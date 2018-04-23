@@ -1,0 +1,104 @@
+
+from collections import MutableMapping
+
+
+class FSMap(MutableMapping):
+    """Wrap a FileSystem instance as a mutable wrapping.
+
+    The keys of the mapping become files under the given root, and the
+    values (which must be bytes) the contents of those files.
+
+    Parameters
+    ----------
+    root : string
+        prefix for all the files
+    fs : FileSystem instance
+    check : bool (=True)
+        performs a touch at the location, to check for write access.
+
+    Examples
+    --------
+    >>> fs = FileSystem(**parameters) # doctest: +SKIP
+    >>> d = FSMap('my-data/path/', fs) # doctest: +SKIP
+    >>> d['loc1'] = b'Hello World' # doctest: +SKIP
+    >>> list(d.keys()) # doctest: +SKIP
+    ['loc1']
+    >>> d['loc1'] # doctest: +SKIP
+    b'Hello World'
+    """
+
+    def __init__(self, root, fs, check=False, create=False):
+        self.fs = fs
+        self.root = root
+        if create:
+            self.fs.mkdir(root)
+        if check:
+            if not self.fs.exists(root):
+                raise ValueError("Path %s does not exist. Create "
+                                 " with the ``create=True`` keyword" %
+                                 root)
+            self.fs.touch(root+'/a')
+            self.fs.rm(root+'/a')
+
+    def clear(self):
+        """Remove all keys below root - empties out mapping
+        """
+        try:
+            self.fs.rm(self.root, True)
+            self.fs.mkdir(self.root)
+        except (IOError, OSError):
+            pass
+
+    def _key_to_str(self, key):
+        """Generate full path for the key"""
+        return '/'.join([self.root, key])
+
+    def _str_to_key(self, s):
+        """Strip path of to leave key name"""
+        return s[len(self.root) + 1:]
+
+    def __getitem__(self, key, default=None):
+        """Retrieve data"""
+        key = self._key_to_str(key)
+        try:
+            with self.fs.open(key, 'rb') as f:
+                result = f.read()
+        except (IOError, OSError):
+            if default is not None:
+                return default
+            raise KeyError(key)
+        return result
+
+    def __setitem__(self, key, value):
+        """Store value in key"""
+        key = self._key_to_str(key)
+        with self.fs.open(key, 'wb') as f:
+            f.write(value)
+
+    def keys(self):
+        """List currently defined keys"""
+        return (self._str_to_key(x) for x in self.fs.walk(self.root))
+
+    def __iter__(self):
+        return self.keys()
+
+    def __delitem__(self, key):
+        """Remove key"""
+        self.fs.rm(self._key_to_str(key))
+
+    def __contains__(self, key):
+        """Does key exist in mapping?"""
+        return self.fs.exists(self._key_to_str(key))
+
+    def __len__(self):
+        """Number of stored elements"""
+        return sum(1 for _ in self.keys())
+
+    def __getstate__(self):
+        """Mapping should be pickleable"""
+        return self.fs, self.root
+
+    def __setstate__(self, state):
+        fs, root = state
+        self.fs = fs
+        self.root = root
