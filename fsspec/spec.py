@@ -25,7 +25,7 @@ class AbstractFileSystem(object):
         If no instance has been created, then create one with defaults
         """
         if not cls._singleton[0]:
-            return AbstractFileSystem()
+            return cls()
         else:
             return cls._singleton[0]
 
