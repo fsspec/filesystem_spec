@@ -107,6 +107,9 @@ class LocalFileOpener(object):
         if self.autocommit is False:
             os.remove(self.temp)
 
+    def __getattr__(self, item):
+        return getattr(self.f, item)
+
     def __enter__(self):
         self._incontext = True
         return self.f
