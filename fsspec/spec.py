@@ -7,6 +7,7 @@ aliases = [
     ('listdir', 'ls'),
     ('cp', 'copy'),
     ('move', 'mv'),
+    ('rename', 'mv'),
     ('delete', 'rm'),
 ]
 
