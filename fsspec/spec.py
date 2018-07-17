@@ -2,6 +2,15 @@ from contextlib import contextmanager
 from .utils import read_block
 
 
+aliases = [
+    ('makedir', 'mkdir'),
+    ('listdir', 'ls'),
+    ('cp', 'copy'),
+    ('move', 'mv'),
+    ('delete', 'rm'),
+]
+
+
 class AbstractFileSystem(object):
     """
     A specification for python file-systems
@@ -20,6 +29,8 @@ class AbstractFileSystem(object):
         self.files = None
         self._intrans = False
         self._singleton[0] = self
+        for new, old in aliases:
+            setattr(self, new, getattr(self, old))
 
     @classmethod
     def current(cls):
@@ -70,8 +81,6 @@ class AbstractFileSystem(object):
         """
         pass
 
-    makedir = mkdir
-
     def makedirs(self, path, exist_ok=False):
         """Recursively make directories
 
@@ -116,8 +125,6 @@ class AbstractFileSystem(object):
             (str).
         """
         pass
-
-    listdir = ls
 
     def walk(self, path, simple=False):
         """ Return all files belows path
@@ -238,14 +245,11 @@ class AbstractFileSystem(object):
     def copy(self, path1, path2, **kwargs):
         """ Copy within two locations in the filesystem"""
 
-    cp = copy
 
     def mv(self, path1, path2, **kwargs):
         """ Move file from one location to another """
         self.copy(path1, path2, **kwargs)
         self.rm(path1)
-
-    move = mv
 
     def rm(self, path, recursive=False):
         """Delete files.
@@ -258,8 +262,6 @@ class AbstractFileSystem(object):
             If file(s) are directories, recursively delete contents and then
             also remove the directory
         """
-
-    delete = rm
 
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
               **kwargs):
