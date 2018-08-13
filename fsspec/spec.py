@@ -27,8 +27,8 @@ class AbstractFileSystem(object):
         A reasonable default should be provided if there are no arguments
         """
         self.autocommit = True
-        self.files = None
         self._intrans = False
+        self._transaction = Transaction(self)
         self._singleton[0] = self
         for new, old in aliases:
             setattr(self, new, getattr(self, old))
@@ -40,9 +40,18 @@ class AbstractFileSystem(object):
         If no instance has been created, then create one with defaults
         """
         if not cls._singleton[0]:
-            return AbstractFileSystem()
+            return cls()
         else:
             return cls._singleton[0]
+
+    @property
+    def transaction(self):
+        """A context within which files are committed together upon exit
+
+        Requires the file class to implement `.commit()` and `.discard()`
+        for the normal and exception cases.
+        """
+        return self._transaction
 
     def invalidate_cache(self, path=None):
         """
@@ -55,16 +64,6 @@ class AbstractFileSystem(object):
             path.
         """
         pass
-
-    @contextmanager
-    def transaction(self):
-        self.files = []
-        self._intrans = True
-        yield
-        for f in self.files:
-            f.commit()
-        self.files = None
-        self._intrans = False
 
     def mkdir(self, path, **kwargs):
         """
@@ -294,7 +293,7 @@ class AbstractFileSystem(object):
             f = self._open(path, mode=mode, block_size=block_size,
                            autocommit=ac, **kwargs)
             if not ac:
-                self.files.append(f)
+                self.transaction.files.append(f)
             return f
 
     def touch(self, path, **kwargs):
@@ -358,3 +357,32 @@ class AbstractFileSystem(object):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+
+
+class Transaction(object):
+    """Filesystem transaction context
+
+    Gathers files for deferred commit or discard, so that several write
+    operations can be finalized semi-atomically.
+    """
+
+    def __init__(self, fs):
+        self.fs = fs
+
+    def __enter__(self):
+        self.files = []
+        self.fs._intrans = True
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # only commit if there was no exception
+        self.complete(commit=exc_type is None)
+
+    def complete(self, commit=True):
+        # TODO: define behaviour in case of exception during completion
+        for f in self.files:
+            if commit:
+                f.commit()
+            else:
+                f.discard()
+        self.files = []
+        self.fs._intrans = False
