@@ -290,6 +290,8 @@ class AbstractFileSystem(object):
                 self.open(path, mode, block_size, **kwargs))
         else:
             ac = kwargs.pop('autocommit', not self._intrans)
+            if not self._intrans and not ac:
+                raise ValueError('Must use autocommit outside a transaction.')
             f = self._open(path, mode=mode, block_size=block_size,
                            autocommit=ac, **kwargs)
             if not ac:
