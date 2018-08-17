@@ -1,4 +1,5 @@
-from contextlib import contextmanager
+from hashlib import md5
+import posixpath
 from .utils import read_block
 
 
@@ -17,6 +18,7 @@ class AbstractFileSystem(object):
     A specification for python file-systems
     """
     _singleton = [None]
+    blocksize = 2**22
 
     def __init__(self, *args, **kwargs):
         """Configure
@@ -24,7 +26,9 @@ class AbstractFileSystem(object):
         Instances may be cachable, so if similar enough arguments are seen
         a new instance is not required.
 
-        A reasonable default should be provided if there are no arguments
+        A reasonable default should be provided if there are no arguments.
+
+        Subclasses should call this method.
         """
         self.autocommit = True
         self._intrans = False
@@ -63,7 +67,7 @@ class AbstractFileSystem(object):
             If None, clear all listings cached else listings at or under given
             path.
         """
-        pass
+        pass  # not necessary to implement, may have no cache
 
     def mkdir(self, path, **kwargs):
         """
@@ -79,7 +83,7 @@ class AbstractFileSystem(object):
         kwargs:
             may be permissions, etc.
         """
-        pass
+        pass  # not necessary to implement, may not have directories
 
     def makedirs(self, path, exist_ok=False):
         """Recursively make directories
@@ -95,10 +99,11 @@ class AbstractFileSystem(object):
         exist_ok: bool (False)
             If True, will error if the target already exists
         """
+        pass  # not necessary to implement, may not have directories
 
     def rmdir(self, path):
         """Remove a directory, if empty"""
-        pass
+        pass  # not necessary to implement, may not have directories
 
     def ls(self, path, detail=False):
         """List objects at path.
@@ -114,7 +119,7 @@ class AbstractFileSystem(object):
         - size of the entry, in bytes
 
         Additional information
-        may be present, aproriate to the file-system, e.g., generation,
+        may be present, approriate to the file-system, e.g., generation,
         checksum, etc.
 
         Parameters
@@ -124,7 +129,7 @@ class AbstractFileSystem(object):
             the result of ``info(path)``. If False, gives a list of paths
             (str).
         """
-        pass
+        raise NotImplementedError
 
     def walk(self, path, simple=False):
         """ Return all files belows path
@@ -136,10 +141,37 @@ class AbstractFileSystem(object):
         path: str
             Root to recurse into
         simple: bool (False)
-            If True, returns a list of filenames. If False, returns an
+            If True, returns an iterator of filenames. If False, returns an
             iterator over tuples like
             (dirpath, dirnames, filenames), see ``os.walk``.
         """
+        full_dirs = []
+        dirs = []
+        files = []
+
+        for info in self.ls(path, True):
+            name = info['name']
+            tail = posixpath.split(name)[1]
+            if info['type'] == 'directory':
+                full_dirs.append(name)
+                dirs.append(tail)
+            else:
+                files.append(tail)
+
+        if simple:
+            for name in files:
+                yield '/'.join([path, name])
+        else:
+            yield path, dirs, files
+
+        for d in full_dirs:
+            for res in self.walk(d):
+                if simple:
+                    path, dirs, files = res
+                    for name in files:
+                        yield '/'.join([path, name])
+                else:
+                    yield res
 
     def du(self, path, total=False):
         """Space used by files within a path
@@ -202,13 +234,16 @@ class AbstractFileSystem(object):
         """Give details of entry at path
 
         Returns a single dictionary, with exactly the same information as ``ls``
-        would with ``detail=True``
+        would with ``detail=True``.
+
+        The default implementation should probably be overridden by a shortcut.
 
         Returns
         -------
         dict with keys: name (full path in the FS), size (in bytes), type (file,
         directory, or something else) and other FS-specific keys.
         """
+        return self.ls(path, detail=True)[0]
 
     def isdir(self, path):
         """Is this entry directory-like?"""
@@ -227,9 +262,21 @@ class AbstractFileSystem(object):
 
         Possible extension: maybe should be able to copy to any file-system
         """
+        with self.open(rpath, 'rb') as f1:
+            with open(lpath, 'wb') as f2:
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    f2.write(data)
 
     def put(self, lpath, rpath, **kwargs):
         """ Upload file from local """
+        with open(lpath, 'rb') as f1:
+            with open(rpath, 'wb') as f2:
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    f2.write(data)
 
     def head(self, path, size=1024):
         """ Get the first ``size`` bytes from file """
@@ -244,12 +291,16 @@ class AbstractFileSystem(object):
 
     def copy(self, path1, path2, **kwargs):
         """ Copy within two locations in the filesystem"""
-
+        raise NotImplementedError
 
     def mv(self, path1, path2, **kwargs):
         """ Move file from one location to another """
         self.copy(path1, path2, **kwargs)
         self.rm(path1)
+
+    def _rm(self, path):
+        """Delete a file"""
+        raise NotImplementedError
 
     def rm(self, path, recursive=False):
         """Delete files.
@@ -262,10 +313,16 @@ class AbstractFileSystem(object):
             If file(s) are directories, recursively delete contents and then
             also remove the directory
         """
+        if recursive:
+            # prefer some bulk method, if possible
+            [self._rm(f) for f in self.walk(path, simple=True)]
+        else:
+            self._rm(path)
 
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
               **kwargs):
-        pass
+        """Return raw bytes-mode file-like from the file-system"""
+        raise NotImplementedError
 
     def open(self, path, mode='rb', block_size=None, **kwargs):
         """
@@ -305,6 +362,10 @@ class AbstractFileSystem(object):
                 pass
         else:
             raise NotImplementedError  # update timestamp, if possible
+
+    def ukey(self, path):
+        """Hash of file properties, to tell if it has changed"""
+        return md5(str(self.info(path)).encode()).hexdigest()
 
     def read_block(self, fn, offset, length, delimiter=None):
         """ Read a block of bytes from
@@ -380,7 +441,6 @@ class Transaction(object):
         self.complete(commit=exc_type is None)
 
     def complete(self, commit=True):
-        # TODO: define behaviour in case of exception during completion
         for f in self.files:
             if commit:
                 f.commit()
