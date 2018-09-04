@@ -81,3 +81,9 @@ def read_block(f, offset, length, delimiter=None):
     f.seek(offset)
     b = f.read(length)
     return b
+
+
+try:
+    FileNotFoundError
+except NameError:
+    FileNotFoundError = OSError
