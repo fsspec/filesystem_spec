@@ -131,7 +131,7 @@ class AbstractFileSystem(object):
         """
         raise NotImplementedError
 
-    def walk(self, path, simple=False):
+    def walk(self, path, simple=False, maxdepth=3):
         """ Return all files belows path
 
         Similar to ``ls``, but recursing into subdirectories.
@@ -144,34 +144,43 @@ class AbstractFileSystem(object):
             If True, returns an iterator of filenames. If False, returns an
             iterator over tuples like
             (dirpath, dirnames, filenames), see ``os.walk``.
+        maxdepth: int
+            Maximum recursion depth. None means limitless, but not recomended
+            on link-based file-systems.
         """
         full_dirs = []
         dirs = []
         files = []
 
         for info in self.ls(path, True):
+            # each info name must be at least [path]/part , but here
+            # we check also for names like [path]/part/
             name = info['name']
-            tail = posixpath.split(name)[1]
+            if name.endswith('/'):
+                tail = '/'.join(name.rsplit('/', 2)[-2:])
+            else:
+                tail = name.rsplit('/', 1)[1]
             if info['type'] == 'directory':
                 full_dirs.append(name)
                 dirs.append(tail)
             else:
                 files.append(tail)
-
         if simple:
             for name in files:
-                yield '/'.join([path, name])
+                yield '/'.join([path.rstrip('/'), name])
         else:
             yield path, dirs, files
 
         for d in full_dirs:
-            for res in self.walk(d):
-                if simple:
-                    path, dirs, files = res
-                    for name in files:
-                        yield '/'.join([path, name])
-                else:
-                    yield res
+            if maxdepth is None or maxdepth > 1:
+                for res in self.walk(d, maxdepth=(maxdepth - 1)
+                                     if maxdepth is not None else None):
+                    if simple:
+                        path, dirs, files = res
+                        for name in files:
+                            yield '/'.join([path, name])
+                    else:
+                        yield res
 
     def du(self, path, total=False):
         """Space used by files within a path
