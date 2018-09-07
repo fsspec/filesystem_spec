@@ -8,6 +8,8 @@ aliases = [
     ('listdir', 'ls'),
     ('cp', 'copy'),
     ('move', 'mv'),
+    ('info', 'stat'),
+    ('disk_usage', 'du'),
     ('rename', 'mv'),
     ('delete', 'rm'),
 ]
@@ -182,19 +184,23 @@ class AbstractFileSystem(object):
                     else:
                         yield res
 
-    def du(self, path, total=False):
+    def du(self, path, total=True, maxdepth=4):
         """Space used by files within a path
-
-        If total is True, returns a number (bytes), if False, returns a
-        dict mapping file to size.
 
         Parameters
         ----------
         total: bool
             whether to sum all the file sizes
+        maxdepth: int or None
+            maximum number of directory levels to descend, None for unlimited.
+
+        Returns
+        -------
+        Dict of {fn: size} if total=False, or int otherwise, where numbers
+        refer to bytes used.
         """
         sizes = {}
-        for f in self.walk(path, True):
+        for f in self.walk(path, True, maxdepth=maxdepth):
             info = self.info(f)
             sizes[info['name']] = info['size']
         if total:
@@ -281,7 +287,7 @@ class AbstractFileSystem(object):
     def put(self, lpath, rpath, **kwargs):
         """ Upload file from local """
         with open(lpath, 'rb') as f1:
-            with open(rpath, 'wb') as f2:
+            with self.open(rpath, 'wb') as f2:
                 data = True
                 while data:
                     data = f1.read(self.blocksize)

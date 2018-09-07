@@ -61,8 +61,7 @@ class FSMap(MutableMapping):
         """Retrieve data"""
         key = self._key_to_str(key)
         try:
-            with self.fs.open(key, 'rb') as f:
-                result = f.read()
+            result = self.fs.cat(key, 'rb')
         except (IOError, OSError):
             if default is not None:
                 return default
