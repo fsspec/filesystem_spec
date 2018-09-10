@@ -1,10 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
-import time
-
-from .spec import AbstractFileSystem
-from .utils import FileNotFoundError
+from fsspec.spec import AbstractFileSystem
+from fsspec.utils import FileNotFoundError
+import logging
+logger = logging.Logger('memoryfs')
 
 
 class MemoryFileSystem(AbstractFileSystem):
@@ -20,13 +20,13 @@ class MemoryFileSystem(AbstractFileSystem):
             out = []
             path = path.rstrip('/')
             for p in self.store:
-                if p.split('/', 1)[0] == path:
+                if p.rsplit('/', 1)[0] == path:
                     out.append({'name': p,
                                 'size': self.store[p].getbuffer().nbytes,
                                 'type': 'file'})
-                elif p.split('/', 2)[0] == path:
+                elif p.rsplit('/', 2)[0] == path:
                     # implicit directory
-                    ppath = p.split('/', 1)[0]
+                    ppath = p.rsplit('/', 1)[0]
                     out.append({'name': ppath,
                                 'size': 0,
                                 'type': 'directory'})
@@ -58,14 +58,23 @@ class MemoryFileSystem(AbstractFileSystem):
             else:
                 raise FileNotFoundError(path)
         if mode == 'wb':
+            if not path.startswith('/'):
+                logger.warning('New file with path that does not start with'
+                               ' "/", will not show up in ls.')
             self.store[path] = MemoryFile()
             return self.store[path]
 
     def copy(self, path1, path2, **kwargs):
         self.store[path1] = MemoryFile(self.store[path2].getbuffer())
 
+    def cat(self, path):
+        return self.store[path].getvalue()
+
     def _rm(self, path):
         del self.store[path]
+
+    def ukey(self, path):
+        return hash(self.store[path])  # internal ID of instance
 
     def size(self, path):
         """Size in bytes of the file at path"""

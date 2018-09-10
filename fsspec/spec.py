@@ -1,14 +1,12 @@
 from hashlib import md5
-import posixpath
 from .utils import read_block
-
 
 aliases = [
     ('makedir', 'mkdir'),
     ('listdir', 'ls'),
     ('cp', 'copy'),
     ('move', 'mv'),
-    ('info', 'stat'),
+    ('stat', 'info'),
     ('disk_usage', 'du'),
     ('rename', 'mv'),
     ('delete', 'rm'),
@@ -17,13 +15,14 @@ aliases = [
 
 class AbstractFileSystem(object):
     """
-    A specification for python file-systems
+    An abstract super-class for pythonic file-systems
     """
     _singleton = [None]
     blocksize = 2**22
+    protocol = 'abstract'
 
-    def __init__(self, *args, **kwargs):
-        """Configure
+    def __init__(self, *args, **storage_options):
+        """Create and configure file-system instance
 
         Instances may be cachable, so if similar enough arguments are seen
         a new instance is not required.
@@ -31,13 +30,61 @@ class AbstractFileSystem(object):
         A reasonable default should be provided if there are no arguments.
 
         Subclasses should call this method.
+
+        Magic kwargs that affect functionality here:
+        add_docs: if True, will append docstrings from this spec to the
+            specific implementation
+        add_aliases: if True, will add method aliases
         """
         self.autocommit = True
         self._intrans = False
         self._transaction = Transaction(self)
         self._singleton[0] = self
-        for new, old in aliases:
-            setattr(self, new, getattr(self, old))
+        if storage_options.get('add_docs', True):
+            self._mangle_docstrings()
+        if storage_options.get('add_aliases', True):
+            for new, old in aliases:
+                setattr(self, new, getattr(self, old))
+
+    def _mangle_docstrings(self):
+        """Add AbstractFileSystem docstrings to subclass methods
+
+        Disable by including ``add_docs=False`` to init kwargs.
+        """
+        for method in dir(self.__class__):
+            if method.startswith('_'):
+                continue
+            if self.__class__ is not AbstractFileSystem:
+                m = getattr(self.__class__, method)
+                n = getattr(AbstractFileSystem, method, None).__doc__
+                if (not callable(m) or not n or n in
+                        (m.__doc__ or "")):
+                    # ignore if a) not a method, b) no superclass doc
+                    # c) already includes docstring
+                    continue
+                try:
+                    if m.__doc__:
+                        m.__doc__ += ("\n Upstream docstring: \n" + getattr(
+                                      AbstractFileSystem, method).__doc__)
+                    else:
+                        m.__doc__ = getattr(
+                            AbstractFileSystem, method).__doc__
+                except AttributeError:
+                    pass
+
+    def _strip_protocol(self, path):
+        """ Turn path from fully-qualified to file-system-specific
+
+        May require FS-specific handling, e.g., for relative paths or links.
+        """
+        if path.startswith(self.protocol + '://'):
+            return path[len(self.protocol) + 3:]
+        elif path.startswith(self.protocol + ':'):
+            return path[len(self.protocol) + 1:]
+        elif path.startswith(self.protocol):
+            return path[len(self.protocol):]
+        else:
+            return path
 
     @classmethod
     def current(cls):
