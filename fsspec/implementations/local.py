@@ -1,11 +1,12 @@
 import os
 import shutil
 import tempfile
-from .spec import AbstractFileSystem
+from fsspec.spec import AbstractFileSystem
 
 
 class LocalFileSystem(AbstractFileSystem):
     def mkdir(self, path, **kwargs):
+        """Extra doc"""
         os.mkdir(path, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
@@ -22,7 +23,7 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return paths
 
-    def walk(self, path, simple=False):
+    def walk(self, path, simple=False, maxdepth=None):
         out = os.walk(os.path.abspath(path))
         if simple:
             results = []

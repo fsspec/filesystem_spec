@@ -84,6 +84,6 @@ def read_block(f, offset, length, delimiter=None):
 
 
 try:
-    FileNotFoundError
+    FileNotFoundError = FileNotFoundError
 except NameError:
     FileNotFoundError = OSError

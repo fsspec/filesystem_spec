@@ -1,5 +1,6 @@
 
 from collections import MutableMapping
+from .registry import get_filesystem_class
 
 
 class FSMap(MutableMapping):
@@ -76,7 +77,8 @@ class FSMap(MutableMapping):
 
     def keys(self):
         """List currently defined keys"""
-        return (self._str_to_key(x) for x in self.fs.walk(self.root))
+        return (self._str_to_key(x)
+                for x in self.fs.walk(self.root, simple=True))
 
     def __iter__(self):
         return self.keys()
@@ -95,9 +97,18 @@ class FSMap(MutableMapping):
 
     def __getstate__(self):
         """Mapping should be pickleable"""
+        # TODO: replace with reduce to reinstantiate?
         return self.fs, self.root
 
     def __setstate__(self, state):
         fs, root = state
         self.fs = fs
         self.root = root
+
+
+def get_mapper(url, check=False, create=False, **kwargs):
+    protocol = url.split(':', 1)[0]
+    cls = get_filesystem_class(protocol)
+    fs = cls(**kwargs)
+    # Removing protocol here - could defer to each open() on the backend
+    return FSMap(fs._strip_protocol(url), fs, check, create)
