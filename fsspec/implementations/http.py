@@ -49,7 +49,7 @@ class HTTPFileSystem(AbstractFileSystem):
             else:
                 if l not in ['..', '../']:
                     # Ignore FTP-like "parent"
-                    out.add('/'.join([url.rstrip('/'), l]))
+                    out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
         if detail:
             return [{'name': u, 'type': 'directory'
                      if u.endswith('/') else 'file'} for u in out]

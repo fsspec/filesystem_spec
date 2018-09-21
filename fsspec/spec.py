@@ -184,6 +184,8 @@ class AbstractFileSystem(object):
         """ Return all files belows path
 
         Similar to ``ls``, but recursing into subdirectories.
+        Note that the "files" outputted will include anything that is not
+        a directory, such as links.
 
         Parameters
         ----------
@@ -262,20 +264,31 @@ class AbstractFileSystem(object):
         If the path ends with '/' and does not contain "*", it is essentially
         the same as ``ls(path)``, returning only files.
 
-        We do not attempt to match for ``"**"`` notation.
+        We do not attempt to match for ``"**"`` notation, but we do support
+        ``"?"`` and ``"[..]"``.
 
         Example reimplements code in ``glob.glob()``, taken from hdfs3.
         """
         import re
         import posixpath
-        if '/' in path[:path.index('*')]:
+        if "*" not in path:
+            root = path
+            depth = 1
+            if path.endswith('/'):
+                path += '*'
+            elif self.exists(path):
+                return [path]
+            else:
+                raise FileNotFoundError(path)
+        elif '/' in path[:path.index('*')]:
             ind = path[:path.index('*')].rindex('/')
             root = path[:ind + 1]
+            depth = path[ind + 1:].count('/') + 1
         else:
             root = '/'
+            depth = 1
         allpaths = []
-        for dirname, dirs, fils in self.walk(root):
-            allpaths.extend(posixpath.join(dirname, d) for d in dirs)
+        for dirname, dirs, fils in self.walk(root, maxdepth=depth):
             allpaths.extend(posixpath.join(dirname, f) for f in fils)
         pattern = re.compile("^" + path.replace('//', '/')
                              .rstrip('/')
@@ -289,7 +302,7 @@ class AbstractFileSystem(object):
         try:
             self.info(path)
             return True
-        except:
+        except:   # any exception allowed bar FileNotFoundError?
             return False
 
     def info(self, path):
@@ -306,6 +319,10 @@ class AbstractFileSystem(object):
         directory, or something else) and other FS-specific keys.
         """
         return self.ls(path, detail=True)[0]
+
+    def size(self, path):
+        """Size in bytes of file"""
+        return self.info(path)['size']
 
     def isdir(self, path):
         """Is this entry directory-like?"""
