@@ -180,19 +180,17 @@ class AbstractFileSystem(object):
         """
         raise NotImplementedError
 
-    def walk(self, path, simple=False, maxdepth=3):
+    def walk(self, path, maxdepth=3):
         """ Return all files belows path
 
         Similar to ``ls``, but recursing into subdirectories.
+        Note that the "files" outputted will include anything that is not
+        a directory, such as links.
 
         Parameters
         ----------
         path: str
             Root to recurse into
-        simple: bool (False)
-            If True, returns an iterator of filenames. If False, returns an
-            iterator over tuples like
-            (dirpath, dirnames, filenames), see ``os.walk``.
         maxdepth: int
             Maximum recursion depth. None means limitless, but not recomended
             on link-based file-systems.
@@ -214,22 +212,24 @@ class AbstractFileSystem(object):
                 dirs.append(tail)
             else:
                 files.append(tail)
-        if simple:
-            for name in files:
-                yield '/'.join([path.rstrip('/'), name])
-        else:
-            yield path, dirs, files
+        yield path, dirs, files
 
         for d in full_dirs:
             if maxdepth is None or maxdepth > 1:
                 for res in self.walk(d, maxdepth=(maxdepth - 1)
                                      if maxdepth is not None else None):
-                    if simple:
-                        path, dirs, files = res
-                        for name in files:
-                            yield '/'.join([path, name])
-                    else:
-                        yield res
+                    yield res
+
+    def find(self, path, maxdepth=3):
+        """List all files below path.
+
+        Like posix ``find`` command without conditions
+        """
+        out = []
+        for path, _, files in self.walk(path, maxdepth):
+            for name in files:
+                out.append('/'.join([path, name]))
+        return out
 
     def du(self, path, total=True, maxdepth=4):
         """Space used by files within a path
@@ -262,20 +262,31 @@ class AbstractFileSystem(object):
         If the path ends with '/' and does not contain "*", it is essentially
         the same as ``ls(path)``, returning only files.
 
-        We do not attempt to match for ``"**"`` notation.
+        We do not attempt to match for ``"**"`` notation, but we do support
+        ``"?"`` and ``"[..]"``.
 
         Example reimplements code in ``glob.glob()``, taken from hdfs3.
         """
         import re
         import posixpath
-        if '/' in path[:path.index('*')]:
+        if "*" not in path:
+            root = path
+            depth = 1
+            if path.endswith('/'):
+                path += '*'
+            elif self.exists(path):
+                return [path]
+            else:
+                raise FileNotFoundError(path)
+        elif '/' in path[:path.index('*')]:
             ind = path[:path.index('*')].rindex('/')
             root = path[:ind + 1]
+            depth = path[ind + 1:].count('/') + 1
         else:
             root = '/'
+            depth = 1
         allpaths = []
-        for dirname, dirs, fils in self.walk(root):
-            allpaths.extend(posixpath.join(dirname, d) for d in dirs)
+        for dirname, dirs, fils in self.walk(root, maxdepth=depth):
             allpaths.extend(posixpath.join(dirname, f) for f in fils)
         pattern = re.compile("^" + path.replace('//', '/')
                              .rstrip('/')
@@ -289,7 +300,7 @@ class AbstractFileSystem(object):
         try:
             self.info(path)
             return True
-        except:
+        except:   # any exception allowed bar FileNotFoundError?
             return False
 
     def info(self, path):
@@ -306,6 +317,10 @@ class AbstractFileSystem(object):
         directory, or something else) and other FS-specific keys.
         """
         return self.ls(path, detail=True)[0]
+
+    def size(self, path):
+        """Size in bytes of file"""
+        return self.info(path)['size']
 
     def isdir(self, path):
         """Is this entry directory-like?"""
@@ -364,7 +379,7 @@ class AbstractFileSystem(object):
         """Delete a file"""
         raise NotImplementedError
 
-    def rm(self, path, recursive=False):
+    def rm(self, path, recursive=False, maxdepth=None):
         """Delete files.
 
         Parameters
@@ -374,12 +389,27 @@ class AbstractFileSystem(object):
         recursive: bool
             If file(s) are directories, recursively delete contents and then
             also remove the directory
+        maxdepth: int or None
+            Depth to pass to walk for finding files to delete, if recursive.
+            If None, there will be no limit and infinite recursion may be
+            possible.
         """
-        if recursive:
-            # prefer some bulk method, if possible
-            [self._rm(f) for f in self.walk(path, simple=True)]
-        else:
-            self._rm(path)
+        # prefer some bulk method, if possible
+        if not isinstance(path, list):
+            path = [path]
+        for p in path:
+            if recursive:
+                out = self.walk(p, maxdepth=maxdepth)
+                for pa, _, files in out:
+                    for name in files:
+                        self.rm('/'.join([pa, name]))
+                for pa, dirs, _ in out:
+                    # may fail to remove directories if maxdepth is small
+                    for d in dirs:
+                        self.rmdir('/'.join([pa, d]))
+                self.rmdir(pa)
+            else:
+                self._rm(p)
 
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
               **kwargs):

@@ -23,24 +23,16 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return paths
 
-    def walk(self, path, simple=False, maxdepth=None):
-        out = os.walk(os.path.abspath(path))
-        if simple:
-            results = []
-            for dirpath, dirnames, filenames in out:
-                results.extend([os.path.join(dirpath, f) for f in filenames])
-            return results
-        else:
-            return out
-
     def info(self, path):
-        out = os.stat(path)
+        out = os.stat(path, follow_symlinks=False)
+        dest = False
         if os.path.isfile(path):
             t = 'file'
         elif os.path.isdir(path):
             t = 'directory'
         elif os.path.islink(path):
             t = 'link'
+            dest = os.readlink(path)
         else:
             t = 'other'
         result = {
@@ -51,6 +43,8 @@ class LocalFileSystem(AbstractFileSystem):
         }
         for field in ['mode', 'uid', 'gid', 'mtime']:
             result[field] = getattr(out, 'st_' + field)
+        if dest:
+            result['destination'] = dest
         return result
 
     def copy(self, path1, path2, **kwargs):

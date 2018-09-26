@@ -1,3 +1,6 @@
+from hashlib import md5
+
+
 def seek_delimiter(file, delimiter, blocksize):
     """ Seek current file to next byte after a delimiter bytestring
 
@@ -87,3 +90,19 @@ try:
     FileNotFoundError = FileNotFoundError
 except NameError:
     FileNotFoundError = OSError
+
+
+def tokenize(*args, **kwargs):
+    """ Deterministic token
+
+    (modified from dask.base)
+
+    >>> tokenize([1, 2, '3'])
+    '7d6a880cd9ec03506eee6973ff551339'
+
+    >>> tokenize('Hello') == tokenize('Hello')
+    True
+    """
+    if kwargs:
+        args += (kwargs,)
+    return md5(str(args).encode()).hexdigest()
