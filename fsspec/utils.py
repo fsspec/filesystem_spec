@@ -106,3 +106,16 @@ def tokenize(*args, **kwargs):
     if kwargs:
         args += (kwargs,)
     return md5(str(args).encode()).hexdigest()
+
+
+def get_pyarrow_filesystem(fs):
+    import pyarrow as pa
+
+    class PyarrowWrappedFS(fs.__class__, pa.filesystem.DaskFileSystem):
+
+        def __init__(self, fs):
+            self.fs = fs
+            self.name = str(fs.__class__)
+            self.__dict__.update(fs.__dict__)
+
+    return PyarrowWrappedFS(fs)
