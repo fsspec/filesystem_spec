@@ -1,5 +1,5 @@
 from hashlib import md5
-from .utils import read_block
+from .utils import read_block, get_pyarrow_filesystem
 
 aliases = [
     ('makedir', 'mkdir'),
@@ -512,6 +512,12 @@ class AbstractFileSystem(object):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+
+    def _get_pyarrow_filesystem(self):
+        """
+        Make a version of the FS instance which will be acceptable to pyarrow
+        """
+        return get_pyarrow_filesystem(self)
 
 
 class Transaction(object):
