@@ -2,9 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 from fsspec.spec import AbstractFileSystem
-from fsspec.utils import FileNotFoundError
 import logging
-logger = logging.Logger('memoryfs')
+logger = logging.Logger('fsspec.memoryfs')
 
 
 class MemoryFileSystem(AbstractFileSystem):
