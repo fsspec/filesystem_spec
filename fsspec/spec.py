@@ -519,6 +519,15 @@ class AbstractFileSystem(object):
         """
         return get_pyarrow_filesystem(self)
 
+    def get_mapper(self, root, check=False, create=False):
+        """Create key/value store based on this file-system
+
+        Makes a MutibleMapping interface to the FS at the given root path.
+        See ``fsspec.mapping.FSMap`` for further details.
+        """
+        from .mapping import FSMap
+        return FSMap(root, self, check, create)
+
 
 class Transaction(object):
     """Filesystem transaction context
