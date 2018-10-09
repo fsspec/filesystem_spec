@@ -106,3 +106,21 @@ def tokenize(*args, **kwargs):
     if kwargs:
         args += (kwargs,)
     return md5(str(args).encode()).hexdigest()
+
+
+def get_pyarrow_filesystem(fs):
+    """Make a version of the FS instance which will be acceptable to pyarrow
+
+    This just copies everything, but adds the pyarrow FileSystem as a
+    superclass, so that in arrow functions it passes isinstance checks.
+    """
+    import pyarrow as pa
+
+    class PyarrowWrappedFS(fs.__class__, pa.filesystem.DaskFileSystem):
+
+        def __init__(self, fs):
+            self.fs = fs
+            self.name = str(fs.__class__)
+            self.__dict__.update(fs.__dict__)
+
+    return PyarrowWrappedFS(fs)
