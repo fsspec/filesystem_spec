@@ -168,12 +168,14 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     expanded_paths = []
     paths = list(paths)
     if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
-        raise ValueError("When writing data, only one filename mask can be specified.")
+        raise ValueError("When writing data, only one filename mask can "
+                         "be specified.")
     for curr_path in paths:
         if '*' in curr_path:
             if 'w' in mode:
                 # expand using name_function
-                expanded_paths.extend(_expand_paths(curr_path, name_function, num))
+                expanded_paths.extend(
+                    _expand_paths(curr_path, name_function, num))
             else:
                 # expand using glob
                 expanded_paths.extend(fs.glob(curr_path))
@@ -266,18 +268,3 @@ def _expand_paths(path, name_function, num):
                          "2. A directory: 'foo/\n"
                          "3. A path with a '*' in it: 'foo.*.json'")
     return paths
-
-
-def logical_size(fs, path, compression='infer'):
-    if compression == 'infer':
-        compression = infer_compression(path)
-
-    if compression is None:
-        return fs.size(path)
-    elif compression in compr:
-        with OpenFile(fs, path, compression=compression) as f:
-            f.seek(0, 2)
-            return f.tell()
-    else:
-        raise ValueError("Cannot infer logical size from file compressed with "
-                         "compression=%r" % compression)

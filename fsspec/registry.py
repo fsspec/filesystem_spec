@@ -11,7 +11,7 @@ known_implementations = {
     'http': {'class': 'fsspec.implementations.http.HTTPFileSystem',
              'err': 'HTTPFileSystem requires requests to be installed'},
     'https': {'class': 'fsspec.implementations.http.HTTPFileSystem',
-             'err': 'HTTPFileSystem requires requests to be installed'}
+              'err': 'HTTPFileSystem requires requests to be installed'}
 }
 
 

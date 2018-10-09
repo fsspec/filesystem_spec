@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import bz2
 from gzip import GzipFile
+from zipfile import ZipFile
 
 
 def noop_file(file, **kwargs):
@@ -9,7 +10,7 @@ def noop_file(file, **kwargs):
 
 
 compr = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
-         None: noop_file, 'bz2': bz2.BZ2File}
+         None: noop_file, 'bz2': bz2.BZ2File, 'zip': ZipFile}
 
 try:
     import lzma
