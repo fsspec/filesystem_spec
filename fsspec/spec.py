@@ -1,5 +1,5 @@
 from hashlib import md5
-from .utils import read_block, get_pyarrow_filesystem, tokenize
+from .utils import read_block, tokenize
 
 aliases = [
     ('makedir', 'mkdir'),
@@ -522,7 +522,7 @@ class AbstractFileSystem(object):
         """
         Make a version of the FS instance which will be acceptable to pyarrow
         """
-        return get_pyarrow_filesystem(self)
+        return self
 
     def get_mapper(self, root, check=False, create=False):
         """Create key/value store based on this file-system
@@ -532,6 +532,15 @@ class AbstractFileSystem(object):
         """
         from .mapping import FSMap
         return FSMap(root, self, check, create)
+
+
+try:
+    import pyarrow as pa
+
+    class AbstractFileSystem(AbstractFileSystem, pa.filesystem.DaskFileSystem):
+        pass
+except ImportError:
+    pass
 
 
 class Transaction(object):
