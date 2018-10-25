@@ -48,6 +48,9 @@ class OpenFile(object):
         return (OpenFile, (self.fs, self.path, self.mode, self.compression,
                            self.encoding, self.errors))
 
+    def __repr__(self):
+        return f"<OpenFile '{self.path}'>"
+
     def __enter__(self):
         mode = self.mode.replace('t', '').replace('b', '') + 'b'
 
@@ -57,7 +60,7 @@ class OpenFile(object):
 
         if self.compression is not None:
             compress = compr[self.compression]
-            f = compress(f, mode=mode)
+            f = compress(f, mode=mode[0])
             fobjects.append(f)
 
         if 't' in self.mode:
@@ -193,7 +196,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 
     Parameters
     ----------
-    urlpath : string
+    urlpath : string or iterable
         Absolute or relative filepath, URL (may include protocols like
         ``s3://``), or globstring pointing to data.
     mode : str, optional

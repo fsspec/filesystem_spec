@@ -6,7 +6,6 @@ from fsspec.spec import AbstractFileSystem
 
 class LocalFileSystem(AbstractFileSystem):
     def mkdir(self, path, **kwargs):
-        """Extra doc"""
         os.mkdir(path, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
