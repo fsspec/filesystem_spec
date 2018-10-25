@@ -16,7 +16,7 @@ install:
 
   # Install dependencies
   - conda create -n test -c conda-forge python=$TRAVIS_PYTHON_VERSION pip
-  - conda activate test
+  - source activate test
   - conda install requests pytest -y
 
 script:
