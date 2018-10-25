@@ -1,0 +1,26 @@
+sudo: False
+
+language: python
+
+matrix:
+  include:
+    - python: 3.6
+
+install:
+  # Install conda
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update conda
+
+  # Install dependencies
+  - conda create -n test -c conda-forge python=$TRAVIS_PYTHON_VERSION pip
+  - source activate test
+  - conda install requests pytest -y
+
+script:
+  - py.test -x --pyargs fsspec
+
+notifications:
+  email: false

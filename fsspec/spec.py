@@ -1,5 +1,5 @@
 from hashlib import md5
-from .utils import read_block, get_pyarrow_filesystem
+from .utils import read_block, tokenize
 
 aliases = [
     ('makedir', 'mkdir'),
@@ -31,11 +31,15 @@ class AbstractFileSystem(object):
 
         Subclasses should call this method.
 
+        The token attribute exists to allow implementations to cache instances
+        if they wish.
+
         Magic kwargs that affect functionality here:
         add_docs: if True, will append docstrings from this spec to the
             specific implementation
         add_aliases: if True, will add method aliases
         """
+        self.token = tokenize(args, storage_options)
         self.autocommit = True
         self._intrans = False
         self._transaction = Transaction(self)
@@ -173,6 +177,7 @@ class AbstractFileSystem(object):
 
         Parameters
         ----------
+        path: str
         detail: bool
             if True, gives a list of dictionaries, where each is the same as
             the result of ``info(path)``. If False, gives a list of paths
@@ -247,7 +252,7 @@ class AbstractFileSystem(object):
         refer to bytes used.
         """
         sizes = {}
-        for f in self.walk(path, True, maxdepth=maxdepth):
+        for f in self.find(path, maxdepth=maxdepth):
             info = self.info(f)
             sizes[info['name']] = info['size']
         if total:
@@ -407,7 +412,7 @@ class AbstractFileSystem(object):
                     # may fail to remove directories if maxdepth is small
                     for d in dirs:
                         self.rmdir('/'.join([pa, d]))
-                self.rmdir(pa)
+                self.rmdir(p)
             else:
                 self._rm(p)
 
@@ -517,7 +522,7 @@ class AbstractFileSystem(object):
         """
         Make a version of the FS instance which will be acceptable to pyarrow
         """
-        return get_pyarrow_filesystem(self)
+        return self
 
     def get_mapper(self, root, check=False, create=False):
         """Create key/value store based on this file-system
@@ -527,6 +532,15 @@ class AbstractFileSystem(object):
         """
         from .mapping import FSMap
         return FSMap(root, self, check, create)
+
+
+try:
+    import pyarrow as pa
+
+    class AbstractFileSystem(AbstractFileSystem, pa.filesystem.DaskFileSystem):
+        pass
+except ImportError:
+    pass
 
 
 class Transaction(object):

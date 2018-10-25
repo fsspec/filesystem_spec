@@ -6,12 +6,12 @@ registry = {}
 default = 'file'
 
 known_implementations = {
-    'file': {'class': 'fsspec.LocalFileSystem', 'err': ""},
-    'memory': {'class': 'fsspec.MemoryFileSystem', 'err': ''},
+    'file': {'class': 'fsspec.LocalFileSystem'},
+    'memory': {'class': 'fsspec.MemoryFileSystem'},
     'http': {'class': 'fsspec.implementations.http.HTTPFileSystem',
-             'err': 'HTTPFileSystem requires requests to be installed'},
+             'err': 'HTTPFileSystem requires "requests" to be installed'},
     'https': {'class': 'fsspec.implementations.http.HTTPFileSystem',
-             'err': 'HTTPFileSystem requires requests to be installed'}
+              'err': 'HTTPFileSystem requires "requests" to be installed'}
 }
 
 
