@@ -13,8 +13,8 @@ def noop_file(file, **kwargs):
 
 # should be functions of the form func(infile, mode=, **kwargs) -> file-like
 compr = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
-         None: lambda f, **kwargs: noop_file(f),
-         'bz2': lambda f, **kwargs: BZ2File(f, **kwargs)}
+         None: noop_file,
+         'bz2': BZ2File}
 
 try:
     import lzma
