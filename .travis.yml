@@ -20,7 +20,7 @@ install:
   - conda install requests pytest -y
 
 script:
-  - py.test -x --doctest-modules --pyargs fsspec
+  - py.test -x --pyargs fsspec
 
 notifications:
   email: false

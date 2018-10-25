@@ -229,7 +229,7 @@ def tokenize(*args, **kwargs):
     (modified from dask.base)
 
     >>> tokenize([1, 2, '3'])
-    '7d6a880cd9ec03506eee6973ff551339'
+    '9d71491b50023b06fc76928e6eddb952'
 
     >>> tokenize('Hello') == tokenize('Hello')
     True
