@@ -101,7 +101,7 @@ def update_storage_options(options, inherited=None):
     options.update(inherited)
 
 
-compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz', 'zip': 'zip'}
+compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
 
 
 def infer_compression(filename):

@@ -125,7 +125,8 @@ def test_urlpath_expand_write():
     assert paths == ['prefix-0.csv', 'prefix-1.csv']
     # we can read with multiple masks, but not write
     with pytest.raises(ValueError):
-        _, _, paths = get_fs_token_paths(['prefix1-*.csv', 'prefix2-*.csv'], mode='wb', num=2)
+        _, _, paths = get_fs_token_paths(['prefix1-*.csv', 'prefix2-*.csv'],
+                                         mode='wb', num=2)
 
 
 def test_open_files():
@@ -177,15 +178,14 @@ def test_bad_compression():
     with filetexts(files, mode='b'):
         for func in [open_files]:
             with pytest.raises(ValueError):
-                sample, values = func('./.test.accounts.*',
-                                      compression='not-found')
+                func('./.test.accounts.*', compression='not-found')
 
 
 def test_not_found():
     fn = 'not-a-file'
     fs = LocalFileSystem()
     with pytest.raises((FileNotFoundError, OSError)) as e:
-        with OpenFile(fs, fn, mode='rb') as f:
+        with OpenFile(fs, fn, mode='rb'):
             pass
 
 
@@ -209,7 +209,6 @@ def test_open_files_write(tmpdir, compression_opener):
 
 
 def test_pickability_of_lazy_files(tmpdir):
-    tmpdir = str(tmpdir)
     cloudpickle = pytest.importorskip('cloudpickle')
 
     with filetexts(files, mode='b'):
@@ -236,7 +235,7 @@ def test_abs_paths(tmpdir):
 
     # I don't know what this was testing - but should avoid local paths anyway
     # fs = LocalFileSystem()
-    # os.chdir(here)
+    os.chdir(here)
     # with fs.open('tmp', 'r') as f:
     #     res = f.read()
     # assert res == 'hi'

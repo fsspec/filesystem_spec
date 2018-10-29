@@ -4,6 +4,7 @@ __all__ = ['registry', 'get_filesystem_class', 'default']
 # mapping protocol: implementation class
 registry = {}
 default = 'file'
+gcs = {'class': 'gcsfs.GCSFileSystem', 'err': 'Please install gcsfs'}
 
 known_implementations = {
     'file': {'class': 'fsspec.LocalFileSystem'},
@@ -11,7 +12,8 @@ known_implementations = {
     'http': {'class': 'fsspec.implementations.http.HTTPFileSystem',
              'err': 'HTTPFileSystem requires "requests" to be installed'},
     'https': {'class': 'fsspec.implementations.http.HTTPFileSystem',
-              'err': 'HTTPFileSystem requires "requests" to be installed'}
+              'err': 'HTTPFileSystem requires "requests" to be installed'},
+    'gcs': gcs, 'gs': gcs
 }
 
 

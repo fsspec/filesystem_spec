@@ -18,29 +18,47 @@ class AbstractFileSystem(object):
     An abstract super-class for pythonic file-systems
     """
     _singleton = [None]
+    _cache = {}
+    cachable = True  # this class can be cached, instances reused
+    _cached = False
     blocksize = 2**22
     protocol = 'abstract'
+
+    def __new__(cls, *args, **storage_options):
+        """
+        Will reuse existing instance if:
+        - cls.cachable is True and
+        - the token (a hash of args and kwargs by default) exists in the cache
+
+        The instance will skip init if instance.cached = True.
+        """
+        token = tokenize(args, storage_options)
+        if cls.cachable and token in cls._cache:
+            return cls._cache[token]
+        self = object.__new__(cls)
+        if self.cachable:
+            cls._cache[token] = self
+        return self
 
     def __init__(self, *args, **storage_options):
         """Create and configure file-system instance
 
         Instances may be cachable, so if similar enough arguments are seen
-        a new instance is not required.
+        a new instance is not required. The token attribute exists to allow
+        implementations to cache instances if they wish.
 
         A reasonable default should be provided if there are no arguments.
 
         Subclasses should call this method.
-
-        The token attribute exists to allow implementations to cache instances
-        if they wish.
 
         Magic kwargs that affect functionality here:
         add_docs: if True, will append docstrings from this spec to the
             specific implementation
         add_aliases: if True, will add method aliases
         """
-        self.token = tokenize(args, storage_options)
-        self.autocommit = True
+        if self._cached:
+            return
+        self._cached = True
         self._intrans = False
         self._transaction = Transaction(self)
         self._singleton[0] = self
@@ -109,6 +127,15 @@ class AbstractFileSystem(object):
         for the normal and exception cases.
         """
         return self._transaction
+
+    def start_transaction(self):
+        """Begin write transaction for deferring files, non-context version"""
+        self._intrans = True
+        return self.transaction
+
+    def end_transaction(self):
+        """Finish write transaction, non-context version"""
+        self.transaction.complete()
 
     def invalidate_cache(self, path=None):
         """
@@ -188,7 +215,9 @@ class AbstractFileSystem(object):
     def walk(self, path, maxdepth=3):
         """ Return all files belows path
 
-        Similar to ``ls``, but recursing into subdirectories.
+        List all files, recursing into subdirectories; output is iterator-style,
+        like ``os.walk()``. For a simple list of files, ``find()`` is available.
+
         Note that the "files" outputted will include anything that is not
         a directory, such as links.
 
@@ -197,9 +226,10 @@ class AbstractFileSystem(object):
         path: str
             Root to recurse into
         maxdepth: int
-            Maximum recursion depth. None means limitless, but not recomended
+            Maximum recursion depth. None means limitless, but not recommended
             on link-based file-systems.
         """
+        path = self._strip_protocol(path)
         full_dirs = []
         dirs = []
         files = []
@@ -233,7 +263,7 @@ class AbstractFileSystem(object):
         out = []
         for path, _, files in self.walk(path, maxdepth):
             for name in files:
-                out.append('/'.join([path, name]))
+                out.append('/'.join([path.rstrip('/'), name]))
         return out
 
     def du(self, path, total=True, maxdepth=4):
@@ -321,7 +351,17 @@ class AbstractFileSystem(object):
         dict with keys: name (full path in the FS), size (in bytes), type (file,
         directory, or something else) and other FS-specific keys.
         """
-        return self.ls(path, detail=True)[0]
+        out = self.ls(path, detail=True)
+        out = [o for o in out if o['name'].rstrip('/') == path.rstrip('/')]
+        if out:
+            return out[0]
+        if '/' in path:
+            parent = path.rsplit('/', 1)[0]
+        out = self.ls(parent, detail=True)
+        out = [o for o in out if o['name'].rstrip('/') == path.rstrip('/')]
+        if out:
+            return out[0]
+        raise FileNotFoundError(path)
 
     def size(self, path):
         """Size in bytes of file"""
@@ -343,6 +383,7 @@ class AbstractFileSystem(object):
         """ Copy file to local
 
         Possible extension: maybe should be able to copy to any file-system
+        (streaming through local).
         """
         with self.open(rpath, 'rb') as f1:
             with open(lpath, 'wb') as f2:
@@ -378,7 +419,7 @@ class AbstractFileSystem(object):
     def mv(self, path1, path2, **kwargs):
         """ Move file from one location to another """
         self.copy(path1, path2, **kwargs)
-        self.rm(path1)
+        self.rm(path1, recursive=True)
 
     def _rm(self, path):
         """Delete a file"""
@@ -533,35 +574,40 @@ class AbstractFileSystem(object):
         from .mapping import FSMap
         return FSMap(root, self, check, create)
 
-
-try:
-    import pyarrow as pa
-
-    class AbstractFileSystem(AbstractFileSystem, pa.filesystem.DaskFileSystem):
-        pass
-except ImportError:
-    pass
+    @classmethod
+    def clear_instance_cache(cls):
+        """Remove cached instances from the class cache"""
+        cls._cache.clear()
 
 
 class Transaction(object):
-    """Filesystem transaction context
+    """Filesystem transaction write context
 
     Gathers files for deferred commit or discard, so that several write
     operations can be finalized semi-atomically.
     """
 
     def __init__(self, fs):
+        """
+        Parameters
+        ----------
+        fs: FileSystem instance
+        """
         self.fs = fs
+        self.files = []
 
     def __enter__(self):
-        self.files = []
+        """Start a transaction on this FileSystem"""
         self.fs._intrans = True
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """End transaction and commit, if exit is not due to exception"""
         # only commit if there was no exception
         self.complete(commit=exc_type is None)
+        self.fs._intrans = False
 
     def complete(self, commit=True):
+        """Finish transation: commit or discard all deferred files"""
         for f in self.files:
             if commit:
                 f.commit()

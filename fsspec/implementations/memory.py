@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
-from fsspec.spec import AbstractFileSystem
+from fsspec import AbstractFileSystem
 import logging
 logger = logging.Logger('fsspec.memoryfs')
 
@@ -12,26 +12,45 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=False):
         if path in self.store:
+            # there is a key with this exact name, but could also be directory
             out = [{'name': path,
                     'size': self.store[path].getbuffer().nbytes,
                     'type': 'file'}]
         else:
             out = []
-            path = path.rstrip('/')
-            for p in self.store:
-                if p.rsplit('/', 1)[0] == path:
-                    out.append({'name': p,
-                                'size': self.store[p].getbuffer().nbytes,
-                                'type': 'file'})
-                elif p.rsplit('/', 2)[0] == path:
-                    # implicit directory
-                    ppath = p.rsplit('/', 1)[0]
-                    out.append({'name': ppath,
+        path = path.strip('/')
+        paths = set()
+        for p in self.store:
+            if '/' in p:
+                root = p.rsplit('/', 1)[0]
+            else:
+                root = ''
+            if root == path:
+                out.append({'name': p,
+                            'size': self.store[p].getbuffer().nbytes,
+                            'type': 'file'})
+            elif path and all((a == b) for a, b
+                              in zip(path.split('/'), p.strip('/').split('/'))):
+                # implicit directory
+                ppath = '/'.join(p.split('/')[:len(path.split('/')) + 1])
+                if ppath not in paths:
+                    out.append({'name': ppath + '/',
                                 'size': 0,
                                 'type': 'directory'})
+                    paths.add(ppath)
+            elif all((a == b) for a, b
+                     in zip(path.split('/'), [''] + p.strip('/').split('/'))):
+                # root directory entry
+                ppath = p.rstrip('/').split('/', 1)[0]
+                if ppath not in paths:
+                    out.append({'name': ppath + '/',
+                                'size': 0,
+                                'type': 'directory'})
+                    paths.add(ppath)
+
         if detail:
             return out
-        return [f['name'] for f in out]
+        return sorted([f['name'] for f in out])
 
     def exists(self, path):
         return path in self.store
@@ -57,14 +76,13 @@ class MemoryFileSystem(AbstractFileSystem):
             else:
                 raise FileNotFoundError(path)
         if mode == 'wb':
-            if not path.startswith('/'):
-                logger.warning('New file with path that does not start with'
-                               ' "/", will not show up in ls.')
-            self.store[path] = MemoryFile()
-            return self.store[path]
+            m = MemoryFile(self, path)
+            if not self._intrans:
+                m.commit()
+            return m
 
     def copy(self, path1, path2, **kwargs):
-        self.store[path1] = MemoryFile(self.store[path2].getbuffer())
+        self.store[path2] = MemoryFile(self.store[path1].getbuffer())
 
     def cat(self, path):
         return self.store[path].getvalue()
@@ -85,8 +103,18 @@ class MemoryFileSystem(AbstractFileSystem):
 class MemoryFile(BytesIO):
     """A BytesIO which can't close and works as a context manager"""
 
+    def __init__(self, fs, path):
+        self.fs = fs
+        self.path = path
+
     def __enter__(self):
         return self
 
     def close(self):
         pass
+
+    def discard(self):
+        pass
+
+    def commit(self):
+        self.fs.store[self.path] = self

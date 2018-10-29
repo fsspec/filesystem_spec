@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from fsspec.spec import AbstractFileSystem
+from fsspec import AbstractFileSystem
 
 
 class LocalFileSystem(AbstractFileSystem):
@@ -75,9 +75,7 @@ class LocalFileSystem(AbstractFileSystem):
 
 
 class LocalFileOpener(object):
-    def __init__ (self, path, mode, autocommit=True):
-        # TODO: does autocommit mean write directory to destination, or
-        # do move operation immediately on close
+    def __init__(self, path, mode, autocommit=True):
         self.path = path
         self._incontext = False
         if autocommit or 'w' not in mode:

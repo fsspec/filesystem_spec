@@ -2,12 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 import re
 import requests
-from fsspec.spec import AbstractFileSystem
+from fsspec import AbstractFileSystem
 from fsspec.utils import tokenize
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
+ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_\+.~#?&//=]+)""")
 
 
 class HTTPFileSystem(AbstractFileSystem):
