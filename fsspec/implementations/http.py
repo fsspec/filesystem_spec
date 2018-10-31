@@ -7,7 +7,7 @@ from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
-ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_\+.~#?&//=]+)""")
+ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
 class HTTPFileSystem(AbstractFileSystem):
@@ -44,15 +44,15 @@ class HTTPFileSystem(AbstractFileSystem):
         # ignoring URL-encoded arguments
         r = requests.get(url, **self.kwargs)
         if self.simple_links:
-            links = ex2.findall(r.text)
+            links = ex2.findall(r.text) + ex.findall(r.text)
         else:
             links = ex.findall(r.text)
         out = set()
         for l in links:
-            if not self.simple_links:
+            if isinstance(l, tuple):
                 l = l[1]
             if l.startswith('http'):
-                if l.replace('https:', 'http').startswith(
+                if l.replace('https', 'http').startswith(
                         url.replace('https', 'http')):
                     out.add(l)
             else:
