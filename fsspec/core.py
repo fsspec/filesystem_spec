@@ -135,22 +135,10 @@ def get_compression(urlpath, compression):
     return compression
 
 
-def infer_options(urlpath):
-    if hasattr(urlpath, 'name'):
-        # deal with pathlib.Path objects - must be local
-        urlpath = str(urlpath)
-        ispath = True
-    else:
-        ispath = False
-
-    options = infer_storage_options(urlpath)
-    protocol = options.pop('protocol')
-    urlpath = options.pop('path')
-
-    if ispath and protocol != 'file':
-        raise ValueError("Only use pathlib.Path with local files.")
-
-    return urlpath, protocol, options
+def split_protocol(urlpath):
+    if "://" in urlpath:
+        return urlpath.split("://", 1)
+    return None, urlpath
 
 
 def expand_paths_if_needed(paths, mode, num, fs, name_function):
@@ -213,23 +201,22 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
     if isinstance(urlpath, (list, tuple)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
-        paths, protocols, options_list = zip(*map(infer_options, urlpath))
+        protocols, paths = zip(*map(split_protocol, urlpath))
         protocol = protocols[0]
-        options = options_list[0]
-        if not (all(p == protocol for p in protocols) and
-                all(o == options for o in options_list)):
+        if not all(p == protocol for p in protocols):
             raise ValueError("When specifying a list of paths, all paths must "
-                             "share the same protocol and options")
-        update_storage_options(options, storage_options)
+                             "share the same protocol")
         cls = get_filesystem_class(protocol)
+        options = cls._get_kwargs_from_urls(paths)
+        update_storage_options(options, storage_options)
         fs = cls(**options)
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
     elif isinstance(urlpath, str) or hasattr(urlpath, 'name'):
-        urlpath, protocol, options = infer_options(urlpath)
-        update_storage_options(options, storage_options)
-
+        protocol, urlpath = split_protocol(urlpath)
         cls = get_filesystem_class(protocol)
+        options = cls._get_kwargs_from_urls(urlpath)
+        update_storage_options(options, storage_options)
         fs = cls(**options)
 
         if 'w' in mode:
@@ -241,10 +228,8 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 
     else:
         raise TypeError('url type not understood: %s' % urlpath)
-    fs.protocol = protocol
-    fs_token = tokenize(cls, protocol, storage_options)
 
-    return fs, fs_token, paths
+    return fs, fs.token, paths
 
 
 def _expand_paths(path, name_function, num):

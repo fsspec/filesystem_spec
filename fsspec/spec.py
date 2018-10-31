@@ -17,8 +17,8 @@ class AbstractFileSystem(object):
     """
     An abstract super-class for pythonic file-systems
     """
-    _singleton = [None]
-    _cache = {}
+    _singleton = None
+    _cache = None
     cachable = True  # this class can be cached, instances reused
     _cached = False
     blocksize = 2**22
@@ -32,11 +32,22 @@ class AbstractFileSystem(object):
 
         The instance will skip init if instance.cached = True.
         """
-        token = tokenize(args, storage_options)
+        if cls._singleton is None:
+            # set up space for singleton
+            cls._singleton = [None]
+        if cls._cache is None and cls.cachable:
+            # set up instance cache, if using
+            cls._cache = {}
+
+        # TODO: defer to a class-specific tokeniser?
+        token = tokenize(cls, args, storage_options)
         if cls.cachable and token in cls._cache:
+            # check for cached instance
             return cls._cache[token]
         self = object.__new__(cls)
+        self.token = token
         if self.cachable:
+            # store for caching - can hold memory
             cls._cache[token] = self
         return self
 
@@ -57,6 +68,7 @@ class AbstractFileSystem(object):
         add_aliases: if True, will add method aliases
         """
         if self._cached:
+            # reusing instance, don't change
             return
         self._cached = True
         self._intrans = False
@@ -107,6 +119,19 @@ class AbstractFileSystem(object):
             return path[len(self.protocol):]
         else:
             return path
+
+    @staticmethod
+    def _get_kwargs_from_urls(paths):
+        """If kwargs can be encoded in the paths, extract them here
+
+        This should happen before instantiation of the class; incoming paths
+        then should be amended to strip the options in methods.
+
+        Examples may look like an sftp path "sftp://user@host:/my/path", where
+        the user and host should become kwargs and later get stripped.
+        """
+        # by default, nothing happens
+        return {}
 
     @classmethod
     def current(cls):
@@ -238,15 +263,11 @@ class AbstractFileSystem(object):
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
             name = info['name']
-            if name.endswith('/'):
-                tail = '/'.join(name.rsplit('/', 2)[-2:])
-            else:
-                tail = name.rsplit('/', 1)[1]
             if info['type'] == 'directory':
-                full_dirs.append(name)
-                dirs.append(tail)
+                full_dirs.append(name.rstrip('/'))
+                dirs.append(name.rstrip('/').rsplit('/', 1)[-1])
             else:
-                files.append(tail)
+                files.append(name.rsplit('/', 1)[-1])
         yield path, dirs, files
 
         for d in full_dirs:
@@ -263,7 +284,7 @@ class AbstractFileSystem(object):
         out = []
         for path, _, files in self.walk(path, maxdepth):
             for name in files:
-                out.append('/'.join([path.rstrip('/'), name]))
+                out.append('/'.join([path.rstrip('/'), name]) if path else name)
         return out
 
     def du(self, path, total=True, maxdepth=4):
@@ -318,7 +339,7 @@ class AbstractFileSystem(object):
             root = path[:ind + 1]
             depth = path[ind + 1:].count('/') + 1
         else:
-            root = '/'
+            root = ''
             depth = 1
         allpaths = []
         for dirname, dirs, fils in self.walk(root, maxdepth=depth):

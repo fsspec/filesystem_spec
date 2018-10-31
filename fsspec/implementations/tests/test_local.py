@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import tempfile
 
 import pytest
+import fsspec
 from fsspec.core import open_files, get_fs_token_paths, OpenFile
 from fsspec.implementations.local import LocalFileSystem
 from fsspec import compression
@@ -93,13 +94,7 @@ def test_urlpath_inference_errors():
     # Protocols differ
     with pytest.raises(ValueError) as err:
         get_fs_token_paths(['s3://test/path.csv', '/other/path.csv'])
-    assert 'same protocol and options' in str(err)
-
-    # Options differ
-    with pytest.raises(ValueError) as err:
-        get_fs_token_paths(['hdfs://myuser@node.com/test/path.csv',
-                            'hdfs://otheruser@node.com/other/path.csv'])
-    assert 'same protocol and options' in str(err)
+    assert 'same protocol' in str(err)
 
     # Unknown type
     with pytest.raises(TypeError):

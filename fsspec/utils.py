@@ -5,6 +5,9 @@ import re
 from urllib.parse import urlsplit
 
 
+DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+
+
 def infer_storage_options(urlpath, inherit_storage_options=None):
     """ Infer storage options from URL path and merge it with existing storage
     options.
