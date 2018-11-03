@@ -30,7 +30,7 @@ class FSMap(MutableMapping):
 
     def __init__(self, root, fs, check=False, create=False):
         self.fs = fs
-        self.root = root
+        self.root = root.rstrip('/')  # we join on '/' in _key_to_str
         if create:
             self.fs.mkdir(root)
         if check:
@@ -52,17 +52,18 @@ class FSMap(MutableMapping):
 
     def _key_to_str(self, key):
         """Generate full path for the key"""
-        return '/'.join([self.root, key])
+        # special case for root == ""
+        return '/'.join([self.root, key]) if self.root else key
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
-        return s[len(self.root) + 1:]
+        return s[len(self.root):].lstrip('/')
 
     def __getitem__(self, key, default=None):
         """Retrieve data"""
         key = self._key_to_str(key)
         try:
-            result = self.fs.cat(key, 'rb')
+            result = self.fs.cat(key)
         except (IOError, OSError):
             if default is not None:
                 return default
@@ -78,7 +79,7 @@ class FSMap(MutableMapping):
     def keys(self):
         """List currently defined keys"""
         return (self._str_to_key(x)
-                for x in self.fs.walk(self.root, simple=True))
+                for x in self.fs.find(self.root))
 
     def __iter__(self):
         return self.keys()

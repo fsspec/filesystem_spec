@@ -3,20 +3,21 @@ from __future__ import print_function, division, absolute_import
 import re
 import requests
 from fsspec import AbstractFileSystem
-from fsspec.utils import tokenize
+from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 
-DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
-ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_\+.~#?&//=]+)""")
+ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
 class HTTPFileSystem(AbstractFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
 
-    Unlike other file-systems, HTTP is limited in that it does not provide glob
-    or write capability.
+    ``ls()`` is implemented by loading the parent page and doing a regex
+    match on the result. If simple_link=True, anything of the form
+    "http(s)://server.com/stuff?thing=other"; otherwise only links within
+    HTML href tabs will be used.
     """
     sep = '/'
 
@@ -30,6 +31,7 @@ class HTTPFileSystem(AbstractFileSystem):
         """
         AbstractFileSystem.__init__(self)
         self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
+        self.simple_links = storage_options.pop('simple_links', True)
         self.kwargs = storage_options
         self.session = requests.Session()
 
@@ -41,11 +43,17 @@ class HTTPFileSystem(AbstractFileSystem):
     def ls(self, url, detail=True):
         # ignoring URL-encoded arguments
         r = requests.get(url, **self.kwargs)
-        links = ex.findall(r.text)
+        if self.simple_links:
+            links = ex2.findall(r.text) + ex.findall(r.text)
+        else:
+            links = ex.findall(r.text)
         out = set()
-        for u, l in links:
+        for l in links:
+            if isinstance(l, tuple):
+                l = l[1]
             if l.startswith('http'):
-                if l.startswith(url):
+                if l.replace('https', 'http').startswith(
+                        url.replace('https', 'http')):
                     out.add(l)
             else:
                 if l not in ['..', '../']:
