@@ -25,9 +25,15 @@ class HTTPFileSystem(AbstractFileSystem):
         """
         Parameters
         ----------
+        block_size: int
+            Blocks to read bytes; if 0, will default to raw requests file-like
+            objects instead of HTTPFile instances
+        simple_links: bool
+            If True, will consider both HTML <a> tags and anything that looks
+            like a URL; if False, will consider only the former.
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
-            other parameters for requests
+            other parameters passed on to requests
         """
         AbstractFileSystem.__init__(self)
         self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
@@ -93,7 +99,14 @@ class HTTPFileSystem(AbstractFileSystem):
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
         kw.update(kwargs)
-        return HTTPFile(url, self.session, block_size, **kw)
+        if block_size:
+            return HTTPFile(url, self.session, block_size, **kw)
+        else:
+            kw['stream'] = True
+            r = self.session.get(url, **kw)
+            r.raise_for_status()
+            r.raw.decode_content = True
+            return r.raw
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
