@@ -1,6 +1,8 @@
 import glob
 import pytest
+import requests
 import subprocess
+import time
 import fsspec
 
 pytest.importorskip('requests')
@@ -11,7 +13,17 @@ def server():
     cmd = "python -m http.server 8000".split()
     try:
         P = subprocess.Popen(cmd)
-        yield "http://localhost:8000/"
+        retries = 10
+        url = 'http://localhost:8000/'
+        while True:
+            try:
+                requests.get(url)
+                break
+            except:
+                retries -= 1
+                assert retries > 0, "Ran out of retries waiting for HTTP server"
+                time.sleep(0.1)
+        yield url
     finally:
         P.terminate()
         P.wait()
