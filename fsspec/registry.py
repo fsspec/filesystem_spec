@@ -14,7 +14,9 @@ known_implementations = {
     'https': {'class': 'fsspec.implementations.http.HTTPFileSystem',
               'err': 'HTTPFileSystem requires "requests" to be installed'},
     'zip': {'class': 'fsspec.implementations.zip.ZipFileSystem'},
-    'gcs': gcs, 'gs': gcs
+    'gcs': gcs, 'gs': gcs,
+    'sftp': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
+             'err': 'SFTPFileSystem requires "paramiko" to be installed'}
 }
 
 
@@ -34,7 +36,7 @@ def get_filesystem_class(protocol):
         except Exception as e:
             err = e
         if err is not None:
-            raise err
+            raise RuntimeError(str(err))
         registry[protocol] = getattr(mod, name)
     cls = registry[protocol]
     if cls.protocol == 'abstract' or cls.protocol is None:
