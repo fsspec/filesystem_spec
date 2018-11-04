@@ -6,7 +6,7 @@ import urllib.parse
 
 class SFTPFileSystem(AbstractFileSystem):
 
-    def __init__(self, hostname, ssh_kwargs={}):
+    def __init__(self, hostname, **ssh_kwargs):
         """
 
         Parameters
@@ -17,8 +17,11 @@ class SFTPFileSystem(AbstractFileSystem):
             Parameters passed on to connection. See details in
             http://docs.paramiko.org/en/2.4/api/client.html#paramiko.client.SSHClient.connect
         """
+        super(SFTPFileSystem, self).__init__(**ssh_kwargs)
         self.client = paramiko.SSHClient()
-        self.ftp = self.client.connect(hostname, **ssh_kwargs).open_sftp()
+        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.client.connect(hostname, **ssh_kwargs)
+        self.ftp = self.client.open_sftp()
 
     @staticmethod
     def _get_kwargs_from_urls(path):
@@ -44,13 +47,14 @@ class SFTPFileSystem(AbstractFileSystem):
 
     def mkdirs(self, path, mode=511):
         parts = path.split('/')
-        path = '/'
+        path = ''
         for part in parts:
-            path += part
-            try:
-                self.info(path)
-            except paramiko.SSHException:
+            path += '/' + part
+            if not self.exists(path):
                 self.mkdir(path, mode)
+
+    def rmdir(self, path):
+        self.ftp.rmdir(path)
 
     def info(self, path):
         s = self.ftp.stat(path)
@@ -60,19 +64,16 @@ class SFTPFileSystem(AbstractFileSystem):
             t = 'link'
         else:
             t = 'file'
-        return {'name': path, 'size': s.st_size, 'type': t, 'uid': s.st_uid,
+        return {'name': path + '/' if t == 'directory' else path,
+                'size': s.st_size, 'type': t, 'uid': s.st_uid,
                 'gui': s.st_gid, 'time': s.st_atime, 'mtime': s.st_mtime}
 
     def ls(self, path, detail=False):
-        out = self.ftp.listdir(path)
-        if detail is False:
+        out = ['/'.join([path.rstrip('/'), p]) for p in self.ftp.listdir(path)]
+        out = [self.info(o) for o in out]
+        if detail:
             return out
-        out2 = []
-        for o in out:
-            i = self.info(o)
-            i['name'] = o
-            out2.append(i)
-        return out2
+        return sorted([p['name'] for p in out])
 
     def put(self, lpath, rpath):
         self.ftp.put(lpath, rpath)
@@ -81,6 +82,11 @@ class SFTPFileSystem(AbstractFileSystem):
         self.ftp.get(rpath, lpath)
 
     def _open(self, path, mode='rb', block_size=None, **kwargs):
+        """
+        block_size: int or None
+            If 0, no buffering, if 1, line buffering, if >1, buffer that many
+            bytes, if None use default from paramiko.
+        """
         return self.ftp.open(path, mode,
                              bufsize=block_size if block_size else -1)
 

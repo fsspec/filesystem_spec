@@ -3,6 +3,8 @@ import pytest
 import subprocess
 import fsspec
 
+pytest.importorskip('requests')
+
 
 @pytest.fixture(scope='module')
 def server():

@@ -1,5 +1,9 @@
 sudo: False
-
+sudo: required
+os:
+- linux
+services:
+- docker
 language: python
 
 matrix:

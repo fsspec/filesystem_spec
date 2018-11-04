@@ -80,7 +80,7 @@ class HTTPFileSystem(AbstractFileSystem):
         """Make any intermediate directories to make path writable"""
         raise NotImplementedError
 
-    def open(self, url, mode='rb', block_size=None, **kwargs):
+    def _open(self, url, mode='rb', block_size=None, **kwargs):
         """Make a file-like object
 
         Parameters
@@ -99,6 +99,7 @@ class HTTPFileSystem(AbstractFileSystem):
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        kw.pop('autocommit', None)
         if block_size:
             return HTTPFile(url, self.session, block_size, **kw)
         else:

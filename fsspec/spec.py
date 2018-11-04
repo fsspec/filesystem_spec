@@ -467,14 +467,10 @@ class AbstractFileSystem(object):
         for p in path:
             if recursive:
                 out = self.walk(p, maxdepth=maxdepth)
-                for pa, _, files in out:
+                for pa, _, files in reversed(list(out)):
                     for name in files:
                         self.rm('/'.join([pa, name]))
-                for pa, dirs, _ in out:
-                    # may fail to remove directories if maxdepth is small
-                    for d in dirs:
-                        self.rmdir('/'.join([pa, d]))
-                self.rmdir(p)
+                    self.rmdir(pa)
             else:
                 self._rm(p)
 
