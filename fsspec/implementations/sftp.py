@@ -1,6 +1,8 @@
 import paramiko
 from fsspec import AbstractFileSystem
 from stat import S_ISDIR, S_ISLNK
+import types
+import uuid
 import urllib.parse
 
 
@@ -13,6 +15,8 @@ class SFTPFileSystem(AbstractFileSystem):
         ----------
         hostname: str
             Hostname or IP as a string
+        temppath: str
+            Location on the server to put files, when within a transaction
         ssh_kwargs: dict
             Parameters passed on to connection. See details in
             http://docs.paramiko.org/en/2.4/api/client.html#paramiko.client.SSHClient.connect
@@ -22,6 +26,7 @@ class SFTPFileSystem(AbstractFileSystem):
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.client.connect(hostname, **ssh_kwargs)
         self.ftp = self.client.open_sftp()
+        self.temppath = ssh_kwargs.get('temppath', '/tmp')
 
     @staticmethod
     def _get_kwargs_from_urls(path):
@@ -87,8 +92,20 @@ class SFTPFileSystem(AbstractFileSystem):
             If 0, no buffering, if 1, line buffering, if >1, buffer that many
             bytes, if None use default from paramiko.
         """
-        return self.ftp.open(path, mode,
-                             bufsize=block_size if block_size else -1)
+        if kwargs.get('autocommit', True) is False:
+            # writes to temporary file, move on commit
+            path2 = "{}/{}".format(self.temppath,uuid.uuid4())
+            f = self.ftp.open(path2, mode,
+                              bufsize=block_size if block_size else -1)
+            f.temppath = path2
+            f.targetpath = path
+            f.fs = self
+            f.commit = types.MethodType(commit_a_file, f)
+            f.discard = types.MethodType(discard_a_file, f)
+        else:
+            f = self.ftp.open(path, mode,
+                              bufsize=block_size if block_size else -1)
+        return f
 
     def _rm(self, path):
         if self.isdir(path):
@@ -98,3 +115,11 @@ class SFTPFileSystem(AbstractFileSystem):
 
     def mv(self, old, new):
         self.ftp.posix_rename(old, new)
+
+
+def commit_a_file(self):
+    self.fs.mv(self.temppath, self.targetpath)
+
+
+def discard_a_file(self):
+    self.fs._rm(self.temppath)

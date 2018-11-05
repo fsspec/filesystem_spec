@@ -50,3 +50,20 @@ def test_simple(ssh):
     assert f.exists('/home/someuser')
     f.rm('/home/someuser', recursive=True)
     assert not f.exists('/home/someuser')
+
+
+def test_transaction(ssh):
+    f = fsspec.get_filesystem_class('sftp')(**ssh)
+    f.mkdirs('/home/someuser/deeper')
+    f.start_transaction()
+    f.touch('/home/someuser/deeper/afile')
+    assert f.find('/home/someuser') == []
+    f.end_transaction()
+    f.find('/home/someuser') == ['/home/someuser/deeper/afile']
+
+    with f.transaction:
+        assert f._intrans
+        f.touch('/home/someuser/deeper/afile2')
+        assert f.find('/home/someuser') == ['/home/someuser/deeper/afile']
+    assert f.find('/home/someuser') == ['/home/someuser/deeper/afile',
+                                        '/home/someuser/deeper/afile2']
