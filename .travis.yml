@@ -1,5 +1,9 @@
 sudo: False
-
+sudo: required
+os:
+- linux
+services:
+- docker
 language: python
 
 matrix:
@@ -17,7 +21,7 @@ install:
   # Install dependencies
   - conda create -n test -c conda-forge python=$TRAVIS_PYTHON_VERSION pip
   - source activate test
-  - conda install requests pytest -y
+  - conda install requests pytest paramiko -y
 
 script:
   - py.test -x --pyargs fsspec

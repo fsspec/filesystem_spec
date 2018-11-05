@@ -91,7 +91,7 @@ class ZipFileSystem(AbstractFileSystem):
     def cat(self, path):
         return self.zip.read(path)
 
-    def open(self, path, mode='rb', **kwargs):
+    def _open(self, path, mode='rb', **kwargs):
         if mode != 'rb':
             raise NotImplementedError
         info = self.info(path)
