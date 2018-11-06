@@ -43,3 +43,8 @@ def get_filesystem_class(protocol):
         cls.protocol = protocol
 
     return cls
+
+
+def filesystem(protocol, **storage_options):
+    cls = get_filesystem_class(protocol)
+    return cls(**storage_options)

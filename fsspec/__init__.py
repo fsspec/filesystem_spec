@@ -15,7 +15,7 @@ try:
 except ImportError:
     pass
 
-from .registry import get_filesystem_class, registry
+from .registry import get_filesystem_class, registry, filesystem
 from .mapping import FSMap, get_mapper
 from .core import open_files, get_fs_token_paths
 
