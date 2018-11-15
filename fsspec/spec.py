@@ -1,4 +1,5 @@
 from hashlib import md5
+import io
 from .utils import read_block, tokenize
 
 aliases = [
@@ -477,7 +478,7 @@ class AbstractFileSystem(object):
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
               **kwargs):
         """Return raw bytes-mode file-like from the file-system"""
-        raise NotImplementedError
+        return AbstractBufferedFile(self, path, mode, block_size, autocommit)
 
     def open(self, path, mode='rb', block_size=None, **kwargs):
         """
@@ -536,7 +537,7 @@ class AbstractFileSystem(object):
         Parameters
         ----------
         fn: string
-            Path to filename on GCS
+            Path to filename
         offset: int
             Byte offset to start read
         length: int
@@ -565,8 +566,7 @@ class AbstractFileSystem(object):
                 length = size
             if offset + length > size:
                 length = size - offset
-            bytes = read_block(f, offset, length, delimiter)
-        return bytes
+            return read_block(f, offset, length, delimiter)
 
     def __getstate__(self):
         """ Instance should be pickleable """
@@ -632,3 +632,276 @@ class Transaction(object):
                 f.discard()
         self.files = []
         self.fs._intrans = False
+
+
+class AbstractBufferedFile:
+    DEFAULT_BLOCK_SIZE = 5 * 2**20
+
+    def __init__(self, fs, path, mode='rb', block_size='default',
+                 autocommit=True, **kwargs):
+        """
+        Template for files with buffered reading and writing
+
+        Parameters
+        ----------
+        fa: instance of FileSystem
+        path: str
+            location in file-system
+        mode: str
+            Normal file modes. Currently only 'wb' amd 'rb'.
+        block_size: int
+            Buffer size for reading or writing, 'default' for class default
+        autocommit: bool
+            Whether to write to final destination; may only impact what
+            happens when file is being closed.
+        """
+        self.fs = fs
+        self.mode = mode
+        self.blocksize = (self.DEFAULT_BLOCK_SIZE
+                          if block_size == 'default' else block_size)
+        self.cache = b""
+        self.loc = 0
+        self.autocommit = autocommit
+        self.end = None
+        self.start = None
+        self.closed = False
+        self.trim = True
+        if mode not in {'rb', 'wb'}:
+            raise NotImplementedError('File mode not supported')
+        if mode == 'rb':
+            self.details = fs.info(path)
+            self.size = self.details['size']
+        else:
+            self.buffer = io.BytesIO()
+            self.offset = 0
+            self.forced = False
+            self.location = None
+
+    def commit(self):
+        """Move from temp to final destination"""
+
+    def discard(self):
+        """Throw away temporary file"""
+
+    def info(self):
+        """ File information about this path """
+        return self.details  # error in write mode
+
+    def tell(self):
+        """ Current file location """
+        return self.loc
+
+    def seek(self, loc, whence=0):
+        """ Set current file location
+
+        Parameters
+        ----------
+        loc : int
+            byte location
+        whence : {0, 1, 2}
+            from start of file, current location or end of file, resp.
+        """
+        if not self.mode == 'rb':
+            raise ValueError('Seek only available in read mode')
+        if whence == 0:
+            nloc = loc
+        elif whence == 1:
+            nloc = self.loc + loc
+        elif whence == 2:
+            nloc = self.size + loc
+        else:
+            raise ValueError(
+                "invalid whence (%s, should be 0, 1 or 2)" % whence)
+        if nloc < 0:
+            raise ValueError('Seek before start of file')
+        self.loc = nloc
+        return self.loc
+
+    def write(self, data):
+        """
+        Write data to buffer.
+
+        Buffer only sent on flush() or if buffer is greater than
+        or equal to blocksize.
+
+        Parameters
+        ----------
+        data : bytes
+            Set of bytes to be written.
+        """
+        if self.mode not in {'wb', 'ab'}:
+            raise ValueError('File not in write mode')
+        if self.closed:
+            raise ValueError('I/O operation on closed file.')
+        if self.forced:
+            raise ValueError('This file has been force-flushed, can only close')
+        out = self.buffer.write(data)
+        self.loc += out
+        if self.buffer.tell() >= self.blocksize:
+            self.flush()
+        return out
+
+    def flush(self, force=False):
+        """
+        Write buffered data to backend store.
+
+        Writes the current buffer, if it is larger than the block-size, or if
+        the file is being closed.
+
+        Parameters
+        ----------
+        force : bool
+            When closing, write the last block even if it is smaller than
+            blocks are allowed to be. Disallows further writing to this file.
+        """
+
+        if self.closed:
+            raise ValueError('Flush on closed file')
+        if force and self.forced:
+            raise ValueError("Force flush cannot be called more than once")
+
+        if self.mode not in {'wb', 'ab'}:
+            assert not hasattr(self, "buffer"), "flush on read-mode file " \
+                                                "with non-empty buffer"
+            return
+        if self.buffer.tell() == 0 and not force:
+            # no data in the buffer to write
+            return
+
+        if not self.offset:
+            if force and self.buffer.tell() <= self.blocksize:
+                # Force-write a buffer below blocksize with a single write
+                self._upload_chunk(final=True)
+            elif not force and self.buffer.tell() <= self.blocksize:
+                # Defer initialization of multipart upload, *may* still
+                # be able to simple upload.
+                return
+            else:
+                # At initialize a multipart upload, setting self.location
+                self._initiate_upload()
+
+        self._upload_chunk(final=force)
+
+        if force:
+            self.forced = True
+
+    def _upload_chunk(self, final=False):
+        """ Write one part of a multi-block file upload
+
+        Parameters
+        ==========
+        final: bool
+            This is the last block, so should complete file is committing
+        """
+
+    def _initiate_upload(self):
+        """ Create remote file/upload """
+        pass
+
+    def _fetch(self, start, end):
+        """ Get bytes between start and end, if not already in cache
+
+        Will read ahead by blocksize bytes.
+        """
+        if self.start is None and self.end is None:
+            # First read
+            self.start = start
+            self.end = end + self.blocksize
+            self.cache = self._fetch_range(self.start, self.end)
+        if start < self.start:
+            if self.end - end > self.blocksize:
+                self.start = start
+                self.end = end + self.blocksize
+                self.cache = self._fetch_range(self.start, self.end)
+            else:
+                new = self._fetch_range(start, self.start)
+                self.start = start
+                self.cache = new + self.cache
+        if end > self.end:
+            if self.end > self.size:
+                return
+            if end - self.end > self.blocksize:
+                self.start = start
+                self.end = end + self.blocksize
+                self.cache = self._fetch_range(self.start, self.end)
+            else:
+                new = self._fetch_range(self.end, end + self.blocksize)
+                self.end = end + self.blocksize
+                self.cache = self.cache + new
+
+    def _fetch_range(self, start, end):
+        """Get the specified set of bytes from remote"""
+        raise NotImplementedError
+
+    def read(self, length=-1):
+        """
+        Return data from cache, or fetch pieces as necessary
+
+        Parameters
+        ----------
+        length : int (-1)
+            Number of bytes to read; if <0, all remaining bytes.
+        """
+        if self.mode != 'rb':
+            raise ValueError('File not in read mode')
+        if length < 0:
+            length = self.size
+        if self.closed:
+            raise ValueError('I/O operation on closed file.')
+        self._fetch(self.loc, self.loc + length)
+        out = self.cache[self.loc - self.start:
+                         self.loc - self.start + length]
+        self.loc += len(out)
+        if self.trim:
+            num = (self.loc - self.start) // self.blocksize - 1
+            if num > 0:
+                self.start += self.blocksize * num
+                self.cache = self.cache[self.blocksize * num:]
+        return out
+
+    def close(self):
+        """ Close file
+
+        Finalizes writes, discards cache
+        """
+        if self.closed:
+            return
+        if self.mode == 'rb':
+            self.cache = None
+        else:
+            if not self.forced:
+                self.flush(force=True)
+            else:
+                assert self.buffer.tell() == 0
+
+            self.fs.invalidate_cache(self.path)
+            if '/' in self.path:
+                # invalidate parent
+                self.fs.invalidate_cache(self.path.split('/', 1)[0])
+        self.closed = True
+
+    def readable(self):
+        """Whether opened for reading"""
+        return self.mode == 'rb'
+
+    def seekable(self):
+        """Whether is seekable (only in read mode)"""
+        return self.readable()
+
+    def writable(self):
+        """Whether opened for writing"""
+        return self.mode in {'wb', 'ab'}
+
+    def __del__(self):
+        self.close()
+
+    def __str__(self):
+        return "<File-like object %s, %s>" % (self.fs, self.path)
+
+    __repr__ = __str__
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
