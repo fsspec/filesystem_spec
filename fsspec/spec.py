@@ -655,6 +655,7 @@ class AbstractBufferedFile:
             Whether to write to final destination; may only impact what
             happens when file is being closed.
         """
+        self.path = path
         self.fs = fs
         self.mode = mode
         self.blocksize = (self.DEFAULT_BLOCK_SIZE

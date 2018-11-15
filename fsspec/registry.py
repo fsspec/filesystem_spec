@@ -16,7 +16,8 @@ known_implementations = {
     'zip': {'class': 'fsspec.implementations.zip.ZipFileSystem'},
     'gcs': gcs, 'gs': gcs,
     'sftp': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
-             'err': 'SFTPFileSystem requires "paramiko" to be installed'}
+             'err': 'SFTPFileSystem requires "paramiko" to be installed'},
+    'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'}
 }
 
 

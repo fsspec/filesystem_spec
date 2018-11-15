@@ -77,27 +77,25 @@ class LocalFileSystem(AbstractFileSystem):
 class LocalFileOpener(object):
     def __init__(self, path, mode, autocommit=True):
         self.path = path
-        self._incontext = False
+        self.autocommit = autocommit
         if autocommit or 'w' not in mode:
-            self.autocommit = True
             self.f = open(path, mode=mode)
         else:
             # TODO: check if path is writable?
-            self.autocommit = False
             i, name = tempfile.mkstemp()
             self.temp = name
             self.f = open(name, mode=mode)
 
     def commit(self):
-        if self._incontext:
-            raise RuntimeError('Cannot commit while within file context')
+        if self.autocommit:
+            raise RuntimeError('Can only commit if not already set to '
+                               'autocommit')
         os.rename(self.temp, self.path)
 
     def discard(self):
-        if self._incontext:
-            raise RuntimeError('Cannot discard while within file context')
-        if self.autocommit is False:
-            os.remove(self.temp)
+        if self.autocommit:
+            raise RuntimeError('Cannot discard if set to autocommit')
+        os.remove(self.temp)
 
     def __getattr__(self, item):
         return getattr(self.f, item)
