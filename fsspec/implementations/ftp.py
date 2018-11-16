@@ -5,11 +5,13 @@ from ..spec import AbstractBufferedFile, AbstractFileSystem
 class FTPFileSystem(AbstractFileSystem):
 
     def __init__(self, host, port=21, username=None, password=None,
-                 acct=None):
+                 acct=None, block_size=None):
         super(FTPFileSystem, self).__init__()
         self.ftp = FTP()
         self.host = host
         self.port = port
+        if block_size is not None:
+            self.blocksize = block_size
         self.ftp.connect(host, port)
         self.ftp.login(username, password, acct)
 
@@ -35,8 +37,9 @@ class FTPFileSystem(AbstractFileSystem):
 
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
               **kwargs):
+        block_size = block_size or self.blocksize
         if mode == 'rb':
-            return FTPFile(self, path)
+            return FTPFile(self, path, mode, block_size=block_size)
 
 
 class TransferDone(Exception):
@@ -53,12 +56,12 @@ class FTPFile(AbstractBufferedFile):
         def callback(x):
             total[0] += len(x)
             if total[0] > end - start:
-                out.append(x[:(end - start) - total])
+                out.append(x[:(end - start) - total[0]])
             else:
                 out.append(x)
 
             if total[0] >= end - start:
-                self.ftp.abort()
+                self.fs.ftp.abort()
                 raise TransferDone
 
         try:
