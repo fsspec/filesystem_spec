@@ -12,7 +12,8 @@ here = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture()
 def ftp():
-    P = subprocess.Popen(['python', '-m', 'pyftpdlib', '-d', here])
+    P = subprocess.Popen(['python', '-m', 'pyftpdlib', '-d', here,],
+                         stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
     try:
         time.sleep(1)
         yield 'localhost', 2121
