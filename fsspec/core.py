@@ -4,9 +4,8 @@ import io
 import os
 import logging
 from .compression import compr
-from .utils import (infer_compression,
-                    infer_storage_options, build_name_function,
-                    update_storage_options, tokenize)
+from .utils import (infer_compression, build_name_function,
+                    update_storage_options)
 from .registry import get_filesystem_class
 logger = logging.getLogger('fsspec')
 
@@ -213,18 +212,20 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
     elif isinstance(urlpath, str) or hasattr(urlpath, 'name'):
-        protocol, urlpath = split_protocol(urlpath)
+        protocol, path = split_protocol(urlpath)
         cls = get_filesystem_class(protocol)
+
+        path = cls._strip_protocol(urlpath)
         options = cls._get_kwargs_from_urls(urlpath)
         update_storage_options(options, storage_options)
         fs = cls(**options)
 
         if 'w' in mode:
-            paths = _expand_paths(urlpath, name_function, num)
-        elif "*" in urlpath:
-            paths = sorted(fs.glob(urlpath))
+            paths = _expand_paths(path, name_function, num)
+        elif "*" in path:
+            paths = sorted(fs.glob(path))
         else:
-            paths = [urlpath]
+            paths = [path]
 
     else:
         raise TypeError('url type not understood: %s' % urlpath)

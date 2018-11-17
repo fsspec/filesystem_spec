@@ -1,11 +1,13 @@
 from ftplib import FTP
 from ..spec import AbstractBufferedFile, AbstractFileSystem
+from ..utils import infer_storage_options
 
 
 class FTPFileSystem(AbstractFileSystem):
+    """A filesystem over classic """
 
     def __init__(self, host, port=21, username=None, password=None,
-                 acct=None, block_size=None):
+                 acct=None, block_size=None, **kwargs):
         super(FTPFileSystem, self).__init__()
         self.ftp = FTP()
         self.host = host
@@ -15,6 +17,14 @@ class FTPFileSystem(AbstractFileSystem):
             self.blocksize = block_size
         self.ftp.connect(host, port)
         self.ftp.login(username, password, acct)
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        return infer_storage_options(path)['path']
+
+    @staticmethod
+    def _get_kwargs_from_urls(urlpath):
+        return infer_storage_options(urlpath)
 
     def invalidate_cache(self, path=None):
         if path is not None:

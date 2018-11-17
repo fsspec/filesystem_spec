@@ -1,51 +1,41 @@
 import paramiko
-from fsspec import AbstractFileSystem
 from stat import S_ISDIR, S_ISLNK
 import types
 import uuid
-import urllib.parse
+from .. import AbstractFileSystem
+from ..utils import infer_storage_options
 
 
 class SFTPFileSystem(AbstractFileSystem):
 
-    def __init__(self, hostname, **ssh_kwargs):
+    def __init__(self, host, **ssh_kwargs):
         """
 
         Parameters
         ----------
-        hostname: str
+        host: str
             Hostname or IP as a string
         temppath: str
             Location on the server to put files, when within a transaction
         ssh_kwargs: dict
             Parameters passed on to connection. See details in
             http://docs.paramiko.org/en/2.4/api/client.html#paramiko.client.SSHClient.connect
+            May include port, username, password...
         """
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(hostname, **ssh_kwargs)
+        self.client.connect(host, **ssh_kwargs)
         self.ftp = self.client.open_sftp()
         self.temppath = ssh_kwargs.get('temppath', '/tmp')
 
+    @classmethod
+    def _strip_protocol(cls, path):
+        return infer_storage_options(path)['path']
+
     @staticmethod
-    def _get_kwargs_from_urls(path):
-        """If kwargs can be encoded in the paths, extract them here
-
-        This should happen before instantiation of the class; incoming paths
-        then should be amended to strip the options in methods.
-
-        Examples may look like an sftp path "sftp://user@host:/my/path", where
-        the user and host should become kwargs and later get stripped.
-        """
-        if not isinstance(path, str):
-            path = path[0]
-        results = urllib.parse.urlparse(path)
-        out = {}
-        for att in ['username', 'password', 'hostname', 'port']:
-            if getattr(results, att):
-                out[att] = getattr(results, att)
-        return out
+    def _get_kwargs_from_urls(urlpath):
+        return infer_storage_options(urlpath)
 
     def mkdir(self, path, mode=511):
         self.ftp.mkdir(path, mode)

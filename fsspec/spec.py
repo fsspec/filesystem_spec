@@ -107,17 +107,18 @@ class AbstractFileSystem(object):
                 except AttributeError:
                     pass
 
-    def _strip_protocol(self, path):
+    @classmethod
+    def _strip_protocol(cls, path):
         """ Turn path from fully-qualified to file-system-specific
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
-        if path.startswith(self.protocol + '://'):
-            return path[len(self.protocol) + 3:]
-        elif path.startswith(self.protocol + ':'):
-            return path[len(self.protocol) + 1:]
-        elif path.startswith(self.protocol):
-            return path[len(self.protocol):]
+        if path.startswith(cls.protocol + '://'):
+            return path[len(cls.protocol) + 3:]
+        elif path.startswith(cls.protocol + ':'):
+            return path[len(cls.protocol) + 1:]
+        elif path.startswith(cls.protocol):
+            return path[len(cls.protocol):]
         else:
             return path
 
