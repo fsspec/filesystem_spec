@@ -350,8 +350,9 @@ class AbstractFileSystem(object):
                              .rstrip('/')
                              .replace('*', '[^/]*')
                              .replace('?', '.') + "$")
-        return [p for p in allpaths
-                if pattern.match(p.replace('//', '/').rstrip('/'))]
+        out = {p for p in allpaths
+               if pattern.match(p.replace('//', '/').rstrip('/'))}
+        return list(sorted(out))
 
     def exists(self, path):
         """Is there a file at the given path"""
@@ -655,6 +656,8 @@ class AbstractBufferedFile:
         autocommit: bool
             Whether to write to final destination; may only impact what
             happens when file is being closed.
+        kwargs:
+            Gets stored as self.kwargs
         """
         self.path = path
         self.fs = fs
@@ -668,6 +671,7 @@ class AbstractBufferedFile:
         self.start = None
         self.closed = False
         self.trim = True
+        self.kwargs = kwargs
         if mode not in {'rb', 'wb'}:
             raise NotImplementedError('File mode not supported')
         if mode == 'rb':
@@ -771,18 +775,18 @@ class AbstractBufferedFile:
             return
 
         if not self.offset:
-            if force and self.buffer.tell() <= self.blocksize:
-                # Force-write a buffer below blocksize with a single write
-                self._upload_chunk(final=True)
-            elif not force and self.buffer.tell() <= self.blocksize:
-                # Defer initialization of multipart upload, *may* still
-                # be able to simple upload.
+            if not force and self.buffer.tell() <= self.blocksize:
+                # Defer write on small block
                 return
             else:
-                # At initialize a multipart upload, setting self.location
+                # At initialize a multipart upload
                 self._initiate_upload()
 
         self._upload_chunk(final=force)
+
+        # reset write buffer
+        self.offset += self.buffer.seek(0, 2)
+        self.buffer = io.BytesIO()
 
         if force:
             self.forced = True

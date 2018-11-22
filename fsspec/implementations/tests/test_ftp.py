@@ -27,7 +27,7 @@ def ftp_writable(tmpdir):
     with open(os.path.join(d, 'out'), 'wb') as f:
         f.write(b'hello' * 10000)
     P = subprocess.Popen(['python', '-m', 'pyftpdlib', '-d', d,
-                          '-u', 'user', '-P', 'pass'])
+                          '-u', 'user', '-P', 'pass', '-w'])
     try:
         time.sleep(1)
         yield 'localhost', 2121, 'user', 'pass'
@@ -60,3 +60,41 @@ def test_complex(ftp_writable):
         assert len(fo.cache) == 10010
         assert fo.read(2) == b'he'
         assert fo.tell() == 12
+
+
+def test_write_small(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open('/out2', 'wb') as f:
+        f.write(b'oi')
+    assert fs.cat('/out2') == b'oi'
+
+
+def test_write_big(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw, block_size=1000)
+    fn = '/bigger'
+    with fs.open(fn, 'wb') as f:
+        f.write(b'o' * 500)
+        assert not fs.exists(fn)
+        f.write(b'o' * 1000)
+        fs.invalidate_cache()
+        assert fs.exists(fn)
+        f.write(b'o' * 200)
+        f.flush()
+        assert f.buffer.tell() == 0
+
+    assert fs.cat(fn) == b'o' * 1700
+
+
+def test_transaction(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    fs.mkdir('/tmp')
+    fn = '/tr'
+    with fs.transaction:
+        with fs.open(fn, 'wb') as f:
+            f.write(b'not')
+        assert not fs.exists(fn)
+    assert fs.exists(fn)
+    assert fs.cat(fn) == b'not'
