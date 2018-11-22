@@ -4,7 +4,6 @@ __all__ = ['registry', 'get_filesystem_class', 'default']
 # mapping protocol: implementation class
 registry = {}
 default = 'file'
-gcs = {'class': 'gcsfs.GCSFileSystem', 'err': 'Please install gcsfs'}
 
 known_implementations = {
     'file': {'class': 'fsspec.implementations.local.LocalFileSystem'},
@@ -14,9 +13,10 @@ known_implementations = {
     'https': {'class': 'fsspec.implementations.http.HTTPFileSystem',
               'err': 'HTTPFileSystem requires "requests" to be installed'},
     'zip': {'class': 'fsspec.implementations.zip.ZipFileSystem'},
-    'gcs': gcs, 'gs': gcs,
+    'gcs': {'class': 'gcsfs.GCSFileSystem', 'err': 'Please install gcsfs'},
     'sftp': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
-             'err': 'SFTPFileSystem requires "paramiko" to be installed'}
+             'err': 'SFTPFileSystem requires "paramiko" to be installed'},
+    'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'}
 }
 
 

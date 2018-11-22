@@ -21,7 +21,7 @@ install:
   # Install dependencies
   - conda create -n test -c conda-forge python=$TRAVIS_PYTHON_VERSION pip
   - source activate test
-  - conda install requests pytest paramiko -y
+  - conda install requests pytest paramiko pyftpdlib -y -c defaults -c conda-forge
 
 script:
   - py.test -x --pyargs fsspec

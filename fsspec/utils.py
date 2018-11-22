@@ -50,10 +50,6 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         if windows_path:
             path = '%s:%s' % windows_path.groups()
 
-    if protocol in ['http', 'https']:
-        # for HTTP, we don't want to parse, as requests will anyway
-        return {'protocol': protocol, 'path': urlpath}
-
     options = {
         'protocol': protocol,
         'path': path,
@@ -63,16 +59,7 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        host = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
-
-        # For gcs and s3 the netloc is actually the bucket name, so we want to
-        # include it in the path. It feels a bit wrong to hardcode this, but
-        # the number of filesystems where this matters is small, so this should
-        # be fine to include:
-        if protocol in ('s3', 'gcs', 'gs'):
-            options['path'] = host + options['path']
-        else:
-            options['host'] = host
+        options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
 
         if parsed_path.port:
             options['port'] = parsed_path.port
@@ -93,7 +80,6 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
 
 
 def update_storage_options(options, inherited=None):
-
     if not inherited:
         inherited = {}
     collisions = set(options) & set(inherited)

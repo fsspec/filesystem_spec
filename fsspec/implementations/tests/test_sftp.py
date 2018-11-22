@@ -33,7 +33,7 @@ bash -c "echo \"export VISIBLE=now\" >> /etc/profile"
     for cmd in cmds:
         subprocess.call(['docker', 'exec', cid] + shlex.split(cmd))
     try:
-        yield dict(hostname='localhost', port=9200, username='root',
+        yield dict(host='localhost', port=9200, username='root',
                    password='pass')
     finally:
         stop_docker(name)
