@@ -21,6 +21,7 @@ def ftp():
         P.terminate()
         P.wait()
 
+
 @pytest.fixture()
 def ftp_writable(tmpdir):
     d = str(tmpdir)
