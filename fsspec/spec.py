@@ -24,6 +24,7 @@ class AbstractFileSystem(object):
     _cached = False
     blocksize = 2**22
     protocol = 'abstract'
+    root_marker = ""  # For some FSs, may require leading '/' or other character
 
     def __new__(cls, *args, **storage_options):
         """
@@ -75,6 +76,7 @@ class AbstractFileSystem(object):
         self._intrans = False
         self._transaction = Transaction(self)
         self._singleton[0] = self
+        self.dircache = {}
         if storage_options.get('add_docs', True):
             self._mangle_docstrings()
         if storage_options.get('add_aliases', True):
@@ -376,13 +378,13 @@ class AbstractFileSystem(object):
         directory, or something else) and other FS-specific keys.
         """
         out = self.ls(path, detail=True)
-        out = [o for o in out if o['name'].rstrip('/') == path.rstrip('/')]
+        path = path.rstrip('/')
+        out = [o for o in out if o['name'].rstrip('/') == path]
         if out:
             return out[0]
-        if '/' in path:
-            parent = path.rsplit('/', 1)[0]
-        out = self.ls(parent, detail=True)
-        out = [o for o in out if o['name'].rstrip('/') == path.rstrip('/')]
+
+        out = self.ls(self._parent(path), detail=True)
+        out = [o for o in out if o['name'].rstrip('/') == path]
         if out:
             return out[0]
         raise FileNotFoundError(path)
@@ -443,7 +445,7 @@ class AbstractFileSystem(object):
     def mv(self, path1, path2, **kwargs):
         """ Move file from one location to another """
         self.copy(path1, path2, **kwargs)
-        self.rm(path1, recursive=True)
+        self.rm(path1, recursive=False)
 
     def _rm(self, path):
         """Delete a file"""
@@ -477,6 +479,14 @@ class AbstractFileSystem(object):
             else:
                 self._rm(p)
 
+    @classmethod
+    def _parent(cls, path):
+        path = path.rstrip('/')
+        if '/' in path:
+            return path.rsplit('/', 1)[0]
+        else:
+            return cls.root_marker
+
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
               **kwargs):
         """Return raw bytes-mode file-like from the file-system"""
@@ -501,12 +511,9 @@ class AbstractFileSystem(object):
         import io
         if 'b' not in mode:
             mode = mode.replace('t', '') + 'b'
-            return io.TextIOWrapper(
-                self.open(path, mode, block_size, **kwargs))
+            return io.TextIOWrapper(self.open(path, mode, block_size, **kwargs))
         else:
             ac = kwargs.pop('autocommit', not self._intrans)
-            if not self._intrans and not ac:
-                raise ValueError('Must use autocommit outside a transaction.')
             f = self._open(path, mode=mode, block_size=block_size,
                            autocommit=ac, **kwargs)
             if not ac:
@@ -573,15 +580,18 @@ class AbstractFileSystem(object):
     def __getstate__(self):
         """ Instance should be pickleable """
         d = self.__dict__.copy()
+        d.pop('dircache')
         return d
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.dircache = {}
 
     def _get_pyarrow_filesystem(self):
         """
         Make a version of the FS instance which will be acceptable to pyarrow
         """
+        # all instances already also derive from pyarrow
         return self
 
     def get_mapper(self, root, check=False, create=False):
@@ -636,7 +646,7 @@ class Transaction(object):
         self.fs._intrans = False
 
 
-class AbstractBufferedFile:
+class AbstractBufferedFile(io.BufferedIOBase):
     DEFAULT_BLOCK_SIZE = 5 * 2**20
 
     def __init__(self, fs, path, mode='rb', block_size='default',
@@ -782,11 +792,10 @@ class AbstractBufferedFile:
                 # At initialize a multipart upload
                 self._initiate_upload()
 
-        self._upload_chunk(final=force)
-
-        # reset write buffer
-        self.offset += self.buffer.seek(0, 2)
-        self.buffer = io.BytesIO()
+        if self._upload_chunk(final=force):
+            # reset write buffer
+            self.offset += self.buffer.seek(0, 2)
+            self.buffer = io.BytesIO()
 
         if force:
             self.forced = True
@@ -797,7 +806,8 @@ class AbstractBufferedFile:
         Parameters
         ==========
         final: bool
-            This is the last block, so should complete file is committing
+            This is the last block, so should complete file, if
+            self.autocommit is True.
         """
 
     def _initiate_upload(self):

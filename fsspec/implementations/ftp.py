@@ -104,6 +104,7 @@ class FTPFileSystem(AbstractFileSystem):
         self.invalidate_cache(path1.rsplit('/', 1)[0])
         self.invalidate_cache(path2.rsplit('/', 1)[0])
 
+
 class TransferDone(Exception):
     """Internal exception to break out of transfer"""
     pass
@@ -159,3 +160,4 @@ class FTPFile(AbstractBufferedFile):
         self.buffer.seek(0)
         self.fs.ftp.storbinary("STOR " + self.path, self.buffer,
                                blocksize=2**16, rest=self.offset)
+        return True

@@ -21,6 +21,9 @@ class FSMap(MutableMapping):
     --------
     >>> fs = FileSystem(**parameters) # doctest: +SKIP
     >>> d = FSMap('my-data/path/', fs) # doctest: +SKIP
+    or, more likely
+    >>> d = fs.get_mapper('my-data/path/')
+
     >>> d['loc1'] = b'Hello World' # doctest: +SKIP
     >>> list(d.keys()) # doctest: +SKIP
     ['loc1']
@@ -52,7 +55,10 @@ class FSMap(MutableMapping):
 
     def _key_to_str(self, key):
         """Generate full path for the key"""
-        # special case for root == ""
+        if isinstance(key, (tuple, list)):
+            key = str(tuple(key))
+        else:
+            key = str(key)
         return '/'.join([self.root, key]) if self.root else key
 
     def _str_to_key(self, s):
