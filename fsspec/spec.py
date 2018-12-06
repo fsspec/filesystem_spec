@@ -646,7 +646,7 @@ class Transaction(object):
         self.fs._intrans = False
 
 
-class AbstractBufferedFile(io.BufferedIOBase):
+class AbstractBufferedFile(object):
     DEFAULT_BLOCK_SIZE = 5 * 2**20
 
     def __init__(self, fs, path, mode='rb', block_size='default',
