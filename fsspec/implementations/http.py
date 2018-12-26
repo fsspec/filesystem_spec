@@ -17,7 +17,7 @@ class HTTPFileSystem(AbstractFileSystem):
     ``ls()`` is implemented by loading the parent page and doing a regex
     match on the result. If simple_link=True, anything of the form
     "http(s)://server.com/stuff?thing=other"; otherwise only links within
-    HTML href tabs will be used.
+    HTML href tags will be used.
     """
     sep = '/'
 

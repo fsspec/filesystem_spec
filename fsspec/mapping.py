@@ -114,6 +114,27 @@ class FSMap(MutableMapping):
 
 
 def get_mapper(url, check=False, create=False, **kwargs):
+    """Create key-value interface for given URL and options
+
+    The URL will be of the form "protocol://location" and point to the root
+    of the mapper required. All keys will be file-names below this location,
+    and their values the contents of each key.
+
+    Parameters
+    ----------
+    url: str
+        Root URL of mapping
+    check: bool
+        Whether to attempt to read from the location before instantiation, to
+        check that the mapping does exist
+    create: bool
+        Whether to make the directory corresponding to the root before
+        instantiating
+
+    Returns
+    -------
+    ``FSMap`` instance, the dict-like key-value store.
+    """
     protocol = url.split(':', 1)[0]
     cls = get_filesystem_class(protocol)
     fs = cls(**kwargs)

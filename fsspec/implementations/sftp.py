@@ -7,6 +7,10 @@ from ..utils import infer_storage_options
 
 
 class SFTPFileSystem(AbstractFileSystem):
+    """Files over SFTP/SSH
+
+    Peer-to-peer filesystem over SSH using paramiko.
+    """
 
     def __init__(self, host, **ssh_kwargs):
         """

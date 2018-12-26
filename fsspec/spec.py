@@ -17,6 +17,9 @@ aliases = [
 class AbstractFileSystem(object):
     """
     An abstract super-class for pythonic file-systems
+
+    Implementations are expected to be compatible with or, better, subclass
+    from here.
     """
     _singleton = None
     _cache = None
@@ -647,6 +650,13 @@ class Transaction(object):
 
 
 class AbstractBufferedFile(object):
+    """Convenient class to derive from to provide buffering
+
+    In the case that the backend does not provide a pythonic file-like object
+    already, this class contains much of the logic to build one. The only
+    methods that need to be overridden are ``_upload_chunk``,
+    ``_initate_upload`` and ``_fetch_range``.
+    """
     DEFAULT_BLOCK_SIZE = 5 * 2**20
 
     def __init__(self, fs, path, mode='rb', block_size='default',

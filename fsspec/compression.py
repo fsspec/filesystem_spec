@@ -1,10 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-import os
 from bz2 import BZ2File
 from gzip import GzipFile
-# zip-files are read-only and contain multiple files
-# from zipfile import ZipFile
 
 
 def noop_file(file, **kwargs):

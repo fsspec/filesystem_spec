@@ -5,6 +5,11 @@ from fsspec import AbstractFileSystem
 
 
 class LocalFileSystem(AbstractFileSystem):
+    """Interface to files on local storage
+
+    This class requires no initialisation or parameters
+    """
+
     def mkdir(self, path, **kwargs):
         os.mkdir(path, **kwargs)
 
