@@ -77,18 +77,12 @@ to look:
 .. _gcsfs: http://gcsfs.readthedocs.io/en/latest/api.html#gcsfs.core.GCSFileSystem
 .. _pyfilesystems: https://docs.pyfilesystem.org/en/latest/index.html
 
-Contents of the Repo
---------------------
+Structure of the package
+------------------------
 
-The main proposal here is in ``fsspec/spec.py``, a single class with methods and doc-strings, and a little code. The
-initial method names were copied from ``gcsfs``, but this reflects only lazyness on the part of the inital committer.
-Although the directory and files appear like a python package, they are not meant for installation or execution
-until possibly some later date - or maybe never, if this is to be only loose reference specification.
-
-In addition ``fsspec/utils.py`` contains a couple of useful functions that Dask happens to rely on; it is envisaged
-that if the spec here matures to real code, then a number of helpful functions may live alongside the main
-definitions. Furthermore, ``fsspec/mapping.py`` shows how a key-value map may be easily implemented for all file-systems
-for free, by adhering to a single definition of the structure. This is meant as a motivator, and happens to be
-particularly useful for the `zarr`_ project.
+The best place to get a feel for the contents of ``fsspec`` is by looking through the :doc:`usage` and
+:doc:`api` sections. In addition, the source code will be interesting for those who wish to subclass and
+develop new file-system implementations. ``fsspec/spec.py`` contains the main abstract file-system class
+to derive from, ``AbstractFileSystem``.
 
 .. _zarr: https://zarr.readthedocs.io

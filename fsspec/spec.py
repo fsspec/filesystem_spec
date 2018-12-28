@@ -2,6 +2,7 @@ from hashlib import md5
 import io
 from .utils import read_block, tokenize
 
+# alternative names for some methods, which get patched to new instances
 aliases = [
     ('makedir', 'mkdir'),
     ('listdir', 'ls'),

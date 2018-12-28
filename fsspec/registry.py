@@ -1,10 +1,12 @@
 import importlib
 __all__ = ['registry', 'get_filesystem_class', 'default']
 
-# mapping protocol: implementation class
+# mapping protocol: implementation class object
 registry = {}
 default = 'file'
 
+# protocols mapped to the class which implements them. This dict can
+# be dynamically updated.
 known_implementations = {
     'file': {'class': 'fsspec.implementations.local.LocalFileSystem'},
     'memory': {'class': 'fsspec.implementations.memory.MemoryFileSystem'},

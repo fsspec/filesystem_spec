@@ -14,6 +14,9 @@ class OpenFile(object):
     """
     File-like object to be used in a context
 
+    Can layer (buffered) text-mode and compression over any file-system, which
+    are typically binary-only.
+
     These instances are safe to serialize, as the low-level file object
     is not created until invoked using `with`.
 
@@ -62,7 +65,8 @@ class OpenFile(object):
             f = compress(f, mode=mode[0])
             fobjects.append(f)
 
-        if 't' in self.mode:
+        if 'b' not in self.mode:
+            # assume, for example, that 'r' is equivalent to 'rt' as in builtin
             f = io.TextIOWrapper(f, encoding=self.encoding,
                                  errors=self.errors)
             fobjects.append(f)

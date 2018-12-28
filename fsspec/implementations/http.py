@@ -41,7 +41,8 @@ class HTTPFileSystem(AbstractFileSystem):
         self.kwargs = storage_options
         self.session = requests.Session()
 
-    def _strip_protocol(self, path):
+    @classmethod
+    def _strip_protocol(cls, path):
         """ For HTTP, we always want to keep the full URL
         """
         return path

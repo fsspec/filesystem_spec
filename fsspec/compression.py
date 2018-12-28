@@ -1,3 +1,4 @@
+"""Helper functions for a standard streaming compression API"""
 from __future__ import print_function, division, absolute_import
 
 from bz2 import BZ2File
