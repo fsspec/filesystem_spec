@@ -18,7 +18,11 @@ known_implementations = {
     'gcs': {'class': 'gcsfs.GCSFileSystem', 'err': 'Please install gcsfs'},
     'sftp': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
              'err': 'SFTPFileSystem requires "paramiko" to be installed'},
-    'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'}
+    'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'},
+    'hdfs': {'class': 'fsspec.implementations.hdfs.PyArrowHDFS',
+             'err': 'pyarrow and local java libraries required for HDFS'},
+    'webhdfs': {'class': 'fsspec.implementations.webhdfs.WebHDFS',
+                'err': 'webHDFS access requires "requests" to be installed'}
 }
 
 
