@@ -9,14 +9,30 @@ from ..spec import AbstractFileSystem, AbstractBufferedFile
 
 
 class WebHDFS(AbstractFileSystem):
+    """
+    Interface to HDFS over HTTP
+
+    Three auth mechanisms are supported:
+
+    insecure: no auth is done, and the user is assumed to be whoever they
+        say they are (parameter `user`), or a predefined value such as
+        "dr.who" if not given
+    spnego: when kerberos authentication is enabled, auth is negotiated by
+        requests_kerberos https://github.com/requests/requests-kerberos .
+        This establishes a session based on existing kinit login and/or
+        specified principal/password; paraneters are passed with ``kerb_kwargs``
+    token: uses an existing Hadoop delegation token from another secured
+        service. Indeed, this client can also generate such tokens when
+        not insecure. Note that tokens expire, but can be renewed (by a
+        previously specified user) and may allow for proxying.
+
+    """
     tempdir = '/tmp'
 
     def __init__(self, host, port=50070, kerberos=False, token=None, user=None,
                  proxy_to=None, kerb_kwargs=None, data_proxy=None,
                  **kwargs):
         """
-        Interface to HDFS over HTTP
-
         Parameters
         ----------
         host: str
@@ -35,8 +51,8 @@ class WebHDFS(AbstractFileSystem):
             If given, the user has the authority to proxy, and this value is
             the user in who's name actions are taken
         kerb_kwargs: dict
-            Any extra arguments for kerberos auth, see
-            https://github.com/requests/requests-kerberos/blob/master/requests_kerberos/kerberos_.py#L167
+            Any extra arguments for HTTPKerberosAuth, see
+            https://github.com/requests/requests-kerberos/blob/master/requests_kerberos/kerberos_.py
         data_proxy: dict, callable or None
             If given, map data-node addresses. This can be necessary if the
             HDFS cluster is behind a proxy, running on Docker or otherwise has
@@ -80,6 +96,7 @@ class WebHDFS(AbstractFileSystem):
               redirect=True, **kwargs):
         url = self.url + quote(path or "")
         args = kwargs.copy()
+        args.update(self.pars)
         args['op'] = op.upper()
         out = self.session.request(method=method.upper(), url=url, params=args,
                                    data=data, allow_redirects=redirect)
@@ -163,12 +180,25 @@ class WebHDFS(AbstractFileSystem):
         out = self._call('GETHOMEDIRECTORY')
         return out.json()['Path']
 
-    def get_delegation_token(self):
-        """Retreive token which can give the same authority to other uses"""
-        out = self._call('GETDELEGATIONTOKEN')
-        return out.json()["Token"]["urlString"]
+    def get_delegation_token(self, renewer=None):
+        """Retrieve token which can give the same authority to other uses
 
-    def renew_delegation_toekn(self, token):
+        Parameters
+        ----------
+        renewer: str or None
+            User who may use this token; if None, will be current user
+        """
+        if renewer:
+            out = self._call('GETDELEGATIONTOKEN', renewer=renewer)
+        else:
+            out = self._call('GETDELEGATIONTOKEN')
+        t = out.json()["Token"]
+        if t is None:
+            raise ValueError('No token available for this '
+                             'user/security context')
+        return t["urlString"]
+
+    def renew_delegation_token(self, token):
         """Make token live longer. Returns new expiry time"""
         out = self._call('RENEWDELEGATIONTOKEN', method='put', token=token)
         return out.json()['long']
