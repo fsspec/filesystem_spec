@@ -14,6 +14,39 @@ class WebHDFS(AbstractFileSystem):
     def __init__(self, host, port=50070, kerberos=False, token=None, user=None,
                  proxy_to=None, kerb_kwargs=None, data_proxy=None,
                  **kwargs):
+        """
+        Interface to HDFS over HTTP
+
+        Parameters
+        ----------
+        host: str
+            Name-node address
+        port: int
+            Port for webHDFS
+        kerberos: bool
+            Whether to authenticate with kerberos for this connection
+        token: str or None
+            If given, use this token on every call to authenticate. A user
+            and user-proxy may be encoded in the token and should not be also
+            given
+        user: str or None
+            If given, assert the user name to connect with
+        proxy_to: str or None
+            If given, the user has the authority to proxy, and this value is
+            the user in who's name actions are taken
+        kerb_kwargs: dict
+            Any extra arguments for kerberos auth, see
+            https://github.com/requests/requests-kerberos/blob/master/requests_kerberos/kerberos_.py#L167
+        data_proxy: dict, callable or None
+            If given, map data-node addresses. This can be necessary if the
+            HDFS cluster is behind a proxy, running on Docker or otherwise has
+            a mismatch between the host-names given by the name-node and the
+            address by which to refer to them from the client. If a dict,
+            maps host names `host->data_proxy[host]`; if a callable, full
+            URLs are passed, and function must conform to
+            `url->data_proxy(url)`.
+        kwargs
+        """
         super().__init__(**kwargs)
         self.url = f"http://{host}:{port}/webhdfs/v1"
         self.kerb = kerberos
@@ -60,11 +93,34 @@ class WebHDFS(AbstractFileSystem):
         return out
 
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
-              **kwargs):
+              replication=None, permissions=None, **kwargs):
+        """
+
+        Parameters
+        ----------
+        path: str
+            File location
+        mode: str
+            'rb', 'wb', etc.
+        block_size: int
+            Client buffer size for read-ahead or write buffer
+        autocommit: bool
+            If False, writes to temporary file that only gets put in final
+            location upon commit
+        replication: int
+            Number of copies of file on the cluster, write mode only
+        permissions: str or int
+            posix permissions, write mode only
+        kwargs
+
+        Returns
+        -------
+        WebHDFile instance
+        """
         block_size = block_size or self.blocksize
         return WebHDFile(self, path, mode=mode, block_size=block_size,
                          tempdir=self.tempdir, autocommit=autocommit,
-                         proxy=self.proxy)
+                         replication=replication, permissions=permissions)
 
     @staticmethod
     def _process_info(info):
@@ -89,6 +145,75 @@ class WebHDFS(AbstractFileSystem):
         else:
             return sorted(info['name'] for info in infos)
 
+    def content_summary(self, path):
+        """Total numbers of files, directories and bytes under path"""
+        out = self._call('GETCONTENTSUMMARY', path=path)
+        return out.json()['ContentSummary']
+
+    def get_file_checksum(self, path):
+        """Checksum info of file, giving method and result"""
+        out = self._call('GETFILECHECKSUM', path=path, redirect=False)
+        location = self._apply_proxy(out.headers['Location'])
+        out2 = self.session.get(location)
+        out2.raise_for_status()
+        return out2.json()['FileChecksum']
+
+    def home_directory(self):
+        """Get user's home directory"""
+        out = self._call('GETHOMEDIRECTORY')
+        return out.json()['Path']
+
+    def get_delegation_token(self):
+        """Retreive token which can give the same authority to other uses"""
+        out = self._call('GETDELEGATIONTOKEN')
+        return out.json()["Token"]["urlString"]
+
+    def renew_delegation_toekn(self, token):
+        """Make token live longer. Returns new expiry time"""
+        out = self._call('RENEWDELEGATIONTOKEN', method='put', token=token)
+        return out.json()['long']
+
+    def cancel_delegation_token(self, token):
+        """Stop the token from being useful"""
+        self._call('CANCELDELEGATIONTOKEN', method='put', token=token)
+
+    def chmod(self, path, mod):
+        """Set the permission at path
+
+        Parameters
+        ----------
+        path: str
+            location to set (file or directory)
+        mod: str or int
+            posix epresentation or permission, give as oct string, e.g, '777'
+            or 0o777
+        """
+        self._call('SETPERMISSION', method='put', path=path, permission=mod)
+
+    def chown(self, path, owner=None, group=None):
+        """Change owning user and/or group"""
+        kwargs = {}
+        if owner is not None:
+            kwargs['owner'] = owner
+        if group is not None:
+            kwargs['group'] = group
+        self._call('SETOWNER', method='put', path=path, **kwargs)
+
+    def set_replication(self, path, replication):
+        """
+        Set file replication factor
+
+        Parameters
+        ----------
+        path: str
+            File location (not for directories)
+        replication: int
+            Number of copies of file on the cluster. Should be smaller than
+            number of data nodes; normally 3 on most systems.
+        """
+        self._call('SETREPLICATION', path=path, method='put',
+                   replication=replication)
+
     def mkdir(self, path, **kwargs):
         self._call('MKDIRS', method='put', path=path)
 
@@ -104,18 +229,26 @@ class WebHDFS(AbstractFileSystem):
         self._call('DELETE', method='delete', path=path,
                    recursive='true' if recursive else 'false')
 
+    def _apply_proxy(self, location):
+        if self.proxy and callable(self.proxy):
+            location = self.proxy(location)
+        elif self.proxy:
+            # as a dict
+            for k, v in self.proxy.items():
+                location = location.replace(k, v, 1)
+        return location
+
 
 class WebHDFile(AbstractBufferedFile):
     """A file living in HDFS over webHDFS"""
 
     def __init__(self, fs, path, **kwargs):
-        """
-        kwargs:
-            proxy: dict
-                A mapping from provided hostname to actual hostname
-        """
         kwargs = kwargs.copy()
-        self.proxy = kwargs.pop('proxy', {})
+        if kwargs.get('permissions', None) is None:
+            kwargs.pop('permissions', None)
+        if kwargs.get('replication', None) is None:
+            kwargs.pop('replication', None)
+        self.permissions = kwargs.pop('permissions', 511)
         tempdir = kwargs.pop('tempdir')
         if kwargs.pop('autocommit', False) is False:
             self.target = self.path
@@ -135,12 +268,6 @@ class WebHDFile(AbstractBufferedFile):
         out.raise_for_status()
         return True
 
-    def _apply_proxy(self, location):
-        if self.proxy:
-            for k, v in self.proxy.items():
-                location = location.replace(k, v)
-        return location
-
     def _initiate_upload(self):
         """ Create remote file/upload """
         if 'a' in self.mode:
@@ -152,8 +279,7 @@ class WebHDFile(AbstractBufferedFile):
                 self.fs.rm(self.path)
         out = self.fs._call(op, method, self.path, redirect=False,
                             **self.kwargs)
-        out.raise_for_status()
-        location = self._apply_proxy(out.headers['Location'])
+        location = self.fs._apply_proxy(out.headers['Location'])
         if 'w' in self.mode:
             # create empty file to append to
             out2 = self.fs.session.put(location)
@@ -165,7 +291,7 @@ class WebHDFile(AbstractBufferedFile):
                             length=end-start, redirect=False)
         out.raise_for_status()
         location = out.headers['Location']
-        out2 = self.fs.session.get(self._apply_proxy(location))
+        out2 = self.fs.session.get(self.fs._apply_proxy(location))
         return out2.content
 
     def commit(self):
