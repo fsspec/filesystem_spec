@@ -52,6 +52,10 @@ class WebHDFS(AbstractFileSystem):
                                    data=data, allow_redirects=redirect)
         if out.status_code == 404:
             raise FileNotFoundError(path)
+        if out.status_code == 403:
+            raise PermissionError(path)
+        if out.status_code == 401:
+            raise PermissionError  # not specific to path
         out.raise_for_status()
         return out
 
@@ -89,6 +93,8 @@ class WebHDFS(AbstractFileSystem):
         self._call('MKDIRS', method='put', path=path)
 
     def makedirs(self, path, exist_ok=False):
+        if exist_ok is False and self.exists(path):
+            raise FileExistsError(path)
         self.mkdir(path)
 
     def mv(self, path1, path2, **kwargs):
