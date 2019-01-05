@@ -23,6 +23,7 @@ def hdfs_cluster():
                 time.sleep(1)
                 continue
             break
+        time.sleep(1)
         yield "localhost"
     finally:
         subprocess.check_output(cmd0)

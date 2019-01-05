@@ -38,7 +38,7 @@ install:
   - pip install git+https://github.com/jcrist/hadoop-test-cluster.git
 
 script:
-  - py.test -x -s -v --pyargs fsspec
+  - py.test -v --pyargs fsspec
 
 notifications:
   email: false

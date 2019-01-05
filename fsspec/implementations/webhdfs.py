@@ -103,7 +103,7 @@ class WebHDFS(AbstractFileSystem):
         if out.status_code == 404:
             raise FileNotFoundError(path)
         if out.status_code == 403:
-            raise PermissionError(str(out.text) + '; ' + str(path))
+            raise PermissionError(path or "")
         if out.status_code == 401:
             raise PermissionError  # not specific to path
         out.raise_for_status()
