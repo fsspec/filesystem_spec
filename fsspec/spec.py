@@ -800,13 +800,12 @@ class AbstractBufferedFile(object):
                 # Defer write on small block
                 return
             else:
-                # At initialize a multipart upload
+                # Initialize a multipart upload
                 self._initiate_upload()
 
-        if self._upload_chunk(final=force):
-            # reset write buffer
-            self.offset += self.buffer.seek(0, 2)
-            self.buffer = io.BytesIO()
+        self._upload_chunk(final=force)
+        self.offset += self.buffer.seek(0, 2)
+        self.buffer = io.BytesIO()
 
         if force:
             self.forced = True
@@ -820,6 +819,7 @@ class AbstractBufferedFile(object):
             This is the last block, so should complete file, if
             self.autocommit is True.
         """
+        # may not yet have been initialized, may neet to call _initialize_upload
 
     def _initiate_upload(self):
         """ Create remote file/upload """
@@ -886,6 +886,15 @@ class AbstractBufferedFile(object):
                 self.cache = self.cache[self.blocksize * num:]
         return out
 
+    def readinto(self, b):
+        """mirrors builtin file's readinto method
+
+        https://docs.python.org/3/library/io.html#io.RawIOBase.readinto
+        """
+        data = self.read()
+        b[:len(data)] = data
+        return len(data)
+
     def close(self):
         """ Close file
 
@@ -902,9 +911,8 @@ class AbstractBufferedFile(object):
                 assert self.buffer.tell() == 0
 
             self.fs.invalidate_cache(self.path)
-            if '/' in self.path:
-                # invalidate parent
-                self.fs.invalidate_cache(self.path.split('/', 1)[0])
+            self.fs.invalidate_cache(self.fs._parent(self.path))
+
         self.closed = True
 
     def readable(self):
@@ -923,7 +931,7 @@ class AbstractBufferedFile(object):
         self.close()
 
     def __str__(self):
-        return "<File-like object %s, %s>" % (self.fs, self.path)
+        return "<File-like object %s, %s>" % (type(self.fs).__name__, self.path)
 
     __repr__ = __str__
 

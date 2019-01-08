@@ -15,14 +15,17 @@ known_implementations = {
     'https': {'class': 'fsspec.implementations.http.HTTPFileSystem',
               'err': 'HTTPFileSystem requires "requests" to be installed'},
     'zip': {'class': 'fsspec.implementations.zip.ZipFileSystem'},
-    'gcs': {'class': 'gcsfs.GCSFileSystem', 'err': 'Please install gcsfs'},
+    'gcs': {'class': 'gcsfs.GCSFileSystem',
+            'err': 'Please install gcsfs to access Google Storage'},
     'sftp': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
              'err': 'SFTPFileSystem requires "paramiko" to be installed'},
     'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'},
     'hdfs': {'class': 'fsspec.implementations.hdfs.PyArrowHDFS',
              'err': 'pyarrow and local java libraries required for HDFS'},
     'webhdfs': {'class': 'fsspec.implementations.webhdfs.WebHDFS',
-                'err': 'webHDFS access requires "requests" to be installed'}
+                'err': 'webHDFS access requires "requests" to be installed'},
+    's3': {'class': 's3fs.S3FileSystem',
+           'err': 'Install s3fs to access S3'}
 }
 
 
