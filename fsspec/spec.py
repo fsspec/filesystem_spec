@@ -22,7 +22,7 @@ class AbstractFileSystem(object):
     Implementations are expected to be compatible with or, better, subclass
     from here.
     """
-    _singleton = None
+    _singleton = None  # will contain the newest instance
     _cache = None
     cachable = True  # this class can be cached, instances reused
     _cached = False
@@ -119,14 +119,14 @@ class AbstractFileSystem(object):
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
+        path = path.rstrip('/')
         if path.startswith(cls.protocol + '://'):
-            return path[len(cls.protocol) + 3:]
+            path = path[len(cls.protocol) + 3:]
         elif path.startswith(cls.protocol + ':'):
-            return path[len(cls.protocol) + 1:]
+            path = path[len(cls.protocol) + 1:]
         elif path.startswith(cls.protocol):
-            return path[len(cls.protocol):]
-        else:
-            return path
+            path = path[len(cls.protocol):]
+        return path or cls.root_marker
 
     @staticmethod
     def _get_kwargs_from_urls(paths):
@@ -270,10 +270,14 @@ class AbstractFileSystem(object):
         for info in self.ls(path, True):
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
-            name = info['name']
-            if info['type'] == 'directory':
-                full_dirs.append(name.rstrip('/'))
-                dirs.append(name.rstrip('/').rsplit('/', 1)[-1])
+            name = info['name'].rstrip('/')
+            if info['type'] == 'directory' and name != path:
+                # do not include "self" path
+                full_dirs.append(name)
+                dirs.append(name.rsplit('/', 1)[-1])
+            elif name == path:
+                # file-like with same name as give path
+                files.append('')
             else:
                 files.append(name.rsplit('/', 1)[-1])
         yield path, dirs, files
@@ -300,6 +304,7 @@ class AbstractFileSystem(object):
 
         Parameters
         ----------
+        path: str
         total: bool
             whether to sum all the file sizes
         maxdepth: int or None
@@ -352,7 +357,8 @@ class AbstractFileSystem(object):
         allpaths = []
         for dirname, dirs, fils in self.walk(root, maxdepth=depth):
             allpaths.extend(posixpath.join(dirname, f) for f in fils)
-        pattern = re.compile("^" + path.replace('//', '/')
+        pattern = re.compile("^" + path.replace('.', '\.')
+                             .replace('//', '/')
                              .rstrip('/')
                              .replace('*', '[^/]*')
                              .replace('?', '.') + "$")
@@ -439,7 +445,7 @@ class AbstractFileSystem(object):
     def tail(self, path, size=1024):
         """ Get the last ``size`` bytes from file """
         with self.open(path, 'rb') as f:
-            f.seek(-size, 2)
+            f.seek(max(-size, -f.size), 2)
             return f.read()
 
     def copy(self, path1, path2, **kwargs):
@@ -485,7 +491,7 @@ class AbstractFileSystem(object):
 
     @classmethod
     def _parent(cls, path):
-        path = path.rstrip('/')
+        path = path.rstrip('/').lstrip('/')
         if '/' in path:
             return path.rsplit('/', 1)[0]
         else:
@@ -513,6 +519,7 @@ class AbstractFileSystem(object):
             Some indication of buffering - this is a value in bytes
         """
         import io
+        path = self._strip_protocol(path)
         if 'b' not in mode:
             mode = mode.replace('t', '') + 'b'
             return io.TextIOWrapper(self.open(path, mode, block_size, **kwargs))
@@ -671,7 +678,8 @@ class AbstractBufferedFile(object):
         path: str
             location in file-system
         mode: str
-            Normal file modes. Currently only 'wb' amd 'rb'.
+            Normal file modes. Currently only 'wb', 'ab' or 'rb'. Some file
+            systems may be read-only, and some may not support append.
         block_size: int
             Buffer size for reading or writing, 'default' for class default
         autocommit: bool
@@ -693,7 +701,7 @@ class AbstractBufferedFile(object):
         self.closed = False
         self.trim = True
         self.kwargs = kwargs
-        if mode not in {'rb', 'wb'}:
+        if mode not in {'ab', 'rb', 'wb'}:
             raise NotImplementedError('File mode not supported')
         if mode == 'rb':
             self.details = fs.info(path)
@@ -796,7 +804,7 @@ class AbstractBufferedFile(object):
             return
 
         if not self.offset:
-            if not force and self.buffer.tell() <= self.blocksize:
+            if not force and self.buffer.tell() < self.blocksize:
                 # Defer write on small block
                 return
             else:

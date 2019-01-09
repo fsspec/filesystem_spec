@@ -1,4 +1,4 @@
-from ftplib import FTP
+from ftplib import FTP, Error
 import uuid
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
@@ -6,6 +6,7 @@ from ..utils import infer_storage_options
 
 class FTPFileSystem(AbstractFileSystem):
     """A filesystem over classic """
+    root_marker = '/'
 
     def __init__(self, host, port=21, username=None, password=None,
                  acct=None, block_size=None, tempdir='/tmp', **kwargs):
@@ -46,7 +47,7 @@ class FTPFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        return infer_storage_options(path)['path']
+        return '/' + infer_storage_options(path)['path'].lstrip('/').rstrip('/')
 
     @staticmethod
     def _get_kwargs_from_urls(urlpath):
@@ -59,10 +60,21 @@ class FTPFileSystem(AbstractFileSystem):
             self.dircache.clear()
 
     def ls(self, path, detail=True):
-        path = path.rstrip('/')
+        path = self._strip_protocol(path)
+        out = []
         if path not in self.dircache:
-            self.dircache[path] = list(self.ftp.mlsd(path))
-        files = self.dircache[path]
+            try:
+                self.dircache[path] = list(self.ftp.mlsd(path))
+            except Error:
+                try:
+                    info = self.info(path)
+                    if info['type'] == 'file':
+                        out = [info]
+                except (Error, IndexError):
+                    raise FileNotFoundError
+        files = self.dircache.get(path, out)
+        if path == '/':
+            path = ''  # just for forming the names, below
         if not detail:
             return sorted(['/'.join([path, f[0]]) for f in files])
         out = []
@@ -79,30 +91,36 @@ class FTPFileSystem(AbstractFileSystem):
 
     def info(self, path):
         # implement with direct method
-        parent = path.rsplit('/', 1)[0]
-        files = self.ls(parent, True)
+        path = self._strip_protocol(path)
+        files = self.ls(self._parent(path), True)
         return [f for f in files if f['name'] == path][0]
 
     def _open(self, path, mode='rb', block_size=None, autocommit=True,
               **kwargs):
+        path = self._strip_protocol(path)
         block_size = block_size or self.blocksize
         return FTPFile(self, path, mode=mode, block_size=block_size,
                        tempdir=self.tempdir, autocommit=autocommit)
 
     def _rm(self, path):
+        path = self._strip_protocol(path)
         self.ftp.delete(path)
         self.invalidate_cache(path.rsplit('/', 1)[0])
 
     def mkdir(self, path, **kwargs):
+        path = self._strip_protocol(path)
         self.ftp.mkd(path)
 
     def rmdir(self, path):
+        path = self._strip_protocol(path)
         self.ftp.rmd(path)
 
     def mv(self, path1, path2, **kwargs):
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         self.ftp.rename(path1, path2)
-        self.invalidate_cache(path1.rsplit('/', 1)[0])
-        self.invalidate_cache(path2.rsplit('/', 1)[0])
+        self.invalidate_cache(self._parent(path1))
+        self.invalidate_cache(self._parent(path2))
 
 
 class TransferDone(Exception):
