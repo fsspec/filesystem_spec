@@ -7,19 +7,19 @@ Instantiate a file-system
 -------------------------
 
 ``fsspec`` provides an abstract file-system interface as a template for other filesystems. In this context,
-"interface" means an API for workign with files on the given file-system, which can mean files on some
-remote store, local files, files within some wrapper, or nything else that is capable of producing
+"interface" means an API for working with files on the given file-system, which can mean files on some
+remote store, local files, files within some wrapper, or anything else that is capable of producing
 file-like objects.
 
 Some concrete implementations are bundled with ``fsspec`` and others can be installed separately. They
-can be instantiated directly, or the `registry` can be used to fund them.
+can be instantiated directly, or the `registry` can be used to find them.
 
 Direct instantiation:
 
 .. code-block:: python
 
    from fsspec.implementations.local import LocalFileSystem
-   fs = LocalFileSystme()
+   fs = LocalFileSystem()
 
 Look-up via registry:
 
@@ -45,7 +45,7 @@ is read-only), generally all normal operations, such as ``ls``, ``rm``,  should 
 full list: :class:`fsspec.spec.AbstractFileSystem`).
 Note that this quick-start will prefer posix-style naming, but
 many common operations are aliased: ``cp()`` and ``copy()`` are identical, for instance.
-Functionality is generally chosen to be close to the builtin ``os`` module's working for things like
+Functionality is generally chosen to be as close to the builtin ``os`` module's working for things like
 ``glob`` as possible.
 
 The ``open()`` method will return a file-like object which can be passed to any other library that expects
