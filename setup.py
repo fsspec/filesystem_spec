@@ -21,7 +21,7 @@ setup(name='fsspec',
       maintainer_email='mdurant@anaconda.com',
       license='BSD',
       keywords='file',
-      packages=['fsspec'],
+      packages=['fsspec', 'fsspec.implementations'],
       python_requires='>=3.6',
       install_requires=[open('requirements.txt').read().strip().split('\n')],
       zip_safe=False)
