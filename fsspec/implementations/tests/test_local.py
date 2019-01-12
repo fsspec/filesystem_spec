@@ -184,6 +184,23 @@ def test_not_found():
             pass
 
 
+def test_isfile():
+    fs = LocalFileSystem()
+    with filetexts(files, mode='b'):
+        for f in files.keys():
+            assert fs.isfile(f)
+        assert not fs.isfile('not-a-file')
+
+
+def test_isdir():
+    fs = LocalFileSystem()
+    with filetexts(files, mode='b'):
+        for f in files.keys():
+            assert fs.isdir(os.path.dirname(os.path.abspath(f)))
+            assert not fs.isdir(f)
+        assert not fs.isdir('not-a-dir')
+
+
 @pytest.mark.parametrize('compression_opener',
                          [(None, open), ('gzip', gzip.open)])
 def test_open_files_write(tmpdir, compression_opener):

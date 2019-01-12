@@ -59,7 +59,7 @@ def get_filesystem_class(protocol):
             raise RuntimeError(str(err))
         registry[protocol] = getattr(mod, name)
     cls = registry[protocol]
-    if cls.protocol == 'abstract' or cls.protocol is None:
+    if getattr(cls, 'protocol', None) in ('abstract', None):
         cls.protocol = protocol
 
     return cls
