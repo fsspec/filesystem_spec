@@ -1,6 +1,7 @@
 import pytest
 import shlex
 import subprocess
+import time
 import fsspec
 
 pytest.importorskip('paramiko')
@@ -16,7 +17,7 @@ def stop_docker(name):
 @pytest.fixture(scope='module')
 def ssh():
     # requires docker
-    cmds = """apt-get update
+    cmds = r"""apt-get update
 apt-get install -y openssh-server
 mkdir /var/run/sshd
 bash -c "echo 'root:pass' | chpasswd"
@@ -33,6 +34,7 @@ bash -c "echo \"export VISIBLE=now\" >> /etc/profile"
     for cmd in cmds:
         subprocess.call(['docker', 'exec', cid] + shlex.split(cmd))
     try:
+        time.sleep(1)
         yield dict(host='localhost', port=9200, username='root',
                    password='pass')
     finally:

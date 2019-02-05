@@ -14,7 +14,7 @@ def hdfs_cluster():
     subprocess.check_output(cmd1)
     try:
         while True:
-            t = 10
+            t = 90
             try:
                 requests.get('http://localhost:50070/webhdfs/v1/?op=LISTSTATUS')
             except:
