@@ -405,11 +405,17 @@ class AbstractFileSystem(object):
 
     def isdir(self, path):
         """Is this entry directory-like?"""
-        return self.info(path)['type'] == 'directory'
+        try:
+            return self.info(path)['type'] == 'directory'
+        except FileNotFoundError:
+            return False
 
     def isfile(self, path):
         """Is this entry file-like?"""
-        return self.info(path)['type'] == 'file'
+        try:
+            return self.info(path)['type'] == 'file'
+        except FileNotFoundError:
+            return False
 
     def cat(self, path):
         """ Get the content of a file """
