@@ -85,7 +85,7 @@ class OpenFile(object):
 
 
 def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
-               errors=None, name_function=None, num=1, **kwargs):
+               errors=None, name_function=None, num=1, protocol=None, **kwargs):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
 
     Parameters
@@ -109,6 +109,8 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     num : int [1]
         if writing mode, number of files we expect to create (passed to
         name+function)
+    protocol : str or None
+        If given, overrides the protocol found in the URL.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -124,7 +126,8 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     """
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode, num=num,
                                              name_function=name_function,
-                                             storage_options=kwargs)
+                                             storage_options=kwargs,
+                                             protocol=protocol)
     return [OpenFile(fs, path, mode=mode, compression=compression,
                      encoding=encoding, errors=errors)
             for path in paths]
@@ -182,7 +185,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
 
 
 def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
-                       storage_options=None):
+                       storage_options=None, protocol=None):
     """Filesystem, deterministic token, and paths from a urlpath and options.
 
     Parameters
@@ -200,12 +203,14 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         ``urlpath.replace('*', name_function(partition_index))``.
     storage_options : dict, optional
         Additional keywords to pass to the filesystem class.
+    protocol: str or None
+        To override the protocol specifier in the URL
     """
     if isinstance(urlpath, (list, tuple)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
         protocols, paths = zip(*map(split_protocol, urlpath))
-        protocol = protocols[0]
+        protocol = protocol or protocols[0]
         if not all(p == protocol for p in protocols):
             raise ValueError("When specifying a list of paths, all paths must "
                              "share the same protocol")
@@ -216,7 +221,8 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
     elif isinstance(urlpath, str) or hasattr(urlpath, 'name'):
-        protocol, path = split_protocol(urlpath)
+        protocols, path = split_protocol(urlpath)
+        protocol = protocol or protocols
         cls = get_filesystem_class(protocol)
 
         path = cls._strip_protocol(urlpath)
