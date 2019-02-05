@@ -10,6 +10,19 @@ matrix:
   include:
     - python: 3.6
 
+env:
+  - DOCKER_COMPOSE_VERSION=1.23.2
+
+before_install:
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - sudo apt-get update
+  - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
+  - sudo rm /usr/local/bin/docker-compose
+  - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+  - chmod +x docker-compose
+  - sudo mv docker-compose /usr/local/bin
+
 install:
   # Install conda
   - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
@@ -21,10 +34,11 @@ install:
   # Install dependencies
   - conda create -n test -c conda-forge python=$TRAVIS_PYTHON_VERSION pip
   - source activate test
-  - conda install requests pytest paramiko pyftpdlib -y -c defaults -c conda-forge
+  - conda install requests pytest paramiko pyftpdlib cloudpickle pyarrow -y -c defaults -c conda-forge
+  - pip install git+https://github.com/jcrist/hadoop-test-cluster.git
 
 script:
-  - py.test -x --pyargs fsspec
+  - py.test -v --pyargs fsspec
 
 notifications:
   email: false

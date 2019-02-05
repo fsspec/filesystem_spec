@@ -259,7 +259,7 @@ class HTTPFile(object):
     def _fetch_all(self):
         """Read whole file in one shot, without caching
 
-        This is only called when size is None or position is still at zero,
+        This is only called when position is still at zero,
         and read() is called without a byte-count.
         """
         r = self.session.get(self.url, **self.kwargs)
