@@ -30,7 +30,7 @@ def server():
 
 
 def test_list(server):
-    h = fsspec.get_filesystem_class('http')()
+    h = fsspec.filesystem('http')
     out = h.glob(server + '/*.py')
     expected = glob.glob('*.py')
     for fn in expected:

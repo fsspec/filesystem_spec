@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import re
 import requests
+from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 
@@ -21,7 +22,8 @@ class HTTPFileSystem(AbstractFileSystem):
     """
     sep = '/'
 
-    def __init__(self, **storage_options):
+    def __init__(self, simple_links=True, block_size=None, same_scheme=True,
+                 **storage_options):
         """
         Parameters
         ----------
@@ -31,13 +33,18 @@ class HTTPFileSystem(AbstractFileSystem):
         simple_links: bool
             If True, will consider both HTML <a> tags and anything that looks
             like a URL; if False, will consider only the former.
+        same_scheme: True
+            When doing ls/glob, if this is True, only consider paths that have
+            http/https matching the input URLs.
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters passed on to requests
         """
         AbstractFileSystem.__init__(self)
-        self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
-        self.simple_links = storage_options.pop('simple_links', True)
+        self.block_size = (block_size if block_size is not None
+                           else DEFAULT_BLOCK_SIZE)
+        self.simple_links = simple_links
+        self.same_schema = same_scheme
         self.kwargs = storage_options
         self.session = requests.Session()
 
@@ -55,13 +62,20 @@ class HTTPFileSystem(AbstractFileSystem):
         else:
             links = ex.findall(r.text)
         out = set()
+        parts = urlparse(url)
         for l in links:
             if isinstance(l, tuple):
                 l = l[1]
             if l.startswith('http'):
-                if l.replace('https', 'http').startswith(
+                if self.same_schema:
+                    if l.split(':', 1)[0] == url.split(':', 1)[0]:
+                        out.add(l)
+                elif l.replace('https', 'http').startswith(
                         url.replace('https', 'http')):
+                    # allowed to cross http <-> https
                     out.add(l)
+            elif l.startswith('/') and len(l) > 1:
+                out.add(parts.scheme + '://' + parts.netloc + l)
             else:
                 if l not in ['..', '../']:
                     # Ignore FTP-like "parent"
@@ -205,6 +219,9 @@ class HTTPFile(object):
         if length == 0:
             # asked for no data, so supply no data and shortcut doing work
             return b''
+        if length < 0 and self.loc == 0:
+            # size was provided, but asked for whole file, so shortcut
+            return self._fetch_all()
         if self.size is None:
             if length >= 0:
                 # asked for specific amount of data, but we don't know how
@@ -213,9 +230,6 @@ class HTTPFile(object):
             else:
                 # asked for whole file
                 return self._fetch_all()
-        if length < 0 and self.loc == 0:
-            # size was provided, but asked for whole file, so shortcut
-            return self._fetch_all()
         if length < 0 or self.loc + length > self.size:
             end = self.size
         else:
@@ -354,8 +368,7 @@ def file_size(url, session, **kwargs):
     kwargs = kwargs.copy()
     ar = kwargs.pop('allow_redirects', True)
     head = kwargs.get('headers', {})
-    if 'Accept-Encoding' not in head:
-        head['Accept-Encoding'] = 'identity'
+    head['Accept-Encoding'] = 'identity'
     r = session.head(url, allow_redirects=ar, **kwargs)
     r.raise_for_status()
     if 'Content-Length' in r.headers:
