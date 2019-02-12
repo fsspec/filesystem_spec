@@ -47,13 +47,18 @@ Built-in Implementations
 
 .. autosummary::
    fsspec.implementations.ftp.FTPFileSystem
+   fsspec.implementations.hdfs.PyArrowHDFS
    fsspec.implementations.http.HTTPFileSystem
    fsspec.implementations.local.LocalFileSystem
    fsspec.implementations.memory.MemoryFileSystem
    fsspec.implementations.sftp.SFTPFileSystem
+   fsspec.implementations.webhdfs.WebHDFS
    fsspec.implementations.zip.ZipFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.hdfs.PyArrowHDFS
    :members: __init__
 
 .. autoclass:: fsspec.implementations.http.HTTPFileSystem
@@ -65,6 +70,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.sftp.SFTPFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.webhdfs.WebHDFS
    :members: __init__
 
 .. autoclass:: fsspec.implementations.zip.ZipFileSystem
