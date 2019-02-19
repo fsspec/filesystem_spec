@@ -85,12 +85,10 @@ class WebHDFS(AbstractFileSystem):
         self._connect()
 
     def _connect(self):
+        self.session = requests.Session()
         if self.kerb:
             from requests_kerberos import HTTPKerberosAuth
-            self.session = requests.Session(
-                auth=HTTPKerberosAuth(**self.kerb_kwargs))
-        else:
-            self.session = requests.Session()
+            self.session.auth = HTTPKerberosAuth(**self.kerb_kwargs)
 
     def _call(self, op, method='get', path=None, data=None,
               redirect=True, **kwargs):
