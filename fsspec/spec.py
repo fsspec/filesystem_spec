@@ -218,7 +218,7 @@ class AbstractFileSystem(object):
         """Remove a directory, if empty"""
         pass  # not necessary to implement, may not have directories
 
-    def ls(self, path, detail=False):
+    def ls(self, path, **kwargs):
         """List objects at path.
 
         This should include subdirectories and files at that location. The
@@ -228,12 +228,17 @@ class AbstractFileSystem(object):
         The specific keys, or perhaps a FileInfo class, or similar, is TBD,
         but must be consistent across implementations.
         Must include:
-        - full path to the entry
+        - full path to the entry (without protocol)
         - size of the entry, in bytes
+        - type of entry, "file", "directory" or other
 
         Additional information
-        may be present, approriate to the file-system, e.g., generation,
+        may be present, aproriate to the file-system, e.g., generation,
         checksum, etc.
+
+        May use refresh=True|False to allow use of self._ls_from_cache to
+        check for a saved listing and avoid calling the backend. This would be
+        common where listing may be expensive.
 
         Parameters
         ----------
@@ -242,8 +247,31 @@ class AbstractFileSystem(object):
             if True, gives a list of dictionaries, where each is the same as
             the result of ``info(path)``. If False, gives a list of paths
             (str).
+        kwargs: may have additional backend-specific options, such as version
+            information
+
+        Returns
+        -------
+        List of strings if detail is False, or list of directory information
+        dicts if detail is True.
         """
         raise NotImplementedError
+
+    def _ls_from_cache(self, path):
+        """Check cache for listing
+
+        Returns listing, if found (may me empty list for a directly that exists
+        but contains nothing), None if not in cache.
+        """
+        parent = self._parent(path)
+        if path in self.dircache:
+            return self.dircache[path]
+        elif parent in self.dircache:
+            files = [f for f in self.dircache[parent] if f['name'] == path]
+            if len(files) == 0:
+                # parent dir was listed but did not contain this file
+                raise FileNotFoundError(path)
+            return files
 
     def walk(self, path, maxdepth=3):
         """ Return all files belows path
@@ -374,30 +402,31 @@ class AbstractFileSystem(object):
         except:   # any exception allowed bar FileNotFoundError?
             return False
 
-    def info(self, path):
+    def info(self, path, **kwargs):
         """Give details of entry at path
 
         Returns a single dictionary, with exactly the same information as ``ls``
         would with ``detail=True``.
 
-        The default implementation should probably be overridden by a shortcut.
+        The default implementation should calls ls and could be overridden by a
+        shortcut. kwargs are passed on to ```ls()``.
 
         Returns
         -------
         dict with keys: name (full path in the FS), size (in bytes), type (file,
         directory, or something else) and other FS-specific keys.
         """
-        out = self.ls(path, detail=True)
+        out = self.ls(self._parent(path), detail=True, **kwargs)
+        out = [o for o in out if o['name'].rstrip('/') == path]
+        if out:
+            return out[0]
+        out = self.ls(path, detail=True, **kwargs)
         path = path.rstrip('/')
-        out = [o for o in out if o['name'].rstrip('/') == path]
-        if out:
-            return out[0]
-
-        out = self.ls(self._parent(path), detail=True)
-        out = [o for o in out if o['name'].rstrip('/') == path]
-        if out:
-            return out[0]
-        raise FileNotFoundError(path)
+        out1 = [o for o in out if o['name'].rstrip('/') == path]
+        if len(out1) == 1:
+            return out1[0]
+        else:
+            return {'name': path, 'size': 0, 'type': 'directory'}
 
     def size(self, path):
         """Size in bytes of file"""
@@ -537,9 +566,18 @@ class AbstractFileSystem(object):
                 self.transaction.files.append(f)
             return f
 
-    def touch(self, path, **kwargs):
-        """ Create empty file, or update timestamp """
-        if not self.exists(path):
+    def touch(self, path, truncate=True, **kwargs):
+        """ Create empty file, or update timestamp
+
+        Parameters
+        ----------
+        path : str
+            file location
+        truncate : bool
+            If True, always set file size to 0; if False, update timestamp and
+            leave file unchanged, if backend allows this
+        """
+        if truncate or not self.exists(path):
             with self.open(path, 'wb', **kwargs):
                 pass
         else:
