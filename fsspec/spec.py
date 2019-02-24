@@ -882,6 +882,8 @@ class AbstractBufferedFile(object):
 
         Will read ahead by blocksize bytes.
         """
+        # TODO: only set start/end after fetch, in case it fails?
+        # is this where retry logic might go?
         if self.start is None and self.end is None:
             # First read
             self.start = start

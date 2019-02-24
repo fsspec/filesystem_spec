@@ -44,8 +44,7 @@ def ftp_writable(tmpdir):
 def test_basic(ftp):
     host, port = ftp
     fs = FTPFileSystem(host, port)
-    assert fs.ls('/', detail=False) == sorted(
-        ['/' + f for f in os.listdir(here)])
+    assert fs.ls('/', detail=False) == sorted(os.listdir(here))
     out = fs.cat('/' + os.path.basename(__file__))
     assert out == open(__file__, 'rb').read()
 

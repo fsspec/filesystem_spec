@@ -1,4 +1,3 @@
-from pyarrow.hdfs import HadoopFileSystem
 from ..spec import AbstractFileSystem
 
 
@@ -28,6 +27,7 @@ class PyArrowHDFS(AbstractFileSystem):
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
+        from pyarrow.hdfs import HadoopFileSystem
         self.driver = HadoopFileSystem(host=host, port=port, user=user,
                                        kerb_ticket=kerb_ticket, driver=driver,
                                        extra_conf=extra_conf)

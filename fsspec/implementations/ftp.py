@@ -35,15 +35,18 @@ class FTPFileSystem(AbstractFileSystem):
             Directory on remote to put temporary files when in a transaction
         """
         super(FTPFileSystem, self).__init__()
-        self.ftp = FTP()
         self.host = host
         self.port = port
         self.tempdir = tempdir
-        self.dircache = {}
+        self.cred = username, password, acct
         if block_size is not None:
             self.blocksize = block_size
-        self.ftp.connect(host, port)
-        self.ftp.login(username, password, acct)
+        self._connect()
+
+    def _connect(self):
+        self.ftp = FTP()
+        self.ftp.connect(self.host, self.port)
+        self.ftp.login(*self.cred)
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -64,32 +67,31 @@ class FTPFileSystem(AbstractFileSystem):
         out = []
         if path not in self.dircache:
             try:
-                self.dircache[path] = list(self.ftp.mlsd(path))
+                out = list(self.ftp.mlsd(path))
+                for fn, details in out:
+                    if path == '/':
+                        path = ''  # just for forming the names, below
+                    if fn in ['.', '..']:
+                        continue
+                    details['name'] = '/'.join([path, fn.lstrip('/')])
+                    if details['type'] == 'file':
+                        details['size'] = int(details['size'])
+                    else:
+                        details['size'] = 0
+                self.dircache[path] = out
             except Error:
                 try:
                     info = self.info(path)
                     if info['type'] == 'file':
-                        out = [info]
+                        out = [(path, info)]
                 except (Error, IndexError):
                     raise FileNotFoundError
         files = self.dircache.get(path, out)
-        if path == '/':
-            path = ''  # just for forming the names, below
         if not detail:
-            return sorted(['/'.join([path, f[0]]) for f in files])
-        out = []
-        for fn, details in sorted(files):
-            if fn in ['.', '..']:
-                continue
-            details['name'] = '/'.join([path, fn])
-            if details['type'] == 'file':
-                details['size'] = int(details['size'])
-            else:
-                details['size'] = 0
-            out.append(details)
-        return out
+            return sorted([fn for fn, details in files])
+        return [details for fn, details in files]
 
-    def info(self, path):
+    def info(self, path, **kwargs):
         # implement with direct method
         path = self._strip_protocol(path)
         files = self.ls(self._parent(path), True)
@@ -121,6 +123,9 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp.rename(path1, path2)
         self.invalidate_cache(self._parent(path1))
         self.invalidate_cache(self._parent(path2))
+
+    def __del__(self):
+        self.ftp.close()
 
 
 class TransferDone(Exception):
@@ -171,7 +176,7 @@ class FTPFile(AbstractBufferedFile):
             self.fs.ftp.retrbinary('RETR %s' % self.path, blocksize=2**16,
                                    rest=start, callback=callback)
         except TransferDone:
-            pass
+            self.fs.ftp.abort()
         return b''.join(out)
 
     def _upload_chunk(self, final=False):
