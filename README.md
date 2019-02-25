@@ -5,6 +5,16 @@
 
 A specification for pythonic filesystems.
 
+## Install
+
+```bash
+pip install fsspec
+```
+or
+```bash
+conda install -c conda-forge fsspec
+```
+
 ## Purpose
 
 To produce a template or specification for a file-system interface, that specific implementations should follow,
