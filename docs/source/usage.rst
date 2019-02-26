@@ -72,10 +72,10 @@ or write mode (create names). Critically, the file on the backend system is not 
 
 .. code-block:: python
 
-   files = fsspec.open_files('https://raw.githubusercontent.com/dask/'
-                             'fastparquet/master/test-data/nation.csv', mode='r')
-   # files is a list of not-yet-open objects
-   with files[0] as f:
+   of = fsspec.open('https://raw.githubusercontent.com/dask/'
+                    'fastparquet/master/test-data/nation.csv', mode='r')
+   # files is a not-yet-open OpenFile object. The "with" context actually opens it
+   with of as f:
        # now f is a text-mode file
        df = pd.read_csv(f, sep='|', header=None)
 
