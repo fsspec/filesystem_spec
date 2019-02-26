@@ -53,7 +53,7 @@ to work with python files. These will normally be binary-mode only, but may impl
 in order to limit the number of reads from a remote source. They respect the use of ``with`` contexts. If
 you have ``pandas`` installed, for example, you can do the following:
 
-.. code-block::
+.. code-block:: python
 
     with fs.open('https://raw.githubusercontent.com/dask/'
                  'fastparquet/master/test-data/nation.csv') as f:
