@@ -247,7 +247,7 @@ def _expand_paths(path, name_function, num):
     if isinstance(path, str):
         if path.count('*') > 1:
             raise ValueError("Output path spec must contain at most one '*'.")
-        elif '*' not in path:
+        elif '*' not in path and num > 1:
             path = os.path.join(path, '*.part')
 
         if name_function is None:

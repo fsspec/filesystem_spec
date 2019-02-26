@@ -14,15 +14,9 @@ which may be local, structured data store or some remote service.
 
 This repository is intended to be a place to define a standard interface that such file-systems should adhere to,
 such that code using them should not have to know the details of the implementation in order to operate on any of
-a number of backends.
-
-Everything here is up for discussion, and although a little code has already been included to kick things off, it
-is only meant as a suggestion of one possible way of doing things. With hope, the community can come together to
+a number of backends. With hope, the community can come together to
 define an interface that is the best for the highest number of users, and having the specification, makes developing
 other file-system implementations simpler.
-
-There is no specific model (yet) of how the contents of this repo would be used, whether as a spec to refer to,
-or perhaps something to subclass or use as a mixin, that can also form part of the conversation.
 
 History
 -------
@@ -60,7 +54,7 @@ and each has a user-base wider than just those that work via Dask.
 Influences
 ----------
 
-The following places to consider, when chosing the definitions of how we would like the file-system specification
+The following places to consider, when choosing the definitions of how we would like the file-system specification
 to look:
 
 - python's `os`_ module and its `path` namespace; also other file-connected
@@ -76,6 +70,18 @@ to look:
 .. _os: https://docs.python.org/3/library/os.html
 .. _gcsfs: http://gcsfs.readthedocs.io/en/latest/api.html#gcsfs.core.GCSFileSystem
 .. _pyfilesystems: https://docs.pyfilesystem.org/en/latest/index.html
+
+Not pyfilesystems?
+------------------
+
+It might have been conceivable to reuse code in ``pyfilesystems``, which has an established interface and several
+implementations of its own. However, it supports none of the :ref:`highlight`, critical to
+cloud and parallel access, and would not be easy to
+coerce. Following on the success of ``s3fs`` and ``gcsfs``, and their use within Dask, it seemed best to
+have an interface as close to those as possible. See a
+`discussion`_ on the topic.
+
+.. _discussion: https://github.com/martindurant/filesystem_spec/issues/5
 
 Structure of the package
 ------------------------
