@@ -88,6 +88,11 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
                errors=None, name_function=None, num=1, protocol=None, **kwargs):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
 
+    For writing, a str path must contain the "*" character, which will be filled
+    in by increasing numbers, e.g., "part*" ->  "part1", "part2" if num=2.
+
+    For either reading or writing, can instead provide explicit list of paths.
+
     Parameters
     ----------
     urlpath : string or list
@@ -131,6 +136,42 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     return [OpenFile(fs, path, mode=mode, compression=compression,
                      encoding=encoding, errors=errors)
             for path in paths]
+
+
+def open(urlpath, mode='rb', compression=None, encoding='utf8',
+         errors=None, protocol=None, **kwargs):
+    """ Given a path or paths, return one ``OpenFile`` object.
+
+    Parameters
+    ----------
+    urlpath : string or list
+        Absolute or relative filepath. Prefix with a protocol like ``s3://``
+        to read from alternative filesystems. Should not include glob
+        character(s).
+    mode : 'rb', 'wt', etc.
+    compression : string
+        Compression to use.  See ``dask.bytes.compression.files`` for options.
+    encoding : str
+        For text mode only
+    errors : None or str
+        Passed to TextIOWrapper in text mode
+    protocol : str or None
+        If given, overrides the protocol found in the URL.
+    **kwargs : dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
+
+    Examples
+    --------
+    >>> openfile = open('2015-01-01.csv')  # doctest: +SKIP
+    >>> openfile = open('s3://bucket/2015-01-01.csv.gz', compression='gzip')  # doctest: +SKIP
+
+    Returns
+    -------
+    ``OpenFile`` object.
+    """
+    return open_files([urlpath], mode, compression, encoding, errors,
+                      protocol, **kwargs)[0]
 
 
 def get_compression(urlpath, compression):
@@ -245,10 +286,8 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 
 def _expand_paths(path, name_function, num):
     if isinstance(path, str):
-        if path.count('*') > 1:
-            raise ValueError("Output path spec must contain at most one '*'.")
-        elif '*' not in path and num > 1:
-            path = os.path.join(path, '*.part')
+        if path.count('*') != 1:
+            raise ValueError("Output path spec must contain exactly one '*'.")
 
         if name_function is None:
             name_function = build_name_function(num - 1)

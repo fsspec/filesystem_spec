@@ -8,11 +8,13 @@ User Functions
 
 .. autosummary::
    fsspec.open_files
+   fsspec.open
    fsspec.filesystem
    fsspec.get_filesystem_class
    fsspec.get_mapper
 
 .. autofunction:: fsspec.open_files
+.. autofunction:: fsspec.open
 .. autofunction:: fsspec.filesystem
 .. autofunction:: fsspec.get_filesystem_class
 .. autofunction:: fsspec.get_mapper

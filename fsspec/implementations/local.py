@@ -102,6 +102,10 @@ class LocalFileOpener(object):
             raise RuntimeError('Cannot discard if set to autocommit')
         os.remove(self.temp)
 
+    def __fspath__(self):
+        # uniquely for fsspec implementations, this is a real path
+        return self.path
+
     def __getattr__(self, item):
         return getattr(self.f, item)
 

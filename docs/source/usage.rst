@@ -53,7 +53,7 @@ to work with python files. These will normally be binary-mode only, but may impl
 in order to limit the number of reads from a remote source. They respect the use of ``with`` contexts. If
 you have ``pandas`` installed, for example, you can do the following:
 
-.. code-block::
+.. code-block:: python
 
     with fs.open('https://raw.githubusercontent.com/dask/'
                  'fastparquet/master/test-data/nation.csv') as f:
@@ -72,10 +72,10 @@ or write mode (create names). Critically, the file on the backend system is not 
 
 .. code-block:: python
 
-   files = fsspec.open_files('https://raw.githubusercontent.com/dask/'
-                             'fastparquet/master/test-data/nation.csv', mode='r')
-   # files is a list of not-yet-open objects
-   with files[0] as f:
+   of = fsspec.open('https://raw.githubusercontent.com/dask/'
+                    'fastparquet/master/test-data/nation.csv', mode='r')
+   # files is a not-yet-open OpenFile object. The "with" context actually opens it
+   with of as f:
        # now f is a text-mode file
        df = pd.read_csv(f, sep='|', header=None)
 
