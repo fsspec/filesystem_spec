@@ -205,8 +205,8 @@ def test_isdir():
                          [(None, open), ('gzip', gzip.open)])
 def test_open_files_write(tmpdir, compression_opener):
     compression, opener = compression_opener
-    tmpdir = str(tmpdir) + "/*"
-    files = open_files(tmpdir, num=2, mode='wb', compression=compression)
+    fn = str(tmpdir) + "/*.part"
+    files = open_files(fn, num=2, mode='wb', compression=compression)
     assert len(files) == 2
     assert {f.mode for f in files} == {'wb'}
     for fil in files:
