@@ -88,6 +88,11 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
                errors=None, name_function=None, num=1, protocol=None, **kwargs):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
 
+    For writing, a str path must contain the "*" character, which will be filled
+    in by increasing numbers, e.g., "part*" ->  "part1", "part2" if num=2.
+
+    For either reading or writing, can instead provide explicit list of paths.
+
     Parameters
     ----------
     urlpath : string or list
@@ -282,8 +287,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 def _expand_paths(path, name_function, num):
     if isinstance(path, str):
         if path.count('*') != 1:
-            raise ValueError("Output path spec must contain exactly most one "
-                             "'*'.")
+            raise ValueError("Output path spec must contain exactly one '*'.")
 
         if name_function is None:
             name_function = build_name_function(num - 1)
