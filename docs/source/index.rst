@@ -10,7 +10,8 @@ file-system-like abstractions using a standard pythonic interface.
 Highlights
 ----------
 
-- ``fsspec`` instances are serializable and can be passe between processes/machines
+- based on s3fs and gcsfs
+- ``fsspec`` instances are serializable and can be passed between processes/machines
 - the ``OpenFiles`` file-like instances are also serializable
 - implementations provide random access, to enable only the part of a file required to be read; plus a template
   to base other file-like classes on
