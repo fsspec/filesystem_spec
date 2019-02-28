@@ -22,7 +22,7 @@ class FUSEr(Operations):
         self.counter = 0
     
     def getattr(self, path, fh=None):
-        path = ''.join([self.root, path.lstrip('/')])
+        path = ''.join([self.root, path.lstrip('/')]).rstrip('/')
         info = self.fs.info(path)
         data = {'st_uid': 1000, 'st_gid': 1000}
         perm = 0o777

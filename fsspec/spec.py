@@ -425,8 +425,10 @@ class AbstractFileSystem(object):
         out1 = [o for o in out if o['name'].rstrip('/') == path]
         if len(out1) == 1:
             return out1[0]
-        else:
+        elif len(out1) > 1:
             return {'name': path, 'size': 0, 'type': 'directory'}
+        else:
+            raise FileNotFoundError
 
     def size(self, path):
         """Size in bytes of file"""
