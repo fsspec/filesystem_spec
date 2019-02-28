@@ -84,10 +84,6 @@ class ZipFileSystem(AbstractFileSystem):
         else:
             return list(sorted(f['name'] for f in out))
 
-    def info(self, path):
-        self._get_dirs()
-        return self.dir_cache[path]
-
     def cat(self, path):
         return self.zip.read(path)
 
