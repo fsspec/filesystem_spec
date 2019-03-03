@@ -35,7 +35,7 @@ class SFTPFileSystem(AbstractFileSystem):
     def _connect(self):
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(self.host, **self.ssh_kwargs)
+        self.client.connect(self.host, **self.kwargs)
         self.ftp = self.client.open_sftp()
 
     def __getstate__(self):
