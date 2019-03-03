@@ -48,6 +48,15 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        d.pop('ftp')
+        return d
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._connect()
+
     @classmethod
     def _strip_protocol(cls, path):
         return '/' + infer_storage_options(path)['path'].lstrip('/').rstrip('/')

@@ -12,12 +12,14 @@ User Functions
    fsspec.filesystem
    fsspec.get_filesystem_class
    fsspec.get_mapper
+   fsspec.fuse.run
 
 .. autofunction:: fsspec.open_files
 .. autofunction:: fsspec.open
 .. autofunction:: fsspec.filesystem
 .. autofunction:: fsspec.get_filesystem_class
 .. autofunction:: fsspec.get_mapper
+.. autofunction:: fsspec.fuse.run
 
 Base Classes
 ------------
@@ -43,6 +45,9 @@ Base Classes
 
 .. autoclass:: fsspec.core.OpenFile
    :members:
+
+
+.. _implementations:
 
 Built-in Implementations
 ------------------------
