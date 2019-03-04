@@ -59,7 +59,7 @@ class SFTPFileSystem(AbstractFileSystem):
     def mkdir(self, path, mode=511):
         self.ftp.mkdir(path, mode)
 
-    def mkdirs(self, path, mode=511):
+    def makedirs(self, path, mode=511):
         parts = path.split('/')
         path = ''
         for part in parts:

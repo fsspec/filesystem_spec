@@ -297,7 +297,12 @@ class AbstractFileSystem(object):
         dirs = []
         files = []
 
-        for info in self.ls(path, True):
+        try:
+            listing = self.ls(path, True)
+        except FileNotFoundError:
+            return [], [], []
+
+        for info in listing:
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
             name = info['name'].rstrip('/')
