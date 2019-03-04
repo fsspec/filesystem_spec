@@ -29,13 +29,13 @@ class SFTPFileSystem(AbstractFileSystem):
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
         self.temppath = ssh_kwargs.get('temppath', '/tmp')
         self.host = host
-        self.kwargs = ssh_kwargs
+        self.ssh_kwargs = ssh_kwargs
         self._connect()
 
     def _connect(self):
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(self.host, **self.kwargs)
+        self.client.connect(self.host, **self.ssh_kwargs)
         self.ftp = self.client.open_sftp()
 
     def __getstate__(self):
