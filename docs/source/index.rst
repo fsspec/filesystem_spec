@@ -21,7 +21,10 @@ Highlights
   can work with any arrow function expecting such an instance
 - writes can be transactional: stored in a temporary location and only moved to the final
   destination when the transaction is committed
+- FUSE: mount any path from any backend to a point on your file-system
+- cached instances tokenised on the instance parameters
 
+These are described further in the :doc:`features` section.
 
 Installation
 ------------
@@ -32,6 +35,13 @@ or
 
    conda install -c conda-forge fsspec
 
+Implementations
+---------------
+
+This repo contains several file-system implementations, see :ref:`implementations`. However,
+the external projects ``s3fs`` and ``gcsfs`` are also developing compatibility with ``fsspec`` and
+will eventually depend upon it.
+
 
 .. toctree::
    :maxdepth: 2
@@ -39,6 +49,7 @@ or
 
    intro.rst
    usage.rst
+   features.rst
    api.rst
 
 

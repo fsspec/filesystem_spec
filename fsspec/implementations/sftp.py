@@ -27,11 +27,26 @@ class SFTPFileSystem(AbstractFileSystem):
             May include port, username, password...
         """
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
+        self.temppath = ssh_kwargs.get('temppath', '/tmp')
+        self.host = host
+        self.ssh_kwargs = ssh_kwargs
+        self._connect()
+
+    def _connect(self):
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(host, **ssh_kwargs)
+        self.client.connect(self.host, **self.ssh_kwargs)
         self.ftp = self.client.open_sftp()
-        self.temppath = ssh_kwargs.get('temppath', '/tmp')
+
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        d.pop('ftp', None)
+        d.pop('client', None)
+        return d
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._connect()
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -44,7 +59,7 @@ class SFTPFileSystem(AbstractFileSystem):
     def mkdir(self, path, mode=511):
         self.ftp.mkdir(path, mode)
 
-    def mkdirs(self, path, mode=511):
+    def makedirs(self, path, mode=511):
         parts = path.split('/')
         path = ''
         for part in parts:

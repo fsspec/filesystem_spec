@@ -165,6 +165,8 @@ def open(urlpath, mode='rb', compression=None, encoding='utf8',
     --------
     >>> openfile = open('2015-01-01.csv')  # doctest: +SKIP
     >>> openfile = open('s3://bucket/2015-01-01.csv.gz', compression='gzip')  # doctest: +SKIP
+    ... with openfile as f:
+    ...     df = pd.read_csv(f)
 
     Returns
     -------

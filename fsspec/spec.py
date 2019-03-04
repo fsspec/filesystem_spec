@@ -3,8 +3,10 @@ import io
 from .utils import read_block, tokenize
 
 # alternative names for some methods, which get patched to new instances
+# (alias, original)
 aliases = [
     ('makedir', 'mkdir'),
+    ('mkdirs', 'makedirs'),
     ('listdir', 'ls'),
     ('cp', 'copy'),
     ('move', 'mv'),
@@ -295,7 +297,12 @@ class AbstractFileSystem(object):
         dirs = []
         files = []
 
-        for info in self.ls(path, True):
+        try:
+            listing = self.ls(path, True)
+        except FileNotFoundError:
+            return [], [], []
+
+        for info in listing:
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
             name = info['name'].rstrip('/')
@@ -385,7 +392,7 @@ class AbstractFileSystem(object):
         allpaths = []
         for dirname, dirs, fils in self.walk(root, maxdepth=depth):
             allpaths.extend(posixpath.join(dirname, f) for f in fils)
-        pattern = re.compile("^" + path.replace('.', '\.')
+        pattern = re.compile("^" + path.replace('.', r'\.')
                              .replace('//', '/')
                              .rstrip('/')
                              .replace('*', '[^/]*')
@@ -425,8 +432,10 @@ class AbstractFileSystem(object):
         out1 = [o for o in out if o['name'].rstrip('/') == path]
         if len(out1) == 1:
             return out1[0]
-        else:
+        elif len(out1) > 1:
             return {'name': path, 'size': 0, 'type': 'directory'}
+        else:
+            raise FileNotFoundError
 
     def size(self, path):
         """Size in bytes of file"""

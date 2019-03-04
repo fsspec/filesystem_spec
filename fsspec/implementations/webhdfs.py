@@ -90,6 +90,15 @@ class WebHDFS(AbstractFileSystem):
             from requests_kerberos import HTTPKerberosAuth
             self.session.auth = HTTPKerberosAuth(**self.kerb_kwargs)
 
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        d.pop('session', None)
+        return d
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._connect()
+
     def _call(self, op, method='get', path=None, data=None,
               redirect=True, **kwargs):
         url = self.url + quote(path or "")
