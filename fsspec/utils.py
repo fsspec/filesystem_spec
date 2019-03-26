@@ -152,9 +152,13 @@ def seek_delimiter(file, delimiter, blocksize):
             return
         full = last + current
         try:
-            i = full.index(delimiter)
-            file.seek(file.tell() - (len(full) - i) + len(delimiter))
-            return
+            if delimiter in full:
+                i = full.index(delimiter)
+                file.seek(file.tell() - (len(full) - i) + len(delimiter))
+                return
+            elif len(current) < blocksize:
+                # end-of-file without delimiter
+                return
         except ValueError:
             pass
         last = full[-len(delimiter):]

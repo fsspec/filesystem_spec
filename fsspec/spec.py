@@ -24,7 +24,7 @@ class AbstractFileSystem(object):
     Implementations are expected to be compatible with or, better, subclass
     from here.
     """
-    _singleton = None  # will contain the newest instance
+    _singleton = [None]  # will contain the newest instance
     _cache = None
     cachable = True  # this class can be cached, instances reused
     _cached = False
@@ -40,9 +40,6 @@ class AbstractFileSystem(object):
 
         The instance will skip init if instance.cached = True.
         """
-        if cls._singleton is None:
-            # set up space for singleton
-            cls._singleton = [None]
         if cls._cache is None and cls.cachable:
             # set up instance cache, if using
             cls._cache = {}
@@ -83,11 +80,20 @@ class AbstractFileSystem(object):
         self._transaction = Transaction(self)
         self._singleton[0] = self
         self.dircache = {}
-        if storage_options.get('add_docs', True):
+        if storage_options.pop('add_docs', True):
             self._mangle_docstrings()
-        if storage_options.get('add_aliases', True):
+        if storage_options.pop('add_aliases', True):
             for new, old in aliases:
-                setattr(self, new, getattr(self, old))
+                if not hasattr(self, new):
+                    # don't apply alias if attribute exists already
+                    setattr(self, new, getattr(self, old))
+
+    @classmethod
+    def clear_instance_cache(cls, remove_singleton=True):
+        """Remove any instances stored in class attributes"""
+        cls._cache.clear()
+        if remove_singleton:
+            cls._singleton = [None]
 
     def _mangle_docstrings(self):
         """Add AbstractFileSystem docstrings to subclass methods
@@ -128,6 +134,7 @@ class AbstractFileSystem(object):
             path = path[len(cls.protocol) + 1:]
         elif path.startswith(cls.protocol):
             path = path[len(cls.protocol):]
+        # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
     @staticmethod
@@ -637,7 +644,7 @@ class AbstractFileSystem(object):
             size = f.size
             if length is None:
                 length = size
-            if offset + length > size:
+            if size is not None and offset + length > size:
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
