@@ -187,8 +187,6 @@ class HTTPFile(object):
 
         Returns the position.
         """
-        if self.size is None and (where, whence) not in [(0, 0), (0, 1)]:
-            raise ValueError('Cannot seek since size of file is not known')
         if whence == 0:
             nloc = where
         elif whence == 1:
@@ -223,18 +221,14 @@ class HTTPFile(object):
             # size was provided, but asked for whole file, so shortcut
             return self._fetch_all()
         if self.size is None:
-            if length >= 0:
-                # asked for specific amount of data, but we don't know how
-                # much is available
-                raise ValueError('File size is unknown, must read all data')
-            else:
-                # asked for whole file
+            if length == 0:
                 return self._fetch_all()
-        if length < 0 or self.loc + length > self.size:
+        if length < 0 or (self.size is not None
+                          and self.loc + length > self.size):
             end = self.size
         else:
             end = self.loc + length
-        if self.loc >= self.size:
+        if self.size is not None and self.loc >= self.size:
             # EOF (python files don't error, just return no data)
             return b''
         self. _fetch(self.loc, end)
