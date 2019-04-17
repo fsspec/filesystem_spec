@@ -16,8 +16,14 @@ aliases = [
     ('delete', 'rm'),
 ]
 
+try:   # optionally derive from pyarrow's FileSystem, if available
+    import pyarrow as pa
+    up = pa.filesystem.DaskFileSystem
+except ImportError:
+    up = object
 
-class AbstractFileSystem(object):
+
+class AbstractFileSystem(up):
     """
     An abstract super-class for pythonic file-systems
 
@@ -961,9 +967,12 @@ class AbstractBufferedFile(object):
 
         https://docs.python.org/3/library/io.html#io.RawIOBase.readinto
         """
-        data = self.read()
+        data = self.read(len(b))
         b[:len(data)] = data
         return len(data)
+
+    def readinto1(self, b):
+        return self.readinto(b)
 
     def close(self):
         """ Close file
