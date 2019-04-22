@@ -4,6 +4,7 @@ import re
 import requests
 from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
+from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 
 # https://stackoverflow.com/a/15926317/3821154
@@ -133,7 +134,7 @@ class HTTPFileSystem(AbstractFileSystem):
         return file_size(url, session=self.session, **self.kwargs)
 
 
-class HTTPFile(object):
+class HTTPFile(AbstractBufferedFile):
     """
     A file-like object pointing to a remove HTTP(S) resource
 
@@ -155,54 +156,27 @@ class HTTPFile(object):
     kwargs: all other key-values are passed to reqeuests calls.
     """
 
-    def __init__(self, url, session=None, block_size=None, **kwargs):
+    def __init__(self, url, session=None, block_size=None, mode='rb', **kwargs):
+        if mode != 'rb':
+            raise NotImplementedError('File mode not supported')
         self.url = url
         self.kwargs = kwargs
-        self.loc = 0
         self.session = session if session is not None else requests.Session()
-        self.blocksize = (block_size if block_size is not None
-                          else DEFAULT_BLOCK_SIZE)
         try:
             self.size = file_size(url, self.session, allow_redirects=True,
                                   **self.kwargs)
         except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
             self.size = None
-        self.cache = None
-        self.closed = False
-        self.start = None
+        self.mode = mode
+        self.blocksize = (self.DEFAULT_BLOCK_SIZE
+                          if block_size == 'default' else block_size)
+        self.cache = b""
+        self.loc = 0
         self.end = None
-
-    def seek(self, where, whence=0):
-        """Set file position
-
-        Parameters
-        ----------
-        where: int
-            Location to set
-        whence: int (default 0)
-            If zero, set from start of file (value should be positive); if 1,
-            set relative to current position; if 2, set relative to end of file
-            (value shoulf be negative)
-
-        Returns the position.
-        """
-        if whence == 0:
-            nloc = where
-        elif whence == 1:
-            nloc = self.loc + where
-        elif whence == 2:
-            nloc = self.size + where
-        else:
-            raise ValueError('Whence must be in [1, 2, 3], but got %s' % whence)
-        if nloc < 0:
-            raise ValueError('Seek before start of file')
-        self.loc = nloc
-        return nloc
-
-    def tell(self):
-        """Get current file byte position"""
-        return self.loc
+        self.start = None
+        self.closed = False
+        self.trim = True
 
     def read(self, length=-1):
         """Read bytes from file
@@ -214,55 +188,13 @@ class HTTPFile(object):
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
-        if length == 0:
-            # asked for no data, so supply no data and shortcut doing work
-            return b''
         if length < 0 and self.loc == 0:
             # size was provided, but asked for whole file, so shortcut
             return self._fetch_all()
         if self.size is None:
             if length == 0:
                 return self._fetch_all()
-        if length < 0 or (self.size is not None
-                          and self.loc + length > self.size):
-            end = self.size
-        else:
-            end = self.loc + length
-        if self.size is not None and self.loc >= self.size:
-            # EOF (python files don't error, just return no data)
-            return b''
-        self. _fetch(self.loc, end)
-        data = self.cache[self.loc - self.start:end - self.start]
-        self.loc = end
-        return data
-
-    def _fetch(self, start, end):
-        """Set new bounds for data cache and fetch data, if required"""
-        if self.start is None and self.end is None:
-            # First read
-            self.start = start
-            self.end = end + self.blocksize
-            self.cache = self._fetch_range(start, self.end)
-        elif start < self.start:
-            if self.end - end > self.blocksize:
-                self.start = start
-                self.end = end + self.blocksize
-                self.cache = self._fetch_range(self.start, self.end)
-            else:
-                new = self._fetch_range(start, self.start)
-                self.start = start
-                self.cache = new + self.cache
-        elif end > self.end:
-            if self.end > self.size:
-                return
-            if end - self.end > self.blocksize:
-                self.start = start
-                self.end = end + self.blocksize
-                self.cache = self._fetch_range(self.start, self.end)
-            else:
-                new = self._fetch_range(self.end, end + self.blocksize)
-                self.end = end + self.blocksize
-                self.cache = self.cache + new
+        return super().read(length)
 
     def _fetch_all(self):
         """Read whole file in one shot, without caching
@@ -322,35 +254,6 @@ class HTTPFile(object):
             else:
                 break
         return b''.join(out)
-
-    def __enter__(self):
-        self.loc = 0
-        return self
-
-    def __exit__(self, *args):
-        self.close()
-
-    def __iter__(self):
-        # no text lines here, use TextIOWrapper
-        raise NotImplementedError
-
-    def write(self):
-        raise NotImplementedError
-
-    def flush(self):
-        pass
-
-    def close(self):
-        self.closed = True
-
-    def seekable(self):
-        return True
-
-    def writable(self):
-        return False
-
-    def readable(self):
-        return True
 
 
 def file_size(url, session, **kwargs):
