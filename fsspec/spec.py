@@ -802,6 +802,7 @@ class AbstractBufferedFile(object):
         whence : {0, 1, 2}
             from start of file, current location or end of file, resp.
         """
+        loc = int(loc)
         if not self.mode == 'rb':
             raise ValueError('Seek only available in read mode')
         if whence == 0:
@@ -945,6 +946,7 @@ class AbstractBufferedFile(object):
         length : int (-1)
             Number of bytes to read; if <0, all remaining bytes.
         """
+        length = int(length)
         if self.mode != 'rb':
             raise ValueError('File not in read mode')
         if length < 0:
@@ -996,7 +998,7 @@ class AbstractBufferedFile(object):
 
     def readable(self):
         """Whether opened for reading"""
-        return self.mode == 'rb'
+        return self.mode == 'rb' and not self.closed
 
     def seekable(self):
         """Whether is seekable (only in read mode)"""
@@ -1004,7 +1006,7 @@ class AbstractBufferedFile(object):
 
     def writable(self):
         """Whether opened for writing"""
-        return self.mode in {'wb', 'ab'}
+        return self.mode in {'wb', 'ab'} and not self.closed
 
     def __del__(self):
         self.close()

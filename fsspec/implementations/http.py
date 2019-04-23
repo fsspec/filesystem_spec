@@ -190,10 +190,10 @@ class HTTPFile(AbstractBufferedFile):
         """
         if length < 0 and self.loc == 0:
             # size was provided, but asked for whole file, so shortcut
-            return self._fetch_all()
+            self._fetch_all()
         if self.size is None:
-            if length == 0:
-                return self._fetch_all()
+            if length < 0:
+                self._fetch_all()
         return super().read(length)
 
     def _fetch_all(self):
@@ -213,8 +213,7 @@ class HTTPFile(AbstractBufferedFile):
             self.end = l
             self.cache = out
             self.size = l
-        self.loc = len(out)
-        return out
+        self.cache = out
 
     def _fetch_range(self, start, end):
         """Download a block of data
@@ -231,29 +230,31 @@ class HTTPFile(AbstractBufferedFile):
         r.raise_for_status()
         if r.status_code == 206:
             # partial content, as expected
-            return r.content
-        if 'Content-Length' in r.headers:
+            out = r.content
+        elif 'Content-Length' in r.headers:
             cl = int(r.headers['Content-Length'])
             if cl <= end - start:
                 # data size OK
-                return r.content
+                out = r.content
             else:
                 raise ValueError('Got more bytes (%i) than requested (%i)' % (
                     cl, end - start))
-        cl = 0
-        out = []
-        for chunk in r.iter_content(chunk_size=2 ** 20):
-            # data size unknown, let's see if it goes too big
-            if chunk:
-                out.append(chunk)
-                cl += len(chunk)
-                if cl > end - start:
-                    raise ValueError(
-                        'Got more bytes so far (>%i) than requested (%i)' % (
-                            cl, end - start))
-            else:
-                break
-        return b''.join(out)
+        else:
+            cl = 0
+            out = []
+            for chunk in r.iter_content(chunk_size=2 ** 20):
+                # data size unknown, let's see if it goes too big
+                if chunk:
+                    out.append(chunk)
+                    cl += len(chunk)
+                    if cl > end - start:
+                        raise ValueError(
+                            'Got more bytes so far (>%i) than requested (%i)' % (
+                                cl, end - start))
+                else:
+                    break
+            out = b''.join(out)
+        return out
 
 
 def file_size(url, session, **kwargs):
