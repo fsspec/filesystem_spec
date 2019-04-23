@@ -1067,14 +1067,14 @@ class BytesCache(object):
                 self.end = end + self.blocksize
                 self.cache = self.cache + new
 
+        offset = start - self.start
+        out = self.cache[offset:offset + end - start]
         if self.trim:
             num = (self.end - self.start) // self.blocksize - 1
             if num > 0:
                 self.start += self.blocksize * num
                 self.cache = self.cache[self.blocksize * num:]
-
-        offset = start - self.start
-        return self.cache[offset:offset + end - start]
+        return out
 
     def __len__(self):
         # for testing

@@ -84,6 +84,7 @@ def test_write_big(ftp_writable):
         f.flush()
         assert f.buffer.tell() == 0
 
+    assert fs.info(fn)['size'] == 1700
     assert fs.cat(fn) == b'o' * 1700
 
 
