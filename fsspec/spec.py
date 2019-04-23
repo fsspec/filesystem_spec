@@ -734,7 +734,7 @@ class AbstractBufferedFile(object):
     DEFAULT_BLOCK_SIZE = 5 * 2**20
 
     def __init__(self, fs, path, mode='rb', block_size='default',
-                 autocommit=True, **kwargs):
+                 autocommit=True, cache_type='bytes', **kwargs):
         """
         Template for files with buffered reading and writing
 
@@ -759,19 +759,26 @@ class AbstractBufferedFile(object):
         self.mode = mode
         self.blocksize = (self.DEFAULT_BLOCK_SIZE
                           if block_size == 'default' else block_size)
-        self.cache = b""
         self.loc = 0
         self.autocommit = autocommit
         self.end = None
         self.start = None
         self.closed = False
-        self.trim = True
+        self.trim = kwargs.get('trim', True)
         self.kwargs = kwargs
         if mode not in {'ab', 'rb', 'wb'}:
             raise NotImplementedError('File mode not supported')
         if mode == 'rb':
             self.details = fs.info(path)
             self.size = self.details['size']
+            if cache_type == 'bytes':
+                self.cache = BytesCache(self.blocksize, self._fetch_range,
+                                        self.size, self.trim)
+            elif cache_type == 'mmap':
+                self.cache = MMapCache(self.size, self.blocksize,
+                                       self._fetch_range)
+            else:
+                raise ValueError
         else:
             self.buffer = io.BytesIO()
             self.offset = 0
@@ -900,39 +907,6 @@ class AbstractBufferedFile(object):
         """ Create remote file/upload """
         pass
 
-    def _fetch(self, start, end):
-        """ Get bytes between start and end, if not already in cache
-
-        Will read ahead by blocksize bytes.
-        """
-        # TODO: only set start/end after fetch, in case it fails?
-        # is this where retry logic might go?
-        if self.start is None and self.end is None:
-            # First read
-            self.start = start
-            self.end = end + self.blocksize
-            self.cache = self._fetch_range(self.start, self.end)
-        if start < self.start:
-            if self.end - end > self.blocksize:
-                self.start = start
-                self.end = end + self.blocksize
-                self.cache = self._fetch_range(self.start, self.end)
-            else:
-                new = self._fetch_range(start, self.start)
-                self.start = start
-                self.cache = new + self.cache
-        if end > self.end:
-            if self.end > self.size:
-                return
-            if end - self.end > self.blocksize:
-                self.start = start
-                self.end = end + self.blocksize
-                self.cache = self._fetch_range(self.start, self.end)
-            else:
-                new = self._fetch_range(self.end, end + self.blocksize)
-                self.end = end + self.blocksize
-                self.cache = self.cache + new
-
     def _fetch_range(self, start, end):
         """Get the specified set of bytes from remote"""
         raise NotImplementedError
@@ -953,15 +927,8 @@ class AbstractBufferedFile(object):
             length = self.size
         if self.closed:
             raise ValueError('I/O operation on closed file.')
-        self._fetch(self.loc, self.loc + length)
-        out = self.cache[self.loc - self.start:
-                         self.loc - self.start + length]
+        out = self.cache._fetch(self.loc, self.loc + length)
         self.loc += len(out)
-        if self.trim:
-            num = (self.loc - self.start) // self.blocksize - 1
-            if num > 0:
-                self.start += self.blocksize * num
-                self.cache = self.cache[self.blocksize * num:]
         return out
 
     def readinto(self, b):
@@ -1021,3 +988,94 @@ class AbstractBufferedFile(object):
 
     def __exit__(self, *args):
         self.close()
+
+
+class MMapCache(object):
+
+    def __init__(self, size, blocksize, fetcher):
+        self.blocks = set()
+        self.blocksize = blocksize
+        self.fetcher = fetcher
+        self.size = size
+        self.cache = self._makefile()
+
+    def _makefile(self):
+        import tempfile
+        import mmap
+        # posix version
+        fd = tempfile.TemporaryFile()
+        fd.seek(self.size - 1)
+        fd.write(b'1')
+        fd.flush()
+        f_no = fd.fileno()
+        return mmap.mmap(f_no, self.size)
+
+    def _fetch(self, start, end):
+        start_block = start // self.blocksize
+        end_block = end // self.blocksize
+        need = [i for i in range(start_block, end_block + 1)
+                if i not in self.blocks]
+        while need:
+            # TODO: not a for loop so we can consolidate blocks later to
+            # make fewer fetch calls
+            i = need.pop(0)
+            soffset = i * self.blocksize
+            self.cache[soffset:soffset + self.blocksize] = self.fetcher(
+                soffset, soffset + self.blocksize)
+            self.blocks.add(i)
+
+        return self.cache[start:end]
+
+
+class BytesCache(object):
+
+    def __init__(self, blocksize, fetcher, size, trim=True):
+        self.cache = b''
+        self.start = None
+        self.end = None
+        self.trim = trim
+        self.size = size
+        self.blocksize = blocksize
+        self.fetcher = fetcher
+
+    def _fetch(self, start, end):
+        # TODO: only set start/end after fetch, in case it fails?
+        # is this where retry logic might go?
+        if self.start is None and self.end is None:
+            # First read
+            self.start = start
+            self.end = end + self.blocksize
+            self.cache = self.fetcher(self.start, self.end)
+        if start < self.start:
+            if self.end - end > self.blocksize:
+                self.start = start
+                self.end = end + self.blocksize
+                self.cache = self.fetcher(self.start, self.end)
+            else:
+                new = self.fetcher(start, self.start)
+                self.start = start
+                self.cache = new + self.cache
+        if end > self.end:
+            if self.end > self.size:
+                pass
+            elif end - self.end > self.blocksize:
+                self.start = start
+                self.end = end + self.blocksize
+                self.cache = self.fetcher(self.start, self.end)
+            else:
+                new = self.fetcher(self.end, end + self.blocksize)
+                self.end = end + self.blocksize
+                self.cache = self.cache + new
+
+        if self.trim:
+            num = (self.end - self.start) // self.blocksize - 1
+            if num > 0:
+                self.start += self.blocksize * num
+                self.cache = self.cache[self.blocksize * num:]
+
+        offset = start - self.start
+        return self.cache[offset:offset + end - start]
+
+    def __len__(self):
+        # for testing
+        return len(self.cache)
