@@ -57,7 +57,7 @@ class HTTPFileSystem(AbstractFileSystem):
 
     def ls(self, url, detail=True):
         # ignoring URL-encoded arguments
-        r = requests.get(url, **self.kwargs)
+        r = self.session.get(url, **self.kwargs)
         if self.simple_links:
             links = ex2.findall(r.text) + ex.findall(r.text)
         else:
@@ -96,6 +96,16 @@ class HTTPFileSystem(AbstractFileSystem):
         """Make any intermediate directories to make path writable"""
         raise NotImplementedError
 
+    def exists(self, path):
+        kwargs = self.kwargs.copy()
+        kwargs['stream'] = True
+        try:
+            r = self.session.get(path, **kwargs)
+            r.close()
+            return r.ok
+        except requests.HTTPError:
+            return False
+
     def _open(self, url, mode='rb', block_size=None, **kwargs):
         """Make a file-like object
 
@@ -117,7 +127,7 @@ class HTTPFileSystem(AbstractFileSystem):
         kw.update(kwargs)
         kw.pop('autocommit', None)
         if block_size:
-            return HTTPFile(url, self.session, block_size, **kw)
+            return HTTPFile(self, url, self.session, block_size, **kw)
         else:
             kw['stream'] = True
             r = self.session.get(url, **kw)
@@ -156,27 +166,20 @@ class HTTPFile(AbstractBufferedFile):
     kwargs: all other key-values are passed to reqeuests calls.
     """
 
-    def __init__(self, url, session=None, block_size=None, mode='rb', **kwargs):
+    def __init__(self, fs, url, session=None, block_size=None, mode='rb',
+                 **kwargs):
         if mode != 'rb':
             raise NotImplementedError('File mode not supported')
         self.url = url
-        self.kwargs = kwargs
         self.session = session if session is not None else requests.Session()
         try:
-            self.size = file_size(url, self.session, allow_redirects=True,
-                                  **self.kwargs)
+            size = file_size(url, self.session, allow_redirects=True,
+                             **self.kwargs)
         except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
-            self.size = None
-        self.mode = mode
-        self.blocksize = (self.DEFAULT_BLOCK_SIZE
-                          if block_size == 'default' else block_size)
-        self.cache = b""
-        self.loc = 0
-        self.end = None
-        self.start = None
-        self.closed = False
-        self.trim = True
+            size = None
+        self.details = {'name': url, 'size': size}
+        super().__init__(fs, url, mode, block_size, **kwargs)
 
     def read(self, length=-1):
         """Read bytes from file
