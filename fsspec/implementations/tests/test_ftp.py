@@ -49,15 +49,18 @@ def test_basic(ftp):
     assert out == open(__file__, 'rb').read()
 
 
-def test_complex(ftp_writable):
+@pytest.mark.parametrize('cache_type', ['bytes', 'mmap'])
+def test_complex(ftp_writable, cache_type):
+    from fsspec.spec import BytesCache
     host, port, user, pw = ftp_writable
     files = open_files('ftp:///ou*', host=host, port=port,
                        username=user, password=pw,
-                       block_size=10000)
+                       block_size=10000, cache_type=cache_type)
     assert len(files) == 1
     with files[0] as fo:
         assert fo.read(10) == b'hellohello'
-        assert len(fo.cache) == 10010
+        if isinstance(fo.cache, BytesCache):
+            assert len(fo.cache.cache) == 10010
         assert fo.read(2) == b'he'
         assert fo.tell() == 12
 
@@ -70,9 +73,11 @@ def test_write_small(ftp_writable):
     assert fs.cat('/out2') == b'oi'
 
 
-def test_write_big(ftp_writable):
+@pytest.mark.parametrize('cache_type', ['bytes', 'mmap'])
+def test_write_big(ftp_writable, cache_type):
     host, port, user, pw = ftp_writable
-    fs = FTPFileSystem(host, port, user, pw, block_size=1000)
+    fs = FTPFileSystem(host, port, user, pw, block_size=1000,
+                       cache_type=cache_type)
     fn = '/bigger'
     with fs.open(fn, 'wb') as f:
         f.write(b'o' * 500)

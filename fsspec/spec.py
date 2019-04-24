@@ -734,7 +734,7 @@ class AbstractBufferedFile(object):
     DEFAULT_BLOCK_SIZE = 5 * 2**20
 
     def __init__(self, fs, path, mode='rb', block_size='default',
-                 autocommit=True, cache_type='bytes', **kwargs):
+                 autocommit=True, cache_type='mmap', **kwargs):
         """
         Template for files with buffered reading and writing
 
@@ -1017,11 +1017,11 @@ class MMapCache(object):
                 if i not in self.blocks]
         while need:
             # TODO: not a for loop so we can consolidate blocks later to
-            # make fewer fetch calls
+            # make fewer fetch calls; this could be parallel
             i = need.pop(0)
-            soffset = i * self.blocksize
-            self.cache[soffset:soffset + self.blocksize] = self.fetcher(
-                soffset, soffset + self.blocksize)
+            sstart = i * self.blocksize
+            send = min(sstart + self.blocksize, self.size)
+            self.cache[sstart:send] = self.fetcher(sstart, send)
             self.blocks.add(i)
 
         return self.cache[start:end]
@@ -1075,7 +1075,3 @@ class BytesCache(object):
                 self.start += self.blocksize * num
                 self.cache = self.cache[self.blocksize * num:]
         return out
-
-    def __len__(self):
-        # for testing
-        return len(self.cache)
