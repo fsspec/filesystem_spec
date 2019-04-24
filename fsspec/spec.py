@@ -740,7 +740,7 @@ class AbstractBufferedFile(object):
 
         Parameters
         ----------
-        fa: instance of FileSystem
+        fs: instance of FileSystem
         path: str
             location in file-system
         mode: str
@@ -770,7 +770,7 @@ class AbstractBufferedFile(object):
         if mode not in {'ab', 'rb', 'wb'}:
             raise NotImplementedError('File mode not supported')
         if mode == 'rb':
-            self.details = fs.info(path)
+            self.details = getattr(self, 'details', fs.info(path))
             self.size = self.details['size']
         else:
             self.buffer = io.BytesIO()
