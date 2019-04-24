@@ -734,7 +734,7 @@ class AbstractBufferedFile(object):
     DEFAULT_BLOCK_SIZE = 5 * 2**20
 
     def __init__(self, fs, path, mode='rb', block_size='default',
-                 autocommit=True, cache_type='mmap', **kwargs):
+                 autocommit=True, cache_type='bytes', **kwargs):
         """
         Template for files with buffered reading and writing
 
@@ -769,7 +769,8 @@ class AbstractBufferedFile(object):
         if mode not in {'ab', 'rb', 'wb'}:
             raise NotImplementedError('File mode not supported')
         if mode == 'rb':
-            self.details = getattr(self, 'details', fs.info(path))
+            if not hasattr(self, 'details'):
+                self.details = fs.info(path)
             self.size = self.details['size']
             if cache_type == 'bytes':
                 self.cache = BytesCache(self.blocksize, self._fetch_range,

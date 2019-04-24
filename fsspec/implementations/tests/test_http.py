@@ -35,3 +35,11 @@ def test_list(server):
     expected = glob.glob('*.py')
     for fn in expected:
         assert any(fn in f for f in out)
+
+
+def test_read(server):
+    h = fsspec.filesystem('http')
+    out = h.glob(server + '/*.py')[0]
+    expected = glob.glob('*.py')[0]
+    with h.open(out, 'rb') as f:
+        assert f.read() == open(expected, 'rb').read()

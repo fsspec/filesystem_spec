@@ -174,12 +174,13 @@ class HTTPFile(AbstractBufferedFile):
         self.session = session if session is not None else requests.Session()
         try:
             size = file_size(url, self.session, allow_redirects=True,
-                             **self.kwargs)
+                             **kwargs)
         except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
             size = None
         self.details = {'name': url, 'size': size}
-        super().__init__(fs, url, mode, block_size, **kwargs)
+        super().__init__(fs=fs, path=url, mode=mode, block_size=block_size,
+                         **kwargs)
 
     def read(self, length=-1):
         """Read bytes from file
@@ -208,15 +209,7 @@ class HTTPFile(AbstractBufferedFile):
         r = self.session.get(self.url, **self.kwargs)
         r.raise_for_status()
         out = r.content
-        # set position to end of data; actually expect file might close shortly
-        l = len(out)
-        if l < self.blocksize:
-            # actually all data fits in one block, so cache
-            self.start = 0
-            self.end = l
-            self.cache = out
-            self.size = l
-        self.cache = out
+        self.cache = AllBytes(out)
 
     def _fetch_range(self, start, end):
         """Download a block of data
@@ -276,3 +269,11 @@ def file_size(url, session, **kwargs):
         return int(r.headers['Content-Length'])
     else:
         raise ValueError("Server did not supply size of %s" % url)
+
+
+class AllBytes(object):
+    def __init__(self, data):
+        self.data = data
+
+    def _fetch(self, start, end):
+        return self.data[start:end]
