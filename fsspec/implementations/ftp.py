@@ -34,7 +34,7 @@ class FTPFileSystem(AbstractFileSystem):
         tempdir: str
             Directory on remote to put temporary files when in a transaction
         """
-        super(FTPFileSystem, self).__init__()
+        super(FTPFileSystem, self).__init__(**kwargs)
         self.host = host
         self.port = port
         self.tempdir = tempdir
@@ -186,6 +186,7 @@ class FTPFile(AbstractBufferedFile):
                                    rest=start, callback=callback)
         except TransferDone:
             self.fs.ftp.abort()
+            self.fs.ftp.voidresp()
         return b''.join(out)
 
     def _upload_chunk(self, final=False):
