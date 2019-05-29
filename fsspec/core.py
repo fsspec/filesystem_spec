@@ -35,15 +35,18 @@ class OpenFile(object):
         The encoding to use if opened in text mode.
     errors : str or None, optional
         How to handle encoding errors if opened in text mode.
+    newline : None or str
+        Passed to TextIOWrapper in text mode, how to handle line endings.
     """
     def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
-                 errors=None):
+                 errors=None, newline=None):
         self.fs = fs
         self.path = path
         self.mode = mode
         self.compression = get_compression(path, compression)
         self.encoding = encoding
         self.errors = errors
+        self.newline = newline
         self.fobjects = []
 
     def __reduce__(self):
@@ -52,6 +55,9 @@ class OpenFile(object):
 
     def __repr__(self):
         return f"<OpenFile '{self.path}'>"
+
+    def __fspath__(self):
+        return self.path
 
     def __enter__(self):
         mode = self.mode.replace('t', '').replace('b', '') + 'b'
@@ -68,14 +74,31 @@ class OpenFile(object):
         if 'b' not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
             f = io.TextIOWrapper(f, encoding=self.encoding,
-                                 errors=self.errors)
+                                 errors=self.errors, newline=self.newline)
             fobjects.append(f)
 
         self.fobjects = fobjects
+        try:
+            # opened file should know its original path
+            f.__fspath__ = self.__fspath__
+        except AttributeError:
+            # setting that can fail for some C file-like object
+            pass
         return f
 
     def __exit__(self, *args):
         self.close()
+
+    def __del__(self):
+        self.close()
+
+    def open(self):
+        """Materialise this as a real open file without context
+
+        The file should be explicitly closed to avoid enclosed open file
+        instances persisting
+        """
+        return self.__enter__()
 
     def close(self):
         """Close all encapsulated file objects"""
@@ -309,3 +332,133 @@ def _expand_paths(path, name_function, num):
                          "2. A directory: 'foo/\n"
                          "3. A path with a '*' in it: 'foo.*.json'")
     return paths
+
+
+class BaseCache(object):
+    """Pass-though cache: doesn't keep anything, calls every time
+
+    Acts as base class for other cachers
+
+    Parameters
+    ----------
+    blocksize : int
+        How far to read ahead in numbers of bytes
+    fetcher : func
+        Function of the form f(start, end) which gets bytes from remote as
+        specified
+    size : int
+        How big this file is
+    """
+    def __init__(self, blocksize, size, fetcher, **kwargs):
+        self.blocksize = blocksize
+        self.fetcher = fetcher
+        self.size = size
+
+    def _fetch(self, start, end):
+        return self.fetcher(start, end)
+
+
+class MMapCache(BaseCache):
+    """memory-mapped sparse file cache
+
+    Opens temporary file, which is filled blocks-wise when data is requested.
+    Ensure there is enough disc space in the temporary location.
+
+    This cache method might only work on posix
+    """
+
+    def __init__(self, blocksize, fetcher, size, **kwargs):
+        super().__init__(blocksize, fetcher, size)
+        self.blocks = set()
+        self.cache = self._makefile()
+
+    def _makefile(self):
+        import tempfile
+        import mmap
+        # posix version
+        fd = tempfile.TemporaryFile()
+        fd.seek(self.size - 1)
+        fd.write(b'1')
+        fd.flush()
+        f_no = fd.fileno()
+        return mmap.mmap(f_no, self.size)
+
+    def _fetch(self, start, end):
+        start_block = start // self.blocksize
+        end_block = end // self.blocksize
+        need = [i for i in range(start_block, end_block + 1)
+                if i not in self.blocks]
+        while need:
+            # TODO: not a for loop so we can consolidate blocks later to
+            # make fewer fetch calls; this could be parallel
+            i = need.pop(0)
+            sstart = i * self.blocksize
+            send = min(sstart + self.blocksize, self.size)
+            self.cache[sstart:send] = self.fetcher(sstart, send)
+            self.blocks.add(i)
+
+        return self.cache[start:end]
+
+
+class BytesCache(BaseCache):
+    """Cache which holds data in a in-memory bytes object
+
+    Implements read-ahead by the block size, for semi-random reads progressing
+    through the file.
+
+    Parameters
+    ----------
+    trim : bool
+        As we read more data, whether to discard the start of the buffer when
+        we are more than a blocksize ahead of it.
+    """
+
+    def __init__(self, blocksize, fetcher, size, trim=True, **kwargs):
+        super().__init__(blocksize, fetcher, size)
+        self.cache = b''
+        self.start = None
+        self.end = None
+        self.trim = trim
+
+    def _fetch(self, start, end):
+        # TODO: only set start/end after fetch, in case it fails?
+        # is this where retry logic might go?
+        if self.start is None and self.end is None:
+            # First read
+            self.start = start
+            self.end = end + self.blocksize
+            self.cache = self.fetcher(self.start, self.end)
+        if start < self.start:
+            if self.end - end > self.blocksize:
+                self.start = start
+                self.end = end + self.blocksize
+                self.cache = self.fetcher(self.start, self.end)
+            else:
+                new = self.fetcher(start, self.start)
+                self.start = start
+                self.cache = new + self.cache
+        if end > self.end:
+            if self.end > self.size:
+                pass
+            elif end - self.end > self.blocksize:
+                self.start = start
+                self.end = end + self.blocksize
+                self.cache = self.fetcher(self.start, self.end)
+            else:
+                new = self.fetcher(self.end, end + self.blocksize)
+                self.end = end + self.blocksize
+                self.cache = self.cache + new
+
+        offset = start - self.start
+        out = self.cache[offset:offset + end - start]
+        if self.trim:
+            num = (self.end - self.start) // self.blocksize - 1
+            if num > 0:
+                self.start += self.blocksize * num
+                self.cache = self.cache[self.blocksize * num:]
+        return out
+
+
+caches = {'none': BaseCache,
+          'mmap': MMapCache,
+          'bytes': BytesCache}

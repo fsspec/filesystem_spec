@@ -94,6 +94,9 @@ class AbstractFileSystem(up):
                     # don't apply alias if attribute exists already
                     setattr(self, new, getattr(self, old))
 
+    def __eq__(self, other):
+        return self.token == other.token
+
     @classmethod
     def clear_instance_cache(cls, remove_singleton=True):
         """Remove any instances stored in class attributes"""
@@ -703,8 +706,7 @@ class Transaction(object):
         self.files = []
 
     def __enter__(self):
-        """Start a transaction on this FileSystem"""
-        self.fs._intrans = True
+        self.start()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """End transaction and commit, if exit is not due to exception"""
@@ -712,8 +714,12 @@ class Transaction(object):
         self.complete(commit=exc_type is None)
         self.fs._intrans = False
 
+    def start(self):
+        """Start a transaction on this FileSystem"""
+        self.fs._intrans = True
+
     def complete(self, commit=True):
-        """Finish transation: commit or discard all deferred files"""
+        """Finish transaction: commit or discard all deferred files"""
         for f in self.files:
             if commit:
                 f.commit()
@@ -751,9 +757,13 @@ class AbstractBufferedFile(object):
         autocommit: bool
             Whether to write to final destination; may only impact what
             happens when file is being closed.
+        cache_type : str
+            Caching policy in read mode, one of 'none', 'bytes', 'mmap', see
+            the definitions in ``core``.
         kwargs:
             Gets stored as self.kwargs
         """
+        from .core import caches
         self.path = path
         self.fs = fs
         self.mode = mode
@@ -764,7 +774,7 @@ class AbstractBufferedFile(object):
         self.end = None
         self.start = None
         self.closed = False
-        self.trim = kwargs.get('trim', True)
+        self.trim = kwargs.pop('trim', True)
         self.kwargs = kwargs
         if mode not in {'ab', 'rb', 'wb'}:
             raise NotImplementedError('File mode not supported')
@@ -772,14 +782,8 @@ class AbstractBufferedFile(object):
             if not hasattr(self, 'details'):
                 self.details = fs.info(path)
             self.size = self.details['size']
-            if cache_type == 'bytes':
-                self.cache = BytesCache(self.blocksize, self._fetch_range,
-                                        self.size, self.trim)
-            elif cache_type == 'mmap':
-                self.cache = MMapCache(self.size, self.blocksize,
-                                       self._fetch_range)
-            else:
-                raise ValueError
+            self.cache = caches[cache_type](self.blocksize, self._fetch_range,
+                                            self.size, self.trim)
         else:
             self.buffer = io.BytesIO()
             self.offset = 0
@@ -989,90 +993,3 @@ class AbstractBufferedFile(object):
 
     def __exit__(self, *args):
         self.close()
-
-
-class MMapCache(object):
-
-    def __init__(self, size, blocksize, fetcher):
-        self.blocks = set()
-        self.blocksize = blocksize
-        self.fetcher = fetcher
-        self.size = size
-        self.cache = self._makefile()
-
-    def _makefile(self):
-        import tempfile
-        import mmap
-        # posix version
-        fd = tempfile.TemporaryFile()
-        fd.seek(self.size - 1)
-        fd.write(b'1')
-        fd.flush()
-        f_no = fd.fileno()
-        return mmap.mmap(f_no, self.size)
-
-    def _fetch(self, start, end):
-        start_block = start // self.blocksize
-        end_block = end // self.blocksize
-        need = [i for i in range(start_block, end_block + 1)
-                if i not in self.blocks]
-        while need:
-            # TODO: not a for loop so we can consolidate blocks later to
-            # make fewer fetch calls; this could be parallel
-            i = need.pop(0)
-            sstart = i * self.blocksize
-            send = min(sstart + self.blocksize, self.size)
-            self.cache[sstart:send] = self.fetcher(sstart, send)
-            self.blocks.add(i)
-
-        return self.cache[start:end]
-
-
-class BytesCache(object):
-
-    def __init__(self, blocksize, fetcher, size, trim=True):
-        self.cache = b''
-        self.start = None
-        self.end = None
-        self.trim = trim
-        self.size = size
-        self.blocksize = blocksize
-        self.fetcher = fetcher
-
-    def _fetch(self, start, end):
-        # TODO: only set start/end after fetch, in case it fails?
-        # is this where retry logic might go?
-        if self.start is None and self.end is None:
-            # First read
-            self.start = start
-            self.end = end + self.blocksize
-            self.cache = self.fetcher(self.start, self.end)
-        if start < self.start:
-            if self.end - end > self.blocksize:
-                self.start = start
-                self.end = end + self.blocksize
-                self.cache = self.fetcher(self.start, self.end)
-            else:
-                new = self.fetcher(start, self.start)
-                self.start = start
-                self.cache = new + self.cache
-        if end > self.end:
-            if self.end > self.size:
-                pass
-            elif end - self.end > self.blocksize:
-                self.start = start
-                self.end = end + self.blocksize
-                self.cache = self.fetcher(self.start, self.end)
-            else:
-                new = self.fetcher(self.end, end + self.blocksize)
-                self.end = end + self.blocksize
-                self.cache = self.cache + new
-
-        offset = start - self.start
-        out = self.cache[offset:offset + end - start]
-        if self.trim:
-            num = (self.end - self.start) // self.blocksize - 1
-            if num > 0:
-                self.start += self.blocksize * num
-                self.cache = self.cache[self.blocksize * num:]
-        return out
