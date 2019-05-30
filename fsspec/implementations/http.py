@@ -116,7 +116,8 @@ class HTTPFileSystem(AbstractFileSystem):
         mode: string
             must be "rb"
         block_size: int or None
-            Bytes to download in one request; use instance value if None.
+            Bytes to download in one request; use instance value if None. If
+            zero, will return a streaming Requests file-like instance.
         kwargs: key-value
             Any other parameters, passed to requests calls
         """
@@ -163,21 +164,29 @@ class HTTPFile(AbstractBufferedFile):
     block_size: int or None
         The amount of read-ahead to do, in bytes. Default is 5MB, or the value
         configured for the FileSystem creating this file
-    kwargs: all other key-values are passed to reqeuests calls.
+    size_policy : 'head', 'get', None or int
+        How to infer the file size. If head or get, ask the server using those
+        methods (with ``stream=True`` for the latter, and no download); if
+        int, this is the size in bytes, if None, don't use size at all, which
+        will, for example, prevent a seek-from-end.
+    kwargs: all other key-values are passed to requests calls.
     """
 
     def __init__(self, fs, url, session=None, block_size=None, mode='rb',
-                 **kwargs):
+                 size_policy='head', **kwargs):
         if mode != 'rb':
             raise NotImplementedError('File mode not supported')
         self.url = url
         self.session = session if session is not None else requests.Session()
-        try:
-            size = file_size(url, self.session, allow_redirects=True,
-                             **kwargs)
-        except (ValueError, requests.HTTPError):
-            # No size information - only allow read() and no seek()
-            size = None
+        if size_policy in ['head', 'get']:
+            try:
+                size = file_size(url, self.session, allow_redirects=True,
+                                 size_policy=size_policy, **kwargs)
+            except (ValueError, requests.HTTPError):
+                # No size information - only allow read() and no seek()
+                size = None
+        else:
+            size = size_policy
         self.details = {'name': url, 'size': size}
         super().__init__(fs=fs, path=url, mode=mode, block_size=block_size,
                          **kwargs)
@@ -253,7 +262,7 @@ class HTTPFile(AbstractBufferedFile):
         return out
 
 
-def file_size(url, session, **kwargs):
+def file_size(url, session, size_policy='head', **kwargs):
     """Call HEAD on the server to get file size
 
     Default operation is to explicitly allow redirects and use encoding
@@ -263,7 +272,11 @@ def file_size(url, session, **kwargs):
     ar = kwargs.pop('allow_redirects', True)
     head = kwargs.get('headers', {})
     head['Accept-Encoding'] = 'identity'
-    r = session.head(url, allow_redirects=ar, **kwargs)
+    if size_policy == 'head':
+        r = session.head(url, allow_redirects=ar, **kwargs)
+    elif size_policy == 'get':
+        kwargs['stream'] = True
+        r = session.get(url, allow_redirects=ar, **kwargs)
     r.raise_for_status()
     if 'Content-Length' in r.headers:
         return int(r.headers['Content-Length'])
@@ -272,6 +285,7 @@ def file_size(url, session, **kwargs):
 
 
 class AllBytes(object):
+    """Cache entire contents of a remote URL"""
     def __init__(self, data):
         self.data = data
 
