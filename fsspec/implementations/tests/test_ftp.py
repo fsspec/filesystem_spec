@@ -51,7 +51,7 @@ def test_basic(ftp):
 
 @pytest.mark.parametrize('cache_type', ['bytes', 'mmap'])
 def test_complex(ftp_writable, cache_type):
-    from fsspec.spec import BytesCache
+    from fsspec.core import BytesCache
     host, port, user, pw = ftp_writable
     files = open_files('ftp:///ou*', host=host, port=port,
                        username=user, password=pw,
