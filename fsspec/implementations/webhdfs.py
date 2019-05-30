@@ -6,6 +6,8 @@ import requests
 from urllib.parse import quote
 import uuid
 from ..spec import AbstractFileSystem, AbstractBufferedFile
+import logging
+logger = logging.getLogger('webhdfs')
 
 
 class WebHDFS(AbstractFileSystem):
@@ -105,6 +107,7 @@ class WebHDFS(AbstractFileSystem):
         args = kwargs.copy()
         args.update(self.pars)
         args['op'] = op.upper()
+        logger.debug(url, method, args)
         out = self.session.request(method=method.upper(), url=url, params=args,
                                    data=data, allow_redirects=redirect)
         if out.status_code == 404:
@@ -280,6 +283,7 @@ class WebHDFile(AbstractBufferedFile):
     """A file living in HDFS over webHDFS"""
 
     def __init__(self, fs, path, **kwargs):
+        super().__init__(fs, path, **kwargs)
         kwargs = kwargs.copy()
         if kwargs.get('permissions', None) is None:
             kwargs.pop('permissions', None)
@@ -290,7 +294,6 @@ class WebHDFile(AbstractBufferedFile):
         if kwargs.pop('autocommit', False) is False:
             self.target = self.path
             self.path = '/'.join([tempdir, str(uuid.uuid4())])
-        super().__init__(fs, path, **kwargs)
 
     def _upload_chunk(self, final=False):
         """ Write one part of a multi-block file upload

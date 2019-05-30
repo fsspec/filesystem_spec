@@ -349,7 +349,7 @@ class BaseCache(object):
     size : int
         How big this file is
     """
-    def __init__(self, blocksize, size, fetcher, **kwargs):
+    def __init__(self, blocksize, fetcher, size, **kwargs):
         self.blocksize = blocksize
         self.fetcher = fetcher
         self.size = size

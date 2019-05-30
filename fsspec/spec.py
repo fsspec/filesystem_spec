@@ -94,6 +94,12 @@ class AbstractFileSystem(up):
                     # don't apply alias if attribute exists already
                     setattr(self, new, getattr(self, old))
 
+    def __dask_tokenize__(self):
+        return self.token
+
+    def __hash__(self):
+        return int(self._tok, 16)
+
     def __eq__(self, other):
         return self.token == other.token
 
@@ -453,6 +459,19 @@ class AbstractFileSystem(up):
         else:
             raise FileNotFoundError
 
+    def checksum(self, path):
+        """Unique value for current version of file
+
+        If the checksum is the same from one moment to another, the contents
+        are guaranteed to be the same. If the checksum changes, the contents
+        *might* have changed.
+
+        This should normally be overridden; default will probably capture
+        creation/modification timestamp (which would be good) or maybe
+        access timestamp (which would be bad)
+        """
+        return int(tokenize(self.info(path)), 16)
+
     def size(self, path):
         """Size in bytes of file"""
         return self.info(path)['size']
@@ -789,6 +808,14 @@ class AbstractBufferedFile(object):
             self.offset = 0
             self.forced = False
             self.location = None
+
+    def __hash__(self):
+        return self.fs.checksum(self.path)
+
+    def __eq__(self, other):
+        """Files are equal if they have the same checksum, only in read mode"""
+        assert (self.mode == 'rb' and other.mode == 'rb'
+                and hash(self) == hash(other))
 
     def commit(self):
         """Move from temp to final destination"""
