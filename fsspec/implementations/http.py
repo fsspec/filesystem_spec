@@ -173,7 +173,7 @@ class HTTPFile(AbstractBufferedFile):
     """
 
     def __init__(self, fs, url, session=None, block_size=None, mode='rb',
-                 size_policy='head', **kwargs):
+                 size_policy='head', cache_type='bytes', **kwargs):
         if mode != 'rb':
             raise NotImplementedError('File mode not supported')
         self.url = url
@@ -189,7 +189,7 @@ class HTTPFile(AbstractBufferedFile):
             size = size_policy
         self.details = {'name': url, 'size': size}
         super().__init__(fs=fs, path=url, mode=mode, block_size=block_size,
-                         **kwargs)
+                         cache_type=cache_type, **kwargs)
 
     def read(self, length=-1):
         """Read bytes from file

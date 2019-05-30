@@ -802,7 +802,7 @@ class AbstractBufferedFile(object):
                 self.details = fs.info(path)
             self.size = self.details['size']
             self.cache = caches[cache_type](self.blocksize, self._fetch_range,
-                                            self.size, self.trim)
+                                            self.size, trim=self.trim)
         else:
             self.buffer = io.BytesIO()
             self.offset = 0
