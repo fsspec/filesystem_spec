@@ -458,6 +458,9 @@ class BytesCache(BaseCache):
                 self.cache = self.cache[self.blocksize * num:]
         return out
 
+    def __len__(self):
+        return len(self.cache)
+
 
 caches = {'none': BaseCache,
           'mmap': MMapCache,

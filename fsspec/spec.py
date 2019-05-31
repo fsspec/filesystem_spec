@@ -354,6 +354,8 @@ class AbstractFileSystem(up):
         for path, _, files in self.walk(path, maxdepth):
             for name in files:
                 out.append('/'.join([path.rstrip('/'), name]) if path else name)
+        if self.isfile(path):
+            out.append(path)
         return out
 
     def du(self, path, total=True, maxdepth=4):
