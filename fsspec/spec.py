@@ -1003,7 +1003,7 @@ class AbstractBufferedFile(object):
                 out.append(part[:found + len(char)])
                 self.seek(start + found + len(char))
                 break
-            out.append(found)
+            out.append(part)
         return b"".join(out)
 
     def readline(self):
@@ -1025,7 +1025,13 @@ class AbstractBufferedFile(object):
 
     def readlines(self):
         """Return all data, split by the newline character"""
-        return [l + b'\n' for l in self.read().split(b'\n')]
+        data = self.read()
+        lines = data.split(b'\n')
+        out = [l + b'\n' for l in lines[:-1]]
+        if data.endswith(b'\n'):
+            return out + [lines[-1] + b'\n']
+        else:
+            return out + [lines[-1]]
         # return list(self)  ???
 
     def readinto1(self, b):
