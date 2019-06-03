@@ -459,7 +459,7 @@ class AbstractFileSystem(up):
         out1 = [o for o in out if o['name'].rstrip('/') == path]
         if len(out1) == 1:
             return out1[0]
-        elif len(out1) > 1:
+        elif len(out1) > 1 or out:
             return {'name': path, 'size': 0, 'type': 'directory'}
         else:
             raise FileNotFoundError

@@ -1,5 +1,5 @@
 
-from collections import MutableMapping
+from collections.abc import MutableMapping
 from .registry import get_filesystem_class
 
 
