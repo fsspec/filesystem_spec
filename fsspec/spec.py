@@ -350,11 +350,14 @@ class AbstractFileSystem(up):
 
         Like posix ``find`` command without conditions
         """
+        # TODO: allow equivalent of -name parameter
         out = []
         for path, _, files in self.walk(path, maxdepth):
             for name in files:
                 out.append('/'.join([path.rstrip('/'), name]) if path else name)
         if self.isfile(path):
+            # walk works on directories, but find should also return [path]
+            # when path happens to be a file
             out.append(path)
         return out
 
@@ -714,7 +717,8 @@ class Transaction(object):
     """Filesystem transaction write context
 
     Gathers files for deferred commit or discard, so that several write
-    operations can be finalized semi-atomically.
+    operations can be finalized semi-atomically. This works by having this
+    instance as the ``.transaction`` attribute of the given filesystem
     """
 
     def __init__(self, fs):
@@ -973,6 +977,56 @@ class AbstractBufferedFile(object):
         data = self.read(len(b))
         b[:len(data)] = data
         return len(data)
+
+    def readuntil(self, char=b'\n', blocks=None):
+        """Return data between current position and first occurrence of char
+
+        char is included in the output, except if the end of the tile is
+        encountered first.
+
+        Parameters
+        ----------
+        char : bytes
+            Thing to find
+        blocks : None or int
+            How much to read in each go. Defaults to file blocksize - which may
+            mean a new read on every call.
+        """
+        out = []
+        while True:
+            start = self.tell()
+            part = self.read(blocks or self.blocksize)
+            if len(part) == 0:
+                break
+            found = part.find(char)
+            if found > -1:
+                out.append(part[:found + len(char)])
+                self.seek(start + found + len(char))
+                break
+            out.append(found)
+        return b"".join(out)
+
+    def readline(self):
+        """Read until first occurrence of newline character
+
+        Note that, because of character encoding, this is not necessarily a
+        true line ending.
+        """
+        return self.readuntil(b'\n')
+
+    def __next__(self):
+        out = self.readline()
+        if out:
+            return out
+        raise StopIteration
+
+    def __iter__(self):
+        return self
+
+    def readlines(self):
+        """Return all data, split by the newline character"""
+        return [l + b'\n' for l in self.read().split(b'\n')]
+        # return list(self)  ???
 
     def readinto1(self, b):
         return self.readinto(b)

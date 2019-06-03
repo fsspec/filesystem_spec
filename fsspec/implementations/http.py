@@ -24,7 +24,7 @@ class HTTPFileSystem(AbstractFileSystem):
     sep = '/'
 
     def __init__(self, simple_links=True, block_size=None, same_scheme=True,
-                 **storage_options):
+                 size_policy='head', **storage_options):
         """
         Parameters
         ----------
@@ -47,6 +47,7 @@ class HTTPFileSystem(AbstractFileSystem):
         self.simple_links = simple_links
         self.same_schema = same_scheme
         self.kwargs = storage_options
+        self.size_policy = size_policy
         self.session = requests.Session()
 
     @classmethod
@@ -128,7 +129,8 @@ class HTTPFileSystem(AbstractFileSystem):
         kw.update(kwargs)
         kw.pop('autocommit', None)
         if block_size:
-            return HTTPFile(self, url, self.session, block_size, **kw)
+            return HTTPFile(self, url, self.session, block_size,
+                            size_policy=self.size_policy, **kw)
         else:
             kw['stream'] = True
             r = self.session.get(url, **kw)
@@ -277,6 +279,9 @@ def file_size(url, session, size_policy='head', **kwargs):
     elif size_policy == 'get':
         kwargs['stream'] = True
         r = session.get(url, allow_redirects=ar, **kwargs)
+    else:
+        raise TypeError('size_policy must be "head" or "get", got %s'
+                        '' % size_policy)
     r.raise_for_status()
     if 'Content-Length' in r.headers:
         return int(r.headers['Content-Length'])
