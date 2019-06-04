@@ -3,16 +3,27 @@ from __future__ import print_function, division, absolute_import
 
 from bz2 import BZ2File
 from gzip import GzipFile
+from zipfile import ZipFile
 
 
 def noop_file(file, **kwargs):
     return file
 
 
+def unzip(infile, mode='rb', filename=None, **kwargs):
+    if not 'r' in mode:
+        raise ValueError("zip only supported in read mode")
+    z = ZipFile(infile)
+    if filename is None:
+        filename = z.namelist()[0]
+    return z.open(filename, mode='rb', **kwargs)
+
+
 # should be functions of the form func(infile, mode=, **kwargs) -> file-like
 compr = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
          None: noop_file,
-         'bz2': BZ2File}
+         'bz2': BZ2File,
+         'zip': unzip}
 
 try:
     import lzma
