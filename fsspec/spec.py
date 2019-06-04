@@ -1,6 +1,8 @@
 from hashlib import md5
 import io
+import logging
 from .utils import read_block, tokenize
+logger = logging.getLogger('fsspec')
 
 # alternative names for some methods, which get patched to new instances
 # (alias, original)
@@ -820,7 +822,7 @@ class AbstractBufferedFile(object):
 
     def __eq__(self, other):
         """Files are equal if they have the same checksum, only in read mode"""
-        assert (self.mode == 'rb' and other.mode == 'rb'
+        return (self.mode == 'rb' and other.mode == 'rb'
                 and hash(self) == hash(other))
 
     def commit(self):
@@ -965,6 +967,7 @@ class AbstractBufferedFile(object):
             length = self.size
         if self.closed:
             raise ValueError('I/O operation on closed file.')
+        logger.debug("%s read: %i - %i" % (self, self.loc, self.loc + length))
         out = self.cache._fetch(self.loc, self.loc + length)
         self.loc += len(out)
         return out
