@@ -1,5 +1,6 @@
 from hashlib import md5
 import io
+import os
 import logging
 from .utils import read_block, tokenize
 logger = logging.getLogger('fsspec')
@@ -503,27 +504,64 @@ class AbstractFileSystem(up):
         """ Get the content of a file """
         return self.open(path, 'rb').read()
 
-    def get(self, rpath, lpath, **kwargs):
+    def get(self, rpath, lpath, recursive=False, **kwargs):
         """ Copy file to local
 
         Possible extension: maybe should be able to copy to any file-system
         (streaming through local).
         """
-        with self.open(rpath, 'rb') as f1:
-            with open(lpath, 'wb') as f2:
-                data = True
-                while data:
-                    data = f1.read(self.blocksize)
-                    f2.write(data)
+        if recursive:
+            rpaths = self.walk(rpath)
+            rootdir = os.path.basename(rpath.rstrip('/'))
+            if os.path.isdir(lpath):
+                # copy rpath inside lpath directory
+                lpath2 = os.path.join(lpath, rootdir)
+            else:
+                # copy rpath as lpath directory
+                lpath2 = lpath
+            lpaths = [os.path.join(lpath2, path[len(rpath):].lstrip('/'))
+                      for path in rpaths]
+            for lpath in lpaths:
+                dirname = os.path.dirname(lpath)
+                if not os.path.isdir(dirname):
+                    os.makedirs(dirname)
+        else:
+            rpaths = [rpath]
+            lpaths = [lpath]
+        for lpath, rpath in zip(lpaths, rpaths):
+            with self.open(rpath, 'rb') as f1:
+                with open(lpath, 'wb') as f2:
+                    data = True
+                    while data:
+                        data = f1.read(self.blocksize)
+                        f2.write(data)
 
-    def put(self, lpath, rpath, **kwargs):
+    def put(self, lpath, rpath, recursive=False, **kwargs):
         """ Upload file from local """
-        with open(lpath, 'rb') as f1:
-            with self.open(rpath, 'wb') as f2:
-                data = True
-                while data:
-                    data = f1.read(self.blocksize)
-                    f2.write(data)
+        if recursive:
+            lpaths = []
+            for dirname, subdirlist, filelist in os.walk(lpath):
+                lpaths += [os.path.join(dirname, filename)
+                           for filename in filelist]
+            rootdir = os.path.basename(lpath.rstrip('/'))
+            if self.exists(rpath):
+                # copy lpath inside rpath directory
+                rpath2 = os.path.join(rpath, rootdir)
+            else:
+                # copy lpath as rpath directory
+                rpath2 = rpath
+            rpaths = [os.path.join(rpath2, path[len(lpath):].lstrip('/'))
+                      for path in lpaths]
+        else:
+            lpaths = [lpath]
+            rpaths = [rpath]
+        for lpath, rpath in zip(lpaths, rpaths):
+            with open(lpath, 'rb') as f1:
+                with self.open(rpath, 'wb') as f2:
+                    data = True
+                    while data:
+                        data = f1.read(self.blocksize)
+                        f2.write(data)
 
     def head(self, path, size=1024):
         """ Get the first ``size`` bytes from file """
