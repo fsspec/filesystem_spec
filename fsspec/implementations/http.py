@@ -130,7 +130,8 @@ class HTTPFileSystem(AbstractFileSystem):
         kw.pop('autocommit', None)
         if block_size:
             return HTTPFile(self, url, self.session, block_size,
-                            size_policy=self.size_policy, **kw)
+                            size_policy=kw.pop('size_policy', self.size_policy),
+                            **kw)
         else:
             kw['stream'] = True
             r = self.session.get(url, **kw)
