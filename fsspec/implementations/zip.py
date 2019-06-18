@@ -10,8 +10,9 @@ class ZipFileSystem(AbstractFileSystem):
 
     Keeps file object open while instance lives
     """
+    root_marker = ""
 
-    def __init__(self, **storage_options):
+    def __init__(self, fo='', mode='r', **storage_options):
         """
         Parameters
         ----------
@@ -24,8 +25,6 @@ class ZipFileSystem(AbstractFileSystem):
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters for requests
         """
-        fo = storage_options.pop('fo')
-        mode = storage_options.pop('mode', 'r')
         AbstractFileSystem.__init__(self)
         if mode != 'r':
             raise ValueError("Only read from zip files accepted")

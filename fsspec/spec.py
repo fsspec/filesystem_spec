@@ -16,6 +16,8 @@ aliases = [
     ('disk_usage', 'du'),
     ('rename', 'mv'),
     ('delete', 'rm'),
+    ('upload', 'put'),
+    ('download', 'get')
 ]
 
 try:   # optionally derive from pyarrow's FileSystem, if available
@@ -464,7 +466,7 @@ class AbstractFileSystem(up):
         elif len(out1) > 1 or out:
             return {'name': path, 'size': 0, 'type': 'directory'}
         else:
-            raise FileNotFoundError
+            raise FileNotFoundError(path)
 
     def checksum(self, path):
         """Unique value for current version of file
@@ -579,7 +581,7 @@ class AbstractFileSystem(up):
     def _parent(cls, path):
         path = path.rstrip('/').lstrip('/')
         if '/' in path:
-            return path.rsplit('/', 1)[0]
+            return cls.root_marker + path.rsplit('/', 1)[0]
         else:
             return cls.root_marker
 
