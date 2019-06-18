@@ -367,19 +367,30 @@ class MMapCache(BaseCache):
     This cache method might only work on posix
     """
 
-    def __init__(self, blocksize, fetcher, size, **kwargs):
+    def __init__(self, blocksize, fetcher, size, location=None,
+                 blocks=None, **kwargs):
         super().__init__(blocksize, fetcher, size)
-        self.blocks = set()
+        self.blocks = set() if blocks is None else set(blocks)
+        self.location = location
         self.cache = self._makefile()
 
     def _makefile(self):
         import tempfile
         import mmap
+        from builtins import open
         # posix version
-        fd = tempfile.TemporaryFile()
-        fd.seek(self.size - 1)
-        fd.write(b'1')
-        fd.flush()
+        if self.location is None or not os.path.exists(self.location):
+            if self.location is None:
+                fd = tempfile.TemporaryFile()
+            else:
+                fd = open(self.location, 'wb+')
+            fd.seek(self.size - 1)
+            fd.write(b'1')
+            fd.flush()
+        else:
+            fd = open(self.location, 'rb+')
+        self._file = fd
+
         f_no = fd.fileno()
         return mmap.mmap(f_no, self.size)
 

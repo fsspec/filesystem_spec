@@ -11,7 +11,7 @@ def noop_file(file, **kwargs):
 
 
 def unzip(infile, mode='rb', filename=None, **kwargs):
-    if not 'r' in mode:
+    if 'r' not in mode:
         raise ValueError("zip only supported in read mode")
     z = ZipFile(infile)
     if filename is None:

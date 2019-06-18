@@ -9,6 +9,8 @@ class LocalFileSystem(AbstractFileSystem):
 
     This class requires no initialisation or parameters
     """
+    root_marker = '/'
+
 
     def mkdir(self, path, **kwargs):
         os.mkdir(path, **kwargs)
