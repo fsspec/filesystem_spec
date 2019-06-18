@@ -150,6 +150,9 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize('mode', ['rt', 'rb'])
 @pytest.mark.parametrize('fmt', list(compression.compr))
 def test_compressions(fmt, mode, tmpdir):
+    if fmt == 'zip':
+        # zip implemented read-only
+        pytest.skip()
     fn = os.path.join(tmpdir, '.tmp.getsize')
     fs = LocalFileSystem()
     f = OpenFile(fs, fn, compression=fmt, mode='wb')
