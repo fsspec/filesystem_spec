@@ -56,7 +56,7 @@ def make_caching_class(protocol, storage_options, cache_storage="TMP"):
             return f
 
         def close_and_update(self, f, close):
-            if len(f.cache.blocks) * f.blocksize >= f.size:
+            if len(self.cache[f.path]['blocks']) * f.blocksize >= f.size:
                 self.cache[f.path]['blocks'] = True
             self.save_cache()
             close()
