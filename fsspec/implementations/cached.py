@@ -14,6 +14,8 @@ def make_caching_class(protocol, storage_options, cache_storage="TMP"):
         def __init__(self, *args, **kwargs):
             if cache_storage == "TMP":
                 storage = tempfile.mkdtemp()
+            else:
+                storage = cache_storage
             os.makedirs(storage, exist_ok=True)
             self.storage = storage
             self.load_cache()
@@ -24,11 +26,18 @@ def make_caching_class(protocol, storage_options, cache_storage="TMP"):
             if os.path.exists(fn):
                 with open(fn) as f:
                     self.cache = ujson.load(f)
+                    for c in self.cache.values():
+                        if isinstance(c['blocks'], list):
+                            c['blocks'] = set(c['blocks'])
             else:
                 self.cache = {}
 
         def save_cache(self):
             fn = os.path.join(self.storage, 'cache.json')
+            cache = {k: v.copy() for k, v in self.cache.items()}
+            for c in cache.values():
+                if isinstance(c['blocks'], set):
+                    c['blocks'] = list(c['blocks'])
             with open(fn, 'w') as f:
                 ujson.dump(self.cache, f)
 
@@ -40,7 +49,7 @@ def make_caching_class(protocol, storage_options, cache_storage="TMP"):
                 hash, blocks = detail['fn'], detail['blocks']
                 fn = os.path.join(self.storage, hash)
                 if blocks is True:
-                    return open(fn)
+                    return open(fn, 'rb')
                 else:
                     blocks = set(blocks)
             else:
@@ -56,8 +65,10 @@ def make_caching_class(protocol, storage_options, cache_storage="TMP"):
             return f
 
         def close_and_update(self, f, close):
-            if len(self.cache[f.path]['blocks']) * f.blocksize >= f.size:
-                self.cache[f.path]['blocks'] = True
+            c = self.cache[f.path]
+            if (c['blocks'] is not True
+                    and len(['blocks']) * f.blocksize >= f.size):
+                c['blocks'] = True
             self.save_cache()
             close()
 
