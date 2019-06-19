@@ -30,21 +30,24 @@ def make_caching_class(protocol, storage_options, cache_storage="TMP"):
         def save_cache(self):
             fn = os.path.join(self.storage, 'cache.json')
             with open(fn, 'w') as f:
-                ujson.dump(f, fn)
+                ujson.dump(self.cache, f)
 
         def _open(self, path, mode='rb', **kwargs):
             if mode != 'rb':
                 return super()._open(path, mode=mode, **kwargs)
             if path in self.cache:
                 detail = self.cache[path]
-                fn, blocks = detail['fn'], set(detail['blocks'])
+                hash, blocks = detail['fn'], detail['blocks']
+                fn = os.path.join(self.storage, hash)
                 if blocks is True:
                     return open(fn)
+                else:
+                    blocks = set(blocks)
             else:
                 hash = hashlib.sha256(path.encode()).hexdigest()
                 fn = os.path.join(self.storage, hash)
                 blocks = set()
-                self.cache[path] = {'fn': fn, 'blocks': blocks}
+                self.cache[path] = {'fn': hash, 'blocks': blocks}
             f = super()._open(path, mode=mode, cache_type='none', **kwargs)
             f.cache = MMapCache(f.blocksize, f._fetch_range, f.size,
                                 fn, blocks)
