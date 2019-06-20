@@ -97,9 +97,9 @@ class CachingFileSystem(AbstractFileSystem):
         kwargs['mode'] = mode
 
         # call target filesystems open
-        f = self.fs_open(path, **kwargs)
-        f.cached_files = MMapCache(f.blocksize, f._fetch_range, f.size,
-                                   fn, blocks)
+        f = self.fs._open(path, **kwargs)
+        f.cache = MMapCache(f.blocksize, f._fetch_range, f.size,
+                            fn, blocks)
         close = f.close
         f.close = lambda: self.close_and_update(f, close)
         return f
