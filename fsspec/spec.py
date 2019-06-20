@@ -758,7 +758,7 @@ class Transaction(object):
         self.fs._intrans = False
 
 
-class AbstractBufferedFile(object):
+class AbstractBufferedFile(io.IOBase):
     """Convenient class to derive from to provide buffering
 
     In the case that the backend does not provide a pythonic file-like object
@@ -818,6 +818,15 @@ class AbstractBufferedFile(object):
             self.offset = 0
             self.forced = False
             self.location = None
+
+    @property
+    def closed(self):
+        # get around this attr being read-only in IOBase
+        return self._closed
+
+    @closed.setter
+    def closed(self, c):
+        self._closed = c
 
     def __hash__(self):
         return self.fs.checksum(self.path)
