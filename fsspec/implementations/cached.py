@@ -8,9 +8,29 @@ from fsspec.core import MMapCache
 
 
 class CachingFileSystem(AbstractFileSystem):
+    """Locally caching filesystem, layer over any other FS
+
+    This class implements chunk-wise local storage of remote files, for quick
+    access after the initial download
+    """
+
     protocol = 'cached'
 
     def __init__(self, fs=None, protocol=None, cache_storage='TMP', **kwargs):
+        """
+
+        Parameters
+        ----------
+        fs : fsspec.AbstractFileSystem compatible instance
+            If given, just use this instance, and ignore protocol and kwargs
+        protocol : str
+            Target fielsystem protocol
+        cache_storage : str
+            Location to store files. If "TMP", this is a temporary directory,
+            and will be cleaned up by the OS when this process ends (or later)
+        kwargs
+            Passed to the instantiation of the FS, if fs is None.
+        """
         if cache_storage == "TMP":
             storage = tempfile.mkdtemp()
         else:
@@ -24,6 +44,7 @@ class CachingFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
 
     def load_cache(self):
+        """Read set of stored blocks from file"""
         fn = os.path.join(self.storage, 'cache.json')
         if os.path.exists(fn):
             with open(fn) as f:
@@ -35,6 +56,7 @@ class CachingFileSystem(AbstractFileSystem):
             self.cached_files = {}
 
     def save_cache(self):
+        """Save set of stored blocks from file"""
         fn = os.path.join(self.storage, 'cache.json')
         cache = {k: v.copy() for k, v in self.cached_files.items()}
         for c in cache.values():
@@ -44,6 +66,18 @@ class CachingFileSystem(AbstractFileSystem):
             ujson.dump(self.cached_files, f)
 
     def _open(self, path, mode='rb', **kwargs):
+        """Wrap the target _open
+
+        If the whole file exists in the cache, just open it locally and
+        return that.
+
+        Otherwise, open the file on the target FS, and make it have a mmap
+        cache pointing to the location which we determine, in our cache.
+        The ``blocks`` instance is shared, so as the mmap cache instance
+        updates, so does the entry in our ``cached_files`` attribute.
+        We monkey-patch this file, so that when it closes, we call
+        ``close_and_update`` to save the state of the blocks.
+        """
         if mode != 'rb':
             return self.fs._open(path, mode=mode, **kwargs)
         if path in self.cached_files:
@@ -71,6 +105,7 @@ class CachingFileSystem(AbstractFileSystem):
         return f
 
     def close_and_update(self, f, close):
+        """Called when a file is closing, so store the set of blocks"""
         c = self.cached_files[f.path]
         if (c['blocks'] is not True
                 and len(['blocks']) * f.blocksize >= f.size):
@@ -100,9 +135,9 @@ class CachingFileSystem(AbstractFileSystem):
             m = getattr(cls, item)
             if (inspect.isfunction(m) and (not hasattr(m, '__self__')
                                            or m.__self__ is None)):
-                print("BIND")
+                # instance method
                 return lambda *args, **kw: m(self, *args, **kw)
-            return m
+            return m  # class method or attribute
         else:
-            # attributes of the superclass, which target is being set up
+            # attributes of the superclass, while target is being set up
             return super().__getattribute__(item)
