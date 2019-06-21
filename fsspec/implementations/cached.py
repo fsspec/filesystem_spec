@@ -130,6 +130,9 @@ class CachingFileSystem(AbstractFileSystem):
         if item in d:
             return d[item]
         elif fs is not None:
+            if item in fs.__dict__:
+                # attribute of instance
+                return fs.__dict__[item]
             # attributed belonging to the target filesystem
             cls = type(fs)
             m = getattr(cls, item)
