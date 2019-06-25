@@ -1,4 +1,4 @@
-import ujson
+import pickle
 import os
 import hashlib
 import tempfile
@@ -47,23 +47,37 @@ class CachingFileSystem(AbstractFileSystem):
         """Read set of stored blocks from file"""
         fn = os.path.join(self.storage, 'cache.json')
         if os.path.exists(fn):
-            with open(fn) as f:
-                self.cached_files = ujson.load(f)
-                for c in self.cached_files.values():
-                    if isinstance(c['blocks'], list):
-                        c['blocks'] = set(c['blocks'])
+            with open(fn, 'rb') as f:
+                self.cached_files = pickle.load(f)
         else:
             self.cached_files = {}
 
     def save_cache(self):
         """Save set of stored blocks from file"""
         fn = os.path.join(self.storage, 'cache.json')
-        cache = {k: v.copy() for k, v in self.cached_files.items()}
+        # TODO: a file lock could be used to ensure file does not change
+        #  between re-read and write; but occasional duplicated reads ok.
+        if os.path.exists(fn):
+            with open(fn, 'rb') as f:
+                cached_files = pickle.load(f)
+            for k, c in cached_files.items():
+                if c['blocks'] is not True:
+                    if self.cached_files[k]['blocks'] is True:
+                        c['blocks'] = True
+                    else:
+                        c['blocks'] = c['blocks'].union(
+                            self.cached_files[k]['blocks'])
+        else:
+            cached_files = self.cached_files
+        cache = {k: v.copy() for k, v in cached_files.items()}
         for c in cache.values():
             if isinstance(c['blocks'], set):
                 c['blocks'] = list(c['blocks'])
-        with open(fn, 'w') as f:
-            ujson.dump(self.cached_files, f)
+        with open(fn + '.temp', 'wb') as f:
+            pickle.dump(self.cached_files, f)
+        if os.path.exists(fn):
+            os.remove(fn)
+        os.rename(fn + '.temp', fn)
 
     def _open(self, path, mode='rb', **kwargs):
         """Wrap the target _open
@@ -118,8 +132,9 @@ class CachingFileSystem(AbstractFileSystem):
 
     def __getattribute__(self, item):
         if item in ['load_cache', '_open', 'save_cache', 'close_and_update',
-                    '__init__', '__getattribute__', '__reduce_ex__']:
-            # all the methods defined in this class
+                    '__init__', '__getattribute__', '__reduce_ex__', 'open']:
+            # all the methods defined in this class. Note `open` here, since
+            # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(CachingFileSystem, item)(
                 self, *args, **kw
             )
@@ -139,7 +154,7 @@ class CachingFileSystem(AbstractFileSystem):
             if (inspect.isfunction(m) and (not hasattr(m, '__self__')
                                            or m.__self__ is None)):
                 # instance method
-                return lambda *args, **kw: m(self, *args, **kw)
+                return m.__get__(fs, cls)
             return m  # class method or attribute
         else:
             # attributes of the superclass, while target is being set up

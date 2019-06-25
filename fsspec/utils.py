@@ -230,3 +230,32 @@ def tokenize(*args, **kwargs):
     if kwargs:
         args += (kwargs,)
     return md5(str(args).encode()).hexdigest()
+
+
+def stringify_path(filepath):
+    """ Attempt to convert a path-like object to a string.
+
+    Parameters
+    ----------
+    filepath : object to be converted
+
+    Returns
+    -------
+    filepath_str : maybe a string version of the object
+
+    Notes
+    -----
+    Objects supporting the fspath protocol (Python 3.6+) are coerced
+    according to its __fspath__ method.
+
+    For backwards compatibility with older Python version, pathlib.Path
+    objects are specially coerced.
+
+    Any other object is passed through unchanged, which includes bytes,
+    strings, buffers, or anything else that's not even path-like.
+    """
+    if hasattr(filepath, "__fspath__"):
+        return filepath.__fspath__()
+    elif isinstance(filepath, pathlib.Path):
+        return str(filepath)
+    return filepath
