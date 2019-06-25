@@ -25,7 +25,8 @@ known_implementations = {
     'webhdfs': {'class': 'fsspec.implementations.webhdfs.WebHDFS',
                 'err': 'webHDFS access requires "requests" to be installed'},
     's3': {'class': 's3fs.S3FileSystem',
-           'err': 'Install s3fs to access S3'}
+           'err': 'Install s3fs to access S3'},
+    'cached': {'class': 'fsspec.implementations.cached.CachingFileSystem'}
 }
 
 

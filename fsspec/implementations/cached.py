@@ -16,7 +16,7 @@ class CachingFileSystem(AbstractFileSystem):
 
     protocol = 'cached'
 
-    def __init__(self, fs=None, protocol=None, cache_storage='TMP', **kwargs):
+    def __init__(self, protocol=None, cache_storage='TMP', **kwargs):
         """
 
         Parameters
@@ -37,10 +37,9 @@ class CachingFileSystem(AbstractFileSystem):
             storage = cache_storage
         os.makedirs(storage, exist_ok=True)
         self.storage = storage
+        self.kwargs = kwargs
         self.load_cache()
-        if fs is None:
-            fs = filesystem(protocol, **kwargs)
-        self.fs = fs
+        self.fs = filesystem(protocol, **kwargs)
         super().__init__(**kwargs)
 
     def load_cache(self):
@@ -128,7 +127,7 @@ class CachingFileSystem(AbstractFileSystem):
         close()
 
     def __reduce_ex__(self, *_):
-        return CachingFileSystem, (self.fs, None, self.storage)
+        return CachingFileSystem, (self.protocol, self.storage, self.kwargs)
 
     def __getattribute__(self, item):
         if item in ['load_cache', '_open', 'save_cache', 'close_and_update',
