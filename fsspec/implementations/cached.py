@@ -16,19 +16,18 @@ class CachingFileSystem(AbstractFileSystem):
 
     protocol = 'cached'
 
-    def __init__(self, protocol=None, cache_storage='TMP', **kwargs):
+    def __init__(self, target_protocol=None, cache_storage='TMP',
+                 storage_options=None):
         """
 
         Parameters
         ----------
-        fs : fsspec.AbstractFileSystem compatible instance
-            If given, just use this instance, and ignore protocol and kwargs
-        protocol : str
+        target_protocol : str
             Target fielsystem protocol
         cache_storage : str
             Location to store files. If "TMP", this is a temporary directory,
             and will be cleaned up by the OS when this process ends (or later)
-        kwargs
+        storage_options
             Passed to the instantiation of the FS, if fs is None.
         """
         if cache_storage == "TMP":
@@ -36,15 +35,16 @@ class CachingFileSystem(AbstractFileSystem):
         else:
             storage = cache_storage
         os.makedirs(storage, exist_ok=True)
+        self.protocol = target_protocol
         self.storage = storage
-        self.kwargs = kwargs
+        self.kwargs = storage_options or {}
         self.load_cache()
-        self.fs = filesystem(protocol, **kwargs)
-        super().__init__(**kwargs)
+        self.fs = filesystem(target_protocol, **self.kwargs)
+        super().__init__(**self.kwargs)
 
     def load_cache(self):
         """Read set of stored blocks from file"""
-        fn = os.path.join(self.storage, 'cache.json')
+        fn = os.path.join(self.storage, 'cache')
         if os.path.exists(fn):
             with open(fn, 'rb') as f:
                 self.cached_files = pickle.load(f)
@@ -53,7 +53,7 @@ class CachingFileSystem(AbstractFileSystem):
 
     def save_cache(self):
         """Save set of stored blocks from file"""
-        fn = os.path.join(self.storage, 'cache.json')
+        fn = os.path.join(self.storage, 'cache')
         # TODO: a file lock could be used to ensure file does not change
         #  between re-read and write; but occasional duplicated reads ok.
         if os.path.exists(fn):
@@ -127,11 +127,13 @@ class CachingFileSystem(AbstractFileSystem):
         close()
 
     def __reduce_ex__(self, *_):
-        return CachingFileSystem, (self.protocol, self.storage, self.kwargs)
+        return CachingFileSystem, (self.protocol, self.storage,
+                                   self.kwargs or None)
 
     def __getattribute__(self, item):
         if item in ['load_cache', '_open', 'save_cache', 'close_and_update',
-                    '__init__', '__getattribute__', '__reduce_ex__', 'open']:
+                    '__init__', '__getattribute__', '__reduce_ex__', 'open',
+                    'cat', 'get', 'read_block', 'tail', 'head']:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(CachingFileSystem, item)(
