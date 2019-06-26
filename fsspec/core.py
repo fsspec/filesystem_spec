@@ -370,7 +370,7 @@ class MMapCache(BaseCache):
     def __init__(self, blocksize, fetcher, size, location=None,
                  blocks=None, **kwargs):
         super().__init__(blocksize, fetcher, size)
-        self.blocks = set() if blocks is None else set(blocks)
+        self.blocks = set() if blocks is None else blocks
         self.location = location
         self.cache = self._makefile()
 

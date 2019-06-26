@@ -82,7 +82,7 @@ class LocalFileSystem(AbstractFileSystem):
 
 
 class LocalFileOpener(object):
-    def __init__(self, path, mode, autocommit=True):
+    def __init__(self, path, mode, autocommit=True, **kwargs):
         self.path = path
         self.autocommit = autocommit
         if autocommit or 'w' not in mode:
