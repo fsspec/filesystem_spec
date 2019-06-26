@@ -61,6 +61,7 @@ Built-in Implementations
    fsspec.implementations.sftp.SFTPFileSystem
    fsspec.implementations.webhdfs.WebHDFS
    fsspec.implementations.zip.ZipFileSystem
+   fsspec.implementations.cached.CachingFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -83,4 +84,7 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.zip.ZipFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.cached.CachingFileSystem
    :members: __init__

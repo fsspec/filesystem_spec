@@ -1,5 +1,6 @@
 import os
 import pickle
+import pytest
 
 import fsspec
 from fsspec.implementations.cached import CachingFileSystem
@@ -34,3 +35,18 @@ def test_worflow(ftp_writable):
         f.write(b'changed')
 
     assert fs.cat('/out') == b'test'  # old value
+
+
+def test_blocksize(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open('/out', 'wb') as f:
+        f.write(b'test')
+
+    fs = fsspec.filesystem('cached', target_protocol='ftp',
+                           storage_options={'host': host, 'port': port,
+                                            'username': user, 'password': pw})
+
+    assert fs.cat('/out') == b'test'
+    with pytest.raises(ValueError):
+        fs.open('/out', block_size=1)

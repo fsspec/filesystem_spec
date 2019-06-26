@@ -11,7 +11,17 @@ class CachingFileSystem(AbstractFileSystem):
     """Locally caching filesystem, layer over any other FS
 
     This class implements chunk-wise local storage of remote files, for quick
-    access after the initial download
+    access after the initial download. The files are stored in a given
+    directory with random hashes for the filenames. If no directory is given,
+    a temporary one is used, which should be cleaned up by the OS after the
+    process ends. The files themselves as sparse (as implemented in
+    MMapCache), so only the data which is accessed takes up space.
+
+    Restrictions:
+    - the block-size must be the same for each access of a given file, unless
+      all blocks of the file have already been read
+    - caching can only be applied to file-systems which produce files
+      derived from fsspec.spec.AbstractBufferedFile
     """
 
     protocol = 'cached'
@@ -99,18 +109,25 @@ class CachingFileSystem(AbstractFileSystem):
             fn = os.path.join(self.storage, hash)
             if blocks is True:
                 return open(fn, 'rb')
-            else:
-                blocks = set(blocks)
         else:
             hash = hashlib.sha256(path.encode()).hexdigest()
             fn = os.path.join(self.storage, hash)
             blocks = set()
-            self.cached_files[path] = {'fn': hash, 'blocks': blocks}
+            detail = {'fn': hash, 'blocks': blocks}
+            self.cached_files[path] = detail
         kwargs['cache_type'] = 'none'
         kwargs['mode'] = mode
 
         # call target filesystems open
         f = self.fs._open(path, **kwargs)
+        print(detail)
+        if 'blocksize' in detail:
+            if detail['blocksize'] != f.blocksize:
+                raise ValueError('Cached file must be reopened with same block'
+                                 'size as original (old: %i, new %i)'
+                                 '' % (detail['blocksize'], f.blocksize))
+        else:
+            detail['blocksize'] = f.blocksize
         f.cache = MMapCache(f.blocksize, f._fetch_range, f.size,
                             fn, blocks)
         close = f.close
