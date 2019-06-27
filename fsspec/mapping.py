@@ -33,7 +33,7 @@ class FSMap(MutableMapping):
 
     def __init__(self, root, fs, check=False, create=False):
         self.fs = fs
-        self.root = root.rstrip('/')  # we join on '/' in _key_to_str
+        self.root = fs._strip_protocol(root).rstrip('/')  # we join on '/' in _key_to_str
         if create:
             self.fs.mkdir(root)
         if check:
@@ -139,4 +139,4 @@ def get_mapper(url, check=False, create=False, **kwargs):
     cls = get_filesystem_class(protocol)
     fs = cls(**kwargs)
     # Removing protocol here - could defer to each open() on the backend
-    return FSMap(fs._strip_protocol(url), fs, check, create)
+    return FSMap(url, fs, check, create)
