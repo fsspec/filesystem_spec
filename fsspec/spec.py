@@ -407,15 +407,16 @@ class AbstractFileSystem(up):
         Example reimplements code in ``glob.glob()``, taken from hdfs3.
         """
         import re
+        ends = path.endswith('/')
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >=0 else len(path)
-        indques = path.find("?") if path.find("?") >=0 else len(path)
+        indstar = path.find("*") if path.find("*") >= 0 else len(path)
+        indques = path.find("?") if path.find("?") >= 0 else len(path)
         ind = min(indstar, indques)
         if "*" not in path and "?" not in path:
             root = path
             depth = 1
-            if path.endswith('/'):
-                path += '*'
+            if ends:
+                path += '/*'
             elif self.exists(path):
                 return [path]
             else:
