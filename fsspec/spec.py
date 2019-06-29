@@ -407,8 +407,9 @@ class AbstractFileSystem(up):
         Example reimplements code in ``glob.glob()``, taken from hdfs3.
         """
         import re
+        path = self._strip_protocol(path)
         indstar = path.find("*") if path.find("*") >=0 else len(path)
-        indques = path.find("?") if path.find("*") >=0 else len(path)
+        indques = path.find("?") if path.find("?") >=0 else len(path)
         ind = min(indstar, indques)
         if "*" not in path and "?" not in path:
             root = path
@@ -420,9 +421,9 @@ class AbstractFileSystem(up):
             else:
                 raise FileNotFoundError(path)
         elif '/' in path[:ind]:
-            ind = path[:path.index('*')].rindex('/')
-            root = path[:ind + 1]
-            depth = 20 if "**" in path else path[ind + 1:].count('/') + 1
+            ind2 = path[:ind].rindex('/')
+            root = path[:ind2 + 1]
+            depth = 20 if "**" in path else path[ind2 + 1:].count('/') + 1
         else:
             root = ''
             depth = 20 if "**" in path else 1
@@ -433,7 +434,6 @@ class AbstractFileSystem(up):
                              .replace('**', '.+')
                              .replace('*', '[^/]*')
                              .replace('?', '.') + "$")
-        print(pattern)
         out = {p for p in allpaths
                if pattern.match(p.replace('//', '/').rstrip('/'))}
         return list(sorted(out))
@@ -503,7 +503,7 @@ class AbstractFileSystem(up):
         """Is this entry file-like?"""
         try:
             return self.info(path)['type'] == 'file'
-        except FileNotFoundError:
+        except:
             return False
 
     def cat(self, path):

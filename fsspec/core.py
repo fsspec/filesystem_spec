@@ -461,7 +461,7 @@ class BytesCache(BaseCache):
         out = self.cache[offset:offset + end - start]
         if self.trim:
             num = (self.end - self.start) // (self.blocksize + 1)
-            if num > 0:
+            if num > 1:
                 self.start += self.blocksize * num
                 self.cache = self.cache[self.blocksize * num:]
         return out
