@@ -147,13 +147,14 @@ class AbstractFileSystem(up):
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
-        path = path.rstrip('/')
-        if path.startswith(cls.protocol + '://'):
-            path = path[len(cls.protocol) + 3:]
-        elif path.startswith(cls.protocol + ':'):
-            path = path[len(cls.protocol) + 1:]
-        elif path.startswith(cls.protocol):
-            path = path[len(cls.protocol):]
+        protos = (cls.protocol, ) if isinstance(
+            cls.protocol, str) else cls.protocol
+        for protocol in protos:
+            path = path.rstrip('/')
+            if path.startswith(protocol + '://'):
+                path = path[len(protocol) + 3:]
+            elif path.startswith(protocol + ':'):
+                path = path[len(protocol) + 1:]
         # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
@@ -359,8 +360,10 @@ class AbstractFileSystem(up):
         out = []
         for path, _, files in self.walk(path, maxdepth):
             for name in files:
-                out.append('/'.join([path.rstrip('/'), name]) if path else name)
-        if self.isfile(path):
+                if name:
+                    out.append('/'.join([path.rstrip('/'), name])
+                               if path else name)
+        if self.isfile(path) and path not in out:
             # walk works on directories, but find should also return [path]
             # when path happens to be a file
             out.append(path)
@@ -455,6 +458,7 @@ class AbstractFileSystem(up):
         dict with keys: name (full path in the FS), size (in bytes), type (file,
         directory, or something else) and other FS-specific keys.
         """
+        path = self._strip_protocol(path)
         out = self.ls(self._parent(path), detail=True, **kwargs)
         out = [o for o in out if o['name'].rstrip('/') == path]
         if out:
@@ -510,8 +514,9 @@ class AbstractFileSystem(up):
         Possible extension: maybe should be able to copy to any file-system
         (streaming through local).
         """
+        rpath = self._strip_protocol(rpath)
         if recursive:
-            rpaths = self.walk(rpath)
+            rpaths = self.find(rpath)
             rootdir = os.path.basename(rpath.rstrip('/'))
             if os.path.isdir(lpath):
                 # copy rpath inside lpath directory
@@ -529,6 +534,7 @@ class AbstractFileSystem(up):
             rpaths = [rpath]
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
+            print(lpath, rpath)
             with self.open(rpath, 'rb') as f1:
                 with open(lpath, 'wb') as f2:
                     data = True
