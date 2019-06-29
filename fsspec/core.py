@@ -436,34 +436,31 @@ class BytesCache(BaseCache):
         # is this where retry logic might go?
         if self.start is None and self.end is None:
             # First read
+            self.cache = self.fetcher(start, end + self.blocksize)
             self.start = start
-            self.end = end + self.blocksize
-            self.cache = self.fetcher(self.start, self.end)
-        if start < self.start:
+        elif start < self.start:
             if self.end - end > self.blocksize:
+                self.cache = self.fetcher(start, end + self.blocksize)
                 self.start = start
-                self.end = end + self.blocksize
-                self.cache = self.fetcher(self.start, self.end)
             else:
                 new = self.fetcher(start, self.start)
                 self.start = start
                 self.cache = new + self.cache
-        if end > self.end:
+        elif end > self.end:
             if self.end > self.size:
                 pass
             elif end - self.end > self.blocksize:
+                self.cache = self.fetcher(start, end + self.blocksize)
                 self.start = start
-                self.end = end + self.blocksize
-                self.cache = self.fetcher(self.start, self.end)
             else:
                 new = self.fetcher(self.end, end + self.blocksize)
-                self.end = end + self.blocksize
                 self.cache = self.cache + new
 
+        self.end = self.start + len(self.cache)
         offset = start - self.start
         out = self.cache[offset:offset + end - start]
         if self.trim:
-            num = (self.end - self.start) // self.blocksize - 1
+            num = (self.end - self.start) // (self.blocksize + 1)
             if num > 0:
                 self.start += self.blocksize * num
                 self.cache = self.cache[self.blocksize * num:]

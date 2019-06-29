@@ -18,12 +18,15 @@ class FUSEr(Operations):
     def __init__(self, fs, path):
         self.fs = fs
         self.cache = {}
-        self.root = path
+        self.root = path.rstrip('/') + '/'
         self.counter = 0
     
     def getattr(self, path, fh=None):
         path = ''.join([self.root, path.lstrip('/')]).rstrip('/')
-        info = self.fs.info(path)
+        try:
+            info = self.fs.info(path)
+        except FileNotFoundError:
+            raise FuseOSError(ENOENT)
         data = {'st_uid': 1000, 'st_gid': 1000}
         perm = 0o777
 
@@ -69,8 +72,6 @@ class FUSEr(Operations):
         return len(data)
     
     def create(self, path, flags, fi=None):
-        if fi is not None:
-            print(fi)
         fn = ''.join([self.root, path.lstrip('/')])
         f = self.fs.open(fn, 'wb')
         self.cache[self.counter] = f

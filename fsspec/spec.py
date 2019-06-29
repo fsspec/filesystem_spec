@@ -407,8 +407,10 @@ class AbstractFileSystem(up):
         Example reimplements code in ``glob.glob()``, taken from hdfs3.
         """
         import re
-        import posixpath
-        if "*" not in path:
+        indstar = path.find("*") if path.find("*") >=0 else len(path)
+        indques = path.find("?") if path.find("*") >=0 else len(path)
+        ind = min(indstar, indques)
+        if "*" not in path and "?" not in path:
             root = path
             depth = 1
             if path.endswith('/'):
@@ -417,21 +419,21 @@ class AbstractFileSystem(up):
                 return [path]
             else:
                 raise FileNotFoundError(path)
-        elif '/' in path[:path.index('*')]:
+        elif '/' in path[:ind]:
             ind = path[:path.index('*')].rindex('/')
             root = path[:ind + 1]
-            depth = path[ind + 1:].count('/') + 1
+            depth = 20 if "**" in path else path[ind + 1:].count('/') + 1
         else:
             root = ''
-            depth = 1
-        allpaths = []
-        for dirname, dirs, fils in self.walk(root, maxdepth=depth):
-            allpaths.extend(posixpath.join(dirname, f) for f in fils)
+            depth = 20 if "**" in path else 1
+        allpaths = self.find(root, maxdepth=depth)
         pattern = re.compile("^" + path.replace('.', r'\.')
                              .replace('//', '/')
                              .rstrip('/')
+                             .replace('**', '.+')
                              .replace('*', '[^/]*')
                              .replace('?', '.') + "$")
+        print(pattern)
         out = {p for p in allpaths
                if pattern.match(p.replace('//', '/').rstrip('/'))}
         return list(sorted(out))
@@ -980,9 +982,9 @@ class AbstractBufferedFile(io.IOBase):
                 # Initialize a multipart upload
                 self._initiate_upload()
 
-        self._upload_chunk(final=force)
-        self.offset += self.buffer.seek(0, 2)
-        self.buffer = io.BytesIO()
+        if self._upload_chunk(final=force) is not False:
+            self.offset += self.buffer.seek(0, 2)
+            self.buffer = io.BytesIO()
 
         if force:
             self.forced = True
