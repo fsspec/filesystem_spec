@@ -9,3 +9,4 @@ conda update conda
 # Install dependencies
 conda create -n test -c conda-forge python=3.7 pip
 source activate test
+pip install intake/filesystem_spec --no-deps
