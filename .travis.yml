@@ -30,7 +30,7 @@ matrix:
         - pip install hadoop-test-cluster==0.1.0
 
       script:
-        - py.test -v --pyargs fsspec
+        - py.test -vv fsspec
 
     - language: generic
       env: TEST=S3FS
