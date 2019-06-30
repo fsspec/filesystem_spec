@@ -26,7 +26,7 @@ matrix:
 
       install:
         - source ci/install.sh
-        - conda install requests pytest paramiko pyftpdlib cloudpickle pyarrow -y -c defaults -c conda-forge
+        - conda install requests paramiko pyftpdlib cloudpickle pyarrow -y -c defaults -c conda-forge
         - pip install hadoop-test-cluster==0.1.0
 
       script:
@@ -39,8 +39,10 @@ matrix:
         - export BOTO_CONFIG=/dev/null
         - export AWS_ACCESS_KEY_ID=foobar_key
         - export AWS_SECRET_ACCESS_KEY=foobar_secret
-        - conda install boto3 botocore httpretty moto six pytest mock -c conda-forge -y
-        - pip install git+https://github.com/dask/s3fs
+        - conda install boto3 botocore httpretty moto six mock -c conda-forge -y
+        - git clone https://github.com/dask/s3fs
+        - cd s3fs
+        - pip install -e . --no-deps
 
       script:
         - py.test -vv s3fs
@@ -49,7 +51,7 @@ matrix:
       env: TEST=GCSFS
       install:
         - source ci/install.sh
-        - conda install -c conda-forge pytest requests decorator google-auth -y
+        - conda install -c conda-forge requests decorator google-auth -y
         - pip install vcrpy google-auth-oauthlib
         - git clone https://github.com/dask/gcsfs
         - cd gcsfs
