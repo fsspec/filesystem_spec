@@ -1,8 +1,8 @@
 import pytest
-import requests
 import subprocess
 import time
 
+requests = pytest.importorskip("requests")
 from fsspec.implementations.webhdfs import WebHDFS
 
 

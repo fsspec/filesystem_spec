@@ -31,8 +31,8 @@ class ZipFileSystem(AbstractFileSystem):
         if isinstance(fo, str):
             files = open_files(fo)
             if len(files) != 1:
-                raise ValueError(f'Path "{fo}" did not resolve to exactly'
-                                 f'one file: "{files}"')
+                raise ValueError('Path "{}" did not resolve to exactly'
+                                 'one file: "{}"'.format(fo, files))
             fo = files[0]
         self.fo = fo.__enter__()  # the whole instance is a context
         self.zip = zipfile.ZipFile(self.fo)

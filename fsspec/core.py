@@ -54,7 +54,7 @@ class OpenFile(object):
                            self.encoding, self.errors))
 
     def __repr__(self):
-        return f"<OpenFile '{self.path}'>"
+        return "<OpenFile '{}'>".format(self.path)
 
     def __fspath__(self):
         return self.path

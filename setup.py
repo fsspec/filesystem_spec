@@ -22,6 +22,6 @@ setup(name='fsspec',
       license='BSD',
       keywords='file',
       packages=['fsspec', 'fsspec.implementations'],
-      python_requires='>=3.6',
+      python_requires='>=3.5',
       install_requires=[open('requirements.txt').read().strip().split('\n')],
       zip_safe=False)
