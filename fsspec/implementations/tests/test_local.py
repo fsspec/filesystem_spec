@@ -150,6 +150,7 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize('mode', ['rt', 'rb'])
 @pytest.mark.parametrize('fmt', list(compression.compr))
 def test_compressions(fmt, mode, tmpdir):
+    tmpdir = str(tmpdir)
     if fmt == 'zip':
         # zip implemented read-only
         pytest.skip()
@@ -207,6 +208,7 @@ def test_isdir():
 @pytest.mark.parametrize('compression_opener',
                          [(None, open), ('gzip', gzip.open)])
 def test_open_files_write(tmpdir, compression_opener):
+    tmpdir = str(tmpdir)
     compression, opener = compression_opener
     fn = str(tmpdir) + "/*.part"
     files = open_files(fn, num=2, mode='wb', compression=compression)
@@ -224,6 +226,7 @@ def test_open_files_write(tmpdir, compression_opener):
 
 
 def test_pickability_of_lazy_files(tmpdir):
+    tmpdir = str(tmpdir)
     cloudpickle = pytest.importorskip('cloudpickle')
 
     with filetexts(files, mode='b'):

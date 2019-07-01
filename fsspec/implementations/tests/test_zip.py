@@ -1,7 +1,9 @@
 import zipfile
 from contextlib import contextmanager
-import tempfile
 import os
+import pytest
+import sys
+import tempfile
 import fsspec
 
 
@@ -31,6 +33,7 @@ def test_empty():
         assert fs.find('') == []
 
 
+@pytest.mark.skipif(sys.version_info.minor < 6, reason="zip-info odd on py35")
 def test_mapping():
     with tempzip(data) as z:
         fs = fsspec.get_filesystem_class('zip')(fo=z)

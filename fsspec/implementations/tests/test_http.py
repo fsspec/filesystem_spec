@@ -1,11 +1,10 @@
 import glob
 import pytest
-import requests
 import subprocess
 import time
 import fsspec
 
-pytest.importorskip('requests')
+requests = pytest.importorskip('requests')
 
 
 @pytest.fixture(scope='module')
