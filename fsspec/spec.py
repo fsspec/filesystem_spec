@@ -40,6 +40,7 @@ class AbstractFileSystem(up):
     cachable = True  # this class can be cached, instances reused
     _cached = False
     blocksize = 2**22
+    sep = "/"
     protocol = 'abstract'
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
@@ -103,7 +104,7 @@ class AbstractFileSystem(up):
         return self.token
 
     def __hash__(self):
-        return int(self._tok, 16)
+        return int(self.token, 16)
 
     def __eq__(self, other):
         return self.token == other.token
