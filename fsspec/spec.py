@@ -62,7 +62,7 @@ class AbstractFileSystem(up):
             # check for cached instance
             return cls._cache[token]
         self = object.__new__(cls)
-        self.token = token
+        self._fs_token = token
         if self.cachable:
             # store for caching - can hold memory
             cls._cache[token] = self
@@ -101,13 +101,13 @@ class AbstractFileSystem(up):
                     setattr(self, new, getattr(self, old))
 
     def __dask_tokenize__(self):
-        return self.token
+        return self._fs_token
 
     def __hash__(self):
-        return int(self.token, 16)
+        return int(self._fs_token, 16)
 
     def __eq__(self, other):
-        return self.token == other.token
+        return self._fs_token == other._fs_token
 
     @classmethod
     def clear_instance_cache(cls, remove_singleton=True):
@@ -877,7 +877,10 @@ class AbstractBufferedFile(io.IOBase):
         self._closed = c
 
     def __hash__(self):
-        return self.fs.checksum(self.path)
+        if 'w' in self.mode:
+            return id(self)
+        else:
+            tokenize(self.details)
 
     def __eq__(self, other):
         """Files are equal if they have the same checksum, only in read mode"""
@@ -1023,7 +1026,7 @@ class AbstractBufferedFile(io.IOBase):
         if self.mode != 'rb':
             raise ValueError('File not in read mode')
         if length < 0:
-            length = self.size
+            length = self.size - self.loc
         if self.closed:
             raise ValueError('I/O operation on closed file.')
         logger.debug("%s read: %i - %i" % (self, self.loc, self.loc + length))

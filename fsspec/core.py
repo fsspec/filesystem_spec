@@ -37,14 +37,9 @@ class OpenFile(object):
         How to handle encoding errors if opened in text mode.
     newline : None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
-    context : bool
-        Normally, instances are designed for use in a ``with`` context, to
-        ensure pickleability and release of resources. However,
-        ``context=False`` will open all the file objects immediately, leaving
-        it up to the calling code to fo ``f.close()`` explicitly.
     """
     def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
-                 errors=None, newline=None, context=True):
+                 errors=None, newline=None):
         self.fs = fs
         self.path = path
         self.mode = mode
@@ -53,8 +48,6 @@ class OpenFile(object):
         self.errors = errors
         self.newline = newline
         self.fobjects = []
-        if not context:
-            self.__enter__()
 
     def __reduce__(self):
         return (OpenFile, (self.fs, self.path, self.mode, self.compression,
@@ -241,6 +234,8 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
         raise ValueError("When writing data, only one filename mask can "
                          "be specified.")
+    elif 'w' in mode:
+        num = max(num, len(paths))
     for curr_path in paths:
         if '*' in curr_path:
             if 'w' in mode:
@@ -319,7 +314,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
     else:
         raise TypeError('url type not understood: %s' % urlpath)
 
-    return fs, fs.token, paths
+    return fs, fs._fs_token, paths
 
 
 def _expand_paths(path, name_function, num):

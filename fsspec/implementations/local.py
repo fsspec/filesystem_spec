@@ -75,7 +75,7 @@ class LocalFileSystem(AbstractFileSystem):
             os.remove(path)
 
     def _open(self, path, mode='rb', block_size=None, **kwargs):
-        return LocalFileOpener(path, mode, **kwargs)
+        return LocalFileOpener(path, mode, fs=self, **kwargs)
 
     def touch(self, path, **kwargs):
         """ Create empty file, or update timestamp """
@@ -86,8 +86,9 @@ class LocalFileSystem(AbstractFileSystem):
 
 
 class LocalFileOpener(object):
-    def __init__(self, path, mode, autocommit=True, **kwargs):
+    def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
         self.path = path
+        self.fs = fs
         self.autocommit = autocommit
         if autocommit or 'w' not in mode:
             self.f = open(path, mode=mode)
@@ -96,6 +97,10 @@ class LocalFileOpener(object):
             i, name = tempfile.mkstemp()
             self.temp = name
             self.f = open(name, mode=mode)
+        if 'w' not in mode:
+            self.details = self.fs.info(path)
+            self.size = self.details['size']
+            self.f.size = self.size
 
     def commit(self):
         if self.autocommit:
