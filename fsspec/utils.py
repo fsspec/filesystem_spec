@@ -1,6 +1,7 @@
 from hashlib import md5
 import math
 import os
+import pathlib
 import re
 from urllib.parse import urlsplit
 
@@ -42,13 +43,20 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
 
     parsed_path = urlsplit(urlpath)
     protocol = parsed_path.scheme or 'file'
-    path = parsed_path.path
+    if parsed_path.fragment:
+        path = "#".join([parsed_path.path, parsed_path.fragment])
+    else:
+        path = parsed_path.path
     if protocol == 'file':
         # Special case parsing file protocol URL on Windows according to:
         # https://msdn.microsoft.com/en-us/library/jj710207.aspx
         windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
         if windows_path:
             path = '%s:%s' % windows_path.groups()
+
+    if protocol in ["http", "https"]:
+        # for HTTP, we don't want to parse, as requests will anyway
+        return {"protocol": protocol, "path": urlpath}
 
     options = {
         'protocol': protocol,
@@ -61,6 +69,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         # https://github.com/dask/dask/issues/1417
         options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
 
+        if protocol in ("s3", "gcs", "gs"):
+            options["path"] = options['host'] + options["path"]
+        else:
+            options["host"] = options['host']
         if parsed_path.port:
             options['port'] = parsed_path.port
         if parsed_path.username:
@@ -201,6 +213,8 @@ def read_block(f, offset, length, delimiter=None):
     if delimiter:
         f.seek(offset)
         seek_delimiter(f, delimiter, 2**16)
+        if length is None:
+            return f.read()
         start = f.tell()
         length -= start - offset
 

@@ -5,7 +5,7 @@ import os
 import logging
 from .compression import compr
 from .utils import (infer_compression, build_name_function,
-                    update_storage_options)
+                    update_storage_options, stringify_path)
 from .registry import get_filesystem_class
 logger = logging.getLogger('fsspec')
 
@@ -37,9 +37,14 @@ class OpenFile(object):
         How to handle encoding errors if opened in text mode.
     newline : None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
+    context : bool
+        Normally, instances are designed for use in a ``with`` context, to
+        ensure pickleability and release of resources. However,
+        ``context=False`` will open all the file objects immediately, leaving
+        it up to the calling code to fo ``f.close()`` explicitly.
     """
     def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
-                 errors=None, newline=None):
+                 errors=None, newline=None, context=True):
         self.fs = fs
         self.path = path
         self.mode = mode
@@ -48,6 +53,8 @@ class OpenFile(object):
         self.errors = errors
         self.newline = newline
         self.fobjects = []
+        if not context:
+            self.__enter__()
 
     def __reduce__(self):
         return (OpenFile, (self.fs, self.path, self.mode, self.compression,
@@ -208,6 +215,7 @@ def get_compression(urlpath, compression):
 
 
 def split_protocol(urlpath):
+    urlpath = stringify_path(urlpath)
     if "://" in urlpath:
         return urlpath.split("://", 1)
     return None, urlpath
@@ -282,7 +290,11 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
                              "share the same protocol")
         cls = get_filesystem_class(protocol)
         paths = [cls._strip_protocol(u) for u in urlpath]
-        options = cls._get_kwargs_from_urls(paths)
+        optionss = list(map(cls._get_kwargs_from_urls, paths))
+        options = optionss[0]
+        if not all(o == options for o in optionss):
+            raise ValueError("When specifying a list of paths, all paths must "
+                             "share the same file-system options")
         update_storage_options(options, storage_options)
         fs = cls(**options)
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
@@ -312,8 +324,10 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 
 def _expand_paths(path, name_function, num):
     if isinstance(path, str):
-        if path.count('*') != 1:
+        if path.count('*') > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
+        elif "*" not in path:
+            path = os.path.join(path, "*.part")
 
         if name_function is None:
             name_function = build_name_function(num - 1)

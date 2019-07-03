@@ -2,7 +2,7 @@ from hashlib import md5
 import io
 import os
 import logging
-from .utils import read_block, tokenize
+from .utils import read_block, tokenize, stringify_path
 logger = logging.getLogger('fsspec')
 
 # alternative names for some methods, which get patched to new instances
@@ -148,6 +148,7 @@ class AbstractFileSystem(up):
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
+        path = stringify_path(path)
         protos = (cls.protocol, ) if isinstance(
             cls.protocol, str) else cls.protocol
         for protocol in protos:
@@ -430,12 +431,11 @@ class AbstractFileSystem(up):
             root = ''
             depth = 20 if "**" in path else 1
         allpaths = self.find(root, maxdepth=depth)
-        pattern = re.compile("^" + path.replace('.', r'\.')
-                             .replace('//', '/')
-                             .rstrip('/')
-                             .replace('**', '.+')
-                             .replace('*', '[^/]*')
-                             .replace('?', '.') + "$")
+        pattern = "^" + path.replace('.', r'\.').replace('//', '/').rstrip(
+            '/').replace('?', '.') + "$"
+        pattern = re.sub('[*]{2}', '=PLACEHOLDER=', pattern)
+        pattern = re.sub('[*]', '[^/]*', pattern)
+        pattern = re.compile(pattern.replace("=PLACEHOLDER=", '.*'))
         out = {p for p in allpaths
                if pattern.match(p.replace('//', '/').rstrip('/'))}
         return list(sorted(out))
@@ -1019,7 +1019,7 @@ class AbstractBufferedFile(io.IOBase):
         length : int (-1)
             Number of bytes to read; if <0, all remaining bytes.
         """
-        length = int(length)
+        length = -1 if length is None else int(length)
         if self.mode != 'rb':
             raise ValueError('File not in read mode')
         if length < 0:

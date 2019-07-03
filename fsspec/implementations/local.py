@@ -29,6 +29,10 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return paths
 
+    def glob(self, path):
+        path = os.path.abspath(path)
+        return super().glob(path)
+
     def info(self, path):
         out = os.stat(path, follow_symlinks=False)
         dest = False
