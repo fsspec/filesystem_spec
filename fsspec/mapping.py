@@ -135,7 +135,10 @@ def get_mapper(url, check=False, create=False, **kwargs):
     -------
     ``FSMap`` instance, the dict-like key-value store.
     """
-    protocol = url.split(':', 1)[0]
+    if ":" in url:
+        protocol = url.split(':', 1)[0]
+    else:
+        protocol = 'file'
     cls = get_filesystem_class(protocol)
     fs = cls(**kwargs)
     # Removing protocol here - could defer to each open() on the backend

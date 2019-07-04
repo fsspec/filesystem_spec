@@ -103,6 +103,8 @@ class OpenFile(object):
     def close(self):
         """Close all encapsulated file objects"""
         for f in reversed(self.fobjects):
+            if 'r' not in self.mode and not f.closed:
+                f.flush()
             f.close()
         self.fobjects = []
 
