@@ -35,7 +35,8 @@ class FSMap(MutableMapping):
         self.fs = fs
         self.root = fs._strip_protocol(root).rstrip('/')  # we join on '/' in _key_to_str
         if create:
-            self.fs.mkdir(root)
+            if not self.fs.exists(root):
+                self.fs.mkdir(root)
         if check:
             if not self.fs.exists(root):
                 raise ValueError("Path %s does not exist. Create "
@@ -79,6 +80,7 @@ class FSMap(MutableMapping):
     def __setitem__(self, key, value):
         """Store value in key"""
         key = self._key_to_str(key)
+        self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
         with self.fs.open(key, 'wb') as f:
             f.write(value)
 

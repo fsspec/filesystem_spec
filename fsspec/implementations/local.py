@@ -122,8 +122,8 @@ class LocalFileOpener(object):
 
     def __enter__(self):
         self._incontext = True
-        return self.f
+        return self.f.__enter__()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.f.close()
         self._incontext = False
+        self.f.__exit__(exc_type, exc_value, traceback)

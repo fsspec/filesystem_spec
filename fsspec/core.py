@@ -64,27 +64,20 @@ class OpenFile(object):
 
         f = self.fs.open(self.path, mode=mode)
 
-        fobjects = [f]
+        self.fobjects = [f]
 
         if self.compression is not None:
             compress = compr[self.compression]
             f = compress(f, mode=mode[0])
-            fobjects.append(f)
+            self.fobjects.append(f)
 
         if 'b' not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
             f = io.TextIOWrapper(f, encoding=self.encoding,
                                  errors=self.errors, newline=self.newline)
-            fobjects.append(f)
+            self.fobjects.append(f)
 
-        self.fobjects = fobjects
-        try:
-            # opened file should know its original path
-            f.__fspath__ = self.__fspath__
-        except AttributeError:
-            # setting that can fail for some C file-like object
-            pass
-        return f
+        return self.fobjects[-1]
 
     def __exit__(self, *args):
         self.close()
