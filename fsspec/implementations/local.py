@@ -7,10 +7,18 @@ from fsspec import AbstractFileSystem
 class LocalFileSystem(AbstractFileSystem):
     """Interface to files on local storage
 
-    This class requires no initialisation or parameters
+    Parameters
+    ----------
+    auto_mkdirs: bool
+        Whether, when opening a file, the directory containing it should
+        be created (if it doesn't already exist). This is assumed by pyarrow
+        code.
     """
     root_marker = '/'
 
+    def __init__(self, auto_mkdir=True, **kwargs):
+        super().__init__(**kwargs)
+        self.auto_mkdir = auto_mkdir
 
     def mkdir(self, path, **kwargs):
         os.mkdir(path, **kwargs)
@@ -68,13 +76,15 @@ class LocalFileSystem(AbstractFileSystem):
         """ Move file from one location to another """
         os.rename(path1, path2)
 
-    def rm(self, path, recursive=False):
+    def rm(self, path, recursive=False, maxdepth=None):
         if recursive:
             shutil.rmtree(path)
         else:
             os.remove(path)
 
     def _open(self, path, mode='rb', block_size=None, **kwargs):
+        if self.auto_mkdir:
+            self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
 
     def touch(self, path, **kwargs):

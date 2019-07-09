@@ -214,7 +214,7 @@ class AbstractFileSystem(up):
         """
         pass  # not necessary to implement, may have no cache
 
-    def mkdir(self, path, **kwargs):
+    def mkdir(self, path, create_parents=True, **kwargs):
         """
         Create directory entry at path
 
@@ -225,6 +225,8 @@ class AbstractFileSystem(up):
         ----------
         path: str
             location
+        create_parents: bool
+            if True, this is equivalent to ``makedirs``
         kwargs:
             may be permissions, etc.
         """
