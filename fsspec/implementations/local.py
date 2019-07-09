@@ -7,10 +7,18 @@ from fsspec import AbstractFileSystem
 class LocalFileSystem(AbstractFileSystem):
     """Interface to files on local storage
 
-    This class requires no initialisation or parameters
+    Parameters
+    ----------
+    auto_mkdirs: bool
+        Whether, when opening a file, the directory containing it should
+        be created (if it doesn't already exist). This is assumed by pyarrow
+        code.
     """
     root_marker = '/'
 
+    def __init__(self, auto_mkdir=True, **kwargs):
+        super().__init__(**kwargs)
+        self.auto_mkdir = auto_mkdir
 
     def mkdir(self, path, **kwargs):
         os.mkdir(path, **kwargs)
@@ -28,6 +36,10 @@ class LocalFileSystem(AbstractFileSystem):
             return [self.info(f) for f in paths]
         else:
             return paths
+
+    def glob(self, path):
+        path = os.path.abspath(path)
+        return super().glob(path)
 
     def info(self, path):
         out = os.stat(path, follow_symlinks=False)
@@ -64,14 +76,16 @@ class LocalFileSystem(AbstractFileSystem):
         """ Move file from one location to another """
         os.rename(path1, path2)
 
-    def rm(self, path, recursive=False):
+    def rm(self, path, recursive=False, maxdepth=None):
         if recursive:
             shutil.rmtree(path)
         else:
             os.remove(path)
 
     def _open(self, path, mode='rb', block_size=None, **kwargs):
-        return LocalFileOpener(path, mode, **kwargs)
+        if self.auto_mkdir:
+            self.makedirs(self._parent(path), exist_ok=True)
+        return LocalFileOpener(path, mode, fs=self, **kwargs)
 
     def touch(self, path, **kwargs):
         """ Create empty file, or update timestamp """
@@ -82,8 +96,9 @@ class LocalFileSystem(AbstractFileSystem):
 
 
 class LocalFileOpener(object):
-    def __init__(self, path, mode, autocommit=True, **kwargs):
+    def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
         self.path = path
+        self.fs = fs
         self.autocommit = autocommit
         if autocommit or 'w' not in mode:
             self.f = open(path, mode=mode)
@@ -92,6 +107,10 @@ class LocalFileOpener(object):
             i, name = tempfile.mkstemp()
             self.temp = name
             self.f = open(name, mode=mode)
+        if 'w' not in mode:
+            self.details = self.fs.info(path)
+            self.size = self.details['size']
+            self.f.size = self.size
 
     def commit(self):
         if self.autocommit:
@@ -113,8 +132,8 @@ class LocalFileOpener(object):
 
     def __enter__(self):
         self._incontext = True
-        return self.f
+        return self.f.__enter__()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.f.close()
         self._incontext = False
+        self.f.__exit__(exc_type, exc_value, traceback)

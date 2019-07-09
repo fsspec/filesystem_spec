@@ -16,7 +16,7 @@ def unzip(infile, mode='rb', filename=None, **kwargs):
     z = ZipFile(infile)
     if filename is None:
         filename = z.namelist()[0]
-    return z.open(filename, mode='rb', **kwargs)
+    return z.open(filename, mode='r', **kwargs)
 
 
 # should be functions of the form func(infile, mode=, **kwargs) -> file-like

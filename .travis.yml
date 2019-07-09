@@ -47,6 +47,7 @@ matrix:
       script:
         - py.test -vv s3fs
 
+  allow_failures:
     - language: generic
       env: TEST=GCSFS
       install:

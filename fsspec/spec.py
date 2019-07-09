@@ -2,7 +2,7 @@ from hashlib import md5
 import io
 import os
 import logging
-from .utils import read_block, tokenize
+from .utils import read_block, tokenize, stringify_path
 logger = logging.getLogger('fsspec')
 
 # alternative names for some methods, which get patched to new instances
@@ -62,7 +62,7 @@ class AbstractFileSystem(up):
             # check for cached instance
             return cls._cache[token]
         self = object.__new__(cls)
-        self.token = token
+        self._fs_token = token
         if self.cachable:
             # store for caching - can hold memory
             cls._cache[token] = self
@@ -101,13 +101,13 @@ class AbstractFileSystem(up):
                     setattr(self, new, getattr(self, old))
 
     def __dask_tokenize__(self):
-        return self.token
+        return self._fs_token
 
     def __hash__(self):
-        return int(self.token, 16)
+        return int(self._fs_token, 16)
 
     def __eq__(self, other):
-        return self.token == other.token
+        return self._fs_token == other._fs_token
 
     @classmethod
     def clear_instance_cache(cls, remove_singleton=True):
@@ -148,6 +148,7 @@ class AbstractFileSystem(up):
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
+        path = stringify_path(path)
         protos = (cls.protocol, ) if isinstance(
             cls.protocol, str) else cls.protocol
         for protocol in protos:
@@ -213,7 +214,7 @@ class AbstractFileSystem(up):
         """
         pass  # not necessary to implement, may have no cache
 
-    def mkdir(self, path, **kwargs):
+    def mkdir(self, path, create_parents=True, **kwargs):
         """
         Create directory entry at path
 
@@ -224,6 +225,8 @@ class AbstractFileSystem(up):
         ----------
         path: str
             location
+        create_parents: bool
+            if True, this is equivalent to ``makedirs``
         kwargs:
             may be permissions, etc.
         """
@@ -430,12 +433,11 @@ class AbstractFileSystem(up):
             root = ''
             depth = 20 if "**" in path else 1
         allpaths = self.find(root, maxdepth=depth)
-        pattern = re.compile("^" + path.replace('.', r'\.')
-                             .replace('//', '/')
-                             .rstrip('/')
-                             .replace('**', '.+')
-                             .replace('*', '[^/]*')
-                             .replace('?', '.') + "$")
+        pattern = "^" + path.replace('.', r'\.').replace('//', '/').rstrip(
+            '/').replace('?', '.') + "$"
+        pattern = re.sub('[*]{2}', '=PLACEHOLDER=', pattern)
+        pattern = re.sub('[*]', '[^/]*', pattern)
+        pattern = re.compile(pattern.replace("=PLACEHOLDER=", '.*'))
         out = {p for p in allpaths
                if pattern.match(p.replace('//', '/').rstrip('/'))}
         return list(sorted(out))
@@ -877,7 +879,10 @@ class AbstractBufferedFile(io.IOBase):
         self._closed = c
 
     def __hash__(self):
-        return self.fs.checksum(self.path)
+        if 'w' in self.mode:
+            return id(self)
+        else:
+            tokenize(self.details)
 
     def __eq__(self, other):
         """Files are equal if they have the same checksum, only in read mode"""
@@ -1019,11 +1024,11 @@ class AbstractBufferedFile(io.IOBase):
         length : int (-1)
             Number of bytes to read; if <0, all remaining bytes.
         """
-        length = int(length)
+        length = -1 if length is None else int(length)
         if self.mode != 'rb':
             raise ValueError('File not in read mode')
         if length < 0:
-            length = self.size
+            length = self.size - self.loc
         if self.closed:
             raise ValueError('I/O operation on closed file.')
         logger.debug("%s read: %i - %i" % (self, self.loc, self.loc + length))

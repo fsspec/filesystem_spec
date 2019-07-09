@@ -5,7 +5,7 @@ import os
 import logging
 from .compression import compr
 from .utils import (infer_compression, build_name_function,
-                    update_storage_options)
+                    update_storage_options, stringify_path)
 from .registry import get_filesystem_class
 logger = logging.getLogger('fsspec')
 
@@ -64,27 +64,20 @@ class OpenFile(object):
 
         f = self.fs.open(self.path, mode=mode)
 
-        fobjects = [f]
+        self.fobjects = [f]
 
         if self.compression is not None:
             compress = compr[self.compression]
             f = compress(f, mode=mode[0])
-            fobjects.append(f)
+            self.fobjects.append(f)
 
         if 'b' not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
             f = io.TextIOWrapper(f, encoding=self.encoding,
                                  errors=self.errors, newline=self.newline)
-            fobjects.append(f)
+            self.fobjects.append(f)
 
-        self.fobjects = fobjects
-        try:
-            # opened file should know its original path
-            f.__fspath__ = self.__fspath__
-        except AttributeError:
-            # setting that can fail for some C file-like object
-            pass
-        return f
+        return self.fobjects[-1]
 
     def __exit__(self, *args):
         self.close()
@@ -103,6 +96,8 @@ class OpenFile(object):
     def close(self):
         """Close all encapsulated file objects"""
         for f in reversed(self.fobjects):
+            if 'r' not in self.mode and not f.closed:
+                f.flush()
             f.close()
         self.fobjects = []
 
@@ -208,6 +203,7 @@ def get_compression(urlpath, compression):
 
 
 def split_protocol(urlpath):
+    urlpath = stringify_path(urlpath)
     if "://" in urlpath:
         return urlpath.split("://", 1)
     return None, urlpath
@@ -233,6 +229,8 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
         raise ValueError("When writing data, only one filename mask can "
                          "be specified.")
+    elif 'w' in mode:
+        num = max(num, len(paths))
     for curr_path in paths:
         if '*' in curr_path:
             if 'w' in mode:
@@ -282,7 +280,11 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
                              "share the same protocol")
         cls = get_filesystem_class(protocol)
         paths = [cls._strip_protocol(u) for u in urlpath]
-        options = cls._get_kwargs_from_urls(paths)
+        optionss = list(map(cls._get_kwargs_from_urls, paths))
+        options = optionss[0]
+        if not all(o == options for o in optionss):
+            raise ValueError("When specifying a list of paths, all paths must "
+                             "share the same file-system options")
         update_storage_options(options, storage_options)
         fs = cls(**options)
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
@@ -307,13 +309,15 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
     else:
         raise TypeError('url type not understood: %s' % urlpath)
 
-    return fs, fs.token, paths
+    return fs, fs._fs_token, paths
 
 
 def _expand_paths(path, name_function, num):
     if isinstance(path, str):
-        if path.count('*') != 1:
+        if path.count('*') > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
+        elif "*" not in path:
+            path = os.path.join(path, "*.part")
 
         if name_function is None:
             name_function = build_name_function(num - 1)
