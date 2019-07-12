@@ -205,7 +205,10 @@ def get_compression(urlpath, compression):
 def split_protocol(urlpath):
     urlpath = stringify_path(urlpath)
     if "://" in urlpath:
-        return urlpath.split("://", 1)
+        protocol, path = urlpath.split("://", 1)
+        if len(protocol) > 1:
+            # excludes Windows paths
+            return protocol, path
     return None, urlpath
 
 
