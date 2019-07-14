@@ -1,5 +1,6 @@
 import os
 import shutil
+import posixpath
 import re
 import tempfile
 from fsspec import AbstractFileSystem
@@ -33,7 +34,8 @@ class LocalFileSystem(AbstractFileSystem):
         os.rmdir(path)
 
     def ls(self, path, detail=False):
-        paths = [make_path_posix(os.path.abspath(os.path.join(path, f)))
+        path = make_path_posix(path)
+        paths = [posixpath.abspath(posixpath.join(path, f))
                  for f in os.listdir(path)]
         if detail:
             return [self.info(f) for f in paths]
@@ -41,7 +43,7 @@ class LocalFileSystem(AbstractFileSystem):
             return paths
 
     def glob(self, path):
-        path = make_path_posix(os.path.abspath(path))
+        path = posixpath.abspath(make_path_posix(path))
         return super().glob(path)
 
     def info(self, path, **kwargs):
