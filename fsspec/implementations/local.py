@@ -1,7 +1,10 @@
 import os
 import shutil
+import posixpath
+import re
 import tempfile
 from fsspec import AbstractFileSystem
+from fsspec.utils import stringify_path
 
 
 class LocalFileSystem(AbstractFileSystem):
@@ -21,27 +24,30 @@ class LocalFileSystem(AbstractFileSystem):
         self.auto_mkdir = auto_mkdir
 
     def mkdir(self, path, **kwargs):
+        path = make_path_posix(path)
         os.mkdir(path, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
+        path = make_path_posix(path)
         os.makedirs(path, exist_ok=exist_ok)
 
     def rmdir(self, path):
         os.rmdir(path)
 
     def ls(self, path, detail=False):
-        paths = [os.path.abspath(os.path.join(path, f))
-                 for f in os.listdir(path)]
+        path = make_path_posix(path)
+        paths = [posixpath.join(path, f) for f in os.listdir(path)]
         if detail:
             return [self.info(f) for f in paths]
         else:
             return paths
 
     def glob(self, path):
-        path = os.path.abspath(path)
+        path = make_path_posix(path)
         return super().glob(path)
 
-    def info(self, path):
+    def info(self, path, **kwargs):
+        path = make_path_posix(path)
         out = os.stat(path, follow_symlinks=False)
         dest = False
         if os.path.isfile(path):
@@ -83,6 +89,7 @@ class LocalFileSystem(AbstractFileSystem):
             os.remove(path)
 
     def _open(self, path, mode='rb', block_size=None, **kwargs):
+        path = make_path_posix(path)
         if self.auto_mkdir:
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
@@ -93,6 +100,34 @@ class LocalFileSystem(AbstractFileSystem):
             os.utime(path, None)
         else:
             open(path, 'a').close()
+
+    @classmethod
+    def _parent(cls, path):
+        path = make_path_posix(path).rstrip('/')
+        if '/' in path:
+            return path.rsplit('/', 1)[0]
+        else:
+            return cls.root_marker
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        path = stringify_path(path)
+        if path.startswith('file://'):
+            path = path[7:]
+        return make_path_posix(path)
+
+
+def make_path_posix(path):
+    """ Make path generic """
+    if re.match('/[A-Za-z]:', path):
+        # for windows file URI like "file:///C:/folder/file"
+        # or "file:///C:\\dir\\file"
+        path = path[1:]
+    if os.sep not in path and '/' not in path:
+        path = os.path.abspath(path)
+    if path.startswith('\\') or re.match("[\\\\]*[A-Za-z]:", path):
+        return path.lstrip('\\').replace('\\', '/').replace('//', '/')
+    return path
 
 
 class LocalFileOpener(object):

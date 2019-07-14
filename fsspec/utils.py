@@ -182,7 +182,7 @@ def read_block(f, offset, length, delimiter=None):
     Parameters
     ----------
     fn: string
-        Path to filename on S3
+        Path to filename
     offset: int
         Byte offset to start read
     length: int
