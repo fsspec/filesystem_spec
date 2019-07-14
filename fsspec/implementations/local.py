@@ -115,6 +115,7 @@ def make_path_posix(path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"
         path = path[1:]
+    path = os.path.abspath(path)
     if path.startswith('\\') or re.match("[\\\\]*[A-Za-z]:", path):
         return path.lstrip('\\').replace('\\', '/').replace('//', '/')
     return path
