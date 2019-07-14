@@ -30,7 +30,7 @@ class LocalFileSystem(AbstractFileSystem):
         os.rmdir(path)
 
     def ls(self, path, detail=False):
-        paths = [os.path.abspath(os.path.join(path, f))
+        paths = [make_path_posix(os.path.abspath(os.path.join(path, f)))
                  for f in os.listdir(path)]
         if detail:
             return [self.info(f) for f in paths]
@@ -38,10 +38,10 @@ class LocalFileSystem(AbstractFileSystem):
             return paths
 
     def glob(self, path):
-        path = os.path.abspath(path)
+        path = make_path_posix(os.path.abspath(path))
         return super().glob(path)
 
-    def info(self, path):
+    def info(self, path, **kwargs):
         out = os.stat(path, follow_symlinks=False)
         dest = False
         if os.path.isfile(path):
