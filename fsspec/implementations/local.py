@@ -108,6 +108,12 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return cls.root_marker
 
+    @classmethod
+    def _strip_protocol(cls, path):
+        if path.startswith('file://'):
+            path = path[8:]
+        return make_path_posix(path)
+
 
 def make_path_posix(path):
     """ Make path generic """
