@@ -110,7 +110,7 @@ class LocalFileSystem(AbstractFileSystem):
 
 def make_path_posix(path):
     """ Make path generic """
-    if path.startswith('\\') or re.match("[\\\\]+[A-Za-z]:", path):
+    if path.startswith('\\') or re.match("[\\\\]*[A-Za-z]:", path):
         return path.lstrip('\\').replace('\\', '/').replace('//', '/')
     if re.match('/[A-Za-z]:', path):
         # for windows file URI like "file:///C:/folder/file"
