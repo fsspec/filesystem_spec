@@ -94,6 +94,18 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             open(path, 'a').close()
 
+    def _parent(cls, path):
+        path = make_path_posix(path).rstrip('/')
+        if '/' in path:
+            return path.rsplit('/', 1)[0]
+        else:
+            return cls.root_marker
+
+
+def make_path_posix(path):
+    """ Make path generic """
+    return path.replace('\\', '/').replace('//', '/')
+
 
 class LocalFileOpener(object):
     def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
