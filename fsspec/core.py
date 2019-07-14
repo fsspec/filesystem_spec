@@ -103,7 +103,8 @@ class OpenFile(object):
 
 
 def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
-               errors=None, name_function=None, num=1, protocol=None, **kwargs):
+               errors=None, name_function=None, num=1, protocol=None,
+               newline=None, **kwargs):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
 
     For writing, a str path must contain the "*" character, which will be filled
@@ -152,12 +153,12 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
                                              storage_options=kwargs,
                                              protocol=protocol)
     return [OpenFile(fs, path, mode=mode, compression=compression,
-                     encoding=encoding, errors=errors)
+                     encoding=encoding, errors=errors, newline=newline)
             for path in paths]
 
 
 def open(urlpath, mode='rb', compression=None, encoding='utf8',
-         errors=None, protocol=None, **kwargs):
+         errors=None, protocol=None, newline=None, **kwargs):
     """ Given a path or paths, return one ``OpenFile`` object.
 
     Parameters
@@ -191,7 +192,7 @@ def open(urlpath, mode='rb', compression=None, encoding='utf8',
     ``OpenFile`` object.
     """
     return open_files([urlpath], mode, compression, encoding, errors,
-                      protocol, **kwargs)[0]
+                      protocol, newline=newline, **kwargs)[0]
 
 
 def get_compression(urlpath, compression):
