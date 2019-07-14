@@ -4,6 +4,7 @@ import posixpath
 import re
 import tempfile
 from fsspec import AbstractFileSystem
+from fsspec.utils import stringify_path
 
 
 class LocalFileSystem(AbstractFileSystem):
@@ -110,8 +111,9 @@ class LocalFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
+        path = stringify_path(path)
         if path.startswith('file://'):
-            path = path[8:]
+            path = path[7:]
         return make_path_posix(path)
 
 
