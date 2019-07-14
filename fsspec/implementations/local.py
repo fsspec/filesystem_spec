@@ -35,15 +35,14 @@ class LocalFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=False):
         path = make_path_posix(path)
-        paths = [posixpath.abspath(posixpath.join(path, f))
-                 for f in os.listdir(path)]
+        paths = [posixpath.join(path, f) for f in os.listdir(path)]
         if detail:
             return [self.info(f) for f in paths]
         else:
             return paths
 
     def glob(self, path):
-        path = posixpath.abspath(make_path_posix(path))
+        path = make_path_posix(path)
         return super().glob(path)
 
     def info(self, path, **kwargs):
