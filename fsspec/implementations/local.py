@@ -1,5 +1,6 @@
 import os
 import shutil
+import re
 import tempfile
 from fsspec import AbstractFileSystem
 
@@ -21,9 +22,11 @@ class LocalFileSystem(AbstractFileSystem):
         self.auto_mkdir = auto_mkdir
 
     def mkdir(self, path, **kwargs):
+        path = make_path_posix(path)
         os.mkdir(path, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
+        path = make_path_posix(path)
         os.makedirs(path, exist_ok=exist_ok)
 
     def rmdir(self, path):
@@ -42,6 +45,7 @@ class LocalFileSystem(AbstractFileSystem):
         return super().glob(path)
 
     def info(self, path, **kwargs):
+        path = make_path_posix(path)
         out = os.stat(path, follow_symlinks=False)
         dest = False
         if os.path.isfile(path):
@@ -83,6 +87,7 @@ class LocalFileSystem(AbstractFileSystem):
             os.remove(path)
 
     def _open(self, path, mode='rb', block_size=None, **kwargs):
+        path = make_path_posix(path)
         if self.auto_mkdir:
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
@@ -94,6 +99,7 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             open(path, 'a').close()
 
+    @classmethod
     def _parent(cls, path):
         path = make_path_posix(path).rstrip('/')
         if '/' in path:
@@ -104,7 +110,11 @@ class LocalFileSystem(AbstractFileSystem):
 
 def make_path_posix(path):
     """ Make path generic """
-    return path.replace('\\', '/').replace('//', '/')
+    if path.startswith('\\') or re.match("[\\\\]+[A-Za-z]:"):
+        return path.lstrip('\\').replace('\\', '/').replace('//', '/')
+    if re.match('/[A-Za-z]:'):
+        # for windows file URI like "file:///C:/folder/file"
+        return path[1:]
 
 
 class LocalFileOpener(object):
