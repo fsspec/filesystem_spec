@@ -135,6 +135,9 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
         name+function)
     protocol : str or None
         If given, overrides the protocol found in the URL.
+    newline : bytes or None
+        Used for line terminator in text mode. If None, uses system default;
+        if blank, uses no translation.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -176,6 +179,9 @@ def open(urlpath, mode='rb', compression=None, encoding='utf8',
         Passed to TextIOWrapper in text mode
     protocol : str or None
         If given, overrides the protocol found in the URL.
+    newline : bytes or None
+        Used for line terminator in text mode. If None, uses system default;
+        if blank, uses no translation.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.

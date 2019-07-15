@@ -629,18 +629,18 @@ class AbstractFileSystem(up):
 
     @classmethod
     def _parent(cls, path):
-        path = path.rstrip('/').lstrip('/')
+        path = path.rstrip('/')
         if '/' in path:
             return cls.root_marker + path.rsplit('/', 1)[0]
         else:
             return cls.root_marker
 
-    def _open(self, path, mode='rb', block_size=None, autocommit=True,
+    def _open(self, path, mode='rb', block_size='default', autocommit=True,
               **kwargs):
         """Return raw bytes-mode file-like from the file-system"""
         return AbstractBufferedFile(self, path, mode, block_size, autocommit)
 
-    def open(self, path, mode='rb', block_size=None, **kwargs):
+    def open(self, path, mode='rb', block_size='default', **kwargs):
         """
         Return a file-like object from the filesystem
 

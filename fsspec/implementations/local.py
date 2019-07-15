@@ -23,9 +23,12 @@ class LocalFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
         self.auto_mkdir = auto_mkdir
 
-    def mkdir(self, path, **kwargs):
+    def mkdir(self, path, create_parents=True, **kwargs):
         path = make_path_posix(path)
-        os.mkdir(path, **kwargs)
+        if create_parents:
+            self.makedirs(path, exist_ok=True)
+        else:
+            os.mkdir(path, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
         path = make_path_posix(path)
