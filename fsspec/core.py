@@ -439,6 +439,9 @@ class BytesCache(BaseCache):
     """
 
     def __init__(self, blocksize, fetcher, size, trim=True, **kwargs):
+        if blocksize is None:
+            import pdb
+            pdb.set_trace()
         super().__init__(blocksize, fetcher, size)
         self.cache = b''
         self.start = None

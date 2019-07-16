@@ -1,0 +1,17 @@
+[run]
+omit =
+    */test_*.py
+    fsspec/_version.py
+source =
+    fsspec
+
+[report]
+# Regexes for lines to exclude from consideration
+exclude_lines =
+    pragma: no cover
+
+    raise AssertionError
+    raise NotImplementedError
+    pass
+
+ignore_errors = True

@@ -48,6 +48,7 @@ class AbstractFileSystem(up):
         """
         Will reuse existing instance if:
         - cls.cachable is True and
+        - storage_options does not include do_cache=False
         - the token (a hash of args and kwargs by default) exists in the cache
 
         The instance will skip init if instance.cached = True.
@@ -57,8 +58,9 @@ class AbstractFileSystem(up):
             cls._cache = {}
 
         # TODO: defer to a class-specific tokeniser?
+        do_cache = storage_options.pop('do_cache', True)
         token = tokenize(cls, args, storage_options)
-        if cls.cachable and token in cls._cache:
+        if cls.cachable and token in cls._cache and do_cache:
             # check for cached instance
             return cls._cache[token]
         self = object.__new__(cls)
@@ -622,7 +624,8 @@ class AbstractFileSystem(up):
                 out = self.walk(p, maxdepth=maxdepth)
                 for pa, _, files in reversed(list(out)):
                     for name in files:
-                        self.rm('/'.join([pa, name]))
+                        fn = '/'.join([pa, name]) if pa else name
+                        self.rm(fn)
                     self.rmdir(pa)
             else:
                 self._rm(p)
@@ -847,7 +850,7 @@ class AbstractBufferedFile(io.IOBase):
         self.fs = fs
         self.mode = mode
         self.blocksize = (self.DEFAULT_BLOCK_SIZE
-                          if block_size == 'default' else block_size)
+                          if block_size in ['default', None] else block_size)
         self.loc = 0
         self.autocommit = autocommit
         self.end = None
@@ -882,7 +885,7 @@ class AbstractBufferedFile(io.IOBase):
         if 'w' in self.mode:
             return id(self)
         else:
-            tokenize(self.details)
+            return int(tokenize(self.details), 16)
 
     def __eq__(self, other):
         """Files are equal if they have the same checksum, only in read mode"""
@@ -897,7 +900,10 @@ class AbstractBufferedFile(io.IOBase):
 
     def info(self):
         """ File information about this path """
-        return self.details  # error in write mode
+        if 'r' in self.mode:
+            return self.details
+        else:
+            raise ValueError('Info not available while writing')
 
     def tell(self):
         """ Current file location """
@@ -1096,7 +1102,7 @@ class AbstractBufferedFile(io.IOBase):
         lines = data.split(b'\n')
         out = [l + b'\n' for l in lines[:-1]]
         if data.endswith(b'\n'):
-            return out + [lines[-1] + b'\n']
+            return out
         else:
             return out + [lines[-1]]
         # return list(self)  ???

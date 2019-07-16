@@ -15,9 +15,9 @@ class DaskWorkerFileSystem(AbstractFileSystem):
     When instances are run on the worker,
     """
 
-    def __init__(self, protocol, storage_options=None, **kwargs):
+    def __init__(self, remote_protocol, storage_options=None, **kwargs):
         super().__init__(**kwargs)
-        self.protocol = protocol
+        self.protocol = remote_protocol
         self.storage_options = storage_options or {}
         self.worker = None
         self.client = None

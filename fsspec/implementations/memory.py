@@ -9,6 +9,8 @@ logger = logging.Logger('fsspec.memoryfs')
 class MemoryFileSystem(AbstractFileSystem):
     """A filesystem based on a dict of BytesIO objects"""
     store = {}  # global
+    protocol = 'memory'
+    root_marker = ''
 
     def ls(self, path, detail=False):
         if path in self.store:
@@ -18,23 +20,25 @@ class MemoryFileSystem(AbstractFileSystem):
                     'type': 'file'}]
         else:
             out = []
-        path = path.strip('/')
+        path = path.strip('/').lstrip('/')
         paths = set()
-        for p in self.store:
+        for p2 in self.store:
+            has_slash = "/" if p2.startswith('/') else ""
+            p = p2.lstrip('/')
             if '/' in p:
                 root = p.rsplit('/', 1)[0]
             else:
                 root = ''
             if root == path:
-                out.append({'name': p,
-                            'size': self.store[p].getbuffer().nbytes,
+                out.append({'name': has_slash + p,
+                            'size': self.store[p2].getbuffer().nbytes,
                             'type': 'file'})
             elif path and all((a == b) for a, b
                               in zip(path.split('/'), p.strip('/').split('/'))):
                 # implicit directory
                 ppath = '/'.join(p.split('/')[:len(path.split('/')) + 1])
                 if ppath not in paths:
-                    out.append({'name': ppath + '/',
+                    out.append({'name': has_slash + ppath + '/',
                                 'size': 0,
                                 'type': 'directory'})
                     paths.add(ppath)
@@ -43,7 +47,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 # root directory entry
                 ppath = p.rstrip('/').split('/', 1)[0]
                 if ppath not in paths:
-                    out.append({'name': ppath + '/',
+                    out.append({'name': has_slash + ppath + '/',
                                 'size': 0,
                                 'type': 'directory'})
                     paths.add(ppath)

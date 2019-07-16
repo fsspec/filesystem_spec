@@ -102,12 +102,15 @@ def update_storage_options(options, inherited=None):
     options.update(inherited)
 
 
-compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
+compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz', 'zip': 'zip'}
 
 
 def infer_compression(filename):
     extension = os.path.splitext(filename)[-1].strip('.')
-    return compressions.get(extension, None)
+    if extension in compressions:
+        return compressions[extension]
+    else:
+        raise ValueError('Compression for extension "%s" not known' % extension)
 
 
 def build_name_function(max_int):
