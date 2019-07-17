@@ -9,6 +9,7 @@ logger = logging.Logger('fsspec.memoryfs')
 class MemoryFileSystem(AbstractFileSystem):
     """A filesystem based on a dict of BytesIO objects"""
     store = {}  # global
+    pseudo_dirs = []
     protocol = 'memory'
     root_marker = ''
 
@@ -51,10 +52,29 @@ class MemoryFileSystem(AbstractFileSystem):
                                 'size': 0,
                                 'type': 'directory'})
                     paths.add(ppath)
-
+        for p2 in self.pseudo_dirs:
+            if self._parent(p2).strip('/').rstrip('/') == path:
+                out.append({'name': p2 + '/',
+                            'size': 0,
+                            'type': 'directory'})
         if detail:
             return out
         return sorted([f['name'] for f in out])
+
+    def mkdir(self, path):
+        path = path.rstrip('/')
+        if path not in self.pseudo_dirs:
+            self.pseudo_dirs.append(path)
+
+    def rmdir(self, path):
+        path = path.rstrip('/')
+        if path in self.pseudo_dirs:
+            if self.ls(path) == []:
+                self.pseudo_dirs.remove(path)
+            else:
+                raise OSError("Directory %s not empty" % path)
+        else:
+            raise FileNotFoundError(path)
 
     def exists(self, path):
         return path in self.store
