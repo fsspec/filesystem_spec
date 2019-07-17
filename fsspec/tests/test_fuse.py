@@ -1,10 +1,10 @@
 import os
 import pytest
 from fsspec.implementations.memory import MemoryFileSystem
+pytest.importorskip("fuse")
 from fsspec.fuse import run
 import time
 
-pytest.importorskip("fuse")
 
 
 def test_basic(tmpdir):
