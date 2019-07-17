@@ -6,8 +6,7 @@ from fsspec.utils import infer_storage_options, infer_compression, seek_delimite
 def test_infer_compression():
     assert infer_compression('fn.zip') == 'zip'
     assert infer_compression('fn.gz') == 'gzip'
-    with pytest.raises(ValueError):
-        infer_compression('fn.unknown')
+    assert infer_compression('fn.unknown') is None
 
 
 def test_read_block():

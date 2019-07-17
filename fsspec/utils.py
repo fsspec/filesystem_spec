@@ -109,8 +109,6 @@ def infer_compression(filename):
     extension = os.path.splitext(filename)[-1].strip('.')
     if extension in compressions:
         return compressions[extension]
-    else:
-        raise ValueError('Compression for extension "%s" not known' % extension)
 
 
 def build_name_function(max_int):
