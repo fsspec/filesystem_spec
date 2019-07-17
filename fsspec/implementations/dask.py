@@ -12,7 +12,10 @@ _files_cache = {}
 class DaskWorkerFileSystem(AbstractFileSystem):
     """View files accessible to a worker as any other remote file-system
 
-    When instances are run on the worker,
+    When instances are run on the worker, uses the real filesystem. When
+    run on the client, they call the worker to provide information or data.
+
+    **Warning** this implementation is experimental, and read-only for now.
     """
 
     def __init__(self, remote_protocol, storage_options=None, **kwargs):
