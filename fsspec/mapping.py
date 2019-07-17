@@ -52,7 +52,7 @@ class FSMap(MutableMapping):
         try:
             self.fs.rm(self.root, True)
             self.fs.mkdir(self.root)
-        except (IOError, OSError):
+        except:
             pass
 
     def _key_to_str(self, key):
@@ -72,10 +72,18 @@ class FSMap(MutableMapping):
         key = self._key_to_str(key)
         try:
             result = self.fs.cat(key)
-        except (IOError, OSError):
+        except:
             if default is not None:
                 return default
             raise KeyError(key)
+        return result
+
+    def pop(self, key, default=None):
+        result = self.__getitem__(key, default)
+        try:
+            del self[key]
+        except KeyError:
+            pass
         return result
 
     def __setitem__(self, key, value):
@@ -93,9 +101,15 @@ class FSMap(MutableMapping):
     def __iter__(self):
         return self.keys()
 
+    def __len__(self):
+        return len(self.keys())
+
     def __delitem__(self, key):
         """Remove key"""
-        self.fs.rm(self._key_to_str(key))
+        try:
+            self.fs.rm(self._key_to_str(key))
+        except:
+            raise KeyError
 
     def __contains__(self, key):
         """Does key exist in mapping?"""

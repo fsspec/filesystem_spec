@@ -1,5 +1,8 @@
 import os
 import fsspec
+from fsspec.implementations.memory import MemoryFileSystem
+import pickle
+import pytest
 
 
 def test_mapping_prefix(tmpdir):
@@ -17,3 +20,31 @@ def test_mapping_prefix(tmpdir):
     m3 = fs.get_mapper('file://' + tmpdir)
 
     assert m == m2 == m3
+
+
+def test_ops():
+    MemoryFileSystem.store.clear()
+    m = fsspec.get_mapper('memory://')
+    assert not m
+    assert list(m) == []
+
+    with pytest.raises(KeyError):
+        m['hi']
+
+    assert m.pop('key', 0) == 0
+
+    m['key0'] = b'data'
+    assert list(m) == ['key0']
+    assert m['key0'] == b'data'
+
+    m.clear()
+
+    assert list(m) == []
+
+
+def test_pickle():
+    m = fsspec.get_mapper('memory://')
+    assert isinstance(m.fs, MemoryFileSystem)
+    m['key'] = b'data'
+    m2 = pickle.loads(pickle.dumps(m))
+    assert list(m) == list(m2)

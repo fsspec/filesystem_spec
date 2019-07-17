@@ -26,7 +26,9 @@ known_implementations = {
                 'err': 'webHDFS access requires "requests" to be installed'},
     's3': {'class': 's3fs.S3FileSystem',
            'err': 'Install s3fs to access S3'},
-    'cached': {'class': 'fsspec.implementations.cached.CachingFileSystem'}
+    'cached': {'class': 'fsspec.implementations.cached.CachingFileSystem'},
+    'dask': {'class': 'fsspec.implementations.dask.DaskWorkerFileSystem',
+             'err': 'Install dask distributed to access worker file system'}
 }
 
 

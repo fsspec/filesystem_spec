@@ -3,6 +3,7 @@ import os
 import stat
 from errno import ENOENT, EIO
 from fuse import Operations, FuseOSError
+import threading
 import time
 import pandas as pd
 from fuse import FUSE
@@ -148,5 +149,15 @@ def run(fs, path, mount_point, foreground=True, threads=False):
         stable if False.
 
     """
-    FUSE(FUSEr(fs, path),
-         mount_point, nothreads=not threads, foreground=foreground)
+    func = lambda: FUSE(FUSEr(fs, path),
+                        mount_point, nothreads=not threads, foreground=True)
+    if foreground is False:
+        th = threading.Thread(target=func)
+        th.daemon = True
+        th.start()
+        return th
+    else:  # pragma: no cover
+        try:
+            func()
+        except KeyboardInterrupt:
+            pass
