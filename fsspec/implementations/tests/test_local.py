@@ -89,12 +89,12 @@ def test_urlpath_inference_errors():
     # Empty list
     with pytest.raises(ValueError) as err:
         get_fs_token_paths([])
-    assert 'empty' in str(err)
+    assert 'empty' in str(err.value)
 
     # Protocols differ
     with pytest.raises(ValueError) as err:
         get_fs_token_paths(['s3://test/path.csv', '/other/path.csv'])
-    assert 'same protocol' in str(err)
+    assert 'same protocol' in str(err.value)
 
     # Unknown type
     with pytest.raises(TypeError):

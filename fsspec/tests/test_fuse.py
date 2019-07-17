@@ -32,4 +32,12 @@ def test_basic(tmpdir):
 
     os.mkdir(fn)
     assert os.listdir(fn) == []
+
+    os.mkdir(fn + '/inner')
+
+    with pytest.raises(OSError):
+        os.rmdir(fn)
+
+    os.rmdir(fn + '/inner')
     os.rmdir(fn)
+    assert not fs.pseudo_dirs
