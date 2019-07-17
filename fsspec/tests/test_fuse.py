@@ -6,7 +6,6 @@ from fsspec.fuse import run
 import time
 
 
-
 def test_basic(tmpdir):
     tmpdir = str(tmpdir)
     fs = MemoryFileSystem()
