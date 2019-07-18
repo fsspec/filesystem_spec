@@ -57,7 +57,7 @@ def test_get_put(tmpdir):
     assert open(fn3, 'rb').read() == b'data'
 
     fs.put(tmpdir, '/more', recursive=True)
-    assert fs.find('/more') == ['/more/three', '/more/one', '/more/dir/two']
+    assert fs.find('/more') == ['/more/dir/two', '/more/one', '/more/three']
 
     for f in [fn, fn2, fn3]:
         os.remove(f)
@@ -86,3 +86,28 @@ def test_head_tail():
         f.write(b'I had a nice big cabbage')
     assert fs.head('/myfile', 5) == b'I had'
     assert fs.tail('/myfile', 7) == b'cabbage'
+
+
+def test_move():
+    fs = MemoryFileSystem()
+    with fs.open('/myfile', 'wb') as f:
+        f.write(b'I had a nice big cabbage')
+    fs.move('/myfile', '/otherfile')
+    assert not fs.exists('/myfile')
+    assert fs.info('/otherfile')
+    assert isinstance(fs.ukey('/otherfile'), str)
+
+
+def test_read_block_delimiter():
+    fs = MemoryFileSystem()
+    with fs.open('/myfile', 'wb') as f:
+        f.write(b'some\n'
+                b'lines\n'
+                b'of\n'
+                b'text')
+    assert fs.read_block('/myfile', 0, 2, b'\n') == b'some\n'
+    assert fs.read_block('/myfile', 2, 6, b'\n') == b'lines\n'
+    assert fs.read_block('/myfile', 6, 2, b'\n') == b''
+    assert fs.read_block('/myfile', 2, 9, b'\n') == b'lines\nof\n'
+    assert fs.read_block('/myfile', 12, 6, b'\n') == b'text'
+    assert fs.read_block('/myfile', 0, None) == fs.cat('/myfile')

@@ -106,16 +106,14 @@ class MemoryFileSystem(AbstractFileSystem):
             return m
 
     def copy(self, path1, path2, **kwargs):
-        self.store[path2] = MemoryFile(self.store[path1].getbuffer())
+        self.store[path2] = MemoryFile(self, path2,
+                                       self.store[path1].getbuffer())
 
     def cat(self, path):
         return self.store[path].getvalue()
 
     def _rm(self, path):
         del self.store[path]
-
-    def ukey(self, path):
-        return hash(self.store[path])  # internal ID of instance
 
     def size(self, path):
         """Size in bytes of the file at path"""

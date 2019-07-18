@@ -266,6 +266,7 @@ def test_get_pyarrow_filesystem():
 
     fs = LocalFileSystem()
     assert isinstance(fs, pa.filesystem.FileSystem)
+    assert fs._get_pyarrow_filesystem() is fs
 
     class UnknownFileSystem(object):
         pass

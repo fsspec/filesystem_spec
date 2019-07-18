@@ -15,8 +15,8 @@ def m():
 def test_1(m):
     m.touch('/somefile')  # NB: is found with or without initial /
     m.touch('afiles/and/anothers')
-    assert m.find('') == ['somefile', 'afiles/and/anothers']
-    assert list(m.get_mapper('')) == ['somefile', 'afiles/and/anothers']
+    assert m.find('') == ['afiles/and/anothers', 'somefile']
+    assert list(m.get_mapper('')) == ['afiles/and/anothers', 'somefile']
 
 
 def test_ls(m):

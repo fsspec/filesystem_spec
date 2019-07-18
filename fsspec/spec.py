@@ -370,7 +370,7 @@ class AbstractFileSystem(up):
             # walk works on directories, but find should also return [path]
             # when path happens to be a file
             out.append(path)
-        return out
+        return sorted(out)
 
     def du(self, path, total=True, maxdepth=None):
         """Space used by files within a path
