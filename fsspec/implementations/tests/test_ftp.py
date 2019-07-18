@@ -104,3 +104,7 @@ def test_transaction(ftp_writable):
         assert not fs.exists(fn)
     assert fs.exists(fn)
     assert fs.cat(fn) == b'not'
+
+    fs.rm(fn)
+    assert not fs.exists(fn)
+

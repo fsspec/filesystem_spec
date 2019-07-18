@@ -153,9 +153,6 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize('fmt', list(compression.compr))
 def test_compressions(fmt, mode, tmpdir):
     tmpdir = str(tmpdir)
-    if fmt == 'zip':
-        # zip implemented read-only
-        pytest.skip()
     fn = os.path.join(tmpdir, '.tmp.getsize')
     fs = LocalFileSystem()
     f = OpenFile(fs, fn, compression=fmt, mode='wb')
@@ -272,3 +269,56 @@ def test_get_pyarrow_filesystem():
         pass
 
     assert not isinstance(UnknownFileSystem(), pa.filesystem.FileSystem)
+
+
+def test_directories(tmpdir):
+    tmpdir = str(tmpdir)
+    fs = LocalFileSystem()
+    fs.mkdir(tmpdir + '/dir')
+    assert tmpdir + '/dir' in fs.ls(tmpdir)
+    assert fs.ls(tmpdir, True)[0]['type'] == 'directory'
+    fs.rmdir(tmpdir + '/dir')
+    assert not fs.ls(tmpdir)
+
+
+def test_file_ops(tmpdir):
+    tmpdir = str(tmpdir)
+    fs = LocalFileSystem()
+    with pytest.raises(FileNotFoundError):
+        fs.info(tmpdir + '/nofile')
+    fs.touch(tmpdir + '/afile')
+    i1 = fs.ukey(tmpdir + '/afile')
+
+    assert tmpdir + '/afile' in fs.ls(tmpdir)
+    fs.touch(tmpdir + '/afile')
+    i2 = fs.ukey(tmpdir + '/afile')
+    assert i1 != i2  # because time got updated
+
+    fs.copy(tmpdir + '/afile', tmpdir + '/afile2')
+    assert tmpdir + '/afile2' in fs.ls(tmpdir)
+
+    fs.move(tmpdir + '/afile', tmpdir + '/afile3')
+    assert not fs.exists(tmpdir + '/afile')
+    assert fs.exists(tmpdir + '/afile3')
+
+    fs.rm(tmpdir, recursive=True)
+    assert not fs.exists(tmpdir)
+
+
+def test_commit_discard(tmpdir):
+    tmpdir = str(tmpdir)
+    fs = LocalFileSystem()
+    with fs.transaction:
+        with fs.open(tmpdir + '/afile', 'wb') as f:
+            assert not fs.exists(tmpdir + '/afile')
+            f.write(b'data')
+        assert not fs.exists(tmpdir + '/afile')
+    assert fs.cat(tmpdir + '/afile') == b'data'
+
+    try:
+        with fs.transaction:
+            with fs.open(tmpdir + '/bfile', 'wb') as f:
+                f.write(b'data')
+            raise KeyboardInterrupt
+    except KeyboardInterrupt:
+        assert not fs.exists(tmpdir + '/bfile')
