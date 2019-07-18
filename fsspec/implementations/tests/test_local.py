@@ -290,9 +290,11 @@ def test_file_ops(tmpdir):
     i1 = fs.ukey(tmpdir + '/afile')
 
     assert tmpdir + '/afile' in fs.ls(tmpdir)
-    fs.touch(tmpdir + '/afile')
+
+    with fs.open(tmpdir + '/afile', 'wb') as f:
+        f.write(b'data')
     i2 = fs.ukey(tmpdir + '/afile')
-    assert i1 != i2  # because time got updated
+    assert i1 != i2  # because file changed
 
     fs.copy(tmpdir + '/afile', tmpdir + '/afile2')
     assert tmpdir + '/afile2' in fs.ls(tmpdir)
