@@ -17,6 +17,8 @@ known_implementations = {
     'zip': {'class': 'fsspec.implementations.zip.ZipFileSystem'},
     'gcs': {'class': 'gcsfs.GCSFileSystem',
             'err': 'Please install gcsfs to access Google Storage'},
+    'gs': {'class': 'gcsfs.GCSFileSystem',
+           'err': 'Please install gcsfs to access Google Storage'},
     'sftp': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
              'err': 'SFTPFileSystem requires "paramiko" to be installed'},
     'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'},

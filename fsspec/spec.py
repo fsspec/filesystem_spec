@@ -309,7 +309,7 @@ class AbstractFileSystem(up):
                 raise FileNotFoundError(path)
             return files
 
-    def walk(self, path, maxdepth=3):
+    def walk(self, path, maxdepth=None):
         """ Return all files belows path
 
         List all files, recursing into subdirectories; output is iterator-style,
@@ -357,7 +357,7 @@ class AbstractFileSystem(up):
                                      if maxdepth is not None else None):
                     yield res
 
-    def find(self, path, maxdepth=3):
+    def find(self, path, maxdepth=None):
         """List all files below path.
 
         Like posix ``find`` command without conditions
@@ -375,7 +375,7 @@ class AbstractFileSystem(up):
             out.append(path)
         return out
 
-    def du(self, path, total=True, maxdepth=4):
+    def du(self, path, total=True, maxdepth=None):
         """Space used by files within a path
 
         Parameters

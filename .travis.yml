@@ -1,4 +1,3 @@
-sudo: False
 sudo: required
 os:
 - linux
