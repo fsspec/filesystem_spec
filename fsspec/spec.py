@@ -36,7 +36,7 @@ class AbstractFileSystem(up):
     from here.
     """
     _singleton = [None]  # will contain the newest instance
-    _cache = None
+    _cache = {}
     cachable = True  # this class can be cached, instances reused
     _cached = False
     blocksize = 2**22
@@ -53,9 +53,6 @@ class AbstractFileSystem(up):
 
         The instance will skip init if instance.cached = True.
         """
-        if cls._cache is None and cls.cachable:
-            # set up instance cache, if using
-            cls._cache = {}
 
         # TODO: defer to a class-specific tokeniser?
         do_cache = storage_options.pop('do_cache', True)
@@ -525,14 +522,7 @@ class AbstractFileSystem(up):
         rpath = self._strip_protocol(rpath)
         if recursive:
             rpaths = self.find(rpath)
-            rootdir = os.path.basename(rpath.rstrip('/'))
-            if os.path.isdir(lpath):
-                # copy rpath inside lpath directory
-                lpath2 = os.path.join(lpath, rootdir)
-            else:
-                # copy rpath as lpath directory
-                lpath2 = lpath
-            lpaths = [os.path.join(lpath2, path[len(rpath):].lstrip('/'))
+            lpaths = [os.path.join(lpath, path[len(rpath):].lstrip('/'))
                       for path in rpaths]
             for lpath in lpaths:
                 dirname = os.path.dirname(lpath)
