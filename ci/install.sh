@@ -7,6 +7,6 @@ conda config --set always_yes yes --set changeps1 no
 conda update conda
 
 # Install dependencies
-conda create -n test -c conda-forge python=3.7 pip pytest paramiko requests
+conda create -n test -c conda-forge python=3.7 pip pytest paramiko requests zstandard python-snappy lz4
 source activate test
 pip install . --no-deps
