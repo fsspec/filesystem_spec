@@ -1115,8 +1115,9 @@ class AbstractBufferedFile(io.IOBase):
             else:
                 assert self.buffer.tell() == 0
 
-            self.fs.invalidate_cache(self.path)
-            self.fs.invalidate_cache(self.fs._parent(self.path))
+            if self.fs is not None:
+                self.fs.invalidate_cache(self.path)
+                self.fs.invalidate_cache(self.fs._parent(self.path))
 
         self.closed = True
 
