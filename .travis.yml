@@ -29,7 +29,7 @@ matrix:
         - pip install hadoop-test-cluster==0.1.0
 
       script:
-        - py.test -vv --cov=fsspec fsspec
+        - py.test --cov=fsspec -v
 
     - language: generic
       env: TEST=S3FS
@@ -58,7 +58,7 @@ matrix:
         - pip install -e . --no-deps
 
       script:
-        - GCSFS_RECORD_MODE=none py.test -vvgcsfs
+        - GCSFS_RECORD_MODE=none py.test -vv gcsfs
 
 
 
