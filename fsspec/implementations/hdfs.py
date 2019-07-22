@@ -1,7 +1,6 @@
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
 from pyarrow.hdfs import HadoopFileSystem
-from pyarrow.lib import HdfsFile
 
 
 class PyArrowHDFS(AbstractFileSystem):
@@ -54,17 +53,11 @@ class PyArrowHDFS(AbstractFileSystem):
 
         Returns
         -------
-        arrow HdfsFile file-like instance
+        HDFSFile file-like instance
         """
         if not autocommit:
             raise NotImplementedError
-        fh = self.pahdfs.open(path, mode, block_size, **kwargs)
-        size = fh.size()
-        seek = fh.seek
-
-
-        fh.seek = myseek
-        return fh
+        return HDFSFile(self, path, mode, block_size, **kwargs)
 
     def __reduce_ex__(self, protocol):
         return PyArrowHDFS, self.pars
@@ -121,13 +114,23 @@ class PyArrowHDFS(AbstractFileSystem):
             return super().__getattribute__(item)
 
 
-class HDFSFile(HdfsFile):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.readable():
+class HDFSFile(object):
+    def __init__(self, fs, path, mode, block_size, **kwargs):
+        self.fs = fs
+        self.path = path
+        self.mode = mode
+        self.block_size = block_size
+        self.fh = fs.fs.pahdfs.open(path, mode, block_size, **kwargs)
+        if self.fh.readable():
             self.seek_size = self.size()
 
     def seek(self, loc, whence=0):
         if whence == 0 and self.readable():
             loc = min(loc, self.seek_size)
-        super().seek(loc, whence)
+        return self.fh.seek(loc, whence)
+
+    def __getattr__(self, item):
+        return getattr(self.fh, item)
+
+    def __reduce_ex__(self, protocol):
+        return HDFSFile, (self.fs, self.path, self.mode, self.block_size)
