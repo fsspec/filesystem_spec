@@ -74,11 +74,13 @@ class PyArrowHDFS(AbstractFileSystem):
         d = object.__getattribute__(self, '__dict__')
         driver = d.get('driver', None)  # fs is not immediately defined
         if driver is not None and item in [
-            'chmod', 'chown','user', 'walk',
+            'chmod', 'chown', 'user', 'walk',
             'df', 'disk_usage', 'download', 'driver', 'exists',
             'extra_conf', 'get_capacity', 'get_space_used', 'host',
             'info', 'is_open', 'isdir', 'isfile', 'kerb_ticket',
-            'ls', 'mkdir', 'mv', 'port',
+            'ls', 'mkdir', 'mv', 'port', 'glob', 'get_capacity',
+            'get_space_used', 'df', 'chmod', 'chown', 'disk_usage',
+            'download', 'upload',
             'read_parquet', 'rm', 'stat', 'upload',
         ]:
             return getattr(driver, item)
