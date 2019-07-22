@@ -61,9 +61,16 @@ class PyArrowHDFS(AbstractFileSystem):
     def __reduce_ex__(self, protocol):
         return PyArrowHDFS, self.pars
 
+    def ls(self, path, detail=True):
+        out = self.driver.ls(path, detail)
+        if detail:
+            for p in out:
+                p['type'] = p['type']
+        return out
+
     def __getattribute__(self, item):
         if item in ['_open', '__init__', '__getattribute__', '__reduce_ex__',
-                    'open']:
+                    'open', 'ls']:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(PyArrowHDFS, item)(
@@ -77,8 +84,8 @@ class PyArrowHDFS(AbstractFileSystem):
             'chmod', 'chown', 'user',
             'df', 'disk_usage', 'download', 'driver', 'exists',
             'extra_conf', 'get_capacity', 'get_space_used', 'host',
-            'info', 'is_open', 'isdir', 'isfile', 'kerb_ticket',
-            'ls', 'mkdir', 'mv', 'port', 'get_capacity',
+            'is_open', 'kerb_ticket',
+            'mkdir', 'mv', 'port', 'get_capacity',
             'get_space_used', 'df', 'chmod', 'chown', 'disk_usage',
             'download', 'upload',
             'read_parquet', 'rm', 'stat', 'upload',
