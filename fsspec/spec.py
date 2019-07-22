@@ -532,7 +532,6 @@ class AbstractFileSystem(up):
             rpaths = [rpath]
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
-            print(lpath, rpath)
             with self.open(rpath, 'rb') as f1:
                 with open(lpath, 'wb') as f2:
                     data = True
