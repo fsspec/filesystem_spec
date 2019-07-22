@@ -330,7 +330,7 @@ class AbstractFileSystem(up):
 
         try:
             listing = self.ls(path, True)
-        except FileNotFoundError:
+        except (FileNotFoundError, IOError):
             return [], [], []
 
         for info in listing:
@@ -423,7 +423,7 @@ class AbstractFileSystem(up):
             elif self.exists(path):
                 return [path]
             else:
-                raise FileNotFoundError(path)
+                return []  # glob of non-existent returns empty
         elif '/' in path[:ind]:
             ind2 = path[:ind].rindex('/')
             root = path[:ind2 + 1]
