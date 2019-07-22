@@ -88,7 +88,7 @@ class PyArrowHDFS(AbstractFileSystem):
 
     def __getattribute__(self, item):
         if item in ['_open', '__init__', '__getattribute__', '__reduce_ex__',
-                    'open', 'ls']:
+                    'open', 'ls', 'makedirs']:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(PyArrowHDFS, item)(
