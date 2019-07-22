@@ -1,4 +1,5 @@
 from ..spec import AbstractFileSystem
+from ..utils import infer_storage_options
 
 
 class PyArrowHDFS(AbstractFileSystem):
@@ -68,6 +69,23 @@ class PyArrowHDFS(AbstractFileSystem):
                 p['type'] = p['kind']
         return out
 
+    @staticmethod
+    def _get_kwargs_from_urls(paths):
+        ops = infer_storage_options(paths)
+        out = {}
+        if ops.get('host', None):
+            out['host'] = ops['host']
+        if ops.get('username', None):
+            out['user'] = ops['username']
+        if ops.get('port', None):
+            out['port'] = ops['port']
+        return out
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        ops = infer_storage_options(path)
+        return ops['path']
+
     def __getattribute__(self, item):
         if item in ['_open', '__init__', '__getattribute__', '__reduce_ex__',
                     'open', 'ls']:
@@ -84,10 +102,10 @@ class PyArrowHDFS(AbstractFileSystem):
             'chmod', 'chown', 'user',
             'df', 'disk_usage', 'download', 'driver', 'exists',
             'extra_conf', 'get_capacity', 'get_space_used', 'host',
-            'is_open', 'kerb_ticket',
+            'is_open', 'kerb_ticket', 'strip_protocol',
             'mkdir', 'mv', 'port', 'get_capacity',
             'get_space_used', 'df', 'chmod', 'chown', 'disk_usage',
-            'download', 'upload',
+            'download', 'upload', '_get_kwargs_from_urls',
             'read_parquet', 'rm', 'stat', 'upload',
         ]:
             return getattr(pahdfs, item)
