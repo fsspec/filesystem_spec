@@ -120,7 +120,7 @@ class HDFSFile(object):
         self.path = path
         self.mode = mode
         self.block_size = block_size
-        self.fh = fs.fs.pahdfs.open(path, mode, block_size, **kwargs)
+        self.fh = fs.pahdfs.open(path, mode, block_size, **kwargs)
         if self.fh.readable():
             self.seek_size = self.size()
 
