@@ -82,4 +82,7 @@ class PyArrowHDFS(AbstractFileSystem):
             'read_parquet', 'rm', 'stat', 'upload',
         ]:
             return getattr(driver, item)
+        else:
+            # attributes of the superclass, while target is being set up
+            return super().__getattribute__(item)
 
