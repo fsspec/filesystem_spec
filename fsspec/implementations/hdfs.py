@@ -30,7 +30,7 @@ class PyArrowHDFS(AbstractFileSystem):
         from pyarrow.hdfs import HadoopFileSystem
         AbstractFileSystem.__init__(self, **kwargs)
         self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
-        self.driver = HadoopFileSystem(host=host, port=port, user=user,
+        self.pahdfs = HadoopFileSystem(host=host, port=port, user=user,
                                        kerb_ticket=kerb_ticket, driver=driver,
                                        extra_conf=extra_conf)
 
@@ -56,13 +56,13 @@ class PyArrowHDFS(AbstractFileSystem):
         """
         if not autocommit:
             raise NotImplementedError
-        return self.driver.open(path, mode, block_size, **kwargs)
+        return self.pahdfs.open(path, mode, block_size, **kwargs)
 
     def __reduce_ex__(self, protocol):
         return PyArrowHDFS, self.pars
 
     def ls(self, path, detail=True):
-        out = self.driver.ls(path, detail)
+        out = self.pahdfs.ls(path, detail)
         if detail:
             for p in out:
                 p['type'] = p['type']
@@ -79,8 +79,8 @@ class PyArrowHDFS(AbstractFileSystem):
         if item == '__class__':
             return PyArrowHDFS
         d = object.__getattribute__(self, '__dict__')
-        driver = d.get('driver', None)  # fs is not immediately defined
-        if driver is not None and item in [
+        pahdfs = d.get('pahdfs', None)  # fs is not immediately defined
+        if pahdfs is not None and item in [
             'chmod', 'chown', 'user',
             'df', 'disk_usage', 'download', 'driver', 'exists',
             'extra_conf', 'get_capacity', 'get_space_used', 'host',
@@ -90,7 +90,7 @@ class PyArrowHDFS(AbstractFileSystem):
             'download', 'upload',
             'read_parquet', 'rm', 'stat', 'upload',
         ]:
-            return getattr(driver, item)
+            return getattr(pahdfs, item)
         else:
             # attributes of the superclass, while target is being set up
             return super().__getattribute__(item)
