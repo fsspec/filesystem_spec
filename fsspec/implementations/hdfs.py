@@ -57,7 +57,17 @@ class PyArrowHDFS(AbstractFileSystem):
         """
         if not autocommit:
             raise NotImplementedError
-        return self.pahdfs.open(path, mode, block_size, **kwargs)
+        fh = self.pahdfs.open(path, mode, block_size, **kwargs)
+        size = fh.size()
+        seek = fh.seek
+
+        def myseek(loc, whence, size=size, seek=seek):
+            if whence == 0:
+                loc = min(loc, size)
+            seek(loc, whence)
+
+        fh.seek = myseek
+        return fh
 
     def __reduce_ex__(self, protocol):
         return PyArrowHDFS, self.pars
