@@ -9,7 +9,7 @@ class PyArrowHDFS(AbstractFileSystem):
     """
 
     def __init__(self, host="default", port=0, user=None, kerb_ticket=None,
-                 driver='libhdfs', extra_conf=None):
+                 driver='libhdfs', extra_conf=None, **kwargs):
         """
 
         Parameters
@@ -28,6 +28,8 @@ class PyArrowHDFS(AbstractFileSystem):
             Passed on to HadoopFileSystem
         """
         from pyarrow.hdfs import HadoopFileSystem
+        AbstractFileSystem.__init__(self, **kwargs)
+        self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
         self.driver = HadoopFileSystem(host=host, port=port, user=user,
                                        kerb_ticket=kerb_ticket, driver=driver,
                                        extra_conf=extra_conf)
@@ -56,13 +58,28 @@ class PyArrowHDFS(AbstractFileSystem):
             raise NotImplementedError
         return self.driver.open(path, mode, block_size, **kwargs)
 
-    def __getattr__(self, item):
-        if item in ['chmod', 'chown',
-                    'df', 'disk_usage', 'download', 'driver', 'exists',
-                    'extra_conf', 'get_capacity', 'get_space_used', 'host',
-                    'info', 'is_open', 'isdir', 'isfile', 'kerb_ticket',
-                    'ls', 'mkdir', 'mv', 'port',
-                    'read_parquet', 'rm', 'stat', 'upload',
-                    'user', 'walk']:
-            return getattr(self.driver, item)
+    def __reduce_ex__(self, protocol):
+        return PyArrowHDFS, self.pars
+
+    def __getattribute__(self, item):
+        if item in ['_open', '__init__', '__getattribute__', '__reduce_ex__',
+                    'open']:
+            # all the methods defined in this class. Note `open` here, since
+            # it calls `_open`, but is actually in superclass
+            return lambda *args, **kw: getattr(PyArrowHDFS, item)(
+                self, *args, **kw
+            )
+        if item == '__class__':
+            return PyArrowHDFS
+        d = object.__getattribute__(self, '__dict__')
+        driver = d.get('driver', None)  # fs is not immediately defined
+        if driver is not None and item in [
+            'chmod', 'chown','user', 'walk',
+            'df', 'disk_usage', 'download', 'driver', 'exists',
+            'extra_conf', 'get_capacity', 'get_space_used', 'host',
+            'info', 'is_open', 'isdir', 'isfile', 'kerb_ticket',
+            'ls', 'mkdir', 'mv', 'port',
+            'read_parquet', 'rm', 'stat', 'upload',
+        ]:
+            return getattr(driver, item)
 
