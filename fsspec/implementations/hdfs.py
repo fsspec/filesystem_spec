@@ -115,6 +115,11 @@ class PyArrowHDFS(AbstractFileSystem):
 
 
 class HDFSFile(object):
+    """Wrapper around arrow's HdfsFile
+
+    Allows seek beyond EOF and (eventually) commit/discard
+    """
+
     def __init__(self, fs, path, mode, block_size, **kwargs):
         self.fs = fs
         self.path = path
@@ -134,3 +139,9 @@ class HDFSFile(object):
 
     def __reduce_ex__(self, protocol):
         return HDFSFile, (self.fs, self.path, self.mode, self.block_size)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
