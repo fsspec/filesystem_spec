@@ -1,5 +1,7 @@
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
+from pyarrow.hdfs import HadoopFileSystem
+from pyarrow.lib import HdfsFile
 
 
 class PyArrowHDFS(AbstractFileSystem):
@@ -28,7 +30,6 @@ class PyArrowHDFS(AbstractFileSystem):
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
-        from pyarrow.hdfs import HadoopFileSystem
         AbstractFileSystem.__init__(self, **kwargs)
         self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
         self.pahdfs = HadoopFileSystem(host=host, port=port, user=user,
@@ -61,10 +62,6 @@ class PyArrowHDFS(AbstractFileSystem):
         size = fh.size()
         seek = fh.seek
 
-        def myseek(loc, whence, size=size, seek=seek):
-            if whence == 0:
-                loc = min(loc, size)
-            seek(loc, whence)
 
         fh.seek = myseek
         return fh
@@ -123,3 +120,14 @@ class PyArrowHDFS(AbstractFileSystem):
             # attributes of the superclass, while target is being set up
             return super().__getattribute__(item)
 
+
+class HDFSFile(HdfsFile):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.readable():
+            self.seek_size = self.size()
+
+    def seek(self, loc, whence=0):
+        if whence == 0 and self.readable():
+            loc = min(loc, self.seek_size)
+        super().seek(loc, whence)
