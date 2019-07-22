@@ -65,7 +65,7 @@ class PyArrowHDFS(AbstractFileSystem):
         out = self.pahdfs.ls(path, detail)
         if detail:
             for p in out:
-                p['type'] = p['type']
+                p['type'] = p['kind']
         return out
 
     def __getattribute__(self, item):
