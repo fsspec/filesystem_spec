@@ -177,7 +177,7 @@ class WebHDFS(AbstractFileSystem):
         out = self._call('GETCONTENTSUMMARY', path=path)
         return out.json()['ContentSummary']
 
-    def get_file_checksum(self, path):
+    def ukey(self, path):
         """Checksum info of file, giving method and result"""
         out = self._call('GETFILECHECKSUM', path=path, redirect=False)
         location = self._apply_proxy(out.headers['Location'])

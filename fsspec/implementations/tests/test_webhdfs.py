@@ -1,3 +1,4 @@
+import pickle
 import pytest
 import subprocess
 import time
@@ -29,10 +30,18 @@ def hdfs_cluster():
         subprocess.check_output(cmd0)
 
 
+def test_pickle(hdfs_cluster):
+    w = WebHDFS(hdfs_cluster, user='testuser')
+    w2 = pickle.loads(pickle.dumps(w))
+    assert w == w2
+
+
 def test_simple(hdfs_cluster):
     w = WebHDFS(hdfs_cluster, user='testuser')
     home = w.home_directory()
     assert home == '/user/testuser'
+    with pytest.raises(PermissionError):
+        w.mkdir('/root')
 
 
 def test_workflow(hdfs_cluster):
@@ -55,11 +64,18 @@ def test_workflow_transaction(hdfs_cluster):
     w = WebHDFS(hdfs_cluster, user='testuser',
                 data_proxy={'worker.example.com': 'localhost'})
     fn = '/user/testuser/testrun/afile'
-    w.mkdir('/user/testuser/testrun')
+    w.mkdirs('/user/testuser/testrun')
     with w.transaction:
         with w.open(fn, 'wb') as f:
             f.write(b'hello')
         assert not w.exists(fn)
     assert w.exists(fn)
+    assert w.ukey(fn)
+    files = w.ls('/user/testuser/testrun', True)
+    summ = w.content_summary('/user/testuser/testrun')
+    assert summ['length'] == files[0]['size']
+    assert summ['fileCount'] == 1
+
     w.rm('/user/testuser/testrun', recursive=True)
     assert not w.exists(fn)
+

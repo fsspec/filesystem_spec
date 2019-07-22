@@ -106,16 +106,14 @@ class MemoryFileSystem(AbstractFileSystem):
             return m
 
     def copy(self, path1, path2, **kwargs):
-        self.store[path2] = MemoryFile(self.store[path1].getbuffer())
+        self.store[path2] = MemoryFile(self, path2,
+                                       self.store[path1].getbuffer())
 
     def cat(self, path):
         return self.store[path].getvalue()
 
     def _rm(self, path):
         del self.store[path]
-
-    def ukey(self, path):
-        return hash(self.store[path])  # internal ID of instance
 
     def size(self, path):
         """Size in bytes of the file at path"""
@@ -125,17 +123,26 @@ class MemoryFileSystem(AbstractFileSystem):
 
 
 class MemoryFile(BytesIO):
-    """A BytesIO which can't close and works as a context manager"""
+    """A BytesIO which can't close and works as a context manager
 
-    def __init__(self, fs, path):
+    Can initialise with data
+
+    No need to provide fs, path if auto-committing (default)
+    """
+
+    def __init__(self, fs, path, data=None):
         self.fs = fs
         self.path = path
+        if data:
+            self.write(data)
+            self.size = len(data)
+            self.seek(0)
 
     def __enter__(self):
         return self
 
     def close(self):
-        pass
+        self.size = self.seek(0, 2)
 
     def discard(self):
         pass

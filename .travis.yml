@@ -25,11 +25,11 @@ matrix:
 
       install:
         - source ci/install.sh
-        - conda install requests paramiko pyftpdlib cloudpickle pyarrow -y -c defaults -c conda-forge
+        - conda install requests paramiko pyftpdlib cloudpickle pyarrow pytest-cov -y -c defaults -c conda-forge
         - pip install hadoop-test-cluster==0.1.0
 
       script:
-        - py.test -vv fsspec
+        - py.test --cov=fsspec -v
 
     - language: generic
       env: TEST=S3FS
@@ -58,7 +58,7 @@ matrix:
         - pip install -e . --no-deps
 
       script:
-        - GCSFS_RECORD_MODE=none py.test -vv  gcsfs
+        - GCSFS_RECORD_MODE=none py.test -vv gcsfs
 
 
 

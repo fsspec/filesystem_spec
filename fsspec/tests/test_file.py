@@ -73,6 +73,8 @@ def test_file_idempotent(ftp_writable):
     f2 = ftp.open('/out2', 'rb')
     assert hash(f2) != hash(f)
     assert f != f2
+    f2 = ftp.open('/out', 'wb')
+    assert hash(f2) != hash(f)
 
 
 def test_file_text_attributes(ftp_writable):

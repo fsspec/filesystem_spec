@@ -10,7 +10,7 @@ def test_basic(tmpdir):
     tmpdir = str(tmpdir)
     fs = MemoryFileSystem()
     fs.touch('/mounted/testfile')
-    run(fs, '/mounted/', tmpdir, False)
+    th = run(fs, '/mounted/', tmpdir, False)
     timeout = 10
     while True:
         try:
@@ -22,6 +22,7 @@ def test_basic(tmpdir):
         timeout -= 1
         time.sleep(1)
         assert timeout > 0, "Timeout"
+
     fn = os.path.join(tmpdir, 'test')
     with open(fn, 'wb') as f:
         f.write(b'data')
@@ -41,3 +42,11 @@ def test_basic(tmpdir):
     os.rmdir(fn + '/inner')
     os.rmdir(fn)
     assert not fs.pseudo_dirs
+
+    # should not normally kill a thread like this, but FUSE blocks, so we
+    # cannot have thread listen for event. Alternative may be to .join() but
+    # send a SIGINT
+    th._tstate_lock.release()
+    th._stop()
+    th.join()
+    fs.store.clear()
