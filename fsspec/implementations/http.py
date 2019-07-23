@@ -222,6 +222,7 @@ class HTTPFile(AbstractBufferedFile):
         r.raise_for_status()
         out = r.content
         self.cache = AllBytes(out)
+        self.size = len(out)
 
     def _fetch_range(self, start, end):
         """Download a block of data

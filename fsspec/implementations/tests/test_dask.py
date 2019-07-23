@@ -18,7 +18,7 @@ def cli(tmpdir):
     try:
         yield client
     finally:
-        client.shutdown()
+        client.close()
 
 
 def test_basic(cli):
