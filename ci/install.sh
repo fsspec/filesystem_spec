@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # install FUSE
-sudo apt-get update
 sudo apt-get install libfuse-dev
 
 # Install conda
