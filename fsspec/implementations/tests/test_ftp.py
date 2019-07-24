@@ -5,6 +5,7 @@ import subprocess
 import time
 from fsspec.implementations.ftp import FTPFileSystem
 from fsspec import open_files
+import fsspec
 
 pytest.importorskip('pyftpdlib')
 here = os.path.dirname(os.path.abspath(__file__))
@@ -71,6 +72,16 @@ def test_write_small(ftp_writable):
     with fs.open('/out2', 'wb') as f:
         f.write(b'oi')
     assert fs.cat('/out2') == b'oi'
+
+
+def test_with_url(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fo = fsspec.open("ftp://{}:{}@{}:{}/out".format(user, pw, host, port), 'wb')
+    with fo as f:
+        f.write(b'hello')
+    fo = fsspec.open("ftp://{}:{}@{}:{}/out".format(user, pw, host, port), 'rb')
+    with fo as f:
+        assert f.read() == b'hello'
 
 
 @pytest.mark.parametrize('cache_type', ['bytes', 'mmap'])

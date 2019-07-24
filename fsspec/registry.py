@@ -21,6 +21,8 @@ known_implementations = {
            'err': 'Please install gcsfs to access Google Storage'},
     'sftp': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
              'err': 'SFTPFileSystem requires "paramiko" to be installed'},
+    'ssh': {'class': 'fsspec.implementations.sftp.SFTPFileSystem',
+            'err': 'SFTPFileSystem requires "paramiko" to be installed'},
     'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'},
     'hdfs': {'class': 'fsspec.implementations.hdfs.PyArrowHDFS',
              'err': 'pyarrow and local java libraries required for HDFS'},

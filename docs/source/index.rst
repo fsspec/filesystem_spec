@@ -42,6 +42,16 @@ This repo contains several file-system implementations, see :ref:`implementation
 the external projects ``s3fs`` and ``gcsfs`` are also developing compatibility with ``fsspec`` and
 will eventually depend upon it.
 
+The current list of known implementations can be found as follows
+
+.. code-block:: python
+
+    from fsspec.registry import known_implementations
+    known_implementations
+
+These are only imported on request, which may fail if a required dependency is missing. The dictionary
+``fsspec.registry`` contains all imported implementations, and can be mutated by user code, if necessary.
+
 
 .. toctree::
    :maxdepth: 2
