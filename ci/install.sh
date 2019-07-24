@@ -12,6 +12,7 @@ conda update conda
 
 # Install dependencies
 conda create -n test -c conda-forge python=3.7 pip pytest paramiko requests zstandard python-snappy lz4 distributed \
-    dask fusepy
+    dask fusepy pyarrow  pyftpdlib cloudpickle pyarrow pytest-cov -y -c defaults -c conda-forge
+pip install hadoop-test-cluster==0.1.0 fusepy
 source activate test
 pip install . --no-deps
