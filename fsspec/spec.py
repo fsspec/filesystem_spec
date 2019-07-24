@@ -65,6 +65,7 @@ class AbstractFileSystem(up):
         if self.cachable:
             # store for caching - can hold memory
             cls._cache[token] = self
+        self.storage_options = storage_options
         return self
 
     def __init__(self, *args, **storage_options):
@@ -621,7 +622,7 @@ class AbstractFileSystem(up):
 
     @classmethod
     def _parent(cls, path):
-        path = path.rstrip('/')
+        path = cls._strip_protocol(path.rstrip('/'))
         if '/' in path:
             return cls.root_marker + path.rsplit('/', 1)[0]
         else:

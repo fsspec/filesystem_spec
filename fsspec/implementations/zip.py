@@ -40,6 +40,11 @@ class ZipFileSystem(AbstractFileSystem):
         self.kwargs = storage_options
         self.dir_cache = None
 
+    @classmethod
+    def _strip_protocol(cls, path):
+        # zip file paths are always relative to the archive root
+        return super()._strip_protocol(path).lstrip('/')
+
     def _get_dirs(self):
         if self.dir_cache is None:
             files = self.zip.infolist()
