@@ -54,6 +54,19 @@ def test_simple(ssh):
     assert not f.exists('/home/someuser')
 
 
+@pytest.mark.parametrize('protocol', ['sftp', 'ssh'])
+def test_with_url(protocol, ssh):
+    fo = fsspec.open(protocol + "://{username}:{password}@{host}:{port}"
+                     "/home/someuserout".format(**ssh), 'wb')
+    with fo as f:
+        f.write(b'hello')
+    fo = fsspec.open(protocol + "://{username}:{password}@{host}:{port}"
+                     "/home/someuserout".format(**ssh), 'rb')
+    with fo as f:
+        assert f.read() == b'hello'
+
+
+
 def test_transaction(ssh):
     f = fsspec.get_filesystem_class('sftp')(**ssh)
     f.mkdirs('/home/someuser/deeper')

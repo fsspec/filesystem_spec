@@ -6,6 +6,7 @@ import requests
 from urllib.parse import quote
 import uuid
 from ..spec import AbstractFileSystem, AbstractBufferedFile
+from ..utils import infer_storage_options
 import logging
 logger = logging.getLogger('webhdfs')
 
@@ -30,6 +31,7 @@ class WebHDFS(AbstractFileSystem):
 
     """
     tempdir = '/tmp'
+    protocol = 'webhdfs', 'webHDFS'
 
     def __init__(self, host, port=50070, kerberos=False, token=None, user=None,
                  proxy_to=None, kerb_kwargs=None, data_proxy=None,
@@ -154,6 +156,19 @@ class WebHDFS(AbstractFileSystem):
         info['type'] = info['type'].lower()
         info['size'] = info['length']
         return info
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        return infer_storage_options(path)['path']
+
+    @staticmethod
+    def _get_kwargs_from_urls(urlpath):
+        out = infer_storage_options(urlpath)
+        out.pop('path', None)
+        out.pop('protocol', None)
+        if 'username' in out:
+            out['user'] = out.pop('username')
+        return out
 
     def info(self, path):
         out = self._call('GETFILESTATUS', path=path)

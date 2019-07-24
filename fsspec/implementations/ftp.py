@@ -63,7 +63,10 @@ class FTPFileSystem(AbstractFileSystem):
 
     @staticmethod
     def _get_kwargs_from_urls(urlpath):
-        return infer_storage_options(urlpath)
+        out = infer_storage_options(urlpath)
+        out.pop('path', None)
+        out.pop('protocol', None)
+        return out
 
     def invalidate_cache(self, path=None):
         if path is not None:

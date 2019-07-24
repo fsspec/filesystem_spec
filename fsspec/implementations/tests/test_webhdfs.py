@@ -5,6 +5,7 @@ import time
 
 requests = pytest.importorskip("requests")
 from fsspec.implementations.webhdfs import WebHDFS
+import fsspec
 
 
 @pytest.fixture(scope='module')
@@ -42,6 +43,16 @@ def test_simple(hdfs_cluster):
     assert home == '/user/testuser'
     with pytest.raises(PermissionError):
         w.mkdir('/root')
+
+
+def test_url(hdfs_cluster):
+    url = 'webhdfs://testuser@localhost:50070/user/testuser/myfile'
+    fo = fsspec.open(url, 'wb', data_proxy={'worker.example.com': 'localhost'})
+    with fo as f:
+        f.write(b'hello')
+    fo = fsspec.open(url, 'rb', data_proxy={'worker.example.com': 'localhost'})
+    with fo as f:
+        assert f.read() == b'hello'
 
 
 def test_workflow(hdfs_cluster):

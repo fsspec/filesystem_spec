@@ -289,8 +289,8 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
             raise ValueError("When specifying a list of paths, all paths must "
                              "share the same protocol")
         cls = get_filesystem_class(protocol)
+        optionss = list(map(cls._get_kwargs_from_urls, urlpath))
         paths = [cls._strip_protocol(u) for u in urlpath]
-        optionss = list(map(cls._get_kwargs_from_urls, paths))
         options = optionss[0]
         if not all(o == options for o in optionss):
             raise ValueError("When specifying a list of paths, all paths must "
@@ -304,8 +304,8 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         protocol = protocol or protocols
         cls = get_filesystem_class(protocol)
 
-        path = cls._strip_protocol(urlpath)
         options = cls._get_kwargs_from_urls(urlpath)
+        path = cls._strip_protocol(urlpath)
         update_storage_options(options, storage_options)
         fs = cls(**options)
 

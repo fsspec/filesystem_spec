@@ -11,6 +11,7 @@ class SFTPFileSystem(AbstractFileSystem):
 
     Peer-to-peer filesystem over SSH using paramiko.
     """
+    protocol = 'sftp', 'ssh'
 
     def __init__(self, host, **ssh_kwargs):
         """
@@ -27,7 +28,7 @@ class SFTPFileSystem(AbstractFileSystem):
             May include port, username, password...
         """
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
-        self.temppath = ssh_kwargs.get('temppath', '/tmp')
+        self.temppath = ssh_kwargs.pop('temppath', '/tmp')
         self.host = host
         self.ssh_kwargs = ssh_kwargs
         self._connect()
@@ -54,7 +55,10 @@ class SFTPFileSystem(AbstractFileSystem):
 
     @staticmethod
     def _get_kwargs_from_urls(urlpath):
-        return infer_storage_options(urlpath)
+        out = infer_storage_options(urlpath)
+        out.pop('path', None)
+        out.pop('protocol', None)
+        return out
 
     def mkdir(self, path, mode=511):
         self.ftp.mkdir(path, mode)
