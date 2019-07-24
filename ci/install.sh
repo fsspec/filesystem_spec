@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# install FUSE
+sudo apt-get update
+sudo apt-get install libfuse-dev
+
 # Install conda
 wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
 bash miniconda.sh -b -p $HOME/miniconda
@@ -7,6 +11,7 @@ conda config --set always_yes yes --set changeps1 no
 conda update conda
 
 # Install dependencies
-conda create -n test -c conda-forge python=3.7 pip pytest paramiko requests zstandard python-snappy lz4
+conda create -n test -c conda-forge python=3.7 pip pytest paramiko requests zstandard python-snappy lz4 distributed \
+    dask fusepy
 source activate test
 pip install . --no-deps
