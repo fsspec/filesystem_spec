@@ -1,6 +1,7 @@
 import zipfile
 from contextlib import contextmanager
 import os
+import pickle
 import pytest
 import sys
 import tempfile
@@ -40,3 +41,10 @@ def test_mapping():
         m = fs.get_mapper('')
         assert list(m) == ['a', 'b', 'deeply/nested/path']
         assert m['b'] == data['b']
+
+
+def test_pickle():
+    with tempzip(data) as z:
+        fs = fsspec.get_filesystem_class('zip')(fo=z)
+        fs2 = pickle.loads(pickle.dumps(fs))
+        assert fs2.cat('b') == b'hello'
