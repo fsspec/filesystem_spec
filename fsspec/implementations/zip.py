@@ -8,7 +8,9 @@ from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 class ZipFileSystem(AbstractFileSystem):
     """Read contents of ZIP archive as a file-system
 
-    Keeps file object open while instance lives
+    Keeps file object open while instance lives.
+
+    This class is pickleable, but not necessarily thread-safe
     """
     root_marker = ""
 
@@ -28,6 +30,7 @@ class ZipFileSystem(AbstractFileSystem):
         AbstractFileSystem.__init__(self)
         if mode != 'r':
             raise ValueError("Only read from zip files accepted")
+        self.in_fo = fo
         if isinstance(fo, str):
             files = open_files(fo)
             if len(files) != 1:
@@ -39,6 +42,11 @@ class ZipFileSystem(AbstractFileSystem):
         self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
         self.kwargs = storage_options
         self.dir_cache = None
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        # zip file paths are always relative to the archive root
+        return super()._strip_protocol(path).lstrip('/')
 
     def _get_dirs(self):
         if self.dir_cache is None:
@@ -82,6 +90,9 @@ class ZipFileSystem(AbstractFileSystem):
             return out
         else:
             return list(sorted(f['name'] for f in out))
+
+    def __reduce_ex__(self, protocol):
+        return ZipFileSystem, (self.in_fo, )
 
     def cat(self, path):
         return self.zip.read(path)

@@ -39,8 +39,8 @@ Implementations
 ---------------
 
 This repo contains several file-system implementations, see :ref:`implementations`. However,
-the external projects ``s3fs`` and ``gcsfs`` are also developing compatibility with ``fsspec`` and
-will eventually depend upon it.
+the external projects ``s3fs`` and ``gcsfs`` depend on ``fsspec`` and share the same behaviours.
+``Dask`` and ``Intake`` use ``fsspec`` internally for their IO needs.
 
 The current list of known implementations can be found as follows
 

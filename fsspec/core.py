@@ -210,6 +210,7 @@ def get_compression(urlpath, compression):
 
 
 def split_protocol(urlpath):
+    """Return protocol, path pair"""
     urlpath = stringify_path(urlpath)
     if "://" in urlpath:
         protocol, path = urlpath.split("://", 1)
@@ -217,6 +218,13 @@ def split_protocol(urlpath):
             # excludes Windows paths
             return protocol, path
     return None, urlpath
+
+
+def strip_protocol(urlpath):
+    """Return only path part of full URL, according to appropriate backend"""
+    protocol, _ = split_protocol(urlpath)
+    cls = get_filesystem_class(protocol)
+    return cls._strip_protocol(urlpath)
 
 
 def expand_paths_if_needed(paths, mode, num, fs, name_function):
