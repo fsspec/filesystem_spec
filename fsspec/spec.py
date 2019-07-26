@@ -307,7 +307,7 @@ class AbstractFileSystem(up):
                 raise FileNotFoundError(path)
             return files
 
-    def walk(self, path, maxdepth=None):
+    def walk(self, path, maxdepth=None, **kwargs):
         """ Return all files belows path
 
         List all files, recursing into subdirectories; output is iterator-style,
@@ -323,6 +323,7 @@ class AbstractFileSystem(up):
         maxdepth: int
             Maximum recursion depth. None means limitless, but not recommended
             on link-based file-systems.
+        kwargs: passed to ``ls``
         """
         path = self._strip_protocol(path)
         full_dirs = []
@@ -330,7 +331,7 @@ class AbstractFileSystem(up):
         files = []
 
         try:
-            listing = self.ls(path, True)
+            listing = self.ls(path, True, **kwargs)
         except (FileNotFoundError, IOError):
             return [], [], []
 
@@ -352,17 +353,24 @@ class AbstractFileSystem(up):
         for d in full_dirs:
             if maxdepth is None or maxdepth > 1:
                 for res in self.walk(d, maxdepth=(maxdepth - 1)
-                                     if maxdepth is not None else None):
+                                     if maxdepth is not None else None,
+                                     **kwargs):
                     yield res
 
-    def find(self, path, maxdepth=None):
+    def find(self, path, maxdepth=None, **kwargs):
         """List all files below path.
 
         Like posix ``find`` command without conditions
+
+        Parameters
+        ----------
+        maxdepth: int or None
+            If not None, the maximum number of levels to descend
+        kwargs are passed to ``ls``.
         """
         # TODO: allow equivalent of -name parameter
         out = []
-        for path, _, files in self.walk(path, maxdepth):
+        for path, _, files in self.walk(path, maxdepth, **kwargs):
             for name in files:
                 if name:
                     out.append('/'.join([path.rstrip('/'), name])
@@ -373,7 +381,7 @@ class AbstractFileSystem(up):
             out.append(path)
         return sorted(out)
 
-    def du(self, path, total=True, maxdepth=None):
+    def du(self, path, total=True, maxdepth=None, **kwargs):
         """Space used by files within a path
 
         Parameters
@@ -383,6 +391,7 @@ class AbstractFileSystem(up):
             whether to sum all the file sizes
         maxdepth: int or None
             maximum number of directory levels to descend, None for unlimited.
+        kwargs: passed to ``ls``
 
         Returns
         -------
@@ -390,7 +399,7 @@ class AbstractFileSystem(up):
         refer to bytes used.
         """
         sizes = {}
-        for f in self.find(path, maxdepth=maxdepth):
+        for f in self.find(path, maxdepth=maxdepth, **kwargs):
             info = self.info(f)
             sizes[info['name']] = info['size']
         if total:
@@ -398,17 +407,17 @@ class AbstractFileSystem(up):
         else:
             return sizes
 
-    def glob(self, path):
+    def glob(self, path, **kwargs):
         """
         Find files by glob-matching.
 
         If the path ends with '/' and does not contain "*", it is essentially
         the same as ``ls(path)``, returning only files.
 
-        We do not attempt to match for ``"**"`` notation, but we do support
+        We support ``"**"``,
         ``"?"`` and ``"[..]"``.
 
-        Example reimplements code in ``glob.glob()``, taken from hdfs3.
+        kwargs are passed to ``ls``.
         """
         import re
         ends = path.endswith('/')
@@ -432,7 +441,7 @@ class AbstractFileSystem(up):
         else:
             root = ''
             depth = 20 if "**" in path else 1
-        allpaths = self.find(root, maxdepth=depth)
+        allpaths = self.find(root, maxdepth=depth, **kwargs)
         pattern = "^" + path.replace('.', r'\.').replace('//', '/').rstrip(
             '/').replace('?', '.') + "$"
         pattern = re.sub('[*]{2}', '=PLACEHOLDER=', pattern)
