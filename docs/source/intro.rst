@@ -81,7 +81,7 @@ coerce. Following on the success of ``s3fs`` and ``gcsfs``, and their use within
 have an interface as close to those as possible. See a
 `discussion`_ on the topic.
 
-.. _discussion: https://github.com/martindurant/filesystem_spec/issues/5
+.. _discussion: https://github.com/intake/filesystem_spec/issues/5
 
 Structure of the package
 ------------------------
