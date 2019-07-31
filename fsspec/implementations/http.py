@@ -210,6 +210,8 @@ class HTTPFile(AbstractBufferedFile):
         if self.size is None:
             if length < 0:
                 self._fetch_all()
+        else:
+            length = min(self.size - self.loc, length)
         return super().read(length)
 
     def _fetch_all(self):

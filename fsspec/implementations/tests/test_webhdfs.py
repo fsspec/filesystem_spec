@@ -11,7 +11,10 @@ import fsspec
 @pytest.fixture(scope='module')
 def hdfs_cluster():
     cmd0 = "htcluster shutdown".split()
-    subprocess.check_output(cmd0)
+    try:
+        subprocess.check_output(cmd0)
+    except FileNotFoundError:
+        pytest.skip("htcluster not found")
     cmd1 = "htcluster startup --image base".split()
     subprocess.check_output(cmd1)
     try:
