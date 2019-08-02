@@ -86,7 +86,7 @@ class LocalFileSystem(AbstractFileSystem):
         os.rename(path1, path2)
 
     def rm(self, path, recursive=False, maxdepth=None):
-        if recursive:
+        if recursive and self.isdir(path):
             shutil.rmtree(path)
         else:
             os.remove(path)
