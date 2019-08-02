@@ -309,6 +309,23 @@ def test_file_ops(tmpdir):
     assert not fs.exists(tmpdir)
 
 
+def test_recursive_get_put(tmpdir):
+    tmpdir = str(tmpdir)
+    fs = LocalFileSystem()
+
+    fs.mkdir(tmpdir + '/a1/a2/a3')
+    fs.touch(tmpdir + '/a1/a2/a3/afile')
+    fs.touch(tmpdir + '/a1/afile')
+
+    fs.get('file://{0}/a1'.format(tmpdir), tmpdir + '/b1', recursive=True)
+    assert fs.isfile(tmpdir + '/b1/afile')
+    assert fs.isfile(tmpdir + '/b1/a2/a3/afile')
+
+    fs.put(tmpdir + '/b1', 'file://{0}/c1'.format(tmpdir), recursive=True)
+    assert fs.isfile(tmpdir + '/c1/afile')
+    assert fs.isfile(tmpdir + '/c1/a2/a3/afile')
+
+
 def test_commit_discard(tmpdir):
     tmpdir = str(tmpdir)
     fs = LocalFileSystem()
