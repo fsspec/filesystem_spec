@@ -301,7 +301,9 @@ def test_file_ops(tmpdir):
 
     fs.move(tmpdir + '/afile', tmpdir + '/afile3')
     assert not fs.exists(tmpdir + '/afile')
-    assert fs.exists(tmpdir + '/afile3')
+
+    fs.rm(tmpdir + '/afile3', recursive=True)
+    assert not fs.exists(tmpdir + '/afile3')
 
     fs.rm(tmpdir, recursive=True)
     assert not fs.exists(tmpdir)
