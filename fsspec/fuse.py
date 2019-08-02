@@ -122,10 +122,10 @@ class FUSEr(Operations):
 def run(fs, path, mount_point, foreground=True, threads=False):
     """ Mount stuff in a local directory
 
-    This uses pyfuse to make it appear as if a given path on an fsspec
+    This uses fusepy to make it appear as if a given path on an fsspec
     instance is in fact resident within the local file-system.
 
-    This requires that pyfuse by installed, and that FUSE be available on
+    This requires that fusepy by installed, and that FUSE be available on
     the system (typically requiring a package to be installed with
     apt, yum, brew, etc.).
 
