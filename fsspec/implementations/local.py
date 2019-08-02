@@ -78,8 +78,19 @@ class LocalFileSystem(AbstractFileSystem):
         """ Copy within two locations in the filesystem"""
         shutil.copyfile(path1, path2)
 
-    get = copy
-    put = copy
+    def get(self, path1, path2, **kwargs):
+        """ Copy file to local """
+        if kwargs.get("recursive"):
+            return super(LocalFileSystem, self).get(path1, path2, **kwargs)
+        else:
+            return self.copy(path1, path2, **kwargs)
+
+    def put(self, path1, path2, **kwargs):
+        """ Upload file from local """
+        if kwargs.get("recursive"):
+            return super(LocalFileSystem, self).put(path1, path2, **kwargs)
+        else:
+            return self.copy(path1, path2, **kwargs)
 
     def mv(self, path1, path2, **kwargs):
         """ Move file from one location to another """
