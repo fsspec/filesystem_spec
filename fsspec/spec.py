@@ -542,7 +542,7 @@ class AbstractFileSystem(up):
             rpaths = [rpath]
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
-            with self.open(rpath, 'rb') as f1:
+            with self.open(rpath, 'rb', **kwargs) as f1:
                 with open(lpath, 'wb') as f2:
                     data = True
                     while data:
@@ -570,7 +570,7 @@ class AbstractFileSystem(up):
             rpaths = [rpath]
         for lpath, rpath in zip(lpaths, rpaths):
             with open(lpath, 'rb') as f1:
-                with self.open(rpath, 'wb') as f2:
+                with self.open(rpath, 'wb', **kwargs) as f2:
                     data = True
                     while data:
                         data = f1.read(self.blocksize)
