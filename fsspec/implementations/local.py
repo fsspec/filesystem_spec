@@ -103,13 +103,14 @@ class LocalFileSystem(AbstractFileSystem):
             os.remove(path)
 
     def _open(self, path, mode='rb', block_size=None, **kwargs):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         if self.auto_mkdir:
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
 
     def touch(self, path, **kwargs):
         """ Create empty file, or update timestamp """
+        path = self._strip_protocol(path)
         if self.exists(path):
             os.utime(path, None)
         else:
@@ -117,7 +118,7 @@ class LocalFileSystem(AbstractFileSystem):
 
     @classmethod
     def _parent(cls, path):
-        path = make_path_posix(path).rstrip('/')
+        path = cls._strip_protocol(path).rstrip('/')
         if '/' in path:
             return path.rsplit('/', 1)[0]
         else:
@@ -131,16 +132,25 @@ class LocalFileSystem(AbstractFileSystem):
         return make_path_posix(path)
 
 
-def make_path_posix(path):
+def make_path_posix(path, sep=os.sep):
     """ Make path generic """
     if re.match('/[A-Za-z]:', path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"
         path = path[1:]
-    if os.sep not in path and '/' not in path:
-        path = os.path.abspath(path)
     if path.startswith('\\') or re.match("[\\\\]*[A-Za-z]:", path):
+        # windows full path "\\server\\path" or "C:\\local\\path"
         return path.lstrip('\\').replace('\\', '/').replace('//', '/')
+    if (
+            sep not in path and '/' not in path
+            or (sep == '/' and not path.startswith('/'))
+            or (sep == '\\' and ":" not in path)
+            ):
+        # relative path like "path" or "rel\\path" (win) or rel/path"
+        path = os.path.abspath(path)
+        if os.sep == "\\":
+            # abspath made some more '\\' separators
+            return make_path_posix(path, sep)
     return path
 
 
