@@ -83,7 +83,7 @@ class HTTPFileSystem(AbstractFileSystem):
                     # Ignore FTP-like "parent"
                     out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
         if detail:
-            return [{'name': u, 'type': 'directory'
+            return [{'name': u, 'size': None, 'type': 'directory'
                      if u.endswith('/') else 'file'} for u in out]
         else:
             return list(sorted(out))
@@ -147,6 +147,17 @@ class HTTPFileSystem(AbstractFileSystem):
         """Size in bytes of the file at path"""
         return file_size(url, session=self.session, **self.kwargs)
 
+    def info(self, url, size_policy='head'):
+        try:
+            size = file_size(url, self.session, size_policy)
+            return {'name': url, 'size': size, 'type': 'file'}
+        except:
+            try:
+                self.session.get(url, stream=True)
+                return {'name': url, 'size': None, 'type': 'file'}
+            except:
+                raise
+
 
 class HTTPFile(AbstractBufferedFile):
     """
@@ -193,6 +204,7 @@ class HTTPFile(AbstractBufferedFile):
         self.details = {'name': url, 'size': size}
         super().__init__(fs=fs, path=url, mode=mode, block_size=block_size,
                          cache_type=cache_type, **kwargs)
+        self.cache.size = self.size or self.blocksize
 
     def read(self, length=-1):
         """Read bytes from file
@@ -238,6 +250,9 @@ class HTTPFile(AbstractBufferedFile):
         headers = kwargs.pop('headers', {})
         headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
         r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
+        if r.status_code == 416:
+            # range request outside file
+            return b''
         r.raise_for_status()
         if r.status_code == 206:
             # partial content, as expected
@@ -289,6 +304,8 @@ def file_size(url, session, size_policy='head', **kwargs):
     r.raise_for_status()
     if 'Content-Length' in r.headers:
         return int(r.headers['Content-Length'])
+    elif 'Content-Range' in r.headers:
+        return int(r.headers['Content-Range'].split('/')[1])
     else:
         raise ValueError("Server did not supply size of %s" % url)
 
