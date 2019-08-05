@@ -216,7 +216,11 @@ class HTTPFile(AbstractBufferedFile):
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
-        if length < 0 and self.loc == 0:
+        if (
+                (length < 0 and self.loc == 0) or  # explicit read all
+                (length > (self.size or length)) or  # read more than there is
+                (self.size and self.size < self.blocksize)  # all fits in one block anyway
+        ):
             # size was provided, but asked for whole file, so shortcut
             self._fetch_all()
         if self.size is None:
