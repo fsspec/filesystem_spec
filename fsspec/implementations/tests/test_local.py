@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import gzip
 import os
-from time import sleep
 import sys
 from contextlib import contextmanager
 import tempfile
@@ -10,7 +9,7 @@ import tempfile
 import pytest
 import fsspec
 from fsspec.core import open_files, get_fs_token_paths, OpenFile
-from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec import compression
 
 files = {'.test.accounts.1.json': (b'{"amount": 100, "name": "Alice"}\n'
@@ -343,3 +342,13 @@ def test_commit_discard(tmpdir):
             raise KeyboardInterrupt
     except KeyboardInterrupt:
         assert not fs.exists(tmpdir + '/bfile')
+
+
+def test_make_path_posix():
+    cwd = os.getcwd()
+    assert make_path_posix('/a/posix/path') == '/a/posix/path'
+    assert make_path_posix('/posix') == '/posix'
+    assert make_path_posix('relpath', sep='/') == os.path.join(cwd, 'relpath')
+    assert make_path_posix('rel/path', sep='/') == os.path.join(cwd, 'rel/path')
+    assert make_path_posix('C:\\path', sep='\\') == 'C:/path'
+    assert '/' in make_path_posix('rel\\path', sep='\\')
