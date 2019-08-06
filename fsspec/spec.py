@@ -263,7 +263,8 @@ class AbstractFileSystem(up):
         but must be consistent across implementations.
         Must include:
         - full path to the entry (without protocol)
-        - size of the entry, in bytes
+        - size of the entry, in bytes. If the value cannot be determined, will
+          be ``None``.
         - type of entry, "file", "directory" or other
 
         Additional information
@@ -468,6 +469,9 @@ class AbstractFileSystem(up):
         The default implementation should calls ls and could be overridden by a
         shortcut. kwargs are passed on to ```ls()``.
 
+        Some file systems might not be able to measure the file's size, in
+        which case, the returned dict will include ``'size': None``.
+
         Returns
         -------
         dict with keys: name (full path in the FS), size (in bytes), type (file,
@@ -482,6 +486,8 @@ class AbstractFileSystem(up):
         path = path.rstrip('/')
         out1 = [o for o in out if o['name'].rstrip('/') == path]
         if len(out1) == 1:
+            if "size" not in out1[0]:
+                out1[0]['size'] = None
             return out1[0]
         elif len(out1) > 1 or out:
             return {'name': path, 'size': 0, 'type': 'directory'}
@@ -503,7 +509,7 @@ class AbstractFileSystem(up):
 
     def size(self, path):
         """Size in bytes of file"""
-        return self.info(path)['size']
+        return self.info(path).get('size', None)
 
     def isdir(self, path):
         """Is this entry directory-like?"""
