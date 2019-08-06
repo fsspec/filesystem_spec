@@ -81,6 +81,8 @@ class HTTPFileSystem(AbstractFileSystem):
                 if l not in ['..', '../']:
                     # Ignore FTP-like "parent"
                     out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
+        if not out and url.endswith('/'):
+            return self.ls(url.rstrip('/'), detail=True)
         if detail:
             return [{'name': u, 'size': None, 'type': 'directory'
                      if u.endswith('/') else 'file'} for u in out]
@@ -150,15 +152,18 @@ class HTTPFileSystem(AbstractFileSystem):
         which case size will be given as None (and certain operations on the
         corresponding file will not work).
         """
+        size = False
         for policy in ['head', 'get']:
             try:
-                size = file_size(url, self.session, policy)
-                break
+                size = file_size(url, self.session, policy, **self.kwargs)
+                if size is not None:
+                    break
             except Exception:
                 pass
         else:
             # get failed, so conclude URL does not exist
-            raise FileNotFoundError(url)
+            if size is False:
+                raise FileNotFoundError(url)
         return {"name": url, "size": size, "type": "file"}
 
 
@@ -279,7 +284,7 @@ class HTTPFile(AbstractBufferedFile):
         return out
 
 
-def file_size(url, session, size_policy='head', **kwargs):
+def file_size(url, session=None, size_policy='head', **kwargs):
     """Call HEAD on the server to get file size
 
     Default operation is to explicitly allow redirects and use encoding
@@ -287,8 +292,9 @@ def file_size(url, session, size_policy='head', **kwargs):
     """
     kwargs = kwargs.copy()
     ar = kwargs.pop('allow_redirects', True)
-    head = kwargs.get('headers', {})
+    head = kwargs.get('headers', {}).copy()
     head['Accept-Encoding'] = 'identity'
+    session = session or requests.Session()
     if size_policy == 'head':
         r = session.head(url, allow_redirects=ar, **kwargs)
     elif size_policy == 'get':
