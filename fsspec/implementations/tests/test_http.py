@@ -41,6 +41,13 @@ def test_list(server):
         assert any(myfile in os.path.basename(f) for f in out)
 
 
+def test_exists(server):
+    h = fsspec.filesystem('http')
+    fn = server + '/' + os.path.basename(glob.glob('%s/*.py' % d)[0])
+    assert h.exists(fn)
+    assert not h.exists(server + '/notafile')
+
+
 def test_read(server):
     h = fsspec.filesystem('http')
     out = server + '/' + fn

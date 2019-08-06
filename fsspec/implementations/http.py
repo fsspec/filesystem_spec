@@ -24,7 +24,7 @@ class HTTPFileSystem(AbstractFileSystem):
     sep = '/'
 
     def __init__(self, simple_links=True, block_size=None, same_scheme=True,
-                 size_policy='head', **storage_options):
+                 **storage_options):
         """
         Parameters
         ----------
@@ -47,7 +47,6 @@ class HTTPFileSystem(AbstractFileSystem):
         self.simple_links = simple_links
         self.same_schema = same_scheme
         self.kwargs = storage_options
-        self.size_policy = size_policy
         self.session = requests.Session()
 
     @classmethod
@@ -83,7 +82,7 @@ class HTTPFileSystem(AbstractFileSystem):
                     # Ignore FTP-like "parent"
                     out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
         if detail:
-            return [{'name': u, 'type': 'directory'
+            return [{'name': u, 'size': None, 'type': 'directory'
                      if u.endswith('/') else 'file'} for u in out]
         else:
             return list(sorted(out))
@@ -129,9 +128,7 @@ class HTTPFileSystem(AbstractFileSystem):
         kw.update(kwargs)
         kw.pop('autocommit', None)
         if block_size:
-            return HTTPFile(self, url, self.session, block_size,
-                            size_policy=kw.pop('size_policy', self.size_policy),
-                            **kw)
+            return HTTPFile(self, url, self.session, block_size, **kw)
         else:
             kw['stream'] = True
             r = self.session.get(url, **kw)
@@ -143,9 +140,26 @@ class HTTPFileSystem(AbstractFileSystem):
         """Unique identifier; assume HTTP files are static, unchanging"""
         return tokenize(url, self.kwargs, self.protocol)
 
-    def size(self, url):
-        """Size in bytes of the file at path"""
-        return file_size(url, session=self.session, **self.kwargs)
+    def info(self, url, **kwargs):
+        """Get info of URL
+
+        Tries to access location via HEAD, and then GET methods, but does
+        not fetch the data.
+
+        It is possible that the server does not supply any size information, in
+        which case size will be given as None (and certain operations on the
+        corresponding file will not work).
+        """
+        for policy in ['head', 'get']:
+            try:
+                size = file_size(url, self.session, policy)
+                break
+            except Exception:
+                pass
+        else:
+            # get failed, so conclude URL does not exist
+            raise FileNotFoundError(url)
+        return {"name": url, "size": size, "type": "file"}
 
 
 class HTTPFile(AbstractBufferedFile):
@@ -167,32 +181,23 @@ class HTTPFile(AbstractBufferedFile):
     block_size: int or None
         The amount of read-ahead to do, in bytes. Default is 5MB, or the value
         configured for the FileSystem creating this file
-    size_policy : 'head', 'get', None or int
-        How to infer the file size. If head or get, ask the server using those
-        methods (with ``stream=True`` for the latter, and no download); if
-        int, this is the size in bytes, if None, don't use size at all, which
-        will, for example, prevent a seek-from-end.
+    size: None or int
+        If given, this is the size of the file in bytes, and we don't attempt
+        to call the server to find the value.
     kwargs: all other key-values are passed to requests calls.
     """
 
     def __init__(self, fs, url, session=None, block_size=None, mode='rb',
-                 size_policy='head', cache_type='bytes', **kwargs):
+                 cache_type='bytes', size=None, **kwargs):
         if mode != 'rb':
             raise NotImplementedError('File mode not supported')
         self.url = url
         self.session = session if session is not None else requests.Session()
-        if size_policy in ['head', 'get']:
-            try:
-                size = file_size(url, self.session, allow_redirects=True,
-                                 size_policy=size_policy, **kwargs)
-            except (ValueError, requests.HTTPError):
-                # No size information - only allow read() and no seek()
-                size = None
-        else:
-            size = size_policy
-        self.details = {'name': url, 'size': size}
+        if size is not None:
+            self.details = {'name': url, 'size': size, 'type': 'file'}
         super().__init__(fs=fs, path=url, mode=mode, block_size=block_size,
                          cache_type=cache_type, **kwargs)
+        self.cache.size = self.size or self.blocksize
 
     def read(self, length=-1):
         """Read bytes from file
@@ -204,8 +209,11 @@ class HTTPFile(AbstractBufferedFile):
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
-        if length < 0 and self.loc == 0:
-            # size was provided, but asked for whole file, so shortcut
+        if (
+                (length < 0 and self.loc == 0) or  # explicit read all
+                (length > (self.size or length)) or  # read more than there is
+                (self.size and self.size < self.blocksize)  # all fits in one block anyway
+        ):
             self._fetch_all()
         if self.size is None:
             if length < 0:
@@ -238,6 +246,9 @@ class HTTPFile(AbstractBufferedFile):
         headers = kwargs.pop('headers', {})
         headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
         r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
+        if r.status_code == 416:
+            # range request outside file
+            return b''
         r.raise_for_status()
         if r.status_code == 206:
             # partial content, as expected
@@ -286,11 +297,10 @@ def file_size(url, session, size_policy='head', **kwargs):
     else:
         raise TypeError('size_policy must be "head" or "get", got %s'
                         '' % size_policy)
-    r.raise_for_status()
     if 'Content-Length' in r.headers:
         return int(r.headers['Content-Length'])
-    else:
-        raise ValueError("Server did not supply size of %s" % url)
+    elif 'Content-Range' in r.headers:
+        return int(r.headers['Content-Range'].split('/')[1])
 
 
 class AllBytes(object):
