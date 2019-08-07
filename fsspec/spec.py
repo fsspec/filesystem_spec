@@ -442,8 +442,17 @@ class AbstractFileSystem(up):
             root = ''
             depth = 20 if "**" in path else 1
         allpaths = self.find(root, maxdepth=depth, **kwargs)
-        pattern = "^" + path.replace('.', r'\.').replace('//', '/').rstrip(
-            '/').replace('?', '.') + "$"
+        pattern = "^" + (
+            path.replace('\\', r'\\')
+            .replace('.', r'\.')
+            .replace('+', r'\+')
+            .replace('//', '/')
+            .replace('(', r'\(')
+            .replace(')', r'\)')
+            .replace('|', r'\|')
+            .rstrip('/')
+            .replace('?', '.')
+        ) + "$"
         pattern = re.sub('[*]{2}', '=PLACEHOLDER=', pattern)
         pattern = re.sub('[*]', '[^/]*', pattern)
         pattern = re.compile(pattern.replace("=PLACEHOLDER=", '.*'))
