@@ -45,7 +45,7 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return paths
 
-    def glob(self, path):
+    def glob(self, path, **kargs):
         path = make_path_posix(path)
         return super().glob(path)
 
@@ -53,13 +53,13 @@ class LocalFileSystem(AbstractFileSystem):
         path = make_path_posix(path)
         out = os.stat(path, follow_symlinks=False)
         dest = False
-        if os.path.isfile(path):
-            t = 'file'
-        elif os.path.isdir(path):
-            t = 'directory'
-        elif os.path.islink(path):
+        if os.path.islink(path):
             t = 'link'
             dest = os.readlink(path)
+        elif os.path.isdir(path):
+            t = 'directory'
+        elif os.path.isfile(path):
+            t = 'file'
         else:
             t = 'other'
         result = {
@@ -72,6 +72,11 @@ class LocalFileSystem(AbstractFileSystem):
             result[field] = getattr(out, 'st_' + field)
         if dest:
             result['destination'] = dest
+            try:
+                out2 = os.stat(path, follow_symlinks=True)
+                result['size'] = out2.st_size
+            except IOError:
+                result['size'] = 0
         return result
 
     def copy(self, path1, path2, **kwargs):

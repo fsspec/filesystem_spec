@@ -352,3 +352,32 @@ def test_make_path_posix():
     assert make_path_posix('rel/path', sep='/') == os.path.join(cwd, 'rel/path')
     assert make_path_posix('C:\\path', sep='\\') == 'C:/path'
     assert '/' in make_path_posix('rel\\path', sep='\\')
+
+
+def test_links(tmpdir):
+    tmpdir = str(tmpdir)
+    fn0 = os.path.join(tmpdir, 'target')
+    fn1 = os.path.join(tmpdir, 'link1')
+    fn2 = os.path.join(tmpdir, 'link2')
+    data = b'my target data'
+    with open(fn0, 'wb') as f:
+        f.write(data)
+    os.symlink(fn0, fn1)
+    os.symlink(fn0, fn2)
+
+    fs = LocalFileSystem()
+    assert fs.info(fn0)['type'] == 'file'
+    assert fs.info(fn1)['type'] == 'link'
+    assert fs.info(fn2)['type'] == 'link'
+
+    assert fs.info(fn0)['size'] == len(data)
+    assert fs.info(fn1)['size'] == len(data)
+    assert fs.info(fn2)['size'] == len(data)
+
+    of = fsspec.open(fn1, 'rb')
+    with of as f:
+        assert f.read() == data
+
+    of = fsspec.open(fn2, 'rb')
+    with of as f:
+        assert f.read() == data
