@@ -27,7 +27,7 @@ class CachingFileSystem(AbstractFileSystem):
     protocol = 'cached'
 
     def __init__(self, target_protocol=None, cache_storage='TMP',
-                 storage_options=None):
+                 storage_options=None, blocksize=5*2**20):
         """
 
         Parameters
@@ -47,6 +47,7 @@ class CachingFileSystem(AbstractFileSystem):
         os.makedirs(storage, exist_ok=True)
         self.protocol = target_protocol
         self.storage = storage
+        self.blocksize = blocksize
         self.kwargs = storage_options or {}
         self.load_cache()
         self.fs = filesystem(target_protocol, **self.kwargs)
@@ -113,22 +114,21 @@ class CachingFileSystem(AbstractFileSystem):
             hash = hashlib.sha256(path.encode()).hexdigest()
             fn = os.path.join(self.storage, hash)
             blocks = set()
-            detail = {'fn': hash, 'blocks': blocks}
+            detail = {'fn': fn, 'blocks': blocks}
             self.cached_files[path] = detail
         kwargs['cache_type'] = 'none'
         kwargs['mode'] = mode
 
         # call target filesystems open
         f = self.fs._open(path, **kwargs)
-        print(detail)
         if 'blocksize' in detail:
             if detail['blocksize'] != f.blocksize:
                 raise ValueError('Cached file must be reopened with same block'
                                  'size as original (old: %i, new %i)'
                                  '' % (detail['blocksize'], f.blocksize))
         else:
-            detail['blocksize'] = f.blocksize
-        f.cache = MMapCache(f.blocksize, f._fetch_range, f.size,
+            detail['blocksize'] = self.blocksize
+        f.cache = MMapCache(detail['blocksize'], f._fetch_range, f.size,
                             fn, blocks)
         close = f.close
         f.close = lambda: self.close_and_update(f, close)

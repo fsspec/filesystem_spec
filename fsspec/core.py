@@ -401,6 +401,8 @@ class MMapCache(BaseCache):
         import mmap
         from builtins import open
         # posix version
+        if self.size == 0:
+            self.cache = b""
         if self.location is None or not os.path.exists(self.location):
             if self.location is None:
                 fd = tempfile.TemporaryFile()
@@ -415,6 +417,10 @@ class MMapCache(BaseCache):
 
         f_no = fd.fileno()
         return mmap.mmap(f_no, self.size)
+
+    def __reduce__(self):
+        return MMapCache, (self.blocksize, self.fetcher, self.size,
+                           self.location, self.blocks)
 
     def _fetch(self, start, end):
         start_block = start // self.blocksize

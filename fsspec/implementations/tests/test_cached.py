@@ -1,6 +1,7 @@
 import os
 import pickle
 import pytest
+import cloudpickle
 
 import fsspec
 from fsspec.implementations.cached import CachingFileSystem
@@ -13,6 +14,21 @@ def test_idempotent():
     assert fs2 is fs
     fs3 = pickle.loads(pickle.dumps(fs))
     assert fs3.storage == fs.storage
+
+
+def test_pickle(tmpdir, ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open('/out', 'wb') as f:
+        f.write(b'test')
+
+    fs = fsspec.filesystem('cached', target_protocol='ftp',
+                           storage_options={'host': host, 'port': port,
+                                            'username': user, 'password': pw})
+
+    f = fs.open('/out', 'rb')
+    f2 = pickle.loads(cloudpickle.dumps(f))
+    assert f2.read() == b'test'
 
 
 def test_worflow(ftp_writable):
