@@ -1,6 +1,7 @@
 import os
 import pytest
-from fsspec.core import _expand_paths, OpenFile
+import pickle
+from fsspec.core import _expand_paths, OpenFile, caches
 from fsspec.implementations.tests.test_memory import m
 
 
@@ -29,3 +30,30 @@ def test_openfile_api(m):
     f.close()
     with OpenFile(m, 'somepath', mode='rt') as f:
         f.read() == 'data'
+
+
+# For test_cache_pickleable(). Functions are only picklable if they are defined
+# at the top-level of a module
+def _fetcher(start, end):
+    return b'0' * (end - start)
+
+
+@pytest.mark.parametrize('Cache_imp', caches.values())
+def test_cache_empty_file(Cache_imp):
+    blocksize = 5
+    size = 0
+    cache = Cache_imp(blocksize, _fetcher, size)
+    assert cache._fetch(0, 0) == b''
+
+
+@pytest.mark.parametrize('Cache_imp', caches.values())
+def test_cache_pickleable(Cache_imp):
+    blocksize = 5
+    size = 100
+    cache = Cache_imp(blocksize, _fetcher, size)
+    cache._fetch(0, 5)  # fill in cache
+    unpickled = pickle.loads(pickle.dumps(cache))
+    assert isinstance(unpickled, Cache_imp)
+    assert unpickled.blocksize == blocksize
+    assert unpickled.size == size
+    assert unpickled._fetch(0, 10) == b'0' * 10

@@ -399,22 +399,24 @@ class MMapCache(BaseCache):
     def _makefile(self):
         import tempfile
         import mmap
-        from builtins import open
+
+        if self.size == 0:
+            return bytearray()
+
         # posix version
         if self.location is None or not os.path.exists(self.location):
             if self.location is None:
                 fd = tempfile.TemporaryFile()
+                self.blocks = set()
             else:
-                fd = open(self.location, 'wb+')
+                fd = io.open(self.location, 'wb+')
             fd.seek(self.size - 1)
             fd.write(b'1')
             fd.flush()
         else:
-            fd = open(self.location, 'rb+')
-        self._file = fd
+            fd = io.open(self.location, 'rb+')
 
-        f_no = fd.fileno()
-        return mmap.mmap(f_no, self.size)
+        return mmap.mmap(fd.fileno(), self.size)
 
     def _fetch(self, start, end):
         start_block = start // self.blocksize
@@ -431,6 +433,17 @@ class MMapCache(BaseCache):
             self.blocks.add(i)
 
         return self.cache[start:end]
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # Remove the unpicklable entries.
+        del state['cache']
+        return state
+
+    def __setstate__(self, state):
+        # Restore instance attributes
+        self.__dict__.update(state)
+        self.cache = self._makefile()
 
 
 class BytesCache(BaseCache):
