@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import gzip
 import os
+import os.path
 import sys
 from contextlib import contextmanager
 import tempfile
@@ -255,6 +256,22 @@ def test_abs_paths(tmpdir):
     # with fs.open('tmp', 'r') as f:
     #     res = f.read()
     # assert res == 'hi'
+
+
+@pytest.mark.parametrize('sep', ['/', '\\'])
+@pytest.mark.parametrize('chars', ['+', '++', '(', ')', '|', '\\'])
+def test_glob_weird_characters(tmpdir, sep, chars):
+    tmpdir = str(tmpdir)
+
+    subdir = tmpdir + sep + 'test' + chars + 'x'
+    os.mkdir(subdir)
+    with open(subdir + sep + 'tmp', 'w') as f:
+        f.write('hi')
+
+    out = LocalFileSystem().glob(subdir + sep + '*')
+    assert len(out) == 1
+    assert os.sep in out[0]
+    assert 'tmp' in out[0]
 
 
 def test_get_pyarrow_filesystem():
