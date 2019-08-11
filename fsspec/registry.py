@@ -30,6 +30,8 @@ known_implementations = {
                 'err': 'webHDFS access requires "requests" to be installed'},
     's3': {'class': 's3fs.S3FileSystem',
            'err': 'Install s3fs to access S3'},
+    'adl': {'class': 'adlfs.AzureDatalakeFileSystem',
+            'err': 'Install adlfs to access files stored on Azure Datalake Gen1 from https://github.com/hayesgb/adlfs'},
     'cached': {'class': 'fsspec.implementations.cached.CachingFileSystem'},
     'dask': {'class': 'fsspec.implementations.dask.DaskWorkerFileSystem',
              'err': 'Install dask distributed to access worker file system'}

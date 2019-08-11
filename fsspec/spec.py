@@ -523,14 +523,14 @@ class AbstractFileSystem(up):
     def isdir(self, path):
         """Is this entry directory-like?"""
         try:
-            return self.info(path)['type'] == 'directory'
+            return self.info(path)['type'].lower() == 'directory'
         except FileNotFoundError:
             return False
 
     def isfile(self, path):
         """Is this entry file-like?"""
         try:
-            return self.info(path)['type'] == 'file'
+            return self.info(path)['type'].lower() == 'file'
         except:
             return False
 
