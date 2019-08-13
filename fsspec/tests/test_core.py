@@ -24,7 +24,6 @@ def test_openfile_api(m):
     m.open('somepath', 'wb').write(b'data')
     of = OpenFile(m, 'somepath')
     assert str(of) == "<OpenFile 'somepath'>"
-    assert os.fspath(of) == 'somepath'
     f = of.open()
     assert f.read() == b'data'
     f.close()
