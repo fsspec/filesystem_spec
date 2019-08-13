@@ -18,6 +18,7 @@ class CachingFileSystem(AbstractFileSystem):
     MMapCache), so only the data which is accessed takes up space.
 
     Restrictions:
+
     - the block-size must be the same for each access of a given file, unless
       all blocks of the file have already been read
     - caching can only be applied to file-systems which produce files

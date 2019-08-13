@@ -1163,9 +1163,6 @@ class AbstractBufferedFile(io.IOBase):
     def __str__(self):
         return "<File-like object %s, %s>" % (type(self.fs).__name__, self.path)
 
-    def __fspath__(self):
-        return self.fs.protocol + "://" + self.path
-
     __repr__ = __str__
 
     def __enter__(self):
