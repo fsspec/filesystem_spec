@@ -274,6 +274,17 @@ def test_glob_weird_characters(tmpdir, sep, chars):
     assert 'tmp' in out[0]
 
 
+def test_globfind_dirs(tmpdir):
+    tmpdir = str(tmpdir)
+    fs = fsspec.filesystem('file')
+    fs.mkdir(tmpdir + '/dir')
+    fs.touch(tmpdir + '/dir/afile')
+    assert [tmpdir + '/dir'] == fs.glob(tmpdir + '/*')
+    assert [tmpdir + '/dir/afile'] == fs.find(tmpdir)
+    assert [tmpdir + '/dir', tmpdir + '/dir/afile'] == fs.find(
+        tmpdir, withdirs=True)
+
+
 def test_get_pyarrow_filesystem():
     pa = pytest.importorskip('pyarrow')
 

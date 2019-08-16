@@ -358,7 +358,7 @@ class AbstractFileSystem(up):
                                      **kwargs):
                     yield res
 
-    def find(self, path, maxdepth=None, **kwargs):
+    def find(self, path, maxdepth=None, withdirs=False, **kwargs):
         """List all files below path.
 
         Like posix ``find`` command without conditions
@@ -367,13 +367,18 @@ class AbstractFileSystem(up):
         ----------
         maxdepth: int or None
             If not None, the maximum number of levels to descend
+        withdirs: bool
+            Whether to include directory paths in the output. This is True
+            when used by glob, but users usually only want files.
         kwargs are passed to ``ls``.
         """
         # TODO: allow equivalent of -name parameter
         out = []
-        for path, _, files in self.walk(path, maxdepth, **kwargs):
+        for path, dirs, files in self.walk(path, maxdepth, **kwargs):
+            if withdirs:
+                files += dirs
             for name in files:
-                if name:
+                if name and name not in out:
                     out.append('/'.join([path.rstrip('/'), name])
                                if path else name)
         if self.isfile(path) and path not in out:
@@ -442,7 +447,7 @@ class AbstractFileSystem(up):
         else:
             root = ''
             depth = 20 if "**" in path else 1
-        allpaths = self.find(root, maxdepth=depth, **kwargs)
+        allpaths = self.find(root, maxdepth=depth, withdirs=True, **kwargs)
         pattern = "^" + (
             path.replace('\\', r'\\')
             .replace('.', r'\.')
