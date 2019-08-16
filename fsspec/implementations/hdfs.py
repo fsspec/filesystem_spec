@@ -107,6 +107,7 @@ class PyArrowHDFS(AbstractFileSystem):
             'get_space_used', 'df', 'chmod', 'chown', 'disk_usage',
             'download', 'upload', '_get_kwargs_from_urls',
             'read_parquet', 'rm', 'stat', 'upload',
+            'info',
         ]:
             return getattr(pahdfs, item)
         else:
