@@ -472,13 +472,19 @@ class BytesCache(BaseCache):
     def _fetch(self, start, end):
         # TODO: only set start/end after fetch, in case it fails?
         # is this where retry logic might go?
+        if self.blocksize:
+            bend = min(self.size, end + self.blocksize)
+        else:
+            bend = end
+        if bend == start:
+            return b""
         if self.start is None and self.end is None:
             # First read
-            self.cache = self.fetcher(start, end + self.blocksize)
+            self.cache = self.fetcher(start, bend)
             self.start = start
         elif start < self.start:
             if self.end - end > self.blocksize:
-                self.cache = self.fetcher(start, end + self.blocksize)
+                self.cache = self.fetcher(start, bend)
                 self.start = start
             else:
                 new = self.fetcher(start, self.start)
@@ -488,10 +494,10 @@ class BytesCache(BaseCache):
             if self.end > self.size:
                 pass
             elif end - self.end > self.blocksize:
-                self.cache = self.fetcher(start, end + self.blocksize)
+                self.cache = self.fetcher(start, bend)
                 self.start = start
             else:
-                new = self.fetcher(self.end, end + self.blocksize)
+                new = self.fetcher(self.end, bend)
                 self.cache = self.cache + new
 
         self.end = self.start + len(self.cache)
