@@ -67,6 +67,9 @@ class PyArrowHDFS(AbstractFileSystem):
         if detail:
             for p in out:
                 p['type'] = p['kind']
+                p["name"] = self._strip_protocol(p["name"])
+        else:
+            out = [self._strip_protocol(p) for p in out]
         return out
 
     @staticmethod
@@ -107,7 +110,6 @@ class PyArrowHDFS(AbstractFileSystem):
             'get_space_used', 'df', 'chmod', 'chown', 'disk_usage',
             'download', 'upload', '_get_kwargs_from_urls',
             'read_parquet', 'rm', 'stat', 'upload',
-            'info',
         ]:
             return getattr(pahdfs, item)
         else:
