@@ -2,6 +2,7 @@ import os
 import pytest
 import shutil
 import subprocess
+import sys
 import time
 from fsspec.implementations.ftp import FTPFileSystem
 from fsspec import open_files
@@ -13,7 +14,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture()
 def ftp():
-    P = subprocess.Popen(['python', '-m', 'pyftpdlib', '-d', here],
+    P = subprocess.Popen([sys.executable, '-m', 'pyftpdlib', '-d', here],
                          stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
     try:
         time.sleep(1)
@@ -28,7 +29,7 @@ def ftp_writable(tmpdir):
     d = str(tmpdir)
     with open(os.path.join(d, 'out'), 'wb') as f:
         f.write(b'hello' * 10000)
-    P = subprocess.Popen(['python', '-m', 'pyftpdlib', '-d', d,
+    P = subprocess.Popen([sys.executable, '-m', 'pyftpdlib', '-d', d,
                           '-u', 'user', '-P', 'pass', '-w'])
     try:
         time.sleep(1)
