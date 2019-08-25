@@ -5,13 +5,7 @@ from errno import ENOENT, EIO
 from fuse import Operations, FuseOSError
 import threading
 import time
-import pandas as pd
 from fuse import FUSE
-
-
-def str_to_time(s):
-    t = pd.to_datetime(s)
-    return t.to_datetime64().view('int64') / 1e9
 
 
 class FUSEr(Operations):
