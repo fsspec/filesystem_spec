@@ -252,7 +252,7 @@ class AbstractFileSystem(up):
         """Remove a directory, if empty"""
         pass  # not necessary to implement, may not have directories
 
-    def ls(self, path, **kwargs):
+    def ls(self, path, detail=False, **kwargs):
         """List objects at path.
 
         This should include subdirectories and files at that location. The
@@ -331,8 +331,16 @@ class AbstractFileSystem(up):
         dirs = []
         files = []
 
+        # we might have been called with detail as a kwarg. Ensure we do our
+        # internal listing with detail=True, and when we build our return value
+        # respect whatever parameters were given to us.
+        without_detail = kwargs.copy()
+        if 'detail' in without_detail:
+            del without_detail['detail']
+        detail = kwargs.get('detail', False)
+
         try:
-            listing = self.ls(path, True, **kwargs)
+            listing = self.ls(path, True, **without_detail)
         except (FileNotFoundError, IOError):
             return [], [], []
 
@@ -340,15 +348,23 @@ class AbstractFileSystem(up):
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
             name = info['name'].rstrip('/')
+            if detail:
+                to_append = info
+            else:
+                to_append = name.rsplit("/", 1)[-1]
+
             if info['type'] == 'directory' and name != path:
                 # do not include "self" path
                 full_dirs.append(name)
-                dirs.append(name.rsplit('/', 1)[-1])
+                dirs.append(to_append)
             elif name == path:
                 # file-like with same name as give path
-                files.append('')
+                if detail:
+                    files.append(info)
+                else:
+                    files.append('')
             else:
-                files.append(name.rsplit('/', 1)[-1])
+                files.append(to_append)
         yield path, dirs, files
 
         for d in full_dirs:
