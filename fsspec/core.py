@@ -478,7 +478,8 @@ class BytesCache(BaseCache):
             bend = end
         if bend == start:
             return b""
-        if self.start is None and self.end is None:
+        if ((self.start is None or start < self.start) and
+                (self.end is None or end > self.end)):
             # First read
             self.cache = self.fetcher(start, bend)
             self.start = start
