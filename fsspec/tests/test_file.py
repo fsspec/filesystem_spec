@@ -146,3 +146,17 @@ def test_midread_cache(ftp_writable):
         size = 17562187
         d3 = f.read(size)
         assert len(d3) == size
+
+
+def test_read_block(ftp_writable):
+    # not the same as test_read_block in test_utils, this depends on the
+    # behaviour of the bytest caching
+    from fsspec.utils import read_block
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host=host, port=port,
+                       username=user, password=pw)
+    fn = "/myfile"
+    with fs.open(fn, 'wb') as f:
+        f.write(b'a,b\n1,2')
+    f = fs.open(fn, 'rb', cache_type='bytes')
+    assert read_block(f, 0, 6400, b'\n') == b'a,b\n1,2'

@@ -476,7 +476,7 @@ class BytesCache(BaseCache):
             bend = min(self.size, end + self.blocksize)
         else:
             bend = end
-        if bend == start:
+        if bend == start or start > self.size:
             return b""
         if ((self.start is None or start < self.start) and
                 (self.end is None or end > self.end)):
