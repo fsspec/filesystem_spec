@@ -123,3 +123,26 @@ def test_file_write_attributes(ftp_writable):
         f.write(b'')
     with pytest.raises(ValueError):
         f.flush()
+
+
+def test_midread_cache(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host=host, port=port,
+                       username=user, password=pw)
+    fn = "/myfile"
+    with fs.open(fn, 'wb') as f:
+        f.write(b'a' * 175_627_146)
+    with fs.open(fn, 'rb') as f:
+        f.seek(175561610)
+        d1 = f.read(65536)
+        assert len(d1) == 65536
+
+        f.seek(4)
+        size = 17562198
+        d2 = f.read(size)
+        assert len(d2) == size
+
+        f.seek(17562288)
+        size = 17562187
+        d3 = f.read(size)
+        assert len(d3) == size
