@@ -498,7 +498,7 @@ class BytesCache(BaseCache):
                 self.cache = self.fetcher(start, bend)
                 self.start = start
             else:
-                new = self.fetcher(self.end, bend)
+                new = self.fetcher(self.end, max(end, bend))
                 self.cache = self.cache + new
 
         self.end = self.start + len(self.cache)
