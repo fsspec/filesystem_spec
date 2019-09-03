@@ -1,4 +1,6 @@
 import importlib
+from distutils.version import LooseVersion
+
 __all__ = ['registry', 'get_filesystem_class', 'default']
 
 # mapping protocol: implementation class object
@@ -35,6 +37,11 @@ known_implementations = {
              'err': 'Install dask distributed to access worker file system'}
 }
 
+minversions = {
+    's3fs': LooseVersion("0.3.0"),
+    "gcsfs": LooseVersion("0.3.0"),
+}
+
 
 def get_filesystem_class(protocol):
     """Fetch named protocol implementation from the registry
@@ -50,20 +57,31 @@ def get_filesystem_class(protocol):
     """
     if protocol is None:
         protocol = default
+
     if protocol not in registry:
         if protocol not in known_implementations:
             raise ValueError("Protocol not known: %s" % protocol)
         bit = known_implementations[protocol]
         mod, name = bit['class'].rsplit('.', 1)
+        minversion = minversions.get(mod, None)
         err = None
         try:
             mod = importlib.import_module(mod)
         except ImportError:
             err = ImportError(bit['err'])
+
         except Exception as e:
             err = e
         if err is not None:
             raise RuntimeError(str(err))
+
+        if minversion:
+            version = getattr(mod, "__version__", None)
+            if version and LooseVersion(version) < minversion:
+                raise RuntimeError("'{}={}' is installed, but version '{}' or "
+                                   "higher is required".format(mod.__name__,
+                                                               version,
+                                                               minversion))
         registry[protocol] = getattr(mod, name)
     cls = registry[protocol]
     if getattr(cls, 'protocol', None) in ('abstract', None):
