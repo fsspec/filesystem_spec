@@ -160,3 +160,19 @@ def test_read_block(ftp_writable):
         f.write(b'a,b\n1,2')
     f = fs.open(fn, 'rb', cache_type='bytes')
     assert read_block(f, 0, 6400, b'\n') == b'a,b\n1,2'
+
+
+def test_with_gzip(ftp_writable):
+    import gzip
+    data = b'some compressable stuff'
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host=host, port=port,
+                       username=user, password=pw)
+    fn = "/myfile"
+    with fs.open(fn, 'wb') as f:
+        gf = gzip.GzipFile(fileobj=f, mode='w')
+        gf.write(data)
+        gf.close()
+    with fs.open(fn, 'rb') as f:
+        gf = gzip.GzipFile(fileobj=f, mode='r')
+        assert gf.read() == data
