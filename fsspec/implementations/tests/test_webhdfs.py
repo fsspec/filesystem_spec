@@ -74,6 +74,20 @@ def test_workflow(hdfs_cluster):
     assert not w.exists(fn)
 
 
+def test_with_gzip(hdfs_cluster):
+    from gzip import GzipFile
+    w = WebHDFS(hdfs_cluster, user='testuser',
+                data_proxy={'worker.example.com': 'localhost'})
+    fn = '/user/testuser/gzfile'
+    with w.open(fn, 'wb') as f:
+        gf = GzipFile(fileobj=f, mode='w')
+        gf.write(b'hello')
+        gf.close()
+    with w.open(fn, 'rb') as f:
+        gf = GzipFile(fileobj=f, mode='r')
+        assert gf.read() == b'hello'
+
+
 def test_workflow_transaction(hdfs_cluster):
     w = WebHDFS(hdfs_cluster, user='testuser',
                 data_proxy={'worker.example.com': 'localhost'})
