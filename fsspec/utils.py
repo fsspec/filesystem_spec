@@ -141,7 +141,7 @@ def build_name_function(max_int):
 
 
 def seek_delimiter(file, delimiter, blocksize):
-    r"""Seek current file to byte after file start, delimiter seq or file end.
+    r"""Seek current file to file start, file end, or byte after delimiter seq.
 
     Seeks file to next chunk delimiter, where chunks are defined on file start,
     a delimiting sequence, and file end. Use file.tell() to see location afterwards.
@@ -149,7 +149,7 @@ def seek_delimiter(file, delimiter, blocksize):
     Parameters
     ----------
     file: a file
-    delimiter: bytes or str
+    delimiter: bytes
         a delimiter like ``b'\n'`` or message sentinel, matching file .read() type
     blocksize: int
         Number of bytes to read from the file at once.
@@ -164,12 +164,14 @@ def seek_delimiter(file, delimiter, blocksize):
     if file.tell() == 0:
         return False
 
-    last = type(delimiter)()
+    # Interface is for binary IO, with delimiter as bytes, but initialize last
+    # with result of file.read to preserve compatibility with text IO.
+    last = None
     while True:
         current = file.read(blocksize)
         if not current:
             return
-        full = last + current
+        full = last + current if last else current
         try:
             if delimiter in full:
                 i = full.index(delimiter)
@@ -232,6 +234,8 @@ def read_block(f, offset, length, delimiter=None, split_before=False):
         found_end_delim = seek_delimiter(f, delimiter, 2 ** 16)
         end = f.tell()
 
+        # Adjust split location to before delimiter iff seek found the
+        # delimiter sequence, not start or end of file.
         if found_start_delim and split_before:
             start -= len(delimiter)
 
