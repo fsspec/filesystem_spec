@@ -24,7 +24,7 @@ class HTTPFileSystem(AbstractFileSystem):
     sep = '/'
 
     def __init__(self, simple_links=True, block_size=None, same_scheme=True,
-                 **storage_options):
+                 size_policy=None, **storage_options):
         """
         Parameters
         ----------
@@ -37,6 +37,7 @@ class HTTPFileSystem(AbstractFileSystem):
         same_scheme: True
             When doing ls/glob, if this is True, only consider paths that have
             http/https matching the input URLs.
+        size_policy: this argument is deprecated
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters passed on to requests

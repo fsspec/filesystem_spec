@@ -83,6 +83,12 @@ def test_list(server):
     assert out == [server + '/index/realfile']
 
 
+def test_policy_arg(server):
+    h = fsspec.filesystem('http', size_policy='get')
+    out = h.glob(server + '/index/*')
+    assert out == [server + '/index/realfile']
+
+
 def test_exists(server):
     h = fsspec.filesystem('http')
     assert not h.exists(server + '/notafile')
