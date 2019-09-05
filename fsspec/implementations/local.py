@@ -162,42 +162,19 @@ def make_path_posix(path, sep=os.sep):
 class LocalFileOpener(object):
     def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
         self.path = path
-        self.mode = mode
         self.fs = fs
         self.autocommit = autocommit
-        self._open()
-
-    def _open(self):
-        if self.autocommit or 'w' not in self.mode:
-            self.f = open(self.path, mode=self.mode)
+        if autocommit or 'w' not in mode:
+            self.f = open(path, mode=mode)
         else:
             # TODO: check if path is writable?
             i, name = tempfile.mkstemp()
             self.temp = name
-            self.f = open(name, mode=self.mode)
-        if 'w' not in self.mode:
-            self.details = self.fs.info(self.path)
+            self.f = open(name, mode=mode)
+        if 'w' not in mode:
+            self.details = self.fs.info(path)
             self.size = self.details['size']
             self.f.size = self.size
-
-    def __setstate__(self, state):
-        if 'r' in state['mode']:
-            loc = self.state.pop('loc')
-            self._open()
-            self.f.seek(loc)
-        else:
-            self.f = None
-        self.__dict__.update(state)
-
-    def __getstate__(self):
-        d = self.__dict__.copy()
-        d.pop('f')
-        if 'r' in self.mode:
-            d['loc'] = self.f.tell()
-        else:
-            if not self.f.closed:
-                raise ValueError("Cannot serialise open write-mode local file")
-        return d
 
     def commit(self):
         if self.autocommit:
