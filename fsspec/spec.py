@@ -2,6 +2,8 @@ from hashlib import md5
 import io
 import os
 import logging
+
+from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path
 logger = logging.getLogger('fsspec')
 
@@ -787,47 +789,6 @@ class AbstractFileSystem(up):
     def clear_instance_cache(cls):
         """Remove cached instances from the class cache"""
         cls._cache.clear()
-
-
-class Transaction(object):
-    """Filesystem transaction write context
-
-    Gathers files for deferred commit or discard, so that several write
-    operations can be finalized semi-atomically. This works by having this
-    instance as the ``.transaction`` attribute of the given filesystem
-    """
-
-    def __init__(self, fs):
-        """
-        Parameters
-        ----------
-        fs: FileSystem instance
-        """
-        self.fs = fs
-        self.files = []
-
-    def __enter__(self):
-        self.start()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """End transaction and commit, if exit is not due to exception"""
-        # only commit if there was no exception
-        self.complete(commit=exc_type is None)
-        self.fs._intrans = False
-
-    def start(self):
-        """Start a transaction on this FileSystem"""
-        self.fs._intrans = True
-
-    def complete(self, commit=True):
-        """Finish transaction: commit or discard all deferred files"""
-        for f in self.files:
-            if commit:
-                f.commit()
-            else:
-                f.discard()
-        self.files = []
-        self.fs._intrans = False
 
 
 class AbstractBufferedFile(io.IOBase):
