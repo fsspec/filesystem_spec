@@ -145,6 +145,8 @@ def seek_delimiter(file, delimiter, blocksize):
 
     Seeks file to next chunk delimiter, where chunks are defined on file start,
     a delimiting sequence, and file end. Use file.tell() to see location afterwards.
+    Note that file start is a valid split, so must be at offset > 0 to seek for
+    delimiter.
 
     Parameters
     ----------
@@ -162,6 +164,7 @@ def seek_delimiter(file, delimiter, blocksize):
     """
 
     if file.tell() == 0:
+        # beginning-of-file, return without seek
         return False
 
     # Interface is for binary IO, with delimiter as bytes, but initialize last
@@ -170,7 +173,8 @@ def seek_delimiter(file, delimiter, blocksize):
     while True:
         current = file.read(blocksize)
         if not current:
-            return
+            # end-of-file without delimiter
+            return False
         full = last + current if last else current
         try:
             if delimiter in full:
