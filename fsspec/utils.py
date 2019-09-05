@@ -141,61 +141,76 @@ def build_name_function(max_int):
 
 
 def seek_delimiter(file, delimiter, blocksize):
-    """ Seek current file to next byte after a delimiter bytestring
+    r"""Seek current file to file start, file end, or byte after delimiter seq.
 
-    This seeks the file to the next byte following the delimiter.  It does
-    not return anything.  Use ``file.tell()`` to see location afterwards.
+    Seeks file to next chunk delimiter, where chunks are defined on file start,
+    a delimiting sequence, and file end. Use file.tell() to see location afterwards.
+    Note that file start is a valid split, so must be at offset > 0 to seek for
+    delimiter.
 
     Parameters
     ----------
     file: a file
     delimiter: bytes
-        a delimiter like ``b'\n'`` or message sentinel
+        a delimiter like ``b'\n'`` or message sentinel, matching file .read() type
     blocksize: int
         Number of bytes to read from the file at once.
+
+
+    Returns
+    -------
+    Returns True if a delimiter was found, False if at file start or end.
+
     """
 
     if file.tell() == 0:
-        return
+        # beginning-of-file, return without seek
+        return False
 
-    last = b''
+    # Interface is for binary IO, with delimiter as bytes, but initialize last
+    # with result of file.read to preserve compatibility with text IO.
+    last = None
     while True:
         current = file.read(blocksize)
         if not current:
-            return
-        full = last + current
+            # end-of-file without delimiter
+            return False
+        full = last + current if last else current
         try:
             if delimiter in full:
                 i = full.index(delimiter)
                 file.seek(file.tell() - (len(full) - i) + len(delimiter))
-                return
+                return True
             elif len(current) < blocksize:
                 # end-of-file without delimiter
-                return
-        except ValueError:
+                return False
+        except (OSError, ValueError):
             pass
         last = full[-len(delimiter):]
 
 
-def read_block(f, offset, length, delimiter=None):
+def read_block(f, offset, length, delimiter=None, split_before=False):
     """ Read a block of bytes from a file
 
     Parameters
     ----------
-    fn: string
-        Path to filename
+    f: File
+        Open file
     offset: int
         Byte offset to start read
     length: int
-        Number of bytes to read
+        Number of bytes to read, read through end of file if None
     delimiter: bytes (optional)
         Ensure reading starts and stops at delimiter bytestring
+    split_before: bool (optional)
+        Start/stop read *before* delimiter bytestring.
+
 
     If using the ``delimiter=`` keyword argument we ensure that the read
     starts and stops at delimiter boundaries that follow the locations
     ``offset`` and ``offset + length``.  If ``offset`` is zero then we
-    start at zero.  The bytestring returned WILL include the
-    terminating delimiter string.
+    start at zero, regardless of delimiter.  The bytestring returned WILL
+    include the terminating delimiter string.
 
     Examples
     --------
@@ -213,15 +228,23 @@ def read_block(f, offset, length, delimiter=None):
     """
     if delimiter:
         f.seek(offset)
-        seek_delimiter(f, delimiter, 2**16)
+        found_start_delim = seek_delimiter(f, delimiter, 2 ** 16)
         if length is None:
             return f.read()
         start = f.tell()
         length -= start - offset
 
         f.seek(start + length)
-        seek_delimiter(f, delimiter, 2**16)
+        found_end_delim = seek_delimiter(f, delimiter, 2 ** 16)
         end = f.tell()
+
+        # Adjust split location to before delimiter iff seek found the
+        # delimiter sequence, not start or end of file.
+        if found_start_delim and split_before:
+            start -= len(delimiter)
+
+        if found_end_delim and split_before:
+            end -= len(delimiter)
 
         offset = start
         length = end - start
