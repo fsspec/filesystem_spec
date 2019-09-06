@@ -234,11 +234,12 @@ class HTTPFile(AbstractBufferedFile):
         This is only called when position is still at zero,
         and read() is called without a byte-count.
         """
-        r = self.session.get(self.url, **self.kwargs)
-        r.raise_for_status()
-        out = r.content
-        self.cache = AllBytes(out)
-        self.size = len(out)
+        if not isinstance(self.cache, AllBytes):
+            r = self.session.get(self.url, **self.kwargs)
+            r.raise_for_status()
+            out = r.content
+            self.cache = AllBytes(out)
+            self.size = len(out)
 
     def _fetch_range(self, start, end):
         """Download a block of data

@@ -446,6 +446,43 @@ class MMapCache(BaseCache):
         self.cache = self._makefile()
 
 
+class ReadAheadCache(BaseCache):
+    """ Cache which reads only when we get beyond a block of data
+
+    This is a much simpler version of BytesCache, and does not attempt to
+    fill holes in the cache or keep fragments alive. It is besst suited to
+    many small reads in a sequential order (e.g., readling lines from a file).
+    """
+
+    def __init__(self, blocksize, fetcher, size, **kwargs):
+        super().__init__(blocksize, fetcher, size)
+        self.cache = b''
+        self.start = 0
+        self.end = 0
+
+    def _fetch(self, start, end):
+        end = min(self.size, end)
+        l = end - start
+        if start >= self.size:
+            return b''
+        elif start >= self.start and end <= self.end:
+            # cache hit
+            return self.cache[start - self.start:end - self.start]
+        elif self.start <= start < self.end:
+            # partial hit
+            part = self.cache[start - self.start:]
+            l -= len(part)
+            start = self.end
+        else:
+            # miss
+            part = b''
+        end = min(self.size, end + self.blocksize)
+        self.cache = self.fetcher(start, end)  # new block replaces old
+        self.start = start
+        self.end = self.start + len(self.cache)
+        return part + self.cache[:l]
+
+
 class BytesCache(BaseCache):
     """Cache which holds data in a in-memory bytes object
 
@@ -514,4 +551,5 @@ class BytesCache(BaseCache):
 
 caches = {'none': BaseCache,
           'mmap': MMapCache,
-          'bytes': BytesCache}
+          'bytes': BytesCache,
+          'readahead': ReadAheadCache}
