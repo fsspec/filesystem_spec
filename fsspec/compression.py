@@ -1,7 +1,9 @@
 """Helper functions for a standard streaming compression API"""
+import os.path
 from bz2 import BZ2File
 from gzip import GzipFile
 from zipfile import ZipFile
+
 from fsspec.spec import AbstractBufferedFile
 
 
@@ -23,20 +25,29 @@ def unzip(infile, mode='rb', filename=None, **kwargs):
 
 
 # should be functions of the form func(infile, mode=, **kwargs) -> file-like
-compr = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
-         None: noop_file,
-         'bz2': BZ2File,
-         'zip': unzip}
+compr = {
+    'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
+    None: noop_file,
+    'bz2': BZ2File,
+    'zip': unzip,
+}
+
+compr_extensions = {
+    'gz': 'gzip'
+}
+
 
 try:
     import lzma
-    compr['xz'] = lzma.LZMAFile
+
+    compr["xz"] = lzma.LZMAFile
 except ImportError:
     pass
 
 try:
     import lzmaffi
-    compr['xz'] = lzmaffi.LZMAFile
+
+    compr["xz"] = lzmaffi.LZMAFile
 except ImportError:
     pass
 
@@ -75,14 +86,14 @@ class SnappyFile(AbstractBufferedFile):
 try:
     import snappy
     snappy.compress
-    compr['snappy'] = SnappyFile
+    compr["snappy"] = SnappyFile
 
 except (ImportError, NameError):
     pass
 
 try:
     import lz4.frame
-    compr['lz4'] = lz4.frame.open
+    compr["lz4"] = lz4.frame.open
 except ImportError:
     pass
 
@@ -97,6 +108,22 @@ try:
             cctx = zstd.ZstdCompressor(level=10)
             return cctx.stream_writer(infile)
 
-    compr['zstd'] = zstandard_file
+    compr["zstd"] = zstandard_file
+    compr_extensions["zst"] = "zstd"
 except ImportError:
     pass
+
+
+def infer_compression(filename):
+    """Infer compression, if available, from filename.
+
+    Infer a named compression type, if registered and available, from filename
+    extension. This includes builtin (gz, bz2, zip) compressions, as well as
+    any additional optional registered compressions.
+    """
+
+    extension = os.path.splitext(filename)[-1].strip(".")
+    if extension in compr:
+        return extension
+    elif extension in compr_extensions:
+        return compr_extensions[extension]

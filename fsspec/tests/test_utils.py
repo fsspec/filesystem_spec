@@ -1,30 +1,6 @@
 import io
 import pytest
-from fsspec.utils import infer_storage_options, infer_compression, seek_delimiter, read_block
-from fsspec.compression import compr
-
-
-def test_infer_compression():
-    assert infer_compression('fn.zip') == 'zip'
-    assert infer_compression('fn.gz') == 'gzip'
-    assert infer_compression('fn.unknown') is None
-
-def test_infer_custom_compression():
-    """Inferred compression gets values from fsspec.compression.compr."""
-    assert infer_compression('fn.zip') == 'zip'
-    assert infer_compression('fn.gz') == 'gzip'
-    assert infer_compression('fn.unknown') is None
-    assert infer_compression("fn.test_custom") is None
-
-    compr["test_custom"] = lambda f, **kwargs: f
-
-    try:
-        assert infer_compression('fn.zip') == 'zip'
-        assert infer_compression('fn.gz') == 'gzip'
-        assert infer_compression('fn.unknown') is None
-        assert infer_compression("fn.test_custom") is "test_custom"
-    finally:
-        del compr["test_custom"]
+from fsspec.utils import infer_storage_options, seek_delimiter, read_block
 
 
 def test_read_block():

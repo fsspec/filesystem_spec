@@ -3,9 +3,9 @@ from __future__ import print_function, division, absolute_import
 import io
 import os
 import logging
-from .compression import compr
-from .utils import (infer_compression, build_name_function,
-                    update_storage_options, stringify_path)
+from .compression import compr, infer_compression
+from .utils import (build_name_function, update_storage_options,
+                    stringify_path)
 from .registry import get_filesystem_class
 logger = logging.getLogger('fsspec')
 

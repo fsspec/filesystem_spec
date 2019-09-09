@@ -102,14 +102,6 @@ def update_storage_options(options, inherited=None):
     options.update(inherited)
 
 
-compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz', 'zip': 'zip'}
-
-
-def infer_compression(filename):
-    extension = os.path.splitext(filename)[-1].strip('.')
-    if extension in compressions:
-        return compressions[extension]
-
 
 def build_name_function(max_int):
     """ Returns a function that receives a single integer
