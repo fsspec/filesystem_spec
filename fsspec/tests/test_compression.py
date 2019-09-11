@@ -23,8 +23,28 @@ def test_infer_custom_compression():
         assert infer_compression("fn.unknown") is None
         assert infer_compression("fn.test_custom") is None
         assert infer_compression("fn.tst") == "test_custom"
+
+        # Duplicate registration in name or extension raises a value error.
+        with pytest.raises(ValueError):
+            register_compression("test_custom", lambda f, **kwargs: f, "tst")
+
+        with pytest.raises(ValueError):
+            register_compression("test_conflicting", lambda f, **kwargs: f, "tst")
+        assert "test_conflicting" not in compr
+
+        # ...but can be forced.
+        register_compression(
+            "test_conflicting", lambda f, **kwargs: f, "tst", force=True
+        )
+        assert infer_compression("fn.zip") == "zip"
+        assert infer_compression("fn.gz") == "gzip"
+        assert infer_compression("fn.unknown") is None
+        assert infer_compression("fn.test_custom") is None
+        assert infer_compression("fn.tst") == "test_conflicting"
+
     finally:
         del compr["test_custom"]
+        del compr["test_conflicting"]
         del compressions["tst"]
 
 

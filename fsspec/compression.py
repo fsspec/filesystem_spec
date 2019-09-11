@@ -35,19 +35,22 @@ def register_compression(name, callback, extensions, force=False):
         ValueError: If name or extensions already registered, and not force.
 
     """
-    if name in compr and not force:
-        raise ValueError("Duplicate compression registration: %s" % name)
-
-    compr[name] = callback
-
     if isinstance(extensions, str):
         extensions = [extensions]
+
+    # Validate registration
+    if name in compr and not force:
+        raise ValueError("Duplicate compression registration: %s" % name)
 
     for ext in extensions:
         if ext in fsspec.utils.compressions and not force:
             raise ValueError(
                 "Duplicate compression file extension: %s (%s)" % (ext, name)
             )
+
+    compr[name] = callback
+
+    for ext in extensions:
         fsspec.utils.compressions[ext] = name
 
 
