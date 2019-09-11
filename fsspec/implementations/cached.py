@@ -216,6 +216,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     f2.write(data)
             else:
                 f2.write(f.read())
+        self.save_cache()
         return self._open(path, mode)
 
     def __reduce_ex__(self, *_):
