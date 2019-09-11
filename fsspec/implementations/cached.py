@@ -139,7 +139,11 @@ class CachingFileSystem(AbstractFileSystem):
 
     def close_and_update(self, f, close):
         """Called when a file is closing, so store the set of blocks"""
-        c = self.cached_files[f.path]
+        if f.path.startswith(self.protocol):
+            path = f.path
+        else:
+            path = self.protocol + "://" + f.path
+        c = self.cached_files[path]
         if (c['blocks'] is not True
                 and len(['blocks']) * f.blocksize >= f.size):
             c['blocks'] = True

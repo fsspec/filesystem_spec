@@ -27,9 +27,9 @@ def test_worflow(ftp_writable):
     with fs.open('/out') as f:
         assert os.listdir(fs.storage)
         assert f.read() == b'test'
-        assert fs.cached_files['/out']['blocks']
+        assert fs.cached_files['ftp:///out']['blocks']
     assert fs.cat('/out') == b'test'
-    assert fs.cached_files['/out']['blocks'] is True
+    assert fs.cached_files['ftp:///out']['blocks'] is True
 
     with fs.open('/out', 'wb') as f:
         f.write(b'changed')
