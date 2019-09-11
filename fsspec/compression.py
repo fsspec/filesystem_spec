@@ -1,66 +1,96 @@
 """Helper functions for a standard streaming compression API"""
-import os.path
 from bz2 import BZ2File
 from gzip import GzipFile
 from zipfile import ZipFile
 
+import fsspec.utils
 from fsspec.spec import AbstractBufferedFile
 
 
-def noop_file(file, **kwargs):
+def noop_file(file, mode, **kwargs):
     return file
 
 
-def unzip(infile, mode='rb', filename=None, **kwargs):
-    if 'r' not in mode:
+# should be functions of the form func(infile, mode=, **kwargs) -> file-like
+compr = {None: noop_file}
+
+
+def register_compression(name, callback, extensions, force=False):
+    """Register an "inferable" file compression type.
+
+    Registers transparent file compression type for use with fsspec.open.
+    Compression can be specified by name in open, or "infer"-ed for any files
+    ending with the given extensions.
+
+    Args:
+        name: (str) The compression type name. Eg. "gzip".
+        callback: A callable of form (infile, mode, **kwargs) -> file-like.
+            Accepts an input file-like object, the target mode and kwargs.
+            Returns a wrapped file-like object.
+        extensions: (str, Iterable[str]) A file extension, or list of file
+            extensions for which to infer this compression scheme. Eg. "gz".
+        force: (bool) Force re-registration of compression type or extensions.
+
+    Raises:
+        ValueError: If name or extensions already registered, and not force.
+
+    """
+    if name in compr and not force:
+        raise ValueError("Duplicate compression registration: %s" % name)
+
+    compr[name] = callback
+
+    if isinstance(extensions, str):
+        extensions = [extensions]
+
+    for ext in extensions:
+        if ext in fsspec.utils.compressions and not force:
+            raise ValueError(
+                "Duplicate compression file extension: %s (%s)" % (ext, name)
+            )
+        fsspec.utils.compressions[ext] = name
+
+
+def unzip(infile, mode="rb", filename=None, **kwargs):
+    if "r" not in mode:
         filename = filename or "file"
-        z = ZipFile(infile, mode='w', **kwargs)
-        fo = z.open(filename, mode='w')
+        z = ZipFile(infile, mode="w", **kwargs)
+        fo = z.open(filename, mode="w")
         fo.close = lambda closer=fo.close: closer() or z.close()
         return fo
     z = ZipFile(infile)
     if filename is None:
         filename = z.namelist()[0]
-    return z.open(filename, mode='r', **kwargs)
+    return z.open(filename, mode="r", **kwargs)
 
 
-# should be functions of the form func(infile, mode=, **kwargs) -> file-like
-compr = {
-    'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
-    None: noop_file,
-    'bz2': BZ2File,
-    'zip': unzip,
-}
-
-compr_extensions = {
-    'gz': 'gzip'
-}
-
+register_compression("zip", unzip, "zip")
+register_compression("bz2", BZ2File, "bz2")
+register_compression("gzip", lambda f, **kwargs: GzipFile(fileobj=f, **kwargs), "gz")
 
 try:
     import lzma
 
-    compr["xz"] = lzma.LZMAFile
+    register_compression("lzma", lzma.LZMAFile, "xz")
 except ImportError:
     pass
 
 try:
     import lzmaffi
 
-    compr["xz"] = lzmaffi.LZMAFile
+    register_compression("lzma", lzmaffi.LZMAFile, "xz", force=True)
 except ImportError:
     pass
 
 
 class SnappyFile(AbstractBufferedFile):
-
     def __init__(self, infile, mode, **kwargs):
         import snappy
-        self.details = {'size': 999999999}   # not true, but OK if we don't seek
-        super().__init__(fs=None, path='snappy', mode=mode.strip('b') + 'b',
-                         **kwargs)
+
+        self.details = {"size": 999999999}  # not true, but OK if we don't seek
+        super().__init__(fs=None, path="snappy", mode=mode.strip("b") + "b", **kwargs)
         self.infile = infile
-        if 'r' in mode:
+        if "r" in mode:
             self.codec = snappy.StreamDecompressor()
         else:
             self.codec = snappy.StreamCompressor()
@@ -85,45 +115,33 @@ class SnappyFile(AbstractBufferedFile):
 
 try:
     import snappy
+
     snappy.compress
-    compr["snappy"] = SnappyFile
+    # Snappy may use the .sz file extension, but this is not part of the
+    # standard implementation.
+    register_compression("snappy", SnappyFile, [])
 
 except (ImportError, NameError):
     pass
 
 try:
     import lz4.frame
-    compr["lz4"] = lz4.frame.open
+
+    register_compression("lz4", lz4.frame.open, "lz4")
 except ImportError:
     pass
 
 try:
     import zstandard as zstd
 
-    def zstandard_file(infile, mode='rb'):
-        if 'r' in mode:
+    def zstandard_file(infile, mode="rb"):
+        if "r" in mode:
             cctx = zstd.ZstdDecompressor()
             return cctx.stream_reader(infile)
         else:
             cctx = zstd.ZstdCompressor(level=10)
             return cctx.stream_writer(infile)
 
-    compr["zstd"] = zstandard_file
-    compr_extensions["zst"] = "zstd"
+    register_compression("zstd", zstandard_file, "zst")
 except ImportError:
     pass
-
-
-def infer_compression(filename):
-    """Infer compression, if available, from filename.
-
-    Infer a named compression type, if registered and available, from filename
-    extension. This includes builtin (gz, bz2, zip) compressions, as well as
-    any additional optional registered compressions.
-    """
-
-    extension = os.path.splitext(filename)[-1].strip(".")
-    if extension in compr:
-        return extension
-    elif extension in compr_extensions:
-        return compr_extensions[extension]

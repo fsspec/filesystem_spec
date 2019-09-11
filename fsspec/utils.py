@@ -102,6 +102,21 @@ def update_storage_options(options, inherited=None):
     options.update(inherited)
 
 
+# Compression extensions registered via fsspec.compression.register_compression
+compressions = {}
+
+
+def infer_compression(filename):
+    """Infer compression, if available, from filename.
+
+    Infer a named compression type, if registered and available, from filename
+    extension. This includes builtin (gz, bz2, zip) compressions, as well as
+    optional compressions. See fsspec.compression.register_compression.
+    """
+    extension = os.path.splitext(filename)[-1].strip('.')
+    if extension in compressions:
+        return compressions[extension]
+
 
 def build_name_function(max_int):
     """ Returns a function that receives a single integer
