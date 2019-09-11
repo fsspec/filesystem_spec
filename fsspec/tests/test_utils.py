@@ -1,12 +1,6 @@
 import io
 import pytest
-from fsspec.utils import infer_storage_options, infer_compression, seek_delimiter, read_block
-
-
-def test_infer_compression():
-    assert infer_compression('fn.zip') == 'zip'
-    assert infer_compression('fn.gz') == 'gzip'
-    assert infer_compression('fn.unknown') is None
+from fsspec.utils import infer_storage_options, seek_delimiter, read_block
 
 
 def test_read_block():
