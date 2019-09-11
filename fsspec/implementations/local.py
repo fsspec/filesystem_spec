@@ -1,3 +1,5 @@
+
+import io
 import os
 import shutil
 import posixpath
@@ -164,21 +166,32 @@ class LocalFileOpener(object):
         self.path = path
         self.mode = mode
         self.fs = fs
+        self.f = None
         self.autocommit = autocommit
+        self.blocksize = io.DEFAULT_BUFFER_SIZE
         self._open()
 
     def _open(self):
-        if self.autocommit or 'w' not in self.mode:
-            self.f = open(self.path, mode=self.mode)
-        else:
-            # TODO: check if path is writable?
-            i, name = tempfile.mkstemp()
-            self.temp = name
-            self.f = open(name, mode=self.mode)
-        if 'w' not in self.mode:
-            self.details = self.fs.info(self.path)
-            self.size = self.details['size']
-            self.f.size = self.size
+        if self.f is None or self.f.closed:
+            if self.autocommit or 'w' not in self.mode:
+                self.f = open(self.path, mode=self.mode)
+            else:
+                # TODO: check if path is writable?
+                i, name = tempfile.mkstemp()
+                self.temp = name
+                self.f = open(name, mode=self.mode)
+            if 'w' not in self.mode:
+                self.details = self.fs.info(self.path)
+                self.size = self.details['size']
+                self.f.size = self.size
+
+    def _fetch_range(self, start, end):
+        # probably only used by cached FS
+        if 'r' not in self.mode:
+            raise ValueError
+        self._open()
+        self.f.seek(start)
+        return self.f.read(end - start)
 
     def __setstate__(self, state):
         if 'r' in state['mode']:

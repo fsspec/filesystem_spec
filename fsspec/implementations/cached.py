@@ -102,6 +102,9 @@ class CachingFileSystem(AbstractFileSystem):
         We monkey-patch this file, so that when it closes, we call
         ``close_and_update`` to save the state of the blocks.
         """
+        path = self._strip_protocol(path)
+        if not path.startswith(self.protocol):
+            path = self.protocol + "://" + path
         if mode != 'rb':
             return self.fs._open(path, mode=mode, **kwargs)
         if path in self.cached_files:
@@ -121,7 +124,6 @@ class CachingFileSystem(AbstractFileSystem):
 
         # call target filesystems open
         f = self.fs._open(path, **kwargs)
-        print(detail)
         if 'blocksize' in detail:
             if detail['blocksize'] != f.blocksize:
                 raise ValueError('Cached file must be reopened with same block'
@@ -159,6 +161,78 @@ class CachingFileSystem(AbstractFileSystem):
             )
         if item == '__class__':
             return CachingFileSystem
+        d = object.__getattribute__(self, '__dict__')
+        fs = d.get('fs', None)  # fs is not immediately defined
+        if item in d:
+            return d[item]
+        elif fs is not None:
+            if item in fs.__dict__:
+                # attribute of instance
+                return fs.__dict__[item]
+            # attributed belonging to the target filesystem
+            cls = type(fs)
+            m = getattr(cls, item)
+            if (inspect.isfunction(m) and (not hasattr(m, '__self__')
+                                           or m.__self__ is None)):
+                # instance method
+                return m.__get__(fs, cls)
+            return m  # class method or attribute
+        else:
+            # attributes of the superclass, while target is being set up
+            return super().__getattribute__(item)
+
+
+class WholeFileCacheFileSystem(CachingFileSystem):
+    protocol = 'wfcached'
+
+    def _open(self, path, mode='rb', **kwargs):
+        path = self._strip_protocol(path)
+        if not path.startswith(self.protocol):
+            path = self.protocol + "://" + path
+        if mode != 'rb':
+            return self.fs._open(path, mode=mode, **kwargs)
+        if path in self.cached_files:
+            detail = self.cached_files[path]
+            hash, blocks = detail['fn'], detail['blocks']
+            fn = os.path.join(self.storage, hash)
+            if blocks is True:
+                return open(fn, 'rb')
+        else:
+            hash = hashlib.sha256(path.encode()).hexdigest()
+            fn = os.path.join(self.storage, hash)
+            blocks = True
+            detail = {'fn': hash, 'blocks': blocks}
+            self.cached_files[path] = detail
+        kwargs['cache_type'] = 'none'
+        kwargs['mode'] = mode
+
+        # call target filesystems open
+        f = self.fs._open(path, **kwargs)
+        with open(fn, 'wb') as f2:
+            if f.blocksize and f.size:
+                data = True
+                while data:
+                    data = f.read(f.blocksize)
+                    f2.write(data)
+            else:
+                f2.write(f.read())
+        return self._open(path, mode)
+
+    def __reduce_ex__(self, *_):
+        return WholeFileCacheFileSystem, (self.protocol, self.storage,
+                                   self.kwargs or None)
+
+    def __getattribute__(self, item):
+        if item in ['load_cache', '_open', 'save_cache', 'close_and_update',
+                    '__init__', '__getattribute__', '__reduce_ex__', 'open',
+                    'cat', 'get', 'read_block', 'tail', 'head']:
+            # all the methods defined in this class. Note `open` here, since
+            # it calls `_open`, but is actually in superclass
+            return lambda *args, **kw: getattr(WholeFileCacheFileSystem, item)(
+                self, *args, **kw
+            )
+        if item == '__class__':
+            return WholeFileCacheFileSystem
         d = object.__getattribute__(self, '__dict__')
         fs = d.get('fs', None)  # fs is not immediately defined
         if item in d:
