@@ -26,21 +26,21 @@ class LocalFileSystem(AbstractFileSystem):
         self.auto_mkdir = auto_mkdir
 
     def mkdir(self, path, create_parents=True, **kwargs):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         if create_parents:
             self.makedirs(path, exist_ok=True)
         else:
             os.mkdir(path, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         os.makedirs(path, exist_ok=exist_ok)
 
     def rmdir(self, path):
         os.rmdir(path)
 
     def ls(self, path, detail=False):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         paths = [posixpath.join(path, f) for f in os.listdir(path)]
         if detail:
             return [self.info(f) for f in paths]
@@ -48,11 +48,11 @@ class LocalFileSystem(AbstractFileSystem):
             return paths
 
     def glob(self, path, **kargs):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         return super().glob(path)
 
     def info(self, path, **kwargs):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         out = os.stat(path, follow_symlinks=False)
         dest = False
         if os.path.islink(path):
@@ -141,7 +141,6 @@ class LocalFileSystem(AbstractFileSystem):
 
 def make_path_posix(path, sep=os.sep):
     """ Make path generic """
-    path = LocalFileSystem._strip_protocol(path)
     if re.match('/[A-Za-z]:', path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"
