@@ -21,15 +21,15 @@ def test_worflow(ftp_writable):
     with fs.open('/out', 'wb') as f:
         f.write(b'test')
     fs = fsspec.filesystem('cached', target_protocol='ftp',
-                           storage_options={'host': host, 'port': port,
+                           target_options={'host': host, 'port': port,
                                             'username': user, 'password': pw})
-    assert os.listdir(fs.storage) == []
+    assert os.listdir(fs.storage[-1]) == []
     with fs.open('/out') as f:
-        assert os.listdir(fs.storage)
+        assert os.listdir(fs.storage[-1])
         assert f.read() == b'test'
-        assert fs.cached_files['ftp:///out']['blocks']
+        assert fs.cached_files[-1]['ftp:///out']['blocks']
     assert fs.cat('/out') == b'test'
-    assert fs.cached_files['ftp:///out']['blocks'] is True
+    assert fs.cached_files[-1]['ftp:///out']['blocks'] is True
 
     with fs.open('/out', 'wb') as f:
         f.write(b'changed')
@@ -44,7 +44,7 @@ def test_blocksize(ftp_writable):
         f.write(b'test')
 
     fs = fsspec.filesystem('cached', target_protocol='ftp',
-                           storage_options={'host': host, 'port': port,
+                           target_options={'host': host, 'port': port,
                                             'username': user, 'password': pw})
 
     assert fs.cat('/out') == b'test'
@@ -60,12 +60,22 @@ def test_local_filecache_basic():
     data = b'test data'
     with open(f1, 'wb') as f:
         f.write(data)
+
+    # we can access the file and read it
     fs = fsspec.filesystem('filecache', target_protocol='file',
                            cache_storage=d2)
     with fs.open(f1, 'rb') as f:
         assert f.read() == data
     assert 'cache' in os.listdir(d2)
-    fn = list(fs.cached_files.values())[0]['fn']
+
+    # the file in the location contains the right data
+    fn = list(fs.cached_files[-1].values())[0]['fn']  # this is a hash value
     assert fn in os.listdir(d2)
     with open(os.path.join(d2, fn), 'rb') as f:
         assert f.read() == data
+
+    # still there when original file is removed (check=False)
+    os.remove(f1)
+    with fs.open(f1, 'rb') as f:
+        assert f.read() == data
+
