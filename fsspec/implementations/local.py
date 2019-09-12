@@ -141,6 +141,7 @@ class LocalFileSystem(AbstractFileSystem):
 
 def make_path_posix(path, sep=os.sep):
     """ Make path generic """
+    path = LocalFileSystem._strip_protocol(path)
     if re.match('/[A-Za-z]:', path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"
