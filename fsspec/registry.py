@@ -33,7 +33,8 @@ known_implementations = {
     's3': {'class': 's3fs.S3FileSystem',
            'err': 'Install s3fs to access S3'},
     'cached': {'class': 'fsspec.implementations.cached.CachingFileSystem'},
-    'wfcached': {
+    'blockcache': {'class': 'fsspec.implementations.cached.CachingFileSystem'},
+    'filecache': {
         'class': 'fsspec.implementations.cached.WholeFileCacheFileSystem'},
     'dask': {'class': 'fsspec.implementations.dask.DaskWorkerFileSystem',
              'err': 'Install dask distributed to access worker file system'}

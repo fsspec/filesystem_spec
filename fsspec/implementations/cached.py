@@ -1,10 +1,13 @@
+import datetime
 import pickle
+import logging
 import os
 import hashlib
 import tempfile
 import inspect
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.core import MMapCache
+logger = logging.getLogger('fsspec')
 
 
 class CachingFileSystem(AbstractFileSystem):
@@ -22,13 +25,15 @@ class CachingFileSystem(AbstractFileSystem):
     - the block-size must be the same for each access of a given file, unless
       all blocks of the file have already been read
     - caching can only be applied to file-systems which produce files
-      derived from fsspec.spec.AbstractBufferedFile
+      derived from fsspec.spec.AbstractBufferedFile ; LocalFileSystem is also
+      allowed, for testing
     """
 
-    protocol = 'cached'
+    protocol = ('blockcache', 'cached')
 
     def __init__(self, target_protocol=None, cache_storage='TMP',
-                 storage_options=None):
+                 cache_check=10, check_files=False,
+                 expiry_time=604800, storage_options=None):
         """
 
         Parameters
@@ -38,7 +43,18 @@ class CachingFileSystem(AbstractFileSystem):
         cache_storage : str
             Location to store files. If "TMP", this is a temporary directory,
             and will be cleaned up by the OS when this process ends (or later)
-        storage_options
+        cache_check : int
+            Number of seconds between reload of cache metadata
+        check_files : bool
+            Whether to explicitly see if the UID of the remote file matches
+            the stored one before using. Warning: some file systems such as
+            HTTP cannot reliably give a unique hash of the contents of some
+            path, so be sure to set this option to False.
+        expiry_time : int
+            The time in seconds after which a local copy is considered useless.
+            Set to falsy to prevent expiry. The default is equivalent to one
+            week.
+        storage_options : dict or Noen
             Passed to the instantiation of the FS, if fs is None.
         """
         if cache_storage == "TMP":
@@ -49,9 +65,17 @@ class CachingFileSystem(AbstractFileSystem):
         self.protocol = target_protocol
         self.storage = storage
         self.kwargs = storage_options or {}
+        self.cache_check = cache_check
+        self.check_files = check_files
+        self.expiry = expiry_time
         self.load_cache()
         self.fs = filesystem(target_protocol, **self.kwargs)
         super().__init__(**self.kwargs)
+
+    def __reduce_ex__(self, *_):
+        return self.__class__, (
+            self.protocol, self.storage, self.cache_check, self.check_files,
+            self.expiry, self.kwargs or None)
 
     def load_cache(self):
         """Read set of stored blocks from file"""
@@ -61,6 +85,7 @@ class CachingFileSystem(AbstractFileSystem):
                 self.cached_files = pickle.load(f)
         else:
             self.cached_files = {}
+        self.last_cache = datetime.datetime.now()
 
     def save_cache(self):
         """Save set of stored blocks from file"""
@@ -89,6 +114,25 @@ class CachingFileSystem(AbstractFileSystem):
             os.remove(fn)
         os.rename(fn + '.temp', fn)
 
+    def _check_cache(self):
+        diff = (datetime.datetime.now() - self.last_cache).seconds
+        if diff > self.cache_check:
+            self.load_cache()
+
+    def _check_file(self, path):
+        """Is path in cache and still valid"""
+        if path not in self.cached_files:
+            return False
+        detail = self.cached_files[path]
+        if self.check_files:
+            if detail['uid'] != self.fs.ukey(path):
+                return False
+        if self.expiry:
+            diff = (detail['time'] - datetime.datetime.now()).seconds
+            if diff > self.expiry:
+                return False
+        return True
+
     def _open(self, path, mode='rb', **kwargs):
         """Wrap the target _open
 
@@ -112,13 +156,18 @@ class CachingFileSystem(AbstractFileSystem):
             hash, blocks = detail['fn'], detail['blocks']
             fn = os.path.join(self.storage, hash)
             if blocks is True:
+                logger.debug("Opening local copy of %s" % path)
                 return open(fn, 'rb')
+            logger.debug("Opening partially cached copy of %s" % path)
         else:
             hash = hashlib.sha256(path.encode()).hexdigest()
             fn = os.path.join(self.storage, hash)
             blocks = set()
-            detail = {'fn': hash, 'blocks': blocks}
+            detail = {'fn': hash, 'blocks': blocks,
+                      'time': datetime.datetime.now().isoformat(),
+                      'uid': self.fs.ukey(path)}
             self.cached_files[path] = detail
+            logger.debug("Creating local sparse file for %s" % path)
         kwargs['cache_type'] = 'none'
         kwargs['mode'] = mode
 
@@ -149,10 +198,6 @@ class CachingFileSystem(AbstractFileSystem):
             c['blocks'] = True
         self.save_cache()
         close()
-
-    def __reduce_ex__(self, *_):
-        return CachingFileSystem, (self.protocol, self.storage,
-                                   self.kwargs or None)
 
     def __getattribute__(self, item):
         if item in ['load_cache', '_open', 'save_cache', 'close_and_update',
@@ -187,7 +232,19 @@ class CachingFileSystem(AbstractFileSystem):
 
 
 class WholeFileCacheFileSystem(CachingFileSystem):
-    protocol = 'wfcached'
+    """Caches whole remote files on first access
+
+    This class is intended as a layer over any other file system, and
+    will make a local copy of each file accessed, so that all subsequent
+    reads are local. This is similar to ``CachingFileSystem``, but without
+    the block-wise functionality and so can work even when sparse files
+    are not allowed. See its docstring for definition of the init
+    arguments.
+
+    The class still needs access to the remote store for listing files,
+    and may refresh cached files.
+    """
+    protocol = 'filecache'
 
     def _open(self, path, mode='rb', **kwargs):
         path = self._strip_protocol(path)
@@ -200,13 +257,20 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             hash, blocks = detail['fn'], detail['blocks']
             fn = os.path.join(self.storage, hash)
             if blocks is True:
+                logger.debug("Opening local copy of %s" % path)
                 return open(fn, 'rb')
+            else:
+                raise ValueError("Attempt to open partially cached file %s"
+                                 "as a wholly cached file" % path)
         else:
             hash = hashlib.sha256(path.encode()).hexdigest()
             fn = os.path.join(self.storage, hash)
             blocks = True
-            detail = {'fn': hash, 'blocks': blocks}
+            detail = {'fn': hash, 'blocks': blocks,
+                      'time': datetime.datetime.now().isoformat(),
+                      'uid': self.fs.ukey(path)}
             self.cached_files[path] = detail
+            logger.debug("Copying %s to local cache" % path)
         kwargs['cache_type'] = 'none'
         kwargs['mode'] = mode
 
@@ -214,18 +278,16 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         f = self.fs._open(path, **kwargs)
         with open(fn, 'wb') as f2:
             if f.blocksize and f.size:
+                # opportunity to parallelise here
                 data = True
                 while data:
                     data = f.read(f.blocksize)
                     f2.write(data)
             else:
+                # this only applies to HTTP, should instead use streaming
                 f2.write(f.read())
         self.save_cache()
         return self._open(path, mode)
-
-    def __reduce_ex__(self, *_):
-        return WholeFileCacheFileSystem, (self.protocol, self.storage,
-                                   self.kwargs or None)
 
     def __getattribute__(self, item):
         if item in ['load_cache', '_open', 'save_cache', 'close_and_update',
