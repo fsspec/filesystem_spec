@@ -50,3 +50,22 @@ def test_blocksize(ftp_writable):
     assert fs.cat('/out') == b'test'
     with pytest.raises(ValueError):
         fs.open('/out', block_size=1)
+
+
+def test_local_filecache_basic():
+    import tempfile
+    d1 = tempfile.mkdtemp()
+    d2 = tempfile.mkdtemp()
+    f1 = os.path.join(d1, 'afile')
+    data = b'test data'
+    with open(f1, 'wb') as f:
+        f.write(data)
+    fs = fsspec.filesystem('filecache', target_protocol='file',
+                           cache_storage=d2)
+    with fs.open(f1, 'rb') as f:
+        assert f.read() == data
+    assert 'cache' in os.listdir(d2)
+    fn = list(fs.cached_files.values())[0]['fn']
+    assert fn in os.listdir(d2)
+    with open(os.path.join(d2, fn), 'rb') as f:
+        assert f.read() == data
