@@ -92,6 +92,7 @@ class CachingFileSystem(AbstractFileSystem):
                     # TODO: consolidate blocks here
                     cached_files.append(pickle.load(f))
             else:
+                os.makedirs(storage, exist_ok=True)
                 cached_files.append({})
         self.cached_files = cached_files or [{}]
         self.last_cache = time.time()
@@ -124,11 +125,18 @@ class CachingFileSystem(AbstractFileSystem):
         os.rename(fn + '.temp', fn)
 
     def _check_cache(self):
-        if time.time() - self.last_cache > self.cache_check:
+        """Reload caches if time elapsed or any disappeared"""
+        if not self.cache_check:
+            # explicitly told not to bother checking
+            return
+        timecond = time.time() - self.last_cache > self.cache_check
+        existcond = all(os.path.exists(storage) for storage in self.storage)
+        if timecond or not existcond:
             self.load_cache()
 
     def _check_file(self, path):
         """Is path in cache and still valid"""
+        self._check_cache()
         for storage, cache in zip(self.storage, self.cached_files):
             if path not in cache:
                 continue
@@ -139,7 +147,9 @@ class CachingFileSystem(AbstractFileSystem):
             if self.expiry:
                 if detail['time'] - time.time() > self.expiry:
                     continue
-            return detail, os.path.join(storage, detail['fn'])
+            fn = os.path.join(storage, detail['fn'])
+            if os.path.exists(fn):
+                return detail, fn
         return False, None
 
     def _open(self, path, mode='rb', **kwargs):
@@ -214,7 +224,7 @@ class CachingFileSystem(AbstractFileSystem):
         if item in ['load_cache', '_open', 'save_cache', 'close_and_update',
                     '__init__', '__getattribute__', '__reduce_ex__', 'open',
                     'cat', 'get', 'read_block', 'tail', 'head',
-                    '_check_file']:
+                    '_check_file', '_check_cache']:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(type(self), item)(
