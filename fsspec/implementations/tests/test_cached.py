@@ -8,8 +8,8 @@ from fsspec.implementations.cached import CachingFileSystem
 from .test_ftp import ftp_writable, FTPFileSystem
 
 
-@pytest.fixture
-def local_filecache():
+@pytest.fixture(params=["filecache", "blockcache"])
+def local_cache(request):
     import tempfile
     original_location = tempfile.mkdtemp()
     cache_location = tempfile.mkdtemp()
@@ -19,10 +19,11 @@ def local_filecache():
         f.write(data)
 
     # we can access the file and read it
-    fs = fsspec.filesystem('filecache', target_protocol='file',
+    fs = fsspec.filesystem(request.param, target_protocol='file',
                            cache_storage=cache_location)
 
     return (data, original_file, cache_location, fs)
+
 
 def test_idempotent():
     fs = CachingFileSystem('file')
@@ -69,7 +70,7 @@ def test_blocksize(ftp_writable):
         fs.open('/out', block_size=1)
 
 
-def test_local_filecache_creates_dir_if_needed():
+def test_local_cache_creates_dir_if_needed():
     import tempfile
     original_location = tempfile.mkdtemp()
     cache_location = 'foofoobarbar'
@@ -96,8 +97,8 @@ def test_local_filecache_creates_dir_if_needed():
     assert data_in_cache == data
 
 
-def test_local_filecache_basic(local_filecache):
-    data, original_file, cache_location, fs = local_filecache
+def test_local_cache_basic(local_cache):
+    data, original_file, cache_location, fs = local_cache
 
     # reading from the file contains the right data
     with fs.open(original_file, 'rb') as f:
@@ -116,8 +117,8 @@ def test_local_filecache_basic(local_filecache):
         assert f.read() == data
 
 
-def test_local_filecache_does_not_change_when_original_data_changed(local_filecache):
-    old_data, original_file, cache_location, fs = local_filecache
+def test_local_cache_does_not_change_when_original_data_changed(local_cache):
+    old_data, original_file, cache_location, fs = local_cache
     new_data = b'abc'
 
     with fs.open(original_file, 'rb') as f:
@@ -130,8 +131,8 @@ def test_local_filecache_does_not_change_when_original_data_changed(local_fileca
         assert f.read() == old_data
 
 
-def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
-    old_data, original_file, cache_location, fs = local_filecache
+def test_local_cache_gets_from_original_if_cache_deleted(local_cache):
+    old_data, original_file, cache_location, fs = local_cache
     new_data = b'abc'
 
     with fs.open(original_file, 'rb') as f:
@@ -156,9 +157,9 @@ def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
         assert f.read() == new_data
 
 
-def test_local_filecache_with_new_cache_location_makes_a_new_copy(local_filecache):
+def test_local_cache_with_new_cache_location_makes_a_new_copy(local_cache):
     import tempfile
-    data, original_file, old_cache_location, old_fs = local_filecache
+    data, original_file, old_cache_location, old_fs = local_cache
     new_cache_location = tempfile.mkdtemp()
 
     with old_fs.open(original_file, 'rb') as f:
@@ -210,7 +211,7 @@ def test_filecache_multicache():
     assert 'cache' in os.listdir(cache1)
     assert 'cache' in os.listdir(cache2)
 
-    cache1_contents = [f for f in  if f != 'cache']
+    cache1_contents = [f for f in os.listdir(cache1) if f != 'cache']
     assert len(cache1_contents) == 1
 
     with open(os.path.join(cache1, cache1_contents[0]), 'rb') as f:
