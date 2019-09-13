@@ -89,7 +89,10 @@ class CachingFileSystem(AbstractFileSystem):
             fn = os.path.join(storage, 'cache')
             if os.path.exists(fn):
                 with open(fn, 'rb') as f:
+                    # TODO: consolidate blocks here
                     cached_files.append(pickle.load(f))
+            else:
+                cached_files.append({})
         self.cached_files = cached_files or [{}]
         self.last_cache = time.time()
 
@@ -126,18 +129,18 @@ class CachingFileSystem(AbstractFileSystem):
 
     def _check_file(self, path):
         """Is path in cache and still valid"""
-        for cache in self.cached_files:
+        for storage, cache in zip(self.storage, self.cached_files):
             if path not in cache:
                 continue
-            detail = cache[path]
+            detail = cache[path].copy()
             if self.check_files:
                 if detail['uid'] != self.fs.ukey(path):
                     continue
             if self.expiry:
                 if detail['time'] - time.time() > self.expiry:
                     continue
-            return detail
-        return False
+            return detail, os.path.join(storage, detail['fn'])
+        return False, None
 
     def _open(self, path, mode='rb', **kwargs):
         """Wrap the target _open
@@ -157,13 +160,15 @@ class CachingFileSystem(AbstractFileSystem):
             path = self.protocol + "://" + path
         if mode != 'rb':
             return self.fs._open(path, mode=mode, **kwargs)
-        detail = self._check_file(path)
+        detail, fn = self._check_file(path)
         if detail:
+            # file is in cache
             hash, blocks = detail['fn'], detail['blocks']
-            fn = os.path.join(self.storage[-1], hash)
             if blocks is True:
+                # stored file is complete
                 logger.debug("Opening local copy of %s" % path)
                 return open(fn, 'rb')
+            # TODO: action where partial file exists in read-only cache
             logger.debug("Opening partially cached copy of %s" % path)
         else:
             hash = hashlib.sha256(path.encode()).hexdigest()
@@ -259,10 +264,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             path = self.protocol + "://" + path
         if mode != 'rb':
             return self.fs._open(path, mode=mode, **kwargs)
-        detail = self._check_file(path)
+        detail, fn = self._check_file(path)
         if detail:
             hash, blocks = detail['fn'], detail['blocks']
-            fn = os.path.join(self.storage[-1], hash)
             if blocks is True:
                 logger.debug("Opening local copy of %s" % path)
                 return open(fn, 'rb')

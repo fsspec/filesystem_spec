@@ -79,3 +79,33 @@ def test_local_filecache_basic():
     with fs.open(f1, 'rb') as f:
         assert f.read() == data
 
+
+def test_filecache_multicache():
+    import tempfile
+    origin = tempfile.mkdtemp()
+    cache1 = tempfile.mkdtemp()
+    cache2 = tempfile.mkdtemp()
+    data = b'test data'
+    f1 = os.path.join(origin, 'afile')
+    f2 = os.path.join(origin, 'bfile')
+    with open(f1, 'wb') as f:
+        f.write(data)
+    with open(f2, 'wb') as f:
+        f.write(data * 2)
+
+    # populates first cache
+    fs = fsspec.filesystem('filecache', target_protocol='file',
+                           cache_storage=cache1)
+    with fs.open(f1, 'rb') as f:
+        assert f.read() == data
+
+    # populates first cache
+    fs = fsspec.filesystem('filecache', target_protocol='file',
+                           cache_storage=[cache1, cache2])
+    with fs.open(f1, 'rb') as f:
+        assert f.read() == data
+    assert fs.cat(f1) == data
+    assert fs.cat(f2) == data * 2
+
+    assert len(os.listdir(cache1)) == 2  # cache and hashed afile
+    assert len(os.listdir(cache2)) == 2  # cache and hashed bfile
