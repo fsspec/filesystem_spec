@@ -195,16 +195,29 @@ def test_filecache_multicache():
     # populates first cache
     fs = fsspec.filesystem('filecache', target_protocol='file',
                            cache_storage=cache1)
-    with fs.open(f1, 'rb') as f:
-        assert f.read() == data
+    assert fs.cat(f1) == data
 
-    # populates first cache
+    assert len(os.listdir(cache1)) == 2  # cache and hashed afile
+    assert len(os.listdir(cache2)) == 0  # cache and hashed bfile
+
+    # populates last cache if file not found in first cache
     fs = fsspec.filesystem('filecache', target_protocol='file',
                            cache_storage=[cache1, cache2])
-    with fs.open(f1, 'rb') as f:
-        assert f.read() == data
+
     assert fs.cat(f1) == data
     assert fs.cat(f2) == data * 2
 
-    assert len(os.listdir(cache1)) == 2  # cache and hashed afile
-    assert len(os.listdir(cache2)) == 2  # cache and hashed bfile
+    assert 'cache' in os.listdir(cache1)
+    assert 'cache' in os.listdir(cache2)
+
+    cache1_contents = [f for f in  if f != 'cache']
+    assert len(cache1_contents) == 1
+
+    with open(os.path.join(cache1, cache1_contents[0]), 'rb') as f:
+        assert f.read() == data
+
+    cache2_contents = [f for f in os.listdir(cache2) if f != 'cache']
+    assert len(cache2_contents) == 1
+
+    with open(os.path.join(cache2, cache2_contents[0]), 'rb') as f:
+        assert f.read() == data * 2
