@@ -99,7 +99,7 @@ def test_local_filecache_creates_dir_if_needed():
 def test_local_filecache_basic(local_filecache):
     data, original_file, cache_location, fs = local_filecache
 
-    # reading from the file contians the right data
+    # reading from the file contains the right data
     with fs.open(original_file, 'rb') as f:
         assert f.read() == data
     assert 'cache' in os.listdir(cache_location)
@@ -154,6 +154,29 @@ def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), 'rb') as f:
         assert f.read() == new_data
+
+
+def test_local_filecache_with_new_cache_location_makes_a_new_copy(local_filecache):
+    import tempfile
+    data, original_file, old_cache_location, old_fs = local_filecache
+    new_cache_location = tempfile.mkdtemp()
+
+    with old_fs.open(original_file, 'rb') as f:
+        assert f.read() == data
+
+    new_fs = fsspec.filesystem('filecache', target_protocol='file',
+                               cache_storage=new_cache_location)
+
+    with new_fs.open(original_file, 'rb') as f:
+        assert f.read() == data
+
+    # the file in the location contains the right data
+    fn = list(new_fs.cached_files[-1].values())[0]['fn']  # this is a hash value
+    assert fn in os.listdir(old_cache_location)
+    assert fn in os.listdir(new_cache_location)
+
+    with open(os.path.join(new_cache_location, fn), 'rb') as f:
+        assert f.read() == data
 
 
 def test_filecache_multicache():
