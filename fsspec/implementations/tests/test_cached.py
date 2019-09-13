@@ -1,4 +1,5 @@
 import os
+import shutil
 import pickle
 import pytest
 
@@ -6,6 +7,22 @@ import fsspec
 from fsspec.implementations.cached import CachingFileSystem
 from .test_ftp import ftp_writable, FTPFileSystem
 
+
+@pytest.fixture
+def local_filecache():
+    import tempfile
+    original_location = tempfile.mkdtemp()
+    cache_location = tempfile.mkdtemp()
+    original_file = os.path.join(original_location, 'afile')
+    data = b'test data'
+    with open(original_file, 'wb') as f:
+        f.write(data)
+
+    # we can access the file and read it
+    fs = fsspec.filesystem('filecache', target_protocol='file',
+                           cache_storage=cache_location)
+
+    return (data, original_file, cache_location, fs)
 
 def test_idempotent():
     fs = CachingFileSystem('file')
@@ -52,32 +69,91 @@ def test_blocksize(ftp_writable):
         fs.open('/out', block_size=1)
 
 
-def test_local_filecache_basic():
+def test_local_filecache_creates_dir_if_needed():
     import tempfile
-    d1 = tempfile.mkdtemp()
-    d2 = tempfile.mkdtemp()
-    f1 = os.path.join(d1, 'afile')
-    data = b'test data'
-    with open(f1, 'wb') as f:
-        f.write(data)
+    original_location = tempfile.mkdtemp()
+    cache_location = 'foofoobarbar'
+    assert not os.path.exists(cache_location)
 
-    # we can access the file and read it
-    fs = fsspec.filesystem('filecache', target_protocol='file',
-                           cache_storage=d2)
-    with fs.open(f1, 'rb') as f:
+    try:
+        original_file = os.path.join(original_location, 'afile')
+        data = b'test data'
+        with open(original_file, 'wb') as f:
+            f.write(data)
+
+        # we can access the file and read it
+        fs = fsspec.filesystem('filecache', target_protocol='file',
+                               cache_storage=cache_location)
+
+        with fs.open(original_file, 'rb') as f:
+            data_in_cache = f.read()
+
+        assert os.path.exists(cache_location)
+
+    finally:
+        shutil.rmtree(cache_location)
+
+    assert data_in_cache == data
+
+
+def test_local_filecache_basic(local_filecache):
+    data, original_file, cache_location, fs = local_filecache
+
+    # reading from the file contians the right data
+    with fs.open(original_file, 'rb') as f:
         assert f.read() == data
-    assert 'cache' in os.listdir(d2)
+    assert 'cache' in os.listdir(cache_location)
 
     # the file in the location contains the right data
     fn = list(fs.cached_files[-1].values())[0]['fn']  # this is a hash value
-    assert fn in os.listdir(d2)
-    with open(os.path.join(d2, fn), 'rb') as f:
+    assert fn in os.listdir(cache_location)
+    with open(os.path.join(cache_location, fn), 'rb') as f:
         assert f.read() == data
 
     # still there when original file is removed (check=False)
-    os.remove(f1)
-    with fs.open(f1, 'rb') as f:
+    os.remove(original_file)
+    with fs.open(original_file, 'rb') as f:
         assert f.read() == data
+
+
+def test_local_filecache_does_not_change_when_original_data_changed(local_filecache):
+    old_data, original_file, cache_location, fs = local_filecache
+    new_data = b'abc'
+
+    with fs.open(original_file, 'rb') as f:
+        assert f.read() == old_data
+
+    with open(original_file, 'wb') as f:
+        f.write(new_data)
+
+    with fs.open(original_file, 'rb') as f:
+        assert f.read() == old_data
+
+
+def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
+    old_data, original_file, cache_location, fs = local_filecache
+    new_data = b'abc'
+
+    with fs.open(original_file, 'rb') as f:
+        assert f.read() == old_data
+
+    with open(original_file, 'wb') as f:
+        f.write(new_data)
+
+    shutil.rmtree(cache_location)
+    assert os.path.exists(original_file)
+
+    with open(original_file, 'rb') as f:
+        assert f.read() == new_data
+
+    with fs.open(original_file, 'rb') as f:
+        assert f.read() == new_data
+
+    # the file in the location contains the right data
+    fn = list(fs.cached_files[-1].values())[0]['fn']  # this is a hash value
+    assert fn in os.listdir(cache_location)
+    with open(os.path.join(cache_location, fn), 'rb') as f:
+        assert f.read() == new_data
 
 
 def test_filecache_multicache():
