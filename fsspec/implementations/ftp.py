@@ -79,12 +79,10 @@ class FTPFileSystem(AbstractFileSystem):
         out = []
         if path not in self.dircache:
             try:
-                out = list(self.ftp.mlsd(path))
+                out = [(fn, details) for (fn, details) in self.ftp.mlsd(path) if fn not in ['.' '..']]
                 for fn, details in out:
                     if path == '/':
                         path = ''  # just for forming the names, below
-                    if fn in ['.', '..']:
-                        continue
                     details['name'] = '/'.join([path, fn.lstrip('/')])
                     if details['type'] == 'file':
                         details['size'] = int(details['size'])
