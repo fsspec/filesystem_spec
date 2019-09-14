@@ -16,6 +16,12 @@ def stop_docker(name):
 
 @pytest.fixture(scope="module")
 def ssh():
+    try:
+        subprocess.check_call(["docker", "run", "hello-world"])
+    except subprocess.CalledProcessError:
+        pytest.skip("docker run not available")
+        return
+
     # requires docker
     cmds = r"""apt-get update
 apt-get install -y openssh-server
