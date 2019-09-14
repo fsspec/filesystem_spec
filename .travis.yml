@@ -45,6 +45,20 @@ matrix:
       script:
         - py.test -vv s3fs
 
+    - language: generic
+
+      env:
+        - TEST=PRE-COMMIT
+
+      install:
+        - source ci/install_conda.sh
+        - pip install pre-commit
+        - pre-commit install --install-hooks
+
+      script:
+        - pre-commit run --all
+
+
   allow_failures:
     - language: generic
       env: TEST=GCSFS
