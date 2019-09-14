@@ -28,22 +28,15 @@ matrix:
         - source ci/install.sh
 
       script:
-        - py.test --cov=fsspec -v
+        - tox -e py35,py36,py37
 
     - language: generic
       env: TEST=S3FS
       install:
         - source ci/install.sh
-        - export BOTO_CONFIG=/dev/null
-        - export AWS_ACCESS_KEY_ID=foobar_key
-        - export AWS_SECRET_ACCESS_KEY=foobar_secret
-        - conda install boto3 botocore httpretty moto six mock -c conda-forge -y
-        - git clone https://github.com/dask/s3fs
-        - cd s3fs
-        - pip install -e . --no-deps
 
       script:
-        - py.test -vv s3fs
+        - tox -e s3fs
 
     - language: generic
 
@@ -64,16 +57,8 @@ matrix:
       env: TEST=GCSFS
       install:
         - source ci/install.sh
-        - conda install -c conda-forge requests decorator google-auth -y
-        - pip install vcrpy google-auth-oauthlib
-        - git clone https://github.com/dask/gcsfs
-        - cd gcsfs
-        - pip install -e . --no-deps
-
       script:
-        - GCSFS_RECORD_MODE=none py.test -vv gcsfs
-
-
+        - tox -e gcsfs
 
 notifications:
   email: false
