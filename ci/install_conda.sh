@@ -6,4 +6,4 @@ bash miniconda.sh -b -p $HOME/miniconda
 export PATH="$HOME/miniconda/bin:$PATH"
 conda config --set always_yes yes --set changeps1 no
 conda update conda
-conda install tox tox-conda
+conda install -c conda-forge tox tox-conda
