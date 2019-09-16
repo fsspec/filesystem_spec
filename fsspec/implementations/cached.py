@@ -56,7 +56,7 @@ class CachingFileSystem(AbstractFileSystem):
             The time in seconds after which a local copy is considered useless.
             Set to falsy to prevent expiry. The default is equivalent to one
             week.
-        target_options : dict or Noen
+        target_options : dict or None
             Passed to the instantiation of the FS, if fs is None.
         """
         if cache_storage == "TMP":
