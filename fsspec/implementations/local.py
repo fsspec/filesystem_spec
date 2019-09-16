@@ -1,3 +1,5 @@
+
+import io
 import os
 import shutil
 import posixpath
@@ -24,21 +26,21 @@ class LocalFileSystem(AbstractFileSystem):
         self.auto_mkdir = auto_mkdir
 
     def mkdir(self, path, create_parents=True, **kwargs):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         if create_parents:
             self.makedirs(path, exist_ok=True)
         else:
             os.mkdir(path, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         os.makedirs(path, exist_ok=exist_ok)
 
     def rmdir(self, path):
         os.rmdir(path)
 
     def ls(self, path, detail=False):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         paths = [posixpath.join(path, f) for f in os.listdir(path)]
         if detail:
             return [self.info(f) for f in paths]
@@ -46,11 +48,11 @@ class LocalFileSystem(AbstractFileSystem):
             return paths
 
     def glob(self, path, **kargs):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         return super().glob(path)
 
     def info(self, path, **kwargs):
-        path = make_path_posix(path)
+        path = self._strip_protocol(path)
         out = os.stat(path, follow_symlinks=False)
         dest = False
         if os.path.islink(path):
@@ -162,19 +164,53 @@ def make_path_posix(path, sep=os.sep):
 class LocalFileOpener(object):
     def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
         self.path = path
+        self.mode = mode
         self.fs = fs
+        self.f = None
         self.autocommit = autocommit
-        if autocommit or 'w' not in mode:
-            self.f = open(path, mode=mode)
+        self.blocksize = io.DEFAULT_BUFFER_SIZE
+        self._open()
+
+    def _open(self):
+        if self.f is None or self.f.closed:
+            if self.autocommit or 'w' not in self.mode:
+                self.f = open(self.path, mode=self.mode)
+            else:
+                # TODO: check if path is writable?
+                i, name = tempfile.mkstemp()
+                self.temp = name
+                self.f = open(name, mode=self.mode)
+            if 'w' not in self.mode:
+                self.details = self.fs.info(self.path)
+                self.size = self.details['size']
+                self.f.size = self.size
+
+    def _fetch_range(self, start, end):
+        # probably only used by cached FS
+        if 'r' not in self.mode:
+            raise ValueError
+        self._open()
+        self.f.seek(start)
+        return self.f.read(end - start)
+
+    def __setstate__(self, state):
+        if 'r' in state['mode']:
+            loc = self.state.pop('loc')
+            self._open()
+            self.f.seek(loc)
         else:
-            # TODO: check if path is writable?
-            i, name = tempfile.mkstemp()
-            self.temp = name
-            self.f = open(name, mode=mode)
-        if 'w' not in mode:
-            self.details = self.fs.info(path)
-            self.size = self.details['size']
-            self.f.size = self.size
+            self.f = None
+        self.__dict__.update(state)
+
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        d.pop('f')
+        if 'r' in self.mode:
+            d['loc'] = self.f.tell()
+        else:
+            if not self.f.closed:
+                raise ValueError("Cannot serialise open write-mode local file")
+        return d
 
     def commit(self):
         if self.autocommit:
