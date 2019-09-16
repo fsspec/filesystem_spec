@@ -4,45 +4,20 @@ os:
 - linux
 services:
 - docker
-language: python
 
-matrix:
-  include:
-    - language: generic
-      env: TEST=FSSPEC
-      install:
-        - source ci/install.sh
-      script:
-        - tox -e py35,py36,py37,fuse,coverage
-
-    - language: generic
-      env: TEST=S3FS
-      install:
-        - source ci/install.sh
-      script:
-        - tox -e s3fs
-
-    - language: generic
-
-      env:
-        - TEST=PRE-COMMIT
-
-      install:
-        - source ci/install_conda.sh
-        - pip install pre-commit
-        - pre-commit install --install-hooks
-
-      script:
-        - pre-commit run --all
-
-
-  allow_failures:
-    - language: generic
-      env: TEST=GCSFS
-      install:
-        - source ci/install.sh
-      script:
-        - tox -e gcsfs
+language: generic
+env:
+  - TOXENV=py35
+  - TOXENV=py36
+  - TOXENV=py37
+  - TOXENV=coverage
+  - TOXENV=lint
+  - TOXENV=s3fs
+  - TOXENV=gcsfs
+install:
+  - source ci/install.sh
+script:
+  - tox
 
 notifications:
   email: false

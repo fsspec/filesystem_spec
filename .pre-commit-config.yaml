@@ -1,6 +1,15 @@
+exclude: >
+    (?x)^(
+        \.tox/.*
+    )$
+default_language_version:
+  python: python3.7
 repos:
--   repo: https://github.com/python/black
-    rev: stable
+  - repo: local
     hooks:
-    - id: black
-      language_version: python3.7
+      - id: black
+        name: black
+        entry: black
+        language: python
+        require_serial: true
+        types: [python]
