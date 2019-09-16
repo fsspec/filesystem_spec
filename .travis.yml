@@ -13,7 +13,7 @@ matrix:
       install:
         - source ci/install.sh
       script:
-        - tox -e py35,py36,py37
+        - tox -e py35,py36,py37,fuse,coverage
 
     - language: generic
       env: TEST=S3FS
