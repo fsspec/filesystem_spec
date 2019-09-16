@@ -14,6 +14,7 @@ env:
   - TOXENV=lint
   - TOXENV=s3fs
   - TOXENV=gcsfs
+  - TOXENV=fuse
 install:
   - source ci/install.sh
 script:
