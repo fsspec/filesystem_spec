@@ -18,7 +18,7 @@ env:
 install:
   - source ci/install.sh
 script:
-  - tox
+  - tox -v
 
 notifications:
   email: false
