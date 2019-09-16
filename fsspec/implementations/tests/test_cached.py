@@ -199,7 +199,7 @@ def test_filecache_multicache():
     assert fs.cat(f1) == data
 
     assert len(os.listdir(cache1)) == 2  # cache and hashed afile
-    assert len(os.listdir(cache2)) == 0  # cache and hashed bfile
+    assert len(os.listdir(cache2)) == 0  # hasn't been intialized yet
 
     # populates last cache if file not found in first cache
     fs = fsspec.filesystem('filecache', target_protocol='file',
@@ -222,3 +222,36 @@ def test_filecache_multicache():
 
     with open(os.path.join(cache2, cache2_contents[0]), 'rb') as f:
         assert f.read() == data * 2
+
+
+def test_filecache_multicache_with_same_file_different_data_reads_from_first():
+    import tempfile
+    origin = tempfile.mkdtemp()
+    cache1 = tempfile.mkdtemp()
+    cache2 = tempfile.mkdtemp()
+    data = b'test data'
+    f1 = os.path.join(origin, 'afile')
+    with open(f1, 'wb') as f:
+        f.write(data)
+
+    # populate first cache
+    fs = fsspec.filesystem('filecache', target_protocol='file',
+                           cache_storage=cache1)
+    assert fs.cat(f1) == data
+
+    with open(f1, 'wb') as f:
+        f.write(data * 2)
+
+    # populate second cache
+    fs = fsspec.filesystem('filecache', target_protocol='file',
+                           cache_storage=cache2)
+
+    assert fs.cat(f1) == data * 2
+
+    # the filenames in each cache are the same, but the data is different
+    assert os.listdir(cache1) == os.listdir(cache2)
+
+    fs = fsspec.filesystem('filecache', target_protocol='file',
+                           cache_storage=[cache1, cache2])
+
+    assert fs.cat(f1) == data
