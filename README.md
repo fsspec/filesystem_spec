@@ -31,20 +31,40 @@ Please refer to [RTD](https://filesystem-spec.readthedocs.io/en/latest/?badge=la
 
 ## Develop
 
+fsspec uses [tox](https://tox.readthedocs.io/en/latest/) and
+[tox-conda](https://github.com/tox-dev/tox-conda) to manage dev and test
+environments. First, install conda with tox and tox-conda in a base environment
+(eg. `conda install -c conda-forge tox tox-conda`). Calls to `tox` can then be
+used to configure a development environment and run tests.
+
+First, setup a development conda environment via `tox -e dev`. This will
+install fspec dependencies, test & dev tools, and install fsspec in develop
+mode. Then, activate the dev environment under `.tox/dev` via `conda activate .tox/dev`.
+
+### Testing
+
+Tests can be run directly in the activated dev environment via `pytest fsspec`.
+
+The full fsspec test suite can be run via `tox`, which will setup and execute
+tests against multiple dependency versions in isolated environment. Run `tox
+-av` to list available test environments, select environments via `tox -e <env>`.
+
+The full fsspec suite requires a system-level docker, docker-compose, and fuse
+installation. See `ci/install.sh` for a detailed installation example.
+
 ### Code Formatting
 
-Filesystem_spec uses [Black](https://black.readthedocs.io/en/stable) to ensure
-a consistent code format throughout the project. ``black`` can be installed
-with `pip install black` or `conda install black`.
+fsspec uses [Black](https://black.readthedocs.io/en/stable) to ensure
+a consistent code format throughout the project. ``black`` is automatically
+installed in the tox dev env, activated via `conda activate .tox/dev`.
 
 Then, run `black fsspec` from the root of the filesystem_spec repository to
 auto-format your code. Additionally, many editors have plugins that will apply
 `black` as you edit files.
 
 Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com) to
-automatically run `black` when you make a git commit. This can be done by
-installing pre-commit via `pip install pre-commit` or `conda install
-pre-commit`.
+automatically run `black` when you make a git commit. ``black`` is automatically
+installed in the tox dev env, activated via `conda activate .tox/dev`.
 
 Then, run `pre-commit install --install-hooks` from the root of the
 filesystem_spec repository to setup pre-commit hooks. `black` will now be run
