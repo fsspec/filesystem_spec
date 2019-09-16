@@ -2,6 +2,7 @@
 from bz2 import BZ2File
 from gzip import GzipFile
 from zipfile import ZipFile
+from lzma import LZMAFile
 
 import fsspec.utils
 from fsspec.spec import AbstractBufferedFile
@@ -70,13 +71,7 @@ def unzip(infile, mode="rb", filename=None, **kwargs):
 register_compression("zip", unzip, "zip")
 register_compression("bz2", BZ2File, "bz2")
 register_compression("gzip", lambda f, **kwargs: GzipFile(fileobj=f, **kwargs), "gz")
-
-try:
-    import lzma
-
-    register_compression("xz", lzma.LZMAFile, "xz")
-except ImportError:
-    pass
+register_compression("xz", LZMAFile, "xz")
 
 try:
     import lzmaffi
