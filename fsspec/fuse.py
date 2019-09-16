@@ -6,8 +6,15 @@ from fuse import Operations, FuseOSError
 import threading
 import time
 from fuse import FUSE
+try:
+    # Optional tracing hooks for fuse operations
+    from autologging import traced
+except ImportError:
+    def traced(c):
+        return c
 
 
+@traced
 class FUSEr(Operations):
     def __init__(self, fs, path):
         self.fs = fs
@@ -111,6 +118,8 @@ class FUSEr(Operations):
     def chmod(self, path, mode):
         raise NotImplementedError
 
+    def ioctl(self, path, cmd, arg, fip, flags, data):
+        super().ioctl(path, cmd, arg, fip, flags, data)
 
 def run(fs, path, mount_point, foreground=True, threads=False):
     """ Mount stuff in a local directory
