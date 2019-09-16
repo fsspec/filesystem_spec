@@ -53,9 +53,9 @@ def test_lzma_compression_name():
     assert infer_compression("fn.xz") == "xz"
 
 
-def test_lz4_compression(tmp_path):
-    # type: (pathlib.Path) -> None
+def test_lz4_compression(tmpdir):
     """Infer lz4 compression for .lz4 files if lz4 is available."""
+    tmp_path = pathlib.Path(str(tmpdir))
 
     lz4 = pytest.importorskip("lz4")
 
@@ -82,9 +82,9 @@ def test_lz4_compression(tmp_path):
         assert infile.read() == tdat
 
 
-def test_zstd_compression(tmp_path):
-    # type: (pathlib.Path) -> None
+def test_zstd_compression(tmpdir):
     """Infer zstd compression for .zst files if zstandard is available."""
+    tmp_path = pathlib.Path(str(tmpdir))
 
     zstd = pytest.importorskip("zstandard")
 
@@ -111,9 +111,9 @@ def test_zstd_compression(tmp_path):
         assert infile.read() == tdat
 
 
-def test_snappy_compression(tmp_path):
+def test_snappy_compression(tmpdir):
     """No registered compression for snappy, but can be specified."""
-    # type: (pathlib.Path) -> None
+    tmp_path = pathlib.Path(str(tmpdir))
 
     snappy = pytest.importorskip("snappy")
 
