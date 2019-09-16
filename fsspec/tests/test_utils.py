@@ -26,7 +26,7 @@ def test_read_block():
 
 def test_read_block_split_before():
     """Test start/middle/end cases of split_before."""  # noqa: I
-    d = ("#header" + "".join(f">foo{i}\nFOOBAR{i}\n" for i in range(100_000))).encode()
+    d = ("#header" + "".join(">foo{i}\nFOOBAR{i}\n".format(i=i) for i in range(100000))).encode()
 
     # Read single record at beginning.
     # All reads include beginning of file and read through termination of

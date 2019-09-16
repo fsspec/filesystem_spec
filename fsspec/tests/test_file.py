@@ -125,7 +125,7 @@ def test_midread_cache(ftp_writable):
     fs = FTPFileSystem(host=host, port=port, username=user, password=pw)
     fn = "/myfile"
     with fs.open(fn, "wb") as f:
-        f.write(b"a" * 175_627_146)
+        f.write(b"a" * 175627146)
     with fs.open(fn, "rb") as f:
         f.seek(175561610)
         d1 = f.read(65536)

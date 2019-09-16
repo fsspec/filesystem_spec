@@ -77,7 +77,7 @@ class WebHDFS(AbstractFileSystem):
         kwargs
         """
         super().__init__(**kwargs)
-        self.url = f"http://{host}:{port}/webhdfs/v1"
+        self.url = "http://{host}:{port}/webhdfs/v1".format(host=host, port=port)
         self.kerb = kerberos
         self.kerb_kwargs = kerb_kwargs or {}
         self.pars = {}
