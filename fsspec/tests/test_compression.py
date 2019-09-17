@@ -11,7 +11,6 @@ def test_infer_custom_compression():
     """Inferred compression gets values from fsspec.compression.compr."""
     assert infer_compression("fn.zip") == "zip"
     assert infer_compression("fn.gz") == "gzip"
-    assert infer_compression("fn.xz") == "xz"
     assert infer_compression("fn.unknown") is None
     assert infer_compression("fn.test_custom") is None
     assert infer_compression("fn.tst") is None
@@ -47,6 +46,11 @@ def test_infer_custom_compression():
         del compr["test_custom"]
         del compr["test_conflicting"]
         del compressions["tst"]
+
+
+def test_lzma_compression_name():
+    pytest.importorskip("lzma")
+    assert infer_compression("fn.xz") == "xz"
 
 
 def test_lz4_compression(tmp_path):
