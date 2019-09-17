@@ -1,11 +1,10 @@
 from hashlib import md5
 import io
 import os
-import threading
 import logging
 
 from .transaction import Transaction
-from .utils import read_block, tokenize, stringify_path
+from .utils import read_block, tokenize, stringify_path, SerialisableLocal
 logger = logging.getLogger('fsspec')
 
 # alternative names for some methods, which get patched to new instances
@@ -94,7 +93,7 @@ class AbstractFileSystem(up):
         self._intrans = False
         self._transaction = Transaction(self)
         self._singleton[0] = self
-        self._local = threading.local()  # any thread-local stuff; do not pickle
+        self._local = SerialisableLocal()
         self.dircache = {}
         if storage_options.pop('add_docs', True):
             self._mangle_docstrings()
@@ -765,13 +764,11 @@ class AbstractFileSystem(up):
         """ Instance should be pickleable """
         d = self.__dict__.copy()
         d.pop('dircache', None)
-        d.pop('_local', None)
         return d
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.dircache = {}
-        self._local = threading.local()
 
     def _get_pyarrow_filesystem(self):
         """

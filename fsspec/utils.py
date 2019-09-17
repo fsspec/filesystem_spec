@@ -3,6 +3,7 @@ import math
 import os
 import pathlib
 import re
+import threading
 from urllib.parse import urlsplit
 
 
@@ -304,3 +305,22 @@ def stringify_path(filepath):
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
     return filepath
+
+
+class SerialisableLocal(threading.local):
+    """Thread-local storage that can be pickled"""
+
+    def __init__(self):
+        self.__setstate__({})
+
+    def __getattr__(self, item):
+        return getattr(self._local, item)
+
+    def __getstate__(self):
+        return {}
+
+    def __setstate__(self, state):
+        self._local = threading.local()
+
+    def __contains__(self, item):
+        return item in self._local.__dict__

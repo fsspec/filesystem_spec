@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import re
-import threading
 import requests
 from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
