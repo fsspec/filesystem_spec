@@ -49,7 +49,6 @@ class HTTPFileSystem(AbstractFileSystem):
         self.simple_links = simple_links
         self.same_schema = same_scheme
         self.kwargs = storage_options
-        self._local = threading.local()
 
     @property
     def session(self):
