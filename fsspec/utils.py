@@ -282,11 +282,11 @@ def stringify_path(filepath):
 
     Parameters
     ----------
-    filepath : object to be converted
+    filepath: object to be converted
 
     Returns
     -------
-    filepath_str : maybe a string version of the object
+    filepath_str: maybe a string version of the object
 
     Notes
     -----

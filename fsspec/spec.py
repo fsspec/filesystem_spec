@@ -698,9 +698,9 @@ class AbstractFileSystem(up):
 
         Parameters
         ----------
-        path : str
+        path: str
             file location
-        truncate : bool
+        truncate: bool
             If True, always set file size to 0; if False, update timestamp and
             leave file unchanged, if backend allows this
         """
@@ -819,7 +819,7 @@ class AbstractBufferedFile(io.IOBase):
         autocommit: bool
             Whether to write to final destination; may only impact what
             happens when file is being closed.
-        cache_type : str
+        cache_type: str
             Caching policy in read mode, one of 'none', 'bytes', 'mmap', see
             the definitions in ``core``.
         kwargs:
@@ -894,9 +894,9 @@ class AbstractBufferedFile(io.IOBase):
 
         Parameters
         ----------
-        loc : int
+        loc: int
             byte location
-        whence : {0, 1, 2}
+        whence: {0, 1, 2}
             from start of file, current location or end of file, resp.
         """
         loc = int(loc)
@@ -925,7 +925,7 @@ class AbstractBufferedFile(io.IOBase):
 
         Parameters
         ----------
-        data : bytes
+        data: bytes
             Set of bytes to be written.
         """
         if self.mode not in {'wb', 'ab'}:
@@ -949,7 +949,7 @@ class AbstractBufferedFile(io.IOBase):
 
         Parameters
         ----------
-        force : bool
+        force: bool
             When closing, write the last block even if it is smaller than
             blocks are allowed to be. Disallows further writing to this file.
         """
@@ -1007,7 +1007,7 @@ class AbstractBufferedFile(io.IOBase):
 
         Parameters
         ----------
-        length : int (-1)
+        length: int (-1)
             Number of bytes to read; if <0, all remaining bytes.
         """
         length = -1 if length is None else int(length)
@@ -1039,9 +1039,9 @@ class AbstractBufferedFile(io.IOBase):
 
         Parameters
         ----------
-        char : bytes
+        char: bytes
             Thing to find
-        blocks : None or int
+        blocks: None or int
             How much to read in each go. Defaults to file blocksize - which may
             mean a new read on every call.
         """

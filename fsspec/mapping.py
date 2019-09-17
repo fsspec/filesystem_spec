@@ -12,10 +12,10 @@ class FSMap(MutableMapping):
 
     Parameters
     ----------
-    root : string
+    root: string
         prefix for all the files
-    fs : FileSystem instance
-    check : bool (=True)
+    fs: FileSystem instance
+    check: bool (=True)
         performs a touch at the location, to check for write access.
 
     Examples

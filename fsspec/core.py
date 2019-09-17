@@ -22,20 +22,20 @@ class OpenFile(object):
 
     Parameters
     ----------
-    fs : FileSystem
+    fs: FileSystem
         The file system to use for opening the file. Should match the interface
         of ``dask.bytes.local.LocalFileSystem``.
-    path : str
+    path: str
         Location to open
-    mode : str like 'rb', optional
+    mode: str like 'rb', optional
         Mode of the opened file
-    compression : str or None, optional
+    compression: str or None, optional
         Compression to apply
-    encoding : str or None, optional
+    encoding: str or None, optional
         The encoding to use if opened in text mode.
-    errors : str or None, optional
+    errors: str or None, optional
         How to handle encoding errors if opened in text mode.
-    newline : None or str
+    newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
     """
     def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
@@ -114,31 +114,31 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
 
     Parameters
     ----------
-    urlpath : string or list
+    urlpath: string or list
         Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
         to read from alternative filesystems. To read from multiple files you
         can pass a globstring or a list of paths, with the caveat that they
         must all have the same protocol.
-    mode : 'rb', 'wt', etc.
-    compression : string
+    mode: 'rb', 'wt', etc.
+    compression: string
         Compression to use.  See ``dask.bytes.compression.files`` for options.
-    encoding : str
+    encoding: str
         For text mode only
-    errors : None or str
+    errors: None or str
         Passed to TextIOWrapper in text mode
-    name_function : function or None
+    name_function: function or None
         if opening a set of files for writing, those files do not yet exist,
         so we need to generate their names by formatting the urlpath for
         each sequence number
-    num : int [1]
+    num: int [1]
         if writing mode, number of files we expect to create (passed to
         name+function)
-    protocol : str or None
+    protocol: str or None
         If given, overrides the protocol found in the URL.
-    newline : bytes or None
+    newline: bytes or None
         Used for line terminator in text mode. If None, uses system default;
         if blank, uses no translation.
-    **kwargs : dict
+    **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
 
@@ -166,23 +166,23 @@ def open(urlpath, mode='rb', compression=None, encoding='utf8',
 
     Parameters
     ----------
-    urlpath : string or list
+    urlpath: string or list
         Absolute or relative filepath. Prefix with a protocol like ``s3://``
         to read from alternative filesystems. Should not include glob
         character(s).
-    mode : 'rb', 'wt', etc.
-    compression : string
+    mode: 'rb', 'wt', etc.
+    compression: string
         Compression to use.  See ``dask.bytes.compression.files`` for options.
-    encoding : str
+    encoding: str
         For text mode only
-    errors : None or str
+    errors: None or str
         Passed to TextIOWrapper in text mode
-    protocol : str or None
+    protocol: str or None
         If given, overrides the protocol found in the URL.
-    newline : bytes or None
+    newline: bytes or None
         Used for line terminator in text mode. If None, uses system default;
         if blank, uses no translation.
-    **kwargs : dict
+    **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
 
@@ -231,12 +231,12 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     """Expand paths if they have a ``*`` in them.
 
     :param paths: list of paths
-    mode : str
+    mode: str
         Mode in which to open files.
-    num : int
+    num: int
         If opening in writing mode, number of files we expect to create.
-    fs : filesystem object
-    name_function : callable
+    fs: filesystem object
+    name_function: callable
         If opening in writing mode, this callable is used to generate path
         names. Names are generated for each partition by
         ``urlpath.replace('*', name_function(partition_index))``.
@@ -272,18 +272,18 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 
     Parameters
     ----------
-    urlpath : string or iterable
+    urlpath: string or iterable
         Absolute or relative filepath, URL (may include protocols like
         ``s3://``), or globstring pointing to data.
-    mode : str, optional
+    mode: str, optional
         Mode in which to open files.
-    num : int, optional
+    num: int, optional
         If opening in writing mode, number of files we expect to create.
-    name_function : callable, optional
+    name_function: callable, optional
         If opening in writing mode, this callable is used to generate path
         names. Names are generated for each partition by
         ``urlpath.replace('*', name_function(partition_index))``.
-    storage_options : dict, optional
+    storage_options: dict, optional
         Additional keywords to pass to the filesystem class.
     protocol: str or None
         To override the protocol specifier in the URL
@@ -363,12 +363,12 @@ class BaseCache(object):
 
     Parameters
     ----------
-    blocksize : int
+    blocksize: int
         How far to read ahead in numbers of bytes
-    fetcher : func
+    fetcher: func
         Function of the form f(start, end) which gets bytes from remote as
         specified
-    size : int
+    size: int
         How big this file is
     """
     def __init__(self, blocksize, fetcher, size, **kwargs):
@@ -491,7 +491,7 @@ class BytesCache(BaseCache):
 
     Parameters
     ----------
-    trim : bool
+    trim: bool
         As we read more data, whether to discard the start of the buffer when
         we are more than a blocksize ahead of it.
     """
