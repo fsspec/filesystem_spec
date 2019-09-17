@@ -307,14 +307,18 @@ def stringify_path(filepath):
     return filepath
 
 
-class SerialisableLocal(threading.local):
+class SerialisableLocal():
     """Thread-local storage that can be pickled"""
 
     def __init__(self):
-        self.__setstate__({})
+        self._local = threading.local()
 
     def __getattr__(self, item):
         return getattr(self._local, item)
+
+    def put(self, key, value):
+        """Set a thread-local value"""
+        setattr(self._local, key, value)
 
     def __getstate__(self):
         return {}

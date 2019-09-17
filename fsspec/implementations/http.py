@@ -51,8 +51,8 @@ class HTTPFileSystem(AbstractFileSystem):
 
     @property
     def session(self):
-        if 'session' not in self._local.__dict__:
-            self._local.session = requests.Session()
+        if 'session' not in self._local:
+            self._local.put('session', requests.Session())
         return self._local.session
 
     @classmethod
