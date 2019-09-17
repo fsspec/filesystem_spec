@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import re
+import threading
 import requests
 from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
@@ -48,7 +49,13 @@ class HTTPFileSystem(AbstractFileSystem):
         self.simple_links = simple_links
         self.same_schema = same_scheme
         self.kwargs = storage_options
-        self.session = requests.Session()
+        self._local = threading.local()
+
+    @property
+    def session(self):
+        if 'session' not in self._local.__dict__:
+            self._local.session = requests.Session()
+        return self._local.session
 
     @classmethod
     def _strip_protocol(cls, path):

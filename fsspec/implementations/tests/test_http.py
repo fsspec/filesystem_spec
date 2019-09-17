@@ -1,6 +1,5 @@
-import glob
-import os
 import pytest
+import pickle
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 import fsspec
@@ -129,3 +128,21 @@ def test_random_access(server, headers):
         f.seek(5, 1)
         assert f.read(5) == data[10:15]
 
+
+def test_local_session():
+    h = fsspec.filesystem('http')
+    import threading
+    out = []
+
+    def target():
+        out.append(h.session)
+
+    t = threading.Thread(target=target)
+    t.start()
+    t.join()
+
+    assert out[0] != id(h.session)
+
+    h2 = pickle.loads(pickle.dumps(h))
+    assert h is h2
+    assert h.session is h2.session
