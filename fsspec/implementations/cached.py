@@ -38,25 +38,25 @@ class CachingFileSystem(AbstractFileSystem):
 
         Parameters
         ----------
-        target_protocol : str
+        target_protocol: str
             Target fielsystem protocol
-        cache_storage : str or list(str)
+        cache_storage: str or list(str)
             Location to store files. If "TMP", this is a temporary directory,
             and will be cleaned up by the OS when this process ends (or later).
             If a list, each location will be tried in the order given, but
             only the last will be considered writable.
-        cache_check : int
+        cache_check: int
             Number of seconds between reload of cache metadata
-        check_files : bool
+        check_files: bool
             Whether to explicitly see if the UID of the remote file matches
             the stored one before using. Warning: some file systems such as
             HTTP cannot reliably give a unique hash of the contents of some
             path, so be sure to set this option to False.
-        expiry_time : int
+        expiry_time: int
             The time in seconds after which a local copy is considered useless.
             Set to falsy to prevent expiry. The default is equivalent to one
             week.
-        target_options : dict or None
+        target_options: dict or None
             Passed to the instantiation of the FS, if fs is None.
         """
         if cache_storage == "TMP":

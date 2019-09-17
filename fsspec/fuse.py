@@ -125,19 +125,19 @@ def run(fs, path, mount_point, foreground=True, threads=False):
 
     Parameters
     ----------
-    fs : file-system instance
+    fs: file-system instance
         From one of the compatible implementations
-    path : str
+    path: str
         Location on that file-system to regard as the root directory to
         mount. Note that you typically should include the terminating "/"
         character.
-    mount_point : str
+    mount_point: str
         An empty directory on the local file-system where the contents of
         the remote path will appear
-    foreground : bool
+    foreground: bool
         Whether or not calling this function will block. Operation will
         typically be more stable if True.
-    threads : bool
+    threads: bool
         Whether or not to create threads when responding to file operations
         within the mounter directory. Operation will typically be more
         stable if False.

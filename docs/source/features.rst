@@ -165,3 +165,55 @@ Since files can hold on to write caches and read buffers,
 the instance cache may cause excessive memory usage in some situations; but normally, files
 will get ``close``d, and the data discarded. Only when there is also an unfinalised transaction or
 captured traceback might this be anticipated becoming a problem.
+
+File Buffering
+--------------
+
+Most implementations create file objects which derive from ``fsspec.spec.AbstractBufferedFile``, and
+have many behaviours in common. These files offer buffering of both read and write operations, so that
+communication with the remote resource is limited. The size of the buffer is generally configured
+with the ``blocksize=`` kwargs at p[en time, although the implementation may have some minimum or
+maximum sizes that need to be respected.
+
+For reading, a number of buffering schemes are available, listed in ``fsspec.core.caches``
+(see :ref:`readbuffering`), or "none" for no buffering at all, e.g., for a simple read-ahead
+buffer, you can do
+
+.. code-block:: python
+
+   fs = fsspec.filesystem(...)
+   with fs.open(path, mode='rb', cache_type='readahead') as f:
+       use_for_something(f)
+
+Caching Files Locally
+---------------------
+
+``fsspec`` allows you to access data on remote file systems, that is its purpose. However, such
+access can often be rather slow compared to local storage, so as well as buffering (see above), the
+option exists to cp[y files locally when you first access them, and thereafter to use the local data.
+This local cache of data might be temporary (i.e., attached to the process and discarded when the
+process ends) or at some specific location in your local storage.
+
+Two mechanisms are provided, and both involve wrapping a `target` filesystem. The following example
+creates a file-based cache.
+
+.. code-block:: python
+
+   fs = fsspec.filesystem("filecache", target_protocol='s3', target_options={'anon': True},
+                          cache_storage='/tmp/files/')
+
+Each time you open a remote file on S3, it will first copy it to
+a local temporary directory, and then all further access will use the local file. Since we specify
+a particular local location, the files will persist and can be reused from future sessions, although
+you can also set policies to have cached files expire after some time, or to check the remote file system
+on each open, to see if the target file has changed since it was copied.
+
+With the "blockcache" variant, data is downloaded block-wise: only the specific parts of the remote file
+which are accessed. This means that the local copy of the file might end up being much smaller than the
+remote one, if only certain parts of it are required.
+
+Whereas "filecache" works for all file system implementations, and provides a real local file for other
+libraries to use, "blockcache" has restrictions: that you have a storage/OS combination which supports
+sparse files, that the backend implementation uses files which derive ``from AbstractBufferedFile``,
+and that the library you pass the resultant object to accepts generic python file-like objects. You
+should not mix block- and file-caches in the same directory.
