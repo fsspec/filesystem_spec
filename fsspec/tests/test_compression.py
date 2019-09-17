@@ -48,6 +48,11 @@ def test_infer_custom_compression():
         del compressions["tst"]
 
 
+def test_lzma_compression_name():
+    pytest.importorskip("lzma")
+    assert infer_compression("fn.xz") == "xz"
+
+
 def test_lz4_compression(tmp_path):
     # type: (pathlib.Path) -> None
     """Infer lz4 compression for .lz4 files if lz4 is available."""

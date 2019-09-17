@@ -1,7 +1,7 @@
 import os
 import pytest
 import pickle
-from fsspec.core import _expand_paths, OpenFile, caches
+from fsspec.core import _expand_paths, OpenFile, caches, get_compression
 from fsspec.implementations.tests.test_memory import m
 
 
@@ -56,3 +56,11 @@ def test_cache_pickleable(Cache_imp):
     assert unpickled.blocksize == blocksize
     assert unpickled.size == size
     assert unpickled._fetch(0, 10) == b'0' * 10
+
+
+def test_xz_lzma_compressions():
+    pytest.importorskip("lzma")
+    # Ensure that both 'xz' and 'lzma' compression names can be parsed
+    assert get_compression('some_file.xz', 'infer') == 'xz'
+    assert get_compression('some_file.xz', 'xz') == 'xz'
+    assert get_compression('some_file.xz', 'lzma') == 'lzma'
