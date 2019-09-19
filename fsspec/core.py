@@ -4,10 +4,15 @@ import io
 import os
 import logging
 from .compression import compr
-from .utils import (infer_compression, build_name_function,
-                    update_storage_options, stringify_path)
+from .utils import (
+    infer_compression,
+    build_name_function,
+    update_storage_options,
+    stringify_path,
+)
 from .registry import get_filesystem_class
-logger = logging.getLogger('fsspec')
+
+logger = logging.getLogger("fsspec")
 
 
 class OpenFile(object):
@@ -38,8 +43,17 @@ class OpenFile(object):
     newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
     """
-    def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
-                 errors=None, newline=None):
+
+    def __init__(
+        self,
+        fs,
+        path,
+        mode="rb",
+        compression=None,
+        encoding=None,
+        errors=None,
+        newline=None,
+    ):
         self.fs = fs
         self.path = path
         self.mode = mode
@@ -50,8 +64,17 @@ class OpenFile(object):
         self.fobjects = []
 
     def __reduce__(self):
-        return (OpenFile, (self.fs, self.path, self.mode, self.compression,
-                           self.encoding, self.errors))
+        return (
+            OpenFile,
+            (
+                self.fs,
+                self.path,
+                self.mode,
+                self.compression,
+                self.encoding,
+                self.errors,
+            ),
+        )
 
     def __repr__(self):
         return "<OpenFile '{}'>".format(self.path)
@@ -60,7 +83,7 @@ class OpenFile(object):
         return self.path
 
     def __enter__(self):
-        mode = self.mode.replace('t', '').replace('b', '') + 'b'
+        mode = self.mode.replace("t", "").replace("b", "") + "b"
 
         f = self.fs.open(self.path, mode=mode)
 
@@ -71,10 +94,11 @@ class OpenFile(object):
             f = compress(f, mode=mode[0])
             self.fobjects.append(f)
 
-        if 'b' not in self.mode:
+        if "b" not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
-            f = io.TextIOWrapper(f, encoding=self.encoding,
-                                 errors=self.errors, newline=self.newline)
+            f = io.TextIOWrapper(
+                f, encoding=self.encoding, errors=self.errors, newline=self.newline
+            )
             self.fobjects.append(f)
 
         return self.fobjects[-1]
@@ -96,15 +120,24 @@ class OpenFile(object):
     def close(self):
         """Close all encapsulated file objects"""
         for f in reversed(self.fobjects):
-            if 'r' not in self.mode and not f.closed:
+            if "r" not in self.mode and not f.closed:
                 f.flush()
             f.close()
         self.fobjects = []
 
 
-def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
-               errors=None, name_function=None, num=1, protocol=None,
-               newline=None, **kwargs):
+def open_files(
+    urlpath,
+    mode="rb",
+    compression=None,
+    encoding="utf8",
+    errors=None,
+    name_function=None,
+    num=1,
+    protocol=None,
+    newline=None,
+    **kwargs
+):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
 
     For writing, a str path must contain the "*" character, which will be filled
@@ -151,17 +184,38 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     -------
     List of ``OpenFile`` objects.
     """
-    fs, fs_token, paths = get_fs_token_paths(urlpath, mode, num=num,
-                                             name_function=name_function,
-                                             storage_options=kwargs,
-                                             protocol=protocol)
-    return [OpenFile(fs, path, mode=mode, compression=compression,
-                     encoding=encoding, errors=errors, newline=newline)
-            for path in paths]
+    fs, fs_token, paths = get_fs_token_paths(
+        urlpath,
+        mode,
+        num=num,
+        name_function=name_function,
+        storage_options=kwargs,
+        protocol=protocol,
+    )
+    return [
+        OpenFile(
+            fs,
+            path,
+            mode=mode,
+            compression=compression,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
+        for path in paths
+    ]
 
 
-def open(urlpath, mode='rb', compression=None, encoding='utf8',
-         errors=None, protocol=None, newline=None, **kwargs):
+def open(
+    urlpath,
+    mode="rb",
+    compression=None,
+    encoding="utf8",
+    errors=None,
+    protocol=None,
+    newline=None,
+    **kwargs
+):
     """ Given a path or paths, return one ``OpenFile`` object.
 
     Parameters
@@ -197,12 +251,20 @@ def open(urlpath, mode='rb', compression=None, encoding='utf8',
     -------
     ``OpenFile`` object.
     """
-    return open_files([urlpath], mode, compression, encoding, errors,
-                      protocol, newline=newline, **kwargs)[0]
+    return open_files(
+        [urlpath],
+        mode,
+        compression,
+        encoding,
+        errors,
+        protocol,
+        newline=newline,
+        **kwargs
+    )[0]
 
 
 def get_compression(urlpath, compression):
-    if compression == 'infer':
+    if compression == "infer":
         compression = infer_compression(urlpath)
     if compression is not None and compression not in compr:
         raise ValueError("Compression type %s not supported" % compression)
@@ -244,30 +306,31 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     """
     expanded_paths = []
     paths = list(paths)
-    if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
-        raise ValueError("When writing data, only one filename mask can "
-                         "be specified.")
-    elif 'w' in mode:
+    if "w" in mode and sum([1 for p in paths if "*" in p]) > 1:
+        raise ValueError(
+            "When writing data, only one filename mask can " "be specified."
+        )
+    elif "w" in mode:
         num = max(num, len(paths))
     for curr_path in paths:
-        if '*' in curr_path:
-            if 'w' in mode:
+        if "*" in curr_path:
+            if "w" in mode:
                 # expand using name_function
-                expanded_paths.extend(
-                    _expand_paths(curr_path, name_function, num))
+                expanded_paths.extend(_expand_paths(curr_path, name_function, num))
             else:
                 # expand using glob
                 expanded_paths.extend(fs.glob(curr_path))
         else:
             expanded_paths.append(curr_path)
     # if we generated more paths that asked for, trim the list
-    if 'w' in mode and len(expanded_paths) > num:
+    if "w" in mode and len(expanded_paths) > num:
         expanded_paths = expanded_paths[:num]
     return expanded_paths
 
 
-def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
-                       storage_options=None, protocol=None):
+def get_fs_token_paths(
+    urlpath, mode="rb", num=1, name_function=None, storage_options=None, protocol=None
+):
     """Filesystem, deterministic token, and paths from a urlpath and options.
 
     Parameters
@@ -294,20 +357,24 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         protocols, paths = zip(*map(split_protocol, urlpath))
         protocol = protocol or protocols[0]
         if not all(p == protocol for p in protocols):
-            raise ValueError("When specifying a list of paths, all paths must "
-                             "share the same protocol")
+            raise ValueError(
+                "When specifying a list of paths, all paths must "
+                "share the same protocol"
+            )
         cls = get_filesystem_class(protocol)
         optionss = list(map(cls._get_kwargs_from_urls, urlpath))
         paths = [cls._strip_protocol(u) for u in urlpath]
         options = optionss[0]
         if not all(o == options for o in optionss):
-            raise ValueError("When specifying a list of paths, all paths must "
-                             "share the same file-system options")
+            raise ValueError(
+                "When specifying a list of paths, all paths must "
+                "share the same file-system options"
+            )
         update_storage_options(options, storage_options)
         fs = cls(**options)
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
-    elif isinstance(urlpath, str) or hasattr(urlpath, 'name'):
+    elif isinstance(urlpath, str) or hasattr(urlpath, "name"):
         protocols, path = split_protocol(urlpath)
         protocol = protocol or protocols
         cls = get_filesystem_class(protocol)
@@ -317,7 +384,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         update_storage_options(options, storage_options)
         fs = cls(**options)
 
-        if 'w' in mode:
+        if "w" in mode:
             paths = _expand_paths(path, name_function, num)
         elif "*" in path:
             paths = sorted(fs.glob(path))
@@ -325,14 +392,14 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
             paths = [path]
 
     else:
-        raise TypeError('url type not understood: %s' % urlpath)
+        raise TypeError("url type not understood: %s" % urlpath)
 
     return fs, fs._fs_token, paths
 
 
 def _expand_paths(path, name_function, num):
     if isinstance(path, str):
-        if path.count('*') > 1:
+        if path.count("*") > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
         elif "*" not in path:
             path = os.path.join(path, "*.part")
@@ -340,19 +407,23 @@ def _expand_paths(path, name_function, num):
         if name_function is None:
             name_function = build_name_function(num - 1)
 
-        paths = [path.replace('*', name_function(i)) for i in range(num)]
+        paths = [path.replace("*", name_function(i)) for i in range(num)]
         if paths != sorted(paths):
-            logger.warning("In order to preserve order between partitions"
-                           " paths created with ``name_function`` should "
-                           "sort to partition order")
+            logger.warning(
+                "In order to preserve order between partitions"
+                " paths created with ``name_function`` should "
+                "sort to partition order"
+            )
     elif isinstance(path, (tuple, list)):
         assert len(path) == num
         paths = list(path)
     else:
-        raise ValueError("Path should be either\n"
-                         "1. A list of paths: ['foo.json', 'bar.json', ...]\n"
-                         "2. A directory: 'foo/\n"
-                         "3. A path with a '*' in it: 'foo.*.json'")
+        raise ValueError(
+            "Path should be either\n"
+            "1. A list of paths: ['foo.json', 'bar.json', ...]\n"
+            "2. A directory: 'foo/\n"
+            "3. A path with a '*' in it: 'foo.*.json'"
+        )
     return paths
 
 
@@ -371,6 +442,7 @@ class BaseCache(object):
     size: int
         How big this file is
     """
+
     def __init__(self, blocksize, fetcher, size, **kwargs):
         self.blocksize = blocksize
         self.fetcher = fetcher
@@ -389,8 +461,7 @@ class MMapCache(BaseCache):
     This cache method might only work on posix
     """
 
-    def __init__(self, blocksize, fetcher, size, location=None,
-                 blocks=None, **kwargs):
+    def __init__(self, blocksize, fetcher, size, location=None, blocks=None, **kwargs):
         super().__init__(blocksize, fetcher, size)
         self.blocks = set() if blocks is None else blocks
         self.location = location
@@ -409,20 +480,19 @@ class MMapCache(BaseCache):
                 fd = tempfile.TemporaryFile()
                 self.blocks = set()
             else:
-                fd = io.open(self.location, 'wb+')
+                fd = io.open(self.location, "wb+")
             fd.seek(self.size - 1)
-            fd.write(b'1')
+            fd.write(b"1")
             fd.flush()
         else:
-            fd = io.open(self.location, 'rb+')
+            fd = io.open(self.location, "rb+")
 
         return mmap.mmap(fd.fileno(), self.size)
 
     def _fetch(self, start, end):
         start_block = start // self.blocksize
         end_block = end // self.blocksize
-        need = [i for i in range(start_block, end_block + 1)
-                if i not in self.blocks]
+        need = [i for i in range(start_block, end_block + 1) if i not in self.blocks]
         while need:
             # TODO: not a for loop so we can consolidate blocks later to
             # make fewer fetch calls; this could be parallel
@@ -437,7 +507,7 @@ class MMapCache(BaseCache):
     def __getstate__(self):
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
-        del state['cache']
+        del state["cache"]
         return state
 
     def __setstate__(self, state):
@@ -456,7 +526,7 @@ class ReadAheadCache(BaseCache):
 
     def __init__(self, blocksize, fetcher, size, **kwargs):
         super().__init__(blocksize, fetcher, size)
-        self.cache = b''
+        self.cache = b""
         self.start = 0
         self.end = 0
 
@@ -464,18 +534,18 @@ class ReadAheadCache(BaseCache):
         end = min(self.size, end)
         l = end - start
         if start >= self.size:
-            return b''
+            return b""
         elif start >= self.start and end <= self.end:
             # cache hit
-            return self.cache[start - self.start:end - self.start]
+            return self.cache[start - self.start : end - self.start]
         elif self.start <= start < self.end:
             # partial hit
-            part = self.cache[start - self.start:]
+            part = self.cache[start - self.start :]
             l -= len(part)
             start = self.end
         else:
             # miss
-            part = b''
+            part = b""
         end = min(self.size, end + self.blocksize)
         self.cache = self.fetcher(start, end)  # new block replaces old
         self.start = start
@@ -498,7 +568,7 @@ class BytesCache(BaseCache):
 
     def __init__(self, blocksize, fetcher, size, trim=True, **kwargs):
         super().__init__(blocksize, fetcher, size)
-        self.cache = b''
+        self.cache = b""
         self.start = None
         self.end = None
         self.trim = trim
@@ -506,19 +576,24 @@ class BytesCache(BaseCache):
     def _fetch(self, start, end):
         # TODO: only set start/end after fetch, in case it fails?
         # is this where retry logic might go?
-        if (self.start is not None and start >= self.start and self.end is not
-                None and end < self.end):
+        if (
+            self.start is not None
+            and start >= self.start
+            and self.end is not None
+            and end < self.end
+        ):
             # cache hit: we have all the required data
             offset = start - self.start
-            return self.cache[offset:offset + end - start]
+            return self.cache[offset : offset + end - start]
         if self.blocksize:
             bend = min(self.size, end + self.blocksize)
         else:
             bend = end
         if bend == start or start > self.size:
             return b""
-        if ((self.start is None or start < self.start) and
-                (self.end is None or end > self.end)):
+        if (self.start is None or start < self.start) and (
+            self.end is None or end > self.end
+        ):
             # First read, or extending both before and after
             self.cache = self.fetcher(start, bend)
             self.start = start
@@ -542,19 +617,21 @@ class BytesCache(BaseCache):
 
         self.end = self.start + len(self.cache)
         offset = start - self.start
-        out = self.cache[offset:offset + end - start]
+        out = self.cache[offset : offset + end - start]
         if self.trim:
             num = (self.end - self.start) // (self.blocksize + 1)
             if num > 1:
                 self.start += self.blocksize * num
-                self.cache = self.cache[self.blocksize * num:]
+                self.cache = self.cache[self.blocksize * num :]
         return out
 
     def __len__(self):
         return len(self.cache)
 
 
-caches = {'none': BaseCache,
-          'mmap': MMapCache,
-          'bytes': BytesCache,
-          'readahead': ReadAheadCache}
+caches = {
+    "none": BaseCache,
+    "mmap": MMapCache,
+    "bytes": BytesCache,
+    "readahead": ReadAheadCache,
+}

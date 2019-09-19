@@ -5,7 +5,7 @@ import dask
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 from fsspec import filesystem
 
-methods_to_forward = ['mkdir', 'mkdirs', 'rmdir', 'ls', 'copy', 'mv', 'rm']
+methods_to_forward = ["mkdir", "mkdirs", "rmdir", "ls", "copy", "mv", "rm"]
 _files_cache = {}
 
 
@@ -43,7 +43,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
 
     def __getstate__(self):
         dic = self.__dict__.copy()
-        for method in methods_to_forward + ['client', 'fs']:
+        for method in methods_to_forward + ["client", "fs"]:
             dic.pop(method, None)
         return dic
 
@@ -77,7 +77,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         else:
             return self.rfs.ls(*args, **kwargs).compute()
 
-    def _open(self, path, mode='rb', **kwargs):
+    def _open(self, path, mode="rb", **kwargs):
         if self.worker:
             return self.fs._open(path, mode=mode)
         else:
@@ -87,18 +87,31 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         if self.worker:
             with self._open(path, mode) as f:
                 f.seek(start)
-                return f.read(end-start)
+                return f.read(end - start)
         else:
             return self.rfs.fetch_range(path, mode, start, end).compute()
 
 
 class DaskFile(AbstractBufferedFile):
-
-    def __init__(self, fs, path, mode='rb', block_size='default',
-                 autocommit=True, cache_type='bytes', **kwargs):
-        super().__init__(fs, path, mode=mode, block_size=block_size,
-                         autocommit=autocommit, cache_type=cache_type,
-                         **kwargs)
+    def __init__(
+        self,
+        fs,
+        path,
+        mode="rb",
+        block_size="default",
+        autocommit=True,
+        cache_type="bytes",
+        **kwargs
+    ):
+        super().__init__(
+            fs,
+            path,
+            mode=mode,
+            block_size=block_size,
+            autocommit=autocommit,
+            cache_type=cache_type,
+            **kwargs
+        )
 
     def _upload_chunk(self, final=False):
         pass

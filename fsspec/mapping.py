@@ -1,4 +1,3 @@
-
 from collections.abc import MutableMapping
 from .registry import get_filesystem_class
 from .core import split_protocol
@@ -34,17 +33,20 @@ class FSMap(MutableMapping):
 
     def __init__(self, root, fs, check=False, create=False):
         self.fs = fs
-        self.root = fs._strip_protocol(root).rstrip('/')  # we join on '/' in _key_to_str
+        self.root = fs._strip_protocol(root).rstrip(
+            "/"
+        )  # we join on '/' in _key_to_str
         if create:
             if not self.fs.exists(root):
                 self.fs.mkdir(root)
         if check:
             if not self.fs.exists(root):
-                raise ValueError("Path %s does not exist. Create "
-                                 " with the ``create=True`` keyword" %
-                                 root)
-            self.fs.touch(root+'/a')
-            self.fs.rm(root+'/a')
+                raise ValueError(
+                    "Path %s does not exist. Create "
+                    " with the ``create=True`` keyword" % root
+                )
+            self.fs.touch(root + "/a")
+            self.fs.rm(root + "/a")
 
     def clear(self):
         """Remove all keys below root - empties out mapping
@@ -61,11 +63,11 @@ class FSMap(MutableMapping):
             key = str(tuple(key))
         else:
             key = str(key)
-        return '/'.join([self.root, key]) if self.root else key
+        return "/".join([self.root, key]) if self.root else key
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
-        return s[len(self.root):].lstrip('/')
+        return s[len(self.root) :].lstrip("/")
 
     def __getitem__(self, key, default=None):
         """Retrieve data"""
@@ -90,13 +92,12 @@ class FSMap(MutableMapping):
         """Store value in key"""
         key = self._key_to_str(key)
         self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
-        with self.fs.open(key, 'wb') as f:
+        with self.fs.open(key, "wb") as f:
             f.write(value)
 
     def keys(self):
         """List currently defined keys"""
-        return (self._str_to_key(x)
-                for x in self.fs.find(self.root))
+        return (self._str_to_key(x) for x in self.fs.find(self.root))
 
     def __iter__(self):
         return self.keys()

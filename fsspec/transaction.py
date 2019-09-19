@@ -40,7 +40,6 @@ class Transaction(object):
 
 
 class FileActor(object):
-
     def __init__(self):
         self.files = []
 
@@ -66,6 +65,7 @@ class DaskTransaction(Transaction):
         fs: FileSystem instance
         """
         import distributed
+
         super().__init__(fs)
         client = distributed.default_client()
         self.files = client.submit(FileActor, actor=True).result()

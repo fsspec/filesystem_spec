@@ -10,8 +10,16 @@ class PyArrowHDFS(AbstractFileSystem):
     passes on all calls to the underlying class.
     """
 
-    def __init__(self, host="default", port=0, user=None, kerb_ticket=None,
-                 driver='libhdfs', extra_conf=None, **kwargs):
+    def __init__(
+        self,
+        host="default",
+        port=0,
+        user=None,
+        kerb_ticket=None,
+        driver="libhdfs",
+        extra_conf=None,
+        **kwargs
+    ):
         """
 
         Parameters
@@ -31,12 +39,16 @@ class PyArrowHDFS(AbstractFileSystem):
         """
         AbstractFileSystem.__init__(self, **kwargs)
         self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
-        self.pahdfs = HadoopFileSystem(host=host, port=port, user=user,
-                                       kerb_ticket=kerb_ticket, driver=driver,
-                                       extra_conf=extra_conf)
+        self.pahdfs = HadoopFileSystem(
+            host=host,
+            port=port,
+            user=user,
+            kerb_ticket=kerb_ticket,
+            driver=driver,
+            extra_conf=extra_conf,
+        )
 
-    def _open(self, path, mode='rb', block_size=None, autocommit=True,
-              **kwargs):
+    def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         """
 
         Parameters
@@ -66,7 +78,7 @@ class PyArrowHDFS(AbstractFileSystem):
         out = self.pahdfs.ls(path, detail)
         if detail:
             for p in out:
-                p['type'] = p['kind']
+                p["type"] = p["kind"]
                 p["name"] = self._strip_protocol(p["name"])
         else:
             out = [self._strip_protocol(p) for p in out]
@@ -76,40 +88,68 @@ class PyArrowHDFS(AbstractFileSystem):
     def _get_kwargs_from_urls(paths):
         ops = infer_storage_options(paths)
         out = {}
-        if ops.get('host', None):
-            out['host'] = ops['host']
-        if ops.get('username', None):
-            out['user'] = ops['username']
-        if ops.get('port', None):
-            out['port'] = ops['port']
+        if ops.get("host", None):
+            out["host"] = ops["host"]
+        if ops.get("username", None):
+            out["user"] = ops["username"]
+        if ops.get("port", None):
+            out["port"] = ops["port"]
         return out
 
     @classmethod
     def _strip_protocol(cls, path):
         ops = infer_storage_options(path)
-        return ops['path']
+        return ops["path"]
 
     def __getattribute__(self, item):
-        if item in ['_open', '__init__', '__getattribute__', '__reduce_ex__',
-                    'open', 'ls', 'makedirs']:
+        if item in [
+            "_open",
+            "__init__",
+            "__getattribute__",
+            "__reduce_ex__",
+            "open",
+            "ls",
+            "makedirs",
+        ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
-            return lambda *args, **kw: getattr(PyArrowHDFS, item)(
-                self, *args, **kw
-            )
-        if item == '__class__':
+            return lambda *args, **kw: getattr(PyArrowHDFS, item)(self, *args, **kw)
+        if item == "__class__":
             return PyArrowHDFS
-        d = object.__getattribute__(self, '__dict__')
-        pahdfs = d.get('pahdfs', None)  # fs is not immediately defined
+        d = object.__getattribute__(self, "__dict__")
+        pahdfs = d.get("pahdfs", None)  # fs is not immediately defined
         if pahdfs is not None and item in [
-            'chmod', 'chown', 'user',
-            'df', 'disk_usage', 'download', 'driver', 'exists',
-            'extra_conf', 'get_capacity', 'get_space_used', 'host',
-            'is_open', 'kerb_ticket', 'strip_protocol',
-            'mkdir', 'mv', 'port', 'get_capacity',
-            'get_space_used', 'df', 'chmod', 'chown', 'disk_usage',
-            'download', 'upload', '_get_kwargs_from_urls',
-            'read_parquet', 'rm', 'stat', 'upload',
+            "chmod",
+            "chown",
+            "user",
+            "df",
+            "disk_usage",
+            "download",
+            "driver",
+            "exists",
+            "extra_conf",
+            "get_capacity",
+            "get_space_used",
+            "host",
+            "is_open",
+            "kerb_ticket",
+            "strip_protocol",
+            "mkdir",
+            "mv",
+            "port",
+            "get_capacity",
+            "get_space_used",
+            "df",
+            "chmod",
+            "chown",
+            "disk_usage",
+            "download",
+            "upload",
+            "_get_kwargs_from_urls",
+            "read_parquet",
+            "rm",
+            "stat",
+            "upload",
         ]:
             return getattr(pahdfs, item)
         else:

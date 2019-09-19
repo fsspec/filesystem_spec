@@ -1,4 +1,3 @@
-
 import io
 import os
 import shutil
@@ -19,7 +18,8 @@ class LocalFileSystem(AbstractFileSystem):
         be created (if it doesn't already exist). This is assumed by pyarrow
         code.
     """
-    root_marker = '/'
+
+    root_marker = "/"
 
     def __init__(self, auto_mkdir=True, **kwargs):
         super().__init__(**kwargs)
@@ -56,29 +56,24 @@ class LocalFileSystem(AbstractFileSystem):
         out = os.stat(path, follow_symlinks=False)
         dest = False
         if os.path.islink(path):
-            t = 'link'
+            t = "link"
             dest = os.readlink(path)
         elif os.path.isdir(path):
-            t = 'directory'
+            t = "directory"
         elif os.path.isfile(path):
-            t = 'file'
+            t = "file"
         else:
-            t = 'other'
-        result = {
-            'name': path,
-            'size': out.st_size,
-            'type': t,
-            'created': out.st_ctime
-        }
-        for field in ['mode', 'uid', 'gid', 'mtime']:
-            result[field] = getattr(out, 'st_' + field)
+            t = "other"
+        result = {"name": path, "size": out.st_size, "type": t, "created": out.st_ctime}
+        for field in ["mode", "uid", "gid", "mtime"]:
+            result[field] = getattr(out, "st_" + field)
         if dest:
-            result['destination'] = dest
+            result["destination"] = dest
             try:
                 out2 = os.stat(path, follow_symlinks=True)
-                result['size'] = out2.st_size
+                result["size"] = out2.st_size
             except IOError:
-                result['size'] = 0
+                result["size"] = 0
         return result
 
     def copy(self, path1, path2, **kwargs):
@@ -109,7 +104,7 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             os.remove(path)
 
-    def _open(self, path, mode='rb', block_size=None, **kwargs):
+    def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
         if self.auto_mkdir:
             self.makedirs(self._parent(path), exist_ok=True)
@@ -121,38 +116,39 @@ class LocalFileSystem(AbstractFileSystem):
         if self.exists(path):
             os.utime(path, None)
         else:
-            open(path, 'a').close()
+            open(path, "a").close()
 
     @classmethod
     def _parent(cls, path):
-        path = cls._strip_protocol(path).rstrip('/')
-        if '/' in path:
-            return path.rsplit('/', 1)[0]
+        path = cls._strip_protocol(path).rstrip("/")
+        if "/" in path:
+            return path.rsplit("/", 1)[0]
         else:
             return cls.root_marker
 
     @classmethod
     def _strip_protocol(cls, path):
         path = stringify_path(path)
-        if path.startswith('file://'):
+        if path.startswith("file://"):
             path = path[7:]
         return make_path_posix(path)
 
 
 def make_path_posix(path, sep=os.sep):
     """ Make path generic """
-    if re.match('/[A-Za-z]:', path):
+    if re.match("/[A-Za-z]:", path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"
         path = path[1:]
-    if path.startswith('\\') or re.match("[\\\\]*[A-Za-z]:", path):
+    if path.startswith("\\") or re.match("[\\\\]*[A-Za-z]:", path):
         # windows full path "\\server\\path" or "C:\\local\\path"
-        return path.lstrip('\\').replace('\\', '/').replace('//', '/')
+        return path.lstrip("\\").replace("\\", "/").replace("//", "/")
     if (
-            sep not in path and '/' not in path
-            or (sep == '/' and not path.startswith('/'))
-            or (sep == '\\' and ":" not in path)
-            ):
+        sep not in path
+        and "/" not in path
+        or (sep == "/" and not path.startswith("/"))
+        or (sep == "\\" and ":" not in path)
+    ):
         # relative path like "path" or "rel\\path" (win) or rel/path"
         path = os.path.abspath(path)
         if os.sep == "\\":
@@ -173,29 +169,29 @@ class LocalFileOpener(object):
 
     def _open(self):
         if self.f is None or self.f.closed:
-            if self.autocommit or 'w' not in self.mode:
+            if self.autocommit or "w" not in self.mode:
                 self.f = open(self.path, mode=self.mode)
             else:
                 # TODO: check if path is writable?
                 i, name = tempfile.mkstemp()
                 self.temp = name
                 self.f = open(name, mode=self.mode)
-            if 'w' not in self.mode:
+            if "w" not in self.mode:
                 self.details = self.fs.info(self.path)
-                self.size = self.details['size']
+                self.size = self.details["size"]
                 self.f.size = self.size
 
     def _fetch_range(self, start, end):
         # probably only used by cached FS
-        if 'r' not in self.mode:
+        if "r" not in self.mode:
             raise ValueError
         self._open()
         self.f.seek(start)
         return self.f.read(end - start)
 
     def __setstate__(self, state):
-        if 'r' in state['mode']:
-            loc = self.state.pop('loc')
+        if "r" in state["mode"]:
+            loc = self.state.pop("loc")
             self._open()
             self.f.seek(loc)
         else:
@@ -204,9 +200,9 @@ class LocalFileOpener(object):
 
     def __getstate__(self):
         d = self.__dict__.copy()
-        d.pop('f')
-        if 'r' in self.mode:
-            d['loc'] = self.f.tell()
+        d.pop("f")
+        if "r" in self.mode:
+            d["loc"] = self.f.tell()
         else:
             if not self.f.closed:
                 raise ValueError("Cannot serialise open write-mode local file")
@@ -214,13 +210,12 @@ class LocalFileOpener(object):
 
     def commit(self):
         if self.autocommit:
-            raise RuntimeError('Can only commit if not already set to '
-                               'autocommit')
+            raise RuntimeError("Can only commit if not already set to " "autocommit")
         os.rename(self.temp, self.path)
 
     def discard(self):
         if self.autocommit:
-            raise RuntimeError('Cannot discard if set to autocommit')
+            raise RuntimeError("Cannot discard if set to autocommit")
         os.remove(self.temp)
 
     def __fspath__(self):
