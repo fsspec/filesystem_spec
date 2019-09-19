@@ -1,0 +1,5 @@
+[tool.black]
+# Revert to py34 target syntax to accomodate
+# errors in trailing commas.
+# https://github.com/psf/black/pull/763
+target_version = ['py34']

@@ -43,7 +43,7 @@ class WebHDFS(AbstractFileSystem):
         proxy_to=None,
         kerb_kwargs=None,
         data_proxy=None,
-        **kwargs,
+        **kwargs
     ):
         """
         Parameters
@@ -147,7 +147,7 @@ class WebHDFS(AbstractFileSystem):
         autocommit=True,
         replication=None,
         permissions=None,
-        **kwargs,
+        **kwargs
     ):
         """
 
