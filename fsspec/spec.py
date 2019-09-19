@@ -4,14 +4,9 @@ import os
 import logging
 
 from .transaction import Transaction
-<<<<<<< HEAD
 from .utils import read_block, tokenize, stringify_path, SerialisableLocal
-logger = logging.getLogger('fsspec')
-=======
-from .utils import read_block, tokenize, stringify_path
 
 logger = logging.getLogger("fsspec")
->>>>>>> master
 
 # alternative names for some methods, which get patched to new instances
 # (alias, original)
@@ -777,7 +772,7 @@ class AbstractFileSystem(up):
     def __getstate__(self):
         """ Instance should be pickleable """
         d = self.__dict__.copy()
-        d.pop('dircache', None)
+        d.pop("dircache", None)
         d.pop("dircache")
         return d
 
