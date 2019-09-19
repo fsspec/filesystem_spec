@@ -1,7 +1,12 @@
 #!/usr/bin/env python
+import os
 
 from setuptools import setup
 import versioneer
+
+here = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(name='fsspec',
       version=versioneer.get_version(),
@@ -16,6 +21,8 @@ setup(name='fsspec',
             'Programming Language :: Python :: 3.7',
       ],
       description='File-system specification',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       url='http://github.com/intake/filesystem_spec',
       maintainer='Martin Durant',
       maintainer_email='mdurant@anaconda.com',
