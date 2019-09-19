@@ -18,7 +18,8 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../..'))
+
+sys.path.insert(0, os.path.abspath("../.."))
 
 
 # -- General configuration ------------------------------------------------
@@ -31,28 +32,28 @@ sys.path.insert(0, os.path.abspath('../..'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.autosummary',
-    'numpydoc',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.autosummary",
+    "numpydoc",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+source_suffix = ".rst"
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = "index"
 
 # General information about the project.
-project = u'fsspec'
-copyright = u'2018, Martin Durant'
-author = u'Martin Durant'
+project = u"fsspec"
+copyright = u"2018, Martin Durant"
+author = u"Martin Durant"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -60,6 +61,7 @@ author = u'Martin Durant'
 #
 # The short X.Y version.
 import fsspec
+
 version = fsspec.__version__
 # The full version, including alpha/beta/rc tags.
 release = fsspec.__version__
@@ -77,7 +79,7 @@ language = None
 exclude_patterns = []
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = "sphinx"
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
@@ -88,7 +90,7 @@ todo_include_todos = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_rtd_theme"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -107,9 +109,9 @@ html_static_path = []
 # This is required for the alabaster theme
 # refs: http://alabaster.readthedocs.io/en/latest/installation.html#sidebars
 html_sidebars = {
-    '**': [
-        'relations.html',  # needs 'show_related': True theme option to display
-        'searchbox.html',
+    "**": [
+        "relations.html",  # needs 'show_related': True theme option to display
+        "searchbox.html",
     ]
 }
 
@@ -117,7 +119,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'fsspecdoc'
+htmlhelp_basename = "fsspecdoc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -126,15 +128,12 @@ latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
-
     # The font size ('10pt', '11pt' or '12pt').
     #
     # 'pointsize': '10pt',
-
     # Additional stuff for the LaTeX preamble.
     #
     # 'preamble': '',
-
     # Latex figure (float) alignment
     #
     # 'figure_align': 'htbp',
@@ -144,8 +143,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'fsspec.tex', u'fsspec Documentation',
-     u'Joseph Crail', 'manual'),
+    (master_doc, "fsspec.tex", u"fsspec Documentation", u"Joseph Crail", "manual")
 ]
 
 
@@ -153,10 +151,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, 'fsspec', u'fsspec Documentation',
-     [author], 1)
-]
+man_pages = [(master_doc, "fsspec", u"fsspec Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -165,10 +160,13 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'fsspec', u'fsspec Documentation',
-     author, 'fsspec', 'One line description of project.',
-     'Miscellaneous'),
+    (
+        master_doc,
+        "fsspec",
+        u"fsspec Documentation",
+        author,
+        "fsspec",
+        "One line description of project.",
+        "Miscellaneous",
+    )
 ]
-
-
-

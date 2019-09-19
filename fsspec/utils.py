@@ -37,53 +37,49 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "url_query": "q=1", "extra": "value"}
     """
     # Handle Windows paths including disk name in this special case
-    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
-        return {'protocol': 'file',
-                'path': urlpath}
+    if re.match(r"^[a-zA-Z]:[\\/]", urlpath):
+        return {"protocol": "file", "path": urlpath}
 
     parsed_path = urlsplit(urlpath)
-    protocol = parsed_path.scheme or 'file'
+    protocol = parsed_path.scheme or "file"
     if parsed_path.fragment:
         path = "#".join([parsed_path.path, parsed_path.fragment])
     else:
         path = parsed_path.path
-    if protocol == 'file':
+    if protocol == "file":
         # Special case parsing file protocol URL on Windows according to:
         # https://msdn.microsoft.com/en-us/library/jj710207.aspx
-        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
+        windows_path = re.match(r"^/([a-zA-Z])[:|]([\\/].*)$", path)
         if windows_path:
-            path = '%s:%s' % windows_path.groups()
+            path = "%s:%s" % windows_path.groups()
 
     if protocol in ["http", "https"]:
         # for HTTP, we don't want to parse, as requests will anyway
         return {"protocol": protocol, "path": urlpath}
 
-    options = {
-        'protocol': protocol,
-        'path': path,
-    }
+    options = {"protocol": protocol, "path": path}
 
     if parsed_path.netloc:
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+        options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
 
         if protocol in ("s3", "gcs", "gs"):
-            options["path"] = options['host'] + options["path"]
+            options["path"] = options["host"] + options["path"]
         else:
-            options["host"] = options['host']
+            options["host"] = options["host"]
         if parsed_path.port:
-            options['port'] = parsed_path.port
+            options["port"] = parsed_path.port
         if parsed_path.username:
-            options['username'] = parsed_path.username
+            options["username"] = parsed_path.username
         if parsed_path.password:
-            options['password'] = parsed_path.password
+            options["password"] = parsed_path.password
 
     if parsed_path.query:
-        options['url_query'] = parsed_path.query
+        options["url_query"] = parsed_path.query
     if parsed_path.fragment:
-        options['url_fragment'] = parsed_path.fragment
+        options["url_fragment"] = parsed_path.fragment
 
     if inherit_storage_options:
         update_storage_options(options, inherit_storage_options)
@@ -96,9 +92,11 @@ def update_storage_options(options, inherited=None):
         inherited = {}
     collisions = set(options) & set(inherited)
     if collisions:
-        collisions = '\n'.join('- %r' % k for k in collisions)
-        raise KeyError("Collision between inferred and specified storage "
-                       "options:\n%s" % collisions)
+        collisions = "\n".join("- %r" % k for k in collisions)
+        raise KeyError(
+            "Collision between inferred and specified storage "
+            "options:\n%s" % collisions
+        )
     options.update(inherited)
 
 
@@ -113,7 +111,7 @@ def infer_compression(filename):
     extension. This includes builtin (gz, bz2, zip) compressions, as well as
     optional compressions. See fsspec.compression.register_compression.
     """
-    extension = os.path.splitext(filename)[-1].strip('.')
+    extension = os.path.splitext(filename)[-1].strip(".")
     if extension in compressions:
         return compressions[extension]
 
@@ -193,7 +191,7 @@ def seek_delimiter(file, delimiter, blocksize):
                 return False
         except (OSError, ValueError):
             pass
-        last = full[-len(delimiter):]
+        last = full[-len(delimiter) :]
 
 
 def read_block(f, offset, length, delimiter=None, split_before=False):
