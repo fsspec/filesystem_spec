@@ -10,8 +10,8 @@ import fsspec
 
 @contextmanager
 def tempzip(data={}):
-    f = tempfile.mkstemp(suffix='zip')[1]
-    with zipfile.ZipFile(f, mode='w') as z:
+    f = tempfile.mkstemp(suffix="zip")[1]
+    with zipfile.ZipFile(f, mode="w") as z:
         for k, v in data.items():
             z.writestr(k, v)
     try:
@@ -23,28 +23,26 @@ def tempzip(data={}):
             pass
 
 
-data = {'a': b'',
-        'b': b'hello',
-        'deeply/nested/path': b"stuff"}
+data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
 
 
 def test_empty():
     with tempzip() as z:
-        fs = fsspec.get_filesystem_class('zip')(fo=z)
-        assert fs.find('') == []
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
+        assert fs.find("") == []
 
 
 @pytest.mark.skipif(sys.version_info.minor < 6, reason="zip-info odd on py35")
 def test_mapping():
     with tempzip(data) as z:
-        fs = fsspec.get_filesystem_class('zip')(fo=z)
-        m = fs.get_mapper('')
-        assert list(m) == ['a', 'b', 'deeply/nested/path']
-        assert m['b'] == data['b']
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
+        m = fs.get_mapper("")
+        assert list(m) == ["a", "b", "deeply/nested/path"]
+        assert m["b"] == data["b"]
 
 
 def test_pickle():
     with tempzip(data) as z:
-        fs = fsspec.get_filesystem_class('zip')(fo=z)
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
         fs2 = pickle.loads(pickle.dumps(fs))
-        assert fs2.cat('b') == b'hello'
+        assert fs2.cat("b") == b"hello"

@@ -33,9 +33,12 @@ def test_read_block_split_before():
     # delimited record.
     assert read_block(io.BytesIO(d), 0, 10, delimiter=b"\n") == b"#header>foo0\n"
     assert (
-        read_block(io.BytesIO(d), 0, 10, delimiter=b"\n", split_before=True) == b"#header>foo0"
+        read_block(io.BytesIO(d), 0, 10, delimiter=b"\n", split_before=True)
+        == b"#header>foo0"
     )
-    assert read_block(io.BytesIO(d), 0, 10, delimiter=b">") == b"#header>foo0\nFOOBAR0\n>"
+    assert (
+        read_block(io.BytesIO(d), 0, 10, delimiter=b">") == b"#header>foo0\nFOOBAR0\n>"
+    )
     assert (
         read_block(io.BytesIO(d), 0, 10, delimiter=b">", split_before=True)
         == b"#header>foo0\nFOOBAR0\n"
@@ -73,7 +76,8 @@ def test_read_block_split_before():
 
     # Read with offset spanning multiple records, splits on either side of delimiter
     assert (
-        read_block(io.BytesIO(d), 10, 20, delimiter=b"\n") == b"FOOBAR0\n>foo1\nFOOBAR1\n"
+        read_block(io.BytesIO(d), 10, 20, delimiter=b"\n")
+        == b"FOOBAR0\n>foo1\nFOOBAR1\n"
     )
     assert (
         read_block(io.BytesIO(d), 10, 20, delimiter=b"\n", split_before=True)

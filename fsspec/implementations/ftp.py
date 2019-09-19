@@ -6,10 +6,20 @@ from ..utils import infer_storage_options
 
 class FTPFileSystem(AbstractFileSystem):
     """A filesystem over classic """
-    root_marker = '/'
 
-    def __init__(self, host, port=21, username=None, password=None,
-                 acct=None, block_size=None, tempdir='/tmp', **kwargs):
+    root_marker = "/"
+
+    def __init__(
+        self,
+        host,
+        port=21,
+        username=None,
+        password=None,
+        acct=None,
+        block_size=None,
+        tempdir="/tmp",
+        **kwargs
+    ):
         """
         You can use _get_kwargs_from_urls to get some kwargs from
         a reasonable FTP url.
@@ -50,7 +60,7 @@ class FTPFileSystem(AbstractFileSystem):
 
     def __getstate__(self):
         d = self.__dict__.copy()
-        d.pop('ftp')
+        d.pop("ftp")
         return d
 
     def __setstate__(self, state):
@@ -59,13 +69,13 @@ class FTPFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        return '/' + infer_storage_options(path)['path'].lstrip('/').rstrip('/')
+        return "/" + infer_storage_options(path)["path"].lstrip("/").rstrip("/")
 
     @staticmethod
     def _get_kwargs_from_urls(urlpath):
         out = infer_storage_options(urlpath)
-        out.pop('path', None)
-        out.pop('protocol', None)
+        out.pop("path", None)
+        out.pop("protocol", None)
         return out
 
     def invalidate_cache(self, path=None):
@@ -79,22 +89,24 @@ class FTPFileSystem(AbstractFileSystem):
         out = []
         if path not in self.dircache:
             try:
-                out = [(fn, details) for (fn, details) in self.ftp.mlsd(path)
-                       if fn not in ['.', '..']
-                       and details['type'] not in ['pdir', 'cdir']]
+                out = [
+                    (fn, details)
+                    for (fn, details) in self.ftp.mlsd(path)
+                    if fn not in [".", ".."] and details["type"] not in ["pdir", "cdir"]
+                ]
                 for fn, details in out:
-                    if path == '/':
-                        path = ''  # just for forming the names, below
-                    details['name'] = '/'.join([path, fn.lstrip('/')])
-                    if details['type'] == 'file':
-                        details['size'] = int(details['size'])
+                    if path == "/":
+                        path = ""  # just for forming the names, below
+                    details["name"] = "/".join([path, fn.lstrip("/")])
+                    if details["type"] == "file":
+                        details["size"] = int(details["size"])
                     else:
-                        details['size'] = 0
+                        details["size"] = 0
                 self.dircache[path] = out
             except Error:
                 try:
                     info = self.info(path)
-                    if info['type'] == 'file':
+                    if info["type"] == "file":
                         out = [(path, info)]
                 except (Error, IndexError):
                     raise FileNotFoundError
@@ -107,19 +119,24 @@ class FTPFileSystem(AbstractFileSystem):
         # implement with direct method
         path = self._strip_protocol(path)
         files = self.ls(self._parent(path), True)
-        return [f for f in files if f['name'] == path][0]
+        return [f for f in files if f["name"] == path][0]
 
-    def _open(self, path, mode='rb', block_size=None, autocommit=True,
-              **kwargs):
+    def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         path = self._strip_protocol(path)
         block_size = block_size or self.blocksize
-        return FTPFile(self, path, mode=mode, block_size=block_size,
-                       tempdir=self.tempdir, autocommit=autocommit)
+        return FTPFile(
+            self,
+            path,
+            mode=mode,
+            block_size=block_size,
+            tempdir=self.tempdir,
+            autocommit=autocommit,
+        )
 
     def _rm(self, path):
         path = self._strip_protocol(path)
         self.ftp.delete(path)
-        self.invalidate_cache(path.rsplit('/', 1)[0])
+        self.invalidate_cache(path.rsplit("/", 1)[0])
 
     def mkdir(self, path, **kwargs):
         path = self._strip_protocol(path)
@@ -142,6 +159,7 @@ class FTPFileSystem(AbstractFileSystem):
 
 class TransferDone(Exception):
     """Internal exception to break out of transfer"""
+
     pass
 
 
@@ -150,9 +168,9 @@ class FTPFile(AbstractBufferedFile):
 
     def __init__(self, fs, path, **kwargs):
         super().__init__(fs, path, **kwargs)
-        if kwargs.get('autocommit', False) is False:
+        if kwargs.get("autocommit", False) is False:
             self.target = self.path
-            self.path = '/'.join([kwargs['tempdir'], str(uuid.uuid4())])
+            self.path = "/".join([kwargs["tempdir"], str(uuid.uuid4())])
 
     def commit(self):
         self.fs.mv(self.path, self.target)
@@ -175,7 +193,7 @@ class FTPFile(AbstractBufferedFile):
         def callback(x):
             total[0] += len(x)
             if total[0] > end - start:
-                out.append(x[:(end - start) - total[0]])
+                out.append(x[: (end - start) - total[0]])
                 self.fs.ftp.abort()
                 raise TransferDone
             else:
@@ -185,15 +203,17 @@ class FTPFile(AbstractBufferedFile):
                 raise TransferDone
 
         try:
-            self.fs.ftp.retrbinary('RETR %s' % self.path, blocksize=2**16,
-                                   rest=start, callback=callback)
+            self.fs.ftp.retrbinary(
+                "RETR %s" % self.path, blocksize=2 ** 16, rest=start, callback=callback
+            )
         except TransferDone:
             self.fs.ftp.abort()
             self.fs.ftp.voidresp()
-        return b''.join(out)
+        return b"".join(out)
 
     def _upload_chunk(self, final=False):
         self.buffer.seek(0)
-        self.fs.ftp.storbinary("STOR " + self.path, self.buffer,
-                               blocksize=2**16, rest=self.offset)
+        self.fs.ftp.storbinary(
+            "STOR " + self.path, self.buffer, blocksize=2 ** 16, rest=self.offset
+        )
         return True
