@@ -1,8 +1,7 @@
-import glob
-import os
 import pytest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
+import pickle
 import fsspec
 
 requests = pytest.importorskip("requests")
@@ -128,28 +127,6 @@ def test_random_access(server, headers):
         # we actually get all the data
         f.seek(5, 1)
         assert f.read(5) == data[10:15]
-<<<<<<< Updated upstream
-=======
-
-
-def test_local_session():
-    h = fsspec.filesystem("http")
-    import threading
-
-    out = []
-
-    def target():
-        out.append(h.session)
-
-    t = threading.Thread(target=target)
-    t.start()
-    t.join()
-
-    assert out[0] != id(h.session)
-
-    h2 = pickle.loads(pickle.dumps(h))
-    assert h is h2
-    assert h.session is h2.session
 
 
 def test_mapper_url(server):
@@ -157,4 +134,3 @@ def test_mapper_url(server):
     mapper = h.get_mapper(server + "/index/")
     assert mapper.root.startswith('http:')
     assert list(mapper)
->>>>>>> Stashed changes
