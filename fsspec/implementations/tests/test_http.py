@@ -134,3 +134,7 @@ def test_mapper_url(server):
     mapper = h.get_mapper(server + "/index/")
     assert mapper.root.startswith("http:")
     assert list(mapper)
+
+    mapper2 = fsspec.get_mapper(server + "/index/")
+    assert mapper2.root.startswith("http:")
+    assert list(mapper) == list(mapper2)
