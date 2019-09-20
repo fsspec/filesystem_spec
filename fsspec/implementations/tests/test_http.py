@@ -132,5 +132,5 @@ def test_random_access(server, headers):
 def test_mapper_url(server):
     h = fsspec.filesystem("http")
     mapper = h.get_mapper(server + "/index/")
-    assert mapper.root.startswith('http:')
+    assert mapper.root.startswith("http:")
     assert list(mapper)
