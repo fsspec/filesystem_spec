@@ -157,4 +157,4 @@ def get_mapper(url, check=False, create=False, **kwargs):
     cls = get_filesystem_class(protocol)
     fs = cls(**kwargs)
     # Removing protocol here - could defer to each open() on the backend
-    return FSMap(path, fs, check, create)
+    return FSMap(url, fs, check, create)

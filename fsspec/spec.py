@@ -870,7 +870,7 @@ class AbstractBufferedFile(io.IOBase):
             )
         else:
             self.buffer = io.BytesIO()
-            self.offset = 0
+            self.offset = None
             self.forced = False
             self.location = None
 
@@ -988,12 +988,13 @@ class AbstractBufferedFile(io.IOBase):
             # no data in the buffer to write
             return
 
-        if not self.offset:
+        if self.offset is None:
             if not force and self.buffer.tell() < self.blocksize:
                 # Defer write on small block
                 return
             else:
                 # Initialize a multipart upload
+                self.offset = 0
                 self._initiate_upload()
 
         if self._upload_chunk(final=force) is not False:

@@ -1,8 +1,7 @@
-import glob
-import os
 import pytest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
+import pickle
 import fsspec
 
 requests = pytest.importorskip("requests")
@@ -128,3 +127,14 @@ def test_random_access(server, headers):
         # we actually get all the data
         f.seek(5, 1)
         assert f.read(5) == data[10:15]
+
+
+def test_mapper_url(server):
+    h = fsspec.filesystem("http")
+    mapper = h.get_mapper(server + "/index/")
+    assert mapper.root.startswith("http:")
+    assert list(mapper)
+
+    mapper2 = fsspec.get_mapper(server + "/index/")
+    assert mapper2.root.startswith("http:")
+    assert list(mapper) == list(mapper2)
