@@ -32,7 +32,7 @@ def test_empty():
         assert fs.find("") == []
 
 
-@pytest.mark.skipif(sys.version_info < (3, 6), reason="zip-info odd on py35")
+@pytest.mark.xfail(sys.version_info < (3, 6), reason="zip-info odd on py35")
 def test_mapping():
     with tempzip(data) as z:
         fs = fsspec.get_filesystem_class("zip")(fo=z)
@@ -41,7 +41,7 @@ def test_mapping():
         assert m["b"] == data["b"]
 
 
-@pytest.mark.skipif(sys.version_info < (3, 6), reason="zip not supported on py35")
+@pytest.mark.xfail(sys.version_info < (3, 6), reason="zip not supported on py35")
 def test_pickle():
     with tempzip(data) as z:
         fs = fsspec.get_filesystem_class("zip")(fo=z)

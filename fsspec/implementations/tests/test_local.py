@@ -162,7 +162,7 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize("fmt", list(compression.compr))
 def test_compressions(fmt, mode, tmpdir):
     if fmt == "zip" and sys.version_info < (3, 6):
-        pytest.skip("zip compression requires python3.6 or higher")
+        pytest.xfail("zip compression requires python3.6 or higher")
 
     tmpdir = str(tmpdir)
     fn = os.path.join(tmpdir, ".tmp.getsize")
