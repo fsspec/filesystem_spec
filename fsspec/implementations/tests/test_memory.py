@@ -1,5 +1,6 @@
 import pytest
 import fsspec
+import sys
 
 
 @pytest.fixture()
@@ -19,6 +20,10 @@ def test_1(m):
     assert list(m.get_mapper("")) == ["afiles/and/anothers", "somefile"]
 
 
+@pytest.mark.xfail(
+    sys.version_info < (3, 6),
+    reason="py35 error, see https://github.com/intake/filesystem_spec/issues/148",
+)
 def test_ls(m):
     m.touch("/dir/afile")
     m.touch("/dir/dir1/bfile")

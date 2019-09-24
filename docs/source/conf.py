@@ -51,9 +51,9 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = u"fsspec"
-copyright = u"2018, Martin Durant"
-author = u"Martin Durant"
+project = "fsspec"
+copyright = "2018, Martin Durant"
+author = "Martin Durant"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -143,7 +143,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "fsspec.tex", u"fsspec Documentation", u"Joseph Crail", "manual")
+    (master_doc, "fsspec.tex", "fsspec Documentation", "Joseph Crail", "manual")
 ]
 
 
@@ -151,7 +151,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "fsspec", u"fsspec Documentation", [author], 1)]
+man_pages = [(master_doc, "fsspec", "fsspec Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -163,7 +163,7 @@ texinfo_documents = [
     (
         master_doc,
         "fsspec",
-        u"fsspec Documentation",
+        "fsspec Documentation",
         author,
         "fsspec",
         "One line description of project.",

@@ -12,9 +12,11 @@ import fsspec
 def hdfs_cluster():
     cmd0 = "htcluster shutdown".split()
     try:
-        subprocess.check_output(cmd0)
+        subprocess.check_output(cmd0, stderr=subprocess.STDOUT)
     except FileNotFoundError:
         pytest.skip("htcluster not found")
+    except subprocess.CalledProcessError as ex:
+        pytest.skip("htcluster failed: " + ex.output.decode())
     cmd1 = "htcluster startup --image base".split()
     subprocess.check_output(cmd1)
     try:

@@ -4,76 +4,20 @@ os:
 - linux
 services:
 - docker
-language: python
 
-matrix:
-  include:
-    - language: generic
-
-      env:
-        - TEST=FSSPEC
-        - DOCKER_COMPOSE_VERSION=1.23.2
-
-      before_install:
-        - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-        - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-        - sudo apt-get update
-        - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
-        - sudo rm /usr/local/bin/docker-compose
-        - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
-        - chmod +x docker-compose
-        - sudo mv docker-compose /usr/local/bin
-
-      install:
-        - source ci/install.sh
-
-      script:
-        - py.test --cov=fsspec -v
-
-    - language: generic
-      env: TEST=S3FS
-      install:
-        - source ci/install.sh
-        - export BOTO_CONFIG=/dev/null
-        - export AWS_ACCESS_KEY_ID=foobar_key
-        - export AWS_SECRET_ACCESS_KEY=foobar_secret
-        - conda install boto3 botocore httpretty moto six mock -c conda-forge -y
-        - git clone https://github.com/dask/s3fs
-        - cd s3fs
-        - pip install -e . --no-deps
-
-      script:
-        - py.test -vv s3fs
-
-    - language: generic
-
-      env:
-        - TEST=PRE-COMMIT
-
-      install:
-        - source ci/install_conda.sh
-        - pip install pre-commit
-        - pre-commit install --install-hooks
-
-      script:
-        - pre-commit run --all
-
-
-  allow_failures:
-    - language: generic
-      env: TEST=GCSFS
-      install:
-        - source ci/install.sh
-        - conda install -c conda-forge requests decorator google-auth -y
-        - pip install vcrpy google-auth-oauthlib
-        - git clone https://github.com/dask/gcsfs
-        - cd gcsfs
-        - pip install -e . --no-deps
-
-      script:
-        - GCSFS_RECORD_MODE=none py.test -vv gcsfs
-
-
+language: generic
+env:
+  - TOXENV=py35
+  - TOXENV=py36
+  - TOXENV=py37
+  - TOXENV=coverage
+  - TOXENV=lint
+  - TOXENV=s3fs
+  - TOXENV=gcsfs
+install:
+  - source ci/install.sh
+script:
+  - tox -v
 
 notifications:
   email: false

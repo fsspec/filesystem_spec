@@ -1,11 +1,16 @@
 """Tests abstract buffered file API, using FTP implementation"""
 import pickle
+import sys
 import pytest
 from fsspec.implementations.tests.test_ftp import ftp_writable, FTPFileSystem
 
 data = b"hello" * 10000
 
 
+@pytest.mark.xfail(
+    sys.version_info < (3, 6),
+    reason="py35 error, see https://github.com/intake/filesystem_spec/issues/147",
+)
 def test_pickle(ftp_writable):
     host, port, user, pw = ftp_writable
     ftp = FTPFileSystem(host=host, port=port, username=user, password=pw)
@@ -125,7 +130,7 @@ def test_midread_cache(ftp_writable):
     fs = FTPFileSystem(host=host, port=port, username=user, password=pw)
     fn = "/myfile"
     with fs.open(fn, "wb") as f:
-        f.write(b"a" * 175_627_146)
+        f.write(b"a" * 175627146)
     with fs.open(fn, "rb") as f:
         f.seek(175561610)
         d1 = f.read(65536)
