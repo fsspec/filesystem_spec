@@ -379,17 +379,17 @@ class AbstractFileSystem(up):
         kwargs are passed to ``ls``.
         """
         # TODO: allow equivalent of -name parameter
-        out = []
+        out = set()
         for path, dirs, files in self.walk(path, maxdepth, **kwargs):
             if withdirs:
                 files += dirs
             for name in files:
                 if name and name not in out:
-                    out.append("/".join([path.rstrip("/"), name]) if path else name)
+                    out.add("/".join([path.rstrip("/"), name]) if path else name)
         if self.isfile(path) and path not in out:
             # walk works on directories, but find should also return [path]
             # when path happens to be a file
-            out.append(path)
+            out.add(path)
         return sorted(out)
 
     def du(self, path, total=True, maxdepth=None, **kwargs):
