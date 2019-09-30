@@ -108,3 +108,11 @@ def test_read_block_delimiter():
     assert fs.read_block("/myfile", 2, 9, b"\n") == b"lines\nof\n"
     assert fs.read_block("/myfile", 12, 6, b"\n") == b"text"
     assert fs.read_block("/myfile", 0, None) == fs.cat("/myfile")
+
+
+def test_open_text():
+    fs = MemoryFileSystem()
+    with fs.open("/myfile", "wb") as f:
+        f.write(b"some\n" b"lines\n" b"of\n" b"text")
+    f = fs.open("/myfile", "r", encoding="latin1")
+    assert f.encoding == "latin1"
