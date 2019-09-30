@@ -114,5 +114,5 @@ def test_open_text():
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:
         f.write(b"some\n" b"lines\n" b"of\n" b"text")
-    f = fs.open('/myfile', 'r', encoding='latin1')
-    assert f.encoding == 'latin1'
+    f = fs.open("/myfile", "r", encoding="latin1")
+    assert f.encoding == "latin1"

@@ -686,6 +686,7 @@ class AbstractFileSystem(up):
             See builtin ``open()``
         block_size: int
             Some indication of buffering - this is a value in bytes
+        encoding, errors, newline: passed on to TextIOWrapper for text mode
         """
         import io
 
@@ -693,11 +694,14 @@ class AbstractFileSystem(up):
         if "b" not in mode:
             mode = mode.replace("t", "") + "b"
 
-            text_kwargs = {k: kwargs.pop(k)
-                           for k in ['encoding', 'errors', 'newline']
-                           if k in kwargs}
-            return io.TextIOWrapper(self.open(path, mode, block_size, **kwargs),
-                                    **text_kwargs)
+            text_kwargs = {
+                k: kwargs.pop(k)
+                for k in ["encoding", "errors", "newline"]
+                if k in kwargs
+            }
+            return io.TextIOWrapper(
+                self.open(path, mode, block_size, **kwargs), **text_kwargs
+            )
         else:
             ac = kwargs.pop("autocommit", not self._intrans)
             f = self._open(
