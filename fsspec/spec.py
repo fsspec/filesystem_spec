@@ -987,31 +987,25 @@ class AbstractBufferedFile(io.IOBase):
             raise ValueError("Flush on closed file")
         if force and self.forced:
             raise ValueError("Force flush cannot be called more than once")
+        if force:
+            self.forced = True
 
         if self.mode not in {"wb", "ab"}:
-            assert not hasattr(self, "buffer"), (
-                "flush on read-mode file " "with non-empty buffer"
-            )
+            # no-op to flush on read-mode
             return
-        if self.buffer.tell() == 0 and not force:
-            # no data in the buffer to write
+
+        if not force and self.buffer.tell() < self.blocksize:
+            # Defer write on small block
             return
 
         if self.offset is None:
-            if not force and self.buffer.tell() < self.blocksize:
-                # Defer write on small block
-                return
-            else:
-                # Initialize a multipart upload
-                self.offset = 0
-                self._initiate_upload()
+            # Initialize a multipart upload
+            self.offset = 0
+            self._initiate_upload()
 
         if self._upload_chunk(final=force) is not False:
             self.offset += self.buffer.seek(0, 2)
             self.buffer = io.BytesIO()
-
-        if force:
-            self.forced = True
 
     def _upload_chunk(self, final=False):
         """ Write one part of a multi-block file upload
@@ -1133,8 +1127,6 @@ class AbstractBufferedFile(io.IOBase):
         else:
             if not self.forced:
                 self.flush(force=True)
-            else:
-                assert self.buffer.tell() == 0
 
             if self.fs is not None:
                 self.fs.invalidate_cache(self.path)

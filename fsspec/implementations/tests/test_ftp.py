@@ -109,7 +109,6 @@ def test_write_big(ftp_writable, cache_type):
         assert fs.exists(fn)
         f.write(b"o" * 200)
         f.flush()
-        assert f.buffer.tell() == 0
 
     assert fs.info(fn)["size"] == 1700
     assert fs.cat(fn) == b"o" * 1700
