@@ -296,3 +296,18 @@ def test_filecache_with_checks():
     assert fs2.cat(f1) == data * 2  # changed, since origin changed
     time.sleep(0.11)  # allow cache details to expire
     assert fs.cat(f1) == data * 2  # changed, since origin changed
+
+
+def test_takes_fs_instance():
+    import tempfile
+
+    origin = tempfile.mkdtemp()
+    data = b"test data"
+    f1 = os.path.join(origin, "afile")
+    with open(f1, "wb") as f:
+        f.write(data)
+
+    fs = fsspec.filesystem("file")
+    fs2 = fsspec.filesystem("filecache", target_protocol=fs)
+
+    assert fs2.cat(f1) == data

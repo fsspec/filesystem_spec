@@ -74,14 +74,18 @@ class CachingFileSystem(AbstractFileSystem):
             else:
                 storage = cache_storage
         os.makedirs(storage[-1], exist_ok=True)
-        self.protocol = target_protocol
         self.storage = storage
         self.kwargs = target_options or {}
         self.cache_check = cache_check
         self.check_files = check_files
         self.expiry = expiry_time
         self.load_cache()
-        self.fs = filesystem(target_protocol, **self.kwargs)
+        if isinstance(target_protocol, AbstractFileSystem):
+            self.fs = target_protocol
+            self.protocol = self.fs.protocol
+        else:
+            self.protocol = target_protocol
+            self.fs = filesystem(target_protocol, **self.kwargs)
         super().__init__(**self.kwargs)
 
     def __reduce_ex__(self, *_):
@@ -334,7 +338,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         # call target filesystems open
         f = self.fs._open(path, **kwargs)
         with open(fn, "wb") as f2:
-            if f.blocksize and f.size:
+            if getattr(f, "blocksize", 0) and f.size:
                 # opportunity to parallelise here
                 data = True
                 while data:
