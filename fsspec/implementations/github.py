@@ -16,7 +16,7 @@ class GithubFileSystem(AbstractFileSystem):
 
     url = "https://api.github.com/repos/{org}/{repo}/git/trees/{sha}"
     rurl = "https://raw.githubusercontent.com/{org}/{repo}/{sha}/{path}"
-    protocol = 'github'
+    protocol = "github"
 
     def __init__(self, org, repo, sha="master", **kwargs):
         super().__init__(**kwargs)
@@ -29,43 +29,39 @@ class GithubFileSystem(AbstractFileSystem):
         if path == "":
             sha = self.root
         if sha is None:
-            parts = path.rstrip('/').split('/')
+            parts = path.rstrip("/").split("/")
             so_far = ""
             sha = self.root
             for part in parts:
                 out = self.ls(so_far, True, sha=sha)
-                so_far += '/' + part if so_far else part
-                out = [o for o in out if o['name'] == so_far][0]
-                if out['type'] == 'file':
+                so_far += "/" + part if so_far else part
+                out = [o for o in out if o["name"] == so_far][0]
+                if out["type"] == "file":
                     if detail:
                         return [out]
                     else:
                         return path
-                sha = out['sha']
+                sha = out["sha"]
         if path not in self.dircache:
-            r = requests.get(self.url.format(
-                org=self.org, repo=self.repo, sha=sha))
+            r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=sha))
             self.dircache[path] = [
-                {"name": path + '/' + f['path'] if path else f['path'],
-                 "mode": f['mode'],
-                 "type": {'blob': "file", 'tree': 'directory'}[f['type']],
-                 "size": f.get('size', 0),
-                 "sha": f['sha']}
-                for f in r.json()['tree']
+                {
+                    "name": path + "/" + f["path"] if path else f["path"],
+                    "mode": f["mode"],
+                    "type": {"blob": "file", "tree": "directory"}[f["type"]],
+                    "size": f.get("size", 0),
+                    "sha": f["sha"],
+                }
+                for f in r.json()["tree"]
             ]
         if detail:
             return self.dircache[path]
         else:
-            return sorted([f['name'] for f in self.dircache[path]])
+            return sorted([f["name"] for f in self.dircache[path]])
 
     def _open(self, path, mode="rb", **kwargs):
-        if mode != 'rb':
+        if mode != "rb":
             raise NotImplementedError
-        url = self.rurl.format(
-            org=self.org,
-            repo=self.repo,
-            path=path,
-            sha=self.root
-        )
+        url = self.rurl.format(org=self.org, repo=self.repo, path=path, sha=self.root)
         r = requests.get(url)
         return io.BytesIO(r.content)
