@@ -5,8 +5,11 @@ import dask
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 from fsspec import filesystem
 
-methods_to_forward = ["mkdir", "mkdirs", "rmdir", "ls", "copy", "mv", "rm"]
-_files_cache = {}
+
+def make_instance(cls, args, kwargs):
+    inst = cls(*args, **kwargs)
+    inst._determine_worker()
+    return inst
 
 
 class DaskWorkerFileSystem(AbstractFileSystem):
@@ -18,10 +21,10 @@ class DaskWorkerFileSystem(AbstractFileSystem):
     **Warning** this implementation is experimental, and read-only for now.
     """
 
-    def __init__(self, remote_protocol, storage_options=None, **kwargs):
+    def __init__(self, remote_protocol, remote_options=None, **kwargs):
         super().__init__(**kwargs)
         self.protocol = remote_protocol
-        self.storage_options = storage_options or {}
+        self.remote_options = remote_options
         self.worker = None
         self.client = None
         self.fs = None
@@ -31,21 +34,14 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         try:
             get_worker()
             self.worker = True
-            self.fs = filesystem(self.protocol, **self.storage_options)
+            self.fs = filesystem(self.protocol, **(self.remote_options or {}))
         except ValueError:
             self.worker = False
             self.client = _get_global_client()
             self.rfs = dask.delayed(self)
 
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self._determine_worker()
-
-    def __getstate__(self):
-        dic = self.__dict__.copy()
-        for method in methods_to_forward + ["client", "fs"]:
-            dic.pop(method, None)
-        return dic
+    def __reduce__(self):
+        return make_instance, (type(self), self.storage_args, self.storage_options)
 
     def mkdir(self, *args, **kwargs):
         if self.worker:

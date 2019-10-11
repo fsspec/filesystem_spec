@@ -40,6 +40,7 @@ class CachingFileSystem(AbstractFileSystem):
         check_files=False,
         expiry_time=604800,
         target_options=None,
+        **kwargs
     ):
         """
 
@@ -66,6 +67,9 @@ class CachingFileSystem(AbstractFileSystem):
         target_options: dict or None
             Passed to the instantiation of the FS, if fs is None.
         """
+        if self._cached:
+            return
+        super().__init__(**kwargs)
         if cache_storage == "TMP":
             storage = [tempfile.mkdtemp()]
         else:
@@ -86,7 +90,6 @@ class CachingFileSystem(AbstractFileSystem):
         else:
             self.protocol = target_protocol
             self.fs = filesystem(target_protocol, **self.kwargs)
-        super().__init__(**self.kwargs)
 
     def __reduce_ex__(self, *_):
         return (
@@ -130,7 +133,7 @@ class CachingFileSystem(AbstractFileSystem):
                     if cache[k]["blocks"] is True:
                         c["blocks"] = True
                     else:
-                        c["blocks"] = c["blocks"].union(cache[k]["blocks"])
+                        c["blocks"] = set(c["blocks"]).union(cache[k]["blocks"])
         else:
             cached_files = cache
         cache = {k: v.copy() for k, v in cached_files.items()}

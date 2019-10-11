@@ -8,6 +8,7 @@ class FTPFileSystem(AbstractFileSystem):
     """A filesystem over classic """
 
     root_marker = "/"
+    cachable = False
 
     def __init__(
         self,
@@ -57,15 +58,6 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp = FTP()
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
-
-    def __getstate__(self):
-        d = self.__dict__.copy()
-        d.pop("ftp")
-        return d
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self._connect()
 
     @classmethod
     def _strip_protocol(cls, path):

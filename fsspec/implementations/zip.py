@@ -28,6 +28,8 @@ class ZipFileSystem(AbstractFileSystem):
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters for requests
         """
+        if self._cached:
+            return
         AbstractFileSystem.__init__(self)
         if mode != "r":
             raise ValueError("Only read from zip files accepted")
@@ -42,8 +44,7 @@ class ZipFileSystem(AbstractFileSystem):
             fo = files[0]
         self.fo = fo.__enter__()  # the whole instance is a context
         self.zip = zipfile.ZipFile(self.fo)
-        self.block_size = storage_options.pop("block_size", DEFAULT_BLOCK_SIZE)
-        self.kwargs = storage_options
+        self.block_size = storage_options.get("block_size", DEFAULT_BLOCK_SIZE)
         self.dir_cache = None
 
     @classmethod
@@ -101,9 +102,6 @@ class ZipFileSystem(AbstractFileSystem):
         else:
             return list(sorted(f["name"] for f in out))
 
-    def __reduce_ex__(self, protocol):
-        return ZipFileSystem, (self.in_fo,)
-
     def cat(self, path):
         return self.zip.read(path)
 
@@ -118,4 +116,4 @@ class ZipFileSystem(AbstractFileSystem):
         return out
 
     def ukey(self, path):
-        return tokenize(path, self.kwargs, self.protocol)
+        return tokenize(path, self.in_fo, self.protocol)
