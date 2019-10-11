@@ -389,7 +389,7 @@ def test_make_path_posix():
     assert make_path_posix("relpath", sep="/") == os.path.join(cwd, "relpath")
     assert make_path_posix("rel/path", sep="/") == os.path.join(cwd, "rel/path")
     assert make_path_posix("C:\\path", sep="\\") == "C:/path"
-    assert make_path_posix(r'\\windows-server\someshare\path\more\path\dir\foo.parquet') == r'//windows-server/someshare/path/more/path/dir/foo.parquet'
+    assert make_path_posix('\\\\windows-server\\someshare\\path\\more\\path\dir\\foo.parquet') == '//windows-server/someshare/path/more/path/dir/foo.parquet'
     assert "/" in make_path_posix("rel\\path", sep="\\")
 
 
