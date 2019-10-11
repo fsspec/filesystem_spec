@@ -32,6 +32,10 @@ except ImportError:
     up = object
 
 
+def make_instance(cls, args, kwargs):
+    return cls(*args, **kwargs)
+
+
 class AbstractFileSystem(up):
     """
     An abstract super-class for pythonic file-systems
@@ -70,6 +74,7 @@ class AbstractFileSystem(up):
         if self.cachable:
             # store for caching - can hold memory
             cls._cache[token] = self
+        self.storage_args = args
         self.storage_options = storage_options
         return self
 
@@ -777,15 +782,8 @@ class AbstractFileSystem(up):
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
-    def __getstate__(self):
-        """ Instance should be pickleable """
-        d = self.__dict__.copy()
-        d.pop("dircache")
-        return d
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self.dircache = {}
+    def __reduce__(self):
+        return make_instance, (type(self), self.storage_args, self.storage_options)
 
     def _get_pyarrow_filesystem(self):
         """

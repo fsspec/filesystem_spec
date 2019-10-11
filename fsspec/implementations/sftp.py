@@ -28,6 +28,8 @@ class SFTPFileSystem(AbstractFileSystem):
             http://docs.paramiko.org/en/2.4/api/client.html#paramiko.client.SSHClient.connect
             May include port, username, password...
         """
+        if self._cached:
+            return
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
         self.temppath = ssh_kwargs.pop("temppath", "/tmp")
         self.host = host
@@ -39,16 +41,6 @@ class SFTPFileSystem(AbstractFileSystem):
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.client.connect(self.host, **self.ssh_kwargs)
         self.ftp = self.client.open_sftp()
-
-    def __getstate__(self):
-        d = self.__dict__.copy()
-        d.pop("ftp", None)
-        d.pop("client", None)
-        return d
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self._connect()
 
     @classmethod
     def _strip_protocol(cls, path):

@@ -62,18 +62,19 @@ def test_worflow(ftp_writable):
 def test_blocksize(ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
-    with fs.open("/out", "wb") as f:
-        f.write(b"test")
+    with fs.open("/out_block", "wb") as f:
+        f.write(b"test" * 4000)
 
     fs = fsspec.filesystem(
-        "cached",
+        "blockcache",
         target_protocol="ftp",
         target_options={"host": host, "port": port, "username": user, "password": pw},
     )
 
-    assert fs.cat("/out") == b"test"
+    with fs.open("/out_block", block_size=20) as f:
+        assert f.read(1) == b"t"
     with pytest.raises(ValueError):
-        fs.open("/out", block_size=1)
+        fs.open("/out_block", block_size=30)
 
 
 def test_local_filecache_creates_dir_if_needed():

@@ -29,6 +29,7 @@ def ftp():
 
 @pytest.fixture()
 def ftp_writable(tmpdir):
+    FTPFileSystem.clear_instance_cache()  # remove lingering connections
     d = str(tmpdir)
     with open(os.path.join(d, "out"), "wb") as f:
         f.write(b"hello" * 10000)
@@ -53,6 +54,13 @@ def test_basic(ftp):
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat("/" + os.path.basename(__file__))
     assert out == open(__file__, "rb").read()
+
+
+def test_not_cached(ftp):
+    host, port = ftp
+    fs = FTPFileSystem(host, port)
+    fs2 = FTPFileSystem(host, port)
+    assert fs is not fs2
 
 
 @pytest.mark.parametrize("cache_type", ["bytes", "mmap"])

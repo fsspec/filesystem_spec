@@ -37,6 +37,8 @@ class PyArrowHDFS(AbstractFileSystem):
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
+        if self._cached:
+            return
         AbstractFileSystem.__init__(self, **kwargs)
         self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
         self.pahdfs = HadoopFileSystem(
