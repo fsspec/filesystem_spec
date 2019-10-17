@@ -5,10 +5,10 @@ from multiprocessing import Process
 
 import pytest
 
+pytest.importorskip("fuse")  # noqa: E402
+
 from fsspec.fuse import run
 from fsspec.implementations.memory import MemoryFileSystem
-
-pytest.importorskip("fuse")
 
 
 def host_fuse(mountdir):
