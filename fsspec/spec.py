@@ -1041,6 +1041,9 @@ class AbstractBufferedFile(io.IOBase):
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         logger.debug("%s read: %i - %i" % (self, self.loc, self.loc + length))
+        if length == 0:
+            # don't even bother calling fetch
+            return b""
         out = self.cache._fetch(self.loc, self.loc + length)
         self.loc += len(out)
         return out
