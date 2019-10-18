@@ -62,6 +62,8 @@ class HTTPFileSystem(AbstractFileSystem):
         """
         return path
 
+    # TODO: override get
+
     def ls(self, url, detail=True):
         # ignoring URL-encoded arguments
         r = self.session.get(url, **self.kwargs)

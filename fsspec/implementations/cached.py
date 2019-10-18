@@ -6,7 +6,8 @@ import hashlib
 import tempfile
 import inspect
 from fsspec import AbstractFileSystem, filesystem
-from fsspec.core import MMapCache
+from fsspec.spec import AbstractBufferedFile
+from fsspec.core import MMapCache, BaseCache
 
 logger = logging.getLogger("fsspec")
 
@@ -335,12 +336,15 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             }
             self.cached_files[-1][path] = detail
             logger.debug("Copying %s to local cache" % path)
-        kwargs["cache_type"] = "none"
         kwargs["mode"] = mode
 
         # call target filesystems open
+        # TODO: why not just use fs.get ??
         f = self.fs._open(path, **kwargs)
         with open(fn, "wb") as f2:
+            if isinstance(f, AbstractBufferedFile):
+                # want no type of caching if just downloading whole thing
+                f.cache = BaseCache(0, f.cache.fetcher, f.size)
             if getattr(f, "blocksize", 0) and f.size:
                 # opportunity to parallelise here
                 data = True
