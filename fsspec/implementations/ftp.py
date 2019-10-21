@@ -81,11 +81,15 @@ class FTPFileSystem(AbstractFileSystem):
         out = []
         if path not in self.dircache:
             try:
-                out = [
-                    (fn, details)
-                    for (fn, details) in self.ftp.mlsd(path)
-                    if fn not in [".", ".."] and details["type"] not in ["pdir", "cdir"]
-                ]
+                try:
+                    out = [
+                        (fn, details)
+                        for (fn, details) in self.ftp.mlsd(path)
+                        if fn not in [".", ".."]
+                        and details["type"] not in ["pdir", "cdir"]
+                    ]
+                except Error:
+                    out = _mlsd2(self.ftp, path)  # Not platform independent
                 for fn, details in out:
                     if path == "/":
                         path = ""  # just for forming the names, below
@@ -110,7 +114,7 @@ class FTPFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         # implement with direct method
         path = self._strip_protocol(path)
-        files = self.ls(self._parent(path), True)
+        files = self.ls(self._parent(path).lstrip("/"), True)
         return [f for f in files if f["name"] == path][0]
 
     def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
@@ -209,3 +213,39 @@ class FTPFile(AbstractBufferedFile):
             "STOR " + self.path, self.buffer, blocksize=2 ** 16, rest=self.offset
         )
         return True
+
+
+def _mlsd2(ftp, path="."):
+    """
+    Fall back to using `dir` instead of `mlsd` if not supported.
+
+    This parses a Linux style `ls -l` response to `dir`, but the response may
+    be platform dependent.
+
+    Parameters
+    ----------
+    ftp: ftplib.FTP
+    path: str
+        Expects to be given path, but defaults to ".".
+    """
+    lines = []
+    minfo = []
+    out = ftp.dir(path, lines.append)
+    for line in lines:
+        line = line.split()
+        this = (
+            line[-1],
+            {
+                "modify": " ".join(line[5:8]),
+                "unix.owner": line[2],
+                "unix.group": line[3],
+                "unix.mode": line[0],
+                "size": line[4],
+            },
+        )
+        if "d" == this[1]["unix.mode"][0]:
+            this[1]["type"] = "dir"
+        else:
+            this[1]["type"] = "file"
+        minfo.append(this)
+    return minfo
