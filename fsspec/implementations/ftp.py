@@ -120,7 +120,10 @@ class FTPFileSystem(AbstractFileSystem):
         # implement with direct method
         path = self._strip_protocol(path)
         files = self.ls(self._parent(path).lstrip("/"), True)
-        return [f for f in files if f["name"] == path][0]
+        try:
+            out = [f for f in files if f["name"] == path][0]
+        except IndexError:
+            raise FileNotFoundError(path)
 
     def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         path = self._strip_protocol(path)
@@ -195,7 +198,6 @@ class FTPFile(AbstractBufferedFile):
             total[0] += len(x)
             if total[0] > end - start:
                 out.append(x[: (end - start) - total[0]])
-                self.fs.ftp.abort()
                 raise TransferDone
             else:
                 out.append(x)
@@ -211,8 +213,8 @@ class FTPFile(AbstractBufferedFile):
                 callback=callback,
             )
         except TransferDone:
-            self.fs.ftp.abort()
             try:
+                self.fs.ftp.abort()
                 self.fs.ftp.voidresp()
             except timeout:
                 self.fs._connect()
