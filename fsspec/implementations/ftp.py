@@ -205,13 +205,17 @@ class FTPFile(AbstractBufferedFile):
 
         try:
             self.fs.ftp.retrbinary(
-                "RETR %s" % self.path, blocksize=self.blocksize, rest=start, callback=callback
+                "RETR %s" % self.path,
+                blocksize=self.blocksize,
+                rest=start,
+                callback=callback,
             )
         except TransferDone:
             self.fs.ftp.abort()
             try:
                 self.fs.ftp.voidresp()
-            except timeout: pass
+            except timeout:
+                pass
         return b"".join(out)
 
     def _upload_chunk(self, final=False):
