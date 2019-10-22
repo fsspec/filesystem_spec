@@ -124,6 +124,7 @@ class FTPFileSystem(AbstractFileSystem):
             out = [f for f in files if f["name"] == path][0]
         except IndexError:
             raise FileNotFoundError(path)
+        return out
 
     def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         path = self._strip_protocol(path)
