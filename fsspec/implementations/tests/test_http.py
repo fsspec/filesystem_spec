@@ -36,7 +36,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             print(end)
             d = d[int(start) : int(end) + 1]
         if "give_length" in self.headers:
-            self._respond(200, {"Content-Length": len(d)}, d)
+            response_headers = {"Content-Length": len(d)}
+            if "zero_length" in self.headers:
+                response_headers['Content-Length'] = 0
+            self._respond(200, response_headers, d)
         elif "give_range" in self.headers:
             self._respond(200, {"Content-Range": "0-%i/%i" % (len(d) - 1, len(d))}, d)
         else:
@@ -50,7 +53,11 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         if self.path not in ["/index/realfile", "/index"]:
             self._respond(404)
         elif "give_length" in self.headers:
-            self._respond(200, {"Content-Length": len(d)})
+            response_headers = {"Content-Length": len(d)}
+            if "zero_length" in self.headers:
+                response_headers['Content-Length'] = 0
+
+            self._respond(200, response_headers)
         elif "give_range" in self.headers:
             self._respond(200, {"Content-Range": "0-%i/%i" % (len(d) - 1, len(d))})
         else:
@@ -138,3 +145,13 @@ def test_mapper_url(server):
     mapper2 = fsspec.get_mapper(server + "/index/")
     assert mapper2.root.startswith("http:")
     assert list(mapper) == list(mapper2)
+
+
+def test_content_length_zero(server):
+    h = fsspec.filesystem("http",
+                          headers={"give_length": "true", "zero_length": "true"})
+    url = server + "/index/realfile"
+
+    with h.open(url, "rb") as f:
+        assert f.size is None
+        assert f.read() == data
