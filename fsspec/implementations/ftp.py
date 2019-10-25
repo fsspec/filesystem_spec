@@ -1,4 +1,5 @@
-from ftplib import FTP, Error
+from ftplib import FTP, Error, error_perm
+from socket import timeout
 import uuid
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
@@ -19,6 +20,7 @@ class FTPFileSystem(AbstractFileSystem):
         acct=None,
         block_size=None,
         tempdir="/tmp",
+        timeout=30,
         **kwargs
     ):
         """
@@ -50,12 +52,15 @@ class FTPFileSystem(AbstractFileSystem):
         self.port = port
         self.tempdir = tempdir
         self.cred = username, password, acct
+        self.timeout = timeout
         if block_size is not None:
             self.blocksize = block_size
+        else:
+            self.blocksize = 2 ** 16
         self._connect()
 
     def _connect(self):
-        self.ftp = FTP()
+        self.ftp = FTP(timeout=self.timeout)
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 
@@ -81,11 +86,15 @@ class FTPFileSystem(AbstractFileSystem):
         out = []
         if path not in self.dircache:
             try:
-                out = [
-                    (fn, details)
-                    for (fn, details) in self.ftp.mlsd(path)
-                    if fn not in [".", ".."] and details["type"] not in ["pdir", "cdir"]
-                ]
+                try:
+                    out = [
+                        (fn, details)
+                        for (fn, details) in self.ftp.mlsd(path)
+                        if fn not in [".", ".."]
+                        and details["type"] not in ["pdir", "cdir"]
+                    ]
+                except error_perm:
+                    out = _mlsd2(self.ftp, path)  # Not platform independent
                 for fn, details in out:
                     if path == "/":
                         path = ""  # just for forming the names, below
@@ -110,8 +119,12 @@ class FTPFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         # implement with direct method
         path = self._strip_protocol(path)
-        files = self.ls(self._parent(path), True)
-        return [f for f in files if f["name"] == path][0]
+        files = self.ls(self._parent(path).lstrip("/"), True)
+        try:
+            out = [f for f in files if f["name"] == path][0]
+        except IndexError:
+            raise FileNotFoundError(path)
+        return out
 
     def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         path = self._strip_protocol(path)
@@ -176,7 +189,7 @@ class FTPFile(AbstractBufferedFile):
         Implemented by raising an exception in the fetch callback when the
         number of bytes received reaches the requested amount.
 
-        With fail if the server does not respect the REST command on
+        Will fail if the server does not respect the REST command on
         retrieve requests.
         """
         out = []
@@ -186,7 +199,6 @@ class FTPFile(AbstractBufferedFile):
             total[0] += len(x)
             if total[0] > end - start:
                 out.append(x[: (end - start) - total[0]])
-                self.fs.ftp.abort()
                 raise TransferDone
             else:
                 out.append(x)
@@ -196,16 +208,58 @@ class FTPFile(AbstractBufferedFile):
 
         try:
             self.fs.ftp.retrbinary(
-                "RETR %s" % self.path, blocksize=2 ** 16, rest=start, callback=callback
+                "RETR %s" % self.path,
+                blocksize=self.blocksize,
+                rest=start,
+                callback=callback,
             )
         except TransferDone:
-            self.fs.ftp.abort()
-            self.fs.ftp.voidresp()
+            try:
+                self.fs.ftp.abort()
+                self.fs.ftp.voidresp()
+            except timeout:
+                self.fs._connect()
         return b"".join(out)
 
     def _upload_chunk(self, final=False):
         self.buffer.seek(0)
         self.fs.ftp.storbinary(
-            "STOR " + self.path, self.buffer, blocksize=2 ** 16, rest=self.offset
+            "STOR " + self.path, self.buffer, blocksize=self.blocksize, rest=self.offset
         )
         return True
+
+
+def _mlsd2(ftp, path="."):
+    """
+    Fall back to using `dir` instead of `mlsd` if not supported.
+
+    This parses a Linux style `ls -l` response to `dir`, but the response may
+    be platform dependent.
+
+    Parameters
+    ----------
+    ftp: ftplib.FTP
+    path: str
+        Expects to be given path, but defaults to ".".
+    """
+    lines = []
+    minfo = []
+    out = ftp.dir(path, lines.append)
+    for line in lines:
+        line = line.split()
+        this = (
+            line[-1],
+            {
+                "modify": " ".join(line[5:8]),
+                "unix.owner": line[2],
+                "unix.group": line[3],
+                "unix.mode": line[0],
+                "size": line[4],
+            },
+        )
+        if "d" == this[1]["unix.mode"][0]:
+            this[1]["type"] = "dir"
+        else:
+            this[1]["type"] = "file"
+        minfo.append(this)
+    return minfo
