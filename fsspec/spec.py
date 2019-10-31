@@ -261,7 +261,7 @@ class AbstractFileSystem(up):
         """Remove a directory, if empty"""
         pass  # not necessary to implement, may not have directories
 
-    def ls(self, path, **kwargs):
+    def ls(self, path, detail=True, **kwargs):
         """List objects at path.
 
         This should include subdirectories and files at that location. The
@@ -341,7 +341,7 @@ class AbstractFileSystem(up):
         files = []
 
         try:
-            listing = self.ls(path, True, **kwargs)
+            listing = self.ls(path, detail=True, **kwargs)
         except (FileNotFoundError, IOError):
             return [], [], []
 
