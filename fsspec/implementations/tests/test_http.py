@@ -37,8 +37,6 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             d = d[int(start) : int(end) + 1]
         if "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
-            if "zero_length" in self.headers:
-                response_headers["Content-Length"] = 0
             self._respond(200, response_headers, d)
         elif "give_range" in self.headers:
             self._respond(200, {"Content-Range": "0-%i/%i" % (len(d) - 1, len(d))}, d)
@@ -154,5 +152,4 @@ def test_content_length_zero(server):
     url = server + "/index/realfile"
 
     with h.open(url, "rb") as f:
-        assert f.size is None
         assert f.read() == data

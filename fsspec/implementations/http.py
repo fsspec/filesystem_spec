@@ -180,7 +180,7 @@ class HTTPFileSystem(AbstractFileSystem):
             # get failed, so conclude URL does not exist
             if size is False:
                 raise FileNotFoundError(url)
-        return {"name": url, "size": size, "type": "file"}
+        return {"name": url, "size": size or None, "type": "file"}
 
 
 class HTTPFile(AbstractBufferedFile):
