@@ -172,7 +172,7 @@ class HTTPFileSystem(AbstractFileSystem):
         for policy in ["head", "get"]:
             try:
                 size = file_size(url, self.session, policy, **self.kwargs)
-                if size is not None:
+                if size:
                     break
             except Exception:
                 pass
@@ -180,7 +180,7 @@ class HTTPFileSystem(AbstractFileSystem):
             # get failed, so conclude URL does not exist
             if size is False:
                 raise FileNotFoundError(url)
-        return {"name": url, "size": size, "type": "file"}
+        return {"name": url, "size": size or None, "type": "file"}
 
 
 class HTTPFile(AbstractBufferedFile):
