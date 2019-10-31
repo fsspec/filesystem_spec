@@ -172,7 +172,7 @@ class HTTPFileSystem(AbstractFileSystem):
         for policy in ["head", "get"]:
             try:
                 size = file_size(url, self.session, policy, **self.kwargs)
-                if size is not None:
+                if size:
                     break
             except Exception:
                 pass
@@ -339,11 +339,7 @@ def file_size(url, session=None, size_policy="head", **kwargs):
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
     if "Content-Length" in r.headers:
-        content_length = int(r.headers["Content-Length"])
-        if content_length:
-            # Some servers respond with a Content-Length of 0. We choose to treat these
-            # as not responding with a content-length.
-            return content_length
+        return int(r.headers["Content-Length"])
     elif "Content-Range" in r.headers:
         return int(r.headers["Content-Range"].split("/")[1])
 
