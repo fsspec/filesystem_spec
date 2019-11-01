@@ -436,13 +436,21 @@ class AbstractFileSystem(up):
         kwargs are passed to ``ls``.
         """
         import re
+        from glob import has_magic
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
+        indstar = path.find("*")
+        indques = path.find("?")
+
+        if indstar < 0:
+            indstar = len(path)
+        if indques < 0:
+            indques = len(path)
+
         ind = min(indstar, indques)
-        if "*" not in path and "?" not in path:
+
+        if not has_magic(path):
             root = path
             depth = 1
             if ends:
