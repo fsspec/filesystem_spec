@@ -440,15 +440,11 @@ class AbstractFileSystem(up):
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*")
-        indques = path.find("?")
+        indstar = path.find("*") if path.find("*") >= 0 else len(path)
+        indques = path.find("?") if path.find("?") >= 0 else len(path)
+        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        if indstar < 0:
-            indstar = len(path)
-        if indques < 0:
-            indques = len(path)
-
-        ind = min(indstar, indques)
+        ind = min(indstar, indques, indbrace)
 
         if not has_magic(path):
             root = path
