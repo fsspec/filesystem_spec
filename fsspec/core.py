@@ -308,7 +308,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     paths = list(paths)
     if "w" in mode and sum([1 for p in paths if "*" in p]) > 1:
         raise ValueError(
-            "When writing data, only one filename mask can " "be specified."
+            "When writing data, only one filename mask can be specified."
         )
     elif "w" in mode:
         num = max(num, len(paths))

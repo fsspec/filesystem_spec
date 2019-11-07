@@ -36,7 +36,7 @@ bash -c "echo \"export VISIBLE=now\" >> /etc/profile"
     )
     name = "fsspec_sftp"
     stop_docker(name)
-    cmd = "docker run -d -p 9200:22 --name {} " "ubuntu:16.04 sleep 9000".format(name)
+    cmd = "docker run -d -p 9200:22 --name {} ubuntu:16.04 sleep 9000".format(name)
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
     for cmd in cmds:
         subprocess.call(["docker", "exec", cid] + shlex.split(cmd))
