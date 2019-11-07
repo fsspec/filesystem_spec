@@ -213,3 +213,11 @@ def test_infer_storage_options_c(urlpath, expected_path):
     so = infer_storage_options(urlpath)
     assert so["protocol"] == "file"
     assert so["path"] == expected_path
+
+
+def test_inherit_docstring():
+    import fsspec.implementations.local
+
+    assert (
+        "Upstream docstring" in fsspec.implementations.local.LocalFileSystem.get.__doc__
+    )

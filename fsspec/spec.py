@@ -102,8 +102,15 @@ class AbstractFileSystem(up):
         self._transaction = Transaction(self)
         self._singleton[0] = self
         self.dircache = {}
-        if storage_options.pop("add_docs", True):
-            self._mangle_docstrings()
+
+        if storage_options.pop("add_docs", None):
+            import warnings
+
+            warnings.warn(
+                "add_docs is no longer supported. Use fsspec.utils.inherit_docstrings",
+                FutureWarning,
+            )
+
         if storage_options.pop("add_aliases", True):
             for new, old in aliases:
                 if not hasattr(self, new):
@@ -125,32 +132,6 @@ class AbstractFileSystem(up):
         cls._cache.clear()
         if remove_singleton:
             cls._singleton = [None]
-
-    def _mangle_docstrings(self):
-        """Add AbstractFileSystem docstrings to subclass methods
-
-        Disable by including ``add_docs=False`` to init kwargs.
-        """
-        for method in dir(self.__class__):
-            if method.startswith("_"):
-                continue
-            if self.__class__ is not AbstractFileSystem:
-                m = getattr(self.__class__, method)
-                n = getattr(AbstractFileSystem, method, None).__doc__
-                if not callable(m) or not n or n in (m.__doc__ or ""):
-                    # ignore if a) not a method, b) no superclass doc
-                    # c) already includes docstring
-                    continue
-                try:
-                    if m.__doc__:
-                        m.__doc__ += (
-                            "\n Upstream docstring: \n"
-                            + getattr(AbstractFileSystem, method).__doc__
-                        )
-                    else:
-                        m.__doc__ = getattr(AbstractFileSystem, method).__doc__
-                except AttributeError:
-                    pass
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -562,7 +543,7 @@ class AbstractFileSystem(up):
         return self.open(path, "rb").read()
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
-        """ Copy file to local
+        """Copy file to local.
 
         Possible extension: maybe should be able to copy to any file-system
         (streaming through local).

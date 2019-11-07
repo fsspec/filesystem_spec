@@ -302,3 +302,32 @@ def stringify_path(filepath):
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
     return filepath
+
+
+def inherit_docstrings(cls):
+    from .spec import AbstractFileSystem
+
+    for method in dir(cls):
+        if method.startswith("_"):
+            continue
+
+        m = getattr(cls, method)
+        n = getattr(AbstractFileSystem, method, None).__doc__
+        if not callable(m) or not n or n in (m.__doc__ or ""):
+            # ignore if a) not a method, b) no superclass doc
+            # c) already includes docstring
+            continue
+        if m.__doc__ and hasattr(getattr(AbstractFileSystem, method), "__doc__"):
+            template = """\
+            {}
+
+            Upstream docstring:
+
+            {}"""
+
+            upstream = getattr(AbstractFileSystem, method).__doc__
+            m.__doc__ = template.format(m.__doc__, upstream)
+        else:
+            m.__doc__ = getattr(AbstractFileSystem, method).__doc__
+
+    return cls

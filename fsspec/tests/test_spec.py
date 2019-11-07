@@ -70,3 +70,8 @@ def test_glob(test_path, expected):
     test_fs = TestFS()
 
     assert test_fs.glob(test_path) == expected
+
+
+def test_add_docs_warns():
+    with pytest.warns(FutureWarning, match="add_docs"):
+        AbstractFileSystem(add_docs=True)

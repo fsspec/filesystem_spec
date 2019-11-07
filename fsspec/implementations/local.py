@@ -5,9 +5,10 @@ import posixpath
 import re
 import tempfile
 from fsspec import AbstractFileSystem
-from fsspec.utils import stringify_path
+from fsspec.utils import stringify_path, inherit_docstrings
 
 
+@inherit_docstrings
 class LocalFileSystem(AbstractFileSystem):
     """Interface to files on local storage
 
