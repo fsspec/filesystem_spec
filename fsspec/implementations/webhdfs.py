@@ -245,7 +245,7 @@ class WebHDFS(AbstractFileSystem):
             out = self._call("GETDELEGATIONTOKEN")
         t = out.json()["Token"]
         if t is None:
-            raise ValueError("No token available for this " "user/security context")
+            raise ValueError("No token available for this user/security context")
         return t["urlString"]
 
     def renew_delegation_token(self, token):
