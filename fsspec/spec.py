@@ -1,5 +1,4 @@
 import warnings
-import weakref
 import functools
 from hashlib import md5
 import io
@@ -131,7 +130,10 @@ class _Cached(type):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._cache = weakref.WeakValueDictionary()
+        # Note: we intentionally create a reference here, to avoid garbage
+        # collecting instances when all other references are gone. To really
+        # delete a FileSystem, the cache must be cleared.
+        self._cache = {}
 
     def __call__(self, *args, **kwargs):
         cls = type(self)
