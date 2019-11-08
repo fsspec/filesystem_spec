@@ -2,7 +2,7 @@ import pytest
 from fsspec.spec import AbstractFileSystem
 
 
-class TestFS(AbstractFileSystem):
+class DummyTestFS(AbstractFileSystem):
     protocol = "mock"
     _fs_contents = (
         {"name": "top_level/second_level/date=2019-10-01/", "type": "directory"},
@@ -67,7 +67,7 @@ class TestFS(AbstractFileSystem):
     ],
 )
 def test_glob(test_path, expected):
-    test_fs = TestFS()
+    test_fs = DummyTestFS()
 
     assert test_fs.glob(test_path) == expected
 
