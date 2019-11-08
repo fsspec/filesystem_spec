@@ -4,11 +4,11 @@ import shutil
 import posixpath
 import re
 import tempfile
-from fsspec import AbstractFileSystem, AliasMixin
+from fsspec import AbstractFileSystem
 from fsspec.utils import stringify_path
 
 
-class LocalFileSystem(AbstractFileSystem, AliasMixin):
+class LocalFileSystem(AbstractFileSystem):
     """Interface to files on local storage
 
     Parameters
@@ -20,7 +20,6 @@ class LocalFileSystem(AbstractFileSystem, AliasMixin):
     """
 
     root_marker = "/"
-    _add_aliases = True
 
     def __init__(self, auto_mkdir=True, **kwargs):
         super().__init__(**kwargs)

@@ -88,13 +88,5 @@ def test_cache():
 
 
 def test_alias():
-    fs = DummyTestFS()
-    assert hasattr(fs, "makedir")  # there by default.
-
-    with pytest.warns(FutureWarning, match="makedir"):
-        fs.makedir("foo")
-
-    fs._add_aliases = True
-
-    with pytest.warns(None):
-        fs.makedir("foo")
+    with pytest.warns(FutureWarning, match="add_aliases"):
+        DummyTestFS(add_aliases=True)

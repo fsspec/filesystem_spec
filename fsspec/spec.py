@@ -11,100 +11,6 @@ from .utils import read_block, tokenize, stringify_path
 logger = logging.getLogger("fsspec")
 
 
-def _warn_implicit_alias(method):
-    @functools.wraps(method)
-    def wrapper(*args, **kwargs):
-        self = args[0]
-        if not self._add_aliases:
-            warnings.warn(
-                self._alias_message.format(method.__name__), FutureWarning, stacklevel=2
-            )
-        return method(*args, **kwargs)
-
-    return wrapper
-
-
-class AliasMixin:
-    """
-    Mixin providing aliases for common methods.
-
-    Notes
-    -----
-    By default this is included for all sublasses inheriting from AbstractFileSystem, but this
-    behavior is deprecated. In the future, inheriting from AliasMixin will be required to use
-    these aliases.
-
-    In the interim, using an implicitly inherited alias will emit a warning. To silence the warning,
-    inherit from AliasMixin and set `_add_aliases=True` on the filesystem class.
-    """
-
-    _add_aliases = False
-    _alias_message = "Using implicitly added alias '{}'. Inherit from AliasMixin to continue using this method."
-
-    @_warn_implicit_alias
-    def makedir(self, path, create_parents=True, **kwargs):
-        """Alias of :ref:`FilesystemSpec.mkdir`."""
-        return self.mkdir(path, create_parents=create_parents, **kwargs)
-
-    @_warn_implicit_alias
-    def mkdirs(self, path, exist_ok=False):
-        """Alias of :ref:`FilesystemSpec.makedirs`."""
-        return self.makedirs(path, exist_ok=exist_ok)
-
-    @_warn_implicit_alias
-    def listdir(self, path, detail=True, **kwargs):
-        """Alias of :ref:`FilesystemSpec.ls`."""
-        return self.ls(path, detail=detail, **kwargs)
-
-    @_warn_implicit_alias
-    def cp(self, path1, path2, **kwargs):
-        """Alias of :ref:`FilesystemSpec.copy`."""
-        if not self._add_aliases:
-            warnings.warn(self._alias_message.format("makedir"))
-        return self.copy(path1, path2, **kwargs)
-
-    @_warn_implicit_alias
-    def move(self, path1, path2, **kwargs):
-        """Alias of :ref:`FilesystemSpec.mv`."""
-        if not self._add_aliases:
-            warnings.warn(self._alias_message.format("makedir"))
-        return self.mv(path1, path2, **kwargs)
-
-    @_warn_implicit_alias
-    def stat(self, path, **kwargs):
-        """Alias of :ref:`FilesystemSpec.info`."""
-        if not self._add_aliases:
-            warnings.warn(self._alias_message.format("makedir"))
-        return self.info(path, **kwargs)
-
-    @_warn_implicit_alias
-    def disk_usage(self, path, total=True, maxdepth=None, **kwargs):
-        """Alias of :ref:`FilesystemSpec.du`."""
-        if not self._add_aliases:
-            warnings.warn(self._alias_message.format("makedir"))
-        return self.du(path, total=total, maxdepth=maxdepth, **kwargs)
-
-    @_warn_implicit_alias
-    def rename(self, path1, path2, **kwargs):
-        """Alias of :ref:`FilesystemSpec.mv`."""
-        return self.mv(path1, path2, **kwargs)
-
-    @_warn_implicit_alias
-    def delete(self, path, recursive=False, maxdepth=None):
-        """Alias of :ref:`FilesystemSpec.rm`."""
-        return self.rm(path, recursive=recursive, maxdepth=maxdepth)
-
-    @_warn_implicit_alias
-    def upload(self, lpath, rpath, recursive=False, **kwargs):
-        """Alias of :ref:`FilesystemSpec.put`."""
-        return self.put(lpath, rpath, recursive=recursive, **kwargs)
-
-    @_warn_implicit_alias
-    def download(self, rpath, lpath, recursive=False, **kwargs):
-        """Alias of :ref:`FilesystemSpec.get`."""
-        return self.get(rpath, lpath, recursive=recursive, **kwargs)
-
-
 def make_instance(cls, args, kwargs):
     return cls(*args, **kwargs)
 
@@ -153,17 +59,15 @@ class _Cached(type):
             return obj
 
 
-up = (AliasMixin,)
-
 try:  # optionally derive from pyarrow's FileSystem, if available
     import pyarrow as pa
 
-    up += (pa.filesystem.DaskFileSystem,)
+    up = pa.filesystem.DaskFileSystem
 except ImportError:
-    pass
+    up = object
 
 
-class AbstractFileSystem(*up, metaclass=_Cached):
+class AbstractFileSystem(up, metaclass=_Cached):
     """
     An abstract super-class for pythonic file-systems
 
@@ -195,7 +99,6 @@ class AbstractFileSystem(*up, metaclass=_Cached):
         Magic kwargs that affect functionality here:
         add_docs: if True, will append docstrings from this spec to the
             specific implementation
-        add_aliases: if True, will add method aliases
         """
         if self._cached:
             # reusing instance, don't change
@@ -207,7 +110,7 @@ class AbstractFileSystem(*up, metaclass=_Cached):
         if storage_options.pop("add_docs", True):
             self._mangle_docstrings()
         if storage_options.pop("add_aliases", None):
-            warnings.warn("Use AliasMixin instead.")
+            warnings.warn("add_aliases has been removed.", FutureWarning)
 
     def __dask_tokenize__(self):
         return self._fs_token
@@ -907,6 +810,53 @@ class AbstractFileSystem(*up, metaclass=_Cached):
     def clear_instance_cache(cls):
         """Remove any instances stored in class attributes"""
         cls._cache.clear()
+
+    # ------------------------------------------------------------------------
+    # Aliases
+
+    def makedir(self, path, create_parents=True, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mkdir`."""
+        return self.mkdir(path, create_parents=create_parents, **kwargs)
+
+    def mkdirs(self, path, exist_ok=False):
+        """Alias of :ref:`FilesystemSpec.makedirs`."""
+        return self.makedirs(path, exist_ok=exist_ok)
+
+    def listdir(self, path, detail=True, **kwargs):
+        """Alias of :ref:`FilesystemSpec.ls`."""
+        return self.ls(path, detail=detail, **kwargs)
+
+    def cp(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.copy`."""
+        return self.copy(path1, path2, **kwargs)
+
+    def move(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mv`."""
+        return self.mv(path1, path2, **kwargs)
+
+    def stat(self, path, **kwargs):
+        """Alias of :ref:`FilesystemSpec.info`."""
+        return self.info(path, **kwargs)
+
+    def disk_usage(self, path, total=True, maxdepth=None, **kwargs):
+        """Alias of :ref:`FilesystemSpec.du`."""
+        return self.du(path, total=total, maxdepth=maxdepth, **kwargs)
+
+    def rename(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mv`."""
+        return self.mv(path1, path2, **kwargs)
+
+    def delete(self, path, recursive=False, maxdepth=None):
+        """Alias of :ref:`FilesystemSpec.rm`."""
+        return self.rm(path, recursive=recursive, maxdepth=maxdepth)
+
+    def upload(self, lpath, rpath, recursive=False, **kwargs):
+        """Alias of :ref:`FilesystemSpec.put`."""
+        return self.put(lpath, rpath, recursive=recursive, **kwargs)
+
+    def download(self, rpath, lpath, recursive=False, **kwargs):
+        """Alias of :ref:`FilesystemSpec.get`."""
+        return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
 
 class AbstractBufferedFile(io.IOBase):
