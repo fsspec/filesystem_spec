@@ -33,7 +33,6 @@ Base Classes
    fsspec.core.BaseCache
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
-   :members:
 
 .. autoclass:: fsspec.spec.Transaction
    :members:
