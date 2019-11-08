@@ -106,9 +106,7 @@ class AbstractFileSystem(up):
         if storage_options.pop("add_docs", None):
             import warnings
 
-            warnings.warn(
-                "add_docs is no longer supported.", FutureWarning,
-            )
+            warnings.warn("add_docs is no longer supported.", FutureWarning)
 
         if storage_options.pop("add_aliases", True):
             for new, old in aliases:
