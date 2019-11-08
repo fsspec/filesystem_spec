@@ -56,7 +56,11 @@ class SFTPFileSystem(AbstractFileSystem):
     def mkdir(self, path, mode=511):
         self.ftp.mkdir(path, mode)
 
-    def makedirs(self, path, mode=511):
+    def makedirs(self, path, exist_ok=False, mode=511):
+        if exist_ok:
+            raise ValueError(
+                "SFTPFileSystem.makedirs does not support the 'exist_ok' option."
+            )
         parts = path.split("/")
         path = ""
         for part in parts:
