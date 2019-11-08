@@ -11,11 +11,6 @@ def test_idempotent():
     fs2 = MemoryFileSystem()
     assert fs is fs2
     assert MemoryFileSystem.current() is fs2
-    fs2 = MemoryFileSystem(do_cache=False)
-    assert fs is not fs2
-
-    assert hash(fs) == hash(fs2)
-    assert fs == fs2
 
     MemoryFileSystem.clear_instance_cache()
     assert not MemoryFileSystem._cache

@@ -70,3 +70,28 @@ def test_glob(test_path, expected):
     test_fs = DummyTestFS()
 
     assert test_fs.glob(test_path) == expected
+
+
+def test_cache():
+    fs = DummyTestFS()
+    fs2 = DummyTestFS()
+    assert fs is fs2
+
+    assert len(fs._cache) == 1
+    del fs2
+    assert len(fs._cache) == 1
+    del fs
+    assert len(DummyTestFS._cache) == 0
+
+
+def test_alias():
+    fs = DummyTestFS()
+    assert hasattr(fs, "makedir")  # there by default.
+
+    with pytest.warns(FutureWarning, match="makedir"):
+        fs.makedir("foo")
+
+    fs._add_aliases = True
+
+    with pytest.warns(None):
+        fs.makedir("foo")

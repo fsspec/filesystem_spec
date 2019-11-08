@@ -1,19 +1,20 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
-from fsspec import AbstractFileSystem
+from fsspec import AbstractFileSystem, AliasMixin
 import logging
 
 logger = logging.Logger("fsspec.memoryfs")
 
 
-class MemoryFileSystem(AbstractFileSystem):
+class MemoryFileSystem(AbstractFileSystem, AliasMixin):
     """A filesystem based on a dict of BytesIO objects"""
 
     store = {}  # global
     pseudo_dirs = []
     protocol = "memory"
     root_marker = ""
+    _add_aliases = True
 
     def ls(self, path, detail=False):
         if path in self.store:

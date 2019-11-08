@@ -1,3 +1,6 @@
+import warnings
+import weakref
+import functools
 from hashlib import md5
 import io
 import os
@@ -8,35 +11,157 @@ from .utils import read_block, tokenize, stringify_path
 
 logger = logging.getLogger("fsspec")
 
-# alternative names for some methods, which get patched to new instances
-# (alias, original)
-aliases = [
-    ("makedir", "mkdir"),
-    ("mkdirs", "makedirs"),
-    ("listdir", "ls"),
-    ("cp", "copy"),
-    ("move", "mv"),
-    ("stat", "info"),
-    ("disk_usage", "du"),
-    ("rename", "mv"),
-    ("delete", "rm"),
-    ("upload", "put"),
-    ("download", "get"),
-]
 
-try:  # optionally derive from pyarrow's FileSystem, if available
-    import pyarrow as pa
+def _warn_implicit_alias(method):
+    @functools.wraps(method)
+    def wrapper(*args, **kwargs):
+        self = args[0]
+        if not self._add_aliases:
+            warnings.warn(
+                self._alias_message.format(method.__name__), FutureWarning, stacklevel=2
+            )
+        return method(*args, **kwargs)
 
-    up = pa.filesystem.DaskFileSystem
-except ImportError:
-    up = object
+    return wrapper
+
+
+class AliasMixin:
+    """
+    Mixin providing aliases for common methods.
+
+    Notes
+    -----
+    By default this is included for all sublasses inheriting from AbstractFileSystem, but this
+    behavior is deprecated. In the future, inheriting from AliasMixin will be required to use
+    these aliases.
+
+    In the interim, using an implicitly inherited alias will emit a warning. To silence the warning,
+    inherit from AliasMixin and set `_add_aliases=True` on the filesystem class.
+    """
+
+    _add_aliases = False
+    _alias_message = "Using implicitly added alias '{}'. Inherit from AliasMixin to continue using this method."
+
+    @_warn_implicit_alias
+    def makedir(self, path, create_parents=True, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mkdir`."""
+        return self.mkdir(path, create_parents=create_parents, **kwargs)
+
+    @_warn_implicit_alias
+    def mkdirs(self, path, exist_ok=False):
+        """Alias of :ref:`FilesystemSpec.makedirs`."""
+        return self.makedirs(path, exist_ok=exist_ok)
+
+    @_warn_implicit_alias
+    def listdir(self, path, detail=True, **kwargs):
+        """Alias of :ref:`FilesystemSpec.ls`."""
+        return self.ls(path, detail=detail, **kwargs)
+
+    @_warn_implicit_alias
+    def cp(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.copy`."""
+        if not self._add_aliases:
+            warnings.warn(self._alias_message.format("makedir"))
+        return self.copy(path1, path2, **kwargs)
+
+    @_warn_implicit_alias
+    def move(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mv`."""
+        if not self._add_aliases:
+            warnings.warn(self._alias_message.format("makedir"))
+        return self.mv(path1, path2, **kwargs)
+
+    @_warn_implicit_alias
+    def stat(self, path, **kwargs):
+        """Alias of :ref:`FilesystemSpec.info`."""
+        if not self._add_aliases:
+            warnings.warn(self._alias_message.format("makedir"))
+        return self.info(path, **kwargs)
+
+    @_warn_implicit_alias
+    def disk_usage(self, path, total=True, maxdepth=None, **kwargs):
+        """Alias of :ref:`FilesystemSpec.du`."""
+        if not self._add_aliases:
+            warnings.warn(self._alias_message.format("makedir"))
+        return self.du(path, total=total, maxdepth=maxdepth, **kwargs)
+
+    @_warn_implicit_alias
+    def rename(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mv`."""
+        return self.mv(path1, path2, **kwargs)
+
+    @_warn_implicit_alias
+    def delete(self, path, recursive=False, maxdepth=None):
+        """Alias of :ref:`FilesystemSpec.rm`."""
+        return self.rm(path, recursive=recursive, maxdepth=maxdepth)
+
+    @_warn_implicit_alias
+    def upload(self, lpath, rpath, recursive=False, **kwargs):
+        """Alias of :ref:`FilesystemSpec.put`."""
+        return self.put(lpath, rpath, recursive=recursive, **kwargs)
+
+    @_warn_implicit_alias
+    def download(self, rpath, lpath, recursive=False, **kwargs):
+        """Alias of :ref:`FilesystemSpec.get`."""
+        return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
 
 def make_instance(cls, args, kwargs):
     return cls(*args, **kwargs)
 
 
-class AbstractFileSystem(up):
+class _Cached(type):
+    """
+    Metaclass for caching file system instances.
+
+    Notes
+    -----
+    Instances are cached according to
+
+    * The values of the class attributes listed in `_extra_tokenize_attributes`
+    * The arguments passed to ``__init__``.
+
+    Filesystems are not cached beyond the usual lifetime of Python objects.
+    Deleting all references to a particular filesystem will result in it
+    being garbage collected.
+    """
+
+    cacheable = True
+    _extra_tokenize_attributes = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cache = weakref.WeakValueDictionary()
+
+    def __call__(self, *args, **kwargs):
+        cls = type(self)
+        extra_tokens = tuple(
+            getattr(self, attr, None) for attr in self._extra_tokenize_attributes
+        )
+        token = tokenize(cls, *args, *extra_tokens, **kwargs)
+        if cls.cacheable and token in self._cache:
+            return self._cache[token]
+        else:
+            obj = super().__call__(*args, **kwargs)
+            obj._fs_token = token
+            obj.storage_args = args
+            obj.storage_options = kwargs
+            if cls.cacheable:
+                self._cache[token] = obj
+            return obj
+
+
+up = (AliasMixin,)
+
+try:  # optionally derive from pyarrow's FileSystem, if available
+    import pyarrow as pa
+
+    up += (pa.filesystem.DaskFileSystem,)
+except ImportError:
+    pass
+
+
+class AbstractFileSystem(*up, metaclass=_Cached):
     """
     An abstract super-class for pythonic file-systems
 
@@ -44,8 +169,6 @@ class AbstractFileSystem(up):
     from here.
     """
 
-    _singleton = [None]  # will contain the newest instance
-    _cache = {}
     cachable = True  # this class can be cached, instances reused
     _cached = False
     blocksize = 2 ** 22
@@ -53,30 +176,8 @@ class AbstractFileSystem(up):
     protocol = "abstract"
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
-    def __new__(cls, *args, **storage_options):
-        """
-        Will reuse existing instance if:
-        - cls.cachable is True and
-        - storage_options does not include do_cache=False
-        - the token (a hash of args and kwargs by default) exists in the cache
-
-        The instance will skip init if instance.cached = True.
-        """
-
-        # TODO: defer to a class-specific tokeniser?
-        do_cache = storage_options.pop("do_cache", True)
-        token = tokenize(cls, args, storage_options)
-        if cls.cachable and token in cls._cache and do_cache:
-            # check for cached instance
-            return cls._cache[token]
-        self = object.__new__(cls)
-        self._fs_token = token
-        if self.cachable:
-            # store for caching - can hold memory
-            cls._cache[token] = self
-        self.storage_args = args
-        self.storage_options = storage_options
-        return self
+    #: Extra *class attributes* that should be considered when hashing.
+    _extra_tokenize_attributes = ()
 
     def __init__(self, *args, **storage_options):
         """Create and configure file-system instance
@@ -99,16 +200,12 @@ class AbstractFileSystem(up):
             return
         self._cached = True
         self._intrans = False
-        self._transaction = Transaction(self)
-        self._singleton[0] = self
+        self._transaction = None
         self.dircache = {}
         if storage_options.pop("add_docs", True):
             self._mangle_docstrings()
-        if storage_options.pop("add_aliases", True):
-            for new, old in aliases:
-                if not hasattr(self, new):
-                    # don't apply alias if attribute exists already
-                    setattr(self, new, getattr(self, old))
+        if storage_options.pop("add_aliases", None):
+            warnings.warn("Use AliasMixin instead.")
 
     def __dask_tokenize__(self):
         return self._fs_token
@@ -118,13 +215,6 @@ class AbstractFileSystem(up):
 
     def __eq__(self, other):
         return self._fs_token == other._fs_token
-
-    @classmethod
-    def clear_instance_cache(cls, remove_singleton=True):
-        """Remove any instances stored in class attributes"""
-        cls._cache.clear()
-        if remove_singleton:
-            cls._singleton = [None]
 
     def _mangle_docstrings(self):
         """Add AbstractFileSystem docstrings to subclass methods
@@ -188,10 +278,10 @@ class AbstractFileSystem(up):
 
         If no instance has been created, then create one with defaults
         """
-        if not cls._singleton[0]:
+        if not len(cls._cache):
             return cls()
         else:
-            return cls._singleton[0]
+            return list(cls._cache.values())[-1]
 
     @property
     def transaction(self):
@@ -200,16 +290,20 @@ class AbstractFileSystem(up):
         Requires the file class to implement `.commit()` and `.discard()`
         for the normal and exception cases.
         """
+        if self._transaction is None:
+            self._transaction = Transaction(self)
         return self._transaction
 
     def start_transaction(self):
         """Begin write transaction for deferring files, non-context version"""
         self._intrans = True
+        self._transaction = Transaction(self)
         return self.transaction
 
     def end_transaction(self):
         """Finish write transaction, non-context version"""
         self.transaction.complete()
+        self._transaction = None
 
     def invalidate_cache(self, path=None):
         """
@@ -376,6 +470,7 @@ class AbstractFileSystem(up):
 
         Parameters
         ----------
+        path : str
         maxdepth: int or None
             If not None, the maximum number of levels to descend
         withdirs: bool
@@ -808,7 +903,7 @@ class AbstractFileSystem(up):
 
     @classmethod
     def clear_instance_cache(cls):
-        """Remove cached instances from the class cache"""
+        """Remove any instances stored in class attributes"""
         cls._cache.clear()
 
 

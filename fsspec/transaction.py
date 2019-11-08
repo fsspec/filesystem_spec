@@ -23,6 +23,7 @@ class Transaction(object):
         # only commit if there was no exception
         self.complete(commit=exc_type is None)
         self.fs._intrans = False
+        self.fs._transaction = None
 
     def start(self):
         """Start a transaction on this FileSystem"""

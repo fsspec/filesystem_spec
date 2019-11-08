@@ -371,6 +371,8 @@ def test_commit_discard(tmpdir):
             assert not fs.exists(tmpdir + "/afile")
             f.write(b"data")
         assert not fs.exists(tmpdir + "/afile")
+
+    assert fs._transaction is None
     assert fs.cat(tmpdir + "/afile") == b"data"
 
     try:
