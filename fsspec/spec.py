@@ -808,7 +808,17 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     @classmethod
     def clear_instance_cache(cls):
-        """Remove any instances stored in class attributes"""
+        """
+        Clear the cache of filesystem instances.
+
+        Notes
+        -----
+        Unless overridden by setting the ``cachable`` class attribute to False,
+        the filesystem class stores a reference to newly created instances. This
+        prevents Python's normal rules around garbage collection from working,
+        since the instances refcount will not drop to zero until ``clear_instance_cache``
+        is called.
+        """
         cls._cache.clear()
 
     # ------------------------------------------------------------------------
