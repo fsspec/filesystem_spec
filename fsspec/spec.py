@@ -31,7 +31,7 @@ class _Cached(type):
     being garbage collected.
     """
 
-    cacheable = True
+    cachable = True
     _extra_tokenize_attributes = ()
 
     def __init__(self, *args, **kwargs):
@@ -47,14 +47,14 @@ class _Cached(type):
             getattr(self, attr, None) for attr in self._extra_tokenize_attributes
         )
         token = tokenize(cls, *args, *extra_tokens, **kwargs)
-        if cls.cacheable and token in self._cache:
+        if self.cachable and token in self._cache:
             return self._cache[token]
         else:
             obj = super().__call__(*args, **kwargs)
             obj._fs_token = token
             obj.storage_args = args
             obj.storage_options = kwargs
-            if cls.cacheable:
+            if self.cachable:
                 self._cache[token] = obj
             return obj
 
