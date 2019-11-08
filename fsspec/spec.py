@@ -107,8 +107,7 @@ class AbstractFileSystem(up):
             import warnings
 
             warnings.warn(
-                "add_docs is no longer supported. Use fsspec.utils.inherit_docstrings",
-                FutureWarning,
+                "add_docs is no longer supported.", FutureWarning,
             )
 
         if storage_options.pop("add_aliases", True):

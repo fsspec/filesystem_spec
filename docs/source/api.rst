@@ -78,6 +78,7 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.local.LocalFileSystem
+   :members:
 
 .. autoclass:: fsspec.implementations.memory.MemoryFileSystem
    :members: __init__
