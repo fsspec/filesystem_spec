@@ -381,9 +381,13 @@ class AbstractFileSystem(up):
         withdirs: bool
             Whether to include directory paths in the output. This is True
             when used by glob, but users usually only want files.
-        kwargs are passed to ``ls``.
+        kwargs: dict
+            Passed to ``ls``.
         """
         # TODO: allow equivalent of -name parameter
+        if self.isfile(path):
+            return [path]
+
         out = set()
         for path, dirs, files in self.walk(path, maxdepth, **kwargs):
             if withdirs:
@@ -391,10 +395,7 @@ class AbstractFileSystem(up):
             for name in files:
                 if name and name not in out:
                     out.add("/".join([path.rstrip("/"), name]) if path else name)
-        if self.isfile(path) and path not in out:
-            # walk works on directories, but find should also return [path]
-            # when path happens to be a file
-            out.add(path)
+
         return sorted(out)
 
     def du(self, path, total=True, maxdepth=None, **kwargs):
