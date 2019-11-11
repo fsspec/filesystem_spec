@@ -26,9 +26,10 @@ class _Cached(type):
     * The values of the class attributes listed in `_extra_tokenize_attributes`
     * The arguments passed to ``__init__``.
 
-    Filesystems are not cached beyond the usual lifetime of Python objects.
-    Deleting all references to a particular filesystem will result in it
-    being garbage collected.
+    This creates an additional reference to the filesystem, which prevents the
+    filesystem from being garbage collected when all *user* references go away.
+    A call to the :meth:`AbstractFileSystem.clear_instance_cache` must *also*
+    be made for a filesystem instance to be garbage collected.
     """
 
     cachable = True

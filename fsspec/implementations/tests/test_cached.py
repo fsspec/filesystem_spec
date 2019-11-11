@@ -60,11 +60,6 @@ def test_worflow(ftp_writable):
 
 
 def test_blocksize(ftp_writable):
-    # TODO: fix inter-test state leaking
-    # Without the clear_instance_cache, we have earlier state breaking
-    # this test.
-    CachingFileSystem.clear_instance_cache()
-
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out_block", "wb") as f:
