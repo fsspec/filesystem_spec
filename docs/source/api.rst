@@ -33,7 +33,6 @@ Base Classes
    fsspec.core.BaseCache
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
-   :members:
 
 .. autoclass:: fsspec.spec.Transaction
    :members:
@@ -78,6 +77,7 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.local.LocalFileSystem
+   :members:
 
 .. autoclass:: fsspec.implementations.memory.MemoryFileSystem
    :members: __init__
