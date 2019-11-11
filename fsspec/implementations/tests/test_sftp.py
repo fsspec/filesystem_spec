@@ -100,5 +100,9 @@ def test_transaction(ssh):
 def test_makedirs_exist_ok(ssh):
     f = fsspec.get_filesystem_class("sftp")(**ssh)
 
-    with pytest.raises(ValueError, match="exist_ok'"):
-        f.makedirs("/a/b/c", exist_ok=True)
+    f.makedirs("/a/b/c")
+
+    with pytest.raises(FileExistsError, match="/a/b/c"):
+        f.makedirs("/a/b/c", exist_ok=False)
+
+    f.makedirs("/a/b/c", exist_ok=True)
