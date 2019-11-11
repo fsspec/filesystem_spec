@@ -52,7 +52,8 @@ class _Cached(type):
             return self._cache[token]
         else:
             obj = super().__call__(*args, **kwargs)
-            obj._fs_token = token
+            # Setting _fs_token here causes some static linters to complain.
+            obj._fs_token_ = token
 
             if self.cachable:
                 self._cache[token] = obj
@@ -115,6 +116,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
             self._mangle_docstrings()
         if storage_options.pop("add_aliases", None):
             warnings.warn("add_aliases has been removed.", FutureWarning)
+        self._fs_token_ = None  # Set in _Cached
+
+    @property
+    def _fs_token(self):
+        return self._fs_token_
 
     def __dask_tokenize__(self):
         return self._fs_token
