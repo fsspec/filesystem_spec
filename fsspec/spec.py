@@ -114,7 +114,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         if storage_options.pop("add_docs", None):
             warnings.warn("add_docs is no longer supported.", FutureWarning)
 
-            self._mangle_docstrings()
         if storage_options.pop("add_aliases", None):
             warnings.warn("add_aliases has been removed.", FutureWarning)
         # This is set in _Cached
