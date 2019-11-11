@@ -4,6 +4,8 @@ import shutil
 import subprocess
 import sys
 import time
+
+from fsspec.implementations.cached import CachingFileSystem
 from fsspec.implementations.ftp import FTPFileSystem
 from fsspec import open_files
 import fsspec
@@ -30,6 +32,7 @@ def ftp():
 @pytest.fixture()
 def ftp_writable(tmpdir):
     FTPFileSystem.clear_instance_cache()  # remove lingering connections
+    CachingFileSystem.clear_instance_cache()
     d = str(tmpdir)
     with open(os.path.join(d, "out"), "wb") as f:
         f.write(b"hello" * 10000)

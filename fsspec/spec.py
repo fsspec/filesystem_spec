@@ -1,3 +1,5 @@
+import warnings
+import functools
 from hashlib import md5
 import io
 import os
@@ -8,21 +10,57 @@ from .utils import read_block, tokenize, stringify_path
 
 logger = logging.getLogger("fsspec")
 
-# alternative names for some methods, which get patched to new instances
-# (alias, original)
-aliases = [
-    ("makedir", "mkdir"),
-    ("mkdirs", "makedirs"),
-    ("listdir", "ls"),
-    ("cp", "copy"),
-    ("move", "mv"),
-    ("stat", "info"),
-    ("disk_usage", "du"),
-    ("rename", "mv"),
-    ("delete", "rm"),
-    ("upload", "put"),
-    ("download", "get"),
-]
+
+def make_instance(cls, args, kwargs):
+    return cls(*args, **kwargs)
+
+
+class _Cached(type):
+    """
+    Metaclass for caching file system instances.
+
+    Notes
+    -----
+    Instances are cached according to
+
+    * The values of the class attributes listed in `_extra_tokenize_attributes`
+    * The arguments passed to ``__init__``.
+
+    This creates an additional reference to the filesystem, which prevents the
+    filesystem from being garbage collected when all *user* references go away.
+    A call to the :meth:`AbstractFileSystem.clear_instance_cache` must *also*
+    be made for a filesystem instance to be garbage collected.
+    """
+
+    cachable = True
+    _extra_tokenize_attributes = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Note: we intentionally create a reference here, to avoid garbage
+        # collecting instances when all other references are gone. To really
+        # delete a FileSystem, the cache must be cleared.
+        self._cache = {}
+
+    def __call__(self, *args, **kwargs):
+        cls = type(self)
+        extra_tokens = tuple(
+            getattr(self, attr, None) for attr in self._extra_tokenize_attributes
+        )
+        token = tokenize(cls, *args, *extra_tokens, **kwargs)
+        if self.cachable and token in self._cache:
+            return self._cache[token]
+        else:
+            obj = super().__call__(*args, **kwargs)
+            # Setting _fs_token here causes some static linters to complain.
+            obj._fs_token_ = token
+            self.storage_args = args
+            self.storage_options = kwargs
+
+            if self.cachable:
+                self._cache[token] = obj
+            return obj
+
 
 try:  # optionally derive from pyarrow's FileSystem, if available
     import pyarrow as pa
@@ -32,11 +70,7 @@ except ImportError:
     up = object
 
 
-def make_instance(cls, args, kwargs):
-    return cls(*args, **kwargs)
-
-
-class AbstractFileSystem(up):
+class AbstractFileSystem(up, metaclass=_Cached):
     """
     An abstract super-class for pythonic file-systems
 
@@ -44,8 +78,6 @@ class AbstractFileSystem(up):
     from here.
     """
 
-    _singleton = [None]  # will contain the newest instance
-    _cache = {}
     cachable = True  # this class can be cached, instances reused
     _cached = False
     blocksize = 2 ** 22
@@ -53,30 +85,8 @@ class AbstractFileSystem(up):
     protocol = "abstract"
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
-    def __new__(cls, *args, **storage_options):
-        """
-        Will reuse existing instance if:
-        - cls.cachable is True and
-        - storage_options does not include do_cache=False
-        - the token (a hash of args and kwargs by default) exists in the cache
-
-        The instance will skip init if instance.cached = True.
-        """
-
-        # TODO: defer to a class-specific tokeniser?
-        do_cache = storage_options.pop("do_cache", True)
-        token = tokenize(cls, args, storage_options)
-        if cls.cachable and token in cls._cache and do_cache:
-            # check for cached instance
-            return cls._cache[token]
-        self = object.__new__(cls)
-        self._fs_token = token
-        if self.cachable:
-            # store for caching - can hold memory
-            cls._cache[token] = self
-        self.storage_args = args
-        self.storage_options = storage_options
-        return self
+    #: Extra *class attributes* that should be considered when hashing.
+    _extra_tokenize_attributes = ()
 
     def __init__(self, *args, **storage_options):
         """Create and configure file-system instance
@@ -92,27 +102,26 @@ class AbstractFileSystem(up):
         Magic kwargs that affect functionality here:
         add_docs: if True, will append docstrings from this spec to the
             specific implementation
-        add_aliases: if True, will add method aliases
         """
         if self._cached:
             # reusing instance, don't change
             return
         self._cached = True
         self._intrans = False
-        self._transaction = Transaction(self)
-        self._singleton[0] = self
+        self._transaction = None
         self.dircache = {}
 
         if storage_options.pop("add_docs", None):
-            import warnings
-
             warnings.warn("add_docs is no longer supported.", FutureWarning)
 
-        if storage_options.pop("add_aliases", True):
-            for new, old in aliases:
-                if not hasattr(self, new):
-                    # don't apply alias if attribute exists already
-                    setattr(self, new, getattr(self, old))
+        if storage_options.pop("add_aliases", None):
+            warnings.warn("add_aliases has been removed.", FutureWarning)
+        # This is set in _Cached
+        self._fs_token_ = None
+
+    @property
+    def _fs_token(self):
+        return self._fs_token_
 
     def __dask_tokenize__(self):
         return self._fs_token
@@ -122,13 +131,6 @@ class AbstractFileSystem(up):
 
     def __eq__(self, other):
         return self._fs_token == other._fs_token
-
-    @classmethod
-    def clear_instance_cache(cls, remove_singleton=True):
-        """Remove any instances stored in class attributes"""
-        cls._cache.clear()
-        if remove_singleton:
-            cls._singleton = [None]
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -166,10 +168,10 @@ class AbstractFileSystem(up):
 
         If no instance has been created, then create one with defaults
         """
-        if not cls._singleton[0]:
+        if not len(cls._cache):
             return cls()
         else:
-            return cls._singleton[0]
+            return list(cls._cache.values())[-1]
 
     @property
     def transaction(self):
@@ -178,16 +180,20 @@ class AbstractFileSystem(up):
         Requires the file class to implement `.commit()` and `.discard()`
         for the normal and exception cases.
         """
+        if self._transaction is None:
+            self._transaction = Transaction(self)
         return self._transaction
 
     def start_transaction(self):
         """Begin write transaction for deferring files, non-context version"""
         self._intrans = True
+        self._transaction = Transaction(self)
         return self.transaction
 
     def end_transaction(self):
         """Finish write transaction, non-context version"""
         self.transaction.complete()
+        self._transaction = None
 
     def invalidate_cache(self, path=None):
         """
@@ -354,6 +360,7 @@ class AbstractFileSystem(up):
 
         Parameters
         ----------
+        path : str
         maxdepth: int or None
             If not None, the maximum number of levels to descend
         withdirs: bool
@@ -786,8 +793,65 @@ class AbstractFileSystem(up):
 
     @classmethod
     def clear_instance_cache(cls):
-        """Remove cached instances from the class cache"""
+        """
+        Clear the cache of filesystem instances.
+
+        Notes
+        -----
+        Unless overridden by setting the ``cachable`` class attribute to False,
+        the filesystem class stores a reference to newly created instances. This
+        prevents Python's normal rules around garbage collection from working,
+        since the instances refcount will not drop to zero until ``clear_instance_cache``
+        is called.
+        """
         cls._cache.clear()
+
+    # ------------------------------------------------------------------------
+    # Aliases
+
+    def makedir(self, path, create_parents=True, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mkdir`."""
+        return self.mkdir(path, create_parents=create_parents, **kwargs)
+
+    def mkdirs(self, path, exist_ok=False):
+        """Alias of :ref:`FilesystemSpec.makedirs`."""
+        return self.makedirs(path, exist_ok=exist_ok)
+
+    def listdir(self, path, detail=True, **kwargs):
+        """Alias of :ref:`FilesystemSpec.ls`."""
+        return self.ls(path, detail=detail, **kwargs)
+
+    def cp(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.copy`."""
+        return self.copy(path1, path2, **kwargs)
+
+    def move(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mv`."""
+        return self.mv(path1, path2, **kwargs)
+
+    def stat(self, path, **kwargs):
+        """Alias of :ref:`FilesystemSpec.info`."""
+        return self.info(path, **kwargs)
+
+    def disk_usage(self, path, total=True, maxdepth=None, **kwargs):
+        """Alias of :ref:`FilesystemSpec.du`."""
+        return self.du(path, total=total, maxdepth=maxdepth, **kwargs)
+
+    def rename(self, path1, path2, **kwargs):
+        """Alias of :ref:`FilesystemSpec.mv`."""
+        return self.mv(path1, path2, **kwargs)
+
+    def delete(self, path, recursive=False, maxdepth=None):
+        """Alias of :ref:`FilesystemSpec.rm`."""
+        return self.rm(path, recursive=recursive, maxdepth=maxdepth)
+
+    def upload(self, lpath, rpath, recursive=False, **kwargs):
+        """Alias of :ref:`FilesystemSpec.put`."""
+        return self.put(lpath, rpath, recursive=recursive, **kwargs)
+
+    def download(self, rpath, lpath, recursive=False, **kwargs):
+        """Alias of :ref:`FilesystemSpec.get`."""
+        return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
 
 class AbstractBufferedFile(io.IOBase):

@@ -95,3 +95,14 @@ def test_transaction(ssh):
         "/home/someuser/deeper/afile",
         "/home/someuser/deeper/afile2",
     ]
+
+
+def test_makedirs_exist_ok(ssh):
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+
+    f.makedirs("/a/b/c")
+
+    with pytest.raises(FileExistsError, match="/a/b/c"):
+        f.makedirs("/a/b/c", exist_ok=False)
+
+    f.makedirs("/a/b/c", exist_ok=True)

@@ -72,6 +72,26 @@ def test_glob(test_path, expected):
     assert test_fs.glob(test_path) == expected
 
 
+def test_cache():
+    fs = DummyTestFS()
+    fs2 = DummyTestFS()
+    assert fs is fs2
+
+    assert len(fs._cache) == 1
+    del fs2
+    assert len(fs._cache) == 1
+    del fs
+    assert len(DummyTestFS._cache) == 1
+
+    DummyTestFS.clear_instance_cache()
+    assert len(DummyTestFS._cache) == 0
+
+
+def test_alias():
+    with pytest.warns(FutureWarning, match="add_aliases"):
+        DummyTestFS(add_aliases=True)
+
+
 def test_add_docs_warns():
     with pytest.warns(FutureWarning, match="add_docs"):
         AbstractFileSystem(add_docs=True)
