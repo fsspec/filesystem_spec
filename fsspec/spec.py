@@ -117,7 +117,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
             self._mangle_docstrings()
         if storage_options.pop("add_aliases", None):
             warnings.warn("add_aliases has been removed.", FutureWarning)
-        self._fs_token_ = None  # Set in _Cached
+        # This is set in _Cached
+        self._fs_token_ = None
 
     @property
     def _fs_token(self):
