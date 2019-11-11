@@ -53,8 +53,7 @@ class _Cached(type):
         else:
             obj = super().__call__(*args, **kwargs)
             obj._fs_token = token
-            obj.storage_args = args
-            obj.storage_options = kwargs
+
             if self.cachable:
                 self._cache[token] = obj
             return obj
@@ -108,6 +107,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._intrans = False
         self._transaction = None
         self.dircache = {}
+
+        self.storage_args = args
+        self.storage_options = storage_options
+
         if storage_options.pop("add_docs", True):
             self._mangle_docstrings()
         if storage_options.pop("add_aliases", None):
