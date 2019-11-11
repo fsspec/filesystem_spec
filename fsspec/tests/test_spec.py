@@ -90,3 +90,8 @@ def test_cache():
 def test_alias():
     with pytest.warns(FutureWarning, match="add_aliases"):
         DummyTestFS(add_aliases=True)
+
+
+def test_add_docs_warns():
+    with pytest.warns(FutureWarning, match="add_docs"):
+        AbstractFileSystem(add_docs=True)

@@ -77,25 +77,21 @@ class LocalFileSystem(AbstractFileSystem):
         return result
 
     def copy(self, path1, path2, **kwargs):
-        """ Copy within two locations in the filesystem"""
         shutil.copyfile(path1, path2)
 
     def get(self, path1, path2, **kwargs):
-        """ Copy file to local """
         if kwargs.get("recursive"):
             return super(LocalFileSystem, self).get(path1, path2, **kwargs)
         else:
             return self.copy(path1, path2, **kwargs)
 
     def put(self, path1, path2, **kwargs):
-        """ Upload file from local """
         if kwargs.get("recursive"):
             return super(LocalFileSystem, self).put(path1, path2, **kwargs)
         else:
             return self.copy(path1, path2, **kwargs)
 
     def mv(self, path1, path2, **kwargs):
-        """ Move file from one location to another """
         os.rename(path1, path2)
 
     def rm(self, path, recursive=False, maxdepth=None):
@@ -111,7 +107,6 @@ class LocalFileSystem(AbstractFileSystem):
         return LocalFileOpener(path, mode, fs=self, **kwargs)
 
     def touch(self, path, **kwargs):
-        """ Create empty file, or update timestamp """
         path = self._strip_protocol(path)
         if self.exists(path):
             os.utime(path, None)

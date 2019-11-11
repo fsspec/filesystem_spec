@@ -112,7 +112,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self.storage_args = args
         self.storage_options = storage_options
 
-        if storage_options.pop("add_docs", True):
+        if storage_options.pop("add_docs", None):
+            warnings.warn("add_docs is no longer supported.", FutureWarning)
+
             self._mangle_docstrings()
         if storage_options.pop("add_aliases", None):
             warnings.warn("add_aliases has been removed.", FutureWarning)
@@ -130,32 +132,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     def __eq__(self, other):
         return self._fs_token == other._fs_token
-
-    def _mangle_docstrings(self):
-        """Add AbstractFileSystem docstrings to subclass methods
-
-        Disable by including ``add_docs=False`` to init kwargs.
-        """
-        for method in dir(self.__class__):
-            if method.startswith("_"):
-                continue
-            if self.__class__ is not AbstractFileSystem:
-                m = getattr(self.__class__, method)
-                n = getattr(AbstractFileSystem, method, None).__doc__
-                if not callable(m) or not n or n in (m.__doc__ or ""):
-                    # ignore if a) not a method, b) no superclass doc
-                    # c) already includes docstring
-                    continue
-                try:
-                    if m.__doc__:
-                        m.__doc__ += (
-                            "\n Upstream docstring: \n"
-                            + getattr(AbstractFileSystem, method).__doc__
-                        )
-                    else:
-                        m.__doc__ = getattr(AbstractFileSystem, method).__doc__
-                except AttributeError:
-                    pass
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -572,7 +548,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return self.open(path, "rb").read()
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
-        """ Copy file to local
+        """Copy file to local.
 
         Possible extension: maybe should be able to copy to any file-system
         (streaming through local).
