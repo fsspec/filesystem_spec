@@ -54,6 +54,8 @@ class _Cached(type):
             obj = super().__call__(*args, **kwargs)
             # Setting _fs_token here causes some static linters to complain.
             obj._fs_token_ = token
+            self.storage_args = args
+            self.storage_options = kwargs
 
             if self.cachable:
                 self._cache[token] = obj
@@ -108,9 +110,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._intrans = False
         self._transaction = None
         self.dircache = {}
-
-        self.storage_args = args
-        self.storage_options = storage_options
 
         if storage_options.pop("add_docs", None):
             warnings.warn("add_docs is no longer supported.", FutureWarning)
