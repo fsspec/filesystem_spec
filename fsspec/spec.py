@@ -921,9 +921,10 @@ class AbstractBufferedFile(io.IOBase):
         if "trim" in kwargs:
             warnings.warn(
                 "Passing 'trim' to control the cache behavior has been deprecated. "
-                "Specify it within the 'cache_options' argument instead."
+                "Specify it within the 'cache_options' argument instead.",
+                FutureWarning,
             )
-            cache_options = kwargs.pop("trim")
+            cache_options["trim"] = kwargs.pop("trim")
 
         self.kwargs = kwargs
 

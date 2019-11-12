@@ -115,12 +115,12 @@ def test_add_docs_warns():
 
 def test_cache_options():
     fs = DummyTestFS()
-    f = fs.open("/misc/foo.txt")
+    f = fs.open("misc/foo.txt")
     assert f.cache.trim
 
     # TODO: dummy buffered file
     f = AbstractBufferedFile(
-        fs, "/misc/file.txt", cache_type="bytes", cache_options=dict(trim=False)
+        fs, "misc/foo.txt", cache_type="bytes", cache_options=dict(trim=False)
     )
     assert f.cache.trim is False
 
@@ -128,4 +128,4 @@ def test_cache_options():
 def test_trim_kwarg_warns():
     fs = DummyTestFS()
     with pytest.warns(FutureWarning, match="cache_options"):
-        f = AbstractBufferedFile(fs, "/misc/file.txt", cache_type="bytes", trim=False)
+        f = AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes", trim=False)
