@@ -102,6 +102,7 @@ def test_cache_getitem(Cache_imp):
     assert cacher[0:4] == b"abcd"
     assert cacher[:4] == b"abcd"
     assert cacher[-3:] == b"XYZ"
+    assert cacher[-3:-1] == b"XY"
     assert cacher[2:4] == b"cd"
 
 

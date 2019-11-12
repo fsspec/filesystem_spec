@@ -17,11 +17,10 @@ from .caching import (  # noqa: F401
     BaseCache,
     MMapCache,
     ReadAheadCache,
-    BlockCache,
     BytesCache,
+    BlockCache,
     caches,
 )
-
 
 logger = logging.getLogger("fsspec")
 
