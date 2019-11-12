@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import functools
 import io
 import math
 import os
@@ -581,17 +582,34 @@ class BlockCache(BaseCache):
     ever made for `blocksize`.
     """
 
-    def __init__(self, blocksize, fetcher, size):
+    def __init__(self, blocksize, fetcher, size, maxblocks=32):
         super().__init__(blocksize, fetcher, size)
         # TODO: Consider an LRU-cache rather than a dict.
         # This would avoid ever having the full file in memory if that
         # becomes a problem.
-        self._blocks = {}
+        self._count = 0
+        self._counts = {}
         self.nblocks = math.ceil(size / blocksize)
+        self.maxblocks = maxblocks
+        self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
 
     def __repr__(self):
         return "<BlockCache blocksize={}, size={}, nblocks={}>".format(
             self.blocksize, self.size, self.nblocks
+        )
+
+    def cache_info(self):
+        return self._fetch_block_cached.cache_info()
+
+    def __getstate__(self):
+        state = self.__dict__
+        del state["_fetch_block_cached"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._fetch_block_cached = functools.lru_cache(state["maxblocks"])(
+            self._fetch_block
         )
 
     def _fetch(self, start, end):
@@ -622,9 +640,7 @@ class BlockCache(BaseCache):
         """
         Fetch the block of data for `block_number`.
         """
-        if block_number in self._blocks:
-            return None
-        elif block_number > self.nblocks:
+        if block_number > self.nblocks:
             raise ValueError(
                 "'block_number={}' is greater than the number of blocks ({})".format(
                     block_number, self.nblocks
@@ -634,7 +650,8 @@ class BlockCache(BaseCache):
         start = block_number * self.blocksize
         end = start + self.blocksize
         logger.info("BlockCache fetching block %d", block_number)
-        self._blocks[block_number] = super()._fetch(start, end)
+        block_contents = super()._fetch(start, end)
+        return block_contents
 
     def _read_cache(self, start, end, start_block_number, end_block_number):
         """
@@ -651,20 +668,20 @@ class BlockCache(BaseCache):
         end_pos = end % self.blocksize
 
         if start_block_number == end_block_number:
-            block = self._blocks[start_block_number]
+            block = self._fetch_block_cached(start_block_number)
             return block[start_pos:end_pos]
 
         else:
             # read from the initial
             out = []
-            out.append(self._blocks[start_block_number][start_pos:])
+            out.append(self._fetch_block_cached(start_block_number)[start_pos:])
 
             # intermediate blocks
             for block_number in range(start_block_number + 1, end_block_number):
-                out.append(self._blocks[block_number])
+                out.append(self._fetch_block_cached(block_number))
 
             # final block
-            out.append(self._blocks[end_block_number][:end_pos])
+            out.append(self._fetch_block_cached(end_block_number)[:end_pos])
 
             return b"".join(out)
 
