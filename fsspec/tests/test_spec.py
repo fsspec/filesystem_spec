@@ -1,19 +1,35 @@
 import pytest
-from fsspec.spec import AbstractFileSystem
+from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 
 
 class DummyTestFS(AbstractFileSystem):
     protocol = "mock"
     _fs_contents = (
         {"name": "top_level/second_level/date=2019-10-01/", "type": "directory"},
-        {"name": "top_level/second_level/date=2019-10-01/a.parquet", "type": "file"},
-        {"name": "top_level/second_level/date=2019-10-01/b.parquet", "type": "file"},
+        {
+            "name": "top_level/second_level/date=2019-10-01/a.parquet",
+            "type": "file",
+            "size": 100,
+        },
+        {
+            "name": "top_level/second_level/date=2019-10-01/b.parquet",
+            "type": "file",
+            "size": 100,
+        },
         {"name": "top_level/second_level/date=2019-10-02/", "type": "directory"},
-        {"name": "top_level/second_level/date=2019-10-02/a.parquet", "type": "file"},
+        {
+            "name": "top_level/second_level/date=2019-10-02/a.parquet",
+            "type": "file",
+            "size": 100,
+        },
         {"name": "top_level/second_level/date=2019-10-04/", "type": "directory"},
-        {"name": "top_level/second_level/date=2019-10-04/a.parquet", "type": "file"},
+        {
+            "name": "top_level/second_level/date=2019-10-04/a.parquet",
+            "type": "file",
+            "size": 100,
+        },
         {"name": "misc/", "type": "directory"},
-        {"name": "misc/foo.txt", "type": "file"},
+        {"name": "misc/foo.txt", "type": "file", "size": 100},
     )
 
     def ls(self, path, detail=True, **kwargs):
@@ -95,3 +111,21 @@ def test_alias():
 def test_add_docs_warns():
     with pytest.warns(FutureWarning, match="add_docs"):
         AbstractFileSystem(add_docs=True)
+
+
+def test_cache_options():
+    fs = DummyTestFS()
+    f = fs.open("/misc/foo.txt")
+    assert f.cache.trim
+
+    # TODO: dummy buffered file
+    f = AbstractBufferedFile(
+        fs, "/misc/file.txt", cache_type="bytes", cache_options=dict(trim=False)
+    )
+    assert f.cache.trim is False
+
+
+def test_trim_kwarg_warns():
+    fs = DummyTestFS()
+    with pytest.warns(FutureWarning, match="cache_options"):
+        f = AbstractBufferedFile(fs, "/misc/file.txt", cache_type="bytes", trim=False)
