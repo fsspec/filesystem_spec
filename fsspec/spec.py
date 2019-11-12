@@ -671,7 +671,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
         **kwargs
     ):
         """Return raw bytes-mode file-like from the file-system"""
-        return AbstractBufferedFile(self, path, mode, block_size, autocommit)
+        return AbstractBufferedFile(
+            self,
+            path,
+            mode,
+            block_size,
+            autocommit,
+            cache_options=cache_options,
+            **kwargs
+        )
 
     def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
         """
@@ -709,7 +717,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             ac = kwargs.pop("autocommit", not self._intrans)
             f = self._open(
-                path, mode=mode, block_size=block_size, autocommit=ac, **kwargs
+                path,
+                mode=mode,
+                block_size=block_size,
+                autocommit=ac,
+                cache_options=cache_options,
+                **kwargs
             )
             if not ac:
                 self.transaction.files.append(f)

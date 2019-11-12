@@ -124,6 +124,9 @@ def test_cache_options():
     )
     assert f.cache.trim is False
 
+    f = fs.open("misc/foo.txt", cache_type="bytes", cache_options=dict(trim=False))
+    assert f.cache.trim is False
+
 
 def test_trim_kwarg_warns():
     fs = DummyTestFS()
