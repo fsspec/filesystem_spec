@@ -935,7 +935,7 @@ class AbstractBufferedFile(io.IOBase):
                 self.details = fs.info(path)
             self.size = self.details["size"]
             self.cache = caches[cache_type](
-                self.blocksize, self._fetch_range, self.size, **cache_options,
+                self.blocksize, self._fetch_range, self.size, **cache_options
             )
         else:
             self.buffer = io.BytesIO()
