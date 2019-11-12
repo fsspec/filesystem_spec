@@ -2,13 +2,7 @@ import pytest
 import pickle
 import string
 
-from fsspec.core import (
-    _expand_paths,
-    OpenFile,
-    caches,
-    get_compression,
-    BaseCache
-)
+from fsspec.core import _expand_paths, OpenFile, caches, get_compression, BaseCache
 
 
 @pytest.mark.parametrize(
