@@ -54,7 +54,7 @@ class FSMap(MutableMapping):
         try:
             self.fs.rm(self.root, True)
             self.fs.mkdir(self.root)
-        except:
+        except:  # noqa: E722
             pass
 
     def _key_to_str(self, key):
@@ -74,7 +74,7 @@ class FSMap(MutableMapping):
         key = self._key_to_str(key)
         try:
             result = self.fs.cat(key)
-        except:
+        except:  # noqa: E722
             if default is not None:
                 return default
             raise KeyError(key)
@@ -95,30 +95,22 @@ class FSMap(MutableMapping):
         with self.fs.open(key, "wb") as f:
             f.write(value)
 
-    def keys(self):
-        """List currently defined keys"""
+    def __iter__(self):
         return (self._str_to_key(x) for x in self.fs.find(self.root))
 
-    def __iter__(self):
-        return self.keys()
-
     def __len__(self):
-        return len(self.keys())
+        return len(self.fs.find(self.root))
 
     def __delitem__(self, key):
         """Remove key"""
         try:
             self.fs.rm(self._key_to_str(key))
-        except:
+        except:  # noqa: E722
             raise KeyError
 
     def __contains__(self, key):
         """Does key exist in mapping?"""
         return self.fs.exists(self._key_to_str(key))
-
-    def __len__(self):
-        """Number of stored elements"""
-        return sum(1 for _ in self.keys())
 
     def __getstate__(self):
         """Mapping should be pickleable"""

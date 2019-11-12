@@ -1,5 +1,4 @@
 import warnings
-import functools
 from hashlib import md5
 import io
 import os
@@ -474,7 +473,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
         try:
             self.info(path)
             return True
-        except:  # any exception allowed bar FileNotFoundError?
+        except:  # noqa: E722
+            # any exception allowed bar FileNotFoundError?
             return False
 
     def info(self, path, **kwargs):
@@ -539,7 +539,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Is this entry file-like?"""
         try:
             return self.info(path)["type"] == "file"
-        except:
+        except:  # noqa: E722
             return False
 
     def cat(self, path):
@@ -645,11 +645,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         for p in path:
             if recursive:
                 out = self.walk(p, maxdepth=maxdepth)
-                for pa, _, files in reversed(list(out)):
+                for pa_, _, files in reversed(list(out)):
                     for name in files:
-                        fn = "/".join([pa, name]) if pa else name
+                        fn = "/".join([pa_, name]) if pa_ else name
                         self.rm(fn)
-                    self.rmdir(pa)
+                    self.rmdir(pa_)
             else:
                 self._rm(p)
 
@@ -801,8 +801,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
         Unless overridden by setting the ``cachable`` class attribute to False,
         the filesystem class stores a reference to newly created instances. This
         prevents Python's normal rules around garbage collection from working,
-        since the instances refcount will not drop to zero until ``clear_instance_cache``
-        is called.
+        since the instances refcount will not drop to zero until
+        ``clear_instance_cache`` is called.
         """
         cls._cache.clear()
 

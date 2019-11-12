@@ -178,7 +178,9 @@ def open_files(
     Examples
     --------
     >>> files = open_files('2015-*-*.csv')  # doctest: +SKIP
-    >>> files = open_files('s3://bucket/2015-*-*.csv.gz', compression='gzip')  # doctest: +SKIP
+    >>> files = open_files(
+    ...     's3://bucket/2015-*-*.csv.gz', compression='gzip'
+    ... )  # doctest: +SKIP
 
     Returns
     -------
@@ -243,9 +245,12 @@ def open(
     Examples
     --------
     >>> openfile = open('2015-01-01.csv')  # doctest: +SKIP
-    >>> openfile = open('s3://bucket/2015-01-01.csv.gz', compression='gzip')  # doctest: +SKIP
-    ... with openfile as f:
-    ...     df = pd.read_csv(f)
+    >>> openfile = open(
+    ...     's3://bucket/2015-01-01.csv.gz',
+    ...     compression='gzip'
+    ... )  # doctest: +SKIP
+    >>> with openfile as f:
+    ...     df = pd.read_csv(f)  # doctest: +SKIP
 
     Returns
     -------
