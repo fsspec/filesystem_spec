@@ -175,7 +175,7 @@ communication with the remote resource is limited. The size of the buffer is gen
 with the ``blocksize=`` kwargs at p[en time, although the implementation may have some minimum or
 maximum sizes that need to be respected.
 
-For reading, a number of buffering schemes are available, listed in ``fsspec.core.caches``
+For reading, a number of buffering schemes are available, listed in ``fsspec.caching.caches``
 (see :ref:`readbuffering`), or "none" for no buffering at all, e.g., for a simple read-ahead
 buffer, you can do
 
