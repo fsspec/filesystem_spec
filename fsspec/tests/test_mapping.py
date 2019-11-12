@@ -48,3 +48,14 @@ def test_pickle():
     m["key"] = b"data"
     m2 = pickle.loads(pickle.dumps(m))
     assert list(m) == list(m2)
+
+
+def test_keys_view():
+    # https://github.com/intake/filesystem_spec/issues/186
+    m = fsspec.get_mapper("memory://")
+    m["key"] = b"data"
+
+    keys = m.keys()
+    assert len(keys) == 1
+    # check that we don't consume the keys
+    assert len(keys) == 1
