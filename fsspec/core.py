@@ -446,7 +446,7 @@ class BaseCache(object):
         How big this file is
     """
 
-    def __init__(self, blocksize, fetcher, size, **kwargs):
+    def __init__(self, blocksize, fetcher, size):
         self.blocksize = blocksize
         self.fetcher = fetcher
         self.size = size
@@ -464,7 +464,7 @@ class MMapCache(BaseCache):
     This cache method might only work on posix
     """
 
-    def __init__(self, blocksize, fetcher, size, location=None, blocks=None, **kwargs):
+    def __init__(self, blocksize, fetcher, size, location=None, blocks=None):
         super().__init__(blocksize, fetcher, size)
         self.blocks = set() if blocks is None else blocks
         self.location = location
@@ -527,7 +527,7 @@ class ReadAheadCache(BaseCache):
     many small reads in a sequential order (e.g., readling lines from a file).
     """
 
-    def __init__(self, blocksize, fetcher, size, **kwargs):
+    def __init__(self, blocksize, fetcher, size):
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
         self.start = 0
@@ -569,7 +569,7 @@ class BytesCache(BaseCache):
         we are more than a blocksize ahead of it.
     """
 
-    def __init__(self, blocksize, fetcher, size, trim=True, **kwargs):
+    def __init__(self, blocksize, fetcher, size, trim=True):
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
         self.start = None
