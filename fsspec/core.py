@@ -729,7 +729,7 @@ class BytesCache(BaseCache):
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
         self.start = None
-        self.end = -1
+        self.end = None
         self.trim = trim
 
     def _fetch(self, start, end):
