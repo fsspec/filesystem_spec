@@ -115,7 +115,7 @@ def test_add_docs_warns():
 
 def test_cache_options():
     fs = DummyTestFS()
-    f = fs.open("misc/foo.txt")
+    f = AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes")
     assert f.cache.trim
 
     # TODO: dummy buffered file
