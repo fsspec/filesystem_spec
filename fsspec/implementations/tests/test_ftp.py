@@ -1,16 +1,13 @@
 import os
 import pytest
-import shutil
 import subprocess
 import sys
 import time
 
-from fsspec.implementations.cached import CachingFileSystem
 from fsspec.implementations.ftp import FTPFileSystem
 from fsspec import open_files
 import fsspec
 
-pytest.importorskip("pyftpdlib")
 here = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -27,28 +24,6 @@ def ftp():
     finally:
         P.terminate()
         P.wait()
-
-
-@pytest.fixture()
-def ftp_writable(tmpdir):
-    FTPFileSystem.clear_instance_cache()  # remove lingering connections
-    CachingFileSystem.clear_instance_cache()
-    d = str(tmpdir)
-    with open(os.path.join(d, "out"), "wb") as f:
-        f.write(b"hello" * 10000)
-    P = subprocess.Popen(
-        [sys.executable, "-m", "pyftpdlib", "-d", d, "-u", "user", "-P", "pass", "-w"]
-    )
-    try:
-        time.sleep(1)
-        yield "localhost", 2121, "user", "pass"
-    finally:
-        P.terminate()
-        P.wait()
-        try:
-            shutil.rmtree(tmpdir)
-        except:
-            pass
 
 
 def test_basic(ftp):

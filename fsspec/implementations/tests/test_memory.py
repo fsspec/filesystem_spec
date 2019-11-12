@@ -1,16 +1,5 @@
 import pytest
-import fsspec
 import sys
-
-
-@pytest.fixture()
-def m():
-    m = fsspec.filesystem("memory")
-    m.store.clear()
-    try:
-        yield m
-    finally:
-        m.store.clear()
 
 
 def test_1(m):

@@ -1,4 +1,3 @@
-import inspect
 from distributed.worker import get_worker
 from distributed.client import _get_global_client
 import dask

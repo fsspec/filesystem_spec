@@ -194,7 +194,7 @@ def test_bad_compression():
 def test_not_found():
     fn = "not-a-file"
     fs = LocalFileSystem()
-    with pytest.raises((FileNotFoundError, OSError)) as e:
+    with pytest.raises((FileNotFoundError, OSError)):
         with OpenFile(fs, fn, mode="rb"):
             pass
 
@@ -245,7 +245,7 @@ def test_pickability_of_lazy_files(tmpdir):
 
         for f, f2 in zip(myfiles, myfiles2):
             assert f.path == f2.path
-            assert type(f.fs) == type(f2.fs)
+            assert isinstance(f.fs, type(f2.fs))
             with f as f_open, f2 as f2_open:
                 assert f_open.read() == f2_open.read()
 

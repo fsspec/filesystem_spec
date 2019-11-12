@@ -1,8 +1,6 @@
-import os
 import pytest
 import pickle
 from fsspec.core import _expand_paths, OpenFile, caches, get_compression
-from fsspec.implementations.tests.test_memory import m
 
 
 @pytest.mark.parametrize(

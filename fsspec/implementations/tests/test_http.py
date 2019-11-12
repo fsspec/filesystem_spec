@@ -1,7 +1,6 @@
 import pytest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
-import pickle
 import fsspec
 
 requests = pytest.importorskip("requests")

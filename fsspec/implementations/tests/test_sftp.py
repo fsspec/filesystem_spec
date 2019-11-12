@@ -23,17 +23,22 @@ def ssh():
         return
 
     # requires docker
-    cmds = r"""apt-get update
-apt-get install -y openssh-server
-mkdir /var/run/sshd
-bash -c "echo 'root:pass' | chpasswd"
-sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
-bash -c "echo \"export VISIBLE=now\" >> /etc/profile"
-/usr/sbin/sshd
-""".split(
-        "\n"
-    )
+    cmds = [
+        r"apt-get update",
+        r"apt-get install -y openssh-server",
+        r"mkdir /var/run/sshd",
+        "bash -c \"echo 'root:pass' | chpasswd\"",
+        (
+            r"sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' "
+            r"/etc/ssh/sshd_config"
+        ),
+        (
+            r"sed 's@session\s*required\s*pam_loginuid.so@session optional "
+            r"pam_loginuid.so@g' -i /etc/pam.d/sshd"
+        ),
+        r'bash -c "echo \"export VISIBLE=now\" >> /etc/profile"',
+        r"/usr/sbin/sshd",
+    ]
     name = "fsspec_sftp"
     stop_docker(name)
     cmd = "docker run -d -p 9200:22 --name {} ubuntu:16.04 sleep 9000".format(name)

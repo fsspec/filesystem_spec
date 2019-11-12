@@ -2,7 +2,7 @@
 import pickle
 import sys
 import pytest
-from fsspec.implementations.tests.test_ftp import ftp_writable, FTPFileSystem
+from fsspec.implementations.tests.test_ftp import FTPFileSystem
 
 data = b"hello" * 10000
 

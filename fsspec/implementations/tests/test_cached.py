@@ -5,7 +5,7 @@ import pytest
 
 import fsspec
 from fsspec.implementations.cached import CachingFileSystem
-from .test_ftp import ftp_writable, FTPFileSystem
+from .test_ftp import FTPFileSystem
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def test_idempotent():
     assert fs3.storage == fs.storage
 
 
-def test_worflow(ftp_writable):
+def test_workflow(ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out", "wb") as f:

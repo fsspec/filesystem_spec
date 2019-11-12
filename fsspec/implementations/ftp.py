@@ -244,7 +244,7 @@ def _mlsd2(ftp, path="."):
     """
     lines = []
     minfo = []
-    out = ftp.dir(path, lines.append)
+    ftp.dir(path, lines.append)
     for line in lines:
         line = line.split()
         this = (
