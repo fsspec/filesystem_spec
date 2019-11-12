@@ -95,16 +95,11 @@ class FSMap(MutableMapping):
         with self.fs.open(key, "wb") as f:
             f.write(value)
 
-    def keys(self):
-        """List currently defined keys"""
+    def __iter__(self):
         return (self._str_to_key(x) for x in self.fs.find(self.root))
 
-    def __iter__(self):
-        return self.keys()
-
     def __len__(self):
-        """Number of stored elements"""
-        return sum(1 for _ in self.keys())
+        return len(self.fs.find(self.root))
 
     def __delitem__(self, key):
         """Remove key"""
