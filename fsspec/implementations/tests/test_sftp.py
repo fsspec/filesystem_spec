@@ -27,17 +27,16 @@ def ssh():
         r"apt-get update",
         r"apt-get install -y openssh-server",
         r"mkdir /var/run/sshd",
-        r"bash -c \"echo 'root:pass' | chpasswd\"",
+        "bash -c \"echo 'root:pass' | chpasswd\"",
         (
             r"sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' "
             r"/etc/ssh/sshd_config"
         ),
         (
             r"sed 's@session\s*required\s*pam_loginuid.so@session optional "
-            r"pam_loginuid.so@g'"
+            r"pam_loginuid.so@g' -i /etc/pam.d/sshd"
         ),
-        r"-i /etc/pam.d/sshd",
-        r"bash -c \"echo \"export VISIBLE=now\" >> /etc/profile\"",
+        r'bash -c "echo \"export VISIBLE=now\" >> /etc/profile"',
         r"/usr/sbin/sshd",
     ]
     name = "fsspec_sftp"
