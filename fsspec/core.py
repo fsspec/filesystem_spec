@@ -454,6 +454,28 @@ class BaseCache(object):
     def _fetch(self, start, end):
         return self.fetcher(start, end)
 
+    def __getitem__(self, item: slice):
+        if not isinstance(item, slice):
+            raise TypeError(
+                "Cache indices must be a contiguous slice. Got {} instead.".format(
+                    type(item)
+                )
+            )
+        if item.step and item.step != 1:
+            raise ValueError(
+                "Cache indices must be a contiguous slice. 'item' has step={}".format(
+                    item.step
+                )
+            )
+
+        # handle endpoints
+        if item.start is None:
+            item = slice(0, item.stop)
+        if item.stop is None:
+            item = slice(item.start, self.size)
+
+        return self._fetch(item.start, item.stop)
+
 
 class MMapCache(BaseCache):
     """memory-mapped sparse file cache
@@ -523,8 +545,8 @@ class ReadAheadCache(BaseCache):
     """ Cache which reads only when we get beyond a block of data
 
     This is a much simpler version of BytesCache, and does not attempt to
-    fill holes in the cache or keep fragments alive. It is besst suited to
-    many small reads in a sequential order (e.g., readling lines from a file).
+    fill holes in the cache or keep fragments alive. It is best suited to
+    many small reads in a sequential order (e.g., reading lines from a file).
     """
 
     def __init__(self, blocksize, fetcher, size):
