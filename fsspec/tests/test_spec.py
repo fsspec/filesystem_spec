@@ -128,4 +128,4 @@ def test_cache_options():
 def test_trim_kwarg_warns():
     fs = DummyTestFS()
     with pytest.warns(FutureWarning, match="cache_options"):
-        f = AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes", trim=False)
+        AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes", trim=False)
