@@ -578,17 +578,27 @@ class BlockCache(BaseCache):
     """
     Cache holding memory as a set of blocks.
 
-    Blocks are stored as a Dict[int, bytes]. Requests are only
-    ever made for `blocksize`.
+    Requests are only ever made `blocksize` at a time, and are
+    stored in an LRU cache. The least recently accessed block is
+    discarded when more than `maxblocks` are stored.
+
+    Parameters
+    ----------
+    blocksize : int
+        The number of bytes to store in each block.
+        Requests are only ever made for `blocksize`, so this
+        should balance the overhead of making a request against
+        the granularity of the blocks.
+    fetcher : Callable
+    size : int
+        The total size of the file being cached.
+    maxblocks : int
+        The maximum number of blocks to cache for. The maximum memory
+        use for this cache is then ``blocksize * maxblocks``.
     """
 
     def __init__(self, blocksize, fetcher, size, maxblocks=32):
         super().__init__(blocksize, fetcher, size)
-        # TODO: Consider an LRU-cache rather than a dict.
-        # This would avoid ever having the full file in memory if that
-        # becomes a problem.
-        self._count = 0
-        self._counts = {}
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
         self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
@@ -599,6 +609,14 @@ class BlockCache(BaseCache):
         )
 
     def cache_info(self):
+        """
+        The statistics on the block cache.
+
+        Returns
+        ----------
+        NamedTuple
+            Returned directly from the LRU Cache used internally.
+        """
         return self._fetch_block_cached.cache_info()
 
     def __getstate__(self):
@@ -655,7 +673,7 @@ class BlockCache(BaseCache):
 
     def _read_cache(self, start, end, start_block_number, end_block_number):
         """
-        Read from our block cache, knowing that we have all bytes present.
+        Read from our block cache.
 
         Parameters
         ----------
@@ -677,6 +695,8 @@ class BlockCache(BaseCache):
             out.append(self._fetch_block_cached(start_block_number)[start_pos:])
 
             # intermediate blocks
+            # Note: it'd be nice to combine these into one big request. However
+            # that doesn't play nicely with our LRU cache.
             for block_number in range(start_block_number + 1, end_block_number):
                 out.append(self._fetch_block_cached(block_number))
 
