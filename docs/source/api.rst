@@ -108,14 +108,14 @@ Read Buffering
   fsspec.caching.MMapCache
   fsspec.caching.BlockCache
 
-.. autoclass:: fsspec.core.ReadAheadCache
+.. autoclass:: fsspec.caching.ReadAheadCache
    :members:
 
-.. autoclass:: fsspec.core.BytesCache
+.. autoclass:: fsspec.caching.BytesCache
    :members:
 
-.. autoclass:: fsspec.core.MMapCache
+.. autoclass:: fsspec.caching.MMapCache
    :members:
 
-.. autoclass:: fsspec.core.BlockCache
+.. autoclass:: fsspec.caching.BlockCache
    :members:
