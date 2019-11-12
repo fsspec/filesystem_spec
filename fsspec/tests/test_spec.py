@@ -129,3 +129,9 @@ def test_trim_kwarg_warns():
     fs = DummyTestFS()
     with pytest.warns(FutureWarning, match="cache_options"):
         AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes", trim=False)
+
+
+def test_eq():
+    fs = DummyTestFS()
+    result = fs == 1
+    assert result is False

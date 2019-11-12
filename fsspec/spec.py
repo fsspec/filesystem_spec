@@ -129,7 +129,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return int(self._fs_token, 16)
 
     def __eq__(self, other):
-        return self._fs_token == other._fs_token
+        return isinstance(other, type(self)) and self._fs_token == other._fs_token
 
     @classmethod
     def _strip_protocol(cls, path):
