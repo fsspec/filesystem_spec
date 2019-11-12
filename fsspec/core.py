@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import io
+import math
 import os
 import logging
 from .compression import compr
@@ -454,6 +455,22 @@ class BaseCache(object):
     def _fetch(self, start, end):
         return self.fetcher(start, end)
 
+    def __getitem__(self, item: slice):
+        if not isinstance(item, slice):
+            raise TypeError(
+                "Cache indices must be a contiguous slice. Got {} instead.".format(
+                    type(item)
+                )
+            )
+        if item.step and item.step != 1:
+            raise ValueError(
+                "Cache indices must be a contiguous slice. 'item' has step={}".format(
+                    item.step
+                )
+            )
+
+        return self._fetch(item.start, item.stop)
+
 
 class MMapCache(BaseCache):
     """memory-mapped sparse file cache
@@ -523,8 +540,8 @@ class ReadAheadCache(BaseCache):
     """ Cache which reads only when we get beyond a block of data
 
     This is a much simpler version of BytesCache, and does not attempt to
-    fill holes in the cache or keep fragments alive. It is besst suited to
-    many small reads in a sequential order (e.g., readling lines from a file).
+    fill holes in the cache or keep fragments alive. It is best suited to
+    many small reads in a sequential order (e.g., reading lines from a file).
     """
 
     def __init__(self, blocksize, fetcher, size, **kwargs):
@@ -556,6 +573,102 @@ class ReadAheadCache(BaseCache):
         return part + self.cache[:l]
 
 
+class BlockCache(BaseCache):
+    """
+    Cache holding memory as a set of blocks.
+
+    Blocks are stored as a Dict[int, bytes]. Requests are only
+    ever made for `blocksize`.
+    """
+
+    def __init__(self, blocksize, fetcher, size):
+        super().__init__(blocksize, fetcher, size)
+        # TODO: Consider an LRU-cache rather than a dict.
+        # This would avoid ever having the full file in memory if that
+        # becomes a problem.
+        self._blocks = {}
+        self.nblocks = math.ceil(size / blocksize)
+
+    def __repr__(self):
+        return "<BlockCache blocksize={}, size={}, nblocks={}>".format(
+            self.blocksize, self.size, self.nblocks
+        )
+
+    def _fetch(self, start, end):
+        if end < start:
+            raise ValueError(
+                "'end' ({}) is smaller than 'start' ({}).".format(end, start)
+            )
+
+        if end > self.size:
+            raise ValueError("'end={}' larger than size ('{}')".format(end, self.size))
+
+        # byte position -> block numbers
+        start_block_number = start // self.blocksize
+        end_block_number = end // self.blocksize
+
+        # these are cached, so safe to do multiple calls for the same start and end.
+        for block_number in range(start_block_number, end_block_number + 1):
+            self._fetch_block(block_number)
+
+        return self._read_cache(
+            start,
+            end,
+            start_block_number=start_block_number,
+            end_block_number=end_block_number,
+        )
+
+    def _fetch_block(self, block_number):
+        """
+        Fetch the block of data for `block_number`.
+        """
+        if block_number in self._blocks:
+            return None
+        elif block_number > self.nblocks:
+            raise ValueError(
+                "'block_number={}' is greater than the number of blocks ({})".format(
+                    block_number, self.nblocks
+                )
+            )
+
+        start = block_number * self.blocksize
+        end = start + self.blocksize
+        logger.info("BlockCache fetching block %d", block_number)
+        self._blocks[block_number] = super()._fetch(start, end)
+
+    def _read_cache(self, start, end, start_block_number, end_block_number):
+        """
+        Read from our block cache, knowing that we have all bytes present.
+
+        Parameters
+        ----------
+        start, end : int
+            The start and end byte positions.
+        start_block_number, end_block_number : int
+            The start and end block numbers.
+        """
+        start_pos = start % self.blocksize
+        end_pos = end % self.blocksize
+
+        if start_block_number == end_block_number:
+            block = self._blocks[start_block_number]
+            return block[start_pos:end_pos]
+
+        else:
+            # read from the initial
+            out = []
+            out.append(self._blocks[start_block_number][start_pos:])
+
+            # intermediate blocks
+            for block_number in range(start_block_number + 1, end_block_number):
+                out.append(self._blocks[block_number])
+
+            # final block
+            out.append(self._blocks[end_block_number][:end_pos])
+
+            return b"".join(out)
+
+
 class BytesCache(BaseCache):
     """Cache which holds data in a in-memory bytes object
 
@@ -573,7 +686,7 @@ class BytesCache(BaseCache):
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
         self.start = None
-        self.end = None
+        self.end = -1
         self.trim = trim
 
     def _fetch(self, start, end):
@@ -588,12 +701,15 @@ class BytesCache(BaseCache):
             # cache hit: we have all the required data
             offset = start - self.start
             return self.cache[offset : offset + end - start]
+
         if self.blocksize:
             bend = min(self.size, end + self.blocksize)
         else:
             bend = end
+
         if bend == start or start > self.size:
             return b""
+
         if (self.start is None or start < self.start) and (
             self.end is None or end > self.end
         ):
@@ -637,4 +753,5 @@ caches = {
     "mmap": MMapCache,
     "bytes": BytesCache,
     "readahead": ReadAheadCache,
+    "block": BlockCache,
 }
