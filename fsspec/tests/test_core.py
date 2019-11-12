@@ -70,7 +70,7 @@ def test_cache_pickleable(Cache_imp):
 
 @pytest.mark.parametrize(
     "size_requests",
-    [[(0, 30), (0, 35), (51, 52),], [(0, 1), (1, 11), (1, 52),], [(0, 52), (11, 15),],],
+    [[(0, 30), (0, 35), (51, 52)], [(0, 1), (1, 11), (1, 52)], [(0, 52), (11, 15)]],
 )
 @pytest.mark.parametrize("blocksize", [1, 10, 52, 100])
 def test_cache_basic(Cache_imp, blocksize, size_requests):
