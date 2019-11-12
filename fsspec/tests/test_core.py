@@ -7,7 +7,7 @@ from fsspec.core import (
     OpenFile,
     caches,
     get_compression,
-    BaseCache,
+    BaseCache
 )
 
 
