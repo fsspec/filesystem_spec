@@ -129,7 +129,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return int(self._fs_token, 16)
 
     def __eq__(self, other):
-        return self._fs_token == other._fs_token
+        return isinstance(other, type(self)) and self._fs_token == other._fs_token
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -873,6 +873,7 @@ class AbstractBufferedFile(io.IOBase):
         block_size="default",
         autocommit=True,
         cache_type="bytes",
+        cache_options=None,
         **kwargs
     ):
         """
@@ -894,6 +895,9 @@ class AbstractBufferedFile(io.IOBase):
         cache_type: str
             Caching policy in read mode, one of 'none', 'bytes', 'mmap', see
             the definitions in ``core``.
+        cache_options : dict
+            Additional options passed to the constructor for the cache specified
+            by `cache_type`.
         kwargs:
             Gets stored as self.kwargs
         """
@@ -910,8 +914,20 @@ class AbstractBufferedFile(io.IOBase):
         self.end = None
         self.start = None
         self.closed = False
-        self.trim = kwargs.pop("trim", True)
+
+        if cache_options is None:
+            cache_options = {}
+
+        if "trim" in kwargs:
+            warnings.warn(
+                "Passing 'trim' to control the cache behavior has been deprecated. "
+                "Specify it within the 'cache_options' argument instead.",
+                FutureWarning,
+            )
+            cache_options["trim"] = kwargs.pop("trim")
+
         self.kwargs = kwargs
+
         if mode not in {"ab", "rb", "wb"}:
             raise NotImplementedError("File mode not supported")
         if mode == "rb":
@@ -919,7 +935,7 @@ class AbstractBufferedFile(io.IOBase):
                 self.details = fs.info(path)
             self.size = self.details["size"]
             self.cache = caches[cache_type](
-                self.blocksize, self._fetch_range, self.size, trim=self.trim
+                self.blocksize, self._fetch_range, self.size, **cache_options
             )
         else:
             self.buffer = io.BytesIO()
