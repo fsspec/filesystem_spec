@@ -872,7 +872,7 @@ class AbstractBufferedFile(io.IOBase):
         mode="rb",
         block_size="default",
         autocommit=True,
-        cache_type="bytes",
+        cache_type="readahead",
         cache_options=None,
         **kwargs
     ):
@@ -892,9 +892,8 @@ class AbstractBufferedFile(io.IOBase):
         autocommit: bool
             Whether to write to final destination; may only impact what
             happens when file is being closed.
-        cache_type: str
-            Caching policy in read mode, one of 'none', 'bytes', 'mmap', see
-            the definitions in ``core``.
+        cache_type: {"readahead", "none", "mmap", "bytes"}, default "readahead"
+            Caching policy in read mode. See the definitions in ``core``.
         cache_options : dict
             Additional options passed to the constructor for the cache specified
             by `cache_type`.
