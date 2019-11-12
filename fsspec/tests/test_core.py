@@ -97,6 +97,14 @@ def test_xz_lzma_compressions():
     assert get_compression("some_file.xz", "lzma") == "lzma"
 
 
+def test_cache_getitem(Cache_imp):
+    cacher = Cache_imp(4, letters_fetcher, len(string.ascii_letters))
+    assert cacher[0:4] == b"abcd"
+    assert cacher[:4] == b"abcd"
+    assert cacher[-3:] == b"XYZ"
+    assert cacher[2:4] == b"cd"
+
+
 def test_cache_getitem_raises():
     cacher = BaseCache(4, letters_fetcher, len(string.ascii_letters))
     with pytest.raises(TypeError, match="int"):

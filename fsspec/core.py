@@ -470,6 +470,12 @@ class BaseCache(object):
                 )
             )
 
+        # handle endpoints
+        if item.start is None:
+            item = slice(0, item.stop)
+        if item.stop is None:
+            item = slice(item.start, self.size)
+
         return self._fetch(item.start, item.stop)
 
 
