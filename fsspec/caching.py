@@ -48,8 +48,12 @@ class BaseCache(object):
         # handle endpoints
         if item.start is None:
             item = slice(0, item.stop)
+        elif item.start < 0:
+            item = slice(self.size + item.start, item.stop)
         if item.stop is None:
             item = slice(item.start, self.size)
+        elif item.stop < 0:
+            item = slice(item.start, self.size + item.stop)
 
         return self._fetch(item.start, item.stop)
 
