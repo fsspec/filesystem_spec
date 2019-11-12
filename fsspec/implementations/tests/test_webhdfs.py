@@ -2,10 +2,11 @@ import pickle
 import pytest
 import subprocess
 import time
+import fsspec
 
 requests = pytest.importorskip("requests")
-from fsspec.implementations.webhdfs import WebHDFS
-import fsspec
+
+from fsspec.implementations.webhdfs import WebHDFS  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -24,7 +25,7 @@ def hdfs_cluster():
             t = 90
             try:
                 requests.get("http://localhost:50070/webhdfs/v1/?op=LISTSTATUS")
-            except:
+            except:  # noqa: E722
                 t -= 1
                 assert t > 0, "Timeout waiting for HDFS"
                 time.sleep(1)

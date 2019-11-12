@@ -13,3 +13,7 @@ repos:
         language: python
         require_serial: true
         types: [python]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.3.0
+    hooks:
+    - id: flake8
