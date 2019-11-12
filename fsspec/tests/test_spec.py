@@ -95,3 +95,15 @@ def test_alias():
 def test_add_docs_warns():
     with pytest.warns(FutureWarning, match="add_docs"):
         AbstractFileSystem(add_docs=True)
+
+
+def test_exists():
+    """ Test calling `exists` and `info` on partially completed file/directory names."""
+    test_fs = DummyTestFS()
+
+    assert test_fs.exists("top_level/second")
+    assert test_fs.exists("top_level/second_level/date/")
+    assert test_fs.exists("top_level/second_level/date=2019-10-01/a.parq")
+
+    info = test_fs.info("top_level/second_level/date=2019-10-01/a.parq")
+    assert info["type"] == "directory"
