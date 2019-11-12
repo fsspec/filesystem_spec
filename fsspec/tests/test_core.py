@@ -2,7 +2,14 @@ import pytest
 import pickle
 import string
 
-from fsspec.core import _expand_paths, OpenFile, caches, get_compression, BaseCache
+from fsspec.core import (
+    _expand_paths,
+    OpenFile,
+    caches,
+    get_compression,
+    BaseCache,
+    BlockCache,
+)
 
 
 @pytest.mark.parametrize(
@@ -95,6 +102,7 @@ def test_cache_getitem(Cache_imp):
     assert cacher[0:4] == b"abcd"
     assert cacher[:4] == b"abcd"
     assert cacher[-3:] == b"XYZ"
+    assert cacher[-3:-1] == b"XY"
     assert cacher[2:4] == b"cd"
 
 
@@ -105,3 +113,30 @@ def test_cache_getitem_raises():
 
     with pytest.raises(ValueError, match="contiguous"):
         cacher[::4]
+
+
+def test_block_cache_lru():
+    cache = BlockCache(4, letters_fetcher, len(string.ascii_letters), maxblocks=2)
+    # miss
+    cache[0:2]
+    assert cache.cache_info().hits == 0
+    assert cache.cache_info().misses == 1
+    assert cache.cache_info().currsize == 1
+
+    # hit
+    cache[0:2]
+    assert cache.cache_info().hits == 1
+    assert cache.cache_info().misses == 1
+    assert cache.cache_info().currsize == 1
+
+    # miss
+    cache[4:6]
+    assert cache.cache_info().hits == 1
+    assert cache.cache_info().misses == 2
+    assert cache.cache_info().currsize == 2
+
+    # miss & evict
+    cache[12:13]
+    assert cache.cache_info().hits == 1
+    assert cache.cache_info().misses == 3
+    assert cache.cache_info().currsize == 2

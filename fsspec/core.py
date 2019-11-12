@@ -1,6 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import functools
 import io
+import math
 import os
 import logging
 from .compression import compr
@@ -471,8 +473,12 @@ class BaseCache(object):
         # handle endpoints
         if item.start is None:
             item = slice(0, item.stop)
+        elif item.start < 0:
+            item = slice(self.size + item.start, item.stop)
         if item.stop is None:
             item = slice(item.start, self.size)
+        elif item.stop < 0:
+            item = slice(item.start, self.size + item.stop)
 
         return self._fetch(item.start, item.stop)
 
@@ -578,6 +584,138 @@ class ReadAheadCache(BaseCache):
         return part + self.cache[:l]
 
 
+class BlockCache(BaseCache):
+    """
+    Cache holding memory as a set of blocks.
+
+    Requests are only ever made `blocksize` at a time, and are
+    stored in an LRU cache. The least recently accessed block is
+    discarded when more than `maxblocks` are stored.
+
+    Parameters
+    ----------
+    blocksize : int
+        The number of bytes to store in each block.
+        Requests are only ever made for `blocksize`, so this
+        should balance the overhead of making a request against
+        the granularity of the blocks.
+    fetcher : Callable
+    size : int
+        The total size of the file being cached.
+    maxblocks : int
+        The maximum number of blocks to cache for. The maximum memory
+        use for this cache is then ``blocksize * maxblocks``.
+    """
+
+    def __init__(self, blocksize, fetcher, size, maxblocks=32):
+        super().__init__(blocksize, fetcher, size)
+        self.nblocks = math.ceil(size / blocksize)
+        self.maxblocks = maxblocks
+        self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
+
+    def __repr__(self):
+        return "<BlockCache blocksize={}, size={}, nblocks={}>".format(
+            self.blocksize, self.size, self.nblocks
+        )
+
+    def cache_info(self):
+        """
+        The statistics on the block cache.
+
+        Returns
+        ----------
+        NamedTuple
+            Returned directly from the LRU Cache used internally.
+        """
+        return self._fetch_block_cached.cache_info()
+
+    def __getstate__(self):
+        state = self.__dict__
+        del state["_fetch_block_cached"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._fetch_block_cached = functools.lru_cache(state["maxblocks"])(
+            self._fetch_block
+        )
+
+    def _fetch(self, start, end):
+        if end < start:
+            raise ValueError(
+                "'end' ({}) is smaller than 'start' ({}).".format(end, start)
+            )
+
+        if end > self.size:
+            raise ValueError("'end={}' larger than size ('{}')".format(end, self.size))
+
+        # byte position -> block numbers
+        start_block_number = start // self.blocksize
+        end_block_number = end // self.blocksize
+
+        # these are cached, so safe to do multiple calls for the same start and end.
+        for block_number in range(start_block_number, end_block_number + 1):
+            self._fetch_block(block_number)
+
+        return self._read_cache(
+            start,
+            end,
+            start_block_number=start_block_number,
+            end_block_number=end_block_number,
+        )
+
+    def _fetch_block(self, block_number):
+        """
+        Fetch the block of data for `block_number`.
+        """
+        if block_number > self.nblocks:
+            raise ValueError(
+                "'block_number={}' is greater than the number of blocks ({})".format(
+                    block_number, self.nblocks
+                )
+            )
+
+        start = block_number * self.blocksize
+        end = start + self.blocksize
+        logger.info("BlockCache fetching block %d", block_number)
+        block_contents = super()._fetch(start, end)
+        return block_contents
+
+    def _read_cache(self, start, end, start_block_number, end_block_number):
+        """
+        Read from our block cache.
+
+        Parameters
+        ----------
+        start, end : int
+            The start and end byte positions.
+        start_block_number, end_block_number : int
+            The start and end block numbers.
+        """
+        start_pos = start % self.blocksize
+        end_pos = end % self.blocksize
+
+        if start_block_number == end_block_number:
+            block = self._fetch_block_cached(start_block_number)
+            return block[start_pos:end_pos]
+
+        else:
+            # read from the initial
+            out = []
+            out.append(self._fetch_block_cached(start_block_number)[start_pos:])
+
+            # intermediate blocks
+            # Note: it'd be nice to combine these into one big request. However
+            # that doesn't play nicely with our LRU cache.
+            for block_number in range(start_block_number + 1, end_block_number):
+                out.append(self._fetch_block_cached(block_number))
+
+            # final block
+            out.append(self._fetch_block_cached(end_block_number)[:end_pos])
+
+            return b"".join(out)
+
+
 class BytesCache(BaseCache):
     """Cache which holds data in a in-memory bytes object
 
@@ -610,12 +748,15 @@ class BytesCache(BaseCache):
             # cache hit: we have all the required data
             offset = start - self.start
             return self.cache[offset : offset + end - start]
+
         if self.blocksize:
             bend = min(self.size, end + self.blocksize)
         else:
             bend = end
+
         if bend == start or start > self.size:
             return b""
+
         if (self.start is None or start < self.start) and (
             self.end is None or end > self.end
         ):
@@ -659,4 +800,5 @@ caches = {
     "mmap": MMapCache,
     "bytes": BytesCache,
     "readahead": ReadAheadCache,
+    "block": BlockCache,
 }
