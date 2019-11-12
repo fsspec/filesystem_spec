@@ -28,7 +28,8 @@ apt-get install -y openssh-server
 mkdir /var/run/sshd
 bash -c "echo 'root:pass' | chpasswd"
 sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
+sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' \
+-i /etc/pam.d/sshd
 bash -c "echo \"export VISIBLE=now\" >> /etc/profile"
 /usr/sbin/sshd
 """.split(
