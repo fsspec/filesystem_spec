@@ -124,7 +124,7 @@ class HTTPFileSystem(AbstractFileSystem):
         except requests.HTTPError:
             return False
 
-    def _open(self, url, mode="rb", block_size=None, **kwargs):
+    def _open(self, url, mode="rb", block_size=None, cache_options=None, **kwargs):
         """Make a file-like object
 
         Parameters
@@ -146,7 +146,9 @@ class HTTPFileSystem(AbstractFileSystem):
         kw.update(kwargs)
         kw.pop("autocommit", None)
         if block_size:
-            return HTTPFile(self, url, self.session, block_size, **kw)
+            return HTTPFile(
+                self, url, self.session, block_size, cache_options=cache_options, **kw
+            )
         else:
             kw["stream"] = True
             r = self.session.get(url, **kw)
@@ -216,6 +218,7 @@ class HTTPFile(AbstractBufferedFile):
         block_size=None,
         mode="rb",
         cache_type="bytes",
+        cache_options=None,
         size=None,
         **kwargs
     ):
@@ -231,6 +234,7 @@ class HTTPFile(AbstractBufferedFile):
             mode=mode,
             block_size=block_size,
             cache_type=cache_type,
+            cache_options=cache_options,
             **kwargs
         )
         self.cache.size = self.size or self.blocksize
