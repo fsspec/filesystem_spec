@@ -35,6 +35,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
     "sphinx.ext.autosummary",
+    "sphinx.ext.extlinks",
     "numpydoc",
 ]
 
@@ -170,3 +171,8 @@ texinfo_documents = [
         "Miscellaneous",
     )
 ]
+
+extlinks = {
+    "issue": ("https://github.com/intake/filesystem_spec/issues/%s", "GH#"),
+    "pr": ("https://github.com/intake/filesystem_spec/pull/%s", "GH#"),
+}
