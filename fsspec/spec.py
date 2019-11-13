@@ -661,11 +661,27 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             return cls.root_marker
 
-    def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         """Return raw bytes-mode file-like from the file-system"""
-        return AbstractBufferedFile(self, path, mode, block_size, autocommit)
+        return AbstractBufferedFile(
+            self,
+            path,
+            mode,
+            block_size,
+            autocommit,
+            cache_options=cache_options,
+            **kwargs
+        )
 
-    def open(self, path, mode="rb", block_size=None, **kwargs):
+    def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
         """
         Return a file-like object from the filesystem
 
@@ -680,6 +696,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
             See builtin ``open()``
         block_size: int
             Some indication of buffering - this is a value in bytes
+        cache_options : dict, optional
+            Extra arguments to pass through to the cache.
         encoding, errors, newline: passed on to TextIOWrapper for text mode
         """
         import io
@@ -699,7 +717,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             ac = kwargs.pop("autocommit", not self._intrans)
             f = self._open(
-                path, mode=mode, block_size=block_size, autocommit=ac, **kwargs
+                path,
+                mode=mode,
+                block_size=block_size,
+                autocommit=ac,
+                cache_options=cache_options,
+                **kwargs
             )
             if not ac:
                 self.transaction.files.append(f)
