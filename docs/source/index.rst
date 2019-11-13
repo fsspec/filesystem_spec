@@ -61,6 +61,7 @@ These are only imported on request, which may fail if a required dependency is m
    usage.rst
    features.rst
    api.rst
+   changelog.rst
 
 
 Indices and tables
