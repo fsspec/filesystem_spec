@@ -50,7 +50,15 @@ class PyArrowHDFS(AbstractFileSystem):
             extra_conf=extra_conf,
         )
 
-    def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         """
 
         Parameters
@@ -71,7 +79,15 @@ class PyArrowHDFS(AbstractFileSystem):
         """
         if not autocommit:
             raise NotImplementedError
-        return HDFSFile(self, path, mode, block_size, **kwargs)
+        return HDFSFile(
+            self,
+            path,
+            mode,
+            block_size=block_size,
+            autocommit=autocommit,
+            cache_options=cache_options,
+            **kwargs
+        )
 
     def __reduce_ex__(self, protocol):
         return PyArrowHDFS, self.pars
@@ -165,7 +181,17 @@ class HDFSFile(object):
     Allows seek beyond EOF and (eventually) commit/discard
     """
 
-    def __init__(self, fs, path, mode, block_size, **kwargs):
+    def __init__(
+        self,
+        fs,
+        path,
+        mode,
+        block_size,
+        autocommit=True,
+        cache_type="readahead",
+        cache_options=None,
+        **kwargs
+    ):
         self.fs = fs
         self.path = path
         self.mode = mode

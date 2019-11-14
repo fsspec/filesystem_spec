@@ -175,7 +175,15 @@ class CachingFileSystem(AbstractFileSystem):
                 return detail, fn
         return False, None
 
-    def _open(self, path, mode="rb", **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         """Wrap the target _open
 
         If the whole file exists in the cache, just open it locally and

@@ -105,7 +105,15 @@ class ZipFileSystem(AbstractFileSystem):
     def cat(self, path):
         return self.zip.read(path)
 
-    def _open(self, path, mode="rb", **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         path = self._strip_protocol(path)
         if mode != "rb":
             raise NotImplementedError

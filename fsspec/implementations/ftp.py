@@ -126,7 +126,15 @@ class FTPFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
         return out
 
-    def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        cache_options=None,
+        autocommit=True,
+        **kwargs
+    ):
         path = self._strip_protocol(path)
         block_size = block_size or self.blocksize
         return FTPFile(
@@ -136,6 +144,7 @@ class FTPFileSystem(AbstractFileSystem):
             block_size=block_size,
             tempdir=self.tempdir,
             autocommit=autocommit,
+            cache_options=cache_options,
         )
 
     def _rm(self, path):

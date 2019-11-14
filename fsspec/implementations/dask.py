@@ -72,7 +72,15 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         else:
             return self.rfs.ls(*args, **kwargs).compute()
 
-    def _open(self, path, mode="rb", **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         if self.worker:
             return self.fs._open(path, mode=mode)
         else:

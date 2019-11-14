@@ -124,12 +124,20 @@ class HTTPFileSystem(AbstractFileSystem):
         except requests.HTTPError:
             return False
 
-    def _open(self, url, mode="rb", block_size=None, cache_options=None, **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=None,  # XXX: This differs from the base class.
+        cache_options=None,
+        **kwargs
+    ):
         """Make a file-like object
 
         Parameters
         ----------
-        url: str
+        path: str
             Full URL with protocol
         mode: string
             must be "rb"
@@ -143,15 +151,20 @@ class HTTPFileSystem(AbstractFileSystem):
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
-        kw.update(kwargs)
-        kw.pop("autocommit", None)
+        kw.update(kwargs)  # this does nothing?
         if block_size:
             return HTTPFile(
-                self, url, self.session, block_size, cache_options=cache_options, **kw
+                self,
+                path,
+                self.session,
+                block_size,
+                mode=mode,
+                cache_options=cache_options,
+                **kw
             )
         else:
             kw["stream"] = True
-            r = self.session.get(url, **kw)
+            r = self.session.get(path, **kw)
             r.raise_for_status()
             r.raw.decode_content = True
             return r.raw
