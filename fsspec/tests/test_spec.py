@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 
@@ -145,3 +147,22 @@ def test_eq():
     fs = DummyTestFS()
     result = fs == 1
     assert result is False
+
+
+def test_pickle_multiple():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=1)
+
+    x = pickle.dumps(a)
+    y = pickle.dumps(b)
+
+    del a, b
+    DummyTestFS.clear_instance_cache()
+
+    result = pickle.loads(x)
+    assert result.storage_args == (1,)
+    assert result.storage_options == {}
+
+    result = pickle.loads(y)
+    assert result.storage_args == (2,)
+    assert result.storage_options == dict(bar=1)

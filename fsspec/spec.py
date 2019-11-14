@@ -34,30 +34,29 @@ class _Cached(type):
     cachable = True
     _extra_tokenize_attributes = ()
 
-    def __init__(self, *args, **kwargs):
+    def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Note: we intentionally create a reference here, to avoid garbage
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
-        self._cache = {}
+        cls._cache = {}
 
-    def __call__(self, *args, **kwargs):
-        cls = type(self)
+    def __call__(cls, *args, **kwargs):
         extra_tokens = tuple(
-            getattr(self, attr, None) for attr in self._extra_tokenize_attributes
+            getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
         token = tokenize(cls, *args, *extra_tokens, **kwargs)
-        if self.cachable and token in self._cache:
-            return self._cache[token]
+        if cls.cachable and token in cls._cache:
+            return cls._cache[token]
         else:
             obj = super().__call__(*args, **kwargs)
             # Setting _fs_token here causes some static linters to complain.
             obj._fs_token_ = token
-            self.storage_args = args
-            self.storage_options = kwargs
+            obj.storage_args = args
+            obj.storage_options = kwargs
 
-            if self.cachable:
-                self._cache[token] = obj
+            if cls.cachable:
+                cls._cache[token] = obj
             return obj
 
 
