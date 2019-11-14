@@ -180,9 +180,28 @@ class TransferDone(Exception):
 class FTPFile(AbstractBufferedFile):
     """Interact with a remote FTP file with read/write buffering"""
 
-    def __init__(self, fs, path, **kwargs):
-        super().__init__(fs, path, **kwargs)
-        if kwargs.get("autocommit", False) is False:
+    def __init__(
+        self,
+        fs,
+        path,
+        mode="rb",
+        block_size="default",
+        autocommit=True,
+        cache_type="readahead",
+        cache_options=None,
+        **kwargs
+    ):
+        super().__init__(
+            fs,
+            path,
+            mode=mode,
+            block_size=block_size,
+            autocommit=autocommit,
+            cache_type=cache_type,
+            cache_options=cache_options,
+            **kwargs
+        )
+        if not autocommit:
             self.target = self.path
             self.path = "/".join([kwargs["tempdir"], str(uuid.uuid4())])
 

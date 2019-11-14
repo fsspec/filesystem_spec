@@ -77,8 +77,7 @@ class PyArrowHDFS(AbstractFileSystem):
         -------
         HDFSFile file-like instance
         """
-        if not autocommit:
-            raise NotImplementedError
+
         return HDFSFile(
             self,
             path,
@@ -192,6 +191,12 @@ class HDFSFile(object):
         cache_options=None,
         **kwargs
     ):
+        # TODO: Inherit from AbstractBufferedFile?
+        if not autocommit:
+            raise NotImplementedError(
+                "HDFSFile cannot be opened with 'autocommit=False'."
+            )
+
         self.fs = fs
         self.path = path
         self.mode = mode

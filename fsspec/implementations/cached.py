@@ -200,7 +200,14 @@ class CachingFileSystem(AbstractFileSystem):
         if not path.startswith(self.protocol):
             path = self.protocol + "://" + path
         if mode != "rb":
-            return self.fs._open(path, mode=mode, **kwargs)
+            return self.fs._open(
+                path,
+                mode=mode,
+                block_size=block_size,
+                autocommit=autocommit,
+                cache_options=cache_options,
+                **kwargs
+            )
         detail, fn = self._check_file(path)
         if detail:
             # file is in cache
@@ -223,11 +230,17 @@ class CachingFileSystem(AbstractFileSystem):
             }
             self.cached_files[-1][path] = detail
             logger.debug("Creating local sparse file for %s" % path)
-        kwargs["cache_type"] = "none"
-        kwargs["mode"] = mode
 
         # call target filesystems open
-        f = self.fs._open(path, **kwargs)
+        f = self.fs._open(
+            path,
+            mode=mode,
+            block_size=block_size,
+            autocommit=autocommit,
+            cache_options=cache_options,
+            cache_type=None,
+            **kwargs
+        )
         if "blocksize" in detail:
             if detail["blocksize"] != f.blocksize:
                 raise ValueError(

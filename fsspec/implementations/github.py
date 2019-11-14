@@ -59,7 +59,15 @@ class GithubFileSystem(AbstractFileSystem):
         else:
             return sorted([f["name"] for f in self.dircache[path]])
 
-    def _open(self, path, mode="rb", cache_options=None, **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         if mode != "rb":
             raise NotImplementedError
         url = self.rurl.format(org=self.org, repo=self.repo, path=path, sha=self.root)
