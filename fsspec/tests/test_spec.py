@@ -5,7 +5,9 @@ from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 class DummyTestFS(AbstractFileSystem):
     protocol = "mock"
     _fs_contents = (
-        {"name": "top_level/second_level/date=2019-10-01/", "type": "directory"},
+        {"name": "top_level", "type": "directory"},
+        {"name": "top_level/second_level", "type": "directory"},
+        {"name": "top_level/second_level/date=2019-10-01", "type": "directory"},
         {
             "name": "top_level/second_level/date=2019-10-01/a.parquet",
             "type": "file",
@@ -16,24 +18,28 @@ class DummyTestFS(AbstractFileSystem):
             "type": "file",
             "size": 100,
         },
-        {"name": "top_level/second_level/date=2019-10-02/", "type": "directory"},
+        {"name": "top_level/second_level/date=2019-10-02", "type": "directory"},
         {
             "name": "top_level/second_level/date=2019-10-02/a.parquet",
             "type": "file",
             "size": 100,
         },
-        {"name": "top_level/second_level/date=2019-10-04/", "type": "directory"},
+        {"name": "top_level/second_level/date=2019-10-04", "type": "directory"},
         {
             "name": "top_level/second_level/date=2019-10-04/a.parquet",
             "type": "file",
             "size": 100,
         },
-        {"name": "misc/", "type": "directory"},
+        {"name": "misc", "type": "directory"},
         {"name": "misc/foo.txt", "type": "file", "size": 100},
     )
 
     def ls(self, path, detail=True, **kwargs):
-        files = (file for file in self._fs_contents if path in file["name"])
+        path = self._strip_protocol(path)
+
+        files = (
+            file for file in self._fs_contents if path == self._parent(file["name"])
+        )
 
         if detail:
             return list(files)
@@ -55,6 +61,7 @@ class DummyTestFS(AbstractFileSystem):
                 "top_level/second_level/date=2019-10-01/b.parquet",
             ],
         ),
+        ("mock://top_level/second_level/date=2019-10", []),
         (
             "mock://top_level/second_level/date=2019-10-0[1-4]",
             [
