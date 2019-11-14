@@ -37,8 +37,9 @@ class DummyTestFS(AbstractFileSystem):
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
 
-        files = (file for file in self._fs_contents
-                 if path == self._parent(file["name"]))
+        files = (
+            file for file in self._fs_contents if path == self._parent(file["name"])
+        )
 
         if detail:
             return list(files)
@@ -60,11 +61,7 @@ class DummyTestFS(AbstractFileSystem):
                 "top_level/second_level/date=2019-10-01/b.parquet",
             ],
         ),
-        (
-            "mock://top_level/second_level/date=2019-10",
-            [
-            ],
-        ),
+        ("mock://top_level/second_level/date=2019-10", []),
         (
             "mock://top_level/second_level/date=2019-10-0[1-4]",
             [
