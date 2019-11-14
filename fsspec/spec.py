@@ -42,7 +42,6 @@ class _Cached(type):
         cls._cache = {}
 
     def __call__(cls, *args, **kwargs):
-        # cls = type(self)
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
