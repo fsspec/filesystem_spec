@@ -26,7 +26,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         self.remote_options = remote_options
         self.worker = None
         self.client = None
-        self.fs = None
+        self.fs = None  # What is the type here?
         self._determine_worker()
 
     def _determine_worker(self):
@@ -72,11 +72,34 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         else:
             return self.rfs.ls(*args, **kwargs).compute()
 
-    def _open(self, path, mode="rb", **kwargs):
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         if self.worker:
-            return self.fs._open(path, mode=mode)
+            return self.fs._open(
+                path,
+                mode=mode,
+                block_size=block_size,
+                autocommit=autocommit,
+                cache_options=cache_options,
+                **kwargs
+            )
         else:
-            return DaskFile(self, path, mode, **kwargs)
+            return DaskFile(
+                self,
+                path,
+                mode,
+                block_size=block_size,
+                autocommit=autocommit,
+                cache_options=cache_options,
+                **kwargs
+            )
 
     def fetch_range(self, path, mode, start, end):
         if self.worker:
@@ -88,26 +111,6 @@ class DaskWorkerFileSystem(AbstractFileSystem):
 
 
 class DaskFile(AbstractBufferedFile):
-    def __init__(
-        self,
-        fs,
-        path,
-        mode="rb",
-        block_size="default",
-        autocommit=True,
-        cache_type="bytes",
-        **kwargs
-    ):
-        super().__init__(
-            fs,
-            path,
-            mode=mode,
-            block_size=block_size,
-            autocommit=autocommit,
-            cache_type=cache_type,
-            **kwargs
-        )
-
     def _upload_chunk(self, final=False):
         pass
 

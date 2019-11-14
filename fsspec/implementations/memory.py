@@ -98,16 +98,15 @@ class MemoryFileSystem(AbstractFileSystem):
     def exists(self, path):
         return path in self.store
 
-    def _open(self, path, mode="rb", **kwargs):
-        """Make a file-like object
-
-        Parameters
-        ----------
-        path: str
-            identifier
-        mode: str
-            normally "rb", "wb" or "ab"
-        """
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs
+    ):
         if mode in ["rb", "ab", "rb+"]:
             if path in self.store:
                 f = self.store[path]
