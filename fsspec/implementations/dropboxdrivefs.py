@@ -15,33 +15,58 @@ class DropboxDriveFileSystem(AbstractFileSystem):
     def connect(self):
         self.dbx = dropbox.Dropbox(self.token)
 
-    def _open(self, path, mode="rb", **kwargs):
-        return DropboxDriveFile(self, path, self.dbx, mode="rb", **kwargs)
+    def ls(self, path, detail=True, **kwargs):
+        while '//' in path:
+            path = path.replace('//', '/')
+        list_file = []
+        list_item = self.dbx.files_list_folder(path, recursive = True, include_media_info = True)
+        items = list_item.entries
+        while list_item.has_more: 
+            list_item = self.dbx.files_list_folder_continue(list_item.cursor)
+            items = list_item.entries + items
+
+        if detail: 
+            for item in list_item.entries: 
+                if isinstance(item, dropbox.files.FileMetadata):
+                    list_file.append({'name':item.path_display, 'size':item.size, 'type':'file'})
+                elif isinstance(item, dropbox.files.FolderMetadata):
+                    list_file.append({'name':item.path_display, 'size':None, 'type':'folder'})
+                else:
+                    list_file.append({'name':item.path_display, 'size':item.size, 'type':'unknow'})
+        else: 
+            for item in list_item.entries: 
+                list_file.append(item.path_display)
+        return list_file
+        
+    def _open(
+            self,
+            path,
+            mode="rb",
+            **kwargs
+    ):
+        return DropboxDriveFile(self, path, self.dbx, mode='rb', **kwargs)
 
     def info(self, url, **kwargs):
         """Get info of URL
-        Tries to access location via HEAD, and then GET methods, but does
-        not fetch the data.
-        It is possible that the server does not supply any size information, in
-        which case size will be given as None (and certain operations on the
-        corresponding file will not work).
         """
-        size = None
-        return {"name": url, "size": size or None, "type": "file"}
-
+        metadata = self.dbx.files_get_metadata(url)
+        if isinstance(metadata, dropbox.files.FileMetadata):
+            return {'name':metadata.path_display, 'size':metadata.size, 'type':'file'}
+        elif isinstance(metadata, dropbox.files.FolderMetadata):
+            return{'name':metadata.path_display, 'size':None, 'type':'folder'}
+        else:
+            return {"name": url, "size": None, "type": "unknow"}
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
 
 class DropboxDriveFile(AbstractBufferedFile):
+
     def _fetch_range(self, start, end):
         pass
 
     def __init__(
-        self,
-        fs,
-        path,
-        dbx,
+        self, fs, path, dbx,
         block_size=None,
         mode="rb",
         cache_type="bytes",
@@ -86,13 +111,13 @@ class DropboxDriveFile(AbstractBufferedFile):
         """Download a file.
         Return the bytes of the file, or None if it doesn't exist.
         """
-        while "//" in path:
-            path = path.replace("//", "/")
-        with stopwatch("download"):
+        while '//' in path:
+            path = path.replace('//', '/')
+        with stopwatch('download'):
             try:
-                md, res = self.dbx.files_download("/" + path)
+                md, res = self.dbx.files_download('/'+path)
             except dropbox.exceptions.HttpError as err:
-                print("*** HTTP error :", err)
+                print('*** HTTP error :', err)
                 return None
         data = res.content
         return data
@@ -109,7 +134,6 @@ class DropboxDriveFile(AbstractBufferedFile):
         self._fetch_all()
         return super().read(length)
 
-
 @contextlib.contextmanager
 def stopwatch(message):
     """Context manager to print how long a block of code took."""
@@ -118,7 +142,7 @@ def stopwatch(message):
         yield
     finally:
         t1 = time.time()
-        print("Total elapsed time for %s: %.3f" % (message, t1 - t0))
+        print('Total elapsed time for %s: %.3f' % (message, t1 - t0))
 
 
 class AllBytes(object):
