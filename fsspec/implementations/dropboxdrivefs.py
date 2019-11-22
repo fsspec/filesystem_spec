@@ -1,6 +1,4 @@
-import contextlib
-import time
-
+import requests
 import dropbox
 from ..spec import AbstractFileSystem, AbstractBufferedFile
 
@@ -14,6 +12,7 @@ class DropboxDriveFileSystem(AbstractFileSystem):
           Needs to be done by the user
 
     """
+
     def __init__(self, **storage_options):
         super().__init__(**storage_options)
         self.token = storage_options["token"]
@@ -24,134 +23,115 @@ class DropboxDriveFileSystem(AbstractFileSystem):
         """ connect to the dropbox account with the given token
         """
         self.dbx = dropbox.Dropbox(self.token)
+        self.session = requests.Session()
+        self.session.auth = ("Authorization", self.token)
 
     def ls(self, path, detail=True, **kwargs):
         """ List objects at path
         """
-        while '//' in path:
-            path = path.replace('//', '/')
+        while "//" in path:
+            path = path.replace("//", "/")
         list_file = []
-        list_item = self.dbx.files_list_folder(path, recursive = True, include_media_info = True)
+        list_item = self.dbx.files_list_folder(
+            path, recursive=True, include_media_info=True
+        )
         items = list_item.entries
-        while list_item.has_more: 
+        while list_item.has_more:
             list_item = self.dbx.files_list_folder_continue(list_item.cursor)
             items = list_item.entries + items
 
-        if detail: 
-            for item in list_item.entries: 
+        if detail:
+            for item in list_item.entries:
                 if isinstance(item, dropbox.files.FileMetadata):
-                    list_file.append({'name':item.path_display, 'size':item.size, 'type':'file'})
+                    list_file.append(
+                        {"name": item.path_display, "size": item.size, "type": "file"}
+                    )
                 elif isinstance(item, dropbox.files.FolderMetadata):
-                    list_file.append({'name':item.path_display, 'size':None, 'type':'folder'})
+                    list_file.append(
+                        {"name": item.path_display, "size": None, "type": "folder"}
+                    )
                 else:
-                    list_file.append({'name':item.path_display, 'size':item.size, 'type':'unknow'})
-        else: 
-            for item in list_item.entries: 
+                    list_file.append(
+                        {"name": item.path_display, "size": item.size, "type": "unknow"}
+                    )
+        else:
+            for item in list_item.entries:
                 list_file.append(item.path_display)
         return list_file
-        
+
     def _open(
-            self,
-            path,
-            mode="rb",
-            
-            **kwargs
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=None,
+        cache_options=None,
+        **kwargs
     ):
-        return DropboxDriveFile(self, path, self.dbx, mode=mode, blocksize= 4 * 1024 * 1024, **kwargs)
+        return DropboxDriveFile(
+            self,
+            self.dbx,
+            path,
+            session=self.session,
+            block_size=4 * 1024 * 1024,
+            mode=mode,
+            **kwargs
+        )
 
     def info(self, url, **kwargs):
         """Get info of URL
         """
         metadata = self.dbx.files_get_metadata(url)
         if isinstance(metadata, dropbox.files.FileMetadata):
-            return {'name':metadata.path_display, 'size':metadata.size, 'type':'file'}
+            return {
+                "name": metadata.path_display,
+                "size": metadata.size,
+                "type": "file",
+            }
         elif isinstance(metadata, dropbox.files.FolderMetadata):
-            return{'name':metadata.path_display, 'size':None, 'type':'folder'}
+            return {"name": metadata.path_display, "size": None, "type": "folder"}
         else:
             return {"name": url, "size": None, "type": "unknow"}
 
-DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
-
 
 class DropboxDriveFile(AbstractBufferedFile):
-
-    def _fetch_range(self, start, end):
-        pass
+    """ fetch_all, fetch_range, and read method are based from the http implementation
+    """
 
     def __init__(
-        self, fs, path, dbx,
-        block_size=None,
-        mode="rb",
-        cache_type="bytes",
-        cache_options=None,
-        size=None,
-        **kwargs
+        self, fs, dbx, path, session=None, block_size=None, mode="rb", **kwargs
     ):
         """
         Open a file.
         Parameters
         ----------
-        fs: instance of GoogleDriveFileSystem
+        fs: instance of DropboxDriveFileSystem
+        dbx : instance of dropbox
+        session: requests.Session or None
+                All calls will be made within this session, to avoid restarting connections
+                where the server allows this
+        path : str
+            file path to inspect in dropbox
         mode: str
-            Normal file modes. Currently only 'rb'.
-        block_size: int
-            Buffer size for reading or writing (default 5MB)
+            Normal file modes.'rb' or 'wb'
+        block_size: int or None
+            The amount of read-ahead to do, in bytes. Default is 5MB, or the value
+            configured for the FileSystem creating this file
         """
-        if size is not None:
-            self.details = {"name": path, "size": size, "type": "file"}
+        for key, value in kwargs.items():
+            print("{0} = {1}".format(key, value))
+        self.session = session if session is not None else requests.Session()
+        super().__init__(fs=fs, path=path, mode=mode, block_size=block_size, **kwargs)
 
-        super().__init__(
-            fs=fs,
-            path=path,
-            mode=mode,
-            block_size=block_size,
-            cache_type=cache_type,
-            cache_options=cache_options,
-            **kwargs
-        )
-        print(self.mode)
         self.path = path
         self.dbx = dbx
-
-    def _fetch_all(self):
-        if not isinstance(self.cache, AllBytes):
-            r = self._download(self.path)
-            self.cache = AllBytes(r)
-            self.size = len(r)
-
-    def _download(self, path):
-        """Download a file.
-        Return the bytes of the file, or None if it doesn't exist.
-        """
-        while '//' in path:
-            path = path.replace('//', '/')
-        with stopwatch('download'):
-            try:
-                md, res = self.dbx.files_download('/'+path)
-            except dropbox.exceptions.HttpError as err:
-                print('*** HTTP error :', err)
-                return None
-        data = res.content
-        return data
-    
-    def _upload_chunk(self, final = False):
-        self.cursor.offset += self.buffer.seek(0, 2)
-        print(self.cursor.offset)
-        if final:
-            self.dbx.files_upload_session_finish(self.buffer.getvalue(),self.cursor,self.commit)
-        else:
-            self.dbx.files_upload_session_append(self.buffer.getvalue(), self.cursor.session_id, self.cursor.offset)
-
-
-    def _initiate_upload(self):
-        """ Example given by dropbox API
-        """
-        session = self.dbx.files_upload_session_start(self.buffer.getvalue())
-        self.commit = dropbox.files.CommitInfo(path=self.path)
-        self.cursor = dropbox.files.UploadSessionCursor(session_id=session.session_id,offset=self.offset)
+        while "//" in path:
+            path = path.replace("//", "/")
+        self.url = self.dbx.files_get_temporary_link(path).link
 
     def read(self, length=-1):
         """Read bytes from file
+
         Parameters
         ----------
         length: int
@@ -159,18 +139,99 @@ class DropboxDriveFile(AbstractBufferedFile):
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
-        self._fetch_all()
+        if (
+            (length < 0 and self.loc == 0)
+            or (length > (self.size or length))  # explicit read all
+            or (  # read more than there is
+                self.size and self.size < self.blocksize
+            )  # all fits in one block anyway
+        ):
+            self._fetch_all()
+        if self.size is None:
+            if length < 0:
+                self._fetch_all()
+        else:
+            length = min(self.size - self.loc, length)
         return super().read(length)
 
-@contextlib.contextmanager
-def stopwatch(message):
-    """Context manager to print how long a block of code took."""
-    t0 = time.time()
-    try:
-        yield
-    finally:
-        t1 = time.time()
-        print('Total elapsed time for %s: %.3f' % (message, t1 - t0))
+    def _fetch_all(self):
+        """Read whole file in one shot, without caching
+
+        This is only called when position is still at zero,
+        and read() is called without a byte-count.
+        """
+        if not isinstance(self.cache, AllBytes):
+            r = self.session.get(self.url, **self.kwargs)
+            r.raise_for_status()
+            out = r.content
+            self.cache = AllBytes(out)
+            self.size = len(out)
+
+    def _fetch_range(self, start, end):
+        """Download a block of data
+
+        The expectation is that the server returns only the requested bytes,
+        with HTTP code 206. If this is not the case, we first check the headers,
+        and then stream the output - if the data size is bigger than we
+        requested, an exception is raised.
+        """
+        kwargs = self.kwargs.copy()
+        headers = kwargs.pop("headers", {})
+        headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+        r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
+        if r.status_code == 416:
+            # range request outside file
+            return b""
+        r.raise_for_status()
+        if r.status_code == 206:
+            # partial content, as expected
+            out = r.content
+        elif "Content-Length" in r.headers:
+            cl = int(r.headers["Content-Length"])
+            if cl <= end - start:
+                # data size OK
+                out = r.content
+            else:
+                raise ValueError(
+                    "Got more bytes (%i) than requested (%i)" % (cl, end - start)
+                )
+        else:
+            cl = 0
+            out = []
+            for chunk in r.iter_content(chunk_size=2 ** 20):
+                # data size unknown, let's see if it goes too big
+                if chunk:
+                    out.append(chunk)
+                    cl += len(chunk)
+                    if cl > end - start:
+                        raise ValueError(
+                            "Got more bytes so far (>%i) than requested (%i)"
+                            % (cl, end - start)
+                        )
+                else:
+                    break
+            out = b"".join(out)
+        return out
+
+    def _upload_chunk(self, final=False):
+        self.cursor.offset += self.buffer.seek(0, 2)
+        if final:
+            self.dbx.files_upload_session_finish(
+                self.buffer.getvalue(), self.cursor, self.commit
+            )
+        else:
+            self.dbx.files_upload_session_append(
+                self.buffer.getvalue(), self.cursor.session_id, self.cursor.offset
+            )
+
+    def _initiate_upload(self):
+        """ Initiate the upload session
+        """
+        session = self.dbx.files_upload_session_start(self.buffer.getvalue())
+        self.commit = dropbox.files.CommitInfo(path=self.path)
+        self.cursor = dropbox.files.UploadSessionCursor(
+            session_id=session.session_id, offset=self.offset
+        )
 
 
 class AllBytes(object):
