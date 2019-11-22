@@ -12,8 +12,10 @@ default = "file"
 known_implementations = {
     "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
-    "dropbox": {"class": "fsspec.implementations.dropboxdrivefs.DropboxDriveFileSystem",
-                "err": "Please install the dropbox module"},
+    "dropbox": {
+        "class": "fsspec.implementations.dropboxdrivefs.DropboxDriveFileSystem",
+        "err": 'DropboxFileSystem requires "requests" and "dropbox" to be installed',
+    },
     "http": {
         "class": "fsspec.implementations.http.HTTPFileSystem",
         "err": 'HTTPFileSystem requires "requests" to be installed',
@@ -40,7 +42,6 @@ known_implementations = {
         "err": 'SFTPFileSystem requires "paramiko" to be installed',
     },
     "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
-    
     "hdfs": {
         "class": "fsspec.implementations.hdfs.PyArrowHDFS",
         "err": "pyarrow and local java libraries required for HDFS",
