@@ -6,6 +6,14 @@ from ..spec import AbstractFileSystem, AbstractBufferedFile
 
 
 class DropboxDriveFileSystem(AbstractFileSystem):
+    """ Interface dropbox to connect, list and manage files
+    Parameters:
+    ----------
+    token : str
+          Generated key by adding a dropbox app in the user dropbox account. 
+          Needs to be done by the user
+
+    """
     def __init__(self, **storage_options):
         super().__init__(**storage_options)
         self.token = storage_options["token"]
@@ -13,9 +21,13 @@ class DropboxDriveFileSystem(AbstractFileSystem):
         self.connect()
 
     def connect(self):
+        """ connect to the dropbox account with the given token
+        """
         self.dbx = dropbox.Dropbox(self.token)
 
     def ls(self, path, detail=True, **kwargs):
+        """ List objects at path
+        """
         while '//' in path:
             path = path.replace('//', '/')
         list_file = []
@@ -42,9 +54,10 @@ class DropboxDriveFileSystem(AbstractFileSystem):
             self,
             path,
             mode="rb",
+            
             **kwargs
     ):
-        return DropboxDriveFile(self, path, self.dbx, mode='rb', **kwargs)
+        return DropboxDriveFile(self, path, self.dbx, mode=mode, blocksize= 4 * 1024 * 1024, **kwargs)
 
     def info(self, url, **kwargs):
         """Get info of URL
@@ -84,8 +97,6 @@ class DropboxDriveFile(AbstractBufferedFile):
         block_size: int
             Buffer size for reading or writing (default 5MB)
         """
-        if mode != "rb":
-            raise NotImplementedError("File mode not supported")
         if size is not None:
             self.details = {"name": path, "size": size, "type": "file"}
 
@@ -98,6 +109,7 @@ class DropboxDriveFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs
         )
+        print(self.mode)
         self.path = path
         self.dbx = dbx
 
@@ -121,6 +133,22 @@ class DropboxDriveFile(AbstractBufferedFile):
                 return None
         data = res.content
         return data
+    
+    def _upload_chunk(self, final = False):
+        self.cursor.offset += self.buffer.seek(0, 2)
+        print(self.cursor.offset)
+        if final:
+            self.dbx.files_upload_session_finish(self.buffer.getvalue(),self.cursor,self.commit)
+        else:
+            self.dbx.files_upload_session_append(self.buffer.getvalue(), self.cursor.session_id, self.cursor.offset)
+
+
+    def _initiate_upload(self):
+        """ Example given by dropbox API
+        """
+        session = self.dbx.files_upload_session_start(self.buffer.getvalue())
+        self.commit = dropbox.files.CommitInfo(path=self.path)
+        self.cursor = dropbox.files.UploadSessionCursor(session_id=session.session_id,offset=self.offset)
 
     def read(self, length=-1):
         """Read bytes from file
