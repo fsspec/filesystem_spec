@@ -13,6 +13,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture()
 def ftp():
+    pytest.importorskip("pyftpdlib")
     P = subprocess.Popen(
         [sys.executable, "-m", "pyftpdlib", "-d", here],
         stderr=subprocess.STDOUT,
