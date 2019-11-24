@@ -1,6 +1,7 @@
 import requests
 import dropbox
 from ..spec import AbstractFileSystem, AbstractBufferedFile
+from ..caching import AllBytes
 
 
 class DropboxDriveFileSystem(AbstractFileSystem):
@@ -8,14 +9,14 @@ class DropboxDriveFileSystem(AbstractFileSystem):
     Parameters:
     ----------
     token : str
-          Generated key by adding a dropbox app in the user dropbox account. 
+          Generated key by adding a dropbox app in the user dropbox account.
           Needs to be done by the user
 
     """
 
-    def __init__(self, **storage_options):
-        super().__init__(**storage_options)
-        self.token = storage_options["token"]
+    def __init__(self, token, *args, **storage_options):
+        super().__init__(token=token, *args, **storage_options)
+        self.token = token
         self.kwargs = storage_options
         self.connect()
 
@@ -64,17 +65,17 @@ class DropboxDriveFileSystem(AbstractFileSystem):
         path,
         mode="rb",
         block_size=None,
-        autocommit=None,
+        autocommit=True,
         cache_options=None,
         **kwargs
     ):
         return DropboxDriveFile(
             self,
-            self.dbx,
             path,
-            session=self.session,
-            block_size=4 * 1024 * 1024,
             mode=mode,
+            block_size=4 * 1024 * 1024,
+            autocommit=autocommit,
+            cache_options=cache_options,
             **kwargs
         )
 
@@ -99,17 +100,21 @@ class DropboxDriveFile(AbstractBufferedFile):
     """
 
     def __init__(
-        self, fs, dbx, path, session=None, block_size=None, mode="rb", **kwargs
+        self,
+        fs,
+        path,
+        mode="rb",
+        block_size="default",
+        autocommit=True,
+        cache_type="readahead",
+        cache_options=None,
+        **kwargs
     ):
         """
         Open a file.
         Parameters
         ----------
         fs: instance of DropboxDriveFileSystem
-        dbx : instance of dropbox
-        session: requests.Session or None
-                All calls will be made within this session, to avoid restarting connections
-                where the server allows this
         path : str
             file path to inspect in dropbox
         mode: str
@@ -120,11 +125,11 @@ class DropboxDriveFile(AbstractBufferedFile):
         """
         for key, value in kwargs.items():
             print("{0} = {1}".format(key, value))
-        self.session = session if session is not None else requests.Session()
+        self.session = fs.session if fs.session is not None else requests.Session()
         super().__init__(fs=fs, path=path, mode=mode, block_size=block_size, **kwargs)
 
         self.path = path
-        self.dbx = dbx
+        self.dbx = self.fs.dbx
         while "//" in path:
             path = path.replace("//", "/")
         self.url = self.dbx.files_get_temporary_link(path).link
@@ -232,13 +237,3 @@ class DropboxDriveFile(AbstractBufferedFile):
         self.cursor = dropbox.files.UploadSessionCursor(
             session_id=session.session_id, offset=self.offset
         )
-
-
-class AllBytes(object):
-    """Cache entire contents of the dropbox file"""
-
-    def __init__(self, data):
-        self.data = data
-
-    def _fetch(self, start, end):
-        return self.data[start:end]
