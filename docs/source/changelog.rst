@@ -1,6 +1,14 @@
 Changelog
 =========
 
+Version 0.6.1
+-------------
+
+* ``LocalFileSystem`` is now considered a filestore by pyarrow (:pr:`211`)
+* Fixed bug in HDFS filesystem with ``cache_options`` (:pr:`202`)
+* Fixed instance caching bug with multiple instances (:pr:`203`)
+
+
 Version 0.6.0
 -------------
 
