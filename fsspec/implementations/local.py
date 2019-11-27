@@ -128,6 +128,12 @@ class LocalFileSystem(AbstractFileSystem):
             path = path[7:]
         return make_path_posix(path)
 
+    def _isfilestore(self):
+        # Inheriting from DaskFileSystem makes this False (S3, etc. were)
+        # the original motivation. But we are a posix-like file system.
+        # See https://github.com/dask/dask/issues/5526
+        return True
+
 
 def make_path_posix(path, sep=os.sep):
     """ Make path generic """
