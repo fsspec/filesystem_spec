@@ -427,3 +427,8 @@ def test_links(tmpdir):
     of = fsspec.open(fn2, "rb")
     with of as f:
         assert f.read() == data
+
+
+def test_isfilestore():
+    fs = LocalFileSystem(auto_mkdir=False)
+    assert fs._isfilestore()
