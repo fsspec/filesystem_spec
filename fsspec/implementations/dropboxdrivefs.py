@@ -1,7 +1,7 @@
 import requests
 import dropbox
 from ..spec import AbstractFileSystem, AbstractBufferedFile
-from ..caching import AllBytes
+from .http import HTTPFile
 
 
 class DropboxDriveFileSystem(AbstractFileSystem):
@@ -17,7 +17,6 @@ class DropboxDriveFileSystem(AbstractFileSystem):
     def __init__(self, token, *args, **storage_options):
         super().__init__(token=token, *args, **storage_options)
         self.token = token
-        self.kwargs = storage_options
         self.connect()
 
     def connect(self):
@@ -30,8 +29,7 @@ class DropboxDriveFileSystem(AbstractFileSystem):
     def ls(self, path, detail=True, **kwargs):
         """ List objects at path
         """
-        while "//" in path:
-            path = path.replace("//", "/")
+        path = path.replace("//", "/")
         list_file = []
         list_item = self.dbx.files_list_folder(
             path, recursive=True, include_media_info=True
@@ -49,7 +47,7 @@ class DropboxDriveFileSystem(AbstractFileSystem):
                     )
                 elif isinstance(item, dropbox.files.FolderMetadata):
                     list_file.append(
-                        {"name": item.path_display, "size": None, "type": "folder"}
+                        {"name": item.path_display, "size": None, "type": "directory"}
                     )
                 else:
                     list_file.append(
@@ -90,7 +88,7 @@ class DropboxDriveFileSystem(AbstractFileSystem):
                 "type": "file",
             }
         elif isinstance(metadata, dropbox.files.FolderMetadata):
-            return {"name": metadata.path_display, "size": None, "type": "folder"}
+            return {"name": metadata.path_display, "size": None, "type": "directory"}
         else:
             return {"name": url, "size": None, "type": "unknow"}
 
@@ -123,100 +121,27 @@ class DropboxDriveFile(AbstractBufferedFile):
             The amount of read-ahead to do, in bytes. Default is 5MB, or the value
             configured for the FileSystem creating this file
         """
-        for key, value in kwargs.items():
-            print("{0} = {1}".format(key, value))
-        self.session = fs.session if fs.session is not None else requests.Session()
         super().__init__(fs=fs, path=path, mode=mode, block_size=block_size, **kwargs)
 
         self.path = path
         self.dbx = self.fs.dbx
-        while "//" in path:
-            path = path.replace("//", "/")
-        self.url = self.dbx.files_get_temporary_link(path).link
+        path = path.replace("//", "/")
+        if mode == "rb":
+            self.url = self.dbx.files_get_temporary_link(path).link
+            self.session = fs.session if fs.session is not None else requests.Session()
+            self.httpfile = HTTPFile(
+                fs,
+                self.url,
+                self.session,
+                mode=mode,
+                cache_options=cache_options,
+                size=fs.info(path)["size"],
+            )
 
     def read(self, length=-1):
-        """Read bytes from file
-
-        Parameters
-        ----------
-        length: int
-            Read up to this many bytes. If negative, read all content to end of
-            file. If the server has not supplied the filesize, attempting to
-            read only part of the data will raise a ValueError.
+        """Read bytes from file via the http
         """
-        if (
-            (length < 0 and self.loc == 0)
-            or (length > (self.size or length))  # explicit read all
-            or (  # read more than there is
-                self.size and self.size < self.blocksize
-            )  # all fits in one block anyway
-        ):
-            self._fetch_all()
-        if self.size is None:
-            if length < 0:
-                self._fetch_all()
-        else:
-            length = min(self.size - self.loc, length)
-        return super().read(length)
-
-    def _fetch_all(self):
-        """Read whole file in one shot, without caching
-
-        This is only called when position is still at zero,
-        and read() is called without a byte-count.
-        """
-        if not isinstance(self.cache, AllBytes):
-            r = self.session.get(self.url, **self.kwargs)
-            r.raise_for_status()
-            out = r.content
-            self.cache = AllBytes(out)
-            self.size = len(out)
-
-    def _fetch_range(self, start, end):
-        """Download a block of data
-
-        The expectation is that the server returns only the requested bytes,
-        with HTTP code 206. If this is not the case, we first check the headers,
-        and then stream the output - if the data size is bigger than we
-        requested, an exception is raised.
-        """
-        kwargs = self.kwargs.copy()
-        headers = kwargs.pop("headers", {})
-        headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-        r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
-        if r.status_code == 416:
-            # range request outside file
-            return b""
-        r.raise_for_status()
-        if r.status_code == 206:
-            # partial content, as expected
-            out = r.content
-        elif "Content-Length" in r.headers:
-            cl = int(r.headers["Content-Length"])
-            if cl <= end - start:
-                # data size OK
-                out = r.content
-            else:
-                raise ValueError(
-                    "Got more bytes (%i) than requested (%i)" % (cl, end - start)
-                )
-        else:
-            cl = 0
-            out = []
-            for chunk in r.iter_content(chunk_size=2 ** 20):
-                # data size unknown, let's see if it goes too big
-                if chunk:
-                    out.append(chunk)
-                    cl += len(chunk)
-                    if cl > end - start:
-                        raise ValueError(
-                            "Got more bytes so far (>%i) than requested (%i)"
-                            % (cl, end - start)
-                        )
-                else:
-                    break
-            out = b"".join(out)
-        return out
+        return self.httpfile.read(length=length)
 
     def _upload_chunk(self, final=False):
         self.cursor.offset += self.buffer.seek(0, 2)
