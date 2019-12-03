@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Version 0.7.0
+-------------
+
+* Added ``cache_timeout`` option to :class:`fsspec.AbstractFileSystem` (:pr:``).
+* Changed :attr:`fsspec.AbstractFileSystem` to be an instance of :class:`fsspec.DirCache` rather
+  than a dictionary (:pr:``).
+
 Version 0.6.1
 -------------
 

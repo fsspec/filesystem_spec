@@ -6,6 +6,7 @@ import logging
 
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path
+from .dircache import DirCache
 
 logger = logging.getLogger("fsspec")
 
@@ -86,7 +87,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     #: Extra *class attributes* that should be considered when hashing.
     _extra_tokenize_attributes = ()
 
-    def __init__(self, *args, **storage_options):
+    def __init__(self, *args, cache_timeout=None, **storage_options):
         """Create and configure file-system instance
 
         Instances may be cachable, so if similar enough arguments are seen
@@ -97,9 +98,25 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         Subclasses should call this method.
 
-        Magic kwargs that affect functionality here:
-        add_docs: if True, will append docstrings from this spec to the
-            specific implementation
+        Parameters
+        ----------
+        *args : Tuple
+            Positional arguments, if any. These are used for instance caching.
+        cache_timeout : float, optional
+            Cache expiration time in seconds for directory listing cache.
+            Set cache_timeout <= 0 for no caching, None for no cache expiration.
+
+            Some methods, such as :meth:`AbstractFileSystem.ls`, may consult this
+            cache for improved performance. Caching may be appropriate when connecting
+            to a static filesystem and when listing items is expensive (e.g. S3 or GCS).
+            In these cases, the default ``cache_timeout=None`` is appropriate.
+
+            Caching is *not* appropriate for filesystems that are being modified by
+            external systems and when those results should be reflected on this
+            instance immediately. In these cases, set ``cache_timeout=0``.
+
+        **storage_options : Dict, optional
+            Additional keyword arguments, if any. These are used for instance caching.
         """
         if self._cached:
             # reusing instance, don't change
@@ -107,7 +124,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._cached = True
         self._intrans = False
         self._transaction = None
-        self.dircache = {}
+        self.cache_timeout = cache_timeout
+        self.dircache = DirCache(cache_timeout)
 
         if storage_options.pop("add_docs", None):
             warnings.warn("add_docs is no longer supported.", FutureWarning)
@@ -289,15 +307,19 @@ class AbstractFileSystem(up, metaclass=_Cached):
         Returns listing, if found (may me empty list for a directly that exists
         but contains nothing), None if not in cache.
         """
-        parent = self._parent(path)
-        if path in self.dircache:
+        try:
             return self.dircache[path]
-        elif parent in self.dircache:
-            files = [f for f in self.dircache[parent] if f["name"] == path]
-            if len(files) == 0:
-                # parent dir was listed but did not contain this file
-                raise FileNotFoundError(path)
-            return files
+        except KeyError:
+            pass
+
+        # I don't understand how this was supposed to work. Did we have a restriction
+        # on key?
+        # elif parent in self.dircache:
+        #     files = [f for f in self.dircache[parent] if f["name"] == path]
+        #     if len(files) == 0:
+        #         # parent dir was listed but did not contain this file
+        #         raise FileNotFoundError(path)
+        #     return files
 
     def walk(self, path, maxdepth=None, **kwargs):
         """ Return all files belows path
