@@ -119,3 +119,11 @@ Read Buffering
 
 .. autoclass:: fsspec.caching.BlockCache
    :members:
+
+.. _dircache:
+
+Listing Cache
+-------------
+
+.. autoclass:: fsspec.DirCache
+   :members:
