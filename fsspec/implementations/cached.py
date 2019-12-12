@@ -135,6 +135,11 @@ class CachingFileSystem(AbstractFileSystem):
                         c["blocks"] = True
                     else:
                         c["blocks"] = set(c["blocks"]).union(cache[k]["blocks"])
+
+            # Files can be added to cache after it was written once
+            for k, c in cache.items():
+                if not k in cached_files:
+                    cached_files[k] = c
         else:
             cached_files = cache
         cache = {k: v.copy() for k, v in cached_files.items()}
