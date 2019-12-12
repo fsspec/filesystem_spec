@@ -138,7 +138,7 @@ class CachingFileSystem(AbstractFileSystem):
 
             # Files can be added to cache after it was written once
             for k, c in cache.items():
-                if not k in cached_files:
+                if k not in cached_files:
                     cached_files[k] = c
         else:
             cached_files = cache
