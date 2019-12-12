@@ -331,7 +331,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         if not path.startswith(self.protocol):
-            path = self.protocol + "://" + path
+            if isinstance(self.protocol, tuple):
+                protocol = self.protocol[0]
+            else:
+                protocol = self.protocol
+            path = protocol + "://" + path
         if mode != "rb":
             return self.fs._open(path, mode=mode, **kwargs)
         detail, fn = self._check_file(path)
