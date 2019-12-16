@@ -1,6 +1,12 @@
 Changelog
 =========
 
+Version 0.6.2
+-------------
+
+* Added ``adl`` and ``abfs`` protocols to the known implementations registry (:pr:`209`)
+* Fixed issue with whole-file caching and implementations providing multiple protocols (:pr:`219`)
+
 Version 0.6.1
 -------------
 
