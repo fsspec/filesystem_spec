@@ -328,6 +328,6 @@ def test_add_file_to_cache_after_save(local_filecache):
         "filecache",
         target_protocol="file",
         cache_storage=cache_location,
-        do_not_use_cache_for_this_instance=True,  # using FS from cache is masking the issue
+        do_not_use_cache_for_this_instance=True,  # cache is masking the issue
     )
     assert len(fs2.cached_files[-1]) == 1
