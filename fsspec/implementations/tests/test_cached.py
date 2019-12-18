@@ -312,3 +312,22 @@ def test_takes_fs_instance():
     fs2 = fsspec.filesystem("filecache", target_protocol=fs)
 
     assert fs2.cat(f1) == data
+
+
+def test_add_file_to_cache_after_save(local_filecache):
+    (data, original_file, cache_location, fs) = local_filecache
+
+    fs.save_cache()
+
+    fs.cat(original_file)
+    assert len(fs.cached_files[-1]) == 1
+
+    fs.save_cache()
+
+    fs2 = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=cache_location,
+        do_not_use_cache_for_this_instance=True,  # cache is masking the issue
+    )
+    assert len(fs2.cached_files[-1]) == 1
