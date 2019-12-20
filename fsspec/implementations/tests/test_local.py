@@ -432,3 +432,10 @@ def test_links(tmpdir):
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
     assert fs._isfilestore()
+
+
+def test_auto_mkdir_warns():
+    # Ensure we're not pulling from instance cache
+    LocalFileSystem.clear_instance_cache()
+    with pytest.warns(FutureWarning, match="auto_mkdir=True has been deprecated"):
+        LocalFileSystem()
