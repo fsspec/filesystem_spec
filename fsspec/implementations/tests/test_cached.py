@@ -260,7 +260,7 @@ def test_filecache_multicache_with_same_file_different_data_reads_from_first():
     assert fs.cat(f1) == data * 2
 
     # the filenames in each cache are the same, but the data is different
-    assert os.listdir(cache1) == os.listdir(cache2)
+    assert sorted(os.listdir(cache1)) == sorted(os.listdir(cache2))
 
     fs = fsspec.filesystem(
         "filecache", target_protocol="file", cache_storage=[cache1, cache2]
