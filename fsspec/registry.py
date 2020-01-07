@@ -14,7 +14,10 @@ known_implementations = {
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
     "dropbox": {
         "class": "dropboxdrivefs.DropboxDriveFileSystem",
-        "err": 'DropboxFileSystem requires "dropboxdrivefs", "requests" and "dropbox" to be installed',
+        "err": (
+            'DropboxFileSystem requires "dropboxdrivefs",'
+            '"requests" and "dropbox" to be installed'
+        ),
     },
     "http": {
         "class": "fsspec.implementations.http.HTTPFileSystem",
