@@ -370,6 +370,16 @@ class BytesCache(BaseCache):
         return len(self.cache)
 
 
+class AllBytes(object):
+    """Cache entire contents of the file"""
+
+    def __init__(self, data):
+        self.data = data
+
+    def _fetch(self, start, end):
+        return self.data[start:end]
+
+
 caches = {
     "none": BaseCache,
     "mmap": MMapCache,

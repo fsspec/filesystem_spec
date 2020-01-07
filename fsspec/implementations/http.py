@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
+from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
@@ -359,13 +360,3 @@ def file_size(url, session=None, size_policy="head", **kwargs):
         return int(r.headers["Content-Length"])
     elif "Content-Range" in r.headers:
         return int(r.headers["Content-Range"].split("/")[1])
-
-
-class AllBytes(object):
-    """Cache entire contents of a remote URL"""
-
-    def __init__(self, data):
-        self.data = data
-
-    def _fetch(self, start, end):
-        return self.data[start:end]
