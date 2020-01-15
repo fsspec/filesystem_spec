@@ -368,6 +368,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         # TODO: allow equivalent of -name parameter
         out = set()
+        path = self._strip_protocol(path)
         for path, dirs, files in self.walk(path, maxdepth, **kwargs):
             if withdirs:
                 files += dirs

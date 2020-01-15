@@ -87,9 +87,7 @@ class CachingFileSystem(AbstractFileSystem):
         self.load_cache()
         if isinstance(target_protocol, AbstractFileSystem):
             self.fs = target_protocol
-            self.protocol = self.fs.protocol
         else:
-            self.protocol = target_protocol
             self.fs = filesystem(target_protocol, **self.kwargs)
 
     def __reduce_ex__(self, *_):
@@ -284,10 +282,14 @@ class CachingFileSystem(AbstractFileSystem):
             "head",
             "_check_file",
             "_check_cache",
+            "glob"
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(type(self), item)(self, *args, **kw)
+        if item in ['_strip_protocol']:
+            # class methods
+            return lambda *args, **kw: getattr(type(self), item)(*args, **kw)
         if item == "__class__":
             return type(self)
         d = object.__getattribute__(self, "__dict__")
