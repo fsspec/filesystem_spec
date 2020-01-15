@@ -282,12 +282,12 @@ class CachingFileSystem(AbstractFileSystem):
             "head",
             "_check_file",
             "_check_cache",
-            "glob"
+            "glob",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(type(self), item)(self, *args, **kw)
-        if item in ['_strip_protocol']:
+        if item in ["_strip_protocol"]:
             # class methods
             return lambda *args, **kw: getattr(type(self), item)(*args, **kw)
         if item == "__class__":
