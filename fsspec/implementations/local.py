@@ -8,6 +8,11 @@ import warnings
 from fsspec import AbstractFileSystem
 from fsspec.utils import stringify_path
 
+try:
+    from atomicwrites import replace_atomic as replace
+except ImportError:
+    replace = os.rename
+
 
 class LocalFileSystem(AbstractFileSystem):
     """Interface to files on local storage
@@ -225,7 +230,7 @@ class LocalFileOpener(object):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
-        os.rename(self.temp, self.path)
+        replace(self.temp, self.path)
 
     def discard(self):
         if self.autocommit:
