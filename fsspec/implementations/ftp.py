@@ -227,12 +227,13 @@ class FTPFile(AbstractBufferedFile):
             total[0] += len(x)
             if total[0] > end - start:
                 out.append(x[: (end - start) - total[0]])
-                raise TransferDone(end >= self.size)
+                if end < self.size:
+                    raise TransferDone
             else:
                 out.append(x)
 
-            if total[0] == end - start:
-                raise TransferDone(end >= self.size)
+            if total[0] == end - start and end < self.size:
+                raise TransferDone
 
         try:
             self.fs.ftp.retrbinary(
@@ -241,14 +242,14 @@ class FTPFile(AbstractBufferedFile):
                 rest=start,
                 callback=callback,
             )
-        except TransferDone as e:
-            if not e.args[0]:
+        except TransferDone:
+            try:
                 # stop transfer, we got enough bytes for this block
-                try:
-                    self.fs.ftp.abort()
-                except timeout:
-                    self.fs._connect()
-            self.fs.ftp.voidresp()
+                self.fs.ftp.abort()
+                self.fs.ftp.getmultiline()
+            except Error:
+                self.fs.ftp._connect()
+
         return b"".join(out)
 
     def _upload_chunk(self, final=False):
