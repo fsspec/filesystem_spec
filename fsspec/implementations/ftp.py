@@ -1,5 +1,4 @@
 from ftplib import FTP, Error, error_perm
-from socket import timeout
 import uuid
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
