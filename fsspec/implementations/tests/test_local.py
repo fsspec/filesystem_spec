@@ -6,6 +6,7 @@ import os.path
 import sys
 from contextlib import contextmanager
 import tempfile
+import getpass
 
 import pytest
 import fsspec
@@ -439,3 +440,11 @@ def test_auto_mkdir_warns():
     LocalFileSystem.clear_instance_cache()
     with pytest.warns(FutureWarning, match="auto_mkdir=True has been deprecated"):
         LocalFileSystem()
+
+
+def test_strip_protocol_expanduser():
+    path = "file:///C:\\foo\\bar" if sys.platform == "win32" else "file://~/foo/bar"
+    stripped = LocalFileSystem._strip_protocol(path)
+    assert path != stripped
+    assert "file://" not in stripped
+    assert getpass.getuser() in stripped
