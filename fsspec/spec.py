@@ -322,7 +322,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         dirs = {}
         files = {}
 
-        detail = kwargs.pop('detail', True)
+        detail = kwargs.pop("detail", True)
         try:
             listing = self.ls(path, detail=True, **kwargs)
         except (FileNotFoundError, IOError):
@@ -339,7 +339,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 dirs[name] = info
             elif pathname == path:
                 # file-like with same name as give path
-                files[''] = info
+                files[""] = info
             else:
                 files[name] = info
 
@@ -354,9 +354,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 return
 
         for d in full_dirs:
-            yield from self.walk(
-                d, maxdepth=maxdepth, detail=detail, **kwargs
-            )
+            yield from self.walk(d, maxdepth=maxdepth, detail=detail, **kwargs)
 
     def find(self, path, maxdepth=None, withdirs=False, **kwargs):
         """List all files below path.
@@ -375,7 +373,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         # TODO: allow equivalent of -name parameter
         out = dict()
-        detail = kwargs.pop('detail', False)
+        detail = kwargs.pop("detail", False)
         for path, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
                 files.update(dirs)
