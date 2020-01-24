@@ -322,7 +322,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         dirs = {}
         files = {}
 
-        detail = kwargs.pop("detail", True)
+        detail = kwargs.pop("detail", False)
         try:
             listing = self.ls(path, detail=True, **kwargs)
         except (FileNotFoundError, IOError):
