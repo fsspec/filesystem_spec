@@ -5,8 +5,17 @@ import sys
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
     m.touch("afiles/and/anothers")
-    assert m.find("") == ["afiles/and/anothers", "somefile"]
-    assert list(m.get_mapper("")) == ["afiles/and/anothers", "somefile"]
+    files = m.find("")
+    if "somefile" in files:
+        assert files == ["afiles/and/anothers", "somefile"]
+    else:
+        assert files == ["/somefile", "afiles/and/anothers"]
+
+    files = list(m.get_mapper(""))
+    if "somefile" in files:
+        assert files == ["afiles/and/anothers", "somefile"]
+    else:
+        assert files == ["/somefile", "afiles/and/anothers"]
 
 
 @pytest.mark.xfail(
