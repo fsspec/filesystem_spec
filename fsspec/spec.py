@@ -318,10 +318,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         kwargs: passed to ``ls``
         """
         path = self._strip_protocol(path)
-        full_dirs = []
-        dirs = []
-        files = []
+        full_dirs = {}
+        dirs = {}
+        files = {}
 
+        detail = kwargs.pop('detail', True)
         try:
             listing = self.ls(path, detail=True, **kwargs)
         except (FileNotFoundError, IOError):
@@ -330,26 +331,30 @@ class AbstractFileSystem(up, metaclass=_Cached):
         for info in listing:
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
-            name = info["name"].rstrip("/")
-            if info["type"] == "directory" and name != path:
+            pathname = info["name"].rstrip("/")
+            name = pathname.rsplit("/", 1)[-1]
+            if info["type"] in ("dir", "directory") and pathname != path:
                 # do not include "self" path
-                full_dirs.append(name)
-                dirs.append(name.rsplit("/", 1)[-1])
-            elif name == path:
+                full_dirs[pathname] = info
+                dirs[name] = info
+            elif pathname == path:
                 # file-like with same name as give path
-                files.append("")
+                files[''] = info
             else:
-                files.append(name.rsplit("/", 1)[-1])
-        yield path, dirs, files
+                files[name] = info
+
+        if detail:
+            yield path, dirs, files
+        else:
+            yield path, list(dirs), list(files)
 
         for d in full_dirs:
             if maxdepth is None or maxdepth > 1:
-                for res in self.walk(
-                    d,
-                    maxdepth=(maxdepth - 1) if maxdepth is not None else None,
-                    **kwargs
-                ):
-                    yield res
+                if maxdepth is not None:
+                    maxdepth -= 1
+                yield from self.walk(
+                    d, maxdepth=maxdepth, detail=detail, **kwargs
+                )
 
     def find(self, path, maxdepth=None, withdirs=False, **kwargs):
         """List all files below path.
@@ -367,18 +372,21 @@ class AbstractFileSystem(up, metaclass=_Cached):
         kwargs are passed to ``ls``.
         """
         # TODO: allow equivalent of -name parameter
-        out = set()
-        for path, dirs, files in self.walk(path, maxdepth, **kwargs):
+        out = dict()
+        detail = kwargs.pop('detail', False)
+        for path, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
-                files += dirs
-            for name in files:
-                if name and name not in out:
-                    out.add("/".join([path.rstrip("/"), name]) if path else name)
+                files.update(dirs)
+            out.update({info["name"]: info for name, info in files.items()})
         if self.isfile(path) and path not in out:
             # walk works on directories, but find should also return [path]
             # when path happens to be a file
-            out.add(path)
-        return sorted(out)
+            out[path] = {}
+        names = sorted(out)
+        if not detail:
+            return names
+        else:
+            return {name: out[name] for name in names}
 
     def du(self, path, total=True, maxdepth=None, **kwargs):
         """Space used by files within a path
