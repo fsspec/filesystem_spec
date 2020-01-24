@@ -11,7 +11,7 @@ def test_1(m):
     else:
         assert files == ["/somefile", "afiles/and/anothers"]
 
-    files = list(m.get_mapper(""))
+    files = sorted(m.get_mapper(""))
     if "somefile" in files:
         assert files == ["afiles/and/anothers", "somefile"]
     else:
