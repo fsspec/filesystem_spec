@@ -102,6 +102,8 @@ class FTPFileSystem(AbstractFileSystem):
                         details["size"] = int(details["size"])
                     else:
                         details["size"] = 0
+                    if details["type"] == "dir":
+                        details["type"] = "directory"
                 self.dircache[path] = out
             except Error:
                 try:

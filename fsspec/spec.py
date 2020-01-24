@@ -333,7 +333,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             # we check also for names like [path]/part/
             pathname = info["name"].rstrip("/")
             name = pathname.rsplit("/", 1)[-1]
-            if info["type"] in ("dir", "directory") and pathname != path:
+            if info["type"] == "directory" and pathname != path:
                 # do not include "self" path
                 full_dirs[pathname] = info
                 dirs[name] = info
