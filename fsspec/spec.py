@@ -348,13 +348,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             yield path, list(dirs), list(files)
 
+        if maxdepth is not None:
+            maxdepth -= 1
+            if maxdepth < 1:
+                return
+
         for d in full_dirs:
-            if maxdepth is None or maxdepth > 1:
-                if maxdepth is not None:
-                    maxdepth -= 1
-                yield from self.walk(
-                    d, maxdepth=maxdepth, detail=detail, **kwargs
-                )
+            yield from self.walk(
+                d, maxdepth=maxdepth, detail=detail, **kwargs
+            )
 
     def find(self, path, maxdepth=None, withdirs=False, **kwargs):
         """List all files below path.
