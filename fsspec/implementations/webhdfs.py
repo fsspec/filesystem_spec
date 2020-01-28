@@ -43,6 +43,7 @@ class WebHDFS(AbstractFileSystem):
         proxy_to=None,
         kerb_kwargs=None,
         data_proxy=None,
+        use_https=False,
         **kwargs
     ):
         """
@@ -74,12 +75,16 @@ class WebHDFS(AbstractFileSystem):
             maps host names `host->data_proxy[host]`; if a callable, full
             URLs are passed, and function must conform to
             `url->data_proxy(url)`.
+        use_https: bool
+            Whether to connect to the Name-node using HTTPS instead of HTTP
         kwargs
         """
         if self._cached:
             return
         super().__init__(**kwargs)
-        self.url = "http://{host}:{port}/webhdfs/v1".format(host=host, port=port)
+        self.url = "{protocol}://{host}:{port}/webhdfs/v1".format(
+            protocol='https' if use_https else 'http', host=host, port=port
+        )
         self.kerb = kerberos
         self.kerb_kwargs = kerb_kwargs or {}
         self.pars = {}
