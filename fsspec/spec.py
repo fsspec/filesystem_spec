@@ -453,7 +453,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             root = ""
             depth = 20 if "**" in path else 1
-        allpaths = self.find(root, maxdepth=depth, withdirs=True, **kwargs)
+
+        detail = kwargs.pop("detail", False)
+        allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
         pattern = (
             "^"
             + (
@@ -472,8 +474,14 @@ class AbstractFileSystem(up, metaclass=_Cached):
         pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
         pattern = re.sub("[*]", "[^/]*", pattern)
         pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
-        out = {p for p in allpaths if pattern.match(p.replace("//", "/").rstrip("/"))}
-        return list(sorted(out))
+        out = {
+            p: allpaths[p] for p in sorted(allpaths)
+            if pattern.match(p.replace("//", "/").rstrip("/"))
+        }
+        if detail:
+            return out
+        else:
+            return list(out)
 
     def exists(self, path):
         """Is there a file at the given path"""
