@@ -437,15 +437,23 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         ind = min(indstar, indques, indbrace)
 
+        detail = kwargs.pop("detail", False)
+
         if not has_magic(path):
             root = path
             depth = 1
             if ends:
                 path += "/*"
             elif self.exists(path):
-                return [path]
+                if not detail:
+                    return [path]
+                else:
+                    return {path: self.info(path)}
             else:
-                return []  # glob of non-existent returns empty
+                if not detail:
+                    return []  # glob of non-existent returns empty
+                else:
+                    return {}
         elif "/" in path[:ind]:
             ind2 = path[:ind].rindex("/")
             root = path[: ind2 + 1]
@@ -454,7 +462,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
             root = ""
             depth = 20 if "**" in path else 1
 
-        detail = kwargs.pop("detail", False)
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
         pattern = (
             "^"
