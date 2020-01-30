@@ -36,17 +36,25 @@ class DummyTestFS(AbstractFileSystem):
         {"name": "misc/foo.txt", "type": "file", "size": 100},
     )
 
+    def __getitem__(self, name):
+        for item in self._fs_contents:
+            if item["name"] == name:
+                return item
+        raise IndexError("{name} not found!".format(name=name))
+
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
 
-        files = (
-            file for file in self._fs_contents if path == self._parent(file["name"])
-        )
+        files = {
+            file["name"]: file
+            for file in self._fs_contents
+            if path == self._parent(file["name"])
+        }
 
         if detail:
-            return list(files)
+            return [files[name] for name in sorted(files)]
 
-        return list(sorted([file["name"] for file in files]))
+        return list(sorted(files))
 
 
 @pytest.mark.parametrize(
@@ -93,8 +101,22 @@ class DummyTestFS(AbstractFileSystem):
 )
 def test_glob(test_path, expected):
     test_fs = DummyTestFS()
+    res = test_fs.glob(test_path)
+    res = sorted(res)  # FIXME: py35 back-compat
+    assert res == expected
+    res = test_fs.glob(test_path, detail=True)
+    assert isinstance(res, dict)
+    assert sorted(res) == expected  # FIXME: py35 back-compat
+    for name, info in res.items():
+        assert info == test_fs[name]
 
-    assert test_fs.glob(test_path) == expected
+
+def test_find_details():
+    test_fs = DummyTestFS()
+    filenames = test_fs.find("/")
+    details = test_fs.find("/", detail=True)
+    for filename in filenames:
+        assert details[filename] == test_fs.info(filename)
 
 
 def test_cache():
