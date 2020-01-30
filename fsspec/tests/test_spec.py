@@ -102,10 +102,11 @@ class DummyTestFS(AbstractFileSystem):
 def test_glob(test_path, expected):
     test_fs = DummyTestFS()
     res = test_fs.glob(test_path)
+    res = sorted(res)  # FIXME: py35 back-compat
     assert res == expected
     res = test_fs.glob(test_path, detail=True)
     assert isinstance(res, dict)
-    assert list(res) == expected
+    assert sorted(res) == expected  # FIXME: py35 back-compat
     for name, info in res.items():
         assert info == test_fs[name]
 
