@@ -1,5 +1,4 @@
 from ftplib import FTP, Error, error_perm
-from socket import timeout
 import uuid
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
@@ -227,11 +226,12 @@ class FTPFile(AbstractBufferedFile):
             total[0] += len(x)
             if total[0] > end - start:
                 out.append(x[: (end - start) - total[0]])
-                raise TransferDone
+                if end < self.size:
+                    raise TransferDone
             else:
                 out.append(x)
 
-            if total[0] == end - start:
+            if total[0] == end - start and end < self.size:
                 raise TransferDone
 
         try:
@@ -243,10 +243,12 @@ class FTPFile(AbstractBufferedFile):
             )
         except TransferDone:
             try:
+                # stop transfer, we got enough bytes for this block
                 self.fs.ftp.abort()
-                self.fs.ftp.voidresp()
-            except timeout:
-                self.fs._connect()
+                self.fs.ftp.getmultiline()
+            except Error:
+                self.fs.ftp._connect()
+
         return b"".join(out)
 
     def _upload_chunk(self, final=False):

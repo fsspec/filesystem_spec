@@ -172,7 +172,7 @@ File Buffering
 Most implementations create file objects which derive from ``fsspec.spec.AbstractBufferedFile``, and
 have many behaviours in common. These files offer buffering of both read and write operations, so that
 communication with the remote resource is limited. The size of the buffer is generally configured
-with the ``blocksize=`` kwargs at p[en time, although the implementation may have some minimum or
+with the ``blocksize=`` kwargs at open time, although the implementation may have some minimum or
 maximum sizes that need to be respected.
 
 For reading, a number of buffering schemes are available, listed in ``fsspec.caching.caches``
