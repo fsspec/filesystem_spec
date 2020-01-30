@@ -482,7 +482,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
         pattern = re.sub("[*]", "[^/]*", pattern)
         pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
         out = {
-            p: allpaths[p] for p in sorted(allpaths)
+            p: allpaths[p]
+            for p in sorted(allpaths)
             if pattern.match(p.replace("//", "/").rstrip("/"))
         }
         if detail:

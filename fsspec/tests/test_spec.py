@@ -38,7 +38,7 @@ class DummyTestFS(AbstractFileSystem):
 
     def __getitem__(self, name):
         for item in self._fs_contents:
-            if item['name'] == name:
+            if item["name"] == name:
                 return item
         raise IndexError("{name} not found!".format(name=name))
 
@@ -112,8 +112,8 @@ def test_glob(test_path, expected):
 
 def test_find_details():
     test_fs = DummyTestFS()
-    filenames = test_fs.find('/')
-    details = test_fs.find('/', detail=True)
+    filenames = test_fs.find("/")
+    details = test_fs.find("/", detail=True)
     for filename in filenames:
         assert details[filename] == test_fs.info(filename)
 
