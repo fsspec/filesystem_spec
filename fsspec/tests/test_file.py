@@ -105,7 +105,7 @@ def test_file_write_attributes(ftp_writable):
     f = ftp.open("/out2", "wb")
     with pytest.raises(ValueError):
         f.info()
-    with pytest.raises(ValueError):
+    with pytest.raises(OSError):
         f.seek(0)
     with pytest.raises(ValueError):
         f.read(0)
@@ -175,3 +175,19 @@ def test_with_gzip(ftp_writable):
     with fs.open(fn, "rb") as f:
         gf = gzip.GzipFile(fileobj=f, mode="r")
         assert gf.read() == data
+
+
+def test_with_zip(ftp_writable):
+    import zipfile
+
+    data = b"hello zip"
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host=host, port=port, username=user, password=pw)
+    fn = "/myfile"
+    with fs.open(fn, "wb") as f:
+        zf = zipfile.ZipFile(fileobj=f, mode="w")
+        zf.write(data)
+        zf.close()
+    with fs.open(fn, "rb") as f:
+        zf = zipfile.ZipFile(fileobj=f, mode="r")
+        assert zf.read() == data
