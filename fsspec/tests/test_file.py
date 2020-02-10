@@ -183,11 +183,12 @@ def test_with_zip(ftp_writable):
     data = b"hello zip"
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host=host, port=port, username=user, password=pw)
-    fn = "/myfile"
+    fn = "/myfile.zip"
+    inner_file = "test.txt"
     with fs.open(fn, "wb") as f:
-        zf = zipfile.ZipFile(fileobj=f, mode="w")
-        zf.write(data)
+        zf = zipfile.ZipFile(f, mode="w")
+        zf.writestr(inner_file, data)
         zf.close()
     with fs.open(fn, "rb") as f:
-        zf = zipfile.ZipFile(fileobj=f, mode="r")
-        assert zf.read() == data
+        zf = zipfile.ZipFile(f, mode="r")
+        assert zf.read(inner_file) == data
