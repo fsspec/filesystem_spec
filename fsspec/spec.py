@@ -1036,7 +1036,7 @@ class AbstractBufferedFile(io.IOBase):
         """
         loc = int(loc)
         if not self.mode == "rb":
-            raise ValueError("Seek only available in read mode")
+            raise OSError("Seek only available in read mode")
         if whence == 0:
             nloc = loc
         elif whence == 1:
