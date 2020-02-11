@@ -83,7 +83,7 @@ class WebHDFS(AbstractFileSystem):
             return
         super().__init__(**kwargs)
         self.url = "{protocol}://{host}:{port}/webhdfs/v1".format(
-            protocol='https' if use_https else 'http', host=host, port=port
+            protocol="https" if use_https else "http", host=host, port=port
         )
         self.kerb = kerberos
         self.kerb_kwargs = kerb_kwargs or {}
