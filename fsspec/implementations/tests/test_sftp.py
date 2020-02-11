@@ -18,7 +18,7 @@ def stop_docker(name):
 def ssh():
     try:
         subprocess.check_call(["docker", "run", "hello-world"])
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("docker run not available")
         return
 

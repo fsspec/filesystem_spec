@@ -5,6 +5,7 @@ import os
 import os.path
 import sys
 from contextlib import contextmanager
+import posixpath
 import tempfile
 import getpass
 
@@ -13,6 +14,7 @@ import fsspec
 from fsspec.core import open_files, get_fs_token_paths, OpenFile
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec import compression
+from fsspec.tests.test_utils import WIN
 
 files = {
     ".test.accounts.1.json": (
@@ -74,8 +76,8 @@ def filetexts(d, open=open, mode="t"):
 
 
 def test_urlpath_inference_strips_protocol(tmpdir):
-    tmpdir = str(tmpdir)
-    paths = [os.path.join(tmpdir, "test.%02d.csv" % i) for i in range(20)]
+    tmpdir = make_path_posix(str(tmpdir))
+    paths = ['/'.join([tmpdir, "test.%02d.csv" % i]) for i in range(20)]
 
     for path in paths:
         with open(path, "wb") as f:
@@ -259,7 +261,7 @@ def test_abs_paths(tmpdir):
         f.write("hi")
     out = LocalFileSystem().glob("./*")
     assert len(out) == 1
-    assert os.sep in out[0]
+    assert '/' in out[0]
     assert "tmp" in out[0]
 
     # I don't know what this was testing - but should avoid local paths anyway
@@ -273,21 +275,27 @@ def test_abs_paths(tmpdir):
 @pytest.mark.parametrize("sep", ["/", "\\"])
 @pytest.mark.parametrize("chars", ["+", "++", "(", ")", "|", "\\"])
 def test_glob_weird_characters(tmpdir, sep, chars):
-    tmpdir = str(tmpdir)
+    tmpdir = make_path_posix(str(tmpdir))
 
     subdir = tmpdir + sep + "test" + chars + "x"
-    os.mkdir(subdir)
+    try:
+        os.makedirs(subdir, exist_ok=True)
+    except OSError as e:
+        if WIN and "label syntax" in str(e):
+            pytest.xfail("Illegal windows directory name")
+        else:
+            raise
     with open(subdir + sep + "tmp", "w") as f:
         f.write("hi")
 
     out = LocalFileSystem().glob(subdir + sep + "*")
     assert len(out) == 1
-    assert os.sep in out[0]
+    assert '/' in out[0]
     assert "tmp" in out[0]
 
 
 def test_globfind_dirs(tmpdir):
-    tmpdir = str(tmpdir)
+    tmpdir = make_path_posix(str(tmpdir))
     fs = fsspec.filesystem("file")
     fs.mkdir(tmpdir + "/dir")
     fs.touch(tmpdir + "/dir/afile")
@@ -310,7 +318,7 @@ def test_get_pyarrow_filesystem():
 
 
 def test_directories(tmpdir):
-    tmpdir = str(tmpdir)
+    tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
     fs.mkdir(tmpdir + "/dir")
     assert tmpdir + "/dir" in fs.ls(tmpdir)
@@ -320,7 +328,7 @@ def test_directories(tmpdir):
 
 
 def test_file_ops(tmpdir):
-    tmpdir = str(tmpdir)
+    tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
     with pytest.raises(FileNotFoundError):
         fs.info(tmpdir + "/nofile")
@@ -348,7 +356,7 @@ def test_file_ops(tmpdir):
 
 
 def test_recursive_get_put(tmpdir):
-    tmpdir = str(tmpdir)
+    tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
 
     fs.mkdir(tmpdir + "/a1/a2/a3")
@@ -387,10 +395,15 @@ def test_commit_discard(tmpdir):
 
 def test_make_path_posix():
     cwd = os.getcwd()
-    assert make_path_posix("/a/posix/path") == "/a/posix/path"
-    assert make_path_posix("/posix") == "/posix"
-    assert make_path_posix("relpath", sep="/") == os.path.join(cwd, "relpath")
-    assert make_path_posix("rel/path", sep="/") == os.path.join(cwd, "rel/path")
+    if WIN:
+        drive = cwd[0]
+        assert make_path_posix("/a/posix/path") == f"{drive}:/a/posix/path"
+        assert make_path_posix("/posix") == f"{drive}:/posix"
+    else:
+        assert make_path_posix("/a/posix/path") == "/a/posix/path"
+        assert make_path_posix("/posix") == "/posix"
+    assert make_path_posix("relpath", sep="/") == posixpath.join(make_path_posix(cwd), "relpath")
+    assert make_path_posix("rel/path", sep="/") == posixpath.join(make_path_posix(cwd), "rel/path")
     assert make_path_posix("C:\\path", sep="\\") == "C:/path"
     assert (
         make_path_posix(
@@ -409,8 +422,14 @@ def test_links(tmpdir):
     data = b"my target data"
     with open(fn0, "wb") as f:
         f.write(data)
-    os.symlink(fn0, fn1)
-    os.symlink(fn0, fn2)
+    try:
+        os.symlink(fn0, fn1)
+        os.symlink(fn0, fn2)
+    except OSError:
+        if WIN:
+            pytest.xfail("Ran on win without admin permissions")
+        else:
+            raise
 
     fs = LocalFileSystem()
     assert fs.info(fn0)["type"] == "file"

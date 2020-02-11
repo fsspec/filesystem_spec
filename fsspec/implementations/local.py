@@ -189,6 +189,7 @@ class LocalFileOpener(object):
             else:
                 # TODO: check if path is writable?
                 i, name = tempfile.mkstemp()
+                os.close(i)  # we want normal open and normal buffered file
                 self.temp = name
                 self.f = open(name, mode=self.mode)
             if "w" not in self.mode:
@@ -234,7 +235,7 @@ class LocalFileOpener(object):
         os.remove(self.temp)
 
     def __fspath__(self):
-        # uniquely for fsspec implementations, this is a real path
+        # uniquely among fsspec implementations, this is a real, local path
         return self.path
 
     def __getattr__(self, item):
