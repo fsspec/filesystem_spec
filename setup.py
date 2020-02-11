@@ -17,7 +17,6 @@ setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
     ],
@@ -30,7 +29,7 @@ setup(
     license="BSD",
     keywords="file",
     packages=["fsspec", "fsspec.implementations"],
-    python_requires=">=3.5",
+    python_requires=">3.5",
     install_requires=open("requirements.txt").read().strip().split("\n"),
     zip_safe=False,
 )

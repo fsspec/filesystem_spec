@@ -5,7 +5,11 @@ from multiprocessing import Process
 
 import pytest
 
-pytest.importorskip("fuse")  # noqa: E402
+try:
+    pytest.importorskip("fuse")  # noqa: E402
+except OSError:
+    # can succeed in importing fuse, but fail to load so
+    pytest.importorskip("nonexistent")  # noqa: E402
 
 from fsspec.fuse import run
 from fsspec.implementations.memory import MemoryFileSystem

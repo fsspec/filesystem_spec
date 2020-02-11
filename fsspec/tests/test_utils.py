@@ -1,6 +1,10 @@
 import io
 import pytest
+import sys
 from fsspec.utils import infer_storage_options, seek_delimiter, read_block
+
+
+WIN = "win" in sys.platform
 
 
 def test_read_block():

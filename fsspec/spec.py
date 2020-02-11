@@ -598,19 +598,28 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """ Upload file from local """
+        from .implementations.local import make_path_posix
+        import posixpath
+
         if recursive:
             lpaths = []
             for dirname, subdirlist, filelist in os.walk(lpath):
-                lpaths += [os.path.join(dirname, filename) for filename in filelist]
-            rootdir = os.path.basename(lpath.rstrip("/"))
+                lpaths += [
+                    make_path_posix(os.path.join(dirname, filename))
+                    for filename in filelist
+                ]
+            rootdir = make_path_posix(
+                os.path.basename(make_path_posix(lpath).rstrip("/"))
+            )
             if self.exists(rpath):
                 # copy lpath inside rpath directory
-                rpath2 = os.path.join(rpath, rootdir)
+                rpath2 = posixpath.join(rpath, rootdir)
             else:
                 # copy lpath as rpath directory
                 rpath2 = rpath
             rpaths = [
-                os.path.join(rpath2, path[len(lpath) :].lstrip("/")) for path in lpaths
+                posixpath.join(rpath2, path[len(lpath) :].lstrip("/"))
+                for path in lpaths
             ]
         else:
             lpaths = [lpath]
