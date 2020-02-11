@@ -77,7 +77,7 @@ def filetexts(d, open=open, mode="t"):
 
 def test_urlpath_inference_strips_protocol(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
-    paths = ['/'.join([tmpdir, "test.%02d.csv" % i]) for i in range(20)]
+    paths = ["/".join([tmpdir, "test.%02d.csv" % i]) for i in range(20)]
 
     for path in paths:
         with open(path, "wb") as f:
@@ -261,7 +261,7 @@ def test_abs_paths(tmpdir):
         f.write("hi")
     out = LocalFileSystem().glob("./*")
     assert len(out) == 1
-    assert '/' in out[0]
+    assert "/" in out[0]
     assert "tmp" in out[0]
 
     # I don't know what this was testing - but should avoid local paths anyway
@@ -290,7 +290,7 @@ def test_glob_weird_characters(tmpdir, sep, chars):
 
     out = LocalFileSystem().glob(subdir + sep + "*")
     assert len(out) == 1
-    assert '/' in out[0]
+    assert "/" in out[0]
     assert "tmp" in out[0]
 
 
@@ -402,8 +402,12 @@ def test_make_path_posix():
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
-    assert make_path_posix("relpath", sep="/") == posixpath.join(make_path_posix(cwd), "relpath")
-    assert make_path_posix("rel/path", sep="/") == posixpath.join(make_path_posix(cwd), "rel/path")
+    assert make_path_posix("relpath", sep="/") == posixpath.join(
+        make_path_posix(cwd), "relpath"
+    )
+    assert make_path_posix("rel/path", sep="/") == posixpath.join(
+        make_path_posix(cwd), "rel/path"
+    )
     assert make_path_posix("C:\\path", sep="\\") == "C:/path"
     assert (
         make_path_posix(

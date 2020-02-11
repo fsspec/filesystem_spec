@@ -7,7 +7,6 @@ services:
 
 language: generic
 env:
-  - TOXENV=py35
   - TOXENV=py36
   - TOXENV=py37
   - TOXENV=coverage
