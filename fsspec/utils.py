@@ -37,7 +37,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "url_query": "q=1", "extra": "value"}
     """
     # Handle Windows paths including disk name in this special case
-    if re.match(r"^[a-zA-Z]:[\\/]", urlpath) or re.match(r"^[a-zA-Z0-9]+://", urlpath) is None:
+    if (
+        re.match(r"^[a-zA-Z]:[\\/]", urlpath)
+        or re.match(r"^[a-zA-Z0-9]+://", urlpath) is None
+    ):
         return {"protocol": "file", "path": urlpath}
 
     parsed_path = urlsplit(urlpath)
