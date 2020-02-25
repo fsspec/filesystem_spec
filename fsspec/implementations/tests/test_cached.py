@@ -71,8 +71,8 @@ def test_glob(ftp_writable):
         target_protocol="ftp",
         target_options={"host": host, "port": port, "username": user, "password": pw},
     )
-    assert fs.glob('/wrong*') == []
-    assert fs.glob('/ou*') == ['/out', '/out2']
+    assert fs.glob("/wrong*") == []
+    assert fs.glob("/ou*") == ["/out", "/out2"]
 
 
 def test_blocksize(ftp_writable):

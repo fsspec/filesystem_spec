@@ -71,8 +71,8 @@ known_implementations = {
     },
     "github": {
         "class": "fsspec.implementations.github.GithubFileSystem",
-        "err": "Install the requests package to use the github FS"
-    }
+        "err": "Install the requests package to use the github FS",
+    },
 }
 
 minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}
