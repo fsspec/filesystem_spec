@@ -69,6 +69,10 @@ known_implementations = {
         "class": "fsspec.implementations.dask.DaskWorkerFileSystem",
         "err": "Install dask distributed to access worker file system",
     },
+    "github": {
+        "class": "fsspec.implementations.github.GithubFileSystem",
+        "err": "Install the requests package to use the github FS",
+    },
 }
 
 minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}

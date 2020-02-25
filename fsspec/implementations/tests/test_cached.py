@@ -24,7 +24,7 @@ def local_filecache():
         "filecache", target_protocol="file", cache_storage=cache_location
     )
 
-    return (data, original_file, cache_location, fs)
+    return data, original_file, cache_location, fs
 
 
 def test_idempotent():
@@ -57,6 +57,22 @@ def test_workflow(ftp_writable):
         f.write(b"changed")
 
     assert fs.cat("/out") == b"test"  # old value
+
+
+def test_glob(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/out", "wb") as f:
+        f.write(b"test")
+    with fs.open("/out2", "wb") as f:
+        f.write(b"test2")
+    fs = fsspec.filesystem(
+        "cached",
+        target_protocol="ftp",
+        target_options={"host": host, "port": port, "username": user, "password": pw},
+    )
+    assert fs.glob("/wrong*") == []
+    assert fs.glob("/ou*") == ["/out", "/out2"]
 
 
 def test_blocksize(ftp_writable):

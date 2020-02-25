@@ -372,6 +372,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         kwargs are passed to ``ls``.
         """
         # TODO: allow equivalent of -name parameter
+        path = self._strip_protocol(path)
         out = dict()
         detail = kwargs.pop("detail", False)
         for path, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
