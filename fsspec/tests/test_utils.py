@@ -202,6 +202,13 @@ def test_infer_options():
         infer_storage_options("hdfs:///bucket/file.csv", {"protocol": "collide"})
 
 
+def test_infer_simple():
+    out = infer_storage_options("//mnt/datasets/test.csv")
+    assert out['protocol'] == 'file'
+    assert out['path'] == "//mnt/datasets/test.csv"
+    assert out.get('host', None) is None
+
+
 @pytest.mark.parametrize(
     "urlpath, expected_path",
     (
