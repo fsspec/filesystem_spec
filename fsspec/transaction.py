@@ -27,6 +27,7 @@ class Transaction(object):
 
     def start(self):
         """Start a transaction on this FileSystem"""
+        self.files = []  # clean up after previous failed completions
         self.fs._intrans = True
 
     def complete(self, commit=True):

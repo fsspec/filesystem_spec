@@ -400,7 +400,8 @@ def get_fs_token_paths(
         if "w" in mode:
             paths = _expand_paths(path, name_function, num)
         elif "*" in path:
-            paths = sorted(fs.glob(path))
+            paths = [f for f in sorted(fs.glob(path))
+                     if not fs.isdir(f)]
         else:
             paths = [path]
 

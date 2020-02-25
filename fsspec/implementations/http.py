@@ -107,7 +107,7 @@ class HTTPFileSystem(AbstractFileSystem):
             return list(sorted(out))
 
     def cat(self, url):
-        r = requests.get(url, **self.kwargs)
+        r = self.session.get(url, **self.kwargs)
         r.raise_for_status()
         return r.content
 
