@@ -31,6 +31,7 @@ Base Classes
    fsspec.FSMap
    fsspec.core.OpenFile
    fsspec.core.BaseCache
+   fsspec.core.get_fs_token_paths
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
 
@@ -49,6 +50,7 @@ Base Classes
 .. autoclass:: fsspec.core.BaseCache
    :members:
 
+.. autofunction:: fsspec.core.get_fs_token_paths
 
 .. _implementations:
 
@@ -58,9 +60,11 @@ Built-in Implementations
 .. autosummary::
    fsspec.implementations.ftp.FTPFileSystem
    fsspec.implementations.hdfs.PyArrowHDFS
+   fsspec.implementations.dask.DaskWorkerFileSystem
    fsspec.implementations.http.HTTPFileSystem
    fsspec.implementations.local.LocalFileSystem
    fsspec.implementations.memory.MemoryFileSystem
+   fsspec.implementations.github.GithubFileSystem
    fsspec.implementations.sftp.SFTPFileSystem
    fsspec.implementations.webhdfs.WebHDFS
    fsspec.implementations.zip.ZipFileSystem
@@ -73,6 +77,9 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.hdfs.PyArrowHDFS
    :members: __init__
 
+.. autoclass:: fsspec.implementations.dask.DaskWorkerFileSystem
+   :members: __init__
+
 .. autoclass:: fsspec.implementations.http.HTTPFileSystem
    :members: __init__
 
@@ -80,6 +87,9 @@ Built-in Implementations
    :members:
 
 .. autoclass:: fsspec.implementations.memory.MemoryFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.github.GithubFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.sftp.SFTPFileSystem
@@ -95,6 +105,23 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.cached.WholeFileCacheFileSystem
+
+Other Known Implementations
+---------------------------
+
+- `s3fs`_ for Amazon S3 and other compatible stores
+- `gcsfs`_ for Google Cloud Storage
+- `adl`_ for Azure DataLake storage
+- `abfs`_ for Azure Blob service
+- `dropbox`_ for access to dropbox shares
+- `gdrive`_ to access Google Drive and shares (experimental)
+
+.. _s3fs: https://s3fs.readthedocs.io/en/latest/
+.. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
+.. _adl: https://github.com/dask/adlfs
+.. _abfs: https://github.com/dask/adlfs
+.. _dropbox: https://github.com/MarineChap/intake_dropbox
+.. _gdrive: https://github.com/intake/gdrivefs
 
 .. _readbuffering:
 
