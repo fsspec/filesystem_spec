@@ -42,11 +42,12 @@ class _Cached(type):
         cls._cache = {}
 
     def __call__(cls, *args, **kwargs):
+        skip = kwargs.get('skip_instance_cache', False)
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
         token = tokenize(cls, *args, *extra_tokens, **kwargs)
-        if cls.cachable and token in cls._cache:
+        if not skip and cls.cachable and token in cls._cache:
             return cls._cache[token]
         else:
             obj = super().__call__(*args, **kwargs)
@@ -55,7 +56,7 @@ class _Cached(type):
             obj.storage_args = args
             obj.storage_options = kwargs
 
-            if cls.cachable:
+            if cls.cachable and not skip:
                 cls._cache[token] = obj
             return obj
 

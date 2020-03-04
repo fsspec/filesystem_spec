@@ -9,6 +9,7 @@ class FTPFileSystem(AbstractFileSystem):
 
     root_marker = "/"
     cachable = False
+    protocol = "ftp"
 
     def __init__(
         self,
