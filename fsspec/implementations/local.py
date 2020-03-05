@@ -21,7 +21,7 @@ class LocalFileSystem(AbstractFileSystem):
     """
 
     root_marker = "/"
-    protocol = 'file'
+    protocol = "file"
 
     def __init__(self, auto_mkdir=None, **kwargs):
         super().__init__(**kwargs)

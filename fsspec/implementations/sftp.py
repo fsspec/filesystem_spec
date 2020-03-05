@@ -10,6 +10,10 @@ class SFTPFileSystem(AbstractFileSystem):
     """Files over SFTP/SSH
 
     Peer-to-peer filesystem over SSH using paramiko.
+
+    Note: if using this with the ``open`` or ``open_files``, with full URLs,
+    there is no way to tell if a path is relative, so all paths are assumed
+    to be absolute.
     """
 
     protocol = "sftp", "ssh"

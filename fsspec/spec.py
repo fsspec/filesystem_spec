@@ -6,6 +6,7 @@ import logging
 
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path
+from .dircache import DirCache
 
 logger = logging.getLogger("fsspec")
 
@@ -42,7 +43,7 @@ class _Cached(type):
         cls._cache = {}
 
     def __call__(cls, *args, **kwargs):
-        skip = kwargs.get('skip_instance_cache', False)
+        skip = kwargs.get("skip_instance_cache", False)
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
@@ -98,9 +99,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         Subclasses should call this method.
 
-        Magic kwargs that affect functionality here:
-        add_docs: if True, will append docstrings from this spec to the
-            specific implementation
+        Parameters
+        ----------
+        use_cache, expiry_time, max_paths: passed to ``DirCache``, if the
+        implementation supports directory listing caching. Pass use_cache=False
+        to disable such caching.
+        skip_instance_cache: bool
+            If this is a cachable implementation, pass True here to force
+            creating a new instance even if a matching instance exists, and prevent
+            storing this instance.
         """
         if self._cached:
             # reusing instance, don't change
@@ -108,7 +115,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._cached = True
         self._intrans = False
         self._transaction = None
-        self.dircache = {}
+        self.dircache = DirCache(**storage_options)
 
         if storage_options.pop("add_docs", None):
             warnings.warn("add_docs is no longer supported.", FutureWarning)
@@ -291,14 +298,18 @@ class AbstractFileSystem(up, metaclass=_Cached):
         but contains nothing), None if not in cache.
         """
         parent = self._parent(path)
-        if path in self.dircache:
+        try:
             return self.dircache[path]
-        elif parent in self.dircache:
+        except KeyError:
+            pass
+        try:
             files = [f for f in self.dircache[parent] if f["name"] == path]
             if len(files) == 0:
                 # parent dir was listed but did not contain this file
                 raise FileNotFoundError(path)
             return files
+        except KeyError:
+            pass
 
     def walk(self, path, maxdepth=None, **kwargs):
         """ Return all files belows path
