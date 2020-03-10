@@ -24,7 +24,13 @@ class DirCache(MutableMapping):
     caching off
     """
 
-    def __init__(self, use_listings_cache=True, listings_expiry_time=None, max_paths=None, **kwargs):
+    def __init__(
+        self,
+        use_listings_cache=True,
+        listings_expiry_time=None,
+        max_paths=None,
+        **kwargs
+    ):
         """
 
         Parameters
@@ -84,4 +90,7 @@ class DirCache(MutableMapping):
         return (k for k in self._cache if k in self)
 
     def __reduce__(self):
-        return DirCache, (self.use_listings_cache, self.listings_expiry_time, self.max_paths)
+        return (
+            DirCache,
+            (self.use_listings_cache, self.listings_expiry_time, self.max_paths),
+        )

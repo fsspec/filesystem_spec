@@ -4,7 +4,7 @@ import sys
 from fsspec.utils import infer_storage_options, seek_delimiter, read_block
 
 
-WIN = sys.platform.startswith('win')
+WIN = sys.platform.startswith("win")
 
 
 def test_read_block():
