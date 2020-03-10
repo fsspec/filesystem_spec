@@ -9,6 +9,7 @@ class FTPFileSystem(AbstractFileSystem):
 
     root_marker = "/"
     cachable = False
+    protocol = "ftp"
 
     def __init__(
         self,
@@ -73,12 +74,6 @@ class FTPFileSystem(AbstractFileSystem):
         out.pop("path", None)
         out.pop("protocol", None)
         return out
-
-    def invalidate_cache(self, path=None):
-        if path is not None:
-            self.dircache.pop(path, None)
-        else:
-            self.dircache.clear()
 
     def ls(self, path, detail=True):
         path = self._strip_protocol(path)
