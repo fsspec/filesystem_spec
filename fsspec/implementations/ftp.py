@@ -75,12 +75,6 @@ class FTPFileSystem(AbstractFileSystem):
         out.pop("protocol", None)
         return out
 
-    def invalidate_cache(self, path=None):
-        if path is not None:
-            self.dircache.pop(path, None)
-        else:
-            self.dircache.clear()
-
     def ls(self, path, detail=True):
         path = self._strip_protocol(path)
         out = []

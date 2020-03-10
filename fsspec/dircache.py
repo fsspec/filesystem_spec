@@ -24,15 +24,15 @@ class DirCache(MutableMapping):
     caching off
     """
 
-    def __init__(self, use_cache=True, expiry_time=None, max_paths=None, **kwargs):
+    def __init__(self, use_listings_cache=True, listings_expiry_time=None, max_paths=None, **kwargs):
         """
 
         Parameters
         ----------
-        use_cache: bool
+        use_listings_cache: bool
             If False, this cache never returns items, but always reports KeyError,
             and setting items has no effect
-        expiry_time: int (optional)
+        listings_expiry_time: int (optional)
             Time in seconds that a listing is considered valid. If None,
             listings do not expire.
         max_paths: int (optional)
@@ -43,13 +43,13 @@ class DirCache(MutableMapping):
         self._times = {}
         if max_paths:
             self._q = lru_cache(max_paths + 1)(lambda key: self._cache.pop(key, None))
-        self.use_cache = use_cache
-        self.expiry_time = expiry_time
+        self.use_listings_cache = use_listings_cache
+        self.listings_expiry_time = listings_expiry_time
         self.max_paths = max_paths
 
     def __getitem__(self, item):
-        if self.expiry_time:
-            if self._times.get(item, 0) - time.time() < -self.expiry_time:
+        if self.listings_expiry_time:
+            if self._times.get(item, 0) - time.time() < -self.listings_expiry_time:
                 del self._cache[item]
         if self.max_paths:
             self._q(item)
@@ -69,12 +69,12 @@ class DirCache(MutableMapping):
             return False
 
     def __setitem__(self, key, value):
-        if not self.use_cache:
+        if not self.use_listings_cache:
             return
         if self.max_paths:
             self._q(key)
         self._cache[key] = value
-        if self.expiry_time:
+        if self.listings_expiry_time:
             self._times[key] = time.time()
 
     def __delitem__(self, key):
@@ -84,4 +84,4 @@ class DirCache(MutableMapping):
         return (k for k in self._cache if k in self)
 
     def __reduce__(self):
-        return DirCache, (self.use_cache, self.expiry_time, self.max_paths)
+        return DirCache, (self.use_listings_cache, self.listings_expiry_time, self.max_paths)

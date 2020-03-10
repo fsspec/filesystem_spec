@@ -101,8 +101,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         Parameters
         ----------
-        use_cache, expiry_time, max_paths: passed to ``DirCache``, if the
-        implementation supports directory listing caching. Pass use_cache=False
+        use_listings_cache, listings_expiry_time, max_paths: passed to ``DirCache``, if the
+        implementation supports directory listing caching. Pass use_listings_cache=False
         to disable such caching.
         skip_instance_cache: bool
             If this is a cachable implementation, pass True here to force

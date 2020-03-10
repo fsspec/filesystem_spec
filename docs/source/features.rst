@@ -166,6 +166,28 @@ the instance cache may cause excessive memory usage in some situations; but norm
 will get ``close``d, and the data discarded. Only when there is also an unfinalised transaction or
 captured traceback might this be anticipated becoming a problem.
 
+To disable instance caching, i.e., get a fresh instance which is not in the cache
+even for a cachable class, pass ``skip_instance_cache=True``.
+
+Listings Caching
+----------------
+
+For some implementations, getting file listigns (i.e., ``ls`` and anything that
+depends on it) is expensive. These implementations use dict-like instances of
+:class:`fsspec.dircache.DirCache` to manage the listings.
+
+The cache allows for time-based expiry of entries with the ``listings_expiry_time``
+parameter, or or LRU expiry with the ``max_paths`` parameter. These can be
+set on any implementation instance that uses listings caching; or to skip the
+caching altogether, use ``use_listings_cache=False``. That would be appropriate
+when the target location is known to be volatile because it is being written
+to from other sources.
+
+When the ``fsspec`` instance writes to the backend, the method ``invalidate_cache``
+is called, so that subsequent listing of the given paths will force a refresh. In
+addition, some methods like ``ls`` have a ``refresh`` parameter to force fetching
+the listing again.
+
 File Buffering
 --------------
 

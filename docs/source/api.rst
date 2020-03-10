@@ -32,8 +32,10 @@ Base Classes
    fsspec.core.OpenFile
    fsspec.core.BaseCache
    fsspec.core.get_fs_token_paths
+   fsspec.dircache.DirCache
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
+   :members:
 
 .. autoclass:: fsspec.spec.Transaction
    :members:
@@ -51,6 +53,9 @@ Base Classes
    :members:
 
 .. autofunction:: fsspec.core.get_fs_token_paths
+
+.. autoclass:: fsspec.dircache.DirCache
+   :members: __init__
 
 .. _implementations:
 
@@ -84,7 +89,7 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.local.LocalFileSystem
-   :members:
+   :members: __init__
 
 .. autoclass:: fsspec.implementations.memory.MemoryFileSystem
    :members: __init__
@@ -105,6 +110,7 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.cached.WholeFileCacheFileSystem
+   :members: __init__
 
 Other Known Implementations
 ---------------------------
