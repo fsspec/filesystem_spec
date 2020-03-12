@@ -84,6 +84,12 @@ class CachingFileSystem(AbstractFileSystem):
         self.cache_check = cache_check
         self.check_files = check_files
         self.expiry = expiry_time
+        self._target_protocol = target_protocol
+        self.target_protocol = (
+            target_protocol
+            if isinstance(target_protocol, str)
+            else target_protocol.protocol
+        )
         self.load_cache()
         if isinstance(target_protocol, AbstractFileSystem):
             self.fs = target_protocol
@@ -94,7 +100,7 @@ class CachingFileSystem(AbstractFileSystem):
         return (
             self.__class__,
             (
-                self.protocol,
+                self._target_protocol,
                 self.storage,
                 self.cache_check,
                 self.check_files,
@@ -163,6 +169,9 @@ class CachingFileSystem(AbstractFileSystem):
     def _check_file(self, path):
         """Is path in cache and still valid"""
         self._check_cache()
+        if not path.startswith(self.target_protocol):
+            store_path = self.target_protocol + "://" + path
+            path = self.fs._strip_protocol(store_path)
         for storage, cache in zip(self.storage, self.cached_files):
             if path not in cache:
                 continue
@@ -200,8 +209,10 @@ class CachingFileSystem(AbstractFileSystem):
         ``close_and_update`` to save the state of the blocks.
         """
         path = self._strip_protocol(path)
-        if not path.startswith(self.protocol):
-            path = self.protocol + "://" + path
+
+        if not path.startswith(self.target_protocol):
+            store_path = self.target_protocol + "://" + path
+            path = self.fs._strip_protocol(store_path)
         if mode != "rb":
             return self.fs._open(
                 path,
@@ -211,7 +222,7 @@ class CachingFileSystem(AbstractFileSystem):
                 cache_options=cache_options,
                 **kwargs
             )
-        detail, fn = self._check_file(path)
+        detail, fn = self._check_file(store_path)
         if detail:
             # file is in cache
             hash, blocks = detail["fn"], detail["blocks"]
@@ -231,7 +242,7 @@ class CachingFileSystem(AbstractFileSystem):
                 "time": time.time(),
                 "uid": self.fs.ukey(path),
             }
-            self.cached_files[-1][path] = detail
+            self.cached_files[-1][store_path] = detail
             logger.debug("Creating local sparse file for %s" % path)
 
         # call target filesystems open
@@ -260,11 +271,11 @@ class CachingFileSystem(AbstractFileSystem):
 
     def close_and_update(self, f, close):
         """Called when a file is closing, so store the set of blocks"""
-        if f.path.startswith(self.protocol):
-            path = f.path
-        else:
-            path = self.protocol + "://" + f.path
-        c = self.cached_files[-1][path]
+        path = self._strip_protocol(f.path)
+
+        if not path.startswith(self.target_protocol):
+            store_path = self.target_protocol + "://" + path
+        c = self.cached_files[-1][store_path]
         if c["blocks"] is not True and len(["blocks"]) * f.blocksize >= f.size:
             c["blocks"] = True
         self.save_cache()
@@ -337,15 +348,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
-        if not path.startswith(self.protocol):
-            if isinstance(self.protocol, tuple):
-                protocol = self.protocol[0]
-            else:
-                protocol = self.protocol
-            path = protocol + "://" + path
+
+        if not path.startswith(self.target_protocol):
+            store_path = self.target_protocol + "://" + path
+            path = self.fs._strip_protocol(store_path)
         if mode != "rb":
             return self.fs._open(path, mode=mode, **kwargs)
-        detail, fn = self._check_file(path)
+        detail, fn = self._check_file(store_path)
         if detail:
             hash, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
@@ -366,7 +375,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 "time": time.time(),
                 "uid": self.fs.ukey(path),
             }
-            self.cached_files[-1][path] = detail
+            self.cached_files[-1][store_path] = detail
             logger.debug("Copying %s to local cache" % path)
         kwargs["mode"] = mode
 
