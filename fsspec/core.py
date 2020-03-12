@@ -300,8 +300,12 @@ def split_protocol(urlpath):
 def strip_protocol(urlpath):
     """Return only path part of full URL, according to appropriate backend"""
     protocol, _ = split_protocol(urlpath)
-    cls = get_filesystem_class(protocol)
-    return cls._strip_protocol(urlpath)
+    if protocol:
+        cls = get_filesystem_class(protocol)
+        return cls._strip_protocol(urlpath)
+    else:
+        # already stripped
+        return urlpath
 
 
 def expand_paths_if_needed(paths, mode, num, fs, name_function):

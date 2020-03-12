@@ -1,14 +1,34 @@
-from distributed.worker import get_worker
-from distributed.client import _get_global_client
+
 import dask
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 from fsspec import filesystem
+from fsspec.core import strip_protocol
 
 
 def make_instance(cls, args, kwargs):
     inst = cls(*args, **kwargs)
     inst._determine_worker()
     return inst
+
+
+def _have_distributed_client():
+    try:
+        from distributed.client import _get_global_client
+    except ImportError:
+        return False
+    return _get_global_client() is not None
+
+
+def _is_distributed_worker():
+    try:
+        from distributed._run_local import get_worker
+    except ImportError:
+        return False
+    try:
+        get_worker()
+        return True
+    except ValueError:
+        return False
 
 
 class DaskWorkerFileSystem(AbstractFileSystem):
@@ -19,58 +39,65 @@ class DaskWorkerFileSystem(AbstractFileSystem):
 
     **Warning** this implementation is experimental, and read-only for now.
     """
+    cachable = False
+    protocol = 'dask'
 
-    def __init__(self, remote_protocol, remote_options=None, **kwargs):
+    def __init__(self, target_protocol='file', **kwargs):
         super().__init__(**kwargs)
-        self.protocol = remote_protocol
-        self.remote_options = remote_options
-        self.worker = None
-        self.client = None
-        self.fs = None  # What is the type here?
-        self._determine_worker()
+        self.kwargs = kwargs
+        self.protocol = target_protocol
+        self._run_local = None
+        self.fs = self._determine_worker()
 
     def _determine_worker(self):
-        try:
-            get_worker()
-            self.worker = True
-            self.fs = filesystem(self.protocol, **(self.remote_options or {}))
-        except ValueError:
-            self.worker = False
-            self.client = _get_global_client()
-            self.rfs = dask.delayed(self)
+        self._run_local = _is_distributed_worker() or not _have_distributed_client()
+        if self._run_local:
+            return filesystem(self.protocol, **(self.kwargs or {}))
+        else:
+            return dask.delayed(self)
+
+    @classmethod
+    def _get_kwargs_from_urls(cls, url):
+        if isinstance(url, (list, tuple)):
+            url = url[0]
+        url = cls._strip_protocol(url)
+        if "://" in url:
+            return {'target_protocol': url.split('://', 1)[0]}
+        else:
+            return {}
 
     def __reduce__(self):
         return make_instance, (type(self), self.storage_args, self.storage_options)
 
     def mkdir(self, *args, **kwargs):
-        if self.worker:
+        if self._run_local:
             self.fs.mkdir(*args, **kwargs)
         else:
-            self.rfs.mkdir(*args, **kwargs).compute()
+            self.fs.mkdir(*args, **kwargs).compute()
 
     def rm(self, *args, **kwargs):
-        if self.worker:
+        if self._run_local:
             self.fs.rm(*args, **kwargs)
         else:
-            self.rfs.rm(*args, **kwargs).compute()
+            self.fs.rm(*args, **kwargs).compute()
 
     def copy(self, *args, **kwargs):
-        if self.worker:
+        if self._run_local:
             self.fs.copy(*args, **kwargs)
         else:
-            self.rfs.copy(*args, **kwargs).compute()
+            self.fs.copy(*args, **kwargs).compute()
 
     def mv(self, *args, **kwargs):
-        if self.worker:
+        if self._run_local:
             self.fs.mv(*args, **kwargs)
         else:
-            self.rfs.mv(*args, **kwargs).compute()
+            self.fs.mv(*args, **kwargs).compute()
 
     def ls(self, *args, **kwargs):
-        if self.worker:
+        if self._run_local:
             return self.fs.ls(*args, **kwargs)
         else:
-            return self.rfs.ls(*args, **kwargs).compute()
+            return self.fs.ls(*args, **kwargs).compute()
 
     def _open(
         self,
@@ -81,7 +108,8 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         cache_options=None,
         **kwargs
     ):
-        if self.worker:
+        path = strip_protocol(path)
+        if self._run_local:
             return self.fs._open(
                 path,
                 mode=mode,
@@ -102,12 +130,12 @@ class DaskWorkerFileSystem(AbstractFileSystem):
             )
 
     def fetch_range(self, path, mode, start, end):
-        if self.worker:
+        if self._run_local:
             with self._open(path, mode) as f:
                 f.seek(start)
                 return f.read(end - start)
         else:
-            return self.rfs.fetch_range(path, mode, start, end).compute()
+            return self.fs.fetch_range(path, mode, start, end).compute()
 
 
 class DaskFile(AbstractBufferedFile):
