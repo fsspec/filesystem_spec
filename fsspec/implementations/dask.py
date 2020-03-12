@@ -1,4 +1,3 @@
-
 import dask
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 from fsspec import filesystem
@@ -39,10 +38,11 @@ class DaskWorkerFileSystem(AbstractFileSystem):
 
     **Warning** this implementation is experimental, and read-only for now.
     """
-    cachable = False
-    protocol = 'dask'
 
-    def __init__(self, target_protocol='file', **kwargs):
+    cachable = False
+    protocol = "dask"
+
+    def __init__(self, target_protocol="file", **kwargs):
         super().__init__(**kwargs)
         self.kwargs = kwargs
         self.protocol = target_protocol
@@ -62,7 +62,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
             url = url[0]
         url = cls._strip_protocol(url)
         if "://" in url:
-            return {'target_protocol': url.split('://', 1)[0]}
+            return {"target_protocol": url.split("://", 1)[0]}
         else:
             return {}
 

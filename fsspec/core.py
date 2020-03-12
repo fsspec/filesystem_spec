@@ -368,12 +368,13 @@ def get_fs_token_paths(
     protocol: str or None
         To override the protocol specifier in the URL
     """
+    explicit_protocol = protocol
     if isinstance(urlpath, (list, tuple)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
         protocols, paths = zip(*map(split_protocol, urlpath))
         protocol = protocol or protocols[0]
-        if not all(p == protocol for p in protocols):
+        if not explicit_protocol and not all(p == protocol for p in protocols):
             raise ValueError(
                 "When specifying a list of paths, all paths must "
                 "share the same protocol"
