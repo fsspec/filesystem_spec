@@ -20,7 +20,7 @@ def _have_distributed_client():
 
 def _is_distributed_worker():
     try:
-        from distributed._run_local import get_worker
+        from distributed.worker import get_worker
     except ImportError:
         return False
     try:
