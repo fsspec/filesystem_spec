@@ -84,6 +84,7 @@ class CachingFileSystem(AbstractFileSystem):
         self.cache_check = cache_check
         self.check_files = check_files
         self.expiry = expiry_time
+        self.target_protocol = target_protocol
         self.load_cache()
         if isinstance(target_protocol, AbstractFileSystem):
             self.fs = target_protocol
@@ -94,7 +95,7 @@ class CachingFileSystem(AbstractFileSystem):
         return (
             self.__class__,
             (
-                self.protocol,
+                self.target_protocol,
                 self.storage,
                 self.cache_check,
                 self.check_files,
@@ -200,8 +201,9 @@ class CachingFileSystem(AbstractFileSystem):
         ``close_and_update`` to save the state of the blocks.
         """
         path = self._strip_protocol(path)
-        if not path.startswith(self.protocol):
-            path = self.protocol + "://" + path
+
+        if not path.startswith(self.target_protocol):
+            path = self.fs._strip_protocol(self.target_protocol + "://" + path)
         if mode != "rb":
             return self.fs._open(
                 path,
@@ -337,12 +339,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
-        if not path.startswith(self.protocol):
-            if isinstance(self.protocol, tuple):
-                protocol = self.protocol[0]
-            else:
-                protocol = self.protocol
-            path = protocol + "://" + path
+
+        if not path.startswith(self.target_protocol):
+            path = self.fs._strip_protocol(self.target_protocol + "://" + path)
         if mode != "rb":
             return self.fs._open(path, mode=mode, **kwargs)
         detail, fn = self._check_file(path)
