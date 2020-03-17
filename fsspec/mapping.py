@@ -110,7 +110,8 @@ class FSMap(MutableMapping):
 
     def __contains__(self, key):
         """Does key exist in mapping?"""
-        return self.fs.exists(self._key_to_str(key))
+        path = self._key_to_str(key)
+        return self.fs.exists(path) and self.fs.isfile(path)
 
     def __getstate__(self):
         """Mapping should be pickleable"""
