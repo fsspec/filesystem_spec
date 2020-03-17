@@ -198,6 +198,7 @@ def test_json():
     outa = a.to_json()
     outb = b.to_json()
 
+    assert json.loads(outb)  # is valid JSON
     assert a != b
     assert "bar" in outb
 
