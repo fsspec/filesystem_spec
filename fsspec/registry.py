@@ -97,32 +97,28 @@ def get_filesystem_class(protocol):
         if protocol not in known_implementations:
             raise ValueError("Protocol not known: %s" % protocol)
         bit = known_implementations[protocol]
-        mod, name = bit["class"].rsplit(".", 1)
-        minversion = minversions.get(mod, None)
-        err = None
-        try:
-            mod = importlib.import_module(mod)
-        except ImportError:
-            err = ImportError(bit["err"])
-
-        except Exception as e:
-            err = e
-        if err is not None:
-            raise RuntimeError(str(err))
-
-        if minversion:
-            version = getattr(mod, "__version__", None)
-            if version and LooseVersion(version) < minversion:
-                raise RuntimeError(
-                    "'{}={}' is installed, but version '{}' or "
-                    "higher is required".format(mod.__name__, version, minversion)
-                )
-        registry[protocol] = getattr(mod, name)
+        registry[protocol] = _import_class(bit["class"])
     cls = registry[protocol]
     if getattr(cls, "protocol", None) in ("abstract", None):
         cls.protocol = protocol
 
     return cls
+
+
+def _import_class(cls, minv=None):
+    mod, name = cls.rsplit(".", 1)
+    minv = minv or minversions
+    minversion = minv.get(mod, None)
+
+    mod = importlib.import_module(mod)
+    if minversion:
+        version = getattr(mod, "__version__", None)
+        if version and LooseVersion(version) < minversion:
+            raise RuntimeError(
+                "'{}={}' is installed, but version '{}' or "
+                "higher is required".format(mod.__name__, version, minversion)
+            )
+    return getattr(mod, name)
 
 
 def filesystem(protocol, **storage_options):
