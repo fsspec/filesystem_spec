@@ -1,4 +1,5 @@
 import pickle
+import json
 
 import pytest
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
@@ -188,3 +189,18 @@ def test_pickle_multiple():
     result = pickle.loads(y)
     assert result.storage_args == (2,)
     assert result.storage_options == dict(bar=1)
+
+
+def test_json():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=1)
+
+    outa = a.to_json()
+    outb = b.to_json()
+
+    assert json.loads(outb)  # is valid JSON
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b

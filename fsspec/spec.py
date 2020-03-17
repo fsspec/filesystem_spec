@@ -843,6 +843,59 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def __reduce__(self):
         return make_instance, (type(self), self.storage_args, self.storage_options)
 
+    def to_json(self):
+        """
+        JSON representation of this filesystem instance
+
+        Returns
+        -------
+        str: JSON structure with keys cls (the python location of this class),
+            protocol (text name of this class's protocol, first one in case of
+            multiple), args (positional args, usually empty), and all other
+            kwargs as their own keys.
+        """
+        import json
+
+        cls = type(self)
+        cls = ".".join((cls.__module__, cls.__name__))
+        proto = (
+            self.protocol[0]
+            if isinstance(self.protocol, (tuple, list))
+            else self.protocol
+        )
+        return json.dumps(
+            dict(
+                **{"cls": cls, "protocol": proto, "args": self.storage_args},
+                **self.storage_options
+            )
+        )
+
+    @staticmethod
+    def from_json(blob):
+        """
+        Recreate a filesystem instance from JSON representation
+
+        See ``.to_json()`` for the expected structure of the input
+
+        Parameters
+        ----------
+        blob: str
+
+        Returns
+        -------
+        file system instance, not necessarily of this particular class.
+        """
+        from .registry import _import_class, get_filesystem_class
+        import json
+
+        dic = json.loads(blob)
+        protocol = dic.pop("protocol")
+        try:
+            cls = _import_class(dic.pop("cls"))
+        except (ImportError, ValueError, RuntimeError, KeyError):
+            cls = get_filesystem_class(protocol)
+        return cls(*dic.pop("args", ()), **dic)
+
     def _get_pyarrow_filesystem(self):
         """
         Make a version of the FS instance which will be acceptable to pyarrow
