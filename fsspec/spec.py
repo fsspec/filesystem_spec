@@ -844,6 +844,16 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return make_instance, (type(self), self.storage_args, self.storage_options)
 
     def to_json(self):
+        """
+        JSON representation of this filesystem instance
+
+        Returns
+        -------
+        str: JSON structure with keys cls (the python location of this class),
+            protocol (text name of this class's protocol, first one in case of
+            multiple), args (positional args, usually empty), and all other
+            kwargs as their own keys.
+        """
         import json
 
         cls = type(self)
@@ -862,6 +872,19 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     @staticmethod
     def from_json(blob):
+        """
+        Recreate a filesystem instance from JSON representation
+
+        See ``.to_json()`` for the expected structure of the input
+
+        Parameters
+        ----------
+        blob: str
+
+        Returns
+        -------
+        file system instance, not necessarily of this particular class.
+        """
         from .registry import _import_class, get_filesystem_class
         import json
 
