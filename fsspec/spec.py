@@ -865,7 +865,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         )
         return json.dumps(
             dict(
-                **{"cls": cls, "protocol": proto, "args": self.storage_args,},
+                **{"cls": cls, "protocol": proto, "args": self.storage_args},
                 **self.storage_options
             )
         )
