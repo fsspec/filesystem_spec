@@ -569,7 +569,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Is this entry directory-like?"""
         try:
             return self.info(path)["type"] == "directory"
-        except FileNotFoundError:
+        except IOError:
             return False
 
     def isfile(self, path):

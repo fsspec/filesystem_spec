@@ -152,9 +152,7 @@ class CachingFileSystem(AbstractFileSystem):
                 c["blocks"] = list(c["blocks"])
         with open(fn + ".temp", "wb") as f:
             pickle.dump(cache, f)
-        if os.path.exists(fn):
-            os.remove(fn)
-        os.rename(fn + ".temp", fn)
+        os.replace(fn + ".temp", fn)
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
