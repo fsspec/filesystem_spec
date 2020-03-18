@@ -34,9 +34,8 @@ def test_idempotent():
     fs3 = pickle.loads(pickle.dumps(fs))
     assert fs3.storage == fs.storage
 
-@pytest.mark.parametrize(
-    'impl', ['filecache', 'blockcache']
-)
+
+@pytest.mark.parametrize("impl", ["filecache", "blockcache"])
 def test_workflow(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -61,9 +60,7 @@ def test_workflow(ftp_writable, impl):
     assert fs.cat("/out") == b"test"  # old value
 
 
-@pytest.mark.parametrize(
-    'impl', ['simplecache', 'blockcache']
-)
+@pytest.mark.parametrize("impl", ["simplecache", "blockcache"])
 def test_glob(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -98,9 +95,7 @@ def test_blocksize(ftp_writable):
         fs.open("/out_block", block_size=30)
 
 
-@pytest.mark.parametrize(
-    'impl', ['filecache', 'simplecache', 'blockcache']
-)
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
 def test_local_filecache_creates_dir_if_needed(impl):
     import tempfile
 
@@ -261,9 +256,7 @@ def test_filecache_multicache():
         assert f.read() == data * 2
 
 
-@pytest.mark.parametrize(
-    'impl', ['filecache', 'simplecache']
-)
+@pytest.mark.parametrize("impl", ["filecache", "simplecache"])
 def test_filecache_multicache_with_same_file_different_data_reads_from_first(impl):
     import tempfile
 
@@ -290,9 +283,7 @@ def test_filecache_multicache_with_same_file_different_data_reads_from_first(imp
     # the filenames in each cache are the same, but the data is different
     assert sorted(os.listdir(cache1)) == sorted(os.listdir(cache2))
 
-    fs = fsspec.filesystem(
-        impl, target_protocol="file", cache_storage=[cache1, cache2]
-    )
+    fs = fsspec.filesystem(impl, target_protocol="file", cache_storage=[cache1, cache2])
 
     assert fs.cat(f1) == data
 
@@ -327,9 +318,7 @@ def test_filecache_with_checks():
     assert fs.cat(f1) == data * 2  # changed, since origin changed
 
 
-@pytest.mark.parametrize(
-    'impl', ['filecache', 'simplecache', 'blockcache']
-)
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
 def test_takes_fs_instance(impl):
     import tempfile
 

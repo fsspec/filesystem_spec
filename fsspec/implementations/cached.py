@@ -413,13 +413,9 @@ class SimpleCacheFileSystem(CachingFileSystem):
     protocol = "simplecache"
 
     def __init__(
-            self,
-            target_protocol=None,
-            cache_storage="TMP",
-            target_options=None,
-            **kwargs
+        self, target_protocol=None, cache_storage="TMP", target_options=None, **kwargs
     ):
-        for key in ['cache_check', 'expiry_time', 'check_files']:
+        for key in ["cache_check", "expiry_time", "check_files"]:
             kwargs.pop(key, None)
         super().__init__(
             target_protocol=target_protocol,
