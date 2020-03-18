@@ -65,6 +65,7 @@ known_implementations = {
     "cached": {"class": "fsspec.implementations.cached.CachingFileSystem"},
     "blockcache": {"class": "fsspec.implementations.cached.CachingFileSystem"},
     "filecache": {"class": "fsspec.implementations.cached.WholeFileCacheFileSystem"},
+    "simplecache": {"class": "fsspec.implementations.cached.SimpleCacheFileSystem"},
     "dask": {
         "class": "fsspec.implementations.dask.DaskWorkerFileSystem",
         "err": "Install dask distributed to access worker file system",

@@ -150,9 +150,10 @@ class CachingFileSystem(AbstractFileSystem):
         for c in cache.values():
             if isinstance(c["blocks"], set):
                 c["blocks"] = list(c["blocks"])
-        with open(fn + ".temp", "wb") as f:
+        fn2 = tempfile.mktemp()
+        with open(fn2, "wb") as f:
             pickle.dump(cache, f)
-        os.replace(fn + ".temp", fn)
+        os.replace(fn2, fn)
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
@@ -265,6 +266,7 @@ class CachingFileSystem(AbstractFileSystem):
         f.cache = MMapCache(f.blocksize, f._fetch_range, f.size, fn, blocks)
         close = f.close
         f.close = lambda: self.close_and_update(f, close)
+        self.save_cache()
         return f
 
     def close_and_update(self, f, close):
@@ -394,4 +396,83 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 # this only applies to HTTP, should instead use streaming
                 f2.write(f.read())
         self.save_cache()
+        return self._open(path, mode)
+
+
+class SimpleCacheFileSystem(CachingFileSystem):
+    """Caches whole remote files on first access
+
+    This class is intended as a layer over any other file system, and
+    will make a local copy of each file accessed, so that all subsequent
+    reads are local. This implementation only copies whole files, and
+    does not keep any metadata about the download time or file details.
+    It is therefore safer to use in multi-threaded/concurrent situations.
+
+    """
+
+    protocol = "simplecache"
+
+    def __init__(
+            self,
+            target_protocol=None,
+            cache_storage="TMP",
+            target_options=None,
+            **kwargs
+    ):
+        for key in ['cache_check', 'expiry_time', 'check_files']:
+            kwargs.pop(key, None)
+        super().__init__(
+            target_protocol=target_protocol,
+            target_options=target_options,
+            cache_storage=cache_storage,
+            cache_check=False,
+            expiry_time=False,
+            check_files=False,
+            **kwargs
+        )
+        for storage in self.storage:
+            if not os.path.exists(storage):
+                os.makedirs(storage, exist_ok=True)
+        self.cached_files = [{}]
+
+    def _check_file(self, path):
+        sha = hashlib.sha256(path.encode()).hexdigest()
+        for storage in self.storage:
+            fn = os.path.join(storage, sha)
+            if os.path.exists(fn):
+                return fn
+
+    def save_cache(self):
+        pass
+
+    def _open(self, path, mode="rb", **kwargs):
+        path = self._strip_protocol(path)
+
+        if not path.startswith(self.target_protocol):
+            store_path = self.target_protocol + "://" + path
+            path = self.fs._strip_protocol(store_path)
+        if mode != "rb":
+            return self.fs._open(path, mode=mode, **kwargs)
+        fn = self._check_file(path)
+        if fn:
+            return open(fn, "rb")
+
+        sha = hashlib.sha256(path.encode()).hexdigest()
+        fn = os.path.join(self.storage[-1], sha)
+        logger.debug("Copying %s to local cache" % path)
+        kwargs["mode"] = mode
+
+        with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
+            if isinstance(f, AbstractBufferedFile):
+                # want no type of caching if just downloading whole thing
+                f.cache = BaseCache(0, f.cache.fetcher, f.size)
+            if getattr(f, "blocksize", 0) and f.size:
+                # opportunity to parallelise here
+                data = True
+                while data:
+                    data = f.read(f.blocksize)
+                    f2.write(data)
+            else:
+                # this only applies to HTTP, should instead use streaming
+                f2.write(f.read())
         return self._open(path, mode)

@@ -75,6 +75,7 @@ Built-in Implementations
    fsspec.implementations.zip.ZipFileSystem
    fsspec.implementations.cached.CachingFileSystem
    fsspec.implementations.cached.WholeFileCacheFileSystem
+   fsspec.implementations.cached.SimpleCacheFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -110,6 +111,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.cached.WholeFileCacheFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.cached.SimpleCacheFileSystem
    :members: __init__
 
 Other Known Implementations
