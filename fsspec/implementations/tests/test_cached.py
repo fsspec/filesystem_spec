@@ -35,13 +35,14 @@ def test_idempotent():
     assert fs3.storage == fs.storage
 
 
-def test_workflow(ftp_writable):
+@pytest.mark.parametrize("impl", ["filecache", "blockcache"])
+def test_workflow(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out", "wb") as f:
         f.write(b"test")
     fs = fsspec.filesystem(
-        "cached",
+        impl,
         target_protocol="ftp",
         target_options={"host": host, "port": port, "username": user, "password": pw},
     )
@@ -59,7 +60,8 @@ def test_workflow(ftp_writable):
     assert fs.cat("/out") == b"test"  # old value
 
 
-def test_glob(ftp_writable):
+@pytest.mark.parametrize("impl", ["simplecache", "blockcache"])
+def test_glob(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out", "wb") as f:
@@ -67,7 +69,7 @@ def test_glob(ftp_writable):
     with fs.open("/out2", "wb") as f:
         f.write(b"test2")
     fs = fsspec.filesystem(
-        "cached",
+        impl,
         target_protocol="ftp",
         target_options={"host": host, "port": port, "username": user, "password": pw},
     )
@@ -93,11 +95,13 @@ def test_blocksize(ftp_writable):
         fs.open("/out_block", block_size=30)
 
 
-def test_local_filecache_creates_dir_if_needed():
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+def test_local_filecache_creates_dir_if_needed(impl):
     import tempfile
 
     original_location = tempfile.mkdtemp()
-    cache_location = "foofoobarbar"
+    cache_location = tempfile.mkdtemp()
+    os.rmdir(cache_location)
     assert not os.path.exists(cache_location)
 
     try:
@@ -108,7 +112,7 @@ def test_local_filecache_creates_dir_if_needed():
 
         # we can access the file and read it
         fs = fsspec.filesystem(
-            "filecache", target_protocol="file", cache_storage=cache_location
+            impl, target_protocol="file", cache_storage=cache_location
         )
 
         with fs.open(original_file, "rb") as f:
@@ -252,7 +256,8 @@ def test_filecache_multicache():
         assert f.read() == data * 2
 
 
-def test_filecache_multicache_with_same_file_different_data_reads_from_first():
+@pytest.mark.parametrize("impl", ["filecache", "simplecache"])
+def test_filecache_multicache_with_same_file_different_data_reads_from_first(impl):
     import tempfile
 
     origin = tempfile.mkdtemp()
@@ -264,23 +269,21 @@ def test_filecache_multicache_with_same_file_different_data_reads_from_first():
         f.write(data)
 
     # populate first cache
-    fs = fsspec.filesystem("filecache", target_protocol="file", cache_storage=cache1)
-    assert fs.cat(f1) == data
+    fs1 = fsspec.filesystem(impl, target_protocol="file", cache_storage=cache1)
+    assert fs1.cat(f1) == data
 
     with open(f1, "wb") as f:
         f.write(data * 2)
 
     # populate second cache
-    fs = fsspec.filesystem("filecache", target_protocol="file", cache_storage=cache2)
+    fs2 = fsspec.filesystem(impl, target_protocol="file", cache_storage=cache2)
 
-    assert fs.cat(f1) == data * 2
+    assert fs2.cat(f1) == data * 2
 
     # the filenames in each cache are the same, but the data is different
     assert sorted(os.listdir(cache1)) == sorted(os.listdir(cache2))
 
-    fs = fsspec.filesystem(
-        "filecache", target_protocol="file", cache_storage=[cache1, cache2]
-    )
+    fs = fsspec.filesystem(impl, target_protocol="file", cache_storage=[cache1, cache2])
 
     assert fs.cat(f1) == data
 
@@ -315,7 +318,8 @@ def test_filecache_with_checks():
     assert fs.cat(f1) == data * 2  # changed, since origin changed
 
 
-def test_takes_fs_instance():
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+def test_takes_fs_instance(impl):
     import tempfile
 
     origin = tempfile.mkdtemp()
@@ -325,7 +329,7 @@ def test_takes_fs_instance():
         f.write(data)
 
     fs = fsspec.filesystem("file")
-    fs2 = fsspec.filesystem("filecache", target_protocol=fs)
+    fs2 = fsspec.filesystem(impl, target_protocol=fs)
 
     assert fs2.cat(f1) == data
 

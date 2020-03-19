@@ -75,7 +75,7 @@ class FTPFileSystem(AbstractFileSystem):
         out.pop("protocol", None)
         return out
 
-    def ls(self, path, detail=True):
+    def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         out = []
         if path not in self.dircache:
