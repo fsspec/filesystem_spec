@@ -46,12 +46,12 @@ def test_openfile_api(m):
 
 def test_open_local():
     d1 = str(tempfile.mkdtemp())
-    f1 = os.path.join(d1, 'f1')
-    open(f1, 'w').write('test1')
+    f1 = os.path.join(d1, "f1")
+    open(f1, "w").write("test1")
     d2 = str(tempfile.mkdtemp())
-    fn = open_local('simplecache://' + f1, cache_storage=d2, target_protocol='file')
+    fn = open_local("simplecache://" + f1, cache_storage=d2, target_protocol="file")
     assert isinstance(fn, str)
-    assert open(fn).read() == 'test1'
+    assert open(fn).read() == "test1"
     assert d2 in fn
 
 

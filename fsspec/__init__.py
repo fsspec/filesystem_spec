@@ -19,6 +19,7 @@ __all__ = [
     "get_mapper",
     "open",
     "open_files",
+    "open_local",
     "registry",
     "caching",
 ]

@@ -212,7 +212,7 @@ class CachingFileSystem(AbstractFileSystem):
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
-        if 'r' not in mode:
+        if "r" not in mode:
             return self.fs._open(
                 path,
                 mode=mode,
@@ -352,7 +352,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
-        if 'r' not in mode:
+        if "r" not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
         detail, fn = self._check_file(path)
         if detail:
@@ -447,7 +447,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
-        if 'r'not in mode:
+        if "r" not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
         fn = self._check_file(path)
         if fn:

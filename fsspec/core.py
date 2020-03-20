@@ -279,7 +279,7 @@ def open(
     )[0]
 
 
-def open_local(url, mode='rb', **storage_options):
+def open_local(url, mode="rb", **storage_options):
     """Open file(s) which can be resolved to local
 
     For files which either are local, or get downloaded upon open
@@ -293,7 +293,7 @@ def open_local(url, mode='rb', **storage_options):
     storage_options:
         passed on to FS for or used by open_files (e.g., compression)
     """
-    if 'r' not in mode:
+    if "r" not in mode:
         raise ValueError("Can only ensure local files when reading")
     of = open_files(url, mode=mode, **storage_options)
     paths = [f.open().name for f in of]
