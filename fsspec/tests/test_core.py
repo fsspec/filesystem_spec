@@ -1,10 +1,13 @@
+import os
 import pytest
 import pickle
 import string
+import tempfile
 
 from fsspec.core import (
     _expand_paths,
     OpenFile,
+    open_local,
     caches,
     get_compression,
     BaseCache,
@@ -39,6 +42,17 @@ def test_openfile_api(m):
     f.close()
     with OpenFile(m, "somepath", mode="rt") as f:
         f.read() == "data"
+
+
+def test_open_local():
+    d1 = str(tempfile.mkdtemp())
+    f1 = os.path.join(d1, 'f1')
+    open(f1, 'w').write('test1')
+    d2 = str(tempfile.mkdtemp())
+    fn = open_local('simplecache://' + f1, cache_storage=d2, target_protocol='file')
+    assert isinstance(fn, str)
+    assert open(fn).read() == 'test1'
+    assert d2 in fn
 
 
 # For test_cache_pickleable(). Functions are only picklable if they are defined

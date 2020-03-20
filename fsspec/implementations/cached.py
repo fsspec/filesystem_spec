@@ -212,7 +212,7 @@ class CachingFileSystem(AbstractFileSystem):
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
-        if mode != "rb":
+        if 'r' not in mode:
             return self.fs._open(
                 path,
                 mode=mode,
@@ -228,7 +228,7 @@ class CachingFileSystem(AbstractFileSystem):
             if blocks is True:
                 # stored file is complete
                 logger.debug("Opening local copy of %s" % path)
-                return open(fn, "rb")
+                return open(fn, mode)
             # TODO: action where partial file exists in read-only cache
             logger.debug("Opening partially cached copy of %s" % path)
         else:
@@ -352,14 +352,14 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
-        if mode != "rb":
+        if 'r' not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
-        detail, fn = self._check_file(store_path)
+        detail, fn = self._check_file(path)
         if detail:
             hash, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 logger.debug("Opening local copy of %s" % path)
-                return open(fn, "rb")
+                return open(fn, mode)
             else:
                 raise ValueError(
                     "Attempt to open partially cached file %s"
@@ -447,11 +447,11 @@ class SimpleCacheFileSystem(CachingFileSystem):
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
-        if mode != "rb":
+        if 'r'not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
         fn = self._check_file(path)
         if fn:
-            return open(fn, "rb")
+            return open(fn, mode)
 
         sha = hashlib.sha256(path.encode()).hexdigest()
         fn = os.path.join(self.storage[-1], sha)
