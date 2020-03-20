@@ -354,7 +354,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             path = self.fs._strip_protocol(store_path)
         if "r" not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
-        detail, fn = self._check_file(path)
+        detail, fn = self._check_file(store_path)
         if detail:
             hash, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
