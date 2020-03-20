@@ -90,7 +90,8 @@ class OpenFile(object):
         return "<OpenFile '{}'>".format(self.path)
 
     def __fspath__(self):
-        return self.path
+        # may raise if cannot be resolved to local file
+        return self.open().__fspath__()
 
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
@@ -276,6 +277,29 @@ def open(
         newline=newline,
         **kwargs
     )[0]
+
+
+def open_local(url, mode="rb", **storage_options):
+    """Open file(s) which can be resolved to local
+
+    For files which either are local, or get downloaded upon open
+    (e.g., by file caching)
+
+    Parameters
+    ----------
+    url: str or list(str)
+    mode: str
+        Must be read mode
+    storage_options:
+        passed on to FS for or used by open_files (e.g., compression)
+    """
+    if "r" not in mode:
+        raise ValueError("Can only ensure local files when reading")
+    of = open_files(url, mode=mode, **storage_options)
+    paths = [f.open().name for f in of]
+    if isinstance(url, str) and "*" not in url:
+        return paths[0]
+    return paths
 
 
 def get_compression(urlpath, compression):
