@@ -11,10 +11,10 @@ library designed for task-graph creation and their scheduling.
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _hdfs3: https://hdfs3.readthedocs.io/en/latest/
-.. _adlfs: https://azure-datalake-store.readthedocs.io/en/latest/
+.. _adlfs: https://docs.microsoft.com/en-us/azure/data-lake-store/
 
 Here follows a brief description of some features of note of ``fsspec`` that promide to make
-it an interesting project beyond some other file-system abstractions
+it an interesting project beyond some other file-system abstractions.
 
 Serialisability
 ---------------
@@ -35,8 +35,8 @@ they exist, see below).
 
 The :func:`fsspec.core.OpenFile` class provides a convenient way to prescribe the manner to
 open some file (local,
-remote, in a compressed store, etc.) which is portable, and ca also apply any compression and
-text-mode to the file. These instances are also serialisable, because the do not contain any open
+remote, in a compressed store, etc.) which is portable, and can also apply any compression and
+text-mode to the file. These instances are also serialisable, because they do not contain any open
 files.
 
 The way to work with ``OpenFile`` s is to isolate interaction with in a ``with`` context. It is
@@ -61,7 +61,7 @@ configurable read-ahead buffers to minimise the number of the read operations th
 performed on the back-end storage.
 
 This is also a critical feature in the big-data access model, where each sub-task of an operation
-may need on a small part of a file, and does not, therefore want to be forces into downloading the
+may need on a small part of a file, and does not, therefore want to be forced into downloading the
 whole thing.
 
 Transparent text-mode and compression
@@ -172,12 +172,12 @@ even for a cachable class, pass ``skip_instance_cache=True``.
 Listings Caching
 ----------------
 
-For some implementations, getting file listigns (i.e., ``ls`` and anything that
+For some implementations, getting file listings (i.e., ``ls`` and anything that
 depends on it) is expensive. These implementations use dict-like instances of
 :class:`fsspec.dircache.DirCache` to manage the listings.
 
 The cache allows for time-based expiry of entries with the ``listings_expiry_time``
-parameter, or or LRU expiry with the ``max_paths`` parameter. These can be
+parameter, or LRU expiry with the ``max_paths`` parameter. These can be
 set on any implementation instance that uses listings caching; or to skip the
 caching altogether, use ``use_listings_cache=False``. That would be appropriate
 when the target location is known to be volatile because it is being written
@@ -212,7 +212,7 @@ Caching Files Locally
 
 ``fsspec`` allows you to access data on remote file systems, that is its purpose. However, such
 access can often be rather slow compared to local storage, so as well as buffering (see above), the
-option exists to cp[y files locally when you first access them, and thereafter to use the local data.
+option exists to copy files locally when you first access them, and thereafter to use the local data.
 This local cache of data might be temporary (i.e., attached to the process and discarded when the
 process ends) or at some specific location in your local storage.
 
