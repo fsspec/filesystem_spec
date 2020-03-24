@@ -102,8 +102,8 @@ class PyArrowHDFS(AbstractFileSystem):
         return out
 
     @staticmethod
-    def _get_kwargs_from_urls(paths):
-        ops = infer_storage_options(paths)
+    def _get_kwargs_from_urls(path):
+        ops = infer_storage_options(path)
         out = {}
         if ops.get("host", None):
             out["host"] = ops["host"]

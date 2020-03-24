@@ -2,6 +2,8 @@
 
 import os
 import pickle
+import tempfile
+import fsspec
 from fsspec.implementations.memory import MemoryFileSystem, MemoryFile
 
 
@@ -111,3 +113,18 @@ def test_open_text():
         f.write(b"some\n" b"lines\n" b"of\n" b"text")
     f = fs.open("/myfile", "r", encoding="latin1")
     assert f.encoding == "latin1"
+
+
+def test_chained():
+    d1 = tempfile.mkdtemp()
+    d2 = tempfile.mkdtemp()
+    f1 = os.path.join(d1, 'f1')
+    with open(f1, 'wb') as f:
+        f.write(b'test')
+
+    of = fsspec.open(f"simplecache::file://{f1}", simplecache={'cache_storage': d2,
+                                                               'same_names': True})
+    with of as f:
+        assert f.read() == b'test'
+
+    assert os.listdir(d2) == ['f1']

@@ -41,14 +41,16 @@ class CachingFileSystem(AbstractFileSystem):
         check_files=False,
         expiry_time=604800,
         target_options=None,
+        fs=None,
+        same_names=False,
         **kwargs
     ):
         """
 
         Parameters
         ----------
-        target_protocol: str
-            Target fielsystem protocol
+        target_protocol: str (optional)
+            Target filesystem protocol. Provide either this or ``fs``.
         cache_storage: str or list(str)
             Location to store files. If "TMP", this is a temporary directory,
             and will be cleaned up by the OS when this process ends (or later).
@@ -67,10 +69,17 @@ class CachingFileSystem(AbstractFileSystem):
             week.
         target_options: dict or None
             Passed to the instantiation of the FS, if fs is None.
+        fs: filesystem instance
+            The target filesystem to run against. Provide this or ``protocol``.
+        same_names: bool (optional)
+            By default, target URLs are hashed, so that files from different backends
+            with the same basename do not conflict. If this is true, the original
+            basename is used.
         """
-        if self._cached:
-            return
         super().__init__(**kwargs)
+        if not (fs is None) ^ (target_protocol is None):
+            raise ValueError("Please provide one of filesystem instance (fs) or"
+                             " remote_protocol, not both")
         if cache_storage == "TMP":
             storage = [tempfile.mkdtemp()]
         else:
@@ -84,30 +93,14 @@ class CachingFileSystem(AbstractFileSystem):
         self.cache_check = cache_check
         self.check_files = check_files
         self.expiry = expiry_time
-        self._target_protocol = target_protocol
+        self.same_names = same_names
         self.target_protocol = (
             target_protocol
             if isinstance(target_protocol, str)
-            else target_protocol.protocol
+            else fs.protocol
         )
         self.load_cache()
-        if isinstance(target_protocol, AbstractFileSystem):
-            self.fs = target_protocol
-        else:
-            self.fs = filesystem(target_protocol, **self.kwargs)
-
-    def __reduce_ex__(self, *_):
-        return (
-            self.__class__,
-            (
-                self._target_protocol,
-                self.storage,
-                self.cache_check,
-                self.check_files,
-                self.expiry,
-                self.kwargs or None,
-            ),
-        )
+        self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
 
     def load_cache(self):
         """Read set of stored blocks from file"""
@@ -234,7 +227,10 @@ class CachingFileSystem(AbstractFileSystem):
             # TODO: action where partial file exists in read-only cache
             logger.debug("Opening partially cached copy of %s" % path)
         else:
-            hash = hashlib.sha256(path.encode()).hexdigest()
+            if self.same_names:
+                hash = os.path.basename(path)
+            else:
+                hash = hashlib.sha256(path.encode()).hexdigest()
             fn = os.path.join(self.storage[-1], hash)
             blocks = set()
             detail = {
@@ -291,7 +287,7 @@ class CachingFileSystem(AbstractFileSystem):
             "close_and_update",
             "__init__",
             "__getattribute__",
-            "__reduce_ex__",
+            "__reduce__",
             "open",
             "cat",
             "get",
@@ -305,6 +301,8 @@ class CachingFileSystem(AbstractFileSystem):
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(type(self), item)(self, *args, **kw)
+        if item in ["__reduce_ex__"]:
+            raise AttributeError
         if item in ["_strip_protocol"]:
             # class methods
             return lambda *args, **kw: getattr(type(self), item)(*args, **kw)
@@ -370,7 +368,10 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     "as a wholly cached file" % path
                 )
         else:
-            hash = hashlib.sha256(path.encode()).hexdigest()
+            if self.same_names:
+                hash = os.path.basename(path)
+            else:
+                hash = hashlib.sha256(path.encode()).hexdigest()
             fn = os.path.join(self.storage[-1], hash)
             blocks = True
             detail = {
@@ -417,32 +418,31 @@ class SimpleCacheFileSystem(CachingFileSystem):
     protocol = "simplecache"
 
     def __init__(
-        self, target_protocol=None, cache_storage="TMP", target_options=None, **kwargs
+        self, **kwargs
     ):
+        kw = kwargs.copy()
         for key in ["cache_check", "expiry_time", "check_files"]:
-            kwargs.pop(key, None)
-        super().__init__(
-            target_protocol=target_protocol,
-            target_options=target_options,
-            cache_storage=cache_storage,
-            cache_check=False,
-            expiry_time=False,
-            check_files=False,
-            **kwargs
-        )
+            kw[key] = False
+        super().__init__(**kw)
         for storage in self.storage:
             if not os.path.exists(storage):
                 os.makedirs(storage, exist_ok=True)
         self.cached_files = [{}]
 
     def _check_file(self, path):
-        sha = hashlib.sha256(path.encode()).hexdigest()
+        if self.same_names:
+            sha = os.path.basename(path)
+        else:
+            sha = hashlib.sha256(path.encode()).hexdigest()
         for storage in self.storage:
             fn = os.path.join(storage, sha)
             if os.path.exists(fn):
                 return fn
 
     def save_cache(self):
+        pass
+
+    def load_cache(self):
         pass
 
     def _open(self, path, mode="rb", **kwargs):
@@ -459,7 +459,10 @@ class SimpleCacheFileSystem(CachingFileSystem):
         if fn:
             return open(fn, mode)
 
-        sha = hashlib.sha256(path.encode()).hexdigest()
+        if self.same_names:
+            sha = os.path.basename(path)
+        else:
+            sha = hashlib.sha256(path.encode()).hexdigest()
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache" % path)
         kwargs["mode"] = mode

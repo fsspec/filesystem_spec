@@ -197,6 +197,21 @@ def open_files(
     -------
     List of ``OpenFile`` objects.
     """
+    chain = _un_chain(urlpath, kwargs)
+    if len(chain) > 1:
+        kwargs = chain[0][2]
+        inkwargs = kwargs
+        for ch in chain[1:]:
+            urls, protocol, kw = ch
+            inkwargs['target_protocol'] = protocol
+            inkwargs['target_options'] = kw.copy()
+            inkwargs = inkwargs['target_options']
+        protocol = chain[0][1]
+        if isinstance(urlpath, str):
+            urlpath = protocol + "://" + split_protocol(urlpath.split("::", 1)[1])[1]
+        else:
+            urlpath = [protocol + "://" + split_protocol(u.split("::", 1)[1])[1]
+                       for u in urlpath]
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
         mode,
@@ -217,6 +232,27 @@ def open_files(
         )
         for path in paths
     ]
+
+
+def _un_chain(path, kwargs):
+    if isinstance(path, (tuple, list)):
+        bits = [_un_chain(p, kwargs) for p in path]
+        out = []
+        for pbit in zip(*bits):
+            paths, protocols, kwargs = zip(*pbit)
+            if len(set(protocols)) > 1:
+                raise ValueError("Protocol mismatch in URL chain")
+            if len(set(paths)) == 1:
+                paths = paths[0]
+            else:
+                paths = list(paths)
+            out.append([paths, protocols[0], kwargs[0]])
+        return out
+    bits = [p if "://" in p else p + "://" for p in path.split("::")]
+    # [[url, protocol, kwargs], ...]
+    return [(bit, split_protocol(bit)[0] or 'file',
+             kwargs.get(split_protocol(bit)[0] or 'file', {}))
+            for bit in bits]
 
 
 def open(
@@ -392,12 +428,13 @@ def get_fs_token_paths(
         if not urlpath:
             raise ValueError("empty urlpath sequence")
         protocols, paths = zip(*map(split_protocol, urlpath))
-        protocol = protocol or protocols[0]
-        if not all(p == protocol for p in protocols):
-            raise ValueError(
-                "When specifying a list of paths, all paths must "
-                "share the same protocol"
-            )
+        if protocol is None:
+            protocol = protocols[0]
+            if not all(p == protocol for p in protocols):
+                raise ValueError(
+                    "When specifying a list of paths, all paths must "
+                    "share the same protocol"
+                )
         cls = get_filesystem_class(protocol)
         optionss = list(map(cls._get_kwargs_from_urls, urlpath))
         paths = [cls._strip_protocol(u) for u in urlpath]

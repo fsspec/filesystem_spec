@@ -91,7 +91,7 @@ def get_filesystem_class(protocol):
     import may fail. In this case, the string in the "err" field of the
     ``known_implementations`` will be given as the error message.
     """
-    if protocol is None:
+    if not protocol:
         protocol = default
 
     if protocol not in registry:
