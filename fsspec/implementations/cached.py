@@ -227,10 +227,7 @@ class CachingFileSystem(AbstractFileSystem):
             # TODO: action where partial file exists in read-only cache
             logger.debug("Opening partially cached copy of %s" % path)
         else:
-            if self.same_names:
-                hash = os.path.basename(path)
-            else:
-                hash = hashlib.sha256(path.encode()).hexdigest()
+            hash = hash_name(path, self.same_names)
             fn = os.path.join(self.storage[-1], hash)
             blocks = set()
             detail = {
@@ -368,10 +365,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     "as a wholly cached file" % path
                 )
         else:
-            if self.same_names:
-                hash = os.path.basename(path)
-            else:
-                hash = hashlib.sha256(path.encode()).hexdigest()
+            hash = hash_name(path, self.same_names)
             fn = os.path.join(self.storage[-1], hash)
             blocks = True
             detail = {
@@ -430,10 +424,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
         self.cached_files = [{}]
 
     def _check_file(self, path):
-        if self.same_names:
-            sha = os.path.basename(path)
-        else:
-            sha = hashlib.sha256(path.encode()).hexdigest()
+        sha = hash_name(path, self.same_names)
         for storage in self.storage:
             fn = os.path.join(storage, sha)
             if os.path.exists(fn):
@@ -459,10 +450,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
         if fn:
             return open(fn, mode)
 
-        if self.same_names:
-            sha = os.path.basename(path)
-        else:
-            sha = hashlib.sha256(path.encode()).hexdigest()
+        sha = hash_name(path, self.same_names)
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache" % path)
         kwargs["mode"] = mode
@@ -481,3 +469,11 @@ class SimpleCacheFileSystem(CachingFileSystem):
                 # this only applies to HTTP, should instead use streaming
                 f2.write(f.read())
         return self._open(path, mode)
+
+
+def hash_name(path, same_name):
+    if same_name:
+        hash = os.path.basename(path)
+    else:
+        hash = hashlib.sha256(path.encode()).hexdigest()
+    return hash
