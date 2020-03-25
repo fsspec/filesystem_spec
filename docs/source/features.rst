@@ -207,6 +207,53 @@ buffer, you can do
    with fs.open(path, mode='rb', cache_type='readahead') as f:
        use_for_something(f)
 
+URL chaining
+------------
+
+Some implementations proxy or otherwise make use of another filesystem implementation, such
+as locally caching remote files, i.e., finding out what files exist using the remote implementation,
+but actually opening the local copies upon access. Other examples include reading from a Dask worker
+which can see file-systems the client cannot, and accessing a zip file which is being read from
+another backend.
+
+In such cases, you can specify the parameters exactly as specified in the implementation docstrings,
+for the dask case something like
+
+.. code-block:: python
+
+    of = fsspec.open('dask://bucket/key', target_protocol='s3', target_options={'anon': True})
+
+As a shorthand, particularly useful where you have multiple hops, is to "chain" the URLs with
+the special separator ``"::"``. The arguments to be passed on to each of the implementations referenced
+are keywed by the protocol names included in the URL. Here is the equivalent to the line above:
+
+.. code-block:: python
+
+   of = fsspec.open('dask::s3://bucket/key', s3={'anon': True})
+
+A couple of more complicates cases:
+
+.. code-block:: python
+
+  of = fsspec.open_files('zip://*.csv::simplecache::gcs://bucket/afile.zip',
+                         simplecache={'cache_storage': '/stored/zip/files'},
+                         gcs={'project': 'my-project'})
+
+reads a zip-file from google, stores it locally, and gives access to the contained CSV files. Conversely,
+
+.. code-block:: python
+
+  of = fsspec.open_files('simplecache::zip://*.csv::gcs://bucket/afile.zip',
+                         simplecache={'cache_storage': '/stored/csv/files'},
+                         gcs={'project': 'my-project'})
+
+reads the same zip-file, but extracts the CSV files and stores them locally in the cache.
+
+**For developers**: this "chaining" methods works by formatting the arguments passed to ``open_*``
+into ``target_protocol`` (a simple string) and ``target_options`` (a dict) and also optionally
+``fo`` (target path, if a specific file is required). In order for an implementation to chain
+successfully like this, it must look for exactly those named arguments.
+
 Caching Files Locally
 ---------------------
 
@@ -230,6 +277,15 @@ a particular local location, the files will persist and can be reused from futur
 you can also set policies to have cached files expire after some time, or to check the remote file system
 on each open, to see if the target file has changed since it was copied.
 
+With the top-level functions ``open``, ``open_local`` and ``open_files``, you can use the
+same set of kwargs as the example above, or you can chain the URL - the following would
+be the equivalent
+
+.. code-block:: python
+
+    of = fsspec.open("filecache::s3://bucket/key",
+                     s3={'anon': True}, cache_storage='/tmp/files')
+
 With the "blockcache" variant, data is downloaded block-wise: only the specific parts of the remote file
 which are accessed. This means that the local copy of the file might end up being much smaller than the
 remote one, if only certain parts of it are required.
@@ -238,4 +294,7 @@ Whereas "filecache" works for all file system implementations, and provides a re
 libraries to use, "blockcache" has restrictions: that you have a storage/OS combination which supports
 sparse files, that the backend implementation uses files which derive ``from AbstractBufferedFile``,
 and that the library you pass the resultant object to accepts generic python file-like objects. You
-should not mix block- and file-caches in the same directory.
+should not mix block- and file-caches in the same directory. "simplecache" is the same as "filecache",
+except without the options for cache expiry and to check the original source - it can be used where the
+target can be considered static, and particularly where a large number of target files are expected
+(because no metadata is written to disc). Only "simplecache" is guaranteed thread/process-safe.
