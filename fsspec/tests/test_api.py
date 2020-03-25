@@ -115,7 +115,7 @@ def test_open_text():
     assert f.encoding == "latin1"
 
 
-def test_chained():
+def test_chained_fs():
     d1 = tempfile.mkdtemp()
     d2 = tempfile.mkdtemp()
     f1 = os.path.join(d1, 'f1')
@@ -128,3 +128,47 @@ def test_chained():
         assert f.read() == b'test'
 
     assert os.listdir(d2) == ['f1']
+
+
+def test_chained_fs_multi():
+    d1 = tempfile.mkdtemp()
+    d2 = tempfile.mkdtemp()
+    f1 = os.path.join(d1, 'f1')
+    f2 = os.path.join(d1, 'f2')
+    with open(f1, 'wb') as f:
+        f.write(b'test1')
+    with open(f2, 'wb') as f:
+        f.write(b'test2')
+
+    of = fsspec.open_files(f"simplecache::file://{d1}/*",
+                           simplecache={'cache_storage': d2, 'same_names': True})
+    with of[0] as f:
+        assert f.read() == b'test1'
+    with of[1] as f:
+        assert f.read() == b'test2'
+
+    assert sorted(os.listdir(d2)) == ['f1', 'f2']
+
+    d2 = tempfile.mkdtemp()
+
+    of = fsspec.open_files([f"simplecache::file://{f1}", f"simplecache::file://{f2}"],
+                           simplecache={'cache_storage': d2, 'same_names': True})
+    with of[0] as f:
+        assert f.read() == b'test1'
+    with of[1] as f:
+        assert f.read() == b'test2'
+
+    assert sorted(os.listdir(d2)) == ['f1', 'f2']
+
+
+def test_chained_fo():
+    import zipfile
+    d1 = tempfile.mkdtemp()
+    f1 = os.path.join(d1, 'temp.zip')
+    d3 = tempfile.mkdtemp()
+    with zipfile.ZipFile(f1, mode="w") as z:
+        z.writestr('afile', b'test')
+
+    of = fsspec.open(f"zip://afile::file://{f1}")
+    with of as f:
+        assert f.read() == b'test'

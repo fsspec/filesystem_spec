@@ -201,17 +201,23 @@ def open_files(
     if len(chain) > 1:
         kwargs = chain[0][2]
         inkwargs = kwargs
-        for ch in chain[1:]:
+        urlpath = False
+        for i, ch in enumerate(chain):
             urls, protocol, kw = ch
+            if isinstance(urls, str):
+                if not urlpath and split_protocol(urls)[1]:
+                    urlpath = protocol + "://" + split_protocol(urls)[1]
+            else:
+                if not urlpath and any(split_protocol(u)[1] for u in urls):
+                    urlpath = [protocol + "://" + split_protocol(u)[1]
+                               for u in urls]
+            if i == 0:
+                continue
             inkwargs['target_protocol'] = protocol
             inkwargs['target_options'] = kw.copy()
+            inkwargs['fo'] = urls
             inkwargs = inkwargs['target_options']
         protocol = chain[0][1]
-        if isinstance(urlpath, str):
-            urlpath = protocol + "://" + split_protocol(urlpath.split("::", 1)[1])[1]
-        else:
-            urlpath = [protocol + "://" + split_protocol(u.split("::", 1)[1])[1]
-                       for u in urlpath]
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
         mode,

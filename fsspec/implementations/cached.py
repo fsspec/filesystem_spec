@@ -293,7 +293,6 @@ class CachingFileSystem(AbstractFileSystem):
             "head",
             "_check_file",
             "_check_cache",
-            "glob",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass

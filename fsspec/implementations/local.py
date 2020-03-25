@@ -23,16 +23,8 @@ class LocalFileSystem(AbstractFileSystem):
     root_marker = "/"
     protocol = "file"
 
-    def __init__(self, auto_mkdir=None, **kwargs):
+    def __init__(self, auto_mkdir=False, **kwargs):
         super().__init__(**kwargs)
-        if auto_mkdir is None:
-            warnings.warn(
-                "The default value of auto_mkdir=True has been deprecated "
-                "and will be changed to auto_mkdir=False by default in a "
-                "future release.",
-                FutureWarning,
-            )
-            auto_mkdir = True
         self.auto_mkdir = auto_mkdir
 
     def mkdir(self, path, create_parents=True, **kwargs):
