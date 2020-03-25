@@ -143,8 +143,13 @@ def test_chained_equivalent():
         f"simplecache::file://{f1}",
         simplecache={"cache_storage": d2, "same_names": True},
     )
-    of2 = fsspec.open(f'simplecache://{f1}', cache_storage=d2, same_names=True,
-                      target_protocol='file', target_options={})
+    of2 = fsspec.open(
+        f"simplecache://{f1}",
+        cache_storage=d2,
+        same_names=True,
+        target_protocol="file",
+        target_options={},
+    )
     # the following line passes by fluke - they are not quite the same instance,
     #  since the parameters don't quite match. Also, the url understood by the two
     #  of s are not the same (path gets munged a bit differently)
