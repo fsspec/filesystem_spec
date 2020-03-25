@@ -15,7 +15,15 @@ class ZipFileSystem(AbstractFileSystem):
 
     root_marker = ""
 
-    def __init__(self, fo="", mode="r", **storage_options):
+    def __init__(
+        self,
+        fo="",
+        mode="r",
+        target_protocol=None,
+        target_options=None,
+        block_size=DEFAULT_BLOCK_SIZE,
+        **kwargs
+    ):
         """
         Parameters
         ----------
@@ -24,18 +32,18 @@ class ZipFileSystem(AbstractFileSystem):
             `open_files()`, which must return one file exactly.
         mode: str
             Currently, only 'r' accepted
-        storage_options: key-value
-            May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
-            other parameters for requests
+        target_protocol: str (optional)
+            If ``fo`` is a string, this value can be used to override the
+            FS protocol inferred from a URL
+        target_options: dict (optional)
+            Kwargs passed when instantiating the target FS, if ``fo`` is
+            a string.
         """
-        if self._cached:
-            return
-        AbstractFileSystem.__init__(self)
+        super().__init__(self, **kwargs)
         if mode != "r":
             raise ValueError("Only read from zip files accepted")
-        self.in_fo = fo
         if isinstance(fo, str):
-            files = open_files(fo)
+            files = open_files(fo, protocol=target_protocol, **(target_options or {}))
             if len(files) != 1:
                 raise ValueError(
                     'Path "{}" did not resolve to exactly'
@@ -44,7 +52,7 @@ class ZipFileSystem(AbstractFileSystem):
             fo = files[0]
         self.fo = fo.__enter__()  # the whole instance is a context
         self.zip = zipfile.ZipFile(self.fo)
-        self.block_size = storage_options.get("block_size", DEFAULT_BLOCK_SIZE)
+        self.block_size = block_size
         self.dir_cache = None
 
     @classmethod
@@ -67,7 +75,7 @@ class ZipFileSystem(AbstractFileSystem):
                 )
                 self.dir_cache[f["name"]] = f
 
-    def ls(self, path, detail=False):
+    def ls(self, path, detail=False, **kwargs):
         self._get_dirs()
         paths = {}
         for p, f in self.dir_cache.items():

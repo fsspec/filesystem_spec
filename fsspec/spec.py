@@ -139,6 +139,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def __eq__(self, other):
         return isinstance(other, type(self)) and self._fs_token == other._fs_token
 
+    def __reduce__(self):
+        return make_instance, (type(self), self.storage_args, self.storage_options)
+
     @classmethod
     def _strip_protocol(cls, path):
         """ Turn path from fully-qualified to file-system-specific
@@ -157,7 +160,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return path or cls.root_marker
 
     @staticmethod
-    def _get_kwargs_from_urls(paths):
+    def _get_kwargs_from_urls(path):
         """If kwargs can be encoded in the paths, extract them here
 
         This should happen before instantiation of the class; incoming paths
@@ -839,9 +842,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
             if size is not None and offset + length > size:
                 length = size - offset
             return read_block(f, offset, length, delimiter)
-
-    def __reduce__(self):
-        return make_instance, (type(self), self.storage_args, self.storage_options)
 
     def to_json(self):
         """

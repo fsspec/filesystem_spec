@@ -357,7 +357,7 @@ def test_file_ops(tmpdir):
 
 def test_recursive_get_put(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
-    fs = LocalFileSystem()
+    fs = LocalFileSystem(auto_mkdir=True)
 
     fs.mkdir(tmpdir + "/a1/a2/a3")
     fs.touch(tmpdir + "/a1/a2/a3/afile")
@@ -456,13 +456,6 @@ def test_links(tmpdir):
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
     assert fs._isfilestore()
-
-
-def test_auto_mkdir_warns():
-    # Ensure we're not pulling from instance cache
-    LocalFileSystem.clear_instance_cache()
-    with pytest.warns(FutureWarning, match="auto_mkdir=True has been deprecated"):
-        LocalFileSystem()
 
 
 def test_strip_protocol_expanduser():

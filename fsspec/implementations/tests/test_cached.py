@@ -329,7 +329,7 @@ def test_takes_fs_instance(impl):
         f.write(data)
 
     fs = fsspec.filesystem("file")
-    fs2 = fsspec.filesystem(impl, target_protocol=fs)
+    fs2 = fsspec.filesystem(impl, fs=fs)
 
     assert fs2.cat(f1) == data
 

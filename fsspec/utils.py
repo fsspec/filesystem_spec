@@ -305,3 +305,9 @@ def stringify_path(filepath):
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
     return filepath
+
+
+def make_instance(cls, args, kwargs):
+    inst = cls(*args, **kwargs)
+    inst._determine_worker()
+    return inst
