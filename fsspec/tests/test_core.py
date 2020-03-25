@@ -2,12 +2,7 @@ import os
 import pytest
 import tempfile
 
-from fsspec.core import (
-    _expand_paths,
-    OpenFile,
-    open_local,
-    get_compression,
-)
+from fsspec.core import _expand_paths, OpenFile, open_local, get_compression
 
 
 @pytest.mark.parametrize(
