@@ -302,6 +302,9 @@ class CachingFileSystem(AbstractFileSystem):
         if item in ["_strip_protocol"]:
             # class methods
             return lambda *args, **kw: getattr(type(self), item)(*args, **kw)
+        if item in ['_cache']:
+            # class attributes
+            return getattr(type(self), item)
         if item == "__class__":
             return type(self)
         d = object.__getattribute__(self, "__dict__")

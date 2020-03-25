@@ -132,6 +132,26 @@ def test_chained_fs():
     assert os.listdir(d2) == ["f1"]
 
 
+def test_chained_equivalent():
+    d1 = tempfile.mkdtemp()
+    d2 = tempfile.mkdtemp()
+    f1 = os.path.join(d1, "f1")
+    with open(f1, "wb") as f:
+        f.write(b"test1")
+
+    of = fsspec.open(
+        f"simplecache::file://{f1}",
+        simplecache={"cache_storage": d2, "same_names": True},
+    )
+    of2 = fsspec.open(f'simplecache://{f1}', cache_storage=d2, same_names=True,
+                      target_protocol='file', target_options={})
+    # the following line passes by fluke - they are not quite the same instance,
+    #  since the parameters don't quite match. Also, the url understood by the two
+    #  of s are not the same (path gets munged a bit differently)
+    assert of.fs == of2.fs
+    assert of.open().read() == of2.open().read()
+
+
 def test_chained_fs_multi():
     d1 = tempfile.mkdtemp()
     d2 = tempfile.mkdtemp()
