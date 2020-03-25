@@ -15,8 +15,15 @@ class ZipFileSystem(AbstractFileSystem):
 
     root_marker = ""
 
-    def __init__(self, fo="", mode="r", target_protocol=None, target_options=None,
-                 block_size=DEFAULT_BLOCK_SIZE, **kwargs):
+    def __init__(
+        self,
+        fo="",
+        mode="r",
+        target_protocol=None,
+        target_options=None,
+        block_size=DEFAULT_BLOCK_SIZE,
+        **kwargs
+    ):
         """
         Parameters
         ----------
@@ -36,8 +43,7 @@ class ZipFileSystem(AbstractFileSystem):
         if mode != "r":
             raise ValueError("Only read from zip files accepted")
         if isinstance(fo, str):
-            files = open_files(fo, protocol=target_protocol,
-                               **(target_options or {}))
+            files = open_files(fo, protocol=target_protocol, **(target_options or {}))
             if len(files) != 1:
                 raise ValueError(
                     'Path "{}" did not resolve to exactly'

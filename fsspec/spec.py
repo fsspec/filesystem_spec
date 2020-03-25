@@ -843,9 +843,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
-    def __reduce__(self):
-        return make_instance, (type(self), self.storage_args, self.storage_options)
-
     def to_json(self):
         """
         JSON representation of this filesystem instance

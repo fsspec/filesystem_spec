@@ -4,7 +4,6 @@ import shutil
 import posixpath
 import re
 import tempfile
-import warnings
 from fsspec import AbstractFileSystem
 from fsspec.utils import stringify_path
 

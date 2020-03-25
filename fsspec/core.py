@@ -209,14 +209,13 @@ def open_files(
                     urlpath = protocol + "://" + split_protocol(urls)[1]
             else:
                 if not urlpath and any(split_protocol(u)[1] for u in urls):
-                    urlpath = [protocol + "://" + split_protocol(u)[1]
-                               for u in urls]
+                    urlpath = [protocol + "://" + split_protocol(u)[1] for u in urls]
             if i == 0:
                 continue
-            inkwargs['target_protocol'] = protocol
-            inkwargs['target_options'] = kw.copy()
-            inkwargs['fo'] = urls
-            inkwargs = inkwargs['target_options']
+            inkwargs["target_protocol"] = protocol
+            inkwargs["target_options"] = kw.copy()
+            inkwargs["fo"] = urls
+            inkwargs = inkwargs["target_options"]
         protocol = chain[0][1]
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
@@ -256,9 +255,14 @@ def _un_chain(path, kwargs):
         return out
     bits = [p if "://" in p else p + "://" for p in path.split("::")]
     # [[url, protocol, kwargs], ...]
-    return [(bit, split_protocol(bit)[0] or 'file',
-             kwargs.get(split_protocol(bit)[0] or 'file', {}))
-            for bit in bits]
+    return [
+        (
+            bit,
+            split_protocol(bit)[0] or "file",
+            kwargs.get(split_protocol(bit)[0] or "file", {}),
+        )
+        for bit in bits
+    ]
 
 
 def open(

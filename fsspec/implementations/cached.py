@@ -78,8 +78,10 @@ class CachingFileSystem(AbstractFileSystem):
         """
         super().__init__(**kwargs)
         if not (fs is None) ^ (target_protocol is None):
-            raise ValueError("Please provide one of filesystem instance (fs) or"
-                             " remote_protocol, not both")
+            raise ValueError(
+                "Please provide one of filesystem instance (fs) or"
+                " remote_protocol, not both"
+            )
         if cache_storage == "TMP":
             storage = [tempfile.mkdtemp()]
         else:
@@ -95,9 +97,7 @@ class CachingFileSystem(AbstractFileSystem):
         self.expiry = expiry_time
         self.same_names = same_names
         self.target_protocol = (
-            target_protocol
-            if isinstance(target_protocol, str)
-            else fs.protocol
+            target_protocol if isinstance(target_protocol, str) else fs.protocol
         )
         self.load_cache()
         self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
@@ -410,9 +410,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
 
     protocol = "simplecache"
 
-    def __init__(
-        self, **kwargs
-    ):
+    def __init__(self, **kwargs):
         kw = kwargs.copy()
         for key in ["cache_check", "expiry_time", "check_files"]:
             kw[key] = False
