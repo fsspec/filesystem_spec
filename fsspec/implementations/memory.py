@@ -128,7 +128,7 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def cat(self, path):
         try:
-            self.store[path].getvalue()
+            return self.store[path].getvalue()
         except KeyError:
             raise FileNotFoundError(path)
 
