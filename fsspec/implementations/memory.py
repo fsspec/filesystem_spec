@@ -15,7 +15,7 @@ class MemoryFileSystem(AbstractFileSystem):
     protocol = "memory"
     root_marker = ""
 
-    def ls(self, path, detail=False):
+    def ls(self, path, detail=False, **kwargs):
         if path in self.store:
             # there is a key with this exact name, but could also be directory
             out = [
@@ -127,7 +127,10 @@ class MemoryFileSystem(AbstractFileSystem):
         self.store[path2] = MemoryFile(self, path2, self.store[path1].getbuffer())
 
     def cat(self, path):
-        return self.store[path].getvalue()
+        try:
+            self.store[path].getvalue()
+        except KeyError:
+            raise FileNotFoundError(path)
 
     def _rm(self, path):
         del self.store[path]
