@@ -634,8 +634,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
             else:
                 # copy lpath as rpath directory
                 rpath2 = rpath
+            lpath2 = make_path_posix(os.path.abspath(lpath))
             rpaths = [
-                posixpath.join(rpath2, path[len(lpath) :].lstrip("/"))
+                posixpath.join(rpath2, path[len(lpath2) :].lstrip("/"))
                 for path in lpaths
             ]
         else:

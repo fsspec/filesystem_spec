@@ -1,5 +1,6 @@
 """Tests the spec, using memoryfs"""
 
+import contextlib
 import os
 import pickle
 import tempfile
@@ -55,6 +56,31 @@ def test_get_put(tmpdir):
 
     fs.put(tmpdir, "/more", recursive=True)
     assert fs.find("/more") == ["/more/dir/two", "/more/one", "/more/three"]
+
+    @contextlib.contextmanager
+    def tmp_chdir(path):
+        curdir = os.getcwd()
+        os.chdir(path)
+        try:
+            yield
+        finally:
+            os.chdir(curdir)
+
+    with tmp_chdir(os.path.join(tmpdir, os.path.pardir)):
+        fs.put(os.path.basename(tmpdir), "/moretwo", recursive=True)
+        assert fs.find("/moretwo") == [
+            "/moretwo/dir/two",
+            "/moretwo/one",
+            "/moretwo/three",
+        ]
+
+    with tmp_chdir(tmpdir):
+        fs.put(os.path.curdir, "/morethree", recursive=True)
+        assert fs.find("/morethree") == [
+            "/morethree/dir/two",
+            "/morethree/one",
+            "/morethree/three",
+        ]
 
     for f in [fn, fn2, fn3]:
         os.remove(f)
