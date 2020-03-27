@@ -71,9 +71,9 @@ class FSMap(MutableMapping):
 
     def __getitem__(self, key, default=None):
         """Retrieve data"""
-        key = self._key_to_str(key)
+        k = self._key_to_str(key)
         try:
-            result = self.fs.cat(key)
+            result = self.fs.cat(k)
         except FileNotFoundError:
             if default is not None:
                 return default
