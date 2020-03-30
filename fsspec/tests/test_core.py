@@ -2,7 +2,7 @@ import os
 import pytest
 import tempfile
 
-from fsspec.core import _expand_paths, OpenFile, open_local, get_compression
+from fsspec.core import _expand_paths, OpenFile, open_local, get_compression, open_files
 
 
 @pytest.mark.parametrize(
@@ -51,3 +51,12 @@ def test_xz_lzma_compressions():
     assert get_compression("some_file.xz", "infer") == "xz"
     assert get_compression("some_file.xz", "xz") == "xz"
     assert get_compression("some_file.xz", "lzma") == "lzma"
+
+
+def test_list():
+    here = os.path.abspath(os.path.dirname(__file__))
+    flist = os.listdir(here)
+    plist = [os.path.join(here, p) for p in flist]
+    of = open_files(plist)
+    assert len(of) == len(flist)
+    assert [f.path for f in of] == plist

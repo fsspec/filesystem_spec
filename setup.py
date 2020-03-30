@@ -19,6 +19,7 @@ setup(
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
     ],
     description="File-system specification",
     long_description=long_description,
