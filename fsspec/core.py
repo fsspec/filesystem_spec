@@ -253,8 +253,11 @@ def _un_chain(path, kwargs):
                 paths = list(paths)
             out.append([paths, protocols[0], kwargs[0]])
         return out
-    bits = ([p if "://" in p else p + "://" for p in path.split("::")]
-            if "::" in path else [path])
+    bits = (
+        [p if "://" in p else p + "://" for p in path.split("::")]
+        if "::" in path
+        else [path]
+    )
     # [[url, protocol, kwargs], ...]
     return [
         (
