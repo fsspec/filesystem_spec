@@ -12,7 +12,7 @@ logger = logging.getLogger("webhdfs")
 
 class WebHDFS(AbstractFileSystem):
     """
-    Interface to HDFS over HTTP
+    Interface to HDFS over HTTP using the WebHDFS API. Supports also HttpFS gateways.
 
     Three auth mechanisms are supported:
 
@@ -128,12 +128,22 @@ class WebHDFS(AbstractFileSystem):
             data=data,
             allow_redirects=redirect,
         )
-        if out.status_code == 404:
-            raise FileNotFoundError(path)
-        if out.status_code == 403:
-            raise PermissionError(path or "")
-        if out.status_code == 401:
-            raise PermissionError  # not specific to path
+        if out.status_code in [400, 401, 403, 404, 500]:
+            try:
+                err = out.json()
+                msg = err["RemoteException"]["message"]
+                exp = err["RemoteException"]["exception"]
+            except (ValueError, KeyError):
+                pass
+            else:
+                if exp in ["IllegalArgumentException", "UnsupportedOperationException"]:
+                    raise ValueError(msg)
+                elif exp in ["SecurityException", "AccessControlException"]:
+                    raise PermissionError(msg)
+                elif exp in ["FileNotFoundException"]:
+                    raise FileNotFoundError(msg)
+                else:
+                    raise RuntimeError(msg)
         out.raise_for_status()
         return out
 
