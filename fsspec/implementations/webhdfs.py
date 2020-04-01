@@ -12,7 +12,7 @@ logger = logging.getLogger("webhdfs")
 
 class WebHDFS(AbstractFileSystem):
     """
-    Interface to HDFS over HTTP
+    Interface to HDFS over HTTP using the WebHDFS API. Supports also HttpFS gateways.
 
     Three auth mechanisms are supported:
 
@@ -128,12 +128,22 @@ class WebHDFS(AbstractFileSystem):
             data=data,
             allow_redirects=redirect,
         )
-        if out.status_code == 404:
-            raise FileNotFoundError(path)
-        if out.status_code == 403:
-            raise PermissionError(path or "")
-        if out.status_code == 401:
-            raise PermissionError  # not specific to path
+        if out.status_code in [400, 401, 403, 404, 500]:
+            try:
+                err = out.json()
+                msg = err["RemoteException"]["message"]
+                exp = err["RemoteException"]["exception"]
+            except (ValueError, KeyError):
+                pass
+            else:
+                if exp in ["IllegalArgumentException", "UnsupportedOperationException"]:
+                    raise ValueError(msg)
+                elif exp in ["SecurityException", "AccessControlException"]:
+                    raise PermissionError(msg)
+                elif exp in ["FileNotFoundException"]:
+                    raise FileNotFoundError(msg)
+                else:
+                    raise RuntimeError(msg)
         out.raise_for_status()
         return out
 
@@ -226,10 +236,14 @@ class WebHDFS(AbstractFileSystem):
     def ukey(self, path):
         """Checksum info of file, giving method and result"""
         out = self._call("GETFILECHECKSUM", path=path, redirect=False)
-        location = self._apply_proxy(out.headers["Location"])
-        out2 = self.session.get(location)
-        out2.raise_for_status()
-        return out2.json()["FileChecksum"]
+        if "Location" in out.headers:
+            location = self._apply_proxy(out.headers["Location"])
+            out2 = self.session.get(location)
+            out2.raise_for_status()
+            return out2.json()["FileChecksum"]
+        else:
+            out.raise_for_status()
+            return out.json()["FileChecksum"]
 
     def home_directory(self):
         """Get user's home directory"""
@@ -352,7 +366,11 @@ class WebHDFile(AbstractBufferedFile):
             This is the last block, so should complete file, if
             self.autocommit is True.
         """
-        out = self.fs.session.post(self.location, data=self.buffer.getvalue())
+        out = self.fs.session.post(
+            self.location,
+            data=self.buffer.getvalue(),
+            headers={"content-type": "application/octet-stream"},
+        )
         out.raise_for_status()
         return True
 
@@ -369,7 +387,9 @@ class WebHDFile(AbstractBufferedFile):
         location = self.fs._apply_proxy(out.headers["Location"])
         if "w" in self.mode:
             # create empty file to append to
-            out2 = self.fs.session.put(location)
+            out2 = self.fs.session.put(
+                location, headers={"content-type": "application/octet-stream"}
+            )
             out2.raise_for_status()
         self.location = location.replace("CREATE", "APPEND")
 
@@ -378,9 +398,12 @@ class WebHDFile(AbstractBufferedFile):
             "OPEN", path=self.path, offset=start, length=end - start, redirect=False
         )
         out.raise_for_status()
-        location = out.headers["Location"]
-        out2 = self.fs.session.get(self.fs._apply_proxy(location))
-        return out2.content
+        if "Location" in out.headers:
+            location = out.headers["Location"]
+            out2 = self.fs.session.get(self.fs._apply_proxy(location))
+            return out2.content
+        else:
+            return out.content
 
     def commit(self):
         self.fs.mv(self.path, self.target)
