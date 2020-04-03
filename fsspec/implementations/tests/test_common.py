@@ -3,7 +3,7 @@ import datetime
 import pytest
 
 from fsspec import AbstractFileSystem
-from fsspec.implementations.tests.conftest import FILESYSTEMS, READ_ONLY_FILESYSTEMS
+from fsspec.implementations.tests.conftest import READ_ONLY_FILESYSTEMS
 
 TEST_FILE = 'file'
 

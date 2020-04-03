@@ -12,12 +12,12 @@ from fsspec.implementations.sftp import SFTPFileSystem
 from fsspec.implementations.zip import ZipFileSystem
 
 FILESYSTEMS = {
-    # 'cached': CachingFileSystem,
-    # 'ftp': FTPFileSystem,
+    'cached': CachingFileSystem,
+    'ftp': FTPFileSystem,
     'dask': DaskWorkerFileSystem,
     'github': GithubFileSystem,
     'hdfs': PyArrowHDFS,
-    # 'http': HTTPFileSystem,
+    'http': HTTPFileSystem,
     'local': LocalFileSystem,
     'memory': MemoryFileSystem,
     'sftp': SFTPFileSystem,
