@@ -976,6 +976,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Alias of :ref:`FilesystemSpec.get`."""
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
+    def created(self, path):
+        raise NotImplementedError
+
+    def modified(self, path):
+        raise NotImplementedError
+
 
 class AbstractBufferedFile(io.IOBase):
     """Convenient class to derive from to provide buffering

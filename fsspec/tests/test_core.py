@@ -60,3 +60,7 @@ def test_list():
     of = open_files(plist)
     assert len(of) == len(flist)
     assert [f.path for f in of] == plist
+
+
+def test_created():
+    
