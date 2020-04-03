@@ -1,6 +1,7 @@
 import io
 import requests
 from ..spec import AbstractFileSystem
+from ..utils import infer_storage_options
 
 
 class GithubFileSystem(AbstractFileSystem):
@@ -12,6 +13,18 @@ class GithubFileSystem(AbstractFileSystem):
 
     Given that code files tend to be small, and that github does not support
     retrieving partial content, we always fetch whole files.
+
+    When using fsspec.open, allows URIs of the form:
+
+    - "github://path/file", in which case you must specify org, repo and
+      may specify sha in the extra args
+    - 'github://org:repo@/precip/catalog.yml', where the org and repo are
+      part of the URI
+    - 'github://org:repo@sha/precip/catalog.yml', where tha sha is also included
+
+    ``sha`` can be the full or abbreviated hex of the commit you want to fetch
+    from, or a branch or tag name (so long as it doesn't contain special characters
+    like "/", "?", which would have to be HTTP-encoded).
     """
 
     url = "https://api.github.com/repos/{org}/{repo}/git/trees/{sha}"
@@ -26,6 +39,7 @@ class GithubFileSystem(AbstractFileSystem):
         self.ls("")
 
     def ls(self, path, detail=False, sha=None, **kwargs):
+        path = self._strip_protocol(path)
         if path == "":
             sha = self.root
         if sha is None:
@@ -44,6 +58,9 @@ class GithubFileSystem(AbstractFileSystem):
                 sha = out["sha"]
         if path not in self.dircache:
             r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=sha))
+            if r.status_code == 404:
+                raise FileNotFoundError(path)
+            r.raise_for_status()
             self.dircache[path] = [
                 {
                     "name": path + "/" + f["path"] if path else f["path"],
@@ -58,6 +75,23 @@ class GithubFileSystem(AbstractFileSystem):
             return self.dircache[path]
         else:
             return sorted([f["name"] for f in self.dircache[path]])
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        opts = infer_storage_options(path)
+        if "username" not in opts:
+            return super()._strip_protocol(path)
+        return opts['path'].lstrip('/')
+
+    @staticmethod
+    def _get_kwargs_from_urls(path):
+        opts = infer_storage_options(path)
+        if "username" not in opts:
+            return {}
+        out = {'org': opts['username'], 'repo': opts['password']}
+        if opts['host']:
+            out['sha'] = opts['host']
+        return out
 
     def _open(
         self,
