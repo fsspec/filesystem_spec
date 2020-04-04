@@ -26,7 +26,7 @@ def test_modified(fs: AbstractFileSystem):
         created = fs.created(path=TEST_FILE)
         fs.touch(TEST_FILE)
         modified = fs.modified(path=TEST_FILE)
+        assert isinstance(modified, datetime.datetime)
         assert modified > created
-        assert isinstance(created, datetime.datetime)
     finally:
         fs.rm(TEST_FILE)
