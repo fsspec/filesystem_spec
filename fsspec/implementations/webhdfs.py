@@ -376,14 +376,13 @@ class WebHDFile(AbstractBufferedFile):
 
     def _initiate_upload(self):
         """ Create remote file/upload """
+        kwargs = self.kwargs.copy()
         if "a" in self.mode:
             op, method = "APPEND", "POST"
         else:
             op, method = "CREATE", "PUT"
-            if self.fs.exists(self.path):
-                # no "truncate" or "create empty"
-                self.fs.rm(self.path)
-        out = self.fs._call(op, method, self.path, redirect=False, **self.kwargs)
+            kwargs["overwrite"] = "true"
+        out = self.fs._call(op, method, self.path, redirect=False, **kwargs)
         location = self.fs._apply_proxy(out.headers["Location"])
         if "w" in self.mode:
             # create empty file to append to
