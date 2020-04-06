@@ -81,16 +81,16 @@ class GithubFileSystem(AbstractFileSystem):
         opts = infer_storage_options(path)
         if "username" not in opts:
             return super()._strip_protocol(path)
-        return opts['path'].lstrip('/')
+        return opts["path"].lstrip("/")
 
     @staticmethod
     def _get_kwargs_from_urls(path):
         opts = infer_storage_options(path)
         if "username" not in opts:
             return {}
-        out = {'org': opts['username'], 'repo': opts['password']}
-        if opts['host']:
-            out['sha'] = opts['host']
+        out = {"org": opts["username"], "repo": opts["password"]}
+        if opts["host"]:
+            out["sha"] = opts["host"]
         return out
 
     def _open(
