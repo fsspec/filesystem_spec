@@ -132,4 +132,4 @@ class ZipFileSystem(AbstractFileSystem):
         return out
 
     def ukey(self, path):
-        return tokenize(path, self.in_fo, self.protocol)
+        return tokenize(path, self.fo, self.protocol)

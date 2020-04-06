@@ -337,6 +337,9 @@ class HTTPFile(AbstractBufferedFile):
             out = b"".join(out)
         return out
 
+    def close(self):
+        pass
+
 
 def file_size(url, session=None, size_policy="head", **kwargs):
     """Call HEAD on the server to get file size
