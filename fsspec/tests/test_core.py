@@ -3,6 +3,7 @@ import pytest
 import tempfile
 
 from fsspec.core import _expand_paths, OpenFile, open_local, get_compression, open_files
+import fsspec
 
 
 @pytest.mark.parametrize(
@@ -60,3 +61,24 @@ def test_list():
     of = open_files(plist)
     assert len(of) == len(flist)
     assert [f.path for f in of] == plist
+
+
+def test_automkdir(tmpdir):
+    dir = os.path.join(str(tmpdir), "a")
+    of = fsspec.open(os.path.join(dir, "afile"), "w")
+    with of:
+        pass
+    assert "afile" in os.listdir(dir)
+
+    dir = os.path.join(str(tmpdir), "b")
+    of = fsspec.open(os.path.join(dir, "bfile"), "w", auto_mkdir=True)
+    with of:
+        pass
+
+    assert "bfile" in os.listdir(dir)
+
+    dir = os.path.join(str(tmpdir), "c")
+    with pytest.raises(FileNotFoundError):
+        of = fsspec.open(os.path.join(dir, "bfile"), "w", auto_mkdir=False)
+        with of:
+            pass
