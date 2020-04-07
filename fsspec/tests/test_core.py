@@ -64,21 +64,21 @@ def test_list():
 
 
 def test_automkdir(tmpdir):
-    dir = os.path.join(str(tmpdir), 'a')
-    of = fsspec.open(os.path.join(dir, 'afile'), 'w')
+    dir = os.path.join(str(tmpdir), "a")
+    of = fsspec.open(os.path.join(dir, "afile"), "w")
     with of:
         pass
-    assert 'afile' in os.listdir(dir)
+    assert "afile" in os.listdir(dir)
 
-    dir = os.path.join(str(tmpdir), 'b')
-    of = fsspec.open(os.path.join(dir, 'bfile'), 'w', auto_mkdir=True)
+    dir = os.path.join(str(tmpdir), "b")
+    of = fsspec.open(os.path.join(dir, "bfile"), "w", auto_mkdir=True)
     with of:
         pass
 
-    assert 'bfile' in os.listdir(dir)
+    assert "bfile" in os.listdir(dir)
 
-    dir = os.path.join(str(tmpdir), 'c')
+    dir = os.path.join(str(tmpdir), "c")
     with pytest.raises(FileNotFoundError):
-        of = fsspec.open(os.path.join(dir, 'bfile'), 'w', auto_mkdir=False)
+        of = fsspec.open(os.path.join(dir, "bfile"), "w", auto_mkdir=False)
         with of:
             pass

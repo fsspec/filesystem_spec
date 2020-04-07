@@ -229,7 +229,7 @@ def open_files(
         storage_options=kwargs,
         protocol=protocol,
     )
-    if 'r' not in mode and auto_mkdir:
+    if "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
         [fs.makedirs(parent, exist_ok=True) for parent in parents]
     return [
