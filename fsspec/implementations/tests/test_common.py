@@ -1,14 +1,14 @@
 import datetime
-
+import time
 import pytest
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.tests.conftest import READ_ONLY_FILESYSTEMS
 
-TEST_FILE = 'file'
+TEST_FILE = "file"
 
 
-@pytest.mark.parametrize("fs", ['local'], indirect=["fs"])
+@pytest.mark.parametrize("fs", ["local"], indirect=["fs"])
 def test_created(fs: AbstractFileSystem):
     try:
         fs.touch(TEST_FILE)
@@ -24,6 +24,7 @@ def test_modified(fs: AbstractFileSystem):
     try:
         fs.touch(TEST_FILE)
         created = fs.created(path=TEST_FILE)
+        time.sleep(0.1)
         fs.touch(TEST_FILE)
         modified = fs.modified(path=TEST_FILE)
         assert isinstance(modified, datetime.datetime)
