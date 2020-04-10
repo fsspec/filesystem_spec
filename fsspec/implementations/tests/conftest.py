@@ -2,9 +2,7 @@ import pytest
 
 from fsspec.implementations.local import LocalFileSystem
 
-FILESYSTEMS = {
-    "local": LocalFileSystem,
-}
+FILESYSTEMS = {"local": LocalFileSystem}
 
 READ_ONLY_FILESYSTEMS = []
 
