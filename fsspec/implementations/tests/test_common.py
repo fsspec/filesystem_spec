@@ -24,7 +24,7 @@ def test_modified(fs: AbstractFileSystem):
     try:
         fs.touch(TEST_FILE)
         created = fs.created(path=TEST_FILE)
-        time.sleep(0.1)
+        time.sleep(0.05)
         fs.touch(TEST_FILE)
         modified = fs.modified(path=TEST_FILE)
         assert isinstance(modified, datetime.datetime)

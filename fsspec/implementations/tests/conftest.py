@@ -1,6 +1,5 @@
 import pytest
 
-from fsspec.implementations.http import HTTPFileSystem
 from fsspec.implementations.local import LocalFileSystem
 
 FILESYSTEMS = {
