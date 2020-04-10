@@ -1,12 +1,12 @@
+import io
+import logging
+import os
 import warnings
 from hashlib import md5
-import io
-import os
-import logging
 
+from .dircache import DirCache
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path
-from .dircache import DirCache
 
 logger = logging.getLogger("fsspec")
 
@@ -977,9 +977,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
     def created(self, path):
+        """Return the created timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
 
     def modified(self, path):
+        """Return the modified timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
 
 
