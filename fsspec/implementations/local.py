@@ -1,3 +1,4 @@
+import datetime
 import io
 import os
 import shutil
@@ -113,6 +114,14 @@ class LocalFileSystem(AbstractFileSystem):
             os.utime(path, None)
         else:
             open(path, "a").close()
+
+    def created(self, path):
+        info = self.info(path=path)
+        return datetime.datetime.utcfromtimestamp(info["created"])
+
+    def modified(self, path):
+        info = self.info(path=path)
+        return datetime.datetime.utcfromtimestamp(info["mtime"])
 
     @classmethod
     def _parent(cls, path):
