@@ -154,11 +154,14 @@ def make_path_posix(path, sep=os.sep):
         path = path[1:]
     if path.startswith("\\\\"):
         # special case for windows UNC/DFS-style paths, do nothing,
-        # jsut flip the slashes around (case below does not work!)
+        # just flip the slashes around (case below does not work!)
         return path.replace("\\", "/")
-    if path.startswith("\\") or re.match("[\\\\]*[A-Za-z]:", path):
-        # windows full path "\\server\\path" or "C:\\local\\path"
+    if re.match("[A-Za-z]:", path):
+        # windows full path like "C:\\local\\path"
         return path.lstrip("\\").replace("\\", "/").replace("//", "/")
+    if path.startswith("\\"):
+        # windows network path like "\\server\\path"
+        return "/" + path.lstrip("\\").replace("\\", "/").replace("//", "/")
     if (
         sep not in path
         and "/" not in path
