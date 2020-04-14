@@ -415,6 +415,12 @@ def test_make_path_posix():
         )
         == "//windows-server/someshare/path/more/path/dir/foo.parquet"
     )
+    assert (
+        make_path_posix(
+            r"\\SERVER\UserHomeFolder$\me\My Documents\project1\data\filen.csv"
+        )
+        == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
+    )
     assert "/" in make_path_posix("rel\\path", sep="\\")
 
 
