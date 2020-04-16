@@ -65,7 +65,7 @@ class HTTPFileSystem(AbstractFileSystem):
 
     # TODO: override get
 
-    def ls(self, url, detail=True):
+    def ls(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
         r = self.session.get(url, **self.kwargs)
         if self.simple_links:
@@ -78,9 +78,8 @@ class HTTPFileSystem(AbstractFileSystem):
             if isinstance(l, tuple):
                 l = l[1]
             if l.startswith("http"):
-                if self.same_schema:
-                    if l.split(":", 1)[0] == url.split(":", 1)[0]:
-                        out.add(l)
+                if self.same_schema and l.startswith(url):
+                    out.add(l)
                 elif l.replace("https", "http").startswith(
                     url.replace("https", "http")
                 ):
