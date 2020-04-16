@@ -2,6 +2,7 @@ import io
 import requests
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
+from .memory import MemoryFile
 
 
 class GithubFileSystem(AbstractFileSystem):
@@ -106,4 +107,4 @@ class GithubFileSystem(AbstractFileSystem):
             raise NotImplementedError
         url = self.rurl.format(org=self.org, repo=self.repo, path=path, sha=self.root)
         r = requests.get(url)
-        return io.BytesIO(r.content)
+        return MemoryFile(None, None, r.content)

@@ -150,7 +150,7 @@ class MemoryFile(BytesIO):
     No need to provide fs, path if auto-committing (default)
     """
 
-    def __init__(self, fs, path, data=None):
+    def __init__(self, fs=None, path=None, data=None):
         self.fs = fs
         self.path = path
         if data:
