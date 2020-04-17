@@ -607,11 +607,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
             with self.open(rpath, "rb", **kwargs) as f1:
-                with open(lpath, "wb") as f2:
-                    data = True
-                    while data:
-                        data = f1.read(self.blocksize)
-                        f2.write(data)
+                if not os.path.isdir(lpath):
+                    with open(lpath, "wb") as f2:
+                        data = True
+                        while data:
+                            data = f1.read(self.blocksize)
+                            f2.write(data)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """ Upload file from local """
