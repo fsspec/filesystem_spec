@@ -3,6 +3,9 @@ import json
 
 import pytest
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
+import fsspec
+
+import numpy as np
 
 
 class DummyTestFS(AbstractFileSystem):
@@ -204,3 +207,30 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+@pytest.mark.parametrize(
+    "dt",
+    [
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.float32,
+        np.float64,
+    ],
+)
+def test_readinto_with_numpy(tmpdir, dt):
+    store_path = str(tmpdir / "test_arr.npy")
+    arr = np.arange(10, dtype=dt)
+    arr.tofile(store_path)
+
+    arr2 = np.empty_like(arr)
+    with fsspec.open(store_path, "rb") as f:
+        f.readinto(arr2)
+
+    assert np.array_equal(arr, arr2)
