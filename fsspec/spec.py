@@ -1246,8 +1246,7 @@ class AbstractBufferedFile(io.IOBase):
         https://docs.python.org/3/library/io.html#io.RawIOBase.readinto
         """
         data = self.read(len(b))
-        for i in range(len(data)):
-            b[i] = data[i]
+        memoryview(b).cast("B")[: len(data)] = data
         return len(data)
 
     def readuntil(self, char=b"\n", blocks=None):
