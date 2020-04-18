@@ -607,7 +607,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
             with self.open(rpath, "rb", **kwargs) as f1:
-                if not os.path.isdir(lpath):
+                if not recursive or not os.path.isdir(lpath):
                     with open(lpath, "wb") as f2:
                         data = True
                         while data:
