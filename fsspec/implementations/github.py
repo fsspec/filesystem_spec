@@ -1,4 +1,3 @@
-import io
 import requests
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
