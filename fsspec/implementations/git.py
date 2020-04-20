@@ -11,15 +11,15 @@ class GitFileSystem(AbstractFileSystem):
     def __init__(self, path=None, ref=None, **kwargs):
         super().__init__(**kwargs)
         self.repo = pygit2.Repository(path or os.getcwd())
-        self.ref = ref or 'master'
+        self.ref = ref or "master"
 
     @classmethod
     def _strip_protocol(cls, path):
-        return super()._strip_protocol(path).lstrip('/')
+        return super()._strip_protocol(path).lstrip("/")
 
     def _path_to_object(self, path, ref):
         comm, ref = self.repo.resolve_refish(ref or self.ref)
-        parts = path.split('/')
+        parts = path.split("/")
         tree = comm.tree
         for part in parts:
             if part and isinstance(tree, pygit2.Tree):
@@ -33,25 +33,33 @@ class GitFileSystem(AbstractFileSystem):
             out = []
             for obj in tree:
                 if isinstance(obj, pygit2.Tree):
-                    out.append({'type': 'directory',
-                                'name': '/'.join([path, obj.name]),
-                                'hex': obj.hex,
-                                'mode': "%o" % obj.filemode,
-                                'size': 0})
+                    out.append(
+                        {
+                            "type": "directory",
+                            "name": "/".join([path, obj.name]),
+                            "hex": obj.hex,
+                            "mode": "%o" % obj.filemode,
+                            "size": 0,
+                        }
+                    )
                 else:
-                    out.append({'type': 'file',
-                                'name': '/'.join([path, obj.name]),
-                                'hex': obj.hex,
-                                'mode': "%o" % obj.filemode,
-                                'size': obj.size})
+                    out.append(
+                        {
+                            "type": "file",
+                            "name": "/".join([path, obj.name]),
+                            "hex": obj.hex,
+                            "mode": "%o" % obj.filemode,
+                            "size": obj.size,
+                        }
+                    )
         else:
             out = [tree]
         if detail:
             return out
-        return [o['name'] for o in out]
+        return [o["name"] for o in out]
 
     def ukey(self, path, ref=None):
-        return self.info(path, ref=ref)['hex']
+        return self.info(path, ref=ref)["hex"]
 
     def _open(
         self,

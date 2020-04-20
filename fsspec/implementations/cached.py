@@ -258,8 +258,12 @@ class CachingFileSystem(AbstractFileSystem):
             **kwargs
         )
         if self.compression:
-            comp = infer_compression(path) if self.compression == 'infer' else self.compression
-            f = compr[comp](f, mode='rb')
+            comp = (
+                infer_compression(path)
+                if self.compression == "infer"
+                else self.compression
+            )
+            f = compr[comp](f, mode="rb")
         if "blocksize" in detail:
             if detail["blocksize"] != f.blocksize:
                 raise ValueError(
@@ -395,8 +399,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         # TODO: why not just use fs.get ??
         f = self.fs._open(path, **kwargs)
         if self.compression:
-            comp = infer_compression(path) if self.compression == 'infer' else self.compression
-            f = compr[comp](f, mode='rb')
+            comp = (
+                infer_compression(path)
+                if self.compression == "infer"
+                else self.compression
+            )
+            f = compr[comp](f, mode="rb")
         with open(fn, "wb") as f2:
             if isinstance(f, AbstractBufferedFile):
                 # want no type of caching if just downloading whole thing
@@ -476,8 +484,12 @@ class SimpleCacheFileSystem(CachingFileSystem):
             if getattr(f, "blocksize", 0) and f.size:
                 # opportunity to parallelise here (if not compressed)
                 if self.compression:
-                    comp = infer_compression(path) if self.compression == 'infer' else self.compression
-                    f = compr[comp](f, mode='rb')
+                    comp = (
+                        infer_compression(path)
+                        if self.compression == "infer"
+                        else self.compression
+                    )
+                    f = compr[comp](f, mode="rb")
                 data = True
                 while data:
                     data = f.read(f.blocksize)
@@ -485,8 +497,12 @@ class SimpleCacheFileSystem(CachingFileSystem):
             else:
                 # this only applies to HTTP, should instead use streaming
                 if self.compression:
-                    comp = infer_compression(path) if self.compression == 'infer' else self.compression
-                    f = compr[comp](f, mode='rb')
+                    comp = (
+                        infer_compression(path)
+                        if self.compression == "infer"
+                        else self.compression
+                    )
+                    f = compr[comp](f, mode="rb")
                 f2.write(f.read())
         return self._open(path, mode)
 

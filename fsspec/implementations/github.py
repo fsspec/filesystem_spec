@@ -56,10 +56,13 @@ class GithubFileSystem(AbstractFileSystem):
         -------
         List of string
         """
-        r = requests.get('https://api.github.com/{part}/{org}/repos'.format(
-            part=['users', 'orgs'][is_org], org=org_or_user))
+        r = requests.get(
+            "https://api.github.com/{part}/{org}/repos".format(
+                part=["users", "orgs"][is_org], org=org_or_user
+            )
+        )
         r.raise_for_status()
-        return [repo['name'] for repo in r.json()]
+        return [repo["name"] for repo in r.json()]
 
     def ls(self, path, detail=False, sha=None, **kwargs):
         path = self._strip_protocol(path)
@@ -128,7 +131,9 @@ class GithubFileSystem(AbstractFileSystem):
     ):
         if mode != "rb":
             raise NotImplementedError
-        url = self.rurl.format(org=self.org, repo=self.repo, path=path, sha=sha or self.root)
+        url = self.rurl.format(
+            org=self.org, repo=self.repo, path=path, sha=sha or self.root
+        )
         r = requests.get(url)
         if r.status_code == 404:
             raise FileNotFoundError(path)
