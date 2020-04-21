@@ -5,10 +5,26 @@ import os
 
 
 class GitFileSystem(AbstractFileSystem):
+    """Browse the files of a local git repo at any hash/tag/branch
+
+    (experimental backend)
+    """
 
     root_marker = ""
 
     def __init__(self, path=None, ref=None, **kwargs):
+        """
+
+        Parameters
+        ----------
+        path: str (optional)
+            Local location of the repo (uses current directory if not given)
+        ref: str (optional)
+            Reference to work with, could be a hash, tag or branch name. Defaults
+            to current working tree. Note that ``ls`` and ``open`` also take hash,
+            so this becomes the default for those operations
+        kwargs
+        """
         super().__init__(**kwargs)
         self.repo = pygit2.Repository(path or os.getcwd())
         self.ref = ref or "master"

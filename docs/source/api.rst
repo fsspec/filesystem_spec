@@ -79,7 +79,7 @@ Built-in Implementations
    fsspec.implementations.cached.WholeFileCacheFileSystem
    fsspec.implementations.cached.SimpleCacheFileSystem
    fsspec.implementations.github.GithubFileSystem
-   fsspec.implementations.dvc.DVCFileSystem
+   fsspec.implementations.git.GitFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -123,7 +123,7 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.github.GithubFileSystem
    :members: __init__
 
-.. autoclass:: fsspec.implementations.dvc.DVCFileSystem
+.. autoclass:: fsspec.implementations.git.GitFileSystem
    :members: __init__
 
 Other Known Implementations

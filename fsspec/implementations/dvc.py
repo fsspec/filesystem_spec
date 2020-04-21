@@ -7,10 +7,25 @@ lfs = LocalFileSystem()
 
 
 class DVCFileSystem(AbstractFileSystem):
+    """DVC backend (experimental)
+
+    Load data files that are versioned using the `Data Version Control`_ system
+
+    .. _Data Version Control: https://dvc.org/
+
+    This interface is incomplete and experimental.
+    """
 
     root_marker = ""
 
     def __init__(self, path=None, **kwargs):
+        """
+
+        Parameters
+        ----------
+        path: str (optional)
+            Location of the repo to access; defaults to the current directory.
+        """
         super().__init__(**kwargs)
         self.repo = dvc.repo.Repo(path)
         self.path = self.repo.find_root()
