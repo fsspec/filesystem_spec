@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import io
 import os
 import logging
+import re
 from .compression import compr
 from .utils import (
     infer_compression,
@@ -260,8 +261,9 @@ def _un_chain(path, kwargs):
                 paths = list(paths)
             out.append([paths, protocols[0], kwargs[0]])
         return out
+    x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
     bits = (
-        [p if "://" in p else p + "://" for p in path.split("::")]
+        [p if "://" in p or x.match(p) else p + "://" for p in path.split("::")]
         if "::" in path
         else [path]
     )
