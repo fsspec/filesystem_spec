@@ -2,9 +2,11 @@ import os
 import shutil
 import pickle
 import pytest
+import tempfile
 
 import fsspec
 from fsspec.implementations.cached import CachingFileSystem
+from fsspec.compression import compr
 from .test_ftp import FTPFileSystem
 
 
@@ -289,7 +291,6 @@ def test_filecache_multicache_with_same_file_different_data_reads_from_first(imp
 
 
 def test_filecache_with_checks():
-    import tempfile
     import time
 
     origin = tempfile.mkdtemp()
@@ -320,8 +321,6 @@ def test_filecache_with_checks():
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
 def test_takes_fs_instance(impl):
-    import tempfile
-
     origin = tempfile.mkdtemp()
     data = b"test data"
     f1 = os.path.join(origin, "afile")
@@ -351,3 +350,38 @@ def test_add_file_to_cache_after_save(local_filecache):
         do_not_use_cache_for_this_instance=True,  # cache is masking the issue
     )
     assert len(fs2.cached_files[-1]) == 1
+
+
+@pytest.mark.parametrize("impl", ["filecache", "simplecache"])
+@pytest.mark.parametrize("compression", ["gzip", "bz2"])
+def test_with_compression(impl, compression):
+    data = b"123456789"
+    tempdir = tempfile.mkdtemp()
+    cachedir = tempfile.mkdtemp()
+    fn = os.path.join(tempdir, "data")
+    f = compr[compression](open(fn, mode="wb"), mode="w")
+    f.write(data)
+    f.close()
+
+    with fsspec.open(
+        "%s::%s" % (impl, fn),
+        "rb",
+        compression=compression,
+        **{impl: dict(same_names=True, cache_storage=cachedir)}
+    ) as f:
+        # stores original compressed file, uncompress on read
+        assert f.read() == data
+        assert "data" in os.listdir(cachedir)
+        assert open(os.path.join(cachedir, "data"), "rb").read() != data
+
+    cachedir = tempfile.mkdtemp()
+
+    with fsspec.open(
+        "%s::%s" % (impl, fn),
+        "rb",
+        **{impl: dict(same_names=True, compression=compression, cache_storage=cachedir)}
+    ) as f:
+        # stores uncompressed data
+        assert f.read() == data
+        assert "data" in os.listdir(cachedir)
+        assert open(os.path.join(cachedir, "data"), "rb").read() == data

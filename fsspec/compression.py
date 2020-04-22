@@ -11,6 +11,7 @@ def noop_file(file, mode, **kwargs):
     return file
 
 
+# TODO: files should also be available as contexts
 # should be functions of the form func(infile, mode=, **kwargs) -> file-like
 compr = {None: noop_file}
 

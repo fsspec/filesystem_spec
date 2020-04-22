@@ -52,7 +52,7 @@ class GitFileSystem(AbstractFileSystem):
                     out.append(
                         {
                             "type": "directory",
-                            "name": "/".join([path, obj.name]),
+                            "name": "/".join([path, obj.name]).lstrip('/'),
                             "hex": obj.hex,
                             "mode": "%o" % obj.filemode,
                             "size": 0,
@@ -62,14 +62,21 @@ class GitFileSystem(AbstractFileSystem):
                     out.append(
                         {
                             "type": "file",
-                            "name": "/".join([path, obj.name]),
+                            "name": "/".join([path, obj.name]).lstrip('/'),
                             "hex": obj.hex,
                             "mode": "%o" % obj.filemode,
                             "size": obj.size,
                         }
                     )
         else:
-            out = [tree]
+            obj = tree
+            out = [{
+                    "type": "file",
+                    "name": obj.name,
+                    "hex": obj.hex,
+                    "mode": "%o" % obj.filemode,
+                    "size": obj.size,
+                    }]
         if detail:
             return out
         return [o["name"] for o in out]
@@ -87,5 +94,5 @@ class GitFileSystem(AbstractFileSystem):
         ref=None,
         **kwargs
     ):
-        obj = self._path_to_object(path, ref)
+        obj = self._path_to_object(path, ref or self.ref)
         return MemoryFile(data=obj.data)
