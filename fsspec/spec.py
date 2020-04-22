@@ -607,11 +607,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
             with self.open(rpath, "rb", **kwargs) as f1:
-                with open(lpath, "wb") as f2:
-                    data = True
-                    while data:
-                        data = f1.read(self.blocksize)
-                        f2.write(data)
+                if not recursive or not os.path.isdir(lpath):
+                    with open(lpath, "wb") as f2:
+                        data = True
+                        while data:
+                            data = f1.read(self.blocksize)
+                            f2.write(data)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """ Upload file from local """
@@ -625,9 +626,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     make_path_posix(os.path.join(dirname, filename))
                     for filename in filelist
                 ]
-            rootdir = make_path_posix(
-                os.path.basename(make_path_posix(lpath).rstrip("/"))
-            )
+            rootdir = os.path.basename(make_path_posix(lpath).rstrip("/"))
             if self.exists(rpath):
                 # copy lpath inside rpath directory
                 rpath2 = posixpath.join(rpath, rootdir)
@@ -644,6 +643,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             rpaths = [rpath]
         for lpath, rpath in zip(lpaths, rpaths):
             with open(lpath, "rb") as f1:
+                self.mkdirs(os.path.dirname(rpath), exist_ok=True)
                 with self.open(rpath, "wb", **kwargs) as f2:
                     data = True
                     while data:
@@ -1246,7 +1246,7 @@ class AbstractBufferedFile(io.IOBase):
         https://docs.python.org/3/library/io.html#io.RawIOBase.readinto
         """
         data = self.read(len(b))
-        b[: len(data)] = data
+        memoryview(b).cast("B")[: len(data)] = data
         return len(data)
 
     def readuntil(self, char=b"\n", blocks=None):
