@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.7.x series
+------------
+
+* added ``git`` and ``github`` interfaces
+* added chained syntax for open, open_files and get_mapper
+* adapt webHDFS for HttpFS
+* added open_local
+* added ``simplecache``, and compression to both file caches
+
+
 Version 0.6.2
 -------------
 
