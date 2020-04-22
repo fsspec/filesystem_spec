@@ -1,6 +1,6 @@
 from collections.abc import MutableMapping
-from .registry import get_filesystem_class
-from .core import split_protocol
+from .registry import filesystem
+from .core import split_protocol, _un_chain
 
 
 class FSMap(MutableMapping):
@@ -131,6 +131,8 @@ def get_mapper(url, check=False, create=False, **kwargs):
     of the mapper required. All keys will be file-names below this location,
     and their values the contents of each key.
 
+    Also accepts compound URLs like zip::s3://bucket/file.zip , see ``fsspec.open``.
+
     Parameters
     ----------
     url: str
@@ -146,8 +148,27 @@ def get_mapper(url, check=False, create=False, **kwargs):
     -------
     ``FSMap`` instance, the dict-like key-value store.
     """
-    protocol, path = split_protocol(url)
-    cls = get_filesystem_class(protocol)
-    fs = cls(**kwargs)
+    chain = _un_chain(url, kwargs)
+    if len(chain) > 1:
+        kwargs = chain[0][2]
+        inkwargs = kwargs
+        urlpath = False
+        for i, ch in enumerate(chain):
+            urls, protocol, kw = ch
+            if isinstance(urls, str):
+                if urlpath is False:
+                    urlpath = protocol + "://" + split_protocol(urls)[1]
+            if i == 0:
+                continue
+            inkwargs["target_protocol"] = protocol
+            inkwargs["target_options"] = kw.copy()
+            inkwargs["fo"] = urls
+            inkwargs = inkwargs["target_options"]
+        protocol = chain[0][1]
+        fs = filesystem(protocol, **kwargs)
+    else:
+        protocol, urlpath = split_protocol(url)
+        fs = filesystem(protocol, **kwargs)
+        urlpath = fs._strip_protocol(url)
     # Removing protocol here - could defer to each open() on the backend
-    return FSMap(url, fs, check, create)
+    return FSMap(urlpath, fs, check, create)
