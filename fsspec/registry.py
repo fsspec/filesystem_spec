@@ -74,6 +74,10 @@ known_implementations = {
         "class": "fsspec.implementations.github.GithubFileSystem",
         "err": "Install the requests package to use the github FS",
     },
+    "git": {
+        "class": "fsspec.implementations.git.GitFileSystem",
+        "err": "Install pygit2 to browse local git repos",
+    },
 }
 
 minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}

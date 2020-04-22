@@ -8,6 +8,8 @@ import inspect
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.core import MMapCache, BaseCache
+from fsspec.utils import infer_compression
+from fsspec.compression import compr
 
 logger = logging.getLogger("fsspec")
 
@@ -43,6 +45,7 @@ class CachingFileSystem(AbstractFileSystem):
         target_options=None,
         fs=None,
         same_names=False,
+        compression=None,
         **kwargs
     ):
         """
@@ -75,6 +78,10 @@ class CachingFileSystem(AbstractFileSystem):
             By default, target URLs are hashed, so that files from different backends
             with the same basename do not conflict. If this is true, the original
             basename is used.
+        compression: str (optional)
+            To decompress on download. Can be 'infer' (guess from the URL name),
+            one of the entries in ``fsspec.compression.compr``, or None for no
+            decompression.
         """
         super().__init__(**kwargs)
         if not (fs is None) ^ (target_protocol is None):
@@ -95,6 +102,7 @@ class CachingFileSystem(AbstractFileSystem):
         self.cache_check = cache_check
         self.check_files = check_files
         self.expiry = expiry_time
+        self.compression = compression
         self.same_names = same_names
         self.target_protocol = (
             target_protocol if isinstance(target_protocol, str) else fs.protocol
@@ -249,6 +257,13 @@ class CachingFileSystem(AbstractFileSystem):
             cache_type=None,
             **kwargs
         )
+        if self.compression:
+            comp = (
+                infer_compression(path)
+                if self.compression == "infer"
+                else self.compression
+            )
+            f = compr[comp](f, mode="rb")
         if "blocksize" in detail:
             if detail["blocksize"] != f.blocksize:
                 raise ValueError(
@@ -383,6 +398,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         # call target filesystems open
         # TODO: why not just use fs.get ??
         f = self.fs._open(path, **kwargs)
+        if self.compression:
+            comp = (
+                infer_compression(path)
+                if self.compression == "infer"
+                else self.compression
+            )
+            f = compr[comp](f, mode="rb")
         with open(fn, "wb") as f2:
             if isinstance(f, AbstractBufferedFile):
                 # want no type of caching if just downloading whole thing
@@ -460,13 +482,27 @@ class SimpleCacheFileSystem(CachingFileSystem):
                 # want no type of caching if just downloading whole thing
                 f.cache = BaseCache(0, f.cache.fetcher, f.size)
             if getattr(f, "blocksize", 0) and f.size:
-                # opportunity to parallelise here
+                # opportunity to parallelise here (if not compressed)
+                if self.compression:
+                    comp = (
+                        infer_compression(path)
+                        if self.compression == "infer"
+                        else self.compression
+                    )
+                    f = compr[comp](f, mode="rb")
                 data = True
                 while data:
                     data = f.read(f.blocksize)
                     f2.write(data)
             else:
                 # this only applies to HTTP, should instead use streaming
+                if self.compression:
+                    comp = (
+                        infer_compression(path)
+                        if self.compression == "infer"
+                        else self.compression
+                    )
+                    f = compr[comp](f, mode="rb")
                 f2.write(f.read())
         return self._open(path, mode)
 

@@ -78,6 +78,8 @@ Built-in Implementations
    fsspec.implementations.cached.CachingFileSystem
    fsspec.implementations.cached.WholeFileCacheFileSystem
    fsspec.implementations.cached.SimpleCacheFileSystem
+   fsspec.implementations.github.GithubFileSystem
+   fsspec.implementations.git.GitFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -116,6 +118,12 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.cached.SimpleCacheFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.github.GithubFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.git.GitFileSystem
    :members: __init__
 
 Other Known Implementations

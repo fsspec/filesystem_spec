@@ -1,11 +1,11 @@
-import io
 import requests
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
+from .memory import MemoryFile
 
 
 class GithubFileSystem(AbstractFileSystem):
-    """[Experimental] interface to files in github
+    """Interface to files in github
 
     An instance of this class provides the files residing within a remote github
     repository. You may specify a point in the repos history, by SHA, branch
@@ -37,6 +37,31 @@ class GithubFileSystem(AbstractFileSystem):
         self.repo = repo
         self.root = sha
         self.ls("")
+
+    @classmethod
+    def repos(cls, org_or_user, is_org=True):
+        """List repo names for given org or user
+
+        This may become the top level of the FS
+
+        Parameters
+        ----------
+        org_or_user: str
+            Nmae of the github org or user to query
+        is_org: bool (default True)
+            Whether the name is an organisation (True) or user (False)
+
+        Returns
+        -------
+        List of string
+        """
+        r = requests.get(
+            "https://api.github.com/{part}/{org}/repos".format(
+                part=["users", "orgs"][is_org], org=org_or_user
+            )
+        )
+        r.raise_for_status()
+        return [repo["name"] for repo in r.json()]
 
     def ls(self, path, detail=False, sha=None, **kwargs):
         path = self._strip_protocol(path)
@@ -100,10 +125,16 @@ class GithubFileSystem(AbstractFileSystem):
         block_size=None,
         autocommit=True,
         cache_options=None,
+        sha=None,
         **kwargs
     ):
         if mode != "rb":
             raise NotImplementedError
-        url = self.rurl.format(org=self.org, repo=self.repo, path=path, sha=self.root)
+        url = self.rurl.format(
+            org=self.org, repo=self.repo, path=path, sha=sha or self.root
+        )
         r = requests.get(url)
-        return io.BytesIO(r.content)
+        if r.status_code == 404:
+            raise FileNotFoundError(path)
+        r.raise_for_status()
+        return MemoryFile(None, None, r.content)
