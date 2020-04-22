@@ -131,6 +131,8 @@ def get_mapper(url, check=False, create=False, **kwargs):
     of the mapper required. All keys will be file-names below this location,
     and their values the contents of each key.
 
+    Also accepts compound URLs like zip::s3://bucket/file.zip , see ``fsspec.open``.
+
     Parameters
     ----------
     url: str
