@@ -57,6 +57,19 @@ def test_get_put(tmpdir):
     fs.put(tmpdir, "/more", recursive=True)
     assert fs.find("/more") == ["/more/dir/two", "/more/one", "/more/three"]
 
+    entries = ["/dir/two", "/one", "/three"]
+
+    fs.mkdir("/exists")
+    fs.put(tmpdir, "/exists", recursive=True)
+    tmpbase = os.path.basename(tmpdir)
+
+    assert fs.find("/exists") == ["/exists/" + tmpbase + p for p in entries]
+
+    fs.mkdir("/existstwo")
+    fs.put(tmpdir + "/", "/existstwo", recursive=True)
+    tmpbase = os.path.basename(tmpdir)
+    assert fs.find("/existstwo") == ["/existstwo" + p for p in entries]
+
     @contextlib.contextmanager
     def tmp_chdir(path):
         curdir = os.getcwd()

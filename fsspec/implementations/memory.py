@@ -96,7 +96,7 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def exists(self, path):
-        return path in self.store
+        return path in self.store or path.rstrip("/") in self.pseudo_dirs
 
     def _open(
         self,

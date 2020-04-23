@@ -626,9 +626,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     make_path_posix(os.path.join(dirname, filename))
                     for filename in filelist
                 ]
-            rootdir = os.path.basename(make_path_posix(lpath).rstrip("/"))
-            if self.exists(rpath):
+            lpath_posix = make_path_posix(lpath)
+            if self.exists(rpath) and not lpath_posix.endswith("/"):
                 # copy lpath inside rpath directory
+                rootdir = os.path.basename(lpath_posix.rstrip("/"))
                 rpath2 = posixpath.join(rpath, rootdir)
             else:
                 # copy lpath as rpath directory
