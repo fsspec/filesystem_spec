@@ -105,7 +105,9 @@ class CachingFileSystem(AbstractFileSystem):
         self.compression = compression
         self.same_names = same_names
         self.target_protocol = (
-            target_protocol if isinstance(target_protocol, str) else fs.protocol
+            target_protocol
+            if isinstance(target_protocol, str)
+            else (fs.protocol if isinstance(fs.protocol, str) else fs.protocol[0])
         )
         self.load_cache()
         self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
