@@ -4,7 +4,13 @@ import pytest
 
 from fsspec.implementations.local import LocalFileSystem
 
-FILESYSTEMS = {"local": LocalFileSystem}
+
+# A dummy filesystem that has a list of protocols
+class MultiProtocolFileSystem(LocalFileSystem):
+    protocol = ["file", "other"]
+
+
+FILESYSTEMS = {"local": LocalFileSystem, "multi": MultiProtocolFileSystem}
 
 READ_ONLY_FILESYSTEMS = []
 
