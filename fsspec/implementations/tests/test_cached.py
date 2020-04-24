@@ -320,14 +320,14 @@ def test_filecache_with_checks():
 
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
-def test_takes_fs_instance(impl):
+@pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
+def test_takes_fs_instance(impl, fs):
     origin = tempfile.mkdtemp()
     data = b"test data"
     f1 = os.path.join(origin, "afile")
     with open(f1, "wb") as f:
         f.write(data)
 
-    fs = fsspec.filesystem("file")
     fs2 = fsspec.filesystem(impl, fs=fs)
 
     assert fs2.cat(f1) == data
