@@ -104,7 +104,7 @@ class LocalFileSystem(AbstractFileSystem):
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
-        if self.auto_mkdir:
+        if self.auto_mkdir and "w" in mode:
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
 

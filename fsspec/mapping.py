@@ -74,7 +74,7 @@ class FSMap(MutableMapping):
         k = self._key_to_str(key)
         try:
             result = self.fs.cat(k)
-        except (FileNotFoundError, IsADirectoryError):
+        except (FileNotFoundError, IsADirectoryError, NotADirectoryError):
             if default is not None:
                 return default
             raise KeyError(key)
