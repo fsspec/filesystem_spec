@@ -1,7 +1,7 @@
-fsspec's: python filesystem interfaces
+FSSPEC: Filesystem interfaces for Python
 ======================================
 
-Filesystem Spec is a project to unify various projects and classes to work with remote filesystems and
+Filesystem Spec (FSSPEC) is a project to unify various projects and classes to work with remote filesystems and
 file-system-like abstractions using a standard pythonic interface.
 
 
