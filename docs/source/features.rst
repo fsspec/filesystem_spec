@@ -138,7 +138,7 @@ Mount anything with FUSE
 ------------------------
 
 Any path of any file-system can be mapped to a local directory using pyfuse and
-:func:`sspec.fuse.run`. This feature is experimental, but basic file listing with
+:func:`fsspec.fuse.run`. This feature is experimental, but basic file listing with
 details, and read/write should generally be available to the extent that the
 remote file-system provides enough information. Naturally, if a file-system is read-only,
 then write operations will fail - but they will tend to fail late and with obscure
