@@ -8,7 +8,7 @@ from .registry import known_implementations
 from .core import split_protocol, get_filesystem_class, OpenFile
 
 pn.extension()
-logger = logging.getLogger('fsspec.gui')
+logger = logging.getLogger("fsspec.gui")
 
 
 class SigSlot(object):
@@ -22,6 +22,7 @@ class SigSlot(object):
 
     By default, all signals emit a DEBUG logging statement.
     """
+
     signals = []  # names of signals that this class may emit
     # each of which must be set by _register for any new instance
     slots = []  # names of actions that this class may respond to
@@ -40,8 +41,9 @@ class SigSlot(object):
         self.panel = pn.pane.PaneBase()
         # no signals to set up in the base class
 
-    def _register(self, widget, name, thing='value', log_level=logging.DEBUG,
-                  auto=False):
+    def _register(
+        self, widget, name, thing="value", log_level=logging.DEBUG, auto=False
+    ):
         """Watch the given attribute of a widget and assign it a named event
 
         This is normally called at the time a widget is instantiated, in the
@@ -65,9 +67,18 @@ class SigSlot(object):
         """
         if name not in self.signals:
             raise ValueError("Attempt to assign an undeclared signal: %s" % name)
-        self._sigs[name] = {'widget': widget, 'callbacks': [], 'thing': thing,
-                            'log': log_level}
-        wn = "-".join([getattr(widget, 'name', str(widget)) if widget is not None else "none", thing])
+        self._sigs[name] = {
+            "widget": widget,
+            "callbacks": [],
+            "thing": thing,
+            "log": log_level,
+        }
+        wn = "-".join(
+            [
+                getattr(widget, "name", str(widget)) if widget is not None else "none",
+                thing,
+            ]
+        )
         self._map[wn] = name
         if widget is not None:
             widget.param.watch(self._signal, thing, onlychanged=True)
@@ -78,9 +89,8 @@ class SigSlot(object):
         """Display in a notebook or a server"""
         try:
             return self.panel._repr_mimebundle_(*args, **kwargs)
-        except:
-            raise NotImplementedError("Panel does not seem to be set "
-                                      "up properly")
+        except (ValueError, AttributeError):
+            raise NotImplementedError("Panel does not seem to be set " "up properly")
 
     def connect(self, signal, slot):
         """Associate call back with given event
@@ -92,7 +102,7 @@ class SigSlot(object):
         Alternatively, the callback can be a string, in which case it means
         emitting the correspondingly-named event (i.e., connect to self)
         """
-        self._sigs[signal]['callbacks'].append(slot)
+        self._sigs[signal]["callbacks"].append(slot)
 
     def _signal(self, event):
         """This is called by a an action on a widget
@@ -127,8 +137,8 @@ class SigSlot(object):
 
         Calling of callbacks will halt whenever one returns False.
         """
-        logger.log(self._sigs[sig]['log'], "{}: {}".format(sig, value))
-        for callback in self._sigs[sig]['callbacks']:
+        logger.log(self._sigs[sig]["log"], "{}: {}".format(sig, value))
+        for callback in self._sigs[sig]["callbacks"]:
             if isinstance(callback, str):
                 self._emit(callback)
             elif callback(value) is False:
@@ -142,8 +152,8 @@ class SigSlot(object):
 class SingleSelect(SigSlot):
     """A multiselect which only allows you to select one item for an event"""
 
-    signals = ['_selected', 'selected']  # the first is internal
-    slots = ['set_options', 'set_selection', 'add', 'clear', 'select']
+    signals = ["_selected", "selected"]  # the first is internal
+    slots = ["set_options", "set_selection", "add", "clear", "select"]
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -151,9 +161,9 @@ class SingleSelect(SigSlot):
 
     def _setup(self):
         self.panel = pn.widgets.MultiSelect(**self.kwargs)
-        self._register(self.panel, '_selected', 'value')
-        self._register(None, 'selected')
-        self.connect('_selected', self.select_one)
+        self._register(self.panel, "_selected", "value")
+        self._register(None, "selected")
+        self.connect("_selected", self.select_one)
 
     def _signal(self, *args, **kwargs):
         super()._signal(*args, **kwargs)
@@ -162,7 +172,7 @@ class SingleSelect(SigSlot):
         with self.ignore_events():
             val = [self.panel.value[-1]] if self.panel.value else []
             self.panel.value = val
-        self._emit('selected', self.panel.value)
+        self._emit("selected", self.panel.value)
 
     def set_options(self, options):
         self.panel.options = options
@@ -180,9 +190,16 @@ class SingleSelect(SigSlot):
 
 class FileSelector(SigSlot):
 
-    signals = ['protocol_changed', 'selection_changed', 'directory_entered',
-               'home_clicked', 'up_clicked', 'go_clicked', 'filters_changed']
-    slots = ['set_filters', 'go_home']
+    signals = [
+        "protocol_changed",
+        "selection_changed",
+        "directory_entered",
+        "home_clicked",
+        "up_clicked",
+        "go_clicked",
+        "filters_changed",
+    ]
+    slots = ["set_filters", "go_home"]
 
     def __init__(self, url=None, filters=None, ignore=None, kwargs=None):
         """
@@ -196,7 +213,7 @@ class FileSelector(SigSlot):
             allowed. Does not affect directories.
             If given, the endings will appear as checkboxes in the interface
         ignore : list(str) (optional)
-            Regex(s) of file basename patterns to ignore, e.g., "\." for typical
+            Regex(s) of file basename patterns to ignore, e.g., "\\." for typical
             hidden files on posix
         kwargs : dict (optional)
             To pass to file system instance
@@ -204,7 +221,7 @@ class FileSelector(SigSlot):
         if url:
             self.init_protocol, url = split_protocol(url)
         else:
-            self.init_protocol, url = 'file', os.getcwd()
+            self.init_protocol, url = "file", os.getcwd()
         self.init_url = url
         self.init_kwargs = kwargs or "{}"
         self.filters = filters
@@ -213,40 +230,46 @@ class FileSelector(SigSlot):
         super().__init__()
 
     def _setup(self):
-        self.url = pn.widgets.TextInput(name='url', value=self.init_url, align='end',
-                                        sizing_mode='stretch_width', width_policy='max')
-        self.protocol = pn.widgets.Select(options=list(sorted(known_implementations)),
-                                          value=self.init_protocol, name='protocol', align='center')
-        self.kwargs = pn.widgets.TextInput(name='kwargs', value="{}", align='center')
-        self.go = pn.widgets.Button(name='⇨', align='end', width=45)
+        self.url = pn.widgets.TextInput(
+            name="url",
+            value=self.init_url,
+            align="end",
+            sizing_mode="stretch_width",
+            width_policy="max",
+        )
+        self.protocol = pn.widgets.Select(
+            options=list(sorted(known_implementations)),
+            value=self.init_protocol,
+            name="protocol",
+            align="center",
+        )
+        self.kwargs = pn.widgets.TextInput(name="kwargs", value="{}", align="center")
+        self.go = pn.widgets.Button(name="⇨", align="end", width=45)
         self.main = SingleSelect(size=10)
-        self.home = pn.widgets.Button(name='🏠', width=40, height=30, align='end')
-        self.up = pn.widgets.Button(name='‹', width=30, height=30, align='end')
+        self.home = pn.widgets.Button(name="🏠", width=40, height=30, align="end")
+        self.up = pn.widgets.Button(name="‹", width=30, height=30, align="end")
 
-        self._register(self.protocol, 'protocol_changed', auto=True)
-        self._register(self.go, 'go_clicked', 'clicks', auto=True)
-        self._register(self.up, 'up_clicked', 'clicks', auto=True)
-        self._register(self.home, 'home_clicked', 'clicks', auto=True)
-        self._register(None, 'selection_changed')
-        self.main.connect('selected', self.selection_changed)
-        self._register(None, 'directory_entered')
+        self._register(self.protocol, "protocol_changed", auto=True)
+        self._register(self.go, "go_clicked", "clicks", auto=True)
+        self._register(self.up, "up_clicked", "clicks", auto=True)
+        self._register(self.home, "home_clicked", "clicks", auto=True)
+        self._register(None, "selection_changed")
+        self.main.connect("selected", self.selection_changed)
+        self._register(None, "directory_entered")
 
         mid = pn.Row(self.home, self.up, self.url, self.go)
 
-        self.panel = pn.Column(
-            pn.Row(
-                self.protocol, self.kwargs
-            ),
-            mid,
-            self.main.panel
-        )
+        self.panel = pn.Column(pn.Row(self.protocol, self.kwargs), mid, self.main.panel)
         self.go_clicked()
         if self.filters:
             self.filter_sel = pn.widgets.CheckBoxGroup(
-                value=self.filters, options=self.filters, inline=False,
-                align='end', width_policy='min'
+                value=self.filters,
+                options=self.filters,
+                inline=False,
+                align="end",
+                width_policy="min",
             )
-            self._register(self.filter_sel, 'filters_changed', auto=True)
+            self._register(self.filter_sel, "filters_changed", auto=True)
             mid.append(self.filter_sel)
 
     @property
@@ -262,9 +285,13 @@ class FileSelector(SigSlot):
 
     @property
     def urlpath(self):
-        return (self.protocol.value + "://" + self.main.value[0]) if self.main.value else None
+        return (
+            (self.protocol.value + "://" + self.main.value[0])
+            if self.main.value
+            else None
+        )
 
-    def open_file(self, mode='rb', compression=None, encoding=None):
+    def open_file(self, mode="rb", compression=None, encoding=None):
         if self.urlpath is None:
             raise ValueError("No file selected")
         return OpenFile(self.fs, self.urlpath, mode, compression, encoding)
@@ -281,16 +308,30 @@ class FileSelector(SigSlot):
         self.go_clicked()
 
     def go_clicked(self, *_):
-        listing = sorted(self.fs.ls(self.url.value, detail=True), key=lambda x: x['name'])
-        listing = [l for l in listing if not any(i.match(l['name'].rsplit('/', 1)[-1])
-                                                 for i in self.ignore)]
-        folders = {'📁 ' + o['name'].rsplit('/', 1)[-1]: o['name'] for o in listing
-                   if o['type'] == 'directory'}
-        files = {'📄 ' + o['name'].rsplit('/', 1)[-1]: o['name'] for o in listing
-                 if o['type'] == 'file'}
+        listing = sorted(
+            self.fs.ls(self.url.value, detail=True), key=lambda x: x["name"]
+        )
+        listing = [
+            l
+            for l in listing
+            if not any(i.match(l["name"].rsplit("/", 1)[-1]) for i in self.ignore)
+        ]
+        folders = {
+            "📁 " + o["name"].rsplit("/", 1)[-1]: o["name"]
+            for o in listing
+            if o["type"] == "directory"
+        }
+        files = {
+            "📄 " + o["name"].rsplit("/", 1)[-1]: o["name"]
+            for o in listing
+            if o["type"] == "file"
+        }
         if self.filters:
-            files = {k: v for k, v in files.items()
-                     if any(v.endswith(ext) for ext in self.filters)}
+            files = {
+                k: v
+                for k, v in files.items()
+                if any(v.endswith(ext) for ext in self.filters)
+            }
         self.main.set_options(dict(**folders, **files))
 
     def protocol_changed(self, *_):
