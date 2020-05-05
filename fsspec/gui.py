@@ -74,6 +74,14 @@ class SigSlot(object):
         if auto and hasattr(self, name):
             self.connect(name, getattr(self, name))
 
+    def _repr_mimebundle_(self, *args, **kwargs):
+        """Display in a notebook or a server"""
+        try:
+            return self.panel._repr_mimebundle_(*args, **kwargs)
+        except:
+            raise NotImplementedError("Panel does not seem to be set "
+                                      "up properly")
+
     def connect(self, signal, slot):
         """Associate call back with given event
 
