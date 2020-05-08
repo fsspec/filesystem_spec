@@ -1,6 +1,5 @@
 from collections.abc import MutableMapping
-from .registry import filesystem
-from .core import split_protocol, _un_chain
+from .core import url_to_fs
 
 
 class FSMap(MutableMapping):
@@ -148,27 +147,6 @@ def get_mapper(url, check=False, create=False, **kwargs):
     -------
     ``FSMap`` instance, the dict-like key-value store.
     """
-    chain = _un_chain(url, kwargs)
-    if len(chain) > 1:
-        kwargs = chain[0][2]
-        inkwargs = kwargs
-        urlpath = False
-        for i, ch in enumerate(chain):
-            urls, protocol, kw = ch
-            if isinstance(urls, str):
-                if urlpath is False:
-                    urlpath = protocol + "://" + split_protocol(urls)[1]
-            if i == 0:
-                continue
-            inkwargs["target_protocol"] = protocol
-            inkwargs["target_options"] = kw.copy()
-            inkwargs["fo"] = urls
-            inkwargs = inkwargs["target_options"]
-        protocol = chain[0][1]
-        fs = filesystem(protocol, **kwargs)
-    else:
-        protocol, urlpath = split_protocol(url)
-        fs = filesystem(protocol, **kwargs)
-        urlpath = fs._strip_protocol(url)
     # Removing protocol here - could defer to each open() on the backend
+    fs, urlpath = url_to_fs(url, **kwargs)
     return FSMap(urlpath, fs, check, create)

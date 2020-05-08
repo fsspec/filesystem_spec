@@ -14,6 +14,7 @@ User Functions
    fsspec.get_filesystem_class
    fsspec.get_mapper
    fsspec.fuse.run
+   fsspec.gui.FileSelector
 
 .. autofunction:: fsspec.open_files
 .. autofunction:: fsspec.open
@@ -22,6 +23,8 @@ User Functions
 .. autofunction:: fsspec.get_filesystem_class
 .. autofunction:: fsspec.get_mapper
 .. autofunction:: fsspec.fuse.run
+.. autoclass:: fsspec.gui.FileSelector
+   :members:
 
 Base Classes
 ------------
