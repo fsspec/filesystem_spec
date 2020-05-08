@@ -11,7 +11,7 @@ from .utils import (
     update_storage_options,
     stringify_path,
 )
-from .registry import get_filesystem_class
+from .registry import get_filesystem_class, filesystem
 
 # for backwards compat, we export cache things from here too
 from .caching import (  # noqa: F401
@@ -276,6 +276,30 @@ def _un_chain(path, kwargs):
         )
         for bit in bits
     ]
+
+
+def url_to_fs(url, **kwargs):
+    """Turn fully-qualified and potentially chained URL into filesystem instance"""
+    chain = _un_chain(url, kwargs)
+    if len(chain) > 1:
+        kwargs = chain[0][2]
+        inkwargs = kwargs
+        for i, ch in enumerate(chain):
+            urls, protocol, kw = ch
+            if i == 0:
+                continue
+            inkwargs["target_protocol"] = protocol
+            inkwargs["target_options"] = kw.copy()
+            inkwargs["fo"] = urls
+            inkwargs = inkwargs["target_options"]
+        protocol = chain[0][1]
+        urlpath = chain[-1][1] + "://" + split_protocol(urls)[1]
+        fs = filesystem(protocol, **kwargs)
+    else:
+        protocol, urlpath = split_protocol(url)
+        fs = filesystem(protocol, **kwargs)
+        urlpath = fs._strip_protocol(url)
+    return fs, urlpath
 
 
 def open(

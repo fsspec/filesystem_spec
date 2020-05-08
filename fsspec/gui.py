@@ -141,8 +141,15 @@ class SigSlot(object):
         for callback in self._sigs[sig]["callbacks"]:
             if isinstance(callback, str):
                 self._emit(callback)
-            elif callback(value) is False:
-                break
+            else:
+                try:
+                    # running callbacks should not break the interface
+                    ret = callback(value)
+                    if ret is False:
+                        break
+                except Exception as e:
+                    logger.exception("Exception (%s) while executing callback for signal: %s"
+                                     "" % (e, sig))
 
     def show(self, threads=False):
         """Open a new browser tab and display this instance's interface"""
@@ -257,20 +264,31 @@ class FileSelector(SigSlot):
         self.main.connect("selected", self.selection_changed)
         self._register(None, "directory_entered")
 
-        mid = pn.Row(self.home, self.up, self.url, self.go)
+        self.filter_sel = pn.widgets.CheckBoxGroup(
+            value=[],
+            options=[],
+            inline=False,
+            align="end",
+            width_policy="min",
+        )
+        self._register(self.filter_sel, "filters_changed", auto=True)
 
-        self.panel = pn.Column(pn.Row(self.protocol, self.kwargs), mid, self.main.panel)
+        self.panel = pn.Column(pn.Row(self.protocol, self.kwargs),
+                               pn.Row(self.home, self.up, self.url, self.go, self.filter_sel),
+                               self.main.panel)
+        self.set_filters(self.filters)
+        self.prev_protocol = self.protocol.value
+        self.prev_kwargs = self.storage_options
         self.go_clicked()
-        if self.filters:
-            self.filter_sel = pn.widgets.CheckBoxGroup(
-                value=self.filters,
-                options=self.filters,
-                inline=False,
-                align="end",
-                width_policy="min",
-            )
-            self._register(self.filter_sel, "filters_changed", auto=True)
-            mid.append(self.filter_sel)
+
+    def set_filters(self, filters=None):
+        self.filters = filters
+        if filters:
+            self.filter_sel.options = filters
+            self.filter_sel.value = filters
+        else:
+            self.filter_sel.options = []
+            self.filter_sel.value = []
 
     @property
     def storage_options(self):
@@ -308,6 +326,10 @@ class FileSelector(SigSlot):
         self.go_clicked()
 
     def go_clicked(self, *_):
+        if self.prev_protocol != self.protocol.value or self.prev_kwargs != self.storage_options:
+            self._fs = None  # causes fs to be recreated
+            self.prev_protocol = self.protocol.value
+            self.prev_kwargs = self.storage_options
         listing = sorted(
             self.fs.ls(self.url.value, detail=True), key=lambda x: x["name"]
         )

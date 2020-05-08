@@ -36,6 +36,7 @@ csv_files = {
     ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
     ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
 }
+odir = os.getcwd()
 
 
 @contextmanager
@@ -49,7 +50,6 @@ def filetexts(d, open=open, mode="t"):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    odir = os.getcwd()
     dirname = tempfile.mkdtemp()
     try:
         os.chdir(dirname)
