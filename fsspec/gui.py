@@ -273,7 +273,7 @@ class FileSelector(SigSlot):
         self._register(None, "directory_entered")
 
         self.filter_sel = pn.widgets.CheckBoxGroup(
-            value=[], options=[], inline=False, align="end", width_policy="min",
+            value=[], options=[], inline=False, align="end", width_policy="min"
         )
         self._register(self.filter_sel, "filters_changed", auto=True)
 
