@@ -1,7 +1,12 @@
 Changelog
 =========
 
-0.7.x series
+Version 0.7.4
+-------------
+
+* panel-based GUI
+
+0.7.3 series
 ------------
 
 * added ``git`` and ``github`` interfaces
