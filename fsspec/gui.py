@@ -148,12 +148,15 @@ class SigSlot(object):
                     if ret is False:
                         break
                 except Exception as e:
-                    logger.exception("Exception (%s) while executing callback for signal: %s"
-                                     "" % (e, sig))
+                    logger.exception(
+                        "Exception (%s) while executing callback for signal: %s"
+                        "" % (e, sig)
+                    )
 
     def show(self, threads=False):
         """Open a new browser tab and display this instance's interface"""
-        self.panel.show(threads=threads)
+        self.panel.show(threads=threads, verbose=False)
+        return self
 
 
 class SingleSelect(SigSlot):
@@ -196,6 +199,11 @@ class SingleSelect(SigSlot):
 
 
 class FileSelector(SigSlot):
+    """Panel-based graphical file selector widget
+
+    Instances of this widget are interactive and can be displayed in jupyter by having
+    them as the output of a cell,  or in a separate browser tab using ``.show()``.
+    """
 
     signals = [
         "protocol_changed",
@@ -265,17 +273,15 @@ class FileSelector(SigSlot):
         self._register(None, "directory_entered")
 
         self.filter_sel = pn.widgets.CheckBoxGroup(
-            value=[],
-            options=[],
-            inline=False,
-            align="end",
-            width_policy="min",
+            value=[], options=[], inline=False, align="end", width_policy="min",
         )
         self._register(self.filter_sel, "filters_changed", auto=True)
 
-        self.panel = pn.Column(pn.Row(self.protocol, self.kwargs),
-                               pn.Row(self.home, self.up, self.url, self.go, self.filter_sel),
-                               self.main.panel)
+        self.panel = pn.Column(
+            pn.Row(self.protocol, self.kwargs),
+            pn.Row(self.home, self.up, self.url, self.go, self.filter_sel),
+            self.main.panel,
+        )
         self.set_filters(self.filters)
         self.prev_protocol = self.protocol.value
         self.prev_kwargs = self.storage_options
@@ -292,10 +298,12 @@ class FileSelector(SigSlot):
 
     @property
     def storage_options(self):
+        """Value of the kwargs box as a dictionary"""
         return ast.literal_eval(self.kwargs.value) or {}
 
     @property
     def fs(self):
+        """Current filesystem instance"""
         if self._fs is None:
             cls = get_filesystem_class(self.protocol.value)
             self._fs = cls(**self.storage_options)
@@ -303,6 +311,7 @@ class FileSelector(SigSlot):
 
     @property
     def urlpath(self):
+        """URL of currently selected item"""
         return (
             (self.protocol.value + "://" + self.main.value[0])
             if self.main.value
@@ -310,6 +319,29 @@ class FileSelector(SigSlot):
         )
 
     def open_file(self, mode="rb", compression=None, encoding=None):
+        """Create OpenFile instance for the currently selected item
+
+        For example, in a notebook you might do something like
+
+        .. code-block::
+
+            [ ]: sel = FileSelector(); sel
+
+            # user selects their file
+
+            [ ]: with sel.open_file('rb') as f:
+            ...      out = f.read()
+
+        Parameters
+        ----------
+        mode: str (optional)
+            Open mode for the file.
+        compression: str (optional)
+            The interact with the file as compressed. Set to 'infer' to guess
+            compression from the file ending
+        encoding: str (optional)
+            If using text mode, use this encoding; defaults to UTF8.
+        """
         if self.urlpath is None:
             raise ValueError("No file selected")
         return OpenFile(self.fs, self.urlpath, mode, compression, encoding)
@@ -326,7 +358,10 @@ class FileSelector(SigSlot):
         self.go_clicked()
 
     def go_clicked(self, *_):
-        if self.prev_protocol != self.protocol.value or self.prev_kwargs != self.storage_options:
+        if (
+            self.prev_protocol != self.protocol.value
+            or self.prev_kwargs != self.storage_options
+        ):
             self._fs = None  # causes fs to be recreated
             self.prev_protocol = self.protocol.value
             self.prev_kwargs = self.storage_options

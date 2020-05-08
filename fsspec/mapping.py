@@ -66,7 +66,7 @@ class FSMap(MutableMapping):
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
-        return s[len(self.root):].lstrip("/")
+        return s[len(self.root) :].lstrip("/")
 
     def __getitem__(self, key, default=None):
         """Retrieve data"""

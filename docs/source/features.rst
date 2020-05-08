@@ -298,3 +298,29 @@ should not mix block- and file-caches in the same directory. "simplecache" is th
 except without the options for cache expiry and to check the original source - it can be used where the
 target can be considered static, and particularly where a large number of target files are expected
 (because no metadata is written to disc). Only "simplecache" is guaranteed thread/process-safe.
+
+File Selector
+-------------
+
+The module ``fsspec.gui`` contains a graphical file selector interface. It is built
+using `panel`_, which must be installed in order to use the GUI. Upon instantiation,
+you can provide the initial URL location (which can be returned to with the "🏠" button),
+arguments and filters.
+
+.. _panel: https://panel.holoviz.org/
+
+.. image:: img/gui.png
+
+Clicking on a directory will descend into it, and selecting a file will mark it as
+the output of the interface. You can select any of the known protocols, but should
+provide any required arguments in the "kwargs" box (as a dictionary) and any
+absolute URL location before clicking "⇨" to go to that location. If using file filters,
+they will appear as a list of checkboxes; only those file-endings selected will be
+shown (or if none are selected, all files are shown).
+
+The interface provides the following outputs:
+
+- ``.urlpath``: the currently selected item (if any)
+- ``.storage_options``: the value of the kwargs box
+- ``.fs``: the current filesystem instance
+- ``.open_file()``: produces an ``OpenFile`` instance for the current selection
