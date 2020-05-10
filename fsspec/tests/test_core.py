@@ -82,3 +82,11 @@ def test_automkdir(tmpdir):
         of = fsspec.open(os.path.join(dir, "bfile"), "w", auto_mkdir=False)
         with of:
             pass
+
+
+def test_automkdir_readonly(tmpdir):
+    dir = os.path.join(str(tmpdir), "d")
+    with pytest.raises(FileNotFoundError):
+        of = fsspec.open(os.path.join(dir, "dfile"), "r")
+        with of:
+            pass
