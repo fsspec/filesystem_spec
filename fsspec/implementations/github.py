@@ -108,7 +108,7 @@ class GithubFileSystem(AbstractFileSystem):
             so_far = ""
             _sha = sha or self.root
             for part in parts:
-                out = self.ls(so_far, True, _sha=_sha)
+                out = self.ls(so_far, True, sha=sha, _sha=_sha)
                 so_far += "/" + part if so_far else part
                 out = [o for o in out if o["name"] == so_far]
                 if not out:
@@ -120,12 +120,12 @@ class GithubFileSystem(AbstractFileSystem):
                     else:
                         return path
                 _sha = out["sha"]
-        if path not in self.dircache:
+        if path not in self.dircache or sha not in [self.root, None]:
             r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=_sha))
             if r.status_code == 404:
                 raise FileNotFoundError(path)
             r.raise_for_status()
-            self.dircache[path] = [
+            out = [
                 {
                     "name": path + "/" + f["path"] if path else f["path"],
                     "mode": f["mode"],
@@ -135,10 +135,17 @@ class GithubFileSystem(AbstractFileSystem):
                 }
                 for f in r.json()["tree"]
             ]
-        if detail:
-            return self.dircache[path]
+            if sha == self.root:
+                self.dircache[path] = out
         else:
-            return sorted([f["name"] for f in self.dircache[path]])
+            out = self.dircache[path]
+        if detail:
+            return out
+        else:
+            return sorted([f["name"] for f in out])
+
+    def invalidate_cache(self, path=None):
+        self.dircache.clear()
 
     @classmethod
     def _strip_protocol(cls, path):
