@@ -63,26 +63,65 @@ class GithubFileSystem(AbstractFileSystem):
         r.raise_for_status()
         return [repo["name"] for repo in r.json()]
 
-    def ls(self, path, detail=False, sha=None, **kwargs):
+    @property
+    def tags(self):
+        """Names of tags in the repo"""
+        r = requests.get("https://api.github.com/repos/{org}/{repo}/tags"
+                         "".format(org=self.org, repo=self.repo))
+        r.raise_for_status()
+        return [t['name'] for t in r.json()]
+
+    @property
+    def branches(self):
+        """Names of branches in the repo"""
+        r = requests.get("https://api.github.com/repos/{org}/{repo}/branches"
+                         "".format(org=self.org, repo=self.repo))
+        r.raise_for_status()
+        return [t['name'] for t in r.json()]
+
+    @property
+    def refs(self):
+        """Named references, tags and branches"""
+        return {'tags': self.tags, 'branches': self.branches}
+
+    def ls(self, path, detail=False, sha=None, _sha=None, **kwargs):
+        """List files at given path
+
+        Parameters
+        ----------
+        path: str
+            Location to list, relative to repo root
+        detail: bool
+            If True, returns list of dicts, one per file; if False, returns
+            list of full filenames only
+        sha: str (optional)
+            List at the given point in the repo history, branch or tag name or commit
+            SHA
+        _sha: str (optional)
+            List this specific tree object (used internally to descend into trees)
+        """
         path = self._strip_protocol(path)
         if path == "":
-            sha = self.root
-        if sha is None:
+            _sha = sha or self.root
+        if _sha is None:
             parts = path.rstrip("/").split("/")
             so_far = ""
-            sha = self.root
+            _sha = sha or self.root
             for part in parts:
-                out = self.ls(so_far, True, sha=sha)
+                out = self.ls(so_far, True, _sha=_sha)
                 so_far += "/" + part if so_far else part
-                out = [o for o in out if o["name"] == so_far][0]
+                out = [o for o in out if o["name"] == so_far]
+                if not out:
+                    raise FileNotFoundError(path)
+                out = out[0]
                 if out["type"] == "file":
                     if detail:
                         return [out]
                     else:
                         return path
-                sha = out["sha"]
+                _sha = out["sha"]
         if path not in self.dircache:
-            r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=sha))
+            r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=_sha))
             if r.status_code == 404:
                 raise FileNotFoundError(path)
             r.raise_for_status()
