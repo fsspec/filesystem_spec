@@ -34,12 +34,12 @@ class GithubFileSystem(AbstractFileSystem):
     rurl = "https://raw.githubusercontent.com/{org}/{repo}/{sha}/{path}"
     protocol = "github"
 
-    def __init__(self, org, repo, sha="master", username=None, token=None,**kwargs):
+    def __init__(self, org, repo, sha="master", username=None, token=None, **kwargs):
         super().__init__(**kwargs)
         self.org = org
         self.repo = repo
         self.root = sha
-        if ('username' is None) ^ ('token' is None):
+        if (username is None) ^ (token is None):
             raise ValueError("Auth required both username and token")
         self.username = username
         self.token = token
@@ -48,7 +48,7 @@ class GithubFileSystem(AbstractFileSystem):
     @property
     def kw(self):
         if self.username:
-            return {'auth': (self.username, self.token)}
+            return {"auth": (self.username, self.token)}
         return {}
 
     @classmethod
@@ -79,25 +79,29 @@ class GithubFileSystem(AbstractFileSystem):
     @property
     def tags(self):
         """Names of tags in the repo"""
-        r = requests.get("https://api.github.com/repos/{org}/{repo}/tags"
-                         "".format(org=self.org, repo=self.repo),
-                         **self.kw)
+        r = requests.get(
+            "https://api.github.com/repos/{org}/{repo}/tags"
+            "".format(org=self.org, repo=self.repo),
+            **self.kw
+        )
         r.raise_for_status()
-        return [t['name'] for t in r.json()]
+        return [t["name"] for t in r.json()]
 
     @property
     def branches(self):
         """Names of branches in the repo"""
-        r = requests.get("https://api.github.com/repos/{org}/{repo}/branches"
-                         "".format(org=self.org, repo=self.repo),
-                         **self.kw)
+        r = requests.get(
+            "https://api.github.com/repos/{org}/{repo}/branches"
+            "".format(org=self.org, repo=self.repo),
+            **self.kw
+        )
         r.raise_for_status()
-        return [t['name'] for t in r.json()]
+        return [t["name"] for t in r.json()]
 
     @property
     def refs(self):
         """Named references, tags and branches"""
-        return {'tags': self.tags, 'branches': self.branches}
+        return {"tags": self.tags, "branches": self.branches}
 
     def ls(self, path, detail=False, sha=None, _sha=None, **kwargs):
         """List files at given path
@@ -136,8 +140,9 @@ class GithubFileSystem(AbstractFileSystem):
                         return path
                 _sha = out["sha"]
         if path not in self.dircache or sha not in [self.root, None]:
-            r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=_sha),
-                             **self.kw)
+            r = requests.get(
+                self.url.format(org=self.org, repo=self.repo, sha=_sha), **self.kw
+            )
             if r.status_code == 404:
                 raise FileNotFoundError(path)
             r.raise_for_status()
