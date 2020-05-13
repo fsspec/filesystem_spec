@@ -25,18 +25,31 @@ class GithubFileSystem(AbstractFileSystem):
     ``sha`` can be the full or abbreviated hex of the commit you want to fetch
     from, or a branch or tag name (so long as it doesn't contain special characters
     like "/", "?", which would have to be HTTP-encoded).
+
+    For authorised access, you must provide username and token, which can be made
+    at https://github.com/settings/tokens
     """
 
     url = "https://api.github.com/repos/{org}/{repo}/git/trees/{sha}"
     rurl = "https://raw.githubusercontent.com/{org}/{repo}/{sha}/{path}"
     protocol = "github"
 
-    def __init__(self, org, repo, sha="master", **kwargs):
+    def __init__(self, org, repo, sha="master", username=None, token=None,**kwargs):
         super().__init__(**kwargs)
         self.org = org
         self.repo = repo
         self.root = sha
+        if ('username' is None) ^ ('token' is None):
+            raise ValueError("Auth required both username and token")
+        self.username = username
+        self.token = token
         self.ls("")
+
+    @property
+    def kw(self):
+        if self.username:
+            return {'auth': (self.username, self.token)}
+        return {}
 
     @classmethod
     def repos(cls, org_or_user, is_org=True):
@@ -67,7 +80,8 @@ class GithubFileSystem(AbstractFileSystem):
     def tags(self):
         """Names of tags in the repo"""
         r = requests.get("https://api.github.com/repos/{org}/{repo}/tags"
-                         "".format(org=self.org, repo=self.repo))
+                         "".format(org=self.org, repo=self.repo),
+                         **self.kw)
         r.raise_for_status()
         return [t['name'] for t in r.json()]
 
@@ -75,7 +89,8 @@ class GithubFileSystem(AbstractFileSystem):
     def branches(self):
         """Names of branches in the repo"""
         r = requests.get("https://api.github.com/repos/{org}/{repo}/branches"
-                         "".format(org=self.org, repo=self.repo))
+                         "".format(org=self.org, repo=self.repo),
+                         **self.kw)
         r.raise_for_status()
         return [t['name'] for t in r.json()]
 
@@ -121,7 +136,8 @@ class GithubFileSystem(AbstractFileSystem):
                         return path
                 _sha = out["sha"]
         if path not in self.dircache or sha not in [self.root, None]:
-            r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=_sha))
+            r = requests.get(self.url.format(org=self.org, repo=self.repo, sha=_sha),
+                             **self.kw)
             if r.status_code == 404:
                 raise FileNotFoundError(path)
             r.raise_for_status()
@@ -135,7 +151,7 @@ class GithubFileSystem(AbstractFileSystem):
                 }
                 for f in r.json()["tree"]
             ]
-            if sha == self.root:
+            if sha in [self.root, None]:
                 self.dircache[path] = out
         else:
             out = self.dircache[path]
@@ -179,7 +195,7 @@ class GithubFileSystem(AbstractFileSystem):
         url = self.rurl.format(
             org=self.org, repo=self.repo, path=path, sha=sha or self.root
         )
-        r = requests.get(url)
+        r = requests.get(url, **self.kw)
         if r.status_code == 404:
             raise FileNotFoundError(path)
         r.raise_for_status()
