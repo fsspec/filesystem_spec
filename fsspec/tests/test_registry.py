@@ -16,7 +16,7 @@ def clear_registry():
         yield
     finally:
         _registry.clear()
-        known_implementations.pop('test', None)
+        known_implementations.pop("test", None)
 
 
 @pytest.mark.parametrize(
@@ -73,13 +73,14 @@ def test_register_fail(clear_registry):
     with pytest.raises(ValueError):
         register_implementation("test", "doesntexist.AbstractFileSystem")
 
-    register_implementation("test", "doesntexist.AbstractFileSystem", errtxt="hiho",
-                            clobber=True)
+    register_implementation(
+        "test", "doesntexist.AbstractFileSystem", errtxt="hiho", clobber=True
+    )
     with pytest.raises(ImportError) as e:
         get_filesystem_class("test")
     assert "hiho" in str(e.value)
     register_implementation("test", AbstractFileSystem)
-    
+
     with pytest.raises(ValueError):
         register_implementation("test", AbstractFileSystem)
     register_implementation("test", AbstractFileSystem, clobber=True)
