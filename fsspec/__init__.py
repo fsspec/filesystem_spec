@@ -1,7 +1,12 @@
 from ._version import get_versions
 
 from .spec import AbstractFileSystem
-from .registry import get_filesystem_class, registry, filesystem, register_implementation
+from .registry import (
+    get_filesystem_class,
+    registry,
+    filesystem,
+    register_implementation,
+)
 from .mapping import FSMap, get_mapper
 from .core import open_files, get_fs_token_paths, open, open_local
 from . import caching
@@ -14,7 +19,7 @@ __all__ = [
     "AbstractFileSystem",
     "FSMap",
     "filesystem",
-    'register_implementation',
+    "register_implementation",
     "get_filesystem_class",
     "get_fs_token_paths",
     "get_mapper",

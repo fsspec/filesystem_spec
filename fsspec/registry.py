@@ -18,6 +18,7 @@ class ReadOnlyRegistry(dict):
 
     To add backend implementations, use ``register_implementation``
     """
+
     def __init__(self, target):
         self.target = target
 
@@ -54,18 +55,25 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
         which gets added to known_implementations,
         so the import is deferred until the filesystem is actually used.
     clobber: bool (optional)
-        Whether to overwrite a protocol with the same name; if False, will raise instead.
+        Whether to overwrite a protocol with the same name; if False, will raise
+        instead.
     """
     if isinstance(cls, str):
         if name in known_implementations and clobber is False:
-            raise ValueError("Name (%s) already in the known_implementations and clobber "
-                             "is False" % name)
-        known_implementations[name] = {'class': cls,
-                                       'err': errtxt or "%s import failed for protocol %s" % (cls, name)}
+            raise ValueError(
+                "Name (%s) already in the known_implementations and clobber "
+                "is False" % name
+            )
+        known_implementations[name] = {
+            "class": cls,
+            "err": errtxt or "%s import failed for protocol %s" % (cls, name),
+        }
 
     else:
         if name in registry and clobber is False:
-            raise ValueError("Name (%s) already in the registry and clobber is False" % name)
+            raise ValueError(
+                "Name (%s) already in the registry and clobber is False" % name
+            )
         _registry[name] = cls
 
 
@@ -170,7 +178,7 @@ def get_filesystem_class(protocol):
         try:
             register_implementation(protocol, _import_class(bit["class"]))
         except ImportError as e:
-            raise ImportError(bit['err']) from e
+            raise ImportError(bit["err"]) from e
     cls = registry[protocol]
     if getattr(cls, "protocol", None) in ("abstract", None):
         cls.protocol = protocol
