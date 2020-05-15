@@ -57,6 +57,9 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
     clobber: bool (optional)
         Whether to overwrite a protocol with the same name; if False, will raise
         instead.
+    errtxt: str (optional)
+        If given, then a failure to import the given class will result in this
+        text being given.
     """
     if isinstance(cls, str):
         if name in known_implementations and clobber is False:
