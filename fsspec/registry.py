@@ -4,11 +4,87 @@ from distutils.version import LooseVersion
 __all__ = ["registry", "get_filesystem_class", "default"]
 
 # mapping protocol: implementation class object
-registry = {}
+_registry = {}  # internal, mutable
+
+
+class ReadOnlyError(TypeError):
+    pass
+
+
+class ReadOnlyRegistry(dict):
+    """Dict-like registry, but immutable
+
+    Maps backend name to implementation class
+
+    To add backend implementations, use ``register_implementation``
+    """
+
+    def __init__(self, target):
+        self.target = target
+
+    def __getitem__(self, item):
+        return self.target[item]
+
+    def __delitem__(self, key):
+        raise ReadOnlyError
+
+    def __setitem__(self, key, value):
+        raise ReadOnlyError
+
+    def clear(self):
+        raise ReadOnlyError
+
+    def __contains__(self, item):
+        return item in self.target
+
+    def __iter__(self):
+        yield from self.target
+
+
+def register_implementation(name, cls, clobber=False, errtxt=None):
+    """Add implementation class to the registry
+
+    Parameters
+    ----------
+    name: str
+        Protocol name to associate with the class
+    cls: class or str
+        if a class: fsspec-compliant implementation class (normally inherits from
+        ``fsspec.AbstractFileSystem``, gets added straight to the registry. If a
+        str, the full path to an implementation class like package.module.class,
+        which gets added to known_implementations,
+        so the import is deferred until the filesystem is actually used.
+    clobber: bool (optional)
+        Whether to overwrite a protocol with the same name; if False, will raise
+        instead.
+    errtxt: str (optional)
+        If given, then a failure to import the given class will result in this
+        text being given.
+    """
+    if isinstance(cls, str):
+        if name in known_implementations and clobber is False:
+            raise ValueError(
+                "Name (%s) already in the known_implementations and clobber "
+                "is False" % name
+            )
+        known_implementations[name] = {
+            "class": cls,
+            "err": errtxt or "%s import failed for protocol %s" % (cls, name),
+        }
+
+    else:
+        if name in registry and clobber is False:
+            raise ValueError(
+                "Name (%s) already in the registry and clobber is False" % name
+            )
+        _registry[name] = cls
+
+
+registry = ReadOnlyRegistry(_registry)
 default = "file"
 
 # protocols mapped to the class which implements them. This dict can
-# be dynamically updated.
+# updated with register_implementation
 known_implementations = {
     "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
@@ -102,7 +178,10 @@ def get_filesystem_class(protocol):
         if protocol not in known_implementations:
             raise ValueError("Protocol not known: %s" % protocol)
         bit = known_implementations[protocol]
-        registry[protocol] = _import_class(bit["class"])
+        try:
+            register_implementation(protocol, _import_class(bit["class"]))
+        except ImportError as e:
+            raise ImportError(bit["err"]) from e
     cls = registry[protocol]
     if getattr(cls, "protocol", None) in ("abstract", None):
         cls.protocol = protocol
