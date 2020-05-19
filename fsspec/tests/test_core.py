@@ -36,14 +36,14 @@ def test_openfile_api(m):
 
 
 def test_openfile_open(m):
-    of = OpenFile(m, "somepath", mode='wt')
+    of = OpenFile(m, "somepath", mode="wt")
     f = of.open()
-    f.write('hello')
-    assert m.size('somepath') == 0  # no flush yet
+    f.write("hello")
+    assert m.size("somepath") == 0  # no flush yet
     del of
-    assert m.size('somepath') == 0  # still no flush
+    assert m.size("somepath") == 0  # still no flush
     f.close()
-    assert m.size('somepath') == 5
+    assert m.size("somepath") == 5
 
 
 def test_open_local():
