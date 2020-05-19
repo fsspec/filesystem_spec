@@ -35,6 +35,17 @@ def test_openfile_api(m):
         f.read() == "data"
 
 
+def test_openfile_open(m):
+    of = OpenFile(m, "somepath", mode="wt")
+    f = of.open()
+    f.write("hello")
+    assert m.size("somepath") == 0  # no flush yet
+    del of
+    assert m.size("somepath") == 0  # still no flush
+    f.close()
+    assert m.size("somepath") == 5
+
+
 def test_open_local():
     d1 = str(tempfile.mkdtemp())
     f1 = os.path.join(d1, "f1")

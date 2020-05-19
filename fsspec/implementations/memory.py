@@ -145,7 +145,7 @@ class MemoryFileSystem(AbstractFileSystem):
 class MemoryFile(BytesIO):
     """A BytesIO which can't close and works as a context manager
 
-    Can initialise with data
+    Can initialise with data. Each path should only be active once at any moment.
 
     No need to provide fs, path if auto-committing (default)
     """
