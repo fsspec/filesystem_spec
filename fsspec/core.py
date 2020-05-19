@@ -119,23 +119,40 @@ class OpenFile(object):
         self.close()
 
     def __del__(self):
-        self.close()
+        self.fobjects.clear()  # may cause cleanup of objects and close files
 
     def open(self):
         """Materialise this as a real open file without context
 
-        The file should be explicitly closed to avoid enclosed open file
-        instances persisting
+        The file should be explicitly closed to avoid enclosed file
+        instances persisting. This code-path monkey-patches the file-like
+        objects, so they can close even if the parent OpenFile object has already
+        been deleted; but a with-context is better style.
         """
-        return self.__enter__()
+        out = self.__enter__()
+        closer = out.close
+        fobjects = self.fobjects.copy()[:-1]
+        mode = self.mode
+
+        def close():
+            # this func has no reference to
+            closer()  # original close bound method of the final file-like
+            _close(fobjects, mode)  # call close on other dependent file-likes
+
+        out.close = close
+        return out
 
     def close(self):
         """Close all encapsulated file objects"""
-        for f in reversed(self.fobjects):
-            if "r" not in self.mode and not f.closed:
-                f.flush()
-            f.close()
-        self.fobjects = []
+        _close(self.fobjects, self.mode)
+
+
+def _close(fobjects, mode):
+    for f in reversed(fobjects):
+        if "r" not in mode and not f.closed:
+            f.flush()
+        f.close()
+    fobjects.clear()
 
 
 def open_files(
