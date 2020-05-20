@@ -210,13 +210,13 @@ class LocalFileOpener(object):
         return self.f.read(end - start)
 
     def __setstate__(self, state):
+        self.f = None
+        loc = state.pop("loc", None)
+        self.__dict__.update(state)
         if "r" in state["mode"]:
-            loc = self.state.pop("loc")
+            self.f = None
             self._open()
             self.f.seek(loc)
-        else:
-            self.f = None
-        self.__dict__.update(state)
 
     def __getstate__(self):
         d = self.__dict__.copy()
