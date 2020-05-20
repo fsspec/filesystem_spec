@@ -470,15 +470,15 @@ def test_pickle(tmpdir):
     tmpdir = str(tmpdir)
     fn0 = os.path.join(tmpdir, "target")
 
-    with open(fn0, 'wb') as f:
-        f.write(b'data')
+    with open(fn0, "wb") as f:
+        f.write(b"data")
 
-    f = fs.open(fn0, 'rb')
+    f = fs.open(fn0, "rb")
     f.seek(1)
     f2 = pickle.loads(pickle.dumps(f))
     assert f2.read() == f.read()
 
-    f = fs.open(fn0, 'wb')
+    f = fs.open(fn0, "wb")
     with pytest.raises(ValueError):
         pickle.dumps(f)
 
