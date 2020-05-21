@@ -2,6 +2,9 @@
 omit =
     */test_*.py
     fsspec/_version.py
+    fsspec/implementations/dvc.py
+    fsspec/implementations/github.py
+    fsspec/implementations/hdfs.py
 source =
     fsspec
 

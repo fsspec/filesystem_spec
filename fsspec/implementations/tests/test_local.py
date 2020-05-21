@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import gzip
 import os
 import os.path
+import pickle
 import sys
 from contextlib import contextmanager
 import posixpath
@@ -462,6 +463,24 @@ def test_links(tmpdir):
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
     assert fs._isfilestore()
+
+
+def test_pickle(tmpdir):
+    fs = LocalFileSystem()
+    tmpdir = str(tmpdir)
+    fn0 = os.path.join(tmpdir, "target")
+
+    with open(fn0, "wb") as f:
+        f.write(b"data")
+
+    f = fs.open(fn0, "rb")
+    f.seek(1)
+    f2 = pickle.loads(pickle.dumps(f))
+    assert f2.read() == f.read()
+
+    f = fs.open(fn0, "wb")
+    with pytest.raises(ValueError):
+        pickle.dumps(f)
 
 
 def test_strip_protocol_expanduser():
