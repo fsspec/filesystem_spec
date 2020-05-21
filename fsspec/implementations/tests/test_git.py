@@ -19,7 +19,7 @@ def repo():
     open(os.path.join(d, "file1"), "wb").write(b"data0")
     subprocess.call("git add file1", shell=True, cwd=d)
     subprocess.call('git commit -m "init"', shell=True, cwd=d)
-    sha = open(os.path.join(d, ".git/refs/heads/master"), 'r').read().strip()
+    sha = open(os.path.join(d, ".git/refs/heads/master"), "r").read().strip()
     open(os.path.join(d, "file1"), "wb").write(b"data00")
     subprocess.check_output('git commit -a -m "tagger"', shell=True, cwd=d)
     subprocess.call('git tag -a thetag -m "make tag"', shell=True, cwd=d)
