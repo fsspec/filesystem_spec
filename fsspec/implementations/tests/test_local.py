@@ -492,11 +492,11 @@ def test_strip_protocol_expanduser():
 
 
 def test_iterable(tmpdir):
-    data = b'a\nhello\noi'
-    fn = os.path.join(tmpdir, 'test')
-    with open(fn, 'wb') as f:
+    data = b"a\nhello\noi"
+    fn = os.path.join(tmpdir, "test")
+    with open(fn, "wb") as f:
         f.write(data)
-    of = fsspec.open('file://%s' % fn, 'rb')
+    of = fsspec.open("file://%s" % fn, "rb")
     with of as f:
         out = list(f)
-    assert b''.join(out) == data
+    assert b"".join(out) == data
