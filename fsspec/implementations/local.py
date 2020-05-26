@@ -242,6 +242,9 @@ class LocalFileOpener(object):
         # uniquely among fsspec implementations, this is a real, local path
         return self.path
 
+    def __iter__(self):
+        return self.f.__iter__()
+
     def __getattr__(self, item):
         return getattr(self.f, item)
 
