@@ -3,13 +3,13 @@ import tarfile
 import fsspec
 from fsspec.compression import compr
 
-typemap = {b'0': 'file',
-           b'5': 'directory'}
+typemap = {b"0": "file", b"5": "directory"}
 
 
 class TarFileSystem(fsspec.AbstractFileSystem):
-
-    def __init__(self, fo, index_store=None, storage_options=None, compression=None, **kwargs):
+    def __init__(
+        self, fo, index_store=None, storage_options=None, compression=None, **kwargs
+    ):
         super().__init__(**kwargs)
         if isinstance(fo, str):
             fo = fsspec.open(fo, **(storage_options or {})).open()
@@ -29,19 +29,19 @@ class TarFileSystem(fsspec.AbstractFileSystem):
         out = {}
         for ti in fo:
             info = ti.get_info()
-            info['type'] = typemap[info['type']]
-            out[ti.get_info()['name']] = (info, ti.offset_data)
+            info["type"] = typemap[info["type"]]
+            out[ti.get_info()["name"]] = (info, ti.offset_data)
 
         self.index = out
         # TODO: save index to self.index_store here, if set
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
-        parts = path.rstrip("/").split('/')
+        parts = path.rstrip("/").split("/")
         out = []
         for name, (details, _) in self.index.items():
-            nparts = name.rstrip('/').split('/')
-            if parts == nparts and details['type'] != 'directory':
+            nparts = name.rstrip("/").split("/")
+            if parts == nparts and details["type"] != "directory":
                 out = [details]
                 break
             if len(nparts) and parts == nparts[:-1]:
@@ -49,27 +49,26 @@ class TarFileSystem(fsspec.AbstractFileSystem):
         if detail:
             return out
         else:
-            return [o['name'] for o in out]
+            return [o["name"] for o in out]
 
     def info(self, path, **kwargs):
         return self.index[path][0]
 
-    def _open(self, path, mode='rb', **kwargs):
-        if mode != 'rb':
-            raise ValueError('Read Only filesystem implementation')
+    def _open(self, path, mode="rb", **kwargs):
+        if mode != "rb":
+            raise ValueError("Read Only filesystem implementation")
         details, offset = self.index[path]
-        if details['type'] != 'file':
-            raise ValueError('Can only regilar files')
+        if details["type"] != "file":
+            raise ValueError("Can only regilar files")
         newfo = copy.copy(self.fo)
         newfo.seek(offset)
         return TarContainedFile(newfo, self.info(path))
 
 
 class TarContainedFile(object):
-
     def __init__(self, of, info):
         self.info = info
-        self.size = info['size']
+        self.size = info["size"]
         self.of = of
         self.start = of.tell()
         self.end = self.start + self.size
@@ -86,7 +85,7 @@ class TarContainedFile(object):
         if n > self.end - self.tell():
             n = self.end - self.tell()
         if n < 1:
-            return b''
+            return b""
         return self.of.read(n)
 
     def seek(self, to, whence=0):
