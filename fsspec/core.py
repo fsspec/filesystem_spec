@@ -219,26 +219,6 @@ def open_files(
     -------
     List of ``OpenFile`` objects.
     """
-    chain = _un_chain(urlpath, kwargs)
-    if len(chain) > 1:
-        kwargs = chain[0][2]
-        inkwargs = kwargs
-        urlpath = False
-        for i, ch in enumerate(chain):
-            urls, protocol, kw = ch
-            if isinstance(urls, str):
-                if not urlpath and split_protocol(urls)[1]:
-                    urlpath = protocol + "://" + split_protocol(urls)[1]
-            else:
-                if not urlpath and any(split_protocol(u)[1] for u in urls):
-                    urlpath = [protocol + "://" + split_protocol(u)[1] for u in urls]
-            if i == 0:
-                continue
-            inkwargs["target_protocol"] = protocol
-            inkwargs["target_options"] = kw.copy()
-            inkwargs["fo"] = urls
-            inkwargs = inkwargs["target_options"]
-        protocol = chain[0][1]
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
         mode,
@@ -488,6 +468,26 @@ def get_fs_token_paths(
     protocol: str or None
         To override the protocol specifier in the URL
     """
+    chain = _un_chain(urlpath, storage_options or {})
+    if len(chain) > 1:
+        storage_options = chain[0][2]
+        inkwargs = storage_options
+        urlpath = False
+        for i, ch in enumerate(chain):
+            urls, protocol, kw = ch
+            if isinstance(urls, str):
+                if not urlpath and split_protocol(urls)[1]:
+                    urlpath = protocol + "://" + split_protocol(urls)[1]
+            else:
+                if not urlpath and any(split_protocol(u)[1] for u in urls):
+                    urlpath = [protocol + "://" + split_protocol(u)[1] for u in urls]
+            if i == 0:
+                continue
+            inkwargs["target_protocol"] = protocol
+            inkwargs["target_options"] = kw.copy()
+            inkwargs["fo"] = urls
+            inkwargs = inkwargs["target_options"]
+        protocol = chain[0][1]
     if isinstance(urlpath, (list, tuple)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
