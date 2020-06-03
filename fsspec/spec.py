@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 import os
@@ -115,6 +116,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             return
         self._cached = True
         self._intrans = False
+        self._loop = None
         self._transaction = None
         self.dircache = DirCache(**storage_options)
 
@@ -586,6 +588,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """ Get the content of a file """
         return self.open(path, "rb").read()
 
+    def get_file(self, rpath, lpath, **kwargs):
+        """Fetch a single remote file to local"""
+        with self.open(rpath, "rb", **kwargs) as f1:
+            with open(lpath, "wb") as f2:
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    f2.write(data)
+
     def get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file to local.
 
@@ -606,13 +617,16 @@ class AbstractFileSystem(up, metaclass=_Cached):
             rpaths = [rpath]
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
-            with self.open(rpath, "rb", **kwargs) as f1:
-                if not recursive or not os.path.isdir(lpath):
-                    with open(lpath, "wb") as f2:
-                        data = True
-                        while data:
-                            data = f1.read(self.blocksize)
-                            f2.write(data)
+            self.get_file(rpath, lpath, **kwargs)
+
+    def put_file(self, lpath, rpath, **kwargs):
+        with open(lpath, "rb") as f1:
+            self.mkdirs(os.path.dirname(rpath), exist_ok=True)
+            with self.open(rpath, "wb", **kwargs) as f2:
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    f2.write(data)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """ Upload file from local """
@@ -642,13 +656,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             lpaths = [lpath]
             rpaths = [rpath]
         for lpath, rpath in zip(lpaths, rpaths):
-            with open(lpath, "rb") as f1:
-                self.mkdirs(os.path.dirname(rpath), exist_ok=True)
-                with self.open(rpath, "wb", **kwargs) as f2:
-                    data = True
-                    while data:
-                        data = f1.read(self.blocksize)
-                        f2.write(data)
+            self.put_file(lpath, rpath)
 
     def head(self, path, size=1024):
         """ Get the first ``size`` bytes from file """
@@ -983,6 +991,20 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def modified(self, path):
         """Return the modified timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
+
+    @property
+    def loop(self):
+        if self._loop is None or self._loop.closed:
+            self._loop = asyncio.get_event_loop()
+        return self._loop
+
+    def __getattr__(self, item):
+        if not item.startswih('_') and hasattr("_" + item):
+            thing = getattr("_" + item)
+            if asyncio.iscoroutinefunction(thing):
+                thing = self.loop.run_until_complete(thing)
+            return thing
+        raise AttributeError(item)
 
 
 class AbstractBufferedFile(io.IOBase):

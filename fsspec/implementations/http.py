@@ -65,7 +65,7 @@ class HTTPFileSystem(AbstractFileSystem):
 
     # TODO: override get
 
-    def ls(self, url, detail=True, **kwargs):
+    async def _ls(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
         r = self.session.get(url, **self.kwargs)
         if self.simple_links:
@@ -77,16 +77,17 @@ class HTTPFileSystem(AbstractFileSystem):
         for l in links:
             if isinstance(l, tuple):
                 l = l[1]
+            if l.startswith("/") and len(l) > 1:
+                # absolute URL on this server
+                l = parts.scheme + "://" + parts.netloc + l
             if l.startswith("http"):
-                if self.same_schema and l.startswith(url):
+                if self.same_schema and l.startswith(url.rstrip('/') + '/'):
                     out.add(l)
                 elif l.replace("https", "http").startswith(
-                    url.replace("https", "http")
+                    url.replace("https", "http").rstrip('/') + '/'
                 ):
                     # allowed to cross http <-> https
                     out.add(l)
-            elif l.startswith("/") and len(l) > 1:
-                out.add(parts.scheme + "://" + parts.netloc + l)
             else:
                 if l not in ["..", "../"]:
                     # Ignore FTP-like "parent"
@@ -109,6 +110,10 @@ class HTTPFileSystem(AbstractFileSystem):
         r = self.session.get(url, **self.kwargs)
         r.raise_for_status()
         return r.content
+
+    def get(self, rpath, lpath, recursive=False, **kwargs):
+        if recursive:
+            super().get()
 
     def mkdirs(self, url):
         """Make any intermediate directories to make path writable"""
