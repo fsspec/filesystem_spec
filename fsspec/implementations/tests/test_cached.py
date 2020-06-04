@@ -81,27 +81,27 @@ def test_glob(ftp_writable, impl):
 
 def test_write():
     tmp = str(tempfile.mkdtemp())
-    fn = tmp + 'afile'
+    fn = tmp + "afile"
     url = "simplecache::file://" + fn
-    with fsspec.open(url, 'wb') as f:
-        f.write(b'hello')
+    with fsspec.open(url, "wb") as f:
+        f.write(b"hello")
         assert fn not in f.name
         assert not os.listdir(tmp)
 
-    assert open(fn, 'rb').read() == b'hello'
+    assert open(fn, "rb").read() == b"hello"
 
 
 def test_write_pickle_context():
     tmp = str(tempfile.mkdtemp())
-    fn = tmp + 'afile'
+    fn = tmp + "afile"
     url = "simplecache::file://" + fn
-    f = fsspec.open(url, 'wb').open()
-    f.write(b'hello ')
+    f = fsspec.open(url, "wb").open()
+    f.write(b"hello ")
     f.flush()
     with pickle.loads(pickle.dumps(f)) as f2:
-        f2.write(b'world')
+        f2.write(b"world")
 
-    assert open(fn, 'rb').read() == b'hello world'
+    assert open(fn, "rb").read() == b"hello world"
 
 
 def test_blocksize(ftp_writable):

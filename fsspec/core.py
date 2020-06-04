@@ -228,7 +228,7 @@ def open_files(
         name_function=name_function,
         storage_options=kwargs,
         protocol=protocol,
-        expand=expand
+        expand=expand,
     )
     if "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
@@ -450,8 +450,13 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
 
 
 def get_fs_token_paths(
-    urlpath, mode="rb", num=1, name_function=None, storage_options=None, protocol=None,
-    expand=True
+    urlpath,
+    mode="rb",
+    num=1,
+    name_function=None,
+    storage_options=None,
+    protocol=None,
+    expand=True,
 ):
     """Filesystem, deterministic token, and paths from a urlpath and options.
 

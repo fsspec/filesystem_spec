@@ -517,7 +517,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
 class LocalTempFile:
     """A temporary local file, which will be uploaded on commit"""
 
-    def __init__(self, fs, path, fn=None, mode='wb', autocommit=True, seek=0):
+    def __init__(self, fs, path, fn=None, mode="wb", autocommit=True, seek=0):
         fn = fn or tempfile.mktemp()
         self.mode = mode
         self.fn = fn
@@ -531,7 +531,10 @@ class LocalTempFile:
 
     def __reduce__(self):
         # always open in rb+ to allow continuing writing at a location
-        return LocalTempFile, (self.fs, self.path, self.fn, "rb+", self.autocommit, self.tell())
+        return (
+            LocalTempFile,
+            (self.fs, self.path, self.fn, "rb+", self.autocommit, self.tell()),
+        )
 
     def __enter__(self):
         return self.fh
