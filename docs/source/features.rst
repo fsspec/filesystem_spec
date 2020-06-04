@@ -299,6 +299,23 @@ except without the options for cache expiry and to check the original source - i
 target can be considered static, and particularly where a large number of target files are expected
 (because no metadata is written to disc). Only "simplecache" is guaranteed thread/process-safe.
 
+Remote Write Caching
+--------------------
+
+You can cache files to local files to send to remote using the "simplecache" protocol.
+The following example demonstrates how this might look
+
+.. code-block:: python
+
+   with fsspec.open('simplecache::s3://mybucket/myfile', 'wb',
+                    s3={"profile": "writer"}) as f:
+       f.write(b"some data")
+
+This will open a local file for writing, and when this file is closed, it will be uploaded
+to the target URL, in this case on S3. The file-like object ``f`` can be passed to any
+library expecting to write to a file. Note that we pass parameters to ``S3FileSystem`` using
+the key ``"s3"``, the same as the name of the protocol.
+
 File Selector
 -------------
 
