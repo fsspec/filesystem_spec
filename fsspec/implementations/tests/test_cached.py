@@ -91,6 +91,19 @@ def test_write():
     assert open(fn, 'rb').read() == b'hello'
 
 
+def test_write_pickle_context():
+    tmp = str(tempfile.mkdtemp())
+    fn = tmp + 'afile'
+    url = "simplecache::file://" + fn
+    f = fsspec.open(url, 'wb').open()
+    f.write(b'hello ')
+    f.flush()
+    with pickle.loads(pickle.dumps(f)) as f2:
+        f2.write(b'world')
+
+    assert open(fn, 'rb').read() == b'hello world'
+
+
 def test_blocksize(ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
