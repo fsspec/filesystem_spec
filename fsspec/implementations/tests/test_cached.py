@@ -79,6 +79,18 @@ def test_glob(ftp_writable, impl):
     assert fs.glob("/ou*") == ["/out", "/out2"]
 
 
+def test_write():
+    tmp = str(tempfile.mkdtemp())
+    fn = tmp + 'afile'
+    url = "simplecache::file://" + fn
+    with fsspec.open(url, 'wb') as f:
+        f.write(b'hello')
+        assert fn not in f.name
+        assert not os.listdir(tmp)
+
+    assert open(fn, 'rb').read() == b'hello'
+
+
 def test_blocksize(ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)

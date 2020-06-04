@@ -166,6 +166,7 @@ def open_files(
     protocol=None,
     newline=None,
     auto_mkdir=True,
+    expand=True,
     **kwargs
 ):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
@@ -204,6 +205,7 @@ def open_files(
     auto_mkdir: bool (True)
         If in write mode, this will ensure the target directory exists before
         writing, by calling ``fs.mkdirs(exist_ok=True)``.
+    expand: bool
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -226,6 +228,7 @@ def open_files(
         name_function=name_function,
         storage_options=kwargs,
         protocol=protocol,
+        expand=expand
     )
     if "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
@@ -355,6 +358,7 @@ def open(
         errors,
         protocol,
         newline=newline,
+        expand=False,
         **kwargs
     )[0]
 
@@ -446,7 +450,8 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
 
 
 def get_fs_token_paths(
-    urlpath, mode="rb", num=1, name_function=None, storage_options=None, protocol=None
+    urlpath, mode="rb", num=1, name_function=None, storage_options=None, protocol=None,
+    expand=True
 ):
     """Filesystem, deterministic token, and paths from a urlpath and options.
 
@@ -467,6 +472,8 @@ def get_fs_token_paths(
         Additional keywords to pass to the filesystem class.
     protocol: str or None
         To override the protocol specifier in the URL
+    expand: bool
+        Expand string paths for writing, assuming the path is a directory
     """
     chain = _un_chain(urlpath, storage_options or {})
     if len(chain) > 1:
@@ -522,7 +529,7 @@ def get_fs_token_paths(
         update_storage_options(options, storage_options)
         fs = cls(**options)
 
-        if "w" in mode:
+        if "w" in mode and expand:
             paths = _expand_paths(path, name_function, num)
         elif "*" in path:
             paths = [f for f in sorted(fs.glob(path)) if not fs.isdir(f)]

@@ -433,6 +433,11 @@ class SimpleCacheFileSystem(CachingFileSystem):
     does not keep any metadata about the download time or file details.
     It is therefore safer to use in multi-threaded/concurrent situations.
 
+    This is the only of the caching filesystems that supports write: you will
+    be given a real local open file, and upon close and commit, it will be
+    uploaded to the target filesystem; the writability or the target URL is
+    not checked until that time.
+
     """
 
     protocol = "simplecache"
@@ -469,7 +474,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
             store_path = path
         path = self.fs._strip_protocol(store_path)
         if "r" not in mode:
-            return self.fs._open(path, mode=mode, **kwargs)
+            return LocalTempFile(self, path, mode=mode)
         fn = self._check_file(path)
         if fn:
             return open(fn, mode)
@@ -507,6 +512,36 @@ class SimpleCacheFileSystem(CachingFileSystem):
                     f = compr[comp](f, mode="rb")
                 f2.write(f.read())
         return self._open(path, mode)
+
+
+class LocalTempFile:
+    """A temporary local file, which will be uploaded on commit"""
+
+    def __init__(self, fs, path, mode='wb', autocommit=True):
+        fn = tempfile.mktemp()
+        print(fn)
+        self.fn = fn
+        self.fh = open(fn, mode)
+        self.path = path
+        self.fs = fs
+        self.closed = False
+        self.autocommit = autocommit
+
+    def close(self):
+        self.fh.close()
+        self.closed = True
+        if self.autocommit:
+            self.commit()
+
+    def discard(self):
+        self.fh.close()
+        os.remove(self.fn)
+
+    def commit(self):
+        self.fs.put(self.fn, self.path)
+
+    def __getattr__(self, item):
+        return getattr(self.fh, item)
 
 
 def hash_name(path, same_name):
