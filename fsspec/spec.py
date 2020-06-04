@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import io
 import logging
 import os
@@ -66,7 +67,7 @@ class _Cached(type):
 try:  # optionally derive from pyarrow's FileSystem, if available
     import pyarrow as pa
 
-    up = pa.filesystem.DaskFileSystem
+    up = object #pa.filesystem.DaskFileSystem
 except ImportError:
     up = object
 
@@ -257,7 +258,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Remove a directory, if empty"""
         pass  # not necessary to implement, may not have directories
 
-    def ls(self, path, detail=True, **kwargs):
+    def ___ls(self, path, detail=True, **kwargs):
         """List objects at path.
 
         This should include subdirectories and files at that location. The
@@ -999,11 +1000,17 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return self._loop
 
     def __getattr__(self, item):
-        if not item.startswih('_') and hasattr("_" + item):
-            thing = getattr("_" + item)
+        if not item.startswith('_') and hasattr(self, "_" + item):
+            thing = getattr(self, "_" + item)
             if asyncio.iscoroutinefunction(thing):
-                thing = self.loop.run_until_complete(thing)
-            return thing
+
+                @functools.wraps(thing)
+                def runthing(*args, **kwargs):
+                    return self.loop.run_until_complete(thing(*args, **kwargs))
+
+                return runthing
+            else:
+                return thing
         raise AttributeError(item)
 
 
