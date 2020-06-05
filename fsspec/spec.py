@@ -220,7 +220,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         pass  # not necessary to implement, may have no cache
 
-    def mkdir(self, path, create_parents=True, **kwargs):
+    async def _mkdir(self, path, create_parents=True, **kwargs):
         """
         Create directory entry at path
 
@@ -238,7 +238,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         pass  # not necessary to implement, may not have directories
 
-    def makedirs(self, path, exist_ok=False):
+    async def _makedirs(self, path, exist_ok=False):
         """Recursively make directories
 
         Creates directory at path and any intervening required directories.
@@ -254,11 +254,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         pass  # not necessary to implement, may not have directories
 
-    def rmdir(self, path):
+    async def _rmdir(self, path):
         """Remove a directory, if empty"""
         pass  # not necessary to implement, may not have directories
 
-    def ___ls(self, path, detail=True, **kwargs):
+    async def _ls(self, path, detail=True, **kwargs):
         """List objects at path.
 
         This should include subdirectories and files at that location. The

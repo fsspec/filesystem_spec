@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import aiohttp
 import re
 import requests
 from urllib.parse import urlparse
@@ -55,7 +56,7 @@ class HTTPFileSystem(AbstractFileSystem):
         self.simple_links = simple_links
         self.same_schema = same_scheme
         self.kwargs = storage_options
-        self.session = requests.Session()
+        self.session = self.loop.run_until_complete(aiohttp.ClientSession())
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -63,15 +64,17 @@ class HTTPFileSystem(AbstractFileSystem):
         """
         return path
 
-    # TODO: override get
-
     async def _ls(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
-        r = self.session.get(url, **self.kwargs)
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        async with self.session.get(url, **self.kwargs) as r:
+            r.raise_for_status()
+            text = await r.text()
         if self.simple_links:
-            links = ex2.findall(r.text) + ex.findall(r.text)
+            links = ex2.findall(text) + ex.findall(text)
         else:
-            links = ex.findall(r.text)
+            links = ex.findall(text)
         out = set()
         parts = urlparse(url)
         for l in links:
@@ -93,7 +96,7 @@ class HTTPFileSystem(AbstractFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            return self.ls(url.rstrip("/"), detail=True)
+            return await self._ls(url.rstrip("/"), detail=True)
         if detail:
             return [
                 {
@@ -106,25 +109,38 @@ class HTTPFileSystem(AbstractFileSystem):
         else:
             return list(sorted(out))
 
-    def cat(self, url):
-        r = self.session.get(url, **self.kwargs)
-        r.raise_for_status()
-        return r.content
+    async def _cat(self, url):
+        async with self.session.get(url, **self.kwargs) as r:
+            r.raise_for_status()
+            out = await r.read()
+        return out
+
+    async def _get_file(self, rpath, lpath, chunk_size=5*2**20, stream=True, **kwargs):
+        async with self.session.get(rpath, **self.kwargs) as r:
+            r.raise_for_status()
+            with open(lpath, 'wb') as fd:
+                while True:
+                    chunk = await r.content.read(chunk_size)
+                    if not chunk:
+                        break
+                    fd.write(chunk)
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         if recursive:
             super().get()
+        else:
+            self.get_file(rpath, lpath, **kwargs)
 
-    def mkdirs(self, url):
+    def mkdirs(self, url, **kwargs):
         """Make any intermediate directories to make path writable"""
         raise NotImplementedError
 
-    def exists(self, path):
+    async def _exists(self, path):
         kwargs = self.kwargs.copy()
         kwargs["stream"] = True
         try:
-            r = self.session.get(path, **kwargs)
-            r.close()
+            r = await self.session.get(path, **kwargs)
+            await r.close()
             return r.ok
         except requests.HTTPError:
             return False
