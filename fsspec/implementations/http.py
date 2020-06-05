@@ -31,7 +31,7 @@ class HTTPFileSystem(AbstractFileSystem):
         block_size=None,
         same_scheme=True,
         size_policy=None,
-        cache_type='bytes',
+        cache_type="bytes",
         cache_options=None,
         **storage_options
     ):
