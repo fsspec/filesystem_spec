@@ -31,6 +31,8 @@ class HTTPFileSystem(AbstractFileSystem):
         block_size=None,
         same_scheme=True,
         size_policy=None,
+        cache_type="bytes",
+        cache_options=None,
         **storage_options
     ):
         """
@@ -49,11 +51,14 @@ class HTTPFileSystem(AbstractFileSystem):
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters passed on to requests
+        cache_type, cache_options: defaults used in open
         """
         AbstractFileSystem.__init__(self)
         self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
         self.simple_links = simple_links
         self.same_schema = same_scheme
+        self.cache_type = cache_type
+        self.cache_options = cache_options
         self.kwargs = storage_options
         self.session = requests.Session()
 
@@ -130,6 +135,7 @@ class HTTPFileSystem(AbstractFileSystem):
         mode="rb",
         block_size=None,
         autocommit=None,  # XXX: This differs from the base class.
+        cache_type=None,
         cache_options=None,
         **kwargs
     ):
@@ -159,7 +165,8 @@ class HTTPFileSystem(AbstractFileSystem):
                 self.session,
                 block_size,
                 mode=mode,
-                cache_options=cache_options,
+                cache_type=cache_type or self.cache_type,
+                cache_options=cache_options or self.cache_options,
                 **kw
             )
         else:
