@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import aiohttp
+import asyncio
 import re
 import requests
 from urllib.parse import urlparse
@@ -12,6 +13,17 @@ from ..caching import AllBytes
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
+
+
+def sync(func):
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        loop = args[0].loop
+        return loop.run_until_complete(func(*args, **kwargs))
+
+    return wrapper
 
 
 class HTTPFileSystem(AbstractFileSystem):
@@ -61,7 +73,8 @@ class HTTPFileSystem(AbstractFileSystem):
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.kwargs = storage_options
-        self.session = self.loop.run_until_complete(aiohttp.ClientSession())
+        self.loop = asyncio.get_event_loop()
+        self.session = aiohttp.ClientSession()
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -114,21 +127,36 @@ class HTTPFileSystem(AbstractFileSystem):
         else:
             return list(sorted(out))
 
-    async def _cat(self, url):
-        async with self.session.get(url, **self.kwargs) as r:
-            r.raise_for_status()
-            out = await r.read()
-        return out
+    async def _cat(self, url, chunks=False):
+        if chunks < 1:
+            async with self.session.get(url, **self.kwargs) as r:
+                r.raise_for_status()
+                out = await r.read()
+            return out
+        else:
+            size = file_size(url, **self.kwargs)
+            sizes = list(range(0, size, chunks)) + [size]
+            #out = await asyncio.gather(get_range(self.session, url, start, start)
+            #                       for start, end in zip(sizes[:-1], sizes[1:]))
+            out = [get_range(self.session, url, start, end)
+                   for start, end in zip(sizes[:-1], sizes[1:])][:-1]
+            out = await asyncio.gather(*out)
+            return b''.join(out)
 
-    async def _get_file(self, rpath, lpath, chunk_size=5*2**20, stream=True, **kwargs):
-        async with self.session.get(rpath, **self.kwargs) as r:
-            r.raise_for_status()
-            with open(lpath, 'wb') as fd:
-                while True:
-                    chunk = await r.content.read(chunk_size)
-                    if not chunk:
-                        break
-                    fd.write(chunk)
+    cat = sync(_cat)
+
+    async def _get_file(self, rpath, lpath, chunk_size=5*2**20, chunks=0, **kwargs):
+        if chunks < 1:
+            async with self.session.get(rpath, **self.kwargs) as r:
+                r.raise_for_status()
+                with open(lpath, 'wb') as fd:
+                    chunk = True
+                    while chunk:
+                        chunk = await r.content.read(chunk_size)
+                        fd.write(chunk)
+        else:
+            size = self.size(rpath)
+            self.loop.gather(get_range(self.session, ))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         if recursive:
@@ -214,7 +242,7 @@ class HTTPFileSystem(AbstractFileSystem):
         size = False
         for policy in ["head", "get"]:
             try:
-                size = file_size(url, self.session, policy, **self.kwargs)
+                size = file_size(url, size_policy=policy, **self.kwargs)
                 if size:
                     break
             except Exception:
@@ -327,7 +355,7 @@ class HTTPFile(AbstractBufferedFile):
         requested, an exception is raised.
         """
         kwargs = self.kwargs.copy()
-        headers = kwargs.pop("headers", {})
+        headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = "bytes=%i-%i" % (start, end - 1)
         r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
         if r.status_code == 416:
@@ -366,6 +394,16 @@ class HTTPFile(AbstractBufferedFile):
 
     def close(self):
         pass
+
+
+async def get_range(session, url, start, end, **kwargs):
+    # explicit get a range when we know it must be safe
+    kwargs = kwargs.copy()
+    headers = kwargs.pop("headers", {}).copy()
+    headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+    r = await session.get(url, headers=headers, **kwargs)
+    r.raise_for_status()
+    return await r.read()
 
 
 def file_size(url, session=None, size_policy="head", **kwargs):

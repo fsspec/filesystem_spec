@@ -1,5 +1,3 @@
-import asyncio
-import functools
 import io
 import logging
 import os
@@ -67,7 +65,7 @@ class _Cached(type):
 try:  # optionally derive from pyarrow's FileSystem, if available
     import pyarrow as pa
 
-    up = object #pa.filesystem.DaskFileSystem
+    up = pa.filesystem.DaskFileSystem
 except ImportError:
     up = object
 
@@ -117,7 +115,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
             return
         self._cached = True
         self._intrans = False
-        self._loop = None
         self._transaction = None
         self.dircache = DirCache(**storage_options)
 
@@ -220,7 +217,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         pass  # not necessary to implement, may have no cache
 
-    async def _mkdir(self, path, create_parents=True, **kwargs):
+    def mkdir(self, path, create_parents=True, **kwargs):
         """
         Create directory entry at path
 
@@ -238,7 +235,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         pass  # not necessary to implement, may not have directories
 
-    async def _makedirs(self, path, exist_ok=False):
+    def makedirs(self, path, exist_ok=False):
         """Recursively make directories
 
         Creates directory at path and any intervening required directories.
@@ -254,11 +251,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         pass  # not necessary to implement, may not have directories
 
-    async def _rmdir(self, path):
+    def rmdir(self, path):
         """Remove a directory, if empty"""
         pass  # not necessary to implement, may not have directories
 
-    async def _ls(self, path, detail=True, **kwargs):
+    def ls(self, path, detail=True, **kwargs):
         """List objects at path.
 
         This should include subdirectories and files at that location. The
@@ -589,15 +586,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """ Get the content of a file """
         return self.open(path, "rb").read()
 
-    def get_file(self, rpath, lpath, **kwargs):
-        """Fetch a single remote file to local"""
-        with self.open(rpath, "rb", **kwargs) as f1:
-            with open(lpath, "wb") as f2:
-                data = True
-                while data:
-                    data = f1.read(self.blocksize)
-                    f2.write(data)
-
     def get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file to local.
 
@@ -618,16 +606,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
             rpaths = [rpath]
             lpaths = [lpath]
         for lpath, rpath in zip(lpaths, rpaths):
-            self.get_file(rpath, lpath, **kwargs)
-
-    def put_file(self, lpath, rpath, **kwargs):
-        with open(lpath, "rb") as f1:
-            self.mkdirs(os.path.dirname(rpath), exist_ok=True)
-            with self.open(rpath, "wb", **kwargs) as f2:
-                data = True
-                while data:
-                    data = f1.read(self.blocksize)
-                    f2.write(data)
+            with self.open(rpath, "rb", **kwargs) as f1:
+                if not recursive or not os.path.isdir(lpath):
+                    with open(lpath, "wb") as f2:
+                        data = True
+                        while data:
+                            data = f1.read(self.blocksize)
+                            f2.write(data)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """ Upload file from local """
@@ -657,7 +642,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
             lpaths = [lpath]
             rpaths = [rpath]
         for lpath, rpath in zip(lpaths, rpaths):
-            self.put_file(lpath, rpath)
+            with open(lpath, "rb") as f1:
+                self.mkdirs(os.path.dirname(rpath), exist_ok=True)
+                with self.open(rpath, "wb", **kwargs) as f2:
+                    data = True
+                    while data:
+                        data = f1.read(self.blocksize)
+                        f2.write(data)
 
     def head(self, path, size=1024):
         """ Get the first ``size`` bytes from file """
@@ -992,26 +983,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def modified(self, path):
         """Return the modified timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
-
-    @property
-    def loop(self):
-        if self._loop is None or self._loop.closed:
-            self._loop = asyncio.get_event_loop()
-        return self._loop
-
-    def __getattr__(self, item):
-        if not item.startswith('_') and hasattr(self, "_" + item):
-            thing = getattr(self, "_" + item)
-            if asyncio.iscoroutinefunction(thing):
-
-                @functools.wraps(thing)
-                def runthing(*args, **kwargs):
-                    return self.loop.run_until_complete(thing(*args, **kwargs))
-
-                return runthing
-            else:
-                return thing
-        raise AttributeError(item)
 
 
 class AbstractBufferedFile(io.IOBase):

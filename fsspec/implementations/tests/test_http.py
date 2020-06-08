@@ -152,3 +152,10 @@ def test_content_length_zero(server):
 
     with h.open(url, "rb") as f:
         assert f.read() == data
+
+
+def test_chunks(server):
+    h = fsspec.filesystem('http', headers={"give_length": "true", 'head_ok': "true "})
+    assert h.cat(server + "/index/realfile") == data
+    assert h.size(server + "/index/realfile") == len(data)
+    assert h.cat(server + "/index/realfile", chunks=1000) == data
