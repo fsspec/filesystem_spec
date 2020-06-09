@@ -22,7 +22,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
-        if self.path not in ["/index/realfile", "/index"]:
+        if self.path.rstrip('/') not in ["/index/realfile", "/index"]:
             self._respond(404)
             return
 
@@ -47,7 +47,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(405)
             return
         d = data if self.path == "/index/realfile" else index
-        if self.path not in ["/index/realfile", "/index"]:
+        if self.path.rstrip('/') not in ["/index/realfile", "/index"]:
             self._respond(404)
         elif "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
