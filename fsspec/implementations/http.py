@@ -26,6 +26,10 @@ def sync(func):
     return wrapper
 
 
+async def get_client():
+    return aiohttp.ClientSession()
+
+
 class HTTPFileSystem(AbstractFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
@@ -74,7 +78,7 @@ class HTTPFileSystem(AbstractFileSystem):
         self.cache_options = cache_options
         self.kwargs = storage_options
         self.loop = asyncio.get_event_loop()
-        self.session = aiohttp.ClientSession()
+        self.session = self.loop.run_until_complete(get_client())
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -136,10 +140,8 @@ class HTTPFileSystem(AbstractFileSystem):
         else:
             size = file_size(url, **self.kwargs)
             sizes = list(range(0, size, chunks)) + [size]
-            #out = await asyncio.gather(get_range(self.session, url, start, start)
-            #                       for start, end in zip(sizes[:-1], sizes[1:]))
             out = [get_range(self.session, url, start, end)
-                   for start, end in zip(sizes[:-1], sizes[1:])][:-1]
+                   for start, end in zip(sizes[:-1], sizes[1:])]
             out = await asyncio.gather(*out)
             return b''.join(out)
 
