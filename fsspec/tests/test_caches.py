@@ -2,7 +2,7 @@ import pickle
 import string
 
 import pytest
-from fsspec.caching import BaseCache, BlockCache, caches
+from fsspec.caching import BlockCache, caches
 
 
 def test_cache_getitem(Cache_imp):
