@@ -80,8 +80,12 @@ class MemoryFileSystem(AbstractFileSystem):
             return out
         return sorted([f["name"] for f in out])
 
-    def mkdir(self, path):
+    def mkdir(self, path, create_parents=True, **kwargs):
         path = path.rstrip("/")
+        if create_parents and self._parent(path):
+            self.mkdir(self._parent(path), create_parents, **kwargs)
+        if self._parent(path) and not self.isdir(self._parent(path)):
+            raise NotADirectoryError(self._parent(path))
         if path not in self.pseudo_dirs:
             self.pseudo_dirs.append(path)
 
