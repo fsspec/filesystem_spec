@@ -123,7 +123,6 @@ class ReadAheadCache(BaseCache):
         self.end = 0
 
     def _fetch(self, start, end):
-        print(start, end, self.size)
         if start is None:
             start = 0
         if end is None:
