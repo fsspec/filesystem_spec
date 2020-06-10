@@ -2,49 +2,38 @@ import pickle
 import string
 
 import pytest
-from fsspec.caching import BaseCache, BlockCache, caches
+from fsspec.caching import BlockCache, caches
 
 
 def test_cache_getitem(Cache_imp):
     cacher = Cache_imp(4, letters_fetcher, len(string.ascii_letters))
-    assert cacher[0:4] == b"abcd"
-    assert cacher[:4] == b"abcd"
-    assert cacher[-3:] == b"XYZ"
-    assert cacher[-3:-1] == b"XY"
-    assert cacher[2:4] == b"cd"
-
-
-def test_cache_getitem_raises():
-    cacher = BaseCache(4, letters_fetcher, len(string.ascii_letters))
-    with pytest.raises(TypeError, match="int"):
-        cacher[5]
-
-    with pytest.raises(ValueError, match="contiguous"):
-        cacher[::4]
+    assert cacher._fetch(0, 4) == b"abcd"
+    assert cacher._fetch(None, 4) == b"abcd"
+    assert cacher._fetch(2, 4) == b"cd"
 
 
 def test_block_cache_lru():
     cache = BlockCache(4, letters_fetcher, len(string.ascii_letters), maxblocks=2)
     # miss
-    cache[0:2]
+    cache._fetch(0, 2)
     assert cache.cache_info().hits == 0
     assert cache.cache_info().misses == 1
     assert cache.cache_info().currsize == 1
 
     # hit
-    cache[0:2]
+    cache._fetch(0, 2)
     assert cache.cache_info().hits == 1
     assert cache.cache_info().misses == 1
     assert cache.cache_info().currsize == 1
 
     # miss
-    cache[4:6]
+    cache._fetch(4, 6)
     assert cache.cache_info().hits == 1
     assert cache.cache_info().misses == 2
     assert cache.cache_info().currsize == 2
 
     # miss & evict
-    cache[12:13]
+    cache._fetch(12, 13)
     assert cache.cache_info().hits == 1
     assert cache.cache_info().misses == 3
     assert cache.cache_info().currsize == 2
@@ -91,6 +80,6 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
     cache = Cache_imp(blocksize, letters_fetcher, len(string.ascii_letters))
 
     for start, end in size_requests:
-        result = cache[start:end]
+        result = cache._fetch(start, end)
         expected = string.ascii_letters[start:end].encode()
         assert result == expected

@@ -28,34 +28,14 @@ class BaseCache(object):
         self.fetcher = fetcher
         self.size = size
 
-    def _fetch(self, start, end):
-        return self.fetcher(start, end)
-
-    def __getitem__(self, item: slice):
-        if not isinstance(item, slice):
-            raise TypeError(
-                "Cache indices must be a contiguous slice. Got {} instead.".format(
-                    type(item)
-                )
-            )
-        if item.step and item.step != 1:
-            raise ValueError(
-                "Cache indices must be a contiguous slice. 'item' has step={}".format(
-                    item.step
-                )
-            )
-
-        # handle endpoints
-        if item.start is None:
-            item = slice(0, item.stop)
-        elif item.start < 0:
-            item = slice(self.size + item.start, item.stop)
-        if item.stop is None:
-            item = slice(item.start, self.size)
-        elif item.stop < 0:
-            item = slice(item.start, self.size + item.stop)
-
-        return self._fetch(item.start, item.stop)
+    def _fetch(self, start, stop):
+        if start is None:
+            start = 0
+        if stop is None:
+            stop = self.size
+        if start >= self.size or start >= stop:
+            return b""
+        return self.fetcher(start, stop)
 
 
 class MMapCache(BaseCache):
@@ -96,6 +76,12 @@ class MMapCache(BaseCache):
         return mmap.mmap(fd.fileno(), self.size)
 
     def _fetch(self, start, end):
+        if start is None:
+            start = 0
+        if end is None:
+            end = self.size
+        if start >= self.size or start >= end:
+            return b""
         start_block = start // self.blocksize
         end_block = end // self.blocksize
         need = [i for i in range(start_block, end_block + 1) if i not in self.blocks]
@@ -137,11 +123,14 @@ class ReadAheadCache(BaseCache):
         self.end = 0
 
     def _fetch(self, start, end):
-        end = min(self.size, end)
-        l = end - start
-        if start >= self.size:
+        if start is None:
+            start = 0
+        if end is None:
+            end = self.size
+        if start >= self.size or start >= end:
             return b""
-        elif start >= self.start and end <= self.end:
+        l = end - start
+        if start >= self.start and end <= self.end:
             # cache hit
             return self.cache[start - self.start : end - self.start]
         elif self.start <= start < self.end:
@@ -216,13 +205,12 @@ class BlockCache(BaseCache):
         )
 
     def _fetch(self, start, end):
-        if end < start:
-            raise ValueError(
-                "'end' ({}) is smaller than 'start' ({}).".format(end, start)
-            )
-
-        if end > self.size:
-            raise ValueError("'end={}' larger than size ('{}')".format(end, self.size))
+        if start is None:
+            start = 0
+        if end is None:
+            end = self.size
+        if start >= self.size or start >= end:
+            return b""
 
         # byte position -> block numbers
         start_block_number = start // self.blocksize
@@ -314,6 +302,12 @@ class BytesCache(BaseCache):
     def _fetch(self, start, end):
         # TODO: only set start/end after fetch, in case it fails?
         # is this where retry logic might go?
+        if start is None:
+            start = 0
+        if end is None:
+            end = self.size
+        if start >= self.size or start >= end:
+            return b""
         if (
             self.start is not None
             and start >= self.start
