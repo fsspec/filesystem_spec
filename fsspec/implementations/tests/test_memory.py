@@ -33,3 +33,20 @@ def test_ls(m):
     assert m.ls("/dir", True)[1]["type"] == "directory"
 
     assert len(m.ls("/dir/dir1")) == 2
+
+
+def test_directories(m):
+    with pytest.raises(NotADirectoryError):
+        m.mkdir("outer/inner", create_parents=False)
+    m.mkdir("outer/inner")
+
+    assert m.ls("outer")
+    assert m.ls("outer/inner") == []
+
+    with pytest.raises(OSError):
+        m.rmdir("outer")
+
+    m.rmdir("outer/inner")
+    m.rmdir("outer")
+
+    assert not m.store
