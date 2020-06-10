@@ -4,6 +4,7 @@ import aiohttp
 import asyncio
 import re
 import requests
+import weakref
 from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
@@ -83,6 +84,8 @@ class HTTPFileSystem(AbstractFileSystem):
         self.kwargs = storage_options
         self.loop = asyncio.get_event_loop()
         self.session = self.loop.run_until_complete(get_client())
+        weakref.finalize(self, sync, self.session.close())
+
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -217,28 +220,29 @@ class HTTPFileSystem(AbstractFileSystem):
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
-        kw.update(kwargs)  # this does nothing?
-        if block_size:
+        kw.update(kwargs)
+        size = self.size(path)
+        if block_size and size:
             return HTTPFile(
                 self,
                 path,
                 self.session,
                 block_size,
                 mode=mode,
+                size=size,
                 cache_type=cache_type or self.cache_type,
                 cache_options=cache_options or self.cache_options,
                 loop=self.loop,
                 **kw
             )
         else:
-            r = sync(self.session.get(path, **kw))
-            if r.status >= 400:
-                raise RuntimeError
-            r.raw.decode_content = True
-            return r.raw
-
-    def __del__(self):
-        sync(self.session.close())
+            return HTTPStreamFile(
+                self,
+                path,
+                mode=mode,
+                loop=self.loop,
+                **kw
+            )
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
@@ -313,8 +317,7 @@ class HTTPFile(AbstractBufferedFile):
             raise NotImplementedError("File mode not supported")
         self.url = url
         self.session = session if session is not None else requests.Session()
-        if size is not None:
-            self.details = {"name": url, "size": size, "type": "file"}
+        self.details = {"name": url, "size": size, "type": "file"}
         super().__init__(
             fs=fs,
             path=url,
@@ -325,7 +328,6 @@ class HTTPFile(AbstractBufferedFile):
             **kwargs
         )
         self.loop = loop or asyncio.get_event_loop()
-        self.cache.size = self.size or self.blocksize
 
     def read(self, length=-1):
         """Read bytes from file
@@ -367,7 +369,7 @@ class HTTPFile(AbstractBufferedFile):
 
     _fetch_all = sync_wrapper(__fetch_all)
 
-    def _fetch_range(self, start, end):
+    async def __fetch_range(self, start, end):
         """Download a block of data
 
         The expectation is that the server returns only the requested bytes,
@@ -378,43 +380,85 @@ class HTTPFile(AbstractBufferedFile):
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-        r = sync(self.session.get(self.url, headers=headers, stream=True, **kwargs))
-        if r.status_code == 416:
-            # range request outside file
-            return b""
-        r.raise_for_status()
-        if r.status_code == 206:
-            # partial content, as expected
-            out = sync(r.read())
-        elif "Content-Length" in r.headers:
-            cl = int(r.headers["Content-Length"])
-            if cl <= end - start:
-                # data size OK
-                out = sync(r.read())
-            else:
-                raise ValueError(
-                    "Got more bytes (%i) than requested (%i)" % (cl, end - start)
-                )
-        else:
-            cl = 0
-            out = []
-            for chunk in r.iter_content(chunk_size=2 ** 20):
-                # data size unknown, let's see if it goes too big
-                if chunk:
-                    out.append(chunk)
-                    cl += len(chunk)
-                    if cl > end - start:
-                        raise ValueError(
-                            "Got more bytes so far (>%i) than requested (%i)"
-                            % (cl, end - start)
-                        )
+        r = await self.session.get(self.url, headers=headers, **kwargs)
+        async with r:
+            if r.status == 416:
+                # range request outside file
+                return b""
+            r.raise_for_status()
+            if r.status == 206:
+                # partial content, as expected
+                out = await r.read()
+            elif "Content-Length" in r.headers:
+                cl = int(r.headers["Content-Length"])
+                if cl <= end - start:
+                    # data size OK
+                    out = await r.read()
                 else:
-                    break
-            out = b"".join(out)
-        return out
+                    raise ValueError(
+                        "Got more bytes (%i) than requested (%i)" % (cl, end - start)
+                    )
+            else:
+                cl = 0
+                out = []
+                while True:
+                    chunk = await r.content.read(2 ** 20)
+                    # data size unknown, let's see if it goes too big
+                    if chunk:
+                        out.append(chunk)
+                        cl += len(chunk)
+                        if cl > end - start:
+                            raise ValueError(
+                                "Got more bytes so far (>%i) than requested (%i)"
+                                % (cl, end - start)
+                            )
+                    else:
+                        break
+                out = b"".join(out)
+            return out
+
+    _fetch_range = sync_wrapper(__fetch_range)
 
     def close(self):
         pass
+
+
+async def get(session, url, **kwargs):
+    return await session.get(url, **kwargs)
+
+
+class HTTPStreamFile(AbstractBufferedFile):
+
+    def __init__(self, fs, url, mode='rb', loop=None, session=None, **kwargs):
+        self.url = url
+        self.loop = loop or asyncio.get_event_loop()
+        self.session = session if session is not None else sync(get_client())
+        if mode != 'rb':
+            raise ValueError
+        self.details = {"name": url, "size": None}
+        super().__init__(
+            fs=fs,
+            path=url,
+            mode=mode,
+            cache_type='none',
+            **kwargs
+        )
+        self.r = sync(get(self.session, url, **kwargs))
+
+    def seek(self, *args, **kwargs):
+        raise ValueError("Cannot seek strteaming HTTP file")
+
+    async def _read(self, num=-1):
+        out = await self.r.content.read(num)
+        self.loc += len(out)
+        return out
+
+    read = sync_wrapper(_read)
+
+    async def _close(self):
+        self.r.close()
+
+    close = sync_wrapper(_close)
 
 
 async def get_range(session, url, start, end, **kwargs):

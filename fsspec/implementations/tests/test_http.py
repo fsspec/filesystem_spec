@@ -31,8 +31,6 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")
-            print(start)
-            print(end)
             d = d[int(start) : int(end) + 1]
         if "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
@@ -127,10 +125,13 @@ def test_random_access(server, headers):
         if headers:
             assert f.size == len(data)
         assert f.read(5) == data[:5]
-        # python server does not respect bytes range request
-        # we actually get all the data
-        f.seek(5, 1)
-        assert f.read(5) == data[10:15]
+
+        if headers:
+            f.seek(5, 1)
+            assert f.read(5) == data[10:15]
+        else:
+            with pytest.raises(ValueError):
+                f.seek(5, 1)
 
 
 def test_mapper_url(server):
