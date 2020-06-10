@@ -37,16 +37,16 @@ def test_ls(m):
 
 def test_directories(m):
     with pytest.raises(NotADirectoryError):
-        m.mkdir('outer/inner', create_parents=False)
-    m.mkdir('outer/inner')
+        m.mkdir("outer/inner", create_parents=False)
+    m.mkdir("outer/inner")
 
-    assert m.ls('outer')
-    assert m.ls('outer/inner') == []
+    assert m.ls("outer")
+    assert m.ls("outer/inner") == []
 
     with pytest.raises(OSError):
-        m.rmdir('outer')
+        m.rmdir("outer")
 
-    m.rmdir('outer/inner')
-    m.rmdir('outer')
+    m.rmdir("outer/inner")
+    m.rmdir("outer")
 
     assert not m.store
