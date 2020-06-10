@@ -395,6 +395,8 @@ class WebHDFile(AbstractBufferedFile):
     def _fetch_range(self, start, end):
         start = max(start, 0)
         end = min(self.size, end)
+        if start >= end or start >= self.size:
+            return b""
         out = self.fs._call(
             "OPEN", path=self.path, offset=start, length=end - start, redirect=False
         )
