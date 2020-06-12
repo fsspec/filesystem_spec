@@ -112,10 +112,10 @@ class HTTPFileSystem(AbstractFileSystem):
                 # absolute URL on this server
                 l = parts.scheme + "://" + parts.netloc + l
             if l.startswith("http"):
-                if self.same_schema and l.startswith(url.rstrip('/') + '/'):
+                if self.same_schema and l.startswith(url.rstrip("/") + "/"):
                     out.add(l)
                 elif l.replace("https", "http").startswith(
-                    url.replace("https", "http").rstrip('/') + '/'
+                    url.replace("https", "http").rstrip("/") + "/"
                 ):
                     # allowed to cross http <-> https
                     out.add(l)
@@ -148,25 +148,27 @@ class HTTPFileSystem(AbstractFileSystem):
         else:
             size = await _file_size(url, **self.kwargs)
             sizes = list(range(0, size, chunks)) + [size]
-            out = [get_range(self.session, url, start, end)
-                   for start, end in zip(sizes[:-1], sizes[1:])]
+            out = [
+                get_range(self.session, url, start, end)
+                for start, end in zip(sizes[:-1], sizes[1:])
+            ]
             out = await asyncio.gather(*out)
-            return b''.join(out)
+            return b"".join(out)
 
     cat = sync_wrapper(_cat)
 
-    async def _get_file(self, rpath, lpath, chunk_size=5*2**20, chunks=0, **kwargs):
+    async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, chunks=0, **kwargs):
         if chunks < 1:
             async with self.session.get(rpath, **self.kwargs) as r:
                 r.raise_for_status()
-                with open(lpath, 'wb') as fd:
+                with open(lpath, "wb") as fd:
                     chunk = True
                     while chunk:
                         chunk = await r.content.read(chunk_size)
                         fd.write(chunk)
         else:
             size = self.size(rpath)
-            self.loop.gather(get_range(self.session, ))
+            self.loop.gather(get_range(self.session,))
 
     get_file = sync_wrapper(_get_file)
 
@@ -235,13 +237,7 @@ class HTTPFileSystem(AbstractFileSystem):
                 **kw
             )
         else:
-            return HTTPStreamFile(
-                self,
-                path,
-                mode=mode,
-                loop=self.loop,
-                **kw
-            )
+            return HTTPStreamFile(self, path, mode=mode, loop=self.loop, **kw)
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
@@ -427,21 +423,14 @@ async def get(session, url, **kwargs):
 
 
 class HTTPStreamFile(AbstractBufferedFile):
-
-    def __init__(self, fs, url, mode='rb', loop=None, session=None, **kwargs):
+    def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
         self.url = url
         self.loop = loop or asyncio.get_event_loop()
         self.session = session if session is not None else sync(get_client())
-        if mode != 'rb':
+        if mode != "rb":
             raise ValueError
         self.details = {"name": url, "size": None}
-        super().__init__(
-            fs=fs,
-            path=url,
-            mode=mode,
-            cache_type='none',
-            **kwargs
-        )
+        super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
         self.r = sync(get(self.session, url, **kwargs))
 
     def seek(self, *args, **kwargs):

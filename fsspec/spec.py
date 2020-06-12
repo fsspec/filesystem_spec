@@ -1101,7 +1101,7 @@ class AbstractBufferedFile(io.IOBase):
     def closed(self):
         # get around this attr being read-only in IOBase
         # use getattr here, since this can be called during del
-        return getattr(self, '_closed', True)
+        return getattr(self, "_closed", True)
 
     @closed.setter
     def closed(self, c):

@@ -22,7 +22,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
-        if self.path.rstrip('/') not in ["/index/realfile", "/index"]:
+        if self.path.rstrip("/") not in ["/index/realfile", "/index"]:
             self._respond(404)
             return
 
@@ -45,7 +45,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(405)
             return
         d = data if self.path == "/index/realfile" else index
-        if self.path.rstrip('/') not in ["/index/realfile", "/index"]:
+        if self.path.rstrip("/") not in ["/index/realfile", "/index"]:
             self._respond(404)
         elif "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
@@ -156,7 +156,7 @@ def test_content_length_zero(server):
 
 
 def test_chunks(server):
-    h = fsspec.filesystem('http', headers={"give_length": "true", 'head_ok': "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     assert h.cat(server + "/index/realfile") == data
     assert h.size(server + "/index/realfile") == len(data)
     out = h.cat(server + "/index/realfile", chunks=int(len(data) / 3.5))
