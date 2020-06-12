@@ -311,3 +311,12 @@ def make_instance(cls, args, kwargs):
     inst = cls(*args, **kwargs)
     inst._determine_worker()
     return inst
+
+
+def common_prefix(paths):
+    parts = [p.split('/') for p in paths]
+    lmax = max(len(p) for p in parts)
+    for i in range(lmax):
+        if not all(p[i] == parts[0][i] for p in parts):
+            break
+    return "/".join(parts[0][:i])

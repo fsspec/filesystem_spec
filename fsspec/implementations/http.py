@@ -86,7 +86,6 @@ class HTTPFileSystem(AbstractFileSystem):
         self.session = self.loop.run_until_complete(get_client())
         weakref.finalize(self, sync, self.session.close())
 
-
     @classmethod
     def _strip_protocol(cls, path):
         """ For HTTP, we always want to keep the full URL

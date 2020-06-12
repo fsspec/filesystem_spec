@@ -86,13 +86,13 @@ class MemoryFileSystem(AbstractFileSystem):
             self.mkdir(self._parent(path), create_parents, **kwargs)
         if self._parent(path) and not self.isdir(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
-        if path not in self.pseudo_dirs:
+        if path and path not in self.pseudo_dirs:
             self.pseudo_dirs.append(path)
 
     def rmdir(self, path):
         path = path.rstrip("/")
         if path in self.pseudo_dirs:
-            if self.ls(path) == []:
+            if not self.ls(path):
                 self.pseudo_dirs.remove(path)
             else:
                 raise OSError("Directory %s not empty" % path)
@@ -137,7 +137,12 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def _rm(self, path):
-        del self.store[path]
+        if self.isfile(path):
+            del self.store[path]
+        elif self.isdir(path):
+            self.rmdir(path)
+        else:
+            raise FileNotFoundError
 
     def size(self, path):
         """Size in bytes of the file at path"""

@@ -3,10 +3,11 @@ import logging
 import os
 import warnings
 from hashlib import md5
+from glob import has_magic
 
 from .dircache import DirCache
 from .transaction import Transaction
-from .utils import read_block, tokenize, stringify_path
+from .utils import read_block, tokenize, stringify_path, common_prefix
 
 logger = logging.getLogger("fsspec")
 
@@ -444,7 +445,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         kwargs are passed to ``ls``.
         """
         import re
-        from glob import has_magic
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
@@ -661,16 +661,46 @@ class AbstractFileSystem(up, metaclass=_Cached):
             f.seek(max(-size, -f.size), 2)
             return f.read()
 
-    def copy(self, path1, path2, **kwargs):
+    def cp_file(self, path1, path2, **kwargs):
+        raise NotImplemented
+
+    def copy(self, path1, path2, recursive=False, **kwargs):
         """ Copy within two locations in the filesystem"""
-        raise NotImplementedError
+        paths = self.expand_path(path1, recursive=recursive)
+        if isinstance(path2, str):
+            if len(paths) > 1:
+                cp = common_prefix(paths)
+                path2 = [p.replace(cp, path2) for p in paths]
+            else:
+                path2 = [path2]
+        for p1, p2 in zip(paths, path2):
+            self.cp_file(p1, p2, **kwargs)
 
-    def mv(self, path1, path2, **kwargs):
-        """ Move file from one location to another """
-        self.copy(path1, path2, **kwargs)
-        self.rm(path1, recursive=False)
+    def expand_path(self, path, recursive=False, maxdepth=None):
+        if isinstance(path, str):
+            out = self.expand_path([path], recursive, maxdepth)
+        else:
+            out = set()
+            for p in path:
+                if has_magic(p):
+                    bit = set(self.glob(p))
+                    out |= bit
+                    if recursive:
+                        out += self.expand_path()
+                elif recursive:
+                    out |= set(self.find(p, withdirs=True))
+                if self.exists(p):
+                    out.add(p)
+        if not out:
+            raise FileNotFoundError(path)
+        return list(sorted(out))
 
-    def _rm(self, path):
+    def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
+        """ Move file(s) from one location to another """
+        self.cp(path1, path2, recursive=recursive, maxdepth=maxdepth)
+        self.rm(path1, recursive=recursive)
+
+    def rm_file(self, path):
         """Delete a file"""
         raise NotImplementedError
 
@@ -689,19 +719,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
             If None, there will be no limit and infinite recursion may be
             possible.
         """
-        # prefer some bulk method, if possible
-        if not isinstance(path, list):
-            path = [path]
-        for p in path:
-            if recursive:
-                out = self.walk(p, maxdepth=maxdepth)
-                for pa_, _, files in reversed(list(out)):
-                    for name in files:
-                        fn = "/".join([pa_, name]) if pa_ else name
-                        self.rm(fn)
-                    self.rmdir(pa_)
-            else:
-                self._rm(p)
+        path = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        for p in reversed(path):
+            self._rm(p)
 
     @classmethod
     def _parent(cls, path):
@@ -976,6 +996,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Alias of :ref:`FilesystemSpec.get`."""
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
+    def _rm(self, path):
+        """Alias for :ref:`FilesystemSpec.rm_file`"""
+        return self.rm_file(path)
+
     def created(self, path):
         """Return the created timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
@@ -1076,7 +1100,8 @@ class AbstractBufferedFile(io.IOBase):
     @property
     def closed(self):
         # get around this attr being read-only in IOBase
-        return self._closed
+        # use getattr here, since this can be called during del
+        return getattr(self, '_closed', True)
 
     @closed.setter
     def closed(self, c):

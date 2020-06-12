@@ -271,6 +271,8 @@ class FileSelector(SigSlot):
         self._register(None, "selection_changed")
         self.main.connect("selected", self.selection_changed)
         self._register(None, "directory_entered")
+        self.prev_protocol = self.protocol.value
+        self.prev_kwargs = self.storage_options
 
         self.filter_sel = pn.widgets.CheckBoxGroup(
             value=[], options=[], inline=False, align="end", width_policy="min"
@@ -283,8 +285,6 @@ class FileSelector(SigSlot):
             self.main.panel,
         )
         self.set_filters(self.filters)
-        self.prev_protocol = self.protocol.value
-        self.prev_kwargs = self.storage_options
         self.go_clicked()
 
     def set_filters(self, filters=None):
