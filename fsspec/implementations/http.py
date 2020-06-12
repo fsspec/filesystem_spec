@@ -147,7 +147,7 @@ class HTTPFileSystem(AbstractFileSystem):
                 out = await r.read()
             return out
         else:
-            size = await _file_size(url, **self.kwargs)
+            size = await _file_size(url, session=self.session, **self.kwargs)
             sizes = list(range(0, size, chunks)) + [size]
             out = [
                 get_range(self.session, url, start, end)
@@ -266,7 +266,9 @@ class HTTPFileSystem(AbstractFileSystem):
         size = False
         for policy in ["head", "get"]:
             try:
-                size = await _file_size(url, size_policy=policy, **self.kwargs)
+                size = await _file_size(
+                    url, size_policy=policy, session=self.session, **self.kwargs
+                )
                 if size:
                     break
             except Exception:
