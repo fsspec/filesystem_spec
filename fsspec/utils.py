@@ -315,8 +315,9 @@ def make_instance(cls, args, kwargs):
 
 def common_prefix(paths):
     parts = [p.split('/') for p in paths]
-    lmax = max(len(p) for p in parts)
+    lmax = min(len(p) for p in parts)
     for i in range(lmax):
         if not all(p[i] == parts[0][i] for p in parts):
             break
+    i += 1
     return "/".join(parts[0][:i])

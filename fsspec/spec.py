@@ -697,7 +697,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """ Move file(s) from one location to another """
-        self.cp(path1, path2, recursive=recursive, maxdepth=maxdepth)
+        self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
         self.rm(path1, recursive=recursive)
 
     def rm_file(self, path):

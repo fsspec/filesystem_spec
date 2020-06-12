@@ -100,7 +100,7 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def exists(self, path):
-        return path in self.store
+        return path in self.store or path in self.pseudo_dirs
 
     def _open(
         self,
@@ -127,8 +127,17 @@ class MemoryFileSystem(AbstractFileSystem):
                 m.commit()
             return m
 
-    def copy(self, path1, path2, **kwargs):
-        self.store[path2] = MemoryFile(self, path2, self.store[path1].getbuffer())
+    def cp_file(self, path1, path2, **kwargs):
+        print('copy', path1, path2)
+        if self.isfile(path1):
+            print('file')
+            self.store[path2] = MemoryFile(self, path2, self.store[path1].getbuffer())
+        elif self.isdir(path1):
+            print('dir')
+            if path2 not in self.pseudo_dirs:
+                self.pseudo_dirs.append(path2)
+        else:
+            raise FileNotFoundError
 
     def cat(self, path):
         try:
@@ -137,9 +146,12 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def _rm(self, path):
+        print('rm', path)
         if self.isfile(path):
+            print('file')
             del self.store[path]
         elif self.isdir(path):
+            print('dir')
             self.rmdir(path)
         else:
             raise FileNotFoundError
