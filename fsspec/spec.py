@@ -662,7 +662,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             return f.read()
 
     def cp_file(self, path1, path2, **kwargs):
-        raise NotImplemented
+        raise NotImplementedError
 
     def copy(self, path1, path2, recursive=False, **kwargs):
         """ Copy within two locations in the filesystem"""

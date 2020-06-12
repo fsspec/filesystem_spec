@@ -27,8 +27,9 @@ def sync_wrapper(func):
     return wrapper
 
 
-def sync(awaitable):
-    return asyncio.get_event_loop().run_until_complete(awaitable)
+def sync(awaitable, loop=None):
+    loop = loop or asyncio.get_event_loop()
+    return loop.run_until_complete(awaitable)
 
 
 async def get_client():
@@ -158,6 +159,8 @@ class HTTPFileSystem(AbstractFileSystem):
     cat = sync_wrapper(_cat)
 
     async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, chunks=0, **kwargs):
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
         if chunks < 1:
             async with self.session.get(rpath, **self.kwargs) as r:
                 r.raise_for_status()
@@ -167,8 +170,11 @@ class HTTPFileSystem(AbstractFileSystem):
                         chunk = await r.content.read(chunk_size)
                         fd.write(chunk)
         else:
-            size = self.size(rpath)
-            self.loop.gather(get_range(self.session,))
+            open(lpath, 'wb').close()
+            size = (await self._info(rpath))['size']
+            starts = list(range(0, size, chunks)) + [size]
+            [await get_range(self.session, rpath, start, end, file=lpath, **kw)
+             for start, end in zip(starts[:-1], starts[1:])]
 
     get_file = sync_wrapper(_get_file)
 
@@ -227,8 +233,8 @@ class HTTPFileSystem(AbstractFileSystem):
             return HTTPFile(
                 self,
                 path,
-                self.session,
-                block_size,
+                session=self.session,
+                block_size=block_size,
                 mode=mode,
                 size=size,
                 cache_type=cache_type or self.cache_type,
@@ -237,7 +243,8 @@ class HTTPFileSystem(AbstractFileSystem):
                 **kw
             )
         else:
-            return HTTPStreamFile(self, path, mode=mode, loop=self.loop, **kw)
+            return HTTPStreamFile(self, path, mode=mode, loop=self.loop,
+                                  session=self.session, **kw)
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
@@ -311,7 +318,7 @@ class HTTPFile(AbstractBufferedFile):
         if mode != "rb":
             raise NotImplementedError("File mode not supported")
         self.url = url
-        self.session = session if session is not None else requests.Session()
+        self.session = session
         self.details = {"name": url, "size": size, "type": "file"}
         super().__init__(
             fs=fs,
@@ -322,7 +329,7 @@ class HTTPFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs
         )
-        self.loop = loop or asyncio.get_event_loop()
+        self.loop = loop
 
     def read(self, length=-1):
         """Read bytes from file
@@ -358,6 +365,7 @@ class HTTPFile(AbstractBufferedFile):
         if not isinstance(self.cache, AllBytes):
             r = await self.session.get(self.url, **self.kwargs)
             async with r:
+                r.raise_for_status()
                 out = await r.read()
                 self.cache = AllBytes(out)
                 self.size = len(out)
@@ -425,13 +433,13 @@ async def get(session, url, **kwargs):
 class HTTPStreamFile(AbstractBufferedFile):
     def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
         self.url = url
-        self.loop = loop or asyncio.get_event_loop()
-        self.session = session if session is not None else sync(get_client())
+        self.loop = loop
+        self.session = session
         if mode != "rb":
             raise ValueError
         self.details = {"name": url, "size": None}
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
-        self.r = sync(get(self.session, url, **kwargs))
+        self.r = sync(get(self.session, url, **kwargs), self.loop)
 
     def seek(self, *args, **kwargs):
         raise ValueError("Cannot seek strteaming HTTP file")
@@ -446,10 +454,11 @@ class HTTPStreamFile(AbstractBufferedFile):
     async def _close(self):
         self.r.close()
 
-    close = sync_wrapper(_close)
+    def close(self):
+        asyncio.ensure_future(self._close())
 
 
-async def get_range(session, url, start, end, **kwargs):
+async def get_range(session, url, start, end, file=None, **kwargs):
     # explicit get a range when we know it must be safe
     kwargs = kwargs.copy()
     headers = kwargs.pop("headers", {}).copy()
@@ -457,7 +466,13 @@ async def get_range(session, url, start, end, **kwargs):
     r = await session.get(url, headers=headers, **kwargs)
     r.raise_for_status()
     async with r:
-        return await r.read()
+        out = await r.read()
+    if file:
+        with open(file, 'rb+') as f:
+            f.seek(start)
+            f.write(out)
+    else:
+        return out
 
 
 async def _file_size(url, session=None, size_policy="head", **kwargs):
