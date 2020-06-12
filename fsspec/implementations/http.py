@@ -170,11 +170,13 @@ class HTTPFileSystem(AbstractFileSystem):
                         chunk = await r.content.read(chunk_size)
                         fd.write(chunk)
         else:
-            open(lpath, 'wb').close()
-            size = (await self._info(rpath))['size']
+            open(lpath, "wb").close()
+            size = (await self._info(rpath))["size"]
             starts = list(range(0, size, chunks)) + [size]
-            [await get_range(self.session, rpath, start, end, file=lpath, **kw)
-             for start, end in zip(starts[:-1], starts[1:])]
+            [
+                await get_range(self.session, rpath, start, end, file=lpath, **kw)
+                for start, end in zip(starts[:-1], starts[1:])
+            ]
 
     get_file = sync_wrapper(_get_file)
 
@@ -243,8 +245,9 @@ class HTTPFileSystem(AbstractFileSystem):
                 **kw
             )
         else:
-            return HTTPStreamFile(self, path, mode=mode, loop=self.loop,
-                                  session=self.session, **kw)
+            return HTTPStreamFile(
+                self, path, mode=mode, loop=self.loop, session=self.session, **kw
+            )
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
@@ -468,7 +471,7 @@ async def get_range(session, url, start, end, file=None, **kwargs):
     async with r:
         out = await r.read()
     if file:
-        with open(file, 'rb+') as f:
+        with open(file, "rb+") as f:
             f.seek(start)
             f.write(out)
     else:

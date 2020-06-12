@@ -167,9 +167,9 @@ def test_chunks(server):
 def test_download(server, tmpdir):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     url = server + "/index/realfile"
-    fn = os.path.join(tmpdir, 'afile')
+    fn = os.path.join(tmpdir, "afile")
     h.get(url, fn, chunks=0)
-    assert open(fn, 'rb').read() == data
+    assert open(fn, "rb").read() == data
     os.remove(fn)
     h.get(url, fn, chunks=int(len(data) / 3.5))
-    assert open(fn, 'rb').read() == data
+    assert open(fn, "rb").read() == data
