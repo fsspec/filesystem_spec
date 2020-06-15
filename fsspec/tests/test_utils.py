@@ -1,7 +1,8 @@
 import io
 import pytest
 import sys
-from fsspec.utils import infer_storage_options, seek_delimiter, read_block
+from fsspec.utils import (infer_storage_options, seek_delimiter, read_block, common_prefix,
+                          other_paths)
 
 
 WIN = sys.platform.startswith("win")
@@ -224,3 +225,36 @@ def test_infer_storage_options_c(urlpath, expected_path):
     so = infer_storage_options(urlpath)
     assert so["protocol"] == "file"
     assert so["path"] == expected_path
+
+
+@pytest.mark.parametrize(
+    "paths, out",
+    (
+        (['/more/dir/', '/more/dir/two', '/more/one', '/more/three'], '/more'),
+        (['/', '', '/'], ''),
+        (['/', '/'], '/'),
+        (['/more/', '/'], ''),
+        (['/more/', '/more'], '/more'),
+        (['more/dir/', 'more/dir/two', 'more/one', 'more/three'], 'more'),
+    )
+)
+def test_common_prefix(paths, out):
+    assert common_prefix(paths) == out
+
+@pytest.mark.parametrize(
+    "paths, other, is_dir, expected",
+    (
+        (['/path1'], '/path2', False, ['/path2']),
+        (['/path1'], '/path2', True, ['/path2/path1']),
+        (['/path1'], '/path2', None, ['/path2']),
+        (['/path1'], '/path2/', True, ['/path2/path1']),
+        (['/path1'], ['/path2'], True, ['/path2']),
+        (['/path1', '/path2'], '/path2', True, ['/path2/path1', '/path2/path2']),
+        (['/more/path1', '/more/path2'], '/path2', True, ['/path2/path1', '/path2/path2']),
+        (['/more/path1', '/more/path2'], '/path2', False, ['/path2/path1', '/path2/path2']),
+        (['/more/path1', '/more/path2'], '/path2/', None, ['/path2/path1', '/path2/path2']),
+        (['/more/path1', '/diff/path2'], '/path2/', None, ['/path2/more/path1', '/path2/diff/path2']),
+    )
+)
+def test_other_paths(paths, other, is_dir, expected):
+    assert other_paths(paths, other, is_dir) == expected

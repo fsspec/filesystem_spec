@@ -7,7 +7,7 @@ from glob import has_magic
 
 from .dircache import DirCache
 from .transaction import Transaction
-from .utils import read_block, tokenize, stringify_path, common_prefix
+from .utils import read_block, tokenize, stringify_path, other_paths
 
 logger = logging.getLogger("fsspec")
 
@@ -586,33 +586,31 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """ Get the content of a file """
         return self.open(path, "rb").read()
 
+    def get_file(self, rpath, lpath, **kwargs):
+        if self.isdir(rpath):
+            os.makedirs(lpath, exist_ok=True)
+        else:
+            with self.open(rpath, "rb", **kwargs) as f1:
+                with open(lpath, "wb") as f2:
+                    data = True
+                    while data:
+                        data = f1.read(self.blocksize)
+                        f2.write(data)
+
     def get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file to local.
 
         Possible extension: maybe should be able to copy to any file-system
         (streaming through local).
         """
+        from .implementations.local import make_path_posix
+
         rpath = self._strip_protocol(rpath)
-        if recursive:
-            rpaths = self.find(rpath)
-            lpaths = [
-                os.path.join(lpath, path[len(rpath) :].lstrip("/")) for path in rpaths
-            ]
-            for lpath in lpaths:
-                dirname = os.path.dirname(lpath)
-                if not os.path.isdir(dirname):
-                    os.makedirs(dirname)
-        else:
-            rpaths = [rpath]
-            lpaths = [lpath]
+        lpath = make_path_posix(lpath)
+        rpaths = self.expand_path(rpath, recursive=recursive)
+        lpaths = other_paths(rpaths, lpath)
         for lpath, rpath in zip(lpaths, rpaths):
-            with self.open(rpath, "rb", **kwargs) as f1:
-                if not recursive or not os.path.isdir(lpath):
-                    with open(lpath, "wb") as f2:
-                        data = True
-                        while data:
-                            data = f1.read(self.blocksize)
-                            f2.write(data)
+            self.get_file(rpath, lpath, **kwargs)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """ Upload file from local """
@@ -667,12 +665,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def copy(self, path1, path2, recursive=False, **kwargs):
         """ Copy within two locations in the filesystem"""
         paths = self.expand_path(path1, recursive=recursive)
-        if isinstance(path2, str):
-            if len(paths) > 1:
-                cp = common_prefix(paths)
-                path2 = [p.replace(cp, path2) for p in paths]
-            else:
-                path2 = [path2]
+        path2 = other_paths(paths, path2)
         for p1, p2 in zip(paths, path2):
             self.cp_file(p1, p2, **kwargs)
 
