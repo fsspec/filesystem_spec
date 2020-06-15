@@ -1,4 +1,5 @@
 import os
+import pickle
 import pytest
 import tempfile
 
@@ -101,3 +102,13 @@ def test_automkdir_readonly(tmpdir):
         of = fsspec.open(os.path.join(dir, "dfile"), "r")
         with of:
             pass
+
+
+def test_openfile_pickle_newline():
+    # GH#318
+    test = fsspec.open(__file__, newline=b"")
+
+    pickled = pickle.dumps(test)
+    restored = pickle.loads(pickled)
+
+    assert test.newline == restored.newline
