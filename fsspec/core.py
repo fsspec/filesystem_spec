@@ -84,7 +84,7 @@ class OpenFile(object):
                 self.compression,
                 self.encoding,
                 self.errors,
-                self.newline
+                self.newline,
             ),
         )
 
