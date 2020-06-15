@@ -586,6 +586,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """ Get the content of a file """
         return self.open(path, "rb").read()
 
+    def mcat(self, paths, recursive=False):
+        """Fetch multiple paths' contents"""
+        paths = self.expand_path(paths, recursive=recursive)
+        return {path: self.cat(path) for path in paths}
+
     def get_file(self, rpath, lpath, **kwargs):
         if self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
@@ -598,48 +603,28 @@ class AbstractFileSystem(up, metaclass=_Cached):
                         f2.write(data)
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
-        """Copy file to local.
+        """Copy file(s) to local.
 
-        Possible extension: maybe should be able to copy to any file-system
-        (streaming through local).
+        Copies a specific file or tree of files (if recursive=True). If lpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within.
+
+        Calls get_file for each source.
         """
         from .implementations.local import make_path_posix
 
         rpath = self._strip_protocol(rpath)
-        lpath = make_path_posix(lpath)
+        if isinstance(lpath, str):
+            lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
         for lpath, rpath in zip(lpaths, rpaths):
             self.get_file(rpath, lpath, **kwargs)
 
-    def put(self, lpath, rpath, recursive=False, **kwargs):
-        """ Upload file from local """
-        from .implementations.local import make_path_posix
-        import posixpath
-
-        if recursive:
-            lpaths = []
-            for dirname, subdirlist, filelist in os.walk(lpath):
-                lpaths += [
-                    make_path_posix(os.path.join(dirname, filename))
-                    for filename in filelist
-                ]
-            rootdir = os.path.basename(make_path_posix(lpath).rstrip("/"))
-            if self.exists(rpath):
-                # copy lpath inside rpath directory
-                rpath2 = posixpath.join(rpath, rootdir)
-            else:
-                # copy lpath as rpath directory
-                rpath2 = rpath
-            lpath2 = make_path_posix(os.path.abspath(lpath))
-            rpaths = [
-                posixpath.join(rpath2, path[len(lpath2) :].lstrip("/"))
-                for path in lpaths
-            ]
+    def put_file(self, lpath, rpath, **kwargs):
+        if os.path.isdir(lpath):
+            self.makedirs(rpath, exist_ok=True)
         else:
-            lpaths = [lpath]
-            rpaths = [rpath]
-        for lpath, rpath in zip(lpaths, rpaths):
             with open(lpath, "rb") as f1:
                 self.mkdirs(os.path.dirname(rpath), exist_ok=True)
                 with self.open(rpath, "wb", **kwargs) as f2:
@@ -647,6 +632,27 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     while data:
                         data = f1.read(self.blocksize)
                         f2.write(data)
+
+    def put(self, lpath, rpath, recursive=False, **kwargs):
+        """Copy file(s) from local.
+
+        Copies a specific file or tree of files (if recursive=True). If rpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within.
+
+        Calls put_file for each source.
+        """
+        from .implementations.local import make_path_posix, LocalFileSystem
+
+        rpath = self._strip_protocol(rpath)
+        if isinstance(lpath, str):
+            lpath = make_path_posix(lpath)
+        fs = LocalFileSystem()
+        lpaths = fs.expand_path(lpath, recursive=recursive)
+        rpaths = other_paths(lpaths, rpath)
+
+        for lpath, rpath in zip(lpaths, rpaths):
+            self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):
         """ Get the first ``size`` bytes from file """
@@ -670,6 +676,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             self.cp_file(p1, p2, **kwargs)
 
     def expand_path(self, path, recursive=False, maxdepth=None):
+        """Turn one or more globs or directories into a list of all matching files"""
         if isinstance(path, str):
             out = self.expand_path([path], recursive, maxdepth)
         else:

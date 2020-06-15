@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import aiohttp
 import asyncio
+import inspect
 import re
 import requests
 import weakref
@@ -10,10 +11,18 @@ from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 from ..caching import AllBytes
+from ..utils import other_paths
 
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
+
+
+def is_running_async():
+    for frame in inspect.stack(context=0):
+        if frame.function == "run_until_complete":
+            return True
+    return False
 
 
 def sync_wrapper(func):
@@ -22,7 +31,11 @@ def sync_wrapper(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         loop = args[0].loop
-        return loop.run_until_complete(func(*args, **kwargs))
+        if is_running_async():
+            out = asyncio.ensure_future(func(*args, **kwargs), loop=loop)
+            return out
+        else:
+            return loop.run_until_complete(func(*args, **kwargs))
 
     return wrapper
 
@@ -158,6 +171,15 @@ class HTTPFileSystem(AbstractFileSystem):
 
     cat = sync_wrapper(_cat)
 
+    async def _mcat(self, paths, recursive=False):
+        paths = self.expand_path(paths, recursive=recursive)
+        out = await asyncio.gather(
+            *[asyncio.ensure_future(self._cat(path), loop=self.loop) for path in paths]
+        )
+        return {k: v for k, v in zip(paths, out)}
+
+    mcat = sync_wrapper(_mcat)
+
     async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, chunks=0, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -180,11 +202,17 @@ class HTTPFileSystem(AbstractFileSystem):
 
     get_file = sync_wrapper(_get_file)
 
-    def get(self, rpath, lpath, recursive=False, **kwargs):
-        if recursive:
-            super().get()
-        else:
-            self.get_file(rpath, lpath, **kwargs)
+    async def _get(self, rpath, lpath, recursive=False, **kwargs):
+        from fsspec.implementations.local import make_path_posix
+
+        rpath = self._strip_protocol(rpath)
+        lpath = make_path_posix(lpath)
+        rpaths = self.expand_path(rpath, recursive=recursive)
+        lpaths = other_paths(rpaths, lpath)
+        await asyncio.gather(
+            self._get_file(rpath, lpath, **kwargs)
+            for lpath, rpath in zip(lpaths, rpaths)
+        )
 
     def mkdirs(self, url, **kwargs):
         """Make any intermediate directories to make path writable"""

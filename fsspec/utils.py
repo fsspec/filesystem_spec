@@ -319,7 +319,6 @@ def common_prefix(paths):
     lmax = min(len(p) for p in parts)
     end = 0
     for i in range(lmax):
-        print(i, [[p[i], parts[0][i]] for p in parts])
         end = all(p[i] == parts[0][i] for p in parts)
         if not end:
             break
@@ -347,14 +346,14 @@ def other_paths(paths, path2, is_dir=None):
     list of str
     """
     if isinstance(path2, str):
-        is_dir = is_dir or path2.endswith('/')
-        path2 =path2.rstrip('/')
+        is_dir = is_dir or path2.endswith("/")
+        path2 = path2.rstrip("/")
         if len(paths) > 1:
             cp = common_prefix(paths)
             path2 = [p.replace(cp, path2, 1) for p in paths]
         else:
             if is_dir:
-                path2 = [path2.rstrip('/') + '/' + paths[0].rsplit('/')[-1]]
+                path2 = [path2.rstrip("/") + "/" + paths[0].rsplit("/")[-1]]
             else:
                 path2 = [path2]
     else:

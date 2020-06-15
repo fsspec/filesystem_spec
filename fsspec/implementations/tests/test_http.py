@@ -23,11 +23,15 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
-        if self.path.rstrip("/") not in ["/index/realfile", "/index"]:
+        if self.path.rstrip("/") not in [
+            "/index/realfile",
+            "/index/otherfile",
+            "/index",
+        ]:
             self._respond(404)
             return
 
-        d = data if self.path == "/index/realfile" else index
+        d = data if self.path in ["/index/realfile", "/index/otherfile"] else index
         if "Range" in self.headers:
             ran = self.headers["Range"]
             b, ran = ran.split("=")
@@ -173,3 +177,22 @@ def test_download(server, tmpdir):
     os.remove(fn)
     h.get(url, fn, chunks=int(len(data) / 3.5))
     assert open(fn, "rb").read() == data
+
+
+def test_multi_download(server, tmpdir):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    urla = server + "/index/realfile"
+    urlb = server + "/index/otherfile"
+    fna = os.path.join(tmpdir, "afile")
+    fnb = os.path.join(tmpdir, "bfile")
+    h.get([urla, urlb], [fna, fnb], chunks=0)
+    assert open(fna, "rb").read() == data
+    assert open(fnb, "rb").read() == data
+
+
+def test_mcat(server):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    urla = server + "/index/realfile"
+    urlb = server + "/index/otherfile"
+    out = h.mcat([urla, urlb])
+    assert out == {urla: data, urlb: data}
