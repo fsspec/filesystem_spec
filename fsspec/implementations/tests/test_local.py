@@ -106,12 +106,6 @@ def test_urlpath_inference_errors():
         get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
     assert "Protocol mismatch" in str(err.value)
 
-    # Unknown type
-    with pytest.raises(TypeError):
-        get_fs_token_paths(
-            {"sets/are.csv", "unordered/so/they.csv", "should/not/be.csvallowed.csv"}
-        )
-
 
 def test_urlpath_expand_read():
     """Make sure * is expanded in file paths when reading."""
