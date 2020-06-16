@@ -77,6 +77,7 @@ def test_list():
 
 def test_pathobject():
     import pathlib
+
     here = os.path.abspath(os.path.dirname(__file__))
     flist = os.listdir(here)
     plist_str = [os.path.join(here, p) for p in flist]
@@ -89,7 +90,7 @@ def test_pathobject():
     assert len(of) == 1
     assert of[0].path == plist_str[0]
     with of[0] as f:
-        assert f.read() == open(plist_str[0], 'rb').read()
+        assert f.read() == open(plist_str[0], "rb").read()
 
 
 def test_automkdir(tmpdir):
