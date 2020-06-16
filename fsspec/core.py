@@ -481,6 +481,10 @@ def get_fs_token_paths(
     expand: bool
         Expand string paths for writing, assuming the path is a directory
     """
+    if isinstance(urlpath, (list, tuple, set)):
+        urlpath = [stringify_path(u) for u in urlpath]
+    else:
+        urlpath = stringify_path(urlpath)
     chain = _un_chain(urlpath, storage_options or {})
     if len(chain) > 1:
         storage_options = chain[0][2]
