@@ -211,8 +211,10 @@ class HTTPFileSystem(AbstractFileSystem):
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
         await asyncio.gather(
-            *[self._get_file(rpath, lpath, **kwargs)
-             for lpath, rpath in zip(lpaths, rpaths)]
+            *[
+                self._get_file(rpath, lpath, **kwargs)
+                for lpath, rpath in zip(lpaths, rpaths)
+            ]
         )
 
     def mkdirs(self, url, **kwargs):
