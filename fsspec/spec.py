@@ -686,11 +686,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     bit = set(self.glob(p))
                     out |= bit
                     if recursive:
-                        out += self.expand_path()
+                        out += self.expand_path(p)
                 elif recursive:
                     out |= set(self.find(p, withdirs=True))
-                if self.exists(p):
-                    out.add(p)
+                out.add(p)
         if not out:
             raise FileNotFoundError(path)
         return list(sorted(out))

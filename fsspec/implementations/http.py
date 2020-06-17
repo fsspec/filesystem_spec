@@ -19,6 +19,7 @@ ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
 def is_running_async():
+    return False
     for frame in inspect.stack(context=0):
         if frame.function == "run_until_complete":
             return True
@@ -210,8 +211,8 @@ class HTTPFileSystem(AbstractFileSystem):
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
         await asyncio.gather(
-            self._get_file(rpath, lpath, **kwargs)
-            for lpath, rpath in zip(lpaths, rpaths)
+            *[self._get_file(rpath, lpath, **kwargs)
+             for lpath, rpath in zip(lpaths, rpaths)]
         )
 
     def mkdirs(self, url, **kwargs):
