@@ -2,9 +2,11 @@ from __future__ import print_function, division, absolute_import
 
 import aiohttp
 import asyncio
+import threading
 import inspect
 import re
 import requests
+import sys
 import weakref
 from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
@@ -18,12 +20,34 @@ ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
-def is_running_async():
-    return False
-    for frame in inspect.stack(context=0):
-        if frame.function == "run_until_complete":
-            return True
-    return False
+def sync(loop, func, *args, **kwargs):
+    """
+    Run coroutine in loop running in separate thread.
+    """
+
+    e = threading.Event()
+    result = [None]
+    error = [False]
+
+    async def f():
+        try:
+            await asyncio.sleep(0)
+            future = func(*args, **kwargs)
+            result[0] = await future
+        except Exception as exc:
+            error[0] = sys.exc_info()
+        finally:
+            e.set()
+
+    assert loop.is_running()
+    asyncio.run_coroutine_threadsafe(f(), loop=loop)
+    while not e.is_set():
+        e.wait(10)
+    if error[0]:
+        typ, exc, tb = error[0]
+        raise exc.with_traceback(tb)
+    else:
+        return result[0]
 
 
 def sync_wrapper(func):
@@ -32,18 +56,17 @@ def sync_wrapper(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         loop = args[0].loop
-        if is_running_async():
-            out = asyncio.ensure_future(func(*args, **kwargs), loop=loop)
-            return out
-        else:
-            return loop.run_until_complete(func(*args, **kwargs))
+        return sync(loop, func, *args, **kwargs)
 
     return wrapper
 
 
-def sync(awaitable, loop=None):
-    loop = loop or asyncio.get_event_loop()
-    return loop.run_until_complete(awaitable)
+def get_loop():
+    loop = asyncio.new_event_loop()
+    t = threading.Thread(target=loop.run_forever)
+    t.daemon = True
+    t.start()
+    return loop
 
 
 async def get_client():
@@ -97,9 +120,9 @@ class HTTPFileSystem(AbstractFileSystem):
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.kwargs = storage_options
-        self.loop = asyncio.get_event_loop()
-        self.session = self.loop.run_until_complete(get_client())
-        weakref.finalize(self, sync, self.session.close())
+        self.loop = get_loop()
+        self.session = sync(self.loop, get_client)
+        weakref.finalize(self, sync, self.loop, self.session.close)
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -475,7 +498,7 @@ class HTTPStreamFile(AbstractBufferedFile):
             raise ValueError
         self.details = {"name": url, "size": None}
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
-        self.r = sync(get(self.session, url, **kwargs), self.loop)
+        self.r = sync(self.loop, get, self.session, url, **kwargs)
 
     def seek(self, *args, **kwargs):
         raise ValueError("Cannot seek strteaming HTTP file")
