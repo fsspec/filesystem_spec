@@ -130,3 +130,8 @@ def test_openfile_pickle_newline():
     restored = pickle.loads(pickled)
 
     assert test.newline == restored.newline
+
+
+def test_mismatch():
+    with pytest.raises(ValueError, match="Protocol mismatch"):
+        open_files(["s3://test/path.csv", "/other/path.csv"])
