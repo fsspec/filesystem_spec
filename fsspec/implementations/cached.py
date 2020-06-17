@@ -3,6 +3,7 @@ import pickle
 import logging
 import os
 import hashlib
+from shutil import move
 import tempfile
 import inspect
 from fsspec import AbstractFileSystem, filesystem
@@ -156,7 +157,7 @@ class CachingFileSystem(AbstractFileSystem):
         fn2 = tempfile.mktemp()
         with open(fn2, "wb") as f:
             pickle.dump(cache, f)
-        os.replace(fn2, fn)
+        move(fn2, fn)
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
