@@ -301,6 +301,20 @@ def test_globfind_dirs(tmpdir):
     assert [tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(tmpdir, withdirs=True)
 
 
+def test_touch(tmpdir):
+    fn = tmpdir + "/in/file"
+    fs = fsspec.filesystem("file", auto_mkdir=False)
+    with pytest.raises(OSError):
+        fs.touch(fn)
+    fs = fsspec.filesystem("file", auto_mkdir=True)
+    fs.touch(fn)
+    info = fs.info(fn)
+    fs.touch(fn)
+    info2 = fs.info(fn)
+    if not WIN:
+        assert info2["mtime"] > info["mtime"]
+
+
 def test_get_pyarrow_filesystem():
     pa = pytest.importorskip("pyarrow")
 

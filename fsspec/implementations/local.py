@@ -118,6 +118,8 @@ class LocalFileSystem(AbstractFileSystem):
 
     def touch(self, path, **kwargs):
         path = self._strip_protocol(path)
+        if self.auto_mkdir:
+            self.makedirs(self._parent(path), exist_ok=True)
         if self.exists(path):
             os.utime(path, None)
         else:
