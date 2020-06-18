@@ -171,14 +171,17 @@ class CachingFileSystem(AbstractFileSystem):
 
     def _check_file(self, path):
         """Is path in cache and still valid"""
+        path = self._strip_protocol(path)
         self._check_cache()
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
+        else:
+            store_path = path
         for storage, cache in zip(self.storage, self.cached_files):
-            if path not in cache:
+            if store_path not in cache:
                 continue
-            detail = cache[path].copy()
+            detail = cache[store_path].copy()
             if self.check_files:
                 if detail["uid"] != self.fs.ukey(path):
                     continue
@@ -207,13 +210,18 @@ class CachingFileSystem(AbstractFileSystem):
         raises PermissionError
         """
         path = self._strip_protocol(path)
+        if not path.startswith(self.target_protocol):
+            store_path = self.target_protocol + "://" + path
+            path = self.fs._strip_protocol(store_path)
+        else:
+            store_path = path
         _, fn = self._check_file(path)
         if fn is None:
             return
         if fn.startswith(self.storage[-1]):
             # is in in writable cache
             os.remove(fn)
-            self.cached_files[-1].pop(path)
+            self.cached_files[-1].pop(store_path)
             self.save_cache()
         else:
             raise PermissionError(
@@ -341,6 +349,8 @@ class CachingFileSystem(AbstractFileSystem):
             "head",
             "_check_file",
             "_check_cache",
+            "clear_cache",
+            "pop_from_cache",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass

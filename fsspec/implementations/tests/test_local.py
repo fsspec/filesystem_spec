@@ -302,6 +302,8 @@ def test_globfind_dirs(tmpdir):
 
 
 def test_touch(tmpdir):
+    import time
+
     fn = tmpdir + "/in/file"
     fs = fsspec.filesystem("file", auto_mkdir=False)
     with pytest.raises(OSError):
@@ -309,6 +311,7 @@ def test_touch(tmpdir):
     fs = fsspec.filesystem("file", auto_mkdir=True)
     fs.touch(fn)
     info = fs.info(fn)
+    time.sleep(0.2)
     fs.touch(fn)
     info2 = fs.info(fn)
     if not WIN:
