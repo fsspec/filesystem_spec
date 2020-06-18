@@ -202,7 +202,9 @@ def test_isfile():
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
+            assert fs.isfile("file://" + f)
         assert not fs.isfile("not-a-file")
+        assert not fs.isfile("file://not-a-file")
 
 
 def test_isdir():
@@ -324,7 +326,7 @@ def test_directories(tmpdir):
 
 def test_file_ops(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
-    fs = LocalFileSystem()
+    fs = LocalFileSystem(auto_mkdir=True)
     with pytest.raises(FileNotFoundError):
         fs.info(tmpdir + "/nofile")
     fs.touch(tmpdir + "/afile")
@@ -342,6 +344,9 @@ def test_file_ops(tmpdir):
 
     fs.move(tmpdir + "/afile", tmpdir + "/afile3")
     assert not fs.exists(tmpdir + "/afile")
+
+    fs.cp(tmpdir + "/afile3", tmpdir + "/deeply/nested/file")
+    assert fs.exists(tmpdir + "/deeply/nested/file")
 
     fs.rm(tmpdir + "/afile3", recursive=True)
     assert not fs.exists(tmpdir + "/afile3")
