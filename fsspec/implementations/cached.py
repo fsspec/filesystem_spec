@@ -3,7 +3,11 @@ import pickle
 import logging
 import os
 import hashlib
+<<<<<<< Updated upstream
 from shutil import move
+=======
+import shutil
+>>>>>>> Stashed changes
 import tempfile
 import inspect
 from fsspec import AbstractFileSystem, filesystem
@@ -189,6 +193,33 @@ class CachingFileSystem(AbstractFileSystem):
             if os.path.exists(fn):
                 return detail, fn
         return False, None
+
+    def clear_cache(self):
+        """Remove all files and metadat from the cache
+
+        In the case of multiple cache locations, this clears only the last one, which is
+        assumed to be the read/write one.
+        """
+        shutil.rmtree(self.storage[-1])
+        self.load_cache()
+
+    def pop_from_cache(self, path):
+        """Remove cached version of given file
+
+        Deletes local copy of the given (remote) path. If it is found in a cache location
+        which is not the last, it is assumed to be read-only, and raises PermissionErroe
+        """
+        path = self._strip_protocol(path)
+        _, fn = self._check_file(path)
+        if fn is None:
+            return
+        if fn.startswith(self.storage[-1]):
+            # is in in writable cache
+            os.remove(fn)
+            self.cached_files[-1].pop(path)
+            self.save_cache()
+        else:
+            raise PermissionError("Can only delete cached file in last, writable cache location")
 
     def _open(
         self,
