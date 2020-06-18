@@ -91,6 +91,62 @@ def test_write():
     assert open(fn, "rb").read() == b"hello"
 
 
+def test_clear():
+    import tempfile
+
+    origin = tempfile.mkdtemp()
+    cache1 = tempfile.mkdtemp()
+    data = b"test data"
+    f1 = os.path.join(origin, "afile")
+    with open(f1, "wb") as f:
+        f.write(data)
+
+    # populates first cache
+    fs = fsspec.filesystem("filecache", target_protocol="file", cache_storage=cache1)
+    assert fs.cat(f1) == data
+
+    assert "cache" in os.listdir(cache1)
+    assert len(os.listdir(cache1)) == 2
+    assert fs._check_file(f1)
+
+    fs.clear_cache()
+    assert not fs._check_file(f1)[0]
+    assert len(os.listdir(cache1)) < 2
+
+
+def test_pop():
+    import tempfile
+
+    origin = tempfile.mkdtemp()
+    cache1 = tempfile.mkdtemp()
+    cache2 = tempfile.mkdtemp()
+    data = b"test data"
+    f1 = os.path.join(origin, "afile")
+    f2 = os.path.join(origin, "bfile")
+    with open(f1, "wb") as f:
+        f.write(data)
+    with open(f2, "wb") as f:
+        f.write(data)
+
+    # populates first cache
+    fs = fsspec.filesystem("filecache", target_protocol="file", cache_storage=cache1)
+    fs.cat(f1)
+
+    # populates last cache if file not found in first cache
+    fs = fsspec.filesystem(
+        "filecache", target_protocol="file", cache_storage=[cache1, cache2]
+    )
+    assert fs.cat(f2) == data
+    assert len(os.listdir(cache2)) == 2
+    assert fs._check_file(f1)
+    with pytest.raises(PermissionError):
+        fs.pop_from_cache(f1)
+    fs.pop_from_cache(f2)
+    assert len(os.listdir(cache2)) == 1
+    assert fs._check_file(f2)[0] is False
+    assert fs._check_file(f1)
+
+
 def test_write_pickle_context():
     tmp = str(tempfile.mkdtemp())
     fn = tmp + "afile"

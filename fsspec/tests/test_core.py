@@ -75,6 +75,24 @@ def test_list():
     assert [f.path for f in of] == plist
 
 
+def test_pathobject():
+    import pathlib
+
+    here = os.path.abspath(os.path.dirname(__file__))
+    flist = os.listdir(here)
+    plist_str = [os.path.join(here, p) for p in flist]
+    plist = [pathlib.Path(p) for p in plist_str]
+    of = open_files(plist)
+    assert len(of) == len(flist)
+    assert [f.path for f in of] == plist_str
+
+    of = open_files(plist[0])
+    assert len(of) == 1
+    assert of[0].path == plist_str[0]
+    with of[0] as f:
+        assert f.read() == open(plist_str[0], "rb").read()
+
+
 def test_automkdir(tmpdir):
     dir = os.path.join(str(tmpdir), "a")
     of = fsspec.open(os.path.join(dir, "afile"), "w")
@@ -112,3 +130,8 @@ def test_openfile_pickle_newline():
     restored = pickle.loads(pickled)
 
     assert test.newline == restored.newline
+
+
+def test_mismatch():
+    with pytest.raises(ValueError, match="Protocol mismatch"):
+        open_files(["s3://test/path.csv", "/other/path.csv"])

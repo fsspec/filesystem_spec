@@ -106,12 +106,6 @@ def test_urlpath_inference_errors():
         get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
     assert "Protocol mismatch" in str(err.value)
 
-    # Unknown type
-    with pytest.raises(TypeError):
-        get_fs_token_paths(
-            {"sets/are.csv", "unordered/so/they.csv", "should/not/be.csvallowed.csv"}
-        )
-
 
 def test_urlpath_expand_read():
     """Make sure * is expanded in file paths when reading."""
@@ -208,7 +202,9 @@ def test_isfile():
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
+            assert fs.isfile("file://" + f)
         assert not fs.isfile("not-a-file")
+        assert not fs.isfile("file://not-a-file")
 
 
 def test_isdir():
@@ -305,6 +301,23 @@ def test_globfind_dirs(tmpdir):
     assert [tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(tmpdir, withdirs=True)
 
 
+def test_touch(tmpdir):
+    import time
+
+    fn = tmpdir + "/in/file"
+    fs = fsspec.filesystem("file", auto_mkdir=False)
+    with pytest.raises(OSError):
+        fs.touch(fn)
+    fs = fsspec.filesystem("file", auto_mkdir=True)
+    fs.touch(fn)
+    info = fs.info(fn)
+    time.sleep(0.2)
+    fs.touch(fn)
+    info2 = fs.info(fn)
+    if not WIN:
+        assert info2["mtime"] > info["mtime"]
+
+
 def test_get_pyarrow_filesystem():
     pa = pytest.importorskip("pyarrow")
 
@@ -330,7 +343,7 @@ def test_directories(tmpdir):
 
 def test_file_ops(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
-    fs = LocalFileSystem()
+    fs = LocalFileSystem(auto_mkdir=True)
     with pytest.raises(FileNotFoundError):
         fs.info(tmpdir + "/nofile")
     fs.touch(tmpdir + "/afile")
@@ -348,6 +361,9 @@ def test_file_ops(tmpdir):
 
     fs.move(tmpdir + "/afile", tmpdir + "/afile3")
     assert not fs.exists(tmpdir + "/afile")
+
+    fs.cp(tmpdir + "/afile3", tmpdir + "/deeply/nested/file")
+    assert fs.exists(tmpdir + "/deeply/nested/file")
 
     fs.rm(tmpdir + "/afile3", recursive=True)
     assert not fs.exists(tmpdir + "/afile3")

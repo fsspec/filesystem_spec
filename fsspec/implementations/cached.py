@@ -3,6 +3,7 @@ import pickle
 import logging
 import os
 import hashlib
+from shutil import move, rmtree
 import tempfile
 import inspect
 from fsspec import AbstractFileSystem, filesystem
@@ -156,7 +157,7 @@ class CachingFileSystem(AbstractFileSystem):
         fn2 = tempfile.mktemp()
         with open(fn2, "wb") as f:
             pickle.dump(cache, f)
-        os.replace(fn2, fn)
+        move(fn2, fn)
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
@@ -170,14 +171,17 @@ class CachingFileSystem(AbstractFileSystem):
 
     def _check_file(self, path):
         """Is path in cache and still valid"""
+        path = self._strip_protocol(path)
         self._check_cache()
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
             path = self.fs._strip_protocol(store_path)
+        else:
+            store_path = path
         for storage, cache in zip(self.storage, self.cached_files):
-            if path not in cache:
+            if store_path not in cache:
                 continue
-            detail = cache[path].copy()
+            detail = cache[store_path].copy()
             if self.check_files:
                 if detail["uid"] != self.fs.ukey(path):
                     continue
@@ -188,6 +192,41 @@ class CachingFileSystem(AbstractFileSystem):
             if os.path.exists(fn):
                 return detail, fn
         return False, None
+
+    def clear_cache(self):
+        """Remove all files and metadat from the cache
+
+        In the case of multiple cache locations, this clears only the last one,
+        which is assumed to be the read/write one.
+        """
+        rmtree(self.storage[-1])
+        self.load_cache()
+
+    def pop_from_cache(self, path):
+        """Remove cached version of given file
+
+        Deletes local copy of the given (remote) path. If it is found in a cache
+        location which is not the last, it is assumed to be read-only, and
+        raises PermissionError
+        """
+        path = self._strip_protocol(path)
+        if not path.startswith(self.target_protocol):
+            store_path = self.target_protocol + "://" + path
+            path = self.fs._strip_protocol(store_path)
+        else:
+            store_path = path
+        _, fn = self._check_file(path)
+        if fn is None:
+            return
+        if fn.startswith(self.storage[-1]):
+            # is in in writable cache
+            os.remove(fn)
+            self.cached_files[-1].pop(store_path)
+            self.save_cache()
+        else:
+            raise PermissionError(
+                "Can only delete cached file in last, writable cache location"
+            )
 
     def _open(
         self,
@@ -310,6 +349,8 @@ class CachingFileSystem(AbstractFileSystem):
             "head",
             "_check_file",
             "_check_cache",
+            "clear_cache",
+            "pop_from_cache",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
