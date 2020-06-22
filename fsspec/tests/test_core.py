@@ -135,3 +135,18 @@ def test_openfile_pickle_newline():
 def test_mismatch():
     with pytest.raises(ValueError, match="Protocol mismatch"):
         open_files(["s3://test/path.csv", "/other/path.csv"])
+
+
+def test_url_kwargs_chain(ftp_writable):
+    host, port, username, password = "localhost", 2121, "user", "pass"
+    data = b"hello"
+    with fsspec.open(
+        "ftp:///afile", "wb", host=host, port=port, username=username, password=password
+    ) as f:
+        f.write(data)
+
+    with fsspec.open(
+        "simplecache::ftp://{}:{}@{}:{}/afile".format(username, password, host, port),
+        "rb",
+    ) as f:
+        assert f.read() == data
