@@ -269,14 +269,15 @@ def _un_chain(path, kwargs):
         else [path]
     )
     # [[url, protocol, kwargs], ...]
-    return [
-        (
-            bit,
-            split_protocol(bit)[0] or "file",
-            kwargs.get(split_protocol(bit)[0] or "file", {}),
-        )
-        for bit in bits
-    ]
+    out = []
+    for bit in bits:
+        protocol = split_protocol(bit)[0] or "file"
+        cls = get_filesystem_class(protocol)
+        extra_kwargs = cls._get_kwargs_from_urls(bit)
+        kws = kwargs.get(split_protocol(bit)[0] or "file", {})
+        kw = dict(**extra_kwargs, **kws)
+        out.append((bit, protocol, kw))
+    return out
 
 
 def url_to_fs(url, **kwargs):
