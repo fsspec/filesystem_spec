@@ -47,3 +47,25 @@ def test_pickle():
         fs = fsspec.get_filesystem_class("zip")(fo=z)
         fs2 = pickle.loads(pickle.dumps(fs))
         assert fs2.cat("b") == b"hello"
+
+
+def test_info():
+    with tempzip(data) as z:
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
+
+        with pytest.raises(FileNotFoundError):
+            fs.info("i-do-not-exist")
+
+        # Iterate over all directories
+        for d in {os.path.dirname(f) for f in data.keys()}:
+            d_info = fs.info(d)
+            assert d_info["type"] == "directory"
+            assert d_info["size"] == 0
+            assert d_info["name"] == (f"{d}/" if d != fs.root_marker else fs.root_marker)
+
+        # Iterate over all files
+        for f, v in data.items():
+            f_info = fs.info(f)
+            assert f_info["type"] == "file"
+            assert f_info["size"] == len(v)
+            assert f_info["name"] == f

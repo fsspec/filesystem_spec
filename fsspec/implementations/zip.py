@@ -75,6 +75,10 @@ class ZipFileSystem(AbstractFileSystem):
                 )
                 self.dir_cache[f["name"]] = f
 
+    def info(self, path, **kwargs):
+        if kwargs.get("_info_implementation", "super") == "super":
+            return super().info(path, **kwargs)
+
     def ls(self, path, detail=False, **kwargs):
         self._get_dirs()
         paths = {}
