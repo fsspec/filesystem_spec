@@ -23,7 +23,7 @@ def tempzip(data={}):
             pass
 
 
-data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
+data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff", "deeply/not": b"more stuff"}
 
 
 def test_empty():
@@ -37,7 +37,7 @@ def test_mapping():
     with tempzip(data) as z:
         fs = fsspec.get_filesystem_class("zip")(fo=z)
         m = fs.get_mapper("")
-        assert list(m) == ["a", "b", "deeply/nested/path"]
+        assert list(m) == ["a", "b", "deeply/nested/path", "deeply/not"]
         assert m["b"] == data["b"]
 
 
@@ -47,3 +47,16 @@ def test_pickle():
         fs = fsspec.get_filesystem_class("zip")(fo=z)
         fs2 = pickle.loads(pickle.dumps(fs))
         assert fs2.cat("b") == b"hello"
+
+
+def test_ls():
+    with tempzip(data) as z:
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
+        assert fs.ls("") == ["a", "b", "deeply/"]
+        assert fs.ls("/") == fs.ls("")
+
+        assert fs.ls("deeply") == ["deeply/nested/", "deeply/not"]
+        assert fs.ls("deeply") == fs.ls("deeply/")
+
+        assert fs.ls("deeply/nested/") == ["deeply/nested/path"]
+
