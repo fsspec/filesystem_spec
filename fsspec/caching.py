@@ -49,7 +49,7 @@ class MMapCache(BaseCache):
 
     def __init__(self, blocksize, fetcher, size, location=None, blocks=None):
         super().__init__(blocksize, fetcher, size)
-        self.blocks = set() if blocks is None else blocks
+        self.blocks = set() if blocks is None else set(blocks)
         self.location = location
         self.cache = self._makefile()
 
