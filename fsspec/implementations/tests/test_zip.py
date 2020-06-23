@@ -49,23 +49,26 @@ def test_pickle():
         assert fs2.cat("b") == b"hello"
 
 
-def test_info():
+@pytest.mark.parametrize("implementation", ["super", "cache"])
+def test_info(implementation):
     with tempzip(data) as z:
         fs = fsspec.get_filesystem_class("zip")(fo=z)
 
         with pytest.raises(FileNotFoundError):
             fs.info("i-do-not-exist")
 
+        def all_dirnames(keys):
+            dirnames = {os.path.dirname(k) for k in keys}
+            if len(dirnames) == 1 and "" in dirnames:
+                return dirnames
+            return dirnames | all_dirnames(dirnames)
+
         # Iterate over all directories
-        for d in {os.path.dirname(f) for f in data.keys()}:
-            d_info = fs.info(d)
-            assert d_info["type"] == "directory"
-            assert d_info["size"] == 0
-            assert d_info["name"] == (f"{d}/" if d != fs.root_marker else fs.root_marker)
+        for d in all_dirnames(data.keys()):
+            d_info = fs.info(d, _info_implementation=implementation)
+            assert (d_info["type"], d_info["size"], d_info["name"]) == ("directory", 0, (f"{d}/" if d != fs.root_marker else fs.root_marker))
 
         # Iterate over all files
         for f, v in data.items():
-            f_info = fs.info(f)
-            assert f_info["type"] == "file"
-            assert f_info["size"] == len(v)
-            assert f_info["name"] == f
+            f_info = fs.info(f, _info_implementation=implementation)
+            assert (f_info["type"], f_info["size"], f_info["name"]) == ("file", len(v), f)
