@@ -56,6 +56,9 @@ class ZipFileSystem(AbstractFileSystem):
         self.block_size = block_size
         self.dir_cache = None
 
+        if kwargs.get("_info_implementation") == "base":
+            self.info = super().info
+
     @classmethod
     def _strip_protocol(cls, path):
         # zip file paths are always relative to the archive root
@@ -65,7 +68,7 @@ class ZipFileSystem(AbstractFileSystem):
         if self.dir_cache is None:
             files = self.zip.infolist()
             self.dir_cache = {
-                dirname: {"name": dirname, "size": 0, "type": "directory"}
+                dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
                 for dirname in self._all_dirnames(self.zip.namelist())
             }
             for z in files:
@@ -80,8 +83,6 @@ class ZipFileSystem(AbstractFileSystem):
                 self.dir_cache[f["name"]] = f
 
     def info(self, path, **kwargs):
-        if kwargs.get("_info_implementation", "super") == "super":
-            return super().info(path, **kwargs)
         self._get_dirs()
         path = self._strip_protocol(path)
         if path in self.dir_cache:
@@ -102,15 +103,6 @@ class ZipFileSystem(AbstractFileSystem):
                 root = ""
             if root == path.rstrip("/"):
                 paths[p] = f
-            elif path and all(
-                (a == b) for a, b in zip(path.split("/"), p.strip("/").split("/"))
-            ):
-                # implicit directory
-                ppath = "/".join(p.split("/")[: len(path.split("/")) + 1])
-                if ppath not in paths:
-                    out = {"name": ppath + "/", "size": 0, "type": "directory"}
-                    paths[ppath] = out
-
             elif all(
                 (a == b)
                 for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
@@ -151,16 +143,14 @@ class ZipFileSystem(AbstractFileSystem):
         return tokenize(path, self.fo, self.protocol)
 
     def _all_dirnames(self, paths):
-        """ Returns *all* directory names appended with "/". for each path in paths
+        """ Returns *all* directory names for each path in paths, including intermediate ones.
 
         Parameters
         ----------
         paths: Iterable of path strings
         """
         if len(paths) == 0:
-            return {self.root_marker}
+            return set()
 
-        dirnames = {os.path.dirname(path.rstrip("/")) + "/" for path in paths} - {
-            f"{self.root_marker}/"
-        }
+        dirnames = {os.path.dirname(path) for path in paths} - {f"{self.root_marker}"}
         return dirnames | self._all_dirnames(dirnames)
