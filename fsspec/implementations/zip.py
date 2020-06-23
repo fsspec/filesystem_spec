@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import os
 import zipfile
 from fsspec import AbstractFileSystem, open_files
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
@@ -63,7 +64,10 @@ class ZipFileSystem(AbstractFileSystem):
     def _get_dirs(self):
         if self.dir_cache is None:
             files = self.zip.infolist()
-            self.dir_cache = {}
+            self.dir_cache = {
+                dirname: {"name": dirname, "size": 0, "type": "directory"}
+                for dirname in self._all_dirnames(self.zip.namelist())
+            }
             for z in files:
                 f = {s: getattr(z, s) for s in zipfile.ZipInfo.__slots__}
                 f.update(
@@ -78,6 +82,14 @@ class ZipFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         if kwargs.get("_info_implementation", "super") == "super":
             return super().info(path, **kwargs)
+        self._get_dirs()
+        path = self._strip_protocol(path)
+        if path in self.dir_cache:
+            return self.dir_cache[path]
+        elif path + "/" in self.dir_cache:
+            return self.dir_cache[path + "/"]
+        else:
+            raise FileNotFoundError(path)
 
     def ls(self, path, detail=False, **kwargs):
         self._get_dirs()
@@ -137,3 +149,18 @@ class ZipFileSystem(AbstractFileSystem):
 
     def ukey(self, path):
         return tokenize(path, self.fo, self.protocol)
+
+    def _all_dirnames(self, paths):
+        """ Returns *all* directory names appended with "/". for each path in paths
+
+        Parameters
+        ----------
+        paths: Iterable of path strings
+        """
+        if len(paths) == 0:
+            return {self.root_marker}
+
+        dirnames = {os.path.dirname(path.rstrip("/")) + "/" for path in paths} - {
+            f"{self.root_marker}/"
+        }
+        return dirnames | self._all_dirnames(dirnames)

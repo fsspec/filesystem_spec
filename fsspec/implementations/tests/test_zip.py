@@ -49,6 +49,23 @@ def test_pickle():
         assert fs2.cat("b") == b"hello"
 
 
+def test_all_dirnames():
+    with tempzip() as z:
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
+
+        # fx are files, dx are a directories
+        assert fs._all_dirnames(["f1"]) == {""}
+        assert fs._all_dirnames(["f1", "f2"]) == {""}
+        assert fs._all_dirnames(["f1", "f2", "d1/f1"]) == {"", "d1/"}
+        assert fs._all_dirnames(["f1", "f2", "d1/f1", "d1/f2"]) == {"", "d1/"}
+        assert fs._all_dirnames(["f1", "f2", "d1/f1", "d1/f2", "d2/f1"]) == {
+            "",
+            "d1/",
+            "d2/",
+        }
+        assert fs._all_dirnames(["d1/d1/d1/f1"]) == {"", "d1/", "d1/d1/", "d1/d1/d1/"}
+
+
 @pytest.mark.parametrize("implementation", ["super", "cache"])
 def test_info(implementation):
     with tempzip(data) as z:
@@ -57,18 +74,20 @@ def test_info(implementation):
         with pytest.raises(FileNotFoundError):
             fs.info("i-do-not-exist")
 
-        def all_dirnames(keys):
-            dirnames = {os.path.dirname(k) for k in keys}
-            if len(dirnames) == 1 and "" in dirnames:
-                return dirnames
-            return dirnames | all_dirnames(dirnames)
-
         # Iterate over all directories
-        for d in all_dirnames(data.keys()):
+        for d in fs._all_dirnames(data.keys()):
             d_info = fs.info(d, _info_implementation=implementation)
-            assert (d_info["type"], d_info["size"], d_info["name"]) == ("directory", 0, (f"{d}/" if d != fs.root_marker else fs.root_marker))
+            assert (d_info["type"], d_info["size"], d_info["name"]) == (
+                "directory",
+                0,
+                d,
+            )
 
         # Iterate over all files
         for f, v in data.items():
             f_info = fs.info(f, _info_implementation=implementation)
-            assert (f_info["type"], f_info["size"], f_info["name"]) == ("file", len(v), f)
+            assert (f_info["type"], f_info["size"], f_info["name"]) == (
+                "file",
+                len(v),
+                f,
+            )
