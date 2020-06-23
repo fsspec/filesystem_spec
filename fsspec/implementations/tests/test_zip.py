@@ -26,20 +26,18 @@ def tempzip(data={}):
 data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
 
 
-@pytest.mark.parametrize("implementation", ["base", "cache"])
-def test_empty(implementation):
+def test_empty():
     with tempzip() as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation=implementation)
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
         assert fs.find("") == []
         with pytest.raises(FileNotFoundError):
             fs.info("")
 
 
 @pytest.mark.xfail(sys.version_info < (3, 6), reason="zip-info odd on py35")
-@pytest.mark.parametrize("implementation", ["base", "cache"])
-def test_mapping(implementation):
+def test_mapping():
     with tempzip(data) as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation=implementation)
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
         m = fs.get_mapper("")
         assert list(m) == ["a", "b", "deeply/nested/path"]
         assert m["b"] == data["b"]
@@ -55,7 +53,7 @@ def test_pickle():
 
 def test_all_dirnames():
     with tempzip() as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="cache")
+        fs = fsspec.get_filesystem_class("zip")(fo=z)
 
         # fx are files, dx are a directories
         assert fs._all_dirnames([]) == set()
@@ -69,7 +67,7 @@ def test_all_dirnames():
 
 def test_ls(monkeypatch):
     with tempzip(data) as z:
-        lhs = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="cache")
+        lhs = fsspec.get_filesystem_class("zip")(fo=z)
 
         assert lhs.ls("") == ["a", "b", "deeply/"]
         assert lhs.ls("/") == lhs.ls("")
@@ -84,7 +82,7 @@ def test_ls(monkeypatch):
 def test_walk():
     with tempzip(data) as z:
         fs_base = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="base")
-        fs_cache = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="cache")
+        fs_cache = fsspec.get_filesystem_class("zip")(fo=z)
 
         lhs = list(fs_base.walk(""))
         rhs = list(fs_cache.walk(""))
@@ -94,7 +92,7 @@ def test_walk():
 def test_info():
     with tempzip(data) as z:
         fs_base = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="base")
-        fs_cache = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="cache")
+        fs_cache = fsspec.get_filesystem_class("zip")(fo=z)
 
         with pytest.raises(FileNotFoundError):
             fs_base.info("i-do-not-exist")
