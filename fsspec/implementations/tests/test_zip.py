@@ -65,7 +65,7 @@ def test_all_dirnames():
         assert fs._all_dirnames(["d1/d1/d1/f1"]) == {"d1", "d1/d1", "d1/d1/d1"}
 
 
-def test_ls(monkeypatch):
+def test_ls():
     with tempzip(data) as z:
         lhs = fsspec.get_filesystem_class("zip")(fo=z)
 
@@ -115,7 +115,7 @@ def test_info():
 @pytest.mark.parametrize("implementation", ["base", "cache"])
 @pytest.mark.parametrize("scale", [128, 256, 512, 1024, 2048, 4096])
 def test_isdir_isfile(benchmark, implementation, scale):
-    if implementation == "base" and scale > 1_000:
+    if implementation == "base" and scale > 1000:
         pytest.skip("test takes too long...")
 
     def make_nested_dir(i):
@@ -123,9 +123,11 @@ def test_isdir_isfile(benchmark, implementation, scale):
         table = x.maketrans("0123456789", "ABCDEFGHIJ")
         return os.path.join(*x.translate(table))
 
-    scaled_data = {f"{make_nested_dir(i)}/{i}": b"" for i in range(1,scale+1)}
+    scaled_data = {f"{make_nested_dir(i)}/{i}": b"" for i in range(1, scale + 1)}
     with tempzip(scaled_data) as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation=implementation)
+        fs = fsspec.get_filesystem_class("zip")(
+            fo=z, _info_implementation=implementation
+        )
 
         lhs_dirs, lhs_files = fs._all_dirnames(scaled_data.keys()), scaled_data.keys()
 
@@ -133,6 +135,7 @@ def test_isdir_isfile(benchmark, implementation, scale):
         fs._get_dirs()
 
         entries = lhs_files | lhs_dirs
+
         @benchmark
         def split_into_dirs_files():
             rhs_dirs = {e for e in entries if fs.isdir(e)}
