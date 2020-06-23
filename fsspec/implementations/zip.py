@@ -152,5 +152,5 @@ class ZipFileSystem(AbstractFileSystem):
         if len(paths) == 0:
             return set()
 
-        dirnames = {os.path.dirname(path) for path in paths} - {f"{self.root_marker}"}
+        dirnames = {os.path.dirname(path) for path in paths} - {self.root_marker}
         return dirnames | self._all_dirnames(dirnames)
