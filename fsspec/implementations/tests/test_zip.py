@@ -28,7 +28,7 @@ data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
 
 def test_empty():
     with tempzip() as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z)
+        fs = fsspec.filesystem("zip", fo=z)
         assert fs.find("") == []
         with pytest.raises(FileNotFoundError):
             fs.info("")
@@ -37,7 +37,7 @@ def test_empty():
 @pytest.mark.xfail(sys.version_info < (3, 6), reason="zip-info odd on py35")
 def test_mapping():
     with tempzip(data) as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z)
+        fs = fsspec.filesystem("zip", fo=z)
         m = fs.get_mapper("")
         assert list(m) == ["a", "b", "deeply/nested/path"]
         assert m["b"] == data["b"]
@@ -46,14 +46,14 @@ def test_mapping():
 @pytest.mark.xfail(sys.version_info < (3, 6), reason="zip not supported on py35")
 def test_pickle():
     with tempzip(data) as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z)
+        fs = fsspec.filesystem("zip", fo=z)
         fs2 = pickle.loads(pickle.dumps(fs))
         assert fs2.cat("b") == b"hello"
 
 
 def test_all_dirnames():
     with tempzip() as z:
-        fs = fsspec.get_filesystem_class("zip")(fo=z)
+        fs = fsspec.filesystem("zip", fo=z)
 
         # fx are files, dx are a directories
         assert fs._all_dirnames([]) == set()
@@ -67,7 +67,7 @@ def test_all_dirnames():
 
 def test_ls():
     with tempzip(data) as z:
-        lhs = fsspec.get_filesystem_class("zip")(fo=z)
+        lhs = fsspec.filesystem("zip", fo=z)
 
         assert lhs.ls("") == ["a", "b", "deeply/"]
         assert lhs.ls("/") == lhs.ls("")
@@ -81,8 +81,8 @@ def test_ls():
 
 def test_walk():
     with tempzip(data) as z:
-        fs_base = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="base")
-        fs_cache = fsspec.get_filesystem_class("zip")(fo=z)
+        fs_base = fsspec.filesystem("zip", fo=z, _info_implementation="base")
+        fs_cache = fsspec.filesystem("zip", fo=z)
 
         lhs = list(fs_base.walk(""))
         rhs = list(fs_cache.walk(""))
@@ -91,8 +91,8 @@ def test_walk():
 
 def test_info():
     with tempzip(data) as z:
-        fs_base = fsspec.get_filesystem_class("zip")(fo=z, _info_implementation="base")
-        fs_cache = fsspec.get_filesystem_class("zip")(fo=z)
+        fs_base = fsspec.filesystem("zip", fo=z, _info_implementation="base")
+        fs_cache = fsspec.filesystem("zip", fo=z)
 
         with pytest.raises(FileNotFoundError):
             fs_base.info("i-do-not-exist")
@@ -125,7 +125,7 @@ def test_isdir_isfile(benchmark, implementation, scale):
 
     scaled_data = {f"{make_nested_dir(i)}/{i}": b"" for i in range(1, scale + 1)}
     with tempzip(scaled_data) as z:
-        fs = fsspec.get_filesystem_class("zip")(
+        fs = fsspec.filesystem("zip",
             fo=z, _info_implementation=implementation
         )
 
