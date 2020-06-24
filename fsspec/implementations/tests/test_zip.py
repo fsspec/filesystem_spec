@@ -1,5 +1,6 @@
 import zipfile
 from contextlib import contextmanager
+
 import os
 import pickle
 import pytest
@@ -26,12 +27,15 @@ def tempzip(data={}):
 data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
 
 
-def test_empty():
+@pytest.mark.parametrize("implementation", ["base", "cache"])
+def test_empty(implementation):
     with tempzip() as z:
-        fs = fsspec.filesystem("zip", fo=z)
+        fs = fsspec.filesystem("zip", fo=z, _info_implementation=implementation)
         assert fs.find("") == []
+        assert fs.find("", withdirs=True) == []
         with pytest.raises(FileNotFoundError):
             fs.info("")
+        assert fs.ls("") == []
 
 
 @pytest.mark.xfail(sys.version_info < (3, 6), reason="zip-info odd on py35")
@@ -77,6 +81,17 @@ def test_ls():
 
         assert lhs.ls("deeply/nested") == ["deeply/nested/path"]
         assert lhs.ls("deeply/nested/") == lhs.ls("deeply/nested")
+
+
+def test_find():
+    with tempzip(data) as z:
+        lhs = fsspec.filesystem("zip", fo=z)
+
+        assert lhs.find("") == ["a", "b", "deeply/nested/path"]
+        assert lhs.find("", withdirs=True) == ["a", "b", "deeply/", "deeply/nested/", "deeply/nested/path"]
+
+        assert lhs.find("deeply") == ["deeply/nested/path"]
+        assert lhs.find("deeply/") == lhs.find("deeply")
 
 
 def test_walk():
