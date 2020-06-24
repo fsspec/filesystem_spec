@@ -27,10 +27,9 @@ def tempzip(data={}):
 data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
 
 
-@pytest.mark.parametrize("implementation", ["base", "cache"])
-def test_empty(implementation):
+def test_empty():
     with tempzip() as z:
-        fs = fsspec.filesystem("zip", fo=z, _info_implementation=implementation)
+        fs = fsspec.filesystem("zip", fo=z)
         assert fs.find("") == []
         assert fs.find("", withdirs=True) == []
         with pytest.raises(FileNotFoundError):
@@ -96,43 +95,44 @@ def test_find():
 
 def test_walk():
     with tempzip(data) as z:
-        fs_base = fsspec.filesystem("zip", fo=z, _info_implementation="base")
-        fs_cache = fsspec.filesystem("zip", fo=z)
-
-        lhs = list(fs_base.walk(""))
-        rhs = list(fs_cache.walk(""))
-        assert lhs == rhs
+        fs = fsspec.filesystem("zip", fo=z)
+        expected = [
+            # (dirname, list of subdirs, list of files)
+            ("", ["deeply"], ["a", "b"]),
+            ("deeply", ["nested"], []),
+            ("deeply/nested", [], ["path"]),
+        ]
+        assert list(fs.walk("")) == expected
 
 
 def test_info():
     with tempzip(data) as z:
-        fs_base = fsspec.filesystem("zip", fo=z, _info_implementation="base")
         fs_cache = fsspec.filesystem("zip", fo=z)
 
-        with pytest.raises(FileNotFoundError):
-            fs_base.info("i-do-not-exist")
         with pytest.raises(FileNotFoundError):
             fs_cache.info("i-do-not-exist")
 
         # Iterate over all directories
+        # The ZipFile does not include additional information about the directories,
         for d in fs_cache._all_dirnames(data.keys()):
-            lhs = fs_base.info(d)
-            rhs = fs_cache.info(d)
-            assert lhs == rhs
+            lhs = fs_cache.info(d)
+            expected = {"name": f"{d}/", "size": 0, "type": "directory"}
+            assert lhs == expected
 
         # Iterate over all files
         for f, v in data.items():
-            lhs = fs_base.info(f)
-            rhs = fs_cache.info(f)
-            assert lhs == rhs
+            lhs = fs_cache.info(f)
+            assert lhs["name"] == f
+            assert lhs["size"] == len(v)
+            assert lhs["type"] == "file"
+            # These are flags specific to Zip Files, there are many other flags, so a straight out comparison
+            # of the file info is more complicated
+            assert "CRC" in lhs
+            assert "compress_size" in lhs
 
 
-@pytest.mark.parametrize("implementation", ["base", "cache"])
 @pytest.mark.parametrize("scale", [128, 256, 512, 1024, 2048, 4096])
-def test_isdir_isfile(benchmark, implementation, scale):
-    if implementation == "base" and scale > 1000:
-        pytest.skip("test takes too long...")
-
+def test_isdir_isfile(benchmark, scale):
     def make_nested_dir(i):
         x = f"{i}"
         table = x.maketrans("0123456789", "ABCDEFGHIJ")
@@ -140,9 +140,7 @@ def test_isdir_isfile(benchmark, implementation, scale):
 
     scaled_data = {f"{make_nested_dir(i)}/{i}": b"" for i in range(1, scale + 1)}
     with tempzip(scaled_data) as z:
-        fs = fsspec.filesystem("zip",
-            fo=z, _info_implementation=implementation
-        )
+        fs = fsspec.filesystem("zip", fo=z)
 
         lhs_dirs, lhs_files = fs._all_dirnames(scaled_data.keys()), scaled_data.keys()
 

@@ -56,9 +56,6 @@ class ZipFileSystem(AbstractFileSystem):
         self.block_size = block_size
         self.dir_cache = None
 
-        if kwargs.get("_info_implementation") == "base":
-            self.info = super().info
-
     @classmethod
     def _strip_protocol(cls, path):
         # zip file paths are always relative to the archive root
