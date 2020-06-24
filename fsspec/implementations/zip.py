@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-import os
 import zipfile
 from fsspec import AbstractFileSystem, open_files
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
@@ -149,5 +148,5 @@ class ZipFileSystem(AbstractFileSystem):
         if len(paths) == 0:
             return set()
 
-        dirnames = {os.path.dirname(path) for path in paths} - {self.root_marker}
+        dirnames = {self._parent(path) for path in paths} - {self.root_marker}
         return dirnames | self._all_dirnames(dirnames)
