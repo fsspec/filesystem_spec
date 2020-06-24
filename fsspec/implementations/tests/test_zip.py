@@ -131,8 +131,9 @@ def test_info():
             assert lhs["name"] == f
             assert lhs["size"] == len(v)
             assert lhs["type"] == "file"
-            # These are flags specific to Zip Files, there are many other flags, so a straight out comparison
-            # of the file info is more complicated
+
+            # There are many flags specific to Zip Files.
+            # These are two we can use to check we are getting some of them
             assert "CRC" in lhs
             assert "compress_size" in lhs
 
