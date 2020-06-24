@@ -87,7 +87,13 @@ def test_find():
         lhs = fsspec.filesystem("zip", fo=z)
 
         assert lhs.find("") == ["a", "b", "deeply/nested/path"]
-        assert lhs.find("", withdirs=True) == ["a", "b", "deeply/", "deeply/nested/", "deeply/nested/path"]
+        assert lhs.find("", withdirs=True) == [
+            "a",
+            "b",
+            "deeply/",
+            "deeply/nested/",
+            "deeply/nested/path",
+        ]
 
         assert lhs.find("deeply") == ["deeply/nested/path"]
         assert lhs.find("deeply/") == lhs.find("deeply")
@@ -136,7 +142,7 @@ def test_isdir_isfile(benchmark, scale):
     def make_nested_dir(i):
         x = f"{i}"
         table = x.maketrans("0123456789", "ABCDEFGHIJ")
-        return os.path.join(*x.translate(table))
+        return "/".join(x.translate(table))
 
     scaled_data = {f"{make_nested_dir(i)}/{i}": b"" for i in range(1, scale + 1)}
     with tempzip(scaled_data) as z:
