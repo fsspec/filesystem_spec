@@ -5,7 +5,7 @@ import warnings
 from hashlib import md5
 from glob import has_magic
 
-from .asyn import get_loop, make_sync_methods, AsyncFileSystem
+from .asyn import get_loop, make_sync_methods
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path, other_paths

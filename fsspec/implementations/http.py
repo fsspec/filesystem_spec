@@ -11,7 +11,6 @@ from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem
 from ..caching import AllBytes
-from ..utils import other_paths
 
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
