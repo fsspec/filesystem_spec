@@ -63,7 +63,10 @@ class ZipFileSystem(AbstractFileSystem):
     def _get_dirs(self):
         if self.dir_cache is None:
             files = self.zip.infolist()
-            self.dir_cache = {}
+            self.dir_cache = {
+                dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                for dirname in self._all_dirnames(self.zip.namelist())
+            }
             for z in files:
                 f = {s: getattr(z, s) for s in zipfile.ZipInfo.__slots__}
                 f.update(
@@ -74,6 +77,16 @@ class ZipFileSystem(AbstractFileSystem):
                     }
                 )
                 self.dir_cache[f["name"]] = f
+
+    def info(self, path, **kwargs):
+        self._get_dirs()
+        path = self._strip_protocol(path)
+        if path in self.dir_cache:
+            return self.dir_cache[path]
+        elif path + "/" in self.dir_cache:
+            return self.dir_cache[path + "/"]
+        else:
+            raise FileNotFoundError(path)
 
     def ls(self, path, detail=False, **kwargs):
         self._get_dirs()
@@ -86,15 +99,6 @@ class ZipFileSystem(AbstractFileSystem):
                 root = ""
             if root == path.rstrip("/"):
                 paths[p] = f
-            elif path and all(
-                (a == b) for a, b in zip(path.split("/"), p.strip("/").split("/"))
-            ):
-                # implicit directory
-                ppath = "/".join(p.split("/")[: len(path.split("/")) + 1])
-                if ppath not in paths:
-                    out = {"name": ppath + "/", "size": 0, "type": "directory"}
-                    paths[ppath] = out
-
             elif all(
                 (a == b)
                 for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
@@ -133,3 +137,16 @@ class ZipFileSystem(AbstractFileSystem):
 
     def ukey(self, path):
         return tokenize(path, self.fo, self.protocol)
+
+    def _all_dirnames(self, paths):
+        """ Returns *all* directory names for each path in paths, including intermediate ones.
+
+        Parameters
+        ----------
+        paths: Iterable of path strings
+        """
+        if len(paths) == 0:
+            return set()
+
+        dirnames = {self._parent(path) for path in paths} - {self.root_marker}
+        return dirnames | self._all_dirnames(dirnames)
