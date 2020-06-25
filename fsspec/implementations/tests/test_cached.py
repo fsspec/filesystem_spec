@@ -77,8 +77,7 @@ def test_blockcache_workflow(ftp_writable, tmp_path, disable_fs_caching):
     with fs.open("/out", block_size=5) as f:
         assert f.read(5) == b"test\n"
         f.seek(30)
-        with pytest.raises(AttributeError):
-            assert f.read(5) == b"test\n"
+        assert f.read(5) == b"test\n"
 
 
 @pytest.mark.parametrize("impl", ["filecache", "blockcache"])
