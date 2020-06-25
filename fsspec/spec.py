@@ -5,6 +5,7 @@ import warnings
 from hashlib import md5
 from glob import has_magic
 
+from .asyn import get_loop, make_sync_methods, AsyncFileSystem
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path, other_paths
@@ -57,6 +58,8 @@ class _Cached(type):
             obj._fs_token_ = token
             obj.storage_args = args
             obj.storage_options = kwargs
+            if obj.async_impl:
+                make_sync_methods(obj)
 
             if cls.cachable and not skip:
                 cls._cache[token] = obj
@@ -84,6 +87,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     blocksize = 2 ** 22
     sep = "/"
     protocol = "abstract"
+    async_impl = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
     #: Extra *class attributes* that should be considered when hashing.
@@ -110,6 +114,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
             If this is a cachable implementation, pass True here to force
             creating a new instance even if a matching instance exists, and prevent
             storing this instance.
+        asynchronous: bool
+        loop: asyncio-compatible IOLoop or None
         """
         if self._cached:
             # reusing instance, don't change
@@ -117,6 +123,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._cached = True
         self._intrans = False
         self._transaction = None
+        if self.async_impl:
+            self.asynchronous = storage_options.get('asynchronous', False)
+            self.loop = storage_options.get('loop', None) or get_loop()
         self.dircache = DirCache(**storage_options)
 
         if storage_options.pop("add_docs", None):
@@ -217,84 +226,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
             path.
         """
         pass  # not necessary to implement, may have no cache
-
-    def mkdir(self, path, create_parents=True, **kwargs):
-        """
-        Create directory entry at path
-
-        For systems that don't have true directories, may create an for
-        this instance only and not touch the real filesystem
-
-        Parameters
-        ----------
-        path: str
-            location
-        create_parents: bool
-            if True, this is equivalent to ``makedirs``
-        kwargs:
-            may be permissions, etc.
-        """
-        pass  # not necessary to implement, may not have directories
-
-    def makedirs(self, path, exist_ok=False):
-        """Recursively make directories
-
-        Creates directory at path and any intervening required directories.
-        Raises exception if, for instance, the path already exists but is a
-        file.
-
-        Parameters
-        ----------
-        path: str
-            leaf directory name
-        exist_ok: bool (False)
-            If True, will error if the target already exists
-        """
-        pass  # not necessary to implement, may not have directories
-
-    def rmdir(self, path):
-        """Remove a directory, if empty"""
-        pass  # not necessary to implement, may not have directories
-
-    def ls(self, path, detail=True, **kwargs):
-        """List objects at path.
-
-        This should include subdirectories and files at that location. The
-        difference between a file and a directory must be clear when details
-        are requested.
-
-        The specific keys, or perhaps a FileInfo class, or similar, is TBD,
-        but must be consistent across implementations.
-        Must include:
-        - full path to the entry (without protocol)
-        - size of the entry, in bytes. If the value cannot be determined, will
-          be ``None``.
-        - type of entry, "file", "directory" or other
-
-        Additional information
-        may be present, aproriate to the file-system, e.g., generation,
-        checksum, etc.
-
-        May use refresh=True|False to allow use of self._ls_from_cache to
-        check for a saved listing and avoid calling the backend. This would be
-        common where listing may be expensive.
-
-        Parameters
-        ----------
-        path: str
-        detail: bool
-            if True, gives a list of dictionaries, where each is the same as
-            the result of ``info(path)``. If False, gives a list of paths
-            (str).
-        kwargs: may have additional backend-specific options, such as version
-            information
-
-        Returns
-        -------
-        List of strings if detail is False, or list of directory information
-        dicts if detail is True.
-        """
-        raise NotImplementedError
 
     def _ls_from_cache(self, path):
         """Check cache for listing

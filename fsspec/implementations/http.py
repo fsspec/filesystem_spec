@@ -2,16 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 import aiohttp
 import asyncio
-import threading
-import inspect
 import re
 import requests
-import sys
 import weakref
 from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
+from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem
 from ..caching import AllBytes
 from ..utils import other_paths
 
@@ -20,60 +18,11 @@ ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
-def sync(loop, func, *args, **kwargs):
-    """
-    Run coroutine in loop running in separate thread.
-    """
-
-    e = threading.Event()
-    result = [None]
-    error = [False]
-
-    async def f():
-        try:
-            await asyncio.sleep(0)
-            future = func(*args, **kwargs)
-            result[0] = await future
-        except Exception as exc:
-            error[0] = sys.exc_info()
-        finally:
-            e.set()
-
-    assert loop.is_running()
-    asyncio.run_coroutine_threadsafe(f(), loop=loop)
-    while not e.is_set():
-        e.wait(10)
-    if error[0]:
-        typ, exc, tb = error[0]
-        raise exc.with_traceback(tb)
-    else:
-        return result[0]
-
-
-def sync_wrapper(func):
-    import functools
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        loop = args[0].loop
-        return sync(loop, func, *args, **kwargs)
-
-    return wrapper
-
-
-def get_loop():
-    loop = asyncio.new_event_loop()
-    t = threading.Thread(target=loop.run_forever)
-    t.daemon = True
-    t.start()
-    return loop
-
-
 async def get_client():
     return aiohttp.ClientSession()
 
 
-class HTTPFileSystem(AbstractFileSystem):
+class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
 
@@ -120,7 +69,6 @@ class HTTPFileSystem(AbstractFileSystem):
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.kwargs = storage_options
-        self.loop = get_loop()
         self.session = sync(self.loop, get_client)
         weakref.finalize(self, sync, self.loop, self.session.close)
 
@@ -175,8 +123,6 @@ class HTTPFileSystem(AbstractFileSystem):
         else:
             return list(sorted(out))
 
-    ls = sync_wrapper(_ls)
-
     async def _cat(self, url, chunks=False):
         if chunks < 1:
             async with self.session.get(url, **self.kwargs) as r:
@@ -192,17 +138,6 @@ class HTTPFileSystem(AbstractFileSystem):
             ]
             out = await asyncio.gather(*out)
             return b"".join(out)
-
-    cat = sync_wrapper(_cat)
-
-    async def _mcat(self, paths, recursive=False):
-        paths = self.expand_path(paths, recursive=recursive)
-        out = await asyncio.gather(
-            *[asyncio.ensure_future(self._cat(path), loop=self.loop) for path in paths]
-        )
-        return {k: v for k, v in zip(paths, out)}
-
-    mcat = sync_wrapper(_mcat)
 
     async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, chunks=0, **kwargs):
         kw = self.kwargs.copy()
@@ -224,36 +159,18 @@ class HTTPFileSystem(AbstractFileSystem):
                 for start, end in zip(starts[:-1], starts[1:])
             ]
 
-    get_file = sync_wrapper(_get_file)
-
-    async def _get(self, rpath, lpath, recursive=False, **kwargs):
-        from fsspec.implementations.local import make_path_posix
-
-        rpath = self._strip_protocol(rpath)
-        lpath = make_path_posix(lpath)
-        rpaths = self.expand_path(rpath, recursive=recursive)
-        lpaths = other_paths(rpaths, lpath)
-        await asyncio.gather(
-            *[
-                self._get_file(rpath, lpath, **kwargs)
-                for lpath, rpath in zip(lpaths, rpaths)
-            ]
-        )
-
-    def mkdirs(self, url, **kwargs):
-        """Make any intermediate directories to make path writable"""
-        raise NotImplementedError
-
-    async def _exists(self, path):
-        kwargs = self.kwargs.copy()
+    async def _exists(self, path, **kwargs):
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
         try:
-            r = await self.session.get(path, **kwargs)
+            r = await self.session.get(path, **kw)
             async with r:
                 return r.status < 400
         except requests.HTTPError:
             return False
 
-    exists = sync_wrapper(_exists)
+    async def _isfile(self, path, **kwargs):
+        return await self._exists(path, **kwargs)
 
     def _open(
         self,
@@ -283,6 +200,7 @@ class HTTPFileSystem(AbstractFileSystem):
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
+        kw['asynchronous'] = self.asynchronous
         kw.update(kwargs)
         size = self.size(path)
         if block_size and size:
@@ -333,8 +251,6 @@ class HTTPFileSystem(AbstractFileSystem):
                 raise FileNotFoundError(url)
         return {"name": url, "size": size or None, "type": "file"}
 
-    info = sync_wrapper(_info)
-
 
 class HTTPFile(AbstractBufferedFile):
     """
@@ -372,10 +288,12 @@ class HTTPFile(AbstractBufferedFile):
         cache_options=None,
         size=None,
         loop=None,
+        asynchronous=False,
         **kwargs
     ):
         if mode != "rb":
             raise NotImplementedError("File mode not supported")
+        self.asynchronous = asynchronous
         self.url = url
         self.session = session
         self.details = {"name": url, "size": size, "type": "file"}
@@ -415,7 +333,7 @@ class HTTPFile(AbstractBufferedFile):
             length = min(self.size - self.loc, length)
         return super().read(length)
 
-    async def __fetch_all(self):
+    async def async_fetch_all(self):
         """Read whole file in one shot, without caching
 
         This is only called when position is still at zero,
@@ -429,9 +347,9 @@ class HTTPFile(AbstractBufferedFile):
                 self.cache = AllBytes(out)
                 self.size = len(out)
 
-    _fetch_all = sync_wrapper(__fetch_all)
+    _fetch_all = sync_wrapper(async_fetch_all)
 
-    async def __fetch_range(self, start, end):
+    async def async_fetch_range(self, start, end):
         """Download a block of data
 
         The expectation is that the server returns only the requested bytes,
@@ -479,7 +397,7 @@ class HTTPFile(AbstractBufferedFile):
                 out = b"".join(out)
             return out
 
-    _fetch_range = sync_wrapper(__fetch_range)
+    _fetch_range = sync_wrapper(async_fetch_range)
 
     def close(self):
         pass
@@ -491,6 +409,7 @@ async def get(session, url, **kwargs):
 
 class HTTPStreamFile(AbstractBufferedFile):
     def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
+        self.asynchronous = kwargs.pop('asynchronous', False)
         self.url = url
         self.loop = loop
         self.session = session
