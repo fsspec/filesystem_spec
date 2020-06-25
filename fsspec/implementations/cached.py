@@ -121,7 +121,11 @@ class CachingFileSystem(AbstractFileSystem):
             if os.path.exists(fn):
                 with open(fn, "rb") as f:
                     # TODO: consolidate blocks here
-                    cached_files.append(pickle.load(f))
+                    loaded_cached_files = pickle.load(f)
+                    for c in loaded_cached_files.values():
+                        if isinstance(c["blocks"], list):
+                            c["blocks"] = set(c["blocks"])
+                    cached_files.append(loaded_cached_files)
             else:
                 os.makedirs(storage, exist_ok=True)
                 cached_files.append({})
