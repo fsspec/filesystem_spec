@@ -89,6 +89,8 @@ def sync_wrapper(func, obj=None):
 
 
 def async_wrapper(func):
+    """Run a sync function on the event loop"""
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
