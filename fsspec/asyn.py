@@ -108,9 +108,21 @@ def get_loop():
 
 
 # these methods should be implemented as async by any async-able backend
-async_methods = ['_ls', '_expand_path', '_info', '_isfile', '_isdir',
-                 '_exists', '_walk', '_glob', '_find', '_du', '_cat', '_get_file'
-                 '_put_file', '_rm_file']
+async_methods = [
+    "_ls",
+    "_expand_path",
+    "_info",
+    "_isfile",
+    "_isdir",
+    "_exists",
+    "_walk",
+    "_glob",
+    "_find",
+    "_du",
+    "_cat",
+    "_get_file" "_put_file",
+    "_rm_file",
+]
 
 
 class AsyncFileSystem:
@@ -118,12 +130,7 @@ class AsyncFileSystem:
 
     async def _rm(self, path, recursive=False):
         path = await self._expand_path(path, recursive=recursive)
-        await asyncio.gather(
-            *[
-                self._rm_file(p)
-                for p in path
-            ]
-        )
+        await asyncio.gather(*[self._rm_file(p) for p in path])
 
     async def _mcat(self, paths, recursive=False):
         """Fetch multiple paths' contents"""
@@ -192,5 +199,7 @@ def make_sync_methods(obj):
         if private.match(method):
             if inspect.iscoroutinefunction(getattr(obj, method, None)):
                 setattr(obj, method[1:], sync_wrapper(getattr(obj, method), obj=obj))
-            elif hasattr(obj, method[1:]) and inspect.ismethod(getattr(obj, method[1:])):
+            elif hasattr(obj, method[1:]) and inspect.ismethod(
+                getattr(obj, method[1:])
+            ):
                 setattr(obj, method, async_wrapper(getattr(obj, method[1:])))

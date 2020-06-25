@@ -200,7 +200,7 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
-        kw['asynchronous'] = self.asynchronous
+        kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
         size = self.size(path)
         if block_size and size:
@@ -409,7 +409,7 @@ async def get(session, url, **kwargs):
 
 class HTTPStreamFile(AbstractBufferedFile):
     def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
-        self.asynchronous = kwargs.pop('asynchronous', False)
+        self.asynchronous = kwargs.pop("asynchronous", False)
         self.url = url
         self.loop = loop
         self.session = session
