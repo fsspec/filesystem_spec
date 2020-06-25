@@ -37,7 +37,15 @@ def test_idempotent():
     assert fs3.storage == fs.storage
 
 
-def test_blockcache_workflow(ftp_writable, tmp_path):
+@pytest.fixture()
+def disable_fs_caching():
+    # cheap version of monkeypatching, the built-in monkeypatch did not work
+    fsspec.spec.AbstractFileSystem.cachable = False
+    yield
+    fsspec.spec.AbstractFileSystem.cachable = True
+
+
+def test_blockcache_workflow(ftp_writable, tmp_path, disable_fs_caching):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out", "wb") as f:
