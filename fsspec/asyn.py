@@ -120,7 +120,8 @@ async_methods = [
     "_find",
     "_du",
     "_cat",
-    "_get_file" "_put_file",
+    "_get_file",
+    "_put_file",
     "_rm_file",
 ]
 
