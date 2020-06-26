@@ -4,6 +4,9 @@ import contextlib
 import os
 import pickle
 import tempfile
+
+import pytest
+
 import fsspec
 from fsspec.implementations.memory import MemoryFileSystem, MemoryFile
 
@@ -156,6 +159,32 @@ def test_chained_fs():
         assert f.read() == b"test"
 
     assert os.listdir(d2) == ["f1"]
+
+
+@pytest.mark.xfail(reason="see issue #334", strict=True)
+def test_multilevel_chained_fs():
+    """This test reproduces intake/filesystem_spec#334"""
+    import zipfile
+
+    d1 = tempfile.mkdtemp()
+    f1 = os.path.join(d1, "f1.zip")
+    with zipfile.ZipFile(f1, mode="w") as z:
+        # filename, content
+        z.writestr("foo.txt", "foo.txt")
+        z.writestr("bar.txt", "bar.txt")
+
+    # We expected this to be the correct syntax
+    with pytest.raises(IsADirectoryError):
+        of = fsspec.open_files(f"zip://*.txt::simplecache::file://{f1}")
+        assert len(of) == 2
+
+    # But this is what is actually valid...
+    of = fsspec.open_files(f"zip://*.txt::simplecache://{f1}::file://")
+
+    assert len(of) == 2
+    for open_file in of:
+        with open_file as f:
+            assert f.read().decode("utf-8") == f.name
 
 
 def test_chained_equivalent():
