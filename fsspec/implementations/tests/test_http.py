@@ -1,3 +1,5 @@
+import contextlib
+import asyncio
 import os
 import pytest
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -64,8 +66,8 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(200)  # OK response, but no useful info
 
 
-@pytest.fixture(scope="module")
-def server():
+@contextlib.contextmanager
+def serve():
     server_address = ("", port)
     httpd = HTTPServer(server_address, HTTPTestHandler)
     th = threading.Thread(target=httpd.serve_forever)
@@ -77,6 +79,12 @@ def server():
         httpd.socket.close()
         httpd.shutdown()
         th.join()
+
+
+@pytest.fixture(scope="module")
+def server():
+    with serve as s:
+        yield s
 
 
 def test_list(server):
@@ -194,5 +202,19 @@ def test_mcat(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     urla = server + "/index/realfile"
     urlb = server + "/index/otherfile"
-    out = h.mcat([urla, urlb])
+    out = h.cat([urla, urlb])
     assert out == {urla: data, urlb: data}
+
+
+def test_async():
+    with serve() as server:
+        import threading
+        loop = asyncio.get_event_loop()
+        th = threading.Thread(target=loop.run_forever)
+
+        th.daemon = True
+        th.start()
+        fs = fsspec.filesystem('http', asynchronous=True, loop=loop)
+        cor = fs._cat(server + "/index/realfile")
+        fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
+        assert fut.result() == data

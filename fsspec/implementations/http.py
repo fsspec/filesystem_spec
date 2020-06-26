@@ -41,6 +41,8 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
         size_policy=None,
         cache_type="bytes",
         cache_options=None,
+        asynchronous=False,
+        loop=None,
         **storage_options
     ):
         """
@@ -61,7 +63,7 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
             other parameters passed on to requests
         cache_type, cache_options: defaults used in open
         """
-        AbstractFileSystem.__init__(self)
+        AbstractFileSystem.__init__(self, asynchronous=asynchronous, loop=loop)
         self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
         self.simple_links = simple_links
         self.same_schema = same_scheme
@@ -122,7 +124,7 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
         else:
             return list(sorted(out))
 
-    async def _cat(self, url, chunks=False):
+    async def _cat_file(self, url, chunks=False):
         if chunks < 1:
             async with self.session.get(url, **self.kwargs) as r:
                 r.raise_for_status()

@@ -5,7 +5,7 @@ import warnings
 from hashlib import md5
 from glob import has_magic
 
-from .asyn import get_loop, make_sync_methods
+from .asyn import get_loop, mirror_sync_methods
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path, other_paths
@@ -59,7 +59,7 @@ class _Cached(type):
             obj.storage_args = args
             obj.storage_options = kwargs
             if obj.async_impl:
-                make_sync_methods(obj)
+                mirror_sync_methods(obj)
 
             if cls.cachable and not skip:
                 cls._cache[token] = obj
@@ -591,16 +591,24 @@ class AbstractFileSystem(up, metaclass=_Cached):
         except:  # noqa: E722
             return False
 
-    def cat(self, path):
+    def cat_file(self, path):
         """ Get the content of a file """
         return self.open(path, "rb").read()
 
-    def mcat(self, paths, recursive=False):
-        """Fetch multiple paths' contents"""
-        paths = self.expand_path(paths, recursive=recursive)
-        return {path: self.cat(path) for path in paths}
+    def cat(self, path, recursive=False, **kwargs):
+        """Fetch (potentially multiple) paths' contents
+
+        Returns a dict of {path: contents} if there are multiple paths
+        or the path has been otherwise expanded
+        """
+        paths = self.expand_path(path, recursive=recursive)
+        if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
+            return {path: self.cat_file(path, **kwargs) for path in paths}
+        else:
+            return self.cat_file(paths[0])
 
     def get_file(self, rpath, lpath, **kwargs):
+        """Copy single remote file to local"""
         if self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
         else:
@@ -631,6 +639,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             self.get_file(rpath, lpath, **kwargs)
 
     def put_file(self, lpath, rpath, **kwargs):
+        """Copy single file to remote"""
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
         else:

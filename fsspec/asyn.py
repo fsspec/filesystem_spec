@@ -110,6 +110,14 @@ def get_loop():
 # these methods should be implemented as async by any async-able backend
 async_methods = [
     "_ls",
+    "_cat_file",
+    "_get_file",
+    "_put_file",
+    "_rm_file",
+    "_cp_file"
+]
+# these methods could be overridden, but have default sync versions which rely on _ls
+default_async_methods = [
     "_expand_path",
     "_info",
     "_isfile",
@@ -119,36 +127,47 @@ async_methods = [
     "_glob",
     "_find",
     "_du",
-    "_cat",
-    "_get_file",
-    "_put_file",
-    "_rm_file",
 ]
 
 
 class AsyncFileSystem:
+    """Async file operations, default implementations
+
+    Passes bulk operations to asyncio.gather for concurrent operartion.
+    """
     async_impl = True
 
     async def _rm(self, path, recursive=False):
+        """Delete files
+        """
         path = await self._expand_path(path, recursive=recursive)
         await asyncio.gather(*[self._rm_file(p) for p in path])
 
-    async def _mcat(self, paths, recursive=False):
-        """Fetch multiple paths' contents"""
-        paths = await self._expand_path(paths, recursive=recursive)
-        out = await asyncio.gather(
-            *[asyncio.ensure_future(self._cat(path), loop=self.loop) for path in paths]
+    async def _copy(self, path1, path2, recursive=False, **kwargs):
+        """ Copy within two locations in the filesystem"""
+        paths = await self.expand_path(path1, recursive=recursive)
+        path2 = other_paths(paths, path2)
+        await asyncio.gather(
+            *[
+                self._cp_file(p1, p2, **kwargs)
+                for p1, p2 in zip(paths, path2)
+            ]
         )
-        return {k: v for k, v in zip(paths, out)}
+
+    async def _cat(self, path, recursive=False, **kwargs):
+        """Get contents of files
+        """
+        paths = await self._expand_path(path, recursive=recursive)
+        out = await asyncio.gather(
+            *[asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop) for path in paths]
+        )
+        if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
+            return {k: v for k, v in zip(paths, out)}
+        else:
+            return out[0]
 
     async def _put(self, lpath, rpath, recursive=False, **kwargs):
-        """Copy file(s) from local.
-
-        Copies a specific file or tree of files (if recursive=True). If rpath
-        ends with a "/", it will be assumed to be a directory, and target files
-        will go within.
-
-        Calls put_file for each source.
+        """copy local files to remote
         """
         from .implementations.local import make_path_posix, LocalFileSystem
 
@@ -168,12 +187,6 @@ class AsyncFileSystem:
 
     async def _get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file(s) to local.
-
-        Copies a specific file or tree of files (if recursive=True). If lpath
-        ends with a "/", it will be assumed to be a directory, and target files
-        will go within.
-
-        Calls get_file for each source.
         """
         from fsspec.implementations.local import make_path_posix
 
@@ -189,18 +202,28 @@ class AsyncFileSystem:
         )
 
 
-def make_sync_methods(obj):
+def mirror_sync_methods(obj):
     """Populate sync and async methods for obj
 
-    Uses the methods specified in async_methods (to be implemented) and AsyncFileSystem
-    (where default implementations are available)
-    """
+    For each method will create a sync version if the name refers to an async method
+    (coroutine) and there is no override in the child class; will create an async
+    method for the corresponding sync method if there is no implementation.
 
-    for method in async_methods + dir(AsyncFileSystem):
+    Uses the methods specified in
+    - async_methods: the set that an implementation is expected to provide
+    - default_async_methods: that can be derived from their sync version ini AbstractFileSystem
+    - AsyncFileSystem: async-specific default implementations
+    """
+    from fsspec import AbstractFileSystem
+
+    for method in async_methods + default_async_methods + dir(AsyncFileSystem):
+        smethod = method[1:]
         if private.match(method):
-            if inspect.iscoroutinefunction(getattr(obj, method, None)):
-                setattr(obj, method[1:], sync_wrapper(getattr(obj, method), obj=obj))
-            elif hasattr(obj, method[1:]) and inspect.ismethod(
-                getattr(obj, method[1:])
+            if (inspect.iscoroutinefunction(getattr(obj, method, None))
+                and getattr(obj, smethod, False).__func__ is getattr(AbstractFileSystem, smethod)
             ):
-                setattr(obj, method, async_wrapper(getattr(obj, method[1:])))
+                setattr(obj, smethod, sync_wrapper(getattr(obj, method), obj=obj))
+            elif hasattr(obj, smethod) and inspect.ismethod(
+                getattr(obj, smethod)
+            ):
+                setattr(obj, method, async_wrapper(getattr(obj, smethod)))
