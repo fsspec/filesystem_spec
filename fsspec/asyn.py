@@ -108,14 +108,7 @@ def get_loop():
 
 
 # these methods should be implemented as async by any async-able backend
-async_methods = [
-    "_ls",
-    "_cat_file",
-    "_get_file",
-    "_put_file",
-    "_rm_file",
-    "_cp_file"
-]
+async_methods = ["_ls", "_cat_file", "_get_file", "_put_file", "_rm_file", "_cp_file"]
 # these methods could be overridden, but have default sync versions which rely on _ls
 default_async_methods = [
     "_expand_path",
@@ -135,6 +128,7 @@ class AsyncFileSystem:
 
     Passes bulk operations to asyncio.gather for concurrent operartion.
     """
+
     async_impl = True
 
     async def _rm(self, path, recursive=False):
@@ -148,10 +142,7 @@ class AsyncFileSystem:
         paths = await self.expand_path(path1, recursive=recursive)
         path2 = other_paths(paths, path2)
         await asyncio.gather(
-            *[
-                self._cp_file(p1, p2, **kwargs)
-                for p1, p2 in zip(paths, path2)
-            ]
+            *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
         )
 
     async def _cat(self, path, recursive=False, **kwargs):
@@ -159,7 +150,10 @@ class AsyncFileSystem:
         """
         paths = await self._expand_path(path, recursive=recursive)
         out = await asyncio.gather(
-            *[asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop) for path in paths]
+            *[
+                asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop)
+                for path in paths
+            ]
         )
         if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
             return {k: v for k, v in zip(paths, out)}
@@ -219,11 +213,9 @@ def mirror_sync_methods(obj):
     for method in async_methods + default_async_methods + dir(AsyncFileSystem):
         smethod = method[1:]
         if private.match(method):
-            if (inspect.iscoroutinefunction(getattr(obj, method, None))
-                and getattr(obj, smethod, False).__func__ is getattr(AbstractFileSystem, smethod)
-            ):
+            if inspect.iscoroutinefunction(getattr(obj, method, None)) and getattr(
+                obj, smethod, False
+            ).__func__ is getattr(AbstractFileSystem, smethod):
                 setattr(obj, smethod, sync_wrapper(getattr(obj, method), obj=obj))
-            elif hasattr(obj, smethod) and inspect.ismethod(
-                getattr(obj, smethod)
-            ):
+            elif hasattr(obj, smethod) and inspect.ismethod(getattr(obj, smethod)):
                 setattr(obj, method, async_wrapper(getattr(obj, smethod)))

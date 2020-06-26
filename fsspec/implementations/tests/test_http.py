@@ -209,12 +209,13 @@ def test_mcat(server):
 def test_async():
     with serve() as server:
         import threading
+
         loop = asyncio.get_event_loop()
         th = threading.Thread(target=loop.run_forever)
 
         th.daemon = True
         th.start()
-        fs = fsspec.filesystem('http', asynchronous=True, loop=loop)
+        fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
         cor = fs._cat(server + "/index/realfile")
         fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
         assert fut.result() == data
