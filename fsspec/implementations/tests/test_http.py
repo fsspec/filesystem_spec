@@ -83,7 +83,7 @@ def serve():
 
 @pytest.fixture(scope="module")
 def server():
-    with serve as s:
+    with serve() as s:
         yield s
 
 
@@ -206,16 +206,15 @@ def test_mcat(server):
     assert out == {urla: data, urlb: data}
 
 
-def test_async():
-    with serve() as server:
-        import threading
+def test_async(server):
+    import threading
 
-        loop = asyncio.get_event_loop()
-        th = threading.Thread(target=loop.run_forever)
+    loop = asyncio.get_event_loop()
+    th = threading.Thread(target=loop.run_forever)
 
-        th.daemon = True
-        th.start()
-        fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
-        cor = fs._cat(server + "/index/realfile")
-        fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
-        assert fut.result() == data
+    th.daemon = True
+    th.start()
+    fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
+    cor = fs._cat(server + "/index/realfile")
+    fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
+    assert fut.result() == data

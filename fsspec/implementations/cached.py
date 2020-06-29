@@ -161,6 +161,7 @@ class CachingFileSystem(AbstractFileSystem):
         fn2 = tempfile.mktemp()
         with open(fn2, "wb") as f:
             pickle.dump(cache, f)
+        os.makedirs(os.path.dirname(fn), exist_ok=True)
         move(fn2, fn)
 
     def _check_cache(self):
