@@ -108,7 +108,8 @@ def get_loop():
 
 
 # these methods should be implemented as async by any async-able backend
-async_methods = ["_ls", "_cat_file", "_get_file", "_put_file", "_rm_file", "_cp_file"]
+async_methods = ["_ls", "_cat_file", "_get_file", "_put_file", "_rm_file", "_cp_file",
+                 "_pipe_file"]
 # these methods could be overridden, but have default sync versions which rely on _ls
 default_async_methods = [
     "_expand_path",
@@ -143,6 +144,18 @@ class AsyncFileSystem:
         path2 = other_paths(paths, path2)
         await asyncio.gather(
             *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
+        )
+
+    async def _pipe(self, path, value=None, **kwargs):
+        """Set contents of files
+        """
+        if isinstance(path, str):
+            path = {path: value}
+        await asyncio.gather(
+            *[
+                self._pipe_file(k, v, **kwargs)
+                for k, v in path.items()
+            ]
         )
 
     async def _cat(self, path, recursive=False, **kwargs):

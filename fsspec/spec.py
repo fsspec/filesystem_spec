@@ -595,6 +595,32 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """ Get the content of a file """
         return self.open(path, "rb").read()
 
+    def pipe_file(self, path, value, **kwargs):
+        """Set the bytes of given file"""
+        with self.open(path, 'wb') as f:
+            f.write(value)
+
+    def pipe(self, path, value=None, **kwargs):
+        """Put value into path
+
+        (counterpart to ``cat``)
+        Parameters
+        ----------
+        path: string or dict(str, bytes)
+            If a string, a single remote location to put ``value`` bytes; if a dict,
+            a mapping of {path: bytesvalue}.
+        value: bytes, optional
+            If using a single path, these are the bytes to put there. Ignored if
+            ``path`` is a dict
+        """
+        if isinstance(path, str):
+            self.pipe_file(path, value, **kwargs)
+        elif isinstance(path, dict):
+            for k, v in path.items():
+                self.pipe_file(k, v, **kwargs)
+        else:
+            raise ValueError("path must be str or dict")
+
     def cat(self, path, recursive=False, **kwargs):
         """Fetch (potentially multiple) paths' contents
 
