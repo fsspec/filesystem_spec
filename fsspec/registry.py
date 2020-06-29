@@ -154,6 +154,10 @@ known_implementations = {
         "class": "fsspec.implementations.git.GitFileSystem",
         "err": "Install pygit2 to browse local git repos",
     },
+    "smb": {
+        "class": "fsspec.implementations.smb.SMBFileSystem",
+        "err": 'SMBFileSystem requires "smbprotocol[kerberos]" to be installed',
+    },
 }
 
 minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}
