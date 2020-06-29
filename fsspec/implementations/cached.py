@@ -348,6 +348,7 @@ class CachingFileSystem(AbstractFileSystem):
             "__reduce__",
             "open",
             "cat",
+            "cat_file",
             "get",
             "read_block",
             "tail",
