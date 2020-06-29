@@ -41,7 +41,7 @@ class ReadOnlyRegistry(dict):
         yield from self.target
 
 
-def register_implementation(name, cls, clobber=False, errtxt=None):
+def register_implementation(name, cls, clobber=True, errtxt=None):
     """Add implementation class to the registry
 
     Parameters
