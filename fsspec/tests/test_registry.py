@@ -70,8 +70,9 @@ def test_register_fail(clear_registry):
     with pytest.raises(ImportError):
         get_filesystem_class("test")
 
+    register_implementation("test", "doesntexist.AbstractFileSystem")
     with pytest.raises(ValueError):
-        register_implementation("test", "doesntexist.AbstractFileSystem")
+        register_implementation("test", "doesntexist.AbstractFileSystem", clobber=False)
 
     register_implementation(
         "test", "doesntexist.AbstractFileSystem", errtxt="hiho", clobber=True
@@ -82,5 +83,5 @@ def test_register_fail(clear_registry):
     register_implementation("test", AbstractFileSystem)
 
     with pytest.raises(ValueError):
-        register_implementation("test", AbstractFileSystem)
+        register_implementation("test", AbstractFileSystem, clobber=False)
     register_implementation("test", AbstractFileSystem, clobber=True)
