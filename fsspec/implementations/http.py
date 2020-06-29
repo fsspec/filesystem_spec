@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
-from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem
+from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem, maybe_sync
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
@@ -46,6 +46,8 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
         **storage_options
     ):
         """
+        NB: if this is called async, you must await set_client
+
         Parameters
         ----------
         block_size: int
@@ -70,8 +72,20 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.kwargs = storage_options
-        self.session = sync(self.loop, get_client)
-        weakref.finalize(self, sync, self.loop, self.session.close)
+        if not asynchronous:
+            self._session = sync(self.loop, get_client)
+            weakref.finalize(self, sync, self.loop, self.session.close)
+        else:
+            self._session = None
+
+    @property
+    def session(self):
+        if self._session is None:
+            raise RuntimeError("please await ``.set_session`` before anything else")
+        return self._session
+
+    async def set_session(self):
+        self._session = await get_client()
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -434,7 +448,7 @@ class HTTPStreamFile(AbstractBufferedFile):
         self.r.close()
 
     def close(self):
-        asyncio.ensure_future(self._close())
+        asyncio.run_coroutine_threadsafe(self._close(), self.loop)
 
 
 async def get_range(session, url, start, end, file=None, **kwargs):

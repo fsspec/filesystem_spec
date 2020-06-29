@@ -52,6 +52,36 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
         return result[0]
 
 
+def maybe_sync(func, self, *args, **kwargs):
+    """Make function call into coroutine or maybe run
+
+    If we are running async, returns the coroutine object so that it can be awaited;
+    otherwise runs it on the loop (if is a coroutine already) or directly. Will guess
+    we are running async if either "self" has an attribute asynchronous which is True,
+    or thread_state does (this gets set in ``sync()`` itself, to avoid nesting loops).
+    """
+    loop = self.loop
+    # second condition below triggers if this is running in the thread of the
+    # event loop *during* the call to sync(), i.e., while running
+    # asynchronously
+    if getattr(self, "asynchronous", False) or getattr(
+        thread_state, "asynchronous", False
+    ):
+        if inspect.iscoroutinefunction(func):
+            # directly make awaitable and return is
+            return func(*args, **kwargs)
+        else:
+            # make awaitable which then calls the blocking function
+            return _run_as_coroutine(func, *args, **kwargs)
+    else:
+        if inspect.iscoroutinefunction(func):
+            # run the awaitable on the loop
+            return sync(loop, func, *args, **kwargs)
+        else:
+            # just call the blocking function
+            return func(*args, **kwargs)
+
+
 async def _run_as_coroutine(func, *args, **kwargs):
     return func(*args, **kwargs)
 
@@ -66,24 +96,7 @@ def sync_wrapper(func, obj=None):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         self = obj or args[0]
-        loop = self.loop
-        # second condition below triggers if this is running in the thread of the
-        # event loop *during* the call to sync(), i.e., while running
-        # asynchronously
-        if self.asynchronous or getattr(thread_state, "asynchronous", False):
-            if inspect.iscoroutinefunction(func):
-                # directly make awaitable and return is
-                return func(*args, **kwargs)
-            else:
-                # make awaitable which then calls the blocking function
-                return _run_as_coroutine(func, *args, **kwargs)
-        else:
-            if inspect.iscoroutinefunction(func):
-                # run the awaitable on the loop
-                return sync(loop, func, *args, **kwargs)
-            else:
-                # just call the blocking function
-                return func(*args, **kwargs)
+        return maybe_sync(func, self, *args, **kwargs)
 
     return wrapper
 
@@ -108,8 +121,15 @@ def get_loop():
 
 
 # these methods should be implemented as async by any async-able backend
-async_methods = ["_ls", "_cat_file", "_get_file", "_put_file", "_rm_file", "_cp_file",
-                 "_pipe_file"]
+async_methods = [
+    "_ls",
+    "_cat_file",
+    "_get_file",
+    "_put_file",
+    "_rm_file",
+    "_cp_file",
+    "_pipe_file",
+]
 # these methods could be overridden, but have default sync versions which rely on _ls
 default_async_methods = [
     "_expand_path",
@@ -152,10 +172,7 @@ class AsyncFileSystem:
         if isinstance(path, str):
             path = {path: value}
         await asyncio.gather(
-            *[
-                self._pipe_file(k, v, **kwargs)
-                for k, v in path.items()
-            ]
+            *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
         )
 
     async def _cat(self, path, recursive=False, **kwargs):

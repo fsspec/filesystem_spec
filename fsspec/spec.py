@@ -597,7 +597,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     def pipe_file(self, path, value, **kwargs):
         """Set the bytes of given file"""
-        with self.open(path, 'wb') as f:
+        with self.open(path, "wb") as f:
             f.write(value)
 
     def pipe(self, path, value=None, **kwargs):

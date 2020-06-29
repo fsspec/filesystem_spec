@@ -206,7 +206,7 @@ def test_mcat(server):
     assert out == {urla: data, urlb: data}
 
 
-def test_async(server):
+def test_async_other_thread(server):
     import threading
 
     loop = asyncio.get_event_loop()
@@ -214,7 +214,25 @@ def test_async(server):
 
     th.daemon = True
     th.start()
-    fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
+    fs = fsspec.filesystem("http", asynchronous=False, loop=loop)
     cor = fs._cat(server + "/index/realfile")
     fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
     assert fut.result() == data
+
+
+def test_async_this_thread(server):
+    async def _():
+        loop = asyncio.get_event_loop()
+        fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
+
+        with pytest.raises(RuntimeError):
+            # fails because client creation has not yet been awaited
+            await fs._cat(server + "/index/realfile")
+
+        await fs.set_session()  # creates client
+
+        out = await fs._cat(server + "/index/realfile")
+        del fs
+        assert out == data
+
+    asyncio.run(_())
