@@ -100,18 +100,6 @@ class SMBFileSystem(AbstractFileSystem):
             connection_timeout=self.timeout,
         )
 
-    def _as_unc_path(self, path):
-        rpath = path.replace("/", "\\")
-        unc = "\\\\{}{}".format(self.host, rpath)
-        return unc
-
-    @classmethod
-    def _share_has_path(cls, path):
-        parts = path.count("/")
-        if path.endswith("/"):
-            return parts > 2
-        return parts > 1
-
     @classmethod
     def _strip_protocol(cls, path):
         return infer_storage_options(path)["path"]
@@ -125,24 +113,24 @@ class SMBFileSystem(AbstractFileSystem):
         return out
 
     def mkdir(self, path, create_parents=True, **kwargs):
-        wpath = self._as_unc_path(path)
+        wpath = _as_unc_path(self.host, path)
         if create_parents:
             smbclient.makedirs(wpath, exist_ok=False, **kwargs)
         else:
             smbclient.mkdir(wpath, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
-        if self._share_has_path(path):
-            wpath = self._as_unc_path(path)
+        if _share_has_path(path):
+            wpath = _as_unc_path(self.host, path)
             smbclient.makedirs(wpath, exist_ok=exist_ok)
 
     def rmdir(self, path):
-        if self._share_has_path(path):
-            wpath = self._as_unc_path(path)
+        if _share_has_path(path):
+            wpath = _as_unc_path(self.host, path)
             smbclient.rmdir(wpath)
 
     def info(self, path, **kwargs):
-        wpath = self._as_unc_path(path)
+        wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath, **kwargs)
         if S_ISDIR(stats.st_mode):
             stype = "directory"
@@ -163,18 +151,18 @@ class SMBFileSystem(AbstractFileSystem):
 
     def created(self, path):
         """Return the created timestamp of a file as a datetime.datetime"""
-        wpath = self._as_unc_path(path)
+        wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath)
         return datetime.datetime.utcfromtimestamp(stats.st_ctime)
 
     def modified(self, path):
         """Return the modified timestamp of a file as a datetime.datetime"""
-        wpath = self._as_unc_path(path)
+        wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath)
         return datetime.datetime.utcfromtimestamp(stats.st_mtime)
 
     def ls(self, path, detail=True, **kwargs):
-        unc = self._as_unc_path(path)
+        unc = _as_unc_path(self.host, path)
         listed = smbclient.listdir(unc, **kwargs)
         dirs = ["/".join([path.rstrip("/"), p]) for p in listed]
         if detail:
@@ -197,13 +185,13 @@ class SMBFileSystem(AbstractFileSystem):
             bytes, if None use default from paramiko.
         """
         buffering = block_size if block_size is not None and block_size >= 0 else -1
-        wpath = self._as_unc_path(path)
+        wpath = _as_unc_path(self.host, path)
         if autocommit is False:
             # writes to temporary file, move on commit
             # TODO: use transaction support in SMB protocol
             share = path.split("/")[1]
             path2 = "/{}{}/{}".format(share, self.temppath, uuid.uuid4())
-            wpath2 = self._as_unc_path(path2)
+            wpath2 = _as_unc_path(self.host, path2)
             smbf = smbclient.open_file(wpath2, mode, buffering=buffering, **kwargs)
             smbf.temppath = path2
             smbf.targetpath = path
@@ -216,13 +204,13 @@ class SMBFileSystem(AbstractFileSystem):
 
     def copy(self, path1, path2, **kwargs):
         """ Copy within two locations in the same filesystem"""
-        wpath1 = self._as_unc_path(path1)
-        wpath2 = self._as_unc_path(path2)
+        wpath1 = _as_unc_path(self.host, path1)
+        wpath2 = _as_unc_path(self.host, path2)
         smbclient.copyfile(wpath1, wpath2, **kwargs)
 
     def _rm(self, path):
-        if self._share_has_path(path):
-            wpath = self._as_unc_path(path)
+        if _share_has_path(path):
+            wpath = _as_unc_path(self.host, path)
             stats = smbclient.stat(wpath)
             if S_ISDIR(stats.st_mode):
                 smbclient.rmdir(wpath)
@@ -230,8 +218,8 @@ class SMBFileSystem(AbstractFileSystem):
                 smbclient.remove(wpath)
 
     def mv(self, path1, path2, **kwargs):
-        wpath1 = self._as_unc_path(path1)
-        wpath2 = self._as_unc_path(path2)
+        wpath1 = _as_unc_path(self.host, path1)
+        wpath2 = _as_unc_path(self.host, path2)
         smbclient.rename(wpath1, wpath2, **kwargs)
 
 
@@ -241,3 +229,16 @@ def _commit_a_file(self):
 
 def _discard_a_file(self):
     self.fs.rm(self.temppath)
+
+
+def _as_unc_path(host, path):
+    rpath = path.replace("/", "\\")
+    unc = "\\\\{}{}".format(host, rpath)
+    return unc
+
+
+def _share_has_path(path):
+    parts = path.count("/")
+    if path.endswith("/"):
+        return parts > 2
+    return parts > 1
