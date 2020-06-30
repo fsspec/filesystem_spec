@@ -59,3 +59,13 @@ def test_keys_view():
     assert len(keys) == 1
     # check that we don't consume the keys
     assert len(keys) == 1
+
+
+def test_multi():
+    m = fsspec.get_mapper("memory://")
+    data = {"a": b"data1", "b": b"data2"}
+    m.setitems(data)
+
+    assert m.getitems(list(data)) == data
+    m.delitems(list(data))
+    assert not list(m)

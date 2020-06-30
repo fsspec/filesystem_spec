@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
-from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem, maybe_sync
+from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
@@ -138,41 +138,24 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
         else:
             return list(sorted(out))
 
-    async def _cat_file(self, url, chunks=False):
-        if chunks < 1:
-            async with self.session.get(url, **self.kwargs) as r:
-                r.raise_for_status()
-                out = await r.read()
-            return out
-        else:
-            size = await _file_size(url, session=self.session, **self.kwargs)
-            sizes = list(range(0, size, chunks)) + [size]
-            out = [
-                get_range(self.session, url, start, end)
-                for start, end in zip(sizes[:-1], sizes[1:])
-            ]
-            out = await asyncio.gather(*out)
-            return b"".join(out)
-
-    async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, chunks=0, **kwargs):
+    async def _cat_file(self, url, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
-        if chunks < 1:
-            async with self.session.get(rpath, **self.kwargs) as r:
-                r.raise_for_status()
-                with open(lpath, "wb") as fd:
-                    chunk = True
-                    while chunk:
-                        chunk = await r.content.read(chunk_size)
-                        fd.write(chunk)
-        else:
-            open(lpath, "wb").close()
-            size = (await self._info(rpath))["size"]
-            starts = list(range(0, size, chunks)) + [size]
-            [
-                await get_range(self.session, rpath, start, end, file=lpath, **kw)
-                for start, end in zip(starts[:-1], starts[1:])
-            ]
+        async with self.session.get(url, **kw) as r:
+            r.raise_for_status()
+            out = await r.read()
+        return out
+
+    async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, **kwargs):
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        async with self.session.get(rpath, **self.kwargs) as r:
+            r.raise_for_status()
+            with open(lpath, "wb") as fd:
+                chunk = True
+                while chunk:
+                    chunk = await r.content.read(chunk_size)
+                    fd.write(chunk)
 
     async def _exists(self, path, **kwargs):
         kw = self.kwargs.copy()

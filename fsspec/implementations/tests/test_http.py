@@ -168,22 +168,11 @@ def test_content_length_zero(server):
         assert f.read() == data
 
 
-def test_chunks(server):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
-    assert h.cat(server + "/index/realfile") == data
-    assert h.size(server + "/index/realfile") == len(data)
-    out = h.cat(server + "/index/realfile", chunks=int(len(data) / 3.5))
-    assert out == data
-
-
 def test_download(server, tmpdir):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     url = server + "/index/realfile"
     fn = os.path.join(tmpdir, "afile")
-    h.get(url, fn, chunks=0)
-    assert open(fn, "rb").read() == data
-    os.remove(fn)
-    h.get(url, fn, chunks=int(len(data) / 3.5))
+    h.get(url, fn)
     assert open(fn, "rb").read() == data
 
 
@@ -193,7 +182,7 @@ def test_multi_download(server, tmpdir):
     urlb = server + "/index/otherfile"
     fna = os.path.join(tmpdir, "afile")
     fnb = os.path.join(tmpdir, "bfile")
-    h.get([urla, urlb], [fna, fnb], chunks=0)
+    h.get([urla, urlb], [fna, fnb])
     assert open(fna, "rb").read() == data
     assert open(fnb, "rb").read() == data
 

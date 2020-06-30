@@ -235,7 +235,8 @@ def mirror_sync_methods(obj):
 
     Uses the methods specified in
     - async_methods: the set that an implementation is expected to provide
-    - default_async_methods: that can be derived from their sync version ini AbstractFileSystem
+    - default_async_methods: that can be derived from their sync version in
+      AbstractFileSystem
     - AsyncFileSystem: async-specific default implementations
     """
     from fsspec import AbstractFileSystem
