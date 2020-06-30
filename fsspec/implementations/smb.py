@@ -145,7 +145,7 @@ class SMBFileSystem(AbstractFileSystem):
             "size": s.st_size,
             "type": t,
             "uid": s.st_uid,
-            "gui": s.st_gid,
+            "gid": s.st_gid,
             "time": s.st_atime,
             "mtime": s.st_mtime,
         }

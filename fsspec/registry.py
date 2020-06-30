@@ -156,7 +156,7 @@ known_implementations = {
     },
     "smb": {
         "class": "fsspec.implementations.smb.SMBFileSystem",
-        "err": 'SMBFileSystem requires "smbprotocol[kerberos]" to be installed',
+        "err": 'SMB requires "smbprotocol" or "smbprotocol[kerberos]" installed',
     },
 }
 
