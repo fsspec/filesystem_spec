@@ -16,10 +16,17 @@ from ..utils import infer_storage_options
 
 
 class SMBFileSystem(AbstractFileSystem):
-    """Downloads or uploads to Windows and Samba network drives.
+    """Allow reading and writing to Windows and Samba network shares.
 
-    The argument `path` (str) must have a URI with format:
+    When using `fsspec.open()` for getting a file-like object the URI
+    should be specified as this format:
     `smb://workgroup;user:password@server:port/share/folder/file.csv`.
+
+    Example::
+        >>> import fsspec
+        >>> with fsspec.open('smb://myuser:mypassword@myserver.com/'
+        ...                  'share/folder/file.csv') as smbfile:
+        ...     df = pd.read_csv(smbfile, sep='|', header=None)
 
     Note that you need to pass in a valid hostname or IP address for the host
     component of the URL. Do not use the Windows/NetBIOS machine name for the
