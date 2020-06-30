@@ -3,6 +3,7 @@ import asyncio
 import os
 import pytest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import sys
 import threading
 import fsspec
 
@@ -209,6 +210,7 @@ def test_async_other_thread(server):
     assert fut.result() == data
 
 
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_async_this_thread(server):
     async def _():
         loop = asyncio.get_event_loop()
