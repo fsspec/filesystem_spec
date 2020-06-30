@@ -37,6 +37,7 @@ def smb():
         yield dict(host="localhost", port=445, username="testuser", password="testpass")
     finally:
         import smbclient
+
         smbclient.reset_connection_cache()
         stop_docker(name)
 
@@ -56,15 +57,13 @@ def test_simple(smb):
 
 def test_with_url(smb):
     fo = fsspec.open(
-        "smb://{username}:{password}@{host}:{port}"
-        "/home/someuser.txt".format(**smb),
+        "smb://{username}:{password}@{host}:{port}/home/someuser.txt".format(**smb),
         "wb",
     )
     with fo as f:
         f.write(b"hello")
     fo = fsspec.open(
-        "smb://{username}:{password}@{host}:{port}"
-        "/home/someuser.txt".format(**smb),
+        "smb://{username}:{password}@{host}:{port}/home/someuser.txt".format(**smb),
         "rb",
     )
     with fo as f:
