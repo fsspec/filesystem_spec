@@ -1,7 +1,16 @@
-import smbclient
+# -*- coding: utf-8 -*-
+"""
+This module contains SMBFileSystem class responsible for handling access to
+Windows Samba network shares by using package smbprotocol
+"""
+
 from stat import S_ISDIR, S_ISLNK
+import datetime
 import types
 import uuid
+
+import smbclient
+
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
 
@@ -37,6 +46,7 @@ class SMBFileSystem(AbstractFileSystem):
 
     protocol = "smb"
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         host,
@@ -107,9 +117,9 @@ class SMBFileSystem(AbstractFileSystem):
         return infer_storage_options(path)["path"]
 
     @staticmethod
-    def _get_kwargs_from_urls(urlpath):
+    def _get_kwargs_from_urls(path):
         # smb://workgroup;user:password@host:port/share/folder/file.csv
-        out = infer_storage_options(urlpath)
+        out = infer_storage_options(path)
         out.pop("path", None)
         out.pop("protocol", None)
         return out
@@ -131,39 +141,47 @@ class SMBFileSystem(AbstractFileSystem):
             wpath = self._as_unc_path(path)
             smbclient.rmdir(wpath)
 
-    def info(self, path):
+    def info(self, path, **kwargs):
         wpath = self._as_unc_path(path)
-        s = smbclient.stat(wpath)
-        if S_ISDIR(s.st_mode):
-            t = "directory"
-        elif S_ISLNK(s.st_mode):
-            t = "link"
+        stats = smbclient.stat(wpath, **kwargs)
+        if S_ISDIR(stats.st_mode):
+            stype = "directory"
+        elif S_ISLNK(stats.st_mode):
+            stype = "link"
         else:
-            t = "file"
+            stype = "file"
         res = {
-            "name": path + "/" if t == "directory" else path,
-            "size": s.st_size,
-            "type": t,
-            "uid": s.st_uid,
-            "gid": s.st_gid,
-            "time": s.st_atime,
-            "mtime": s.st_mtime,
+            "name": path + "/" if stype == "directory" else path,
+            "size": stats.st_size,
+            "type": stype,
+            "uid": stats.st_uid,
+            "gid": stats.st_gid,
+            "time": stats.st_atime,
+            "mtime": stats.st_mtime,
         }
         return res
 
-    def ls(self, path, detail=False):
+    def created(self, path):
+        """Return the created timestamp of a file as a datetime.datetime"""
+        wpath = self._as_unc_path(path)
+        stats = smbclient.stat(wpath)
+        return datetime.datetime.utcfromtimestamp(stats.st_ctime)
+
+    def modified(self, path):
+        """Return the modified timestamp of a file as a datetime.datetime"""
+        wpath = self._as_unc_path(path)
+        stats = smbclient.stat(wpath)
+        return datetime.datetime.utcfromtimestamp(stats.st_mtime)
+
+    def ls(self, path, detail=True, **kwargs):
         unc = self._as_unc_path(path)
-        dirs = ["/".join([path.rstrip("/"), p]) for p in smbclient.listdir(unc)]
+        listed = smbclient.listdir(unc, **kwargs)
+        dirs = ["/".join([path.rstrip("/"), p]) for p in listed]
         if detail:
             dirs = [self.info(d) for d in dirs]
         return dirs
 
-    # def put(self, lpath, rpath):
-    #     self.ftp.put(lpath, rpath)
-
-    # def get(self, rpath, lpath):
-    #     self.ftp.get(rpath, lpath)
-
+    # pylint: disable=too-many-arguments
     def _open(
         self,
         path,
@@ -186,15 +204,15 @@ class SMBFileSystem(AbstractFileSystem):
             share = path.split("/")[1]
             path2 = "/{}{}/{}".format(share, self.temppath, uuid.uuid4())
             wpath2 = self._as_unc_path(path2)
-            f = smbclient.open_file(wpath2, mode, buffering=buffering, **kwargs)
-            f.temppath = path2
-            f.targetpath = path
-            f.fs = self
-            f.commit = types.MethodType(commit_a_file, f)
-            f.discard = types.MethodType(discard_a_file, f)
+            smbf = smbclient.open_file(wpath2, mode, buffering=buffering, **kwargs)
+            smbf.temppath = path2
+            smbf.targetpath = path
+            smbf.fs = self
+            smbf.commit = types.MethodType(_commit_a_file, smbf)
+            smbf.discard = types.MethodType(_discard_a_file, smbf)
         else:
-            f = smbclient.open_file(wpath, mode, buffering=buffering, **kwargs)
-        return f
+            smbf = smbclient.open_file(wpath, mode, buffering=buffering, **kwargs)
+        return smbf
 
     def copy(self, path1, path2, **kwargs):
         """ Copy within two locations in the same filesystem"""
@@ -205,21 +223,21 @@ class SMBFileSystem(AbstractFileSystem):
     def _rm(self, path):
         if self._share_has_path(path):
             wpath = self._as_unc_path(path)
-            s = smbclient.stat(wpath)
-            if S_ISDIR(s.st_mode):
+            stats = smbclient.stat(wpath)
+            if S_ISDIR(stats.st_mode):
                 smbclient.rmdir(wpath)
             else:
                 smbclient.remove(wpath)
 
-    def mv(self, old, new):
-        wold = self._as_unc_path(old)
-        wnew = self._as_unc_path(new)
-        smbclient.rename(wold, wnew)
+    def mv(self, path1, path2, **kwargs):
+        wpath1 = self._as_unc_path(path1)
+        wpath2 = self._as_unc_path(path2)
+        smbclient.rename(wpath1, wpath2, **kwargs)
 
 
-def commit_a_file(self):
+def _commit_a_file(self):
     self.fs.mv(self.temppath, self.targetpath)
 
 
-def discard_a_file(self):
-    self.fs._rm(self.temppath)
+def _discard_a_file(self):
+    self.fs.rm(self.temppath)

@@ -1,21 +1,21 @@
-import pytest
 import shlex
 import subprocess
 import time
+import pytest
 import fsspec
 
 pytest.importorskip("smbprotocol")
 
 
-def stop_docker(name):
-    cmd = shlex.split('docker ps -a -q --filter "name=%s"' % name)
+def stop_docker(container):
+    cmd = shlex.split('docker ps -a -q --filter "name=%s"' % container)
     cid = subprocess.check_output(cmd).strip().decode()
     if cid:
         subprocess.call(["docker", "rm", "-f", "-v", cid])
 
 
 @pytest.fixture(scope="module")
-def smb():
+def smb_params():
     try:
         pchk = ["docker", "run", "--name", "fsspec_test_smb", "hello-world"]
         subprocess.check_call(pchk)
@@ -25,11 +25,11 @@ def smb():
     stop_docker("fsspec_test_smb")
 
     # requires docker
-    name = "fsspec_smb"
-    stop_docker(name)
+    container = "fsspec_smb"
+    stop_docker(container)
     img = "docker run --name {} --detach -p 139:139 -p 445:445 dperson/samba"
     cfg = " -p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
-    cmd = img.format(name) + cfg
+    cmd = img.format(container) + cfg
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
     print(cid)
     try:
@@ -39,54 +39,56 @@ def smb():
         import smbclient
 
         smbclient.reset_connection_cache()
-        stop_docker(name)
+        stop_docker(container)
 
 
-def test_simple(smb):
-    f = fsspec.get_filesystem_class("smb")(**smb)
-    f.mkdirs("/home/someuser/deeper")
-    f.touch("/home/someuser/deeper/afile")
-    assert f.find("/home/someuser") == ["/home/someuser/deeper/afile"]
-    assert f.ls("/home/someuser/deeper/") == ["/home/someuser/deeper/afile"]
-    assert f.info("/home/someuser/deeper/afile")["type"] == "file"
-    assert f.info("/home/someuser/deeper/afile")["size"] == 0
-    assert f.exists("/home/someuser")
-    f.rm("/home/someuser", recursive=True)
-    assert not f.exists("/home/someuser")
+def test_simple(smb_params):
+    adir = "/home/adir"
+    adir2 = "/home/adir/otherdir/"
+    afile = "/home/adir/otherdir/afile"
+    fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
+    fsmb.mkdirs(adir2)
+    fsmb.touch(afile)
+    assert fsmb.find(adir) == [afile]
+    assert fsmb.ls(adir2, detail=False) == [afile]
+    assert fsmb.info(afile)["type"] == "file"
+    assert fsmb.info(afile)["size"] == 0
+    assert fsmb.exists(adir)
+    fsmb.rm(adir, recursive=True)
+    assert not fsmb.exists(adir)
 
 
-def test_with_url(smb):
+def test_with_url(smb_params):
     smb_url = "smb://{username}:{password}@{host}:{port}/home/someuser.txt"
-    fwo = fsspec.open(smb_url.format(**smb), "wb",)
-    with fwo as fw:
-        fw.write(b"hello")
-    fro = fsspec.open(smb_url.format(**smb), "rb",)
-    with fro as fr:
-        read_result = fr.read()
+    fwo = fsspec.open(smb_url.format(**smb_params), "wb",)
+    with fwo as fwr:
+        fwr.write(b"hello")
+    fro = fsspec.open(smb_url.format(**smb_params), "rb",)
+    with fro as frd:
+        read_result = frd.read()
         assert read_result == b"hello"
 
 
-def test_transaction(smb):
-    f = fsspec.get_filesystem_class("smb")(**smb)
-    f.mkdirs("/home/sometran/deeper")
-    f.start_transaction()
-    f.touch("/home/sometran/deeper/afile")
-    assert f.find("/home/sometran") == []
-    f.end_transaction()
-    f.find("/home/sometran") == ["/home/sometran/deeper/afile"]
+def test_transaction(smb_params):
+    afile = "/home/afolder/otherdir/afile"
+    afile2 = "/home/afolder/otherdir/afile2"
+    adir = "/home/afolder"
+    fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
+    fsmb.mkdirs("/home/afolder/otherdir")
+    fsmb.start_transaction()
+    fsmb.touch(afile)
+    assert fsmb.find(adir) == []
+    fsmb.end_transaction()
+    assert fsmb.find(adir) == [afile]
 
-    with f.transaction:
-        assert f._intrans
-        f.touch("/home/sometran/deeper/afile2")
-        assert f.find("/home/sometran") == ["/home/sometran/deeper/afile"]
-    assert f.find("/home/sometran") == [
-        "/home/sometran/deeper/afile",
-        "/home/sometran/deeper/afile2",
-    ]
+    with fsmb.transaction:
+        assert fsmb._intrans
+        fsmb.touch(afile2)
+        assert fsmb.find(adir) == [afile]
+    assert fsmb.find(adir) == [afile, afile2]
 
 
-def test_makedirs_exist_ok(smb):
-    f = fsspec.get_filesystem_class("smb")(**smb)
-
-    f.makedirs("/home/a/b/c")
-    f.makedirs("/home/a/b/c", exist_ok=True)
+def test_makedirs_exist_ok(smb_params):
+    fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
+    fsmb.makedirs("/home/a/b/c")
+    fsmb.makedirs("/home/a/b/c", exist_ok=True)
