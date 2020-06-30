@@ -60,10 +60,10 @@ def test_simple(smb_params):
 
 def test_with_url(smb_params):
     smb_url = "smb://{username}:{password}@{host}:{port}/home/someuser.txt"
-    fwo = fsspec.open(smb_url.format(**smb_params), "wb",)
+    fwo = fsspec.open(smb_url.format(**smb_params), "wb")
     with fwo as fwr:
         fwr.write(b"hello")
-    fro = fsspec.open(smb_url.format(**smb_params), "rb",)
+    fro = fsspec.open(smb_url.format(**smb_params), "rb")
     with fro as frd:
         read_result = frd.read()
         assert read_result == b"hello"
