@@ -158,6 +158,8 @@ class LocalFileSystem(AbstractFileSystem):
 
 def make_path_posix(path, sep=os.sep):
     """ Make path generic """
+    if isinstance(path, (list, set, tuple)):
+        return type(path)(make_path_posix(p) for p in path)
     if re.match("/[A-Za-z]:", path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"

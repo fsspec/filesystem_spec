@@ -1,5 +1,9 @@
+import contextlib
+import asyncio
+import os
 import pytest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import sys
 import threading
 import fsspec
 
@@ -22,17 +26,19 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
-        if self.path not in ["/index/realfile", "/index"]:
+        if self.path.rstrip("/") not in [
+            "/index/realfile",
+            "/index/otherfile",
+            "/index",
+        ]:
             self._respond(404)
             return
 
-        d = data if self.path == "/index/realfile" else index
+        d = data if self.path in ["/index/realfile", "/index/otherfile"] else index
         if "Range" in self.headers:
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")
-            print(start)
-            print(end)
             d = d[int(start) : int(end) + 1]
         if "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
@@ -47,7 +53,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(405)
             return
         d = data if self.path == "/index/realfile" else index
-        if self.path not in ["/index/realfile", "/index"]:
+        if self.path.rstrip("/") not in ["/index/realfile", "/index"]:
             self._respond(404)
         elif "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
@@ -61,8 +67,8 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(200)  # OK response, but no useful info
 
 
-@pytest.fixture(scope="module")
-def server():
+@contextlib.contextmanager
+def serve():
     server_address = ("", port)
     httpd = HTTPServer(server_address, HTTPTestHandler)
     th = threading.Thread(target=httpd.serve_forever)
@@ -74,6 +80,12 @@ def server():
         httpd.socket.close()
         httpd.shutdown()
         th.join()
+
+
+@pytest.fixture(scope="module")
+def server():
+    with serve() as s:
+        yield s
 
 
 def test_list(server):
@@ -127,10 +139,13 @@ def test_random_access(server, headers):
         if headers:
             assert f.size == len(data)
         assert f.read(5) == data[:5]
-        # python server does not respect bytes range request
-        # we actually get all the data
-        f.seek(5, 1)
-        assert f.read(5) == data[10:15]
+
+        if headers:
+            f.seek(5, 1)
+            assert f.read(5) == data[10:15]
+        else:
+            with pytest.raises(ValueError):
+                f.seek(5, 1)
 
 
 def test_mapper_url(server):
@@ -152,3 +167,63 @@ def test_content_length_zero(server):
 
     with h.open(url, "rb") as f:
         assert f.read() == data
+
+
+def test_download(server, tmpdir):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    url = server + "/index/realfile"
+    fn = os.path.join(tmpdir, "afile")
+    h.get(url, fn)
+    assert open(fn, "rb").read() == data
+
+
+def test_multi_download(server, tmpdir):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    urla = server + "/index/realfile"
+    urlb = server + "/index/otherfile"
+    fna = os.path.join(tmpdir, "afile")
+    fnb = os.path.join(tmpdir, "bfile")
+    h.get([urla, urlb], [fna, fnb])
+    assert open(fna, "rb").read() == data
+    assert open(fnb, "rb").read() == data
+
+
+def test_mcat(server):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    urla = server + "/index/realfile"
+    urlb = server + "/index/otherfile"
+    out = h.cat([urla, urlb])
+    assert out == {urla: data, urlb: data}
+
+
+def test_async_other_thread(server):
+    import threading
+
+    loop = asyncio.get_event_loop()
+    th = threading.Thread(target=loop.run_forever)
+
+    th.daemon = True
+    th.start()
+    fs = fsspec.filesystem("http", asynchronous=False, loop=loop)
+    cor = fs._cat(server + "/index/realfile")
+    fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
+    assert fut.result() == data
+
+
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
+def test_async_this_thread(server):
+    async def _():
+        loop = asyncio.get_event_loop()
+        fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
+
+        with pytest.raises(RuntimeError):
+            # fails because client creation has not yet been awaited
+            await fs._cat(server + "/index/realfile")
+
+        await fs.set_session()  # creates client
+
+        out = await fs._cat(server + "/index/realfile")
+        del fs
+        assert out == data
+
+    asyncio.run(_())

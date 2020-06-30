@@ -138,8 +138,8 @@ def test_info():
             assert "compress_size" in lhs
 
 
-@pytest.mark.parametrize("scale", [128, 256, 512, 1024, 2048, 4096])
-def test_isdir_isfile(benchmark, scale):
+@pytest.mark.parametrize("scale", [128, 512, 4096])
+def test_isdir_isfile(scale):
     def make_nested_dir(i):
         x = f"{i}"
         table = x.maketrans("0123456789", "ABCDEFGHIJ")
@@ -156,13 +156,5 @@ def test_isdir_isfile(benchmark, scale):
 
         entries = lhs_files | lhs_dirs
 
-        @benchmark
-        def split_into_dirs_files():
-            rhs_dirs = {e for e in entries if fs.isdir(e)}
-            rhs_files = {e for e in entries if fs.isfile(e)}
-            return rhs_dirs, rhs_files
-
-        rhs = split_into_dirs_files
-
-        assert lhs_dirs == rhs[0]
-        assert lhs_files == rhs[1]
+        assert lhs_dirs == {e for e in entries if fs.isdir(e)}
+        assert lhs_files == {e for e in entries if fs.isfile(e)}

@@ -3,10 +3,12 @@ import logging
 import os
 import warnings
 from hashlib import md5
+from glob import has_magic
 
+from .asyn import get_loop, mirror_sync_methods
 from .dircache import DirCache
 from .transaction import Transaction
-from .utils import read_block, tokenize, stringify_path
+from .utils import read_block, tokenize, stringify_path, other_paths
 
 logger = logging.getLogger("fsspec")
 
@@ -56,6 +58,8 @@ class _Cached(type):
             obj._fs_token_ = token
             obj.storage_args = args
             obj.storage_options = kwargs
+            if obj.async_impl:
+                mirror_sync_methods(obj)
 
             if cls.cachable and not skip:
                 cls._cache[token] = obj
@@ -83,6 +87,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     blocksize = 2 ** 22
     sep = "/"
     protocol = "abstract"
+    async_impl = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
     #: Extra *class attributes* that should be considered when hashing.
@@ -109,6 +114,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
             If this is a cachable implementation, pass True here to force
             creating a new instance even if a matching instance exists, and prevent
             storing this instance.
+        asynchronous: bool
+        loop: asyncio-compatible IOLoop or None
         """
         if self._cached:
             # reusing instance, don't change
@@ -116,6 +123,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._cached = True
         self._intrans = False
         self._transaction = None
+        if self.async_impl:
+            self.asynchronous = storage_options.get("asynchronous", False)
+            self.loop = storage_options.get("loop", None) or get_loop()
         self.dircache = DirCache(**storage_options)
 
         if storage_options.pop("add_docs", None):
@@ -444,7 +454,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         kwargs are passed to ``ls``.
         """
         import re
-        from glob import has_magic
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
@@ -582,66 +591,84 @@ class AbstractFileSystem(up, metaclass=_Cached):
         except:  # noqa: E722
             return False
 
-    def cat(self, path):
+    def cat_file(self, path):
         """ Get the content of a file """
         return self.open(path, "rb").read()
 
-    def get(self, rpath, lpath, recursive=False, **kwargs):
-        """Copy file to local.
+    def pipe_file(self, path, value, **kwargs):
+        """Set the bytes of given file"""
+        with self.open(path, "wb") as f:
+            f.write(value)
 
-        Possible extension: maybe should be able to copy to any file-system
-        (streaming through local).
+    def pipe(self, path, value=None, **kwargs):
+        """Put value into path
+
+        (counterpart to ``cat``)
+        Parameters
+        ----------
+        path: string or dict(str, bytes)
+            If a string, a single remote location to put ``value`` bytes; if a dict,
+            a mapping of {path: bytesvalue}.
+        value: bytes, optional
+            If using a single path, these are the bytes to put there. Ignored if
+            ``path`` is a dict
         """
-        rpath = self._strip_protocol(rpath)
-        if recursive:
-            rpaths = self.find(rpath)
-            lpaths = [
-                os.path.join(lpath, path[len(rpath) :].lstrip("/")) for path in rpaths
-            ]
-            for lpath in lpaths:
-                dirname = os.path.dirname(lpath)
-                if not os.path.isdir(dirname):
-                    os.makedirs(dirname)
+        if isinstance(path, str):
+            self.pipe_file(path, value, **kwargs)
+        elif isinstance(path, dict):
+            for k, v in path.items():
+                self.pipe_file(k, v, **kwargs)
         else:
-            rpaths = [rpath]
-            lpaths = [lpath]
-        for lpath, rpath in zip(lpaths, rpaths):
+            raise ValueError("path must be str or dict")
+
+    def cat(self, path, recursive=False, **kwargs):
+        """Fetch (potentially multiple) paths' contents
+
+        Returns a dict of {path: contents} if there are multiple paths
+        or the path has been otherwise expanded
+        """
+        paths = self.expand_path(path, recursive=recursive)
+        if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
+            return {path: self.cat_file(path, **kwargs) for path in paths}
+        else:
+            return self.cat_file(paths[0])
+
+    def get_file(self, rpath, lpath, **kwargs):
+        """Copy single remote file to local"""
+        if self.isdir(rpath):
+            os.makedirs(lpath, exist_ok=True)
+        else:
             with self.open(rpath, "rb", **kwargs) as f1:
-                if not recursive or not os.path.isdir(lpath):
-                    with open(lpath, "wb") as f2:
-                        data = True
-                        while data:
-                            data = f1.read(self.blocksize)
-                            f2.write(data)
+                with open(lpath, "wb") as f2:
+                    data = True
+                    while data:
+                        data = f1.read(self.blocksize)
+                        f2.write(data)
 
-    def put(self, lpath, rpath, recursive=False, **kwargs):
-        """ Upload file from local """
+    def get(self, rpath, lpath, recursive=False, **kwargs):
+        """Copy file(s) to local.
+
+        Copies a specific file or tree of files (if recursive=True). If lpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within.
+
+        Calls get_file for each source.
+        """
         from .implementations.local import make_path_posix
-        import posixpath
 
-        if recursive:
-            lpaths = []
-            for dirname, subdirlist, filelist in os.walk(lpath):
-                lpaths += [
-                    make_path_posix(os.path.join(dirname, filename))
-                    for filename in filelist
-                ]
-            rootdir = os.path.basename(make_path_posix(lpath).rstrip("/"))
-            if self.exists(rpath):
-                # copy lpath inside rpath directory
-                rpath2 = posixpath.join(rpath, rootdir)
-            else:
-                # copy lpath as rpath directory
-                rpath2 = rpath
-            lpath2 = make_path_posix(os.path.abspath(lpath))
-            rpaths = [
-                posixpath.join(rpath2, path[len(lpath2) :].lstrip("/"))
-                for path in lpaths
-            ]
-        else:
-            lpaths = [lpath]
-            rpaths = [rpath]
+        rpath = self._strip_protocol(rpath)
+        if isinstance(lpath, str):
+            lpath = make_path_posix(lpath)
+        rpaths = self.expand_path(rpath, recursive=recursive)
+        lpaths = other_paths(rpaths, lpath)
         for lpath, rpath in zip(lpaths, rpaths):
+            self.get_file(rpath, lpath, **kwargs)
+
+    def put_file(self, lpath, rpath, **kwargs):
+        """Copy single file to remote"""
+        if os.path.isdir(lpath):
+            self.makedirs(rpath, exist_ok=True)
+        else:
             with open(lpath, "rb") as f1:
                 self.mkdirs(os.path.dirname(rpath), exist_ok=True)
                 with self.open(rpath, "wb", **kwargs) as f2:
@@ -649,6 +676,27 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     while data:
                         data = f1.read(self.blocksize)
                         f2.write(data)
+
+    def put(self, lpath, rpath, recursive=False, **kwargs):
+        """Copy file(s) from local.
+
+        Copies a specific file or tree of files (if recursive=True). If rpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within.
+
+        Calls put_file for each source.
+        """
+        from .implementations.local import make_path_posix, LocalFileSystem
+
+        rpath = self._strip_protocol(rpath)
+        if isinstance(lpath, str):
+            lpath = make_path_posix(lpath)
+        fs = LocalFileSystem()
+        lpaths = fs.expand_path(lpath, recursive=recursive)
+        rpaths = other_paths(lpaths, rpath)
+
+        for lpath, rpath in zip(lpaths, rpaths):
+            self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):
         """ Get the first ``size`` bytes from file """
@@ -661,16 +709,41 @@ class AbstractFileSystem(up, metaclass=_Cached):
             f.seek(max(-size, -f.size), 2)
             return f.read()
 
-    def copy(self, path1, path2, **kwargs):
-        """ Copy within two locations in the filesystem"""
+    def cp_file(self, path1, path2, **kwargs):
         raise NotImplementedError
 
-    def mv(self, path1, path2, **kwargs):
-        """ Move file from one location to another """
-        self.copy(path1, path2, **kwargs)
-        self.rm(path1, recursive=False)
+    def copy(self, path1, path2, recursive=False, **kwargs):
+        """ Copy within two locations in the filesystem"""
+        paths = self.expand_path(path1, recursive=recursive)
+        path2 = other_paths(paths, path2)
+        for p1, p2 in zip(paths, path2):
+            self.cp_file(p1, p2, **kwargs)
 
-    def _rm(self, path):
+    def expand_path(self, path, recursive=False, maxdepth=None):
+        """Turn one or more globs or directories into a list of all matching files"""
+        if isinstance(path, str):
+            out = self.expand_path([path], recursive, maxdepth)
+        else:
+            out = set()
+            for p in path:
+                if has_magic(p):
+                    bit = set(self.glob(p))
+                    out |= bit
+                    if recursive:
+                        out += self.expand_path(p)
+                elif recursive:
+                    out |= set(self.find(p, withdirs=True))
+                out.add(p)
+        if not out:
+            raise FileNotFoundError(path)
+        return list(sorted(out))
+
+    def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
+        """ Move file(s) from one location to another """
+        self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
+        self.rm(path1, recursive=recursive)
+
+    def rm_file(self, path):
         """Delete a file"""
         raise NotImplementedError
 
@@ -689,19 +762,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
             If None, there will be no limit and infinite recursion may be
             possible.
         """
-        # prefer some bulk method, if possible
-        if not isinstance(path, list):
-            path = [path]
-        for p in path:
-            if recursive:
-                out = self.walk(p, maxdepth=maxdepth)
-                for pa_, _, files in reversed(list(out)):
-                    for name in files:
-                        fn = "/".join([pa_, name]) if pa_ else name
-                        self.rm(fn)
-                    self.rmdir(pa_)
-            else:
-                self._rm(p)
+        path = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        for p in reversed(path):
+            self._rm(p)
 
     @classmethod
     def _parent(cls, path):
@@ -1076,7 +1139,8 @@ class AbstractBufferedFile(io.IOBase):
     @property
     def closed(self):
         # get around this attr being read-only in IOBase
-        return self._closed
+        # use getattr here, since this can be called during del
+        return getattr(self, "_closed", True)
 
     @closed.setter
     def closed(self, c):

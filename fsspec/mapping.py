@@ -56,6 +56,38 @@ class FSMap(MutableMapping):
         except:  # noqa: E722
             pass
 
+    def getitems(self, keys):
+        """Fetch multiple items from the store
+
+        If the backend is async-able, this might proceed concurrently
+
+        Parameters
+        ----------
+        keys: list(str)
+            They keys to be fetched
+
+        Returns
+        -------
+        dict(key, bytes)
+        """
+        keys2 = [self._key_to_str(k) for k in keys]
+        out = self.fs.cat(keys2)
+        return {k: v for k, v in zip(keys, out.values())}
+
+    def setitems(self, values_dict):
+        """Set the values of multuple items in the store
+
+        Parameters
+        ----------
+        values_dict: dict(str, bytes)
+        """
+        values = {self._key_to_str(k): v for k, v in values_dict.items()}
+        self.fs.pipe(values)
+
+    def delitems(self, keys):
+        """Remove multiple keys from the store"""
+        self.fs.rm([self._key_to_str(k) for k in keys])
+
     def _key_to_str(self, key):
         """Generate full path for the key"""
         if isinstance(key, (tuple, list)):
