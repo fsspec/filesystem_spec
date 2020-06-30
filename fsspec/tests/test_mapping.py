@@ -59,6 +59,7 @@ def test_keys_view():
     assert len(keys) == 1
     # check that we don't consume the keys
     assert len(keys) == 1
+    m.clear()
 
 
 def test_multi():
