@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Test SMBFileSystem class using a docker container
+"""
+
+import logging
 import shlex
 import subprocess
 import time
@@ -5,6 +11,8 @@ import pytest
 import fsspec
 
 pytest.importorskip("smbprotocol")
+
+# ! pylint: disable=redefined-outer-name,missing-function-docstring
 
 
 def stop_docker(container):
@@ -31,12 +39,13 @@ def smb_params():
     cfg = " -p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
     cmd = img.format(container) + cfg
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
-    print(cid)
+    logger = logging.getLogger("fsspec")
+    logger.debug("Container: %s", cid)
     try:
         time.sleep(1)
         yield dict(host="localhost", port=445, username="testuser", password="testpass")
     finally:
-        import smbclient
+        import smbclient  # pylint: disable=import-outside-toplevel
 
         smbclient.reset_connection_cache()
         stop_docker(container)
@@ -73,8 +82,9 @@ def test_transaction(smb_params):
     afile = "/home/afolder/otherdir/afile"
     afile2 = "/home/afolder/otherdir/afile2"
     adir = "/home/afolder"
+    adir2 = "/home/afolder/otherdir"
     fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
-    fsmb.mkdirs("/home/afolder/otherdir")
+    fsmb.mkdirs(adir2)
     fsmb.start_transaction()
     fsmb.touch(afile)
     assert fsmb.find(adir) == []

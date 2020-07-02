@@ -6,13 +6,14 @@ Windows Samba network shares by using package smbprotocol
 
 from stat import S_ISDIR, S_ISLNK
 import datetime
-import types
 import uuid
 
 import smbclient
 
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
+
+# ! pylint: disable=bad-continuation
 
 
 class SMBFileSystem(AbstractFileSystem):
@@ -188,26 +189,14 @@ class SMBFileSystem(AbstractFileSystem):
     ):
         """
         block_size: int or None
-            If 0, no buffering, if 1, line buffering, if >1, buffer that many
-            bytes, if None use default from paramiko.
+            If 0, no buffering, 1, line buffering, >1, buffer that many bytes
         """
-        buffering = block_size if block_size is not None and block_size >= 0 else -1
+        bls = block_size if block_size is not None and block_size >= 0 else -1
         wpath = _as_unc_path(self.host, path)
-        if autocommit is False:
-            # writes to temporary file, move on commit
-            # TODO: use transaction support in SMB protocol
-            share = path.split("/")[1]
-            path2 = "/{}{}/{}".format(share, self.temppath, uuid.uuid4())
-            wpath2 = _as_unc_path(self.host, path2)
-            smbf = smbclient.open_file(wpath2, mode, buffering=buffering, **kwargs)
-            smbf.temppath = path2
-            smbf.targetpath = path
-            smbf.fs = self
-            smbf.commit = types.MethodType(_commit_a_file, smbf)
-            smbf.discard = types.MethodType(_discard_a_file, smbf)
-        else:
-            smbf = smbclient.open_file(wpath, mode, buffering=buffering, **kwargs)
-        return smbf
+        if "w" in mode and autocommit is False:
+            temp = _as_temp_path(self.host, path, self.temppath)
+            return SMBFileOpener(wpath, temp, mode, block_size=bls, **kwargs)
+        return smbclient.open_file(wpath, mode, buffering=bls, **kwargs)
 
     def copy(self, path1, path2, **kwargs):
         """ Copy within two locations in the same filesystem"""
@@ -230,17 +219,16 @@ class SMBFileSystem(AbstractFileSystem):
         smbclient.rename(wpath1, wpath2, **kwargs)
 
 
-def _commit_a_file(self):
-    self.fs.mv(self.temppath, self.targetpath)
-
-
-def _discard_a_file(self):
-    self.fs.rm(self.temppath)
-
-
 def _as_unc_path(host, path):
     rpath = path.replace("/", "\\")
     unc = "\\\\{}{}".format(host, rpath)
+    return unc
+
+
+def _as_temp_path(host, path, temppath):
+    share = path.split("/")[1]
+    temp_file = "/{}{}/{}".format(share, temppath, uuid.uuid4())
+    unc = _as_unc_path(host, temp_file)
     return unc
 
 
@@ -249,3 +237,49 @@ def _share_has_path(path):
     if path.endswith("/"):
         return parts > 2
     return parts > 1
+
+
+class SMBFileOpener(object):
+    """writes to remote temporary file, move on commit"""
+
+    def __init__(self, path, temp, mode, block_size=-1, **kwargs):
+        self.path = path
+        self.temp = temp
+        self.mode = mode
+        self.block_size = block_size
+        self.kwargs = kwargs
+        self.smbfile = None
+        self._incontext = False
+        self._open()
+
+    def _open(self):
+        if self.smbfile is None or self.smbfile.closed:
+            self.smbfile = smbclient.open_file(
+                self.temp, self.mode, buffering=self.block_size, **self.kwargs
+            )
+
+    def commit(self):
+        """Move temp file to definitive on success."""
+        # TODO: use transaction support in SMB protocol
+        smbclient.replace(self.temp, self.path)
+
+    def discard(self):
+        """Remove the temp file on failure."""
+        smbclient.remove(self.temp)
+
+    def __fspath__(self):
+        return self.path
+
+    def __iter__(self):
+        return self.smbfile.__iter__()
+
+    def __getattr__(self, item):
+        return getattr(self.smbfile, item)
+
+    def __enter__(self):
+        self._incontext = True
+        return self.smbfile.__enter__()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._incontext = False
+        self.smbfile.__exit__(exc_type, exc_value, traceback)
