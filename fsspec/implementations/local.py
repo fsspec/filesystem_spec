@@ -50,9 +50,9 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return paths
 
-    def glob(self, path, **kargs):
+    def glob(self, path, **kwargs):
         path = self._strip_protocol(path)
-        return super().glob(path)
+        return super().glob(path, **kwargs)
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
