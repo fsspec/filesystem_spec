@@ -43,7 +43,9 @@ class SMBFileSystem(AbstractFileSystem):
 
         For working this source require `smbprotocol`_ to be installed, e.g.::
 
-            $ pip install smbprotocol[kerberos]
+            $ pip install smbprotocol
+            # or
+            # pip install smbprotocol[kerberos]
 
     .. _smbprotocol: https://github.com/jborean93/smbprotocol#requirements
 
