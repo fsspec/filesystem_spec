@@ -341,3 +341,16 @@ The interface provides the following outputs:
 - ``.storage_options``: the value of the kwargs box
 - ``.fs``: the current filesystem instance
 - ``.open_file()``: produces an ``OpenFile`` instance for the current selection
+
+Async
+=====
+
+Some implementations, those deriving from ``fsspec.asyn.AsyncFileSystem``, have
+async/coroutine implementations of some file operations. The async methods have
+names beginning with ``_``, and listed in the ``asyn`` module; synchronous or
+blocking functions are automatically generated, which will operate via an
+event loop in another thread, by default.
+
+Async methods allow for concurrent
+execution of certain batch operations such as ``get``, ``rm`` and ``cat`` even when
+called via the blocking API.

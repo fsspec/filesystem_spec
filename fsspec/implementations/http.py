@@ -6,7 +6,6 @@ import re
 import requests
 import weakref
 from urllib.parse import urlparse
-from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem
@@ -21,7 +20,7 @@ async def get_client():
     return aiohttp.ClientSession()
 
 
-class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
+class HTTPFileSystem(AsyncFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
 
@@ -65,7 +64,7 @@ class HTTPFileSystem(AsyncFileSystem, AbstractFileSystem):
             other parameters passed on to requests
         cache_type, cache_options: defaults used in open
         """
-        AbstractFileSystem.__init__(self, asynchronous=asynchronous, loop=loop)
+        super().__init__(self, asynchronous=asynchronous, loop=loop, **storage_options)
         self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
         self.simple_links = simple_links
         self.same_schema = same_scheme

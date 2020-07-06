@@ -79,26 +79,23 @@ class LocalFileSystem(AbstractFileSystem):
                 result["size"] = 0
         return result
 
-    def copy(self, path1, path2, **kwargs):
+    def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
-        shutil.copyfile(path1, path2)
-
-    def get(self, path1, path2, **kwargs):
-        if kwargs.get("recursive"):
-            return super(LocalFileSystem, self).get(path1, path2, **kwargs)
+        if self.isfile(path1):
+            shutil.copyfile(path1, path2)
         else:
-            return self.copy(path1, path2, **kwargs)
+            self.mkdirs(path1, exist_ok=True)
 
-    def put(self, path1, path2, **kwargs):
-        if kwargs.get("recursive"):
-            return super(LocalFileSystem, self).put(path1, path2, **kwargs)
-        else:
-            return self.copy(path1, path2, **kwargs)
+    def get_file(self, path1, path2, **kwargs):
+        return self.cp_file(path1, path2, **kwargs)
 
-    def mv(self, path1, path2, **kwargs):
+    def put_file(self, path1, path2, **kwargs):
+        return self.cp_file(path1, path2, **kwargs)
+
+    def mv_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
         os.rename(path1, path2)
