@@ -6,6 +6,7 @@ import sys
 import threading
 
 from .utils import other_paths
+from .spec import AbstractFileSystem
 
 # this global variable holds whether this thread is running async or not
 thread_state = threading.local()
@@ -144,22 +145,28 @@ default_async_methods = [
 ]
 
 
-class AsyncFileSystem:
+class AsyncFileSystem(AbstractFileSystem):
     """Async file operations, default implementations
 
-    Passes bulk operations to asyncio.gather for concurrent operartion.
+    Passes bulk operations to asyncio.gather for concurrent operation.
+
+    Implementations that have concurrent batch operations and/or async methods
+    should inherit from this class instead of AbstractFileSystem. Docstrings are
+    copied from the un-underscored method in AbstractFileSystem, if not given.
     """
 
     async_impl = True
 
+    def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
+        self.asynchronous = asynchronous
+        self.loop = loop or get_loop()
+        super().__init__(*args, **kwargs)
+
     async def _rm(self, path, recursive=False):
-        """Delete files
-        """
         path = await self._expand_path(path, recursive=recursive)
         await asyncio.gather(*[self._rm_file(p) for p in path])
 
     async def _copy(self, path1, path2, recursive=False, **kwargs):
-        """ Copy within two locations in the filesystem"""
         paths = await self.expand_path(path1, recursive=recursive)
         path2 = other_paths(paths, path2)
         await asyncio.gather(
@@ -167,8 +174,6 @@ class AsyncFileSystem:
         )
 
     async def _pipe(self, path, value=None, **kwargs):
-        """Set contents of files
-        """
         if isinstance(path, str):
             path = {path: value}
         await asyncio.gather(
@@ -176,8 +181,6 @@ class AsyncFileSystem:
         )
 
     async def _cat(self, path, recursive=False, **kwargs):
-        """Get contents of files
-        """
         paths = await self._expand_path(path, recursive=recursive)
         out = await asyncio.gather(
             *[
@@ -191,8 +194,6 @@ class AsyncFileSystem:
             return out[0]
 
     async def _put(self, lpath, rpath, recursive=False, **kwargs):
-        """copy local files to remote
-        """
         from .implementations.local import make_path_posix, LocalFileSystem
 
         rpath = self._strip_protocol(rpath)
@@ -210,8 +211,6 @@ class AsyncFileSystem:
         )
 
     async def _get(self, rpath, lpath, recursive=False, **kwargs):
-        """Copy file(s) to local.
-        """
         from fsspec.implementations.local import make_path_posix
 
         rpath = self._strip_protocol(rpath)
@@ -247,6 +246,15 @@ def mirror_sync_methods(obj):
             if inspect.iscoroutinefunction(getattr(obj, method, None)) and getattr(
                 obj, smethod, False
             ).__func__ is getattr(AbstractFileSystem, smethod):
-                setattr(obj, smethod, sync_wrapper(getattr(obj, method), obj=obj))
-            elif hasattr(obj, smethod) and inspect.ismethod(getattr(obj, smethod)):
+                mth = sync_wrapper(getattr(obj, method), obj=obj)
+                setattr(obj, smethod, mth)
+                if not mth.__doc__:
+                    mth.__doc__ = getattr(
+                        getattr(AbstractFileSystem, smethod, None), "__doc__", ""
+                    )
+            elif (
+                hasattr(obj, smethod)
+                and inspect.ismethod(getattr(obj, smethod))
+                and not hasattr(obj, method)
+            ):
                 setattr(obj, method, async_wrapper(getattr(obj, smethod)))

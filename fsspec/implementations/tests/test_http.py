@@ -196,6 +196,14 @@ def test_mcat(server):
     assert out == {urla: data, urlb: data}
 
 
+@pytest.mark.xfail(
+    condition=sys.flags.optimize > 1, reason="no docstrings when optimised"
+)
+def test_docstring():
+    h = fsspec.filesystem("http")
+    assert h.cat.__doc__
+
+
 def test_async_other_thread(server):
     import threading
 

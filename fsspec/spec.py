@@ -5,7 +5,6 @@ import warnings
 from hashlib import md5
 from glob import has_magic
 
-from .asyn import get_loop, mirror_sync_methods
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path, other_paths
@@ -59,6 +58,8 @@ class _Cached(type):
             obj.storage_args = args
             obj.storage_options = kwargs
             if obj.async_impl:
+                from .asyn import mirror_sync_methods
+
                 mirror_sync_methods(obj)
 
             if cls.cachable and not skip:
@@ -123,9 +124,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._cached = True
         self._intrans = False
         self._transaction = None
-        if self.async_impl:
-            self.asynchronous = storage_options.get("asynchronous", False)
-            self.loop = storage_options.get("loop", None) or get_loop()
         self.dircache = DirCache(**storage_options)
 
         if storage_options.pop("add_docs", None):
@@ -650,7 +648,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         Copies a specific file or tree of files (if recursive=True). If lpath
         ends with a "/", it will be assumed to be a directory, and target files
-        will go within.
+        will go within. Can submit a list of paths, which may be glob-patterns
+        and will be expanded.
 
         Calls get_file for each source.
         """
@@ -745,6 +744,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     def rm_file(self, path):
         """Delete a file"""
+        self._rm(path)
+
+    def _rm(self, path):
+        """Delete one file"""
+        # this is the old name for the method, prefer rm_file
         raise NotImplementedError
 
     def rm(self, path, recursive=False, maxdepth=None):
@@ -764,7 +768,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         path = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
         for p in reversed(path):
-            self._rm(p)
+            self.rm_file(p)
 
     @classmethod
     def _parent(cls, path):
