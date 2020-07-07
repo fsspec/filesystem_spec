@@ -520,3 +520,30 @@ def test_iterable(tmpdir):
     with of as f:
         out = list(f)
     assert b"".join(out) == data
+
+
+def test_mv_empty(tmpdir):
+    localfs = fsspec.filesystem("file")
+    src = os.path.join(str(tmpdir), "src")
+    dest = os.path.join(str(tmpdir), "dest")
+    assert localfs.isdir(src) is False
+    localfs.mkdir(src)
+    assert localfs.isdir(src)
+    localfs.move(src, dest, recursive=True)
+    assert localfs.isdir(src) is False
+    assert localfs.isdir(dest)
+    assert localfs.info(dest)
+
+
+def test_mv_recursive(tmpdir):
+    localfs = fsspec.filesystem("file")
+    src = os.path.join(str(tmpdir), "src")
+    dest = os.path.join(str(tmpdir), "dest")
+    assert localfs.isdir(src) is False
+    localfs.mkdir(src)
+    assert localfs.isdir(src)
+    localfs.touch(os.path.join(src, "afile"))
+    localfs.move(src, dest, recursive=True)
+    assert localfs.isdir(src) is False
+    assert localfs.isdir(dest)
+    assert localfs.info(os.path.join(dest, "afile"))
