@@ -268,6 +268,8 @@ def _un_chain(path, kwargs):
         if "::" in path
         else [path]
     )
+    if len(bits) < 2:
+        return []
     # [[url, protocol, kwargs], ...]
     out = []
     previous_bit = None
@@ -278,7 +280,10 @@ def _un_chain(path, kwargs):
         extra_kwargs = cls._get_kwargs_from_urls(bit)
         kws = kwargs.get(split_protocol(bit)[0] or "file", {})
         kw = dict(**extra_kwargs, **kws)
-        if protocol in {"blockcache", "filecache", "simplecache"}:
+        if (
+            protocol in {"blockcache", "filecache", "simplecache"}
+            and "target_protocol" not in kw
+        ):
             bit = previous_bit.replace(previous_protocol, protocol)
         out.append((bit, protocol, kw))
         previous_bit = bit

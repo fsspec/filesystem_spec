@@ -211,6 +211,7 @@ def test_multilevel_chained_fs_zip_zip_file():
         with open_file as f:
             assert f.read().decode("utf-8") == f.name
 
+
 def test_chained_equivalent():
     d1 = tempfile.mkdtemp()
     d2 = tempfile.mkdtemp()
