@@ -3,6 +3,7 @@
 import contextlib
 import os
 import pickle
+import sys
 import tempfile
 
 import pytest
@@ -197,6 +198,7 @@ def test_multilevel_chained_fs():
             assert f.read().decode("utf-8") == f.name
 
 
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no seek in old zipfile")
 def test_multilevel_chained_fs_zip_zip_file():
     """This test reproduces intake/filesystem_spec#334"""
     import zipfile
