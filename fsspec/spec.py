@@ -730,6 +730,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     out |= bit
                     if recursive:
                         out += self.expand_path(p)
+                    continue
                 elif recursive:
                     out |= set(self.find(p, withdirs=True))
                 out.add(p)

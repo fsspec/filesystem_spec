@@ -162,16 +162,22 @@ class AsyncFileSystem(AbstractFileSystem):
         self.loop = loop or get_loop()
         super().__init__(*args, **kwargs)
 
-    async def _rm(self, path, recursive=False):
-        path = await self._expand_path(path, recursive=recursive)
-        await asyncio.gather(*[self._rm_file(p) for p in path])
+    async def _rm(self, path, recursive=False, **kwargs):
+        await asyncio.gather(*[self._rm_file(p, **kwargs) for p in path])
 
-    async def _copy(self, path1, path2, recursive=False, **kwargs):
-        paths = await self.expand_path(path1, recursive=recursive)
-        path2 = other_paths(paths, path2)
+    def rm(self, path, recursive=False, **kwargs):
+        path = self.expand_path(path, recursive=recursive)
+        sync(self.loop, self._rm, path, **kwargs)
+
+    async def _copy(self, paths, path2, **kwargs):
         await asyncio.gather(
             *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
         )
+
+    def copy(self, path1, path2, recursive=False, **kwargs):
+        paths = self.expand_path(path1, recursive=recursive)
+        path2 = other_paths(paths, path2)
+        sync(self.loop, self._copy, paths, path2)
 
     async def _pipe(self, path, value=None, **kwargs):
         if isinstance(path, str):
@@ -180,20 +186,31 @@ class AsyncFileSystem(AbstractFileSystem):
             *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
         )
 
-    async def _cat(self, path, recursive=False, **kwargs):
-        paths = await self._expand_path(path, recursive=recursive)
-        out = await asyncio.gather(
+    async def _cat(self, paths, **kwargs):
+        return await asyncio.gather(
             *[
                 asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop)
                 for path in paths
             ]
         )
+
+    def cat(self, path, recursive=False, **kwargs):
+        paths = self.expand_path(path, recursive=recursive)
+        out = sync(self.loop, self._cat, paths, **kwargs)
         if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
             return {k: v for k, v in zip(paths, out)}
         else:
             return out[0]
 
-    async def _put(self, lpath, rpath, recursive=False, **kwargs):
+    async def _put(self, lpaths, rpaths, **kwargs):
+        return await asyncio.gather(
+            *[
+                self._put_file(lpath, rpath, **kwargs)
+                for lpath, rpath in zip(lpaths, rpaths)
+            ]
+        )
+
+    def put(self, lpath, rpath, recursive=False, **kwargs):
         from .implementations.local import make_path_posix, LocalFileSystem
 
         rpath = self._strip_protocol(rpath)
@@ -202,27 +219,25 @@ class AsyncFileSystem(AbstractFileSystem):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
+        sync(self.loop, self._put, lpaths, rpaths, **kwargs)
 
-        await asyncio.gather(
-            *[
-                self._put_file(lpath, rpath, **kwargs)
-                for lpath, rpath in zip(lpaths, rpaths)
-            ]
-        )
-
-    async def _get(self, rpath, lpath, recursive=False, **kwargs):
-        from fsspec.implementations.local import make_path_posix
-
-        rpath = self._strip_protocol(rpath)
-        lpath = make_path_posix(lpath)
-        rpaths = await self._expand_path(rpath, recursive=recursive)
-        lpaths = other_paths(rpaths, lpath)
-        await asyncio.gather(
+    async def _get(self, rpaths, lpaths, **kwargs):
+        return await asyncio.gather(
             *[
                 self._get_file(rpath, lpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
             ]
         )
+
+    def get(self, rpath, lpath, recursive=False, **kwargs):
+        from fsspec.implementations.local import make_path_posix
+
+        rpath = self._strip_protocol(rpath)
+        lpath = make_path_posix(lpath)
+        rpaths = self.expand_path(rpath, recursive=recursive)
+        lpaths = other_paths(rpaths, lpath)
+        return sync(self.loop, self._get, rpaths, lpaths)
+
 
 
 def mirror_sync_methods(obj):

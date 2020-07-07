@@ -196,12 +196,20 @@ def test_mcat(server):
     assert out == {urla: data, urlb: data}
 
 
+def test_mcat_expand(server):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    out = h.cat(server + "/index/*")
+    assert out == {server + "/index/realfile": data}
+
+
 @pytest.mark.xfail(
     condition=sys.flags.optimize > 1, reason="no docstrings when optimised"
 )
 def test_docstring():
     h = fsspec.filesystem("http")
-    assert h.cat.__doc__
+    # most methods have empty docstrings and draw from base class, but this one
+    # is generated
+    assert h.pipe.__doc__
 
 
 def test_async_other_thread(server):
@@ -213,9 +221,9 @@ def test_async_other_thread(server):
     th.daemon = True
     th.start()
     fs = fsspec.filesystem("http", asynchronous=False, loop=loop)
-    cor = fs._cat(server + "/index/realfile")
+    cor = fs._cat([server + "/index/realfile"])
     fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
-    assert fut.result() == data
+    assert fut.result() == [data]
 
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
@@ -226,12 +234,12 @@ def test_async_this_thread(server):
 
         with pytest.raises(RuntimeError):
             # fails because client creation has not yet been awaited
-            await fs._cat(server + "/index/realfile")
+            await fs._cat([server + "/index/realfile"])
 
         await fs.set_session()  # creates client
 
-        out = await fs._cat(server + "/index/realfile")
+        out = await fs._cat([server + "/index/realfile"])
         del fs
-        assert out == data
+        assert out == [data]
 
     asyncio.run(_())
