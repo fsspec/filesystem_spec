@@ -239,7 +239,6 @@ class AsyncFileSystem(AbstractFileSystem):
         return sync(self.loop, self._get, rpaths, lpaths)
 
 
-
 def mirror_sync_methods(obj):
     """Populate sync and async methods for obj
 
