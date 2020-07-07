@@ -91,8 +91,6 @@ celerybeat-schedule
 .venv
 venv/
 ENV/
-.idea/
-.vscode/
 
 # Spyder project settings
 .spyderproject
@@ -106,3 +104,12 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# jetbrains ide stuff
+*.iml
+.idea/
+
+# vscode ide stuff
+*.code-workspace
+.history
+.vscode

@@ -50,3 +50,11 @@ def test_directories(m):
     m.rmdir("outer")
 
     assert not m.store
+
+
+def test_mv_recursive(m):
+    m.mkdir("src")
+    m.touch("src/file.txt")
+    m.mv("src", "dest", recursive=True)
+    assert m.exists("dest/file.txt")
+    assert not m.exists("src")

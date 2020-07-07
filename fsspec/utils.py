@@ -311,3 +311,51 @@ def make_instance(cls, args, kwargs):
     inst = cls(*args, **kwargs)
     inst._determine_worker()
     return inst
+
+
+def common_prefix(paths):
+    """For a list of paths, find the shortest prefix common to all"""
+    parts = [p.split("/") for p in paths]
+    lmax = min(len(p) for p in parts)
+    end = 0
+    for i in range(lmax):
+        end = all(p[i] == parts[0][i] for p in parts)
+        if not end:
+            break
+    i += end
+    return "/".join(parts[0][:i])
+
+
+def other_paths(paths, path2, is_dir=None):
+    """In bulk file operations, construct a new file tree from a list of files
+
+    Parameters
+    ----------
+    paths: list of str
+        The input file tree
+    path2: str or list of str
+        Root to construct the new list in. If this is already a list of str, we just
+        assert it has the right number of elements.
+    is_dir: bool (optional)
+        For the special case where the input in one element, whether to regard the value
+        as the target path, or as a directory to put a file path within. If None, a
+        directory is inferred if the path ends in '/'
+
+    Returns
+    -------
+    list of str
+    """
+    if isinstance(path2, str):
+        is_dir = is_dir or path2.endswith("/")
+        path2 = path2.rstrip("/")
+        if len(paths) > 1:
+            cp = common_prefix(paths)
+            path2 = [p.replace(cp, path2, 1) for p in paths]
+        else:
+            if is_dir:
+                path2 = [path2.rstrip("/") + "/" + paths[0].rsplit("/")[-1]]
+            else:
+                path2 = [path2]
+    else:
+        assert len(paths) == len(path2)
+    return path2

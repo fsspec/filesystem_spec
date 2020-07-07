@@ -1,11 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
+import aiohttp
+import asyncio
 import re
 import requests
+import weakref
 from urllib.parse import urlparse
-from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
+from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
@@ -13,7 +16,11 @@ ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
-class HTTPFileSystem(AbstractFileSystem):
+async def get_client():
+    return aiohttp.ClientSession()
+
+
+class HTTPFileSystem(AsyncFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
 
@@ -33,9 +40,13 @@ class HTTPFileSystem(AbstractFileSystem):
         size_policy=None,
         cache_type="bytes",
         cache_options=None,
+        asynchronous=False,
+        loop=None,
         **storage_options
     ):
         """
+        NB: if this is called async, you must await set_client
+
         Parameters
         ----------
         block_size: int
@@ -53,14 +64,27 @@ class HTTPFileSystem(AbstractFileSystem):
             other parameters passed on to requests
         cache_type, cache_options: defaults used in open
         """
-        AbstractFileSystem.__init__(self)
+        super().__init__(self, asynchronous=asynchronous, loop=loop, **storage_options)
         self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
         self.simple_links = simple_links
         self.same_schema = same_scheme
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.kwargs = storage_options
-        self.session = requests.Session()
+        if not asynchronous:
+            self._session = sync(self.loop, get_client)
+            weakref.finalize(self, sync, self.loop, self.session.close)
+        else:
+            self._session = None
+
+    @property
+    def session(self):
+        if self._session is None:
+            raise RuntimeError("please await ``.set_session`` before anything else")
+        return self._session
+
+    async def set_session(self):
+        self._session = await get_client()
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -68,36 +92,39 @@ class HTTPFileSystem(AbstractFileSystem):
         """
         return path
 
-    # TODO: override get
-
-    def ls(self, url, detail=True, **kwargs):
+    async def _ls(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
-        r = self.session.get(url, **self.kwargs)
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        async with self.session.get(url, **self.kwargs) as r:
+            r.raise_for_status()
+            text = await r.text()
         if self.simple_links:
-            links = ex2.findall(r.text) + ex.findall(r.text)
+            links = ex2.findall(text) + ex.findall(text)
         else:
-            links = ex.findall(r.text)
+            links = ex.findall(text)
         out = set()
         parts = urlparse(url)
         for l in links:
             if isinstance(l, tuple):
                 l = l[1]
+            if l.startswith("/") and len(l) > 1:
+                # absolute URL on this server
+                l = parts.scheme + "://" + parts.netloc + l
             if l.startswith("http"):
-                if self.same_schema and l.startswith(url):
+                if self.same_schema and l.startswith(url.rstrip("/") + "/"):
                     out.add(l)
                 elif l.replace("https", "http").startswith(
-                    url.replace("https", "http")
+                    url.replace("https", "http").rstrip("/") + "/"
                 ):
                     # allowed to cross http <-> https
                     out.add(l)
-            elif l.startswith("/") and len(l) > 1:
-                out.add(parts.scheme + "://" + parts.netloc + l)
             else:
                 if l not in ["..", "../"]:
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            return self.ls(url.rstrip("/"), detail=True)
+            return await self._ls(url.rstrip("/"), detail=True)
         if detail:
             return [
                 {
@@ -110,24 +137,37 @@ class HTTPFileSystem(AbstractFileSystem):
         else:
             return list(sorted(out))
 
-    def cat(self, url):
-        r = self.session.get(url, **self.kwargs)
-        r.raise_for_status()
-        return r.content
+    async def _cat_file(self, url, **kwargs):
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        async with self.session.get(url, **kw) as r:
+            r.raise_for_status()
+            out = await r.read()
+        return out
 
-    def mkdirs(self, url):
-        """Make any intermediate directories to make path writable"""
-        raise NotImplementedError
+    async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, **kwargs):
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        async with self.session.get(rpath, **self.kwargs) as r:
+            r.raise_for_status()
+            with open(lpath, "wb") as fd:
+                chunk = True
+                while chunk:
+                    chunk = await r.content.read(chunk_size)
+                    fd.write(chunk)
 
-    def exists(self, path):
-        kwargs = self.kwargs.copy()
-        kwargs["stream"] = True
+    async def _exists(self, path, **kwargs):
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
         try:
-            r = self.session.get(path, **kwargs)
-            r.close()
-            return r.ok
+            r = await self.session.get(path, **kw)
+            async with r:
+                return r.status < 400
         except requests.HTTPError:
             return False
+
+    async def _isfile(self, path, **kwargs):
+        return await self._exists(path, **kwargs)
 
     def _open(
         self,
@@ -157,30 +197,32 @@ class HTTPFileSystem(AbstractFileSystem):
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
-        kw.update(kwargs)  # this does nothing?
-        if block_size:
+        kw["asynchronous"] = self.asynchronous
+        kw.update(kwargs)
+        size = self.size(path)
+        if block_size and size:
             return HTTPFile(
                 self,
                 path,
-                self.session,
-                block_size,
+                session=self.session,
+                block_size=block_size,
                 mode=mode,
+                size=size,
                 cache_type=cache_type or self.cache_type,
                 cache_options=cache_options or self.cache_options,
+                loop=self.loop,
                 **kw
             )
         else:
-            kw["stream"] = True
-            r = self.session.get(path, **kw)
-            r.raise_for_status()
-            r.raw.decode_content = True
-            return r.raw
+            return HTTPStreamFile(
+                self, path, mode=mode, loop=self.loop, session=self.session, **kw
+            )
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
         return tokenize(url, self.kwargs, self.protocol)
 
-    def info(self, url, **kwargs):
+    async def _info(self, url, **kwargs):
         """Get info of URL
 
         Tries to access location via HEAD, and then GET methods, but does
@@ -193,7 +235,9 @@ class HTTPFileSystem(AbstractFileSystem):
         size = False
         for policy in ["head", "get"]:
             try:
-                size = file_size(url, self.session, policy, **self.kwargs)
+                size = await _file_size(
+                    url, size_policy=policy, session=self.session, **self.kwargs
+                )
                 if size:
                     break
             except Exception:
@@ -240,14 +284,16 @@ class HTTPFile(AbstractBufferedFile):
         cache_type="bytes",
         cache_options=None,
         size=None,
+        loop=None,
+        asynchronous=False,
         **kwargs
     ):
         if mode != "rb":
             raise NotImplementedError("File mode not supported")
+        self.asynchronous = asynchronous
         self.url = url
-        self.session = session if session is not None else requests.Session()
-        if size is not None:
-            self.details = {"name": url, "size": size, "type": "file"}
+        self.session = session
+        self.details = {"name": url, "size": size, "type": "file"}
         super().__init__(
             fs=fs,
             path=url,
@@ -257,7 +303,7 @@ class HTTPFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs
         )
-        self.cache.size = self.size or self.blocksize
+        self.loop = loop
 
     def read(self, length=-1):
         """Read bytes from file
@@ -284,20 +330,23 @@ class HTTPFile(AbstractBufferedFile):
             length = min(self.size - self.loc, length)
         return super().read(length)
 
-    def _fetch_all(self):
+    async def async_fetch_all(self):
         """Read whole file in one shot, without caching
 
         This is only called when position is still at zero,
         and read() is called without a byte-count.
         """
         if not isinstance(self.cache, AllBytes):
-            r = self.session.get(self.url, **self.kwargs)
-            r.raise_for_status()
-            out = r.content
-            self.cache = AllBytes(out)
-            self.size = len(out)
+            r = await self.session.get(self.url, **self.kwargs)
+            async with r:
+                r.raise_for_status()
+                out = await r.read()
+                self.cache = AllBytes(out)
+                self.size = len(out)
 
-    def _fetch_range(self, start, end):
+    _fetch_all = sync_wrapper(async_fetch_all)
+
+    async def async_fetch_range(self, start, end):
         """Download a block of data
 
         The expectation is that the server returns only the requested bytes,
@@ -306,48 +355,102 @@ class HTTPFile(AbstractBufferedFile):
         requested, an exception is raised.
         """
         kwargs = self.kwargs.copy()
-        headers = kwargs.pop("headers", {})
+        headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-        r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
-        if r.status_code == 416:
-            # range request outside file
-            return b""
-        r.raise_for_status()
-        if r.status_code == 206:
-            # partial content, as expected
-            out = r.content
-        elif "Content-Length" in r.headers:
-            cl = int(r.headers["Content-Length"])
-            if cl <= end - start:
-                # data size OK
-                out = r.content
-            else:
-                raise ValueError(
-                    "Got more bytes (%i) than requested (%i)" % (cl, end - start)
-                )
-        else:
-            cl = 0
-            out = []
-            for chunk in r.iter_content(chunk_size=2 ** 20):
-                # data size unknown, let's see if it goes too big
-                if chunk:
-                    out.append(chunk)
-                    cl += len(chunk)
-                    if cl > end - start:
-                        raise ValueError(
-                            "Got more bytes so far (>%i) than requested (%i)"
-                            % (cl, end - start)
-                        )
+        r = await self.session.get(self.url, headers=headers, **kwargs)
+        async with r:
+            if r.status == 416:
+                # range request outside file
+                return b""
+            r.raise_for_status()
+            if r.status == 206:
+                # partial content, as expected
+                out = await r.read()
+            elif "Content-Length" in r.headers:
+                cl = int(r.headers["Content-Length"])
+                if cl <= end - start:
+                    # data size OK
+                    out = await r.read()
                 else:
-                    break
-            out = b"".join(out)
-        return out
+                    raise ValueError(
+                        "Got more bytes (%i) than requested (%i)" % (cl, end - start)
+                    )
+            else:
+                cl = 0
+                out = []
+                while True:
+                    chunk = await r.content.read(2 ** 20)
+                    # data size unknown, let's see if it goes too big
+                    if chunk:
+                        out.append(chunk)
+                        cl += len(chunk)
+                        if cl > end - start:
+                            raise ValueError(
+                                "Got more bytes so far (>%i) than requested (%i)"
+                                % (cl, end - start)
+                            )
+                    else:
+                        break
+                out = b"".join(out)
+            return out
+
+    _fetch_range = sync_wrapper(async_fetch_range)
 
     def close(self):
         pass
 
 
-def file_size(url, session=None, size_policy="head", **kwargs):
+async def get(session, url, **kwargs):
+    return await session.get(url, **kwargs)
+
+
+class HTTPStreamFile(AbstractBufferedFile):
+    def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
+        self.asynchronous = kwargs.pop("asynchronous", False)
+        self.url = url
+        self.loop = loop
+        self.session = session
+        if mode != "rb":
+            raise ValueError
+        self.details = {"name": url, "size": None}
+        super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
+        self.r = sync(self.loop, get, self.session, url, **kwargs)
+
+    def seek(self, *args, **kwargs):
+        raise ValueError("Cannot seek strteaming HTTP file")
+
+    async def _read(self, num=-1):
+        out = await self.r.content.read(num)
+        self.loc += len(out)
+        return out
+
+    read = sync_wrapper(_read)
+
+    async def _close(self):
+        self.r.close()
+
+    def close(self):
+        asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+
+
+async def get_range(session, url, start, end, file=None, **kwargs):
+    # explicit get a range when we know it must be safe
+    kwargs = kwargs.copy()
+    headers = kwargs.pop("headers", {}).copy()
+    headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+    r = await session.get(url, headers=headers, **kwargs)
+    r.raise_for_status()
+    async with r:
+        out = await r.read()
+    if file:
+        with open(file, "rb+") as f:
+            f.seek(start)
+            f.write(out)
+    else:
+        return out
+
+
+async def _file_size(url, session=None, size_policy="head", **kwargs):
     """Call HEAD on the server to get file size
 
     Default operation is to explicitly allow redirects and use encoding
@@ -357,15 +460,18 @@ def file_size(url, session=None, size_policy="head", **kwargs):
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
     head["Accept-Encoding"] = "identity"
-    session = session or requests.Session()
+    session = session or await get_client()
     if size_policy == "head":
-        r = session.head(url, allow_redirects=ar, **kwargs)
+        r = await session.head(url, allow_redirects=ar, **kwargs)
     elif size_policy == "get":
-        kwargs["stream"] = True
-        r = session.get(url, allow_redirects=ar, **kwargs)
+        r = await session.get(url, allow_redirects=ar, **kwargs)
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
-    if "Content-Length" in r.headers:
-        return int(r.headers["Content-Length"])
-    elif "Content-Range" in r.headers:
-        return int(r.headers["Content-Range"].split("/")[1])
+    async with r:
+        if "Content-Length" in r.headers:
+            return int(r.headers["Content-Length"])
+        elif "Content-Range" in r.headers:
+            return int(r.headers["Content-Range"].split("/")[1])
+
+
+file_size = sync_wrapper(_file_size)

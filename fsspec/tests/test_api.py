@@ -124,6 +124,16 @@ def test_move():
     assert isinstance(fs.ukey("/otherfile"), str)
 
 
+def test_pipe_cat():
+    fs = MemoryFileSystem()
+    fs.pipe("afile", b"contents")
+    assert fs.cat("afile") == b"contents"
+
+    data = {"bfile": b"more", "cfile": b"stuff"}
+    fs.pipe(data)
+    assert fs.cat(list(data)) == data
+
+
 def test_read_block_delimiter():
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:

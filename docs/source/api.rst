@@ -34,6 +34,7 @@ Base Classes
    fsspec.spec.Transaction
    fsspec.spec.AbstractBufferedFile
    fsspec.FSMap
+   fsspec.asyn.AsyncFileSystem
    fsspec.core.OpenFile
    fsspec.core.BaseCache
    fsspec.core.get_fs_token_paths
@@ -49,6 +50,8 @@ Base Classes
 
 .. autoclass:: fsspec.spec.AbstractBufferedFile
    :members:
+
+.. autoclass:: fsspec.asyn.AsyncFileSystem
 
 .. autoclass:: fsspec.FSMap
    :members:

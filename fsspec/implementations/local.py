@@ -50,9 +50,9 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return paths
 
-    def glob(self, path, **kargs):
+    def glob(self, path, **kwargs):
         path = self._strip_protocol(path)
-        return super().glob(path)
+        return super().glob(path, **kwargs)
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
@@ -79,26 +79,23 @@ class LocalFileSystem(AbstractFileSystem):
                 result["size"] = 0
         return result
 
-    def copy(self, path1, path2, **kwargs):
+    def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
-        shutil.copyfile(path1, path2)
-
-    def get(self, path1, path2, **kwargs):
-        if kwargs.get("recursive"):
-            return super(LocalFileSystem, self).get(path1, path2, **kwargs)
+        if self.isfile(path1):
+            shutil.copyfile(path1, path2)
         else:
-            return self.copy(path1, path2, **kwargs)
+            self.mkdirs(path2, exist_ok=True)
 
-    def put(self, path1, path2, **kwargs):
-        if kwargs.get("recursive"):
-            return super(LocalFileSystem, self).put(path1, path2, **kwargs)
-        else:
-            return self.copy(path1, path2, **kwargs)
+    def get_file(self, path1, path2, **kwargs):
+        return self.cp_file(path1, path2, **kwargs)
 
-    def mv(self, path1, path2, **kwargs):
+    def put_file(self, path1, path2, **kwargs):
+        return self.cp_file(path1, path2, **kwargs)
+
+    def mv_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
         os.rename(path1, path2)
@@ -158,6 +155,8 @@ class LocalFileSystem(AbstractFileSystem):
 
 def make_path_posix(path, sep=os.sep):
     """ Make path generic """
+    if isinstance(path, (list, set, tuple)):
+        return type(path)(make_path_posix(p) for p in path)
     if re.match("/[A-Za-z]:", path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"

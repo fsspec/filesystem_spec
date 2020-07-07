@@ -297,6 +297,10 @@ def test_globfind_dirs(tmpdir):
     fs.mkdir(tmpdir + "/dir")
     fs.touch(tmpdir + "/dir/afile")
     assert [tmpdir + "/dir"] == fs.glob(tmpdir + "/*")
+    assert fs.glob(tmpdir + "/*", detail=True)[tmpdir + "/dir"]["type"] == "directory"
+    assert (
+        fs.glob(tmpdir + "/dir/*", detail=True)[tmpdir + "/dir/afile"]["type"] == "file"
+    )
     assert [tmpdir + "/dir/afile"] == fs.find(tmpdir)
     assert [tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(tmpdir, withdirs=True)
 
@@ -516,3 +520,30 @@ def test_iterable(tmpdir):
     with of as f:
         out = list(f)
     assert b"".join(out) == data
+
+
+def test_mv_empty(tmpdir):
+    localfs = fsspec.filesystem("file")
+    src = os.path.join(str(tmpdir), "src")
+    dest = os.path.join(str(tmpdir), "dest")
+    assert localfs.isdir(src) is False
+    localfs.mkdir(src)
+    assert localfs.isdir(src)
+    localfs.move(src, dest, recursive=True)
+    assert localfs.isdir(src) is False
+    assert localfs.isdir(dest)
+    assert localfs.info(dest)
+
+
+def test_mv_recursive(tmpdir):
+    localfs = fsspec.filesystem("file")
+    src = os.path.join(str(tmpdir), "src")
+    dest = os.path.join(str(tmpdir), "dest")
+    assert localfs.isdir(src) is False
+    localfs.mkdir(src)
+    assert localfs.isdir(src)
+    localfs.touch(os.path.join(src, "afile"))
+    localfs.move(src, dest, recursive=True)
+    assert localfs.isdir(src) is False
+    assert localfs.isdir(dest)
+    assert localfs.info(os.path.join(dest, "afile"))
