@@ -93,6 +93,7 @@ Built-in Implementations
    fsspec.implementations.cached.SimpleCacheFileSystem
    fsspec.implementations.github.GithubFileSystem
    fsspec.implementations.git.GitFileSystem
+   fsspec.implementations.smb.SMBFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -137,6 +138,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.git.GitFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.smb.SMBFileSystem
    :members: __init__
 
 Other Known Implementations
