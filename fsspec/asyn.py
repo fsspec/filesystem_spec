@@ -156,6 +156,7 @@ class AsyncFileSystem(AbstractFileSystem):
     should inherit from this class instead of AbstractFileSystem. Docstrings are
     copied from the un-underscored method in AbstractFileSystem, if not given.
     """
+
     # note that methods do not have docstring here; they will be copied
     # for _* methods and inferred for overridden methods.
 
