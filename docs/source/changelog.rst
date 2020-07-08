@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Version 0.7.5
+-------------
+
+* async implemented for HTTP as prototype (read-only)
+* write for simplecache
+* added SMB (Samba, protocol >=2) implementation
+
 Version 0.7.4
 -------------
 

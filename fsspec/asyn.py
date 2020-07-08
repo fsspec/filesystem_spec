@@ -132,6 +132,8 @@ async_methods = [
     "_pipe_file",
 ]
 # these methods could be overridden, but have default sync versions which rely on _ls
+# the sync methods below all call expand_path, which in turn may call walk or glob
+# (if passed paths with glob characters, or for recursive=True, respectively)
 default_async_methods = [
     "_expand_path",
     "_info",
@@ -154,6 +156,8 @@ class AsyncFileSystem(AbstractFileSystem):
     should inherit from this class instead of AbstractFileSystem. Docstrings are
     copied from the un-underscored method in AbstractFileSystem, if not given.
     """
+    # note that methods do not have docstring here; they will be copied
+    # for _* methods and inferred for overridden methods.
 
     async_impl = True
 
@@ -250,11 +254,13 @@ def mirror_sync_methods(obj):
     - async_methods: the set that an implementation is expected to provide
     - default_async_methods: that can be derived from their sync version in
       AbstractFileSystem
-    - AsyncFileSystem: async-specific default implementations
+    - AsyncFileSystem: async-specific default coroutines
     """
     from fsspec import AbstractFileSystem
 
     for method in async_methods + default_async_methods + dir(AsyncFileSystem):
+        if not method.startswith("_"):
+            continue
         smethod = method[1:]
         if private.match(method):
             if inspect.iscoroutinefunction(getattr(obj, method, None)) and getattr(
