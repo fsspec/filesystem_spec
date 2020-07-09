@@ -133,7 +133,7 @@ def test_openfile_pickle_newline():
 
 
 def test_mismatch():
-    with pytest.raises(ValueError, match="Protocol mismatch"):
+    with pytest.raises(ValueError, match="protocol"):
         open_files(["s3://test/path.csv", "/other/path.csv"])
 
 

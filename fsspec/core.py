@@ -268,15 +268,30 @@ def _un_chain(path, kwargs):
         if "::" in path
         else [path]
     )
+    if len(bits) < 2:
+        return []
     # [[url, protocol, kwargs], ...]
     out = []
-    for bit in bits:
+    previous_bit = None
+    previous_protocol = None
+    for bit in reversed(bits):
         protocol = split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
         extra_kwargs = cls._get_kwargs_from_urls(bit)
         kws = kwargs.get(split_protocol(bit)[0] or "file", {})
         kw = dict(**extra_kwargs, **kws)
+        if (
+            protocol in {"blockcache", "filecache", "simplecache"}
+            and "target_protocol" not in kw
+        ):
+            bit = previous_bit.replace(previous_protocol, protocol)
         out.append((bit, protocol, kw))
+        previous_bit = bit
+        previous_protocol = protocol
+    out = list(reversed(out))
+    # We should only do the url rewrite if the cache is in the middle of the chain
+    if out[0][1] in {"blockcache", "filecache", "simplecache"}:
+        out[0] = (f"{out[0][1]}://", out[0][1], out[0][2])
     return out
 
 
