@@ -730,6 +730,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     out |= bit
                     if recursive:
                         out += self.expand_path(p)
+                    continue
                 elif recursive:
                     out |= set(self.find(p, withdirs=True))
                 out.add(p)
@@ -996,6 +997,14 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         cls._cache.clear()
 
+    def created(self, path):
+        """Return the created timestamp of a file as a datetime.datetime"""
+        raise NotImplementedError
+
+    def modified(self, path):
+        """Return the modified timestamp of a file as a datetime.datetime"""
+        raise NotImplementedError
+
     # ------------------------------------------------------------------------
     # Aliases
 
@@ -1042,14 +1051,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def download(self, rpath, lpath, recursive=False, **kwargs):
         """Alias of :ref:`FilesystemSpec.get`."""
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
-
-    def created(self, path):
-        """Return the created timestamp of a file as a datetime.datetime"""
-        raise NotImplementedError
-
-    def modified(self, path):
-        """Return the modified timestamp of a file as a datetime.datetime"""
-        raise NotImplementedError
 
 
 class AbstractBufferedFile(io.IOBase):
