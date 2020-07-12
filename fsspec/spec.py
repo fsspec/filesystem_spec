@@ -705,6 +705,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def tail(self, path, size=1024):
         """ Get the last ``size`` bytes from file """
         with self.open(path, "rb") as f:
+            print(f.size)
             f.seek(max(-size, -f.size), 2)
             return f.read()
 
