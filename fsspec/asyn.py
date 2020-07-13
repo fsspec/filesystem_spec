@@ -264,9 +264,10 @@ def mirror_sync_methods(obj):
             continue
         smethod = method[1:]
         if private.match(method):
-            if inspect.iscoroutinefunction(getattr(obj, method, None)) and getattr(
-                obj, smethod, False
-            ).__func__ is getattr(AbstractFileSystem, smethod):
+            isco = inspect.iscoroutinefunction(getattr(obj, method, None))
+            unsync = getattr(getattr(obj, smethod, False), "__func__", None)
+            is_default = unsync is getattr(AbstractFileSystem, smethod, "")
+            if isco and is_default:
                 mth = sync_wrapper(getattr(obj, method), obj=obj)
                 setattr(obj, smethod, mth)
                 if not mth.__doc__:
