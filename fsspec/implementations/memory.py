@@ -114,10 +114,12 @@ class MemoryFileSystem(AbstractFileSystem):
         if mode in ["rb", "ab", "rb+"]:
             if path in self.store:
                 f = self.store[path]
-                if mode == "rb":
-                    f.seek(0)
-                else:
+                if mode == "ab":
+                    # position at the end of file
                     f.seek(0, 2)
+                else:
+                    # position at the beginning of file
+                    f.seek(0)
                 return f
             else:
                 raise FileNotFoundError(path)
@@ -177,7 +179,9 @@ class MemoryFile(BytesIO):
         return self
 
     def close(self):
+        position = self.tell()
         self.size = self.seek(0, 2)
+        self.seek(position)
 
     def discard(self):
         pass

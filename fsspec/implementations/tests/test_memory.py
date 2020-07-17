@@ -58,3 +58,19 @@ def test_mv_recursive(m):
     m.mv("src", "dest", recursive=True)
     assert m.exists("dest/file.txt")
     assert not m.exists("src")
+
+
+def test_rewind(m):
+    # https://github.com/intake/filesystem_spec/issues/349
+    with m.open("src/file.txt", "w") as f:
+        f.write("content")
+    with m.open("src/file.txt") as f:
+        assert f.tell() == 0
+
+
+def test_no_rewind_append_mode(m):
+    # https://github.com/intake/filesystem_spec/issues/349
+    with m.open("src/file.txt", "w") as f:
+        f.write("content")
+    with m.open("src/file.txt", "a") as f:
+        assert f.tell() == 7
