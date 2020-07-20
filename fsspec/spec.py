@@ -1275,7 +1275,7 @@ class AbstractBufferedFile(io.IOBase):
             This is the last block, so should complete file, if
             self.autocommit is True.
         """
-        # may not yet have been initialized, may neet to call _initialize_upload
+        # may not yet have been initialized, may need to call _initialize_upload
 
     def _initiate_upload(self):
         """ Create remote file/upload """
