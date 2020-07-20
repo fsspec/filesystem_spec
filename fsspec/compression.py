@@ -73,10 +73,10 @@ register_compression("bz2", BZ2File, "bz2")
 register_compression("gzip", lambda f, **kwargs: GzipFile(fileobj=f, **kwargs), "gz")
 
 try:
-    import lzma
+    from lzma import LZMAFile
 
-    register_compression("lzma", lzma.LZMAFile, "xz")
-    register_compression("xz", lzma.LZMAFile, "xz", force=True)
+    register_compression("lzma", LZMAFile, "xz")
+    register_compression("xz", LZMAFile, "xz", force=True)
 except ImportError:
     pass
 
