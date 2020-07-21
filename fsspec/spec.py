@@ -733,6 +733,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     continue
                 elif recursive:
                     out |= set(self.find(p, withdirs=True))
+                # TODO: the following is maybe only necessary if NOT recursive
                 out.add(p)
         if not out:
             raise FileNotFoundError(path)

@@ -148,6 +148,18 @@ class OpenFile(object):
         _close(self.fobjects, self.mode)
 
 
+class OpenFiles(list):
+
+    def __enter__(self):
+        return [s.__enter__() for s in self]
+
+    def __exit__(self, *args):
+        [s.__exit__(*args) for s in self]
+
+    def __repr__(self):
+        return "List of %s open files" % len(self)
+
+
 def _close(fobjects, mode):
     for f in reversed(fobjects):
         if "r" not in mode and not f.closed:
@@ -234,7 +246,7 @@ def open_files(
     if "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
         [fs.makedirs(parent, exist_ok=True) for parent in parents]
-    return [
+    return OpenFiles([
         OpenFile(
             fs,
             path,
@@ -245,7 +257,7 @@ def open_files(
             newline=newline,
         )
         for path in paths
-    ]
+    ])
 
 
 def _un_chain(path, kwargs):
