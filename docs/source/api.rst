@@ -36,6 +36,7 @@ Base Classes
    fsspec.FSMap
    fsspec.asyn.AsyncFileSystem
    fsspec.core.OpenFile
+   fsspec.core.OpenFiles
    fsspec.core.BaseCache
    fsspec.core.get_fs_token_paths
    fsspec.dircache.DirCache
@@ -58,6 +59,8 @@ Base Classes
 
 .. autoclass:: fsspec.core.OpenFile
    :members:
+
+.. autoclass:: fsspec.core.OpenFiles
 
 .. autoclass:: fsspec.core.BaseCache
    :members:

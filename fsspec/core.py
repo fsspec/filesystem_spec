@@ -149,6 +149,12 @@ class OpenFile(object):
 
 
 class OpenFiles(list):
+    """List of OpenFile instances
+
+    Can be used in a single context, which opens and closes all of the
+    contained files.
+    """
+
     def __enter__(self):
         return [s.__enter__() for s in self]
 
@@ -156,7 +162,7 @@ class OpenFiles(list):
         [s.__exit__(*args) for s in self]
 
     def __repr__(self):
-        return "<List of %s open files>" % len(self)
+        return "<List of %s OpenFile instances>" % len(self)
 
 
 def _close(fobjects, mode):
@@ -231,7 +237,8 @@ def open_files(
 
     Returns
     -------
-    List of ``OpenFile`` objects.
+    An ``OpenFiles`` instance, which is a ist of ``OpenFile`` objects that can
+    be used as a single context
     """
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
