@@ -148,6 +148,23 @@ class OpenFile(object):
         _close(self.fobjects, self.mode)
 
 
+class OpenFiles(list):
+    """List of OpenFile instances
+
+    Can be used in a single context, which opens and closes all of the
+    contained files.
+    """
+
+    def __enter__(self):
+        return [s.__enter__() for s in self]
+
+    def __exit__(self, *args):
+        [s.__exit__(*args) for s in self]
+
+    def __repr__(self):
+        return "<List of %s OpenFile instances>" % len(self)
+
+
 def _close(fobjects, mode):
     for f in reversed(fobjects):
         if "r" not in mode and not f.closed:
@@ -220,7 +237,8 @@ def open_files(
 
     Returns
     -------
-    List of ``OpenFile`` objects.
+    An ``OpenFiles`` instance, which is a ist of ``OpenFile`` objects that can
+    be used as a single context
     """
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
@@ -234,18 +252,20 @@ def open_files(
     if "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
         [fs.makedirs(parent, exist_ok=True) for parent in parents]
-    return [
-        OpenFile(
-            fs,
-            path,
-            mode=mode,
-            compression=compression,
-            encoding=encoding,
-            errors=errors,
-            newline=newline,
-        )
-        for path in paths
-    ]
+    return OpenFiles(
+        [
+            OpenFile(
+                fs,
+                path,
+                mode=mode,
+                compression=compression,
+                encoding=encoding,
+                errors=errors,
+                newline=newline,
+            )
+            for path in paths
+        ]
+    )
 
 
 def _un_chain(path, kwargs):

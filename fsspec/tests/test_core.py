@@ -3,7 +3,14 @@ import pickle
 import pytest
 import tempfile
 
-from fsspec.core import _expand_paths, OpenFile, open_local, get_compression, open_files
+from fsspec.core import (
+    _expand_paths,
+    OpenFile,
+    open_local,
+    get_compression,
+    open_files,
+    OpenFiles,
+)
 import fsspec
 
 
@@ -150,3 +157,17 @@ def test_url_kwargs_chain(ftp_writable):
         "rb",
     ) as f:
         assert f.read() == data
+
+
+def test_multi_context(tmpdir):
+    fns = [os.path.join(tmpdir, fn) for fn in ["a", "b"]]
+    files = open_files(fns, "wb")
+    assert isinstance(files, OpenFiles)
+    assert isinstance(files[0], OpenFile)
+    assert len(files) == 2
+    with files as of:
+        assert len(of) == 2
+        assert not of[0].closed
+        assert of[0].name.endswith("a")
+    assert of[0].closed
+    assert repr(files) == "<List of 2 OpenFile instances>"
