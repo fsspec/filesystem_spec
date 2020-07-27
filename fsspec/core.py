@@ -417,6 +417,11 @@ def open_local(url, mode="rb", **storage_options):
     if "r" not in mode:
         raise ValueError("Can only ensure local files when reading")
     of = open_files(url, mode=mode, **storage_options)
+    if not all(getattr(f.fs, "local_file", False) for f in of):
+        raise ValueError(
+            "open_local can only be used on a filesystem which"
+            " has attribute local_file=True"
+        )
     paths = [f.open().name for f in of]
     if isinstance(url, str) and "*" not in url:
         return paths[0]
