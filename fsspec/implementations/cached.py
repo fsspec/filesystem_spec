@@ -113,6 +113,9 @@ class CachingFileSystem(AbstractFileSystem):
         self.load_cache()
         self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
 
+    def _mkcache(self):
+        os.makedirs(self.storage[-1], exist_ok=True)
+
     def load_cache(self):
         """Read set of stored blocks from file"""
         cached_files = []
@@ -127,8 +130,8 @@ class CachingFileSystem(AbstractFileSystem):
                             c["blocks"] = set(c["blocks"])
                     cached_files.append(loaded_cached_files)
             else:
-                os.makedirs(storage, exist_ok=True)
                 cached_files.append({})
+        self._mkcache()
         self.cached_files = cached_files or [{}]
         self.last_cache = time.time()
 
@@ -161,11 +164,12 @@ class CachingFileSystem(AbstractFileSystem):
         fn2 = tempfile.mktemp()
         with open(fn2, "wb") as f:
             pickle.dump(cache, f)
-        os.makedirs(os.path.dirname(fn), exist_ok=True)
+        self._mkcache()
         move(fn2, fn)
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
+        self._mkcache()
         if not self.cache_check:
             # explicitly told not to bother checking
             return
@@ -177,6 +181,7 @@ class CachingFileSystem(AbstractFileSystem):
     def _check_file(self, path):
         """Is path in cache and still valid"""
         path = self._strip_protocol(path)
+
         self._check_cache()
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
@@ -294,6 +299,7 @@ class CachingFileSystem(AbstractFileSystem):
             logger.debug("Creating local sparse file for %s" % path)
 
         # call target filesystems open
+        self._mkcache()
         f = self.fs._open(
             path,
             mode=mode,
@@ -357,6 +363,7 @@ class CachingFileSystem(AbstractFileSystem):
             "_check_cache",
             "clear_cache",
             "pop_from_cache",
+            "_mkcache",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -408,6 +415,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     """
 
     protocol = "filecache"
+    local_file = True
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
@@ -454,6 +462,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 else self.compression
             )
             f = compr[comp](f, mode="rb")
+        self._mkcache()
         with open(fn, "wb") as f2:
             if isinstance(f, AbstractBufferedFile):
                 # want no type of caching if just downloading whole thing
@@ -488,6 +497,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
     """
 
     protocol = "simplecache"
+    local_file = True
 
     def __init__(self, **kwargs):
         kw = kwargs.copy()
@@ -500,6 +510,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
         self.cached_files = [{}]
 
     def _check_file(self, path):
+        self._check_cache()
         sha = hash_name(path, self.same_names)
         for storage in self.storage:
             fn = os.path.join(storage, sha)
@@ -531,6 +542,7 @@ class SimpleCacheFileSystem(CachingFileSystem):
         logger.debug("Copying %s to local cache" % path)
         kwargs["mode"] = mode
 
+        self._mkcache()
         with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
             if isinstance(f, AbstractBufferedFile):
                 # want no type of caching if just downloading whole thing

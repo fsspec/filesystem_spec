@@ -171,3 +171,8 @@ def test_multi_context(tmpdir):
         assert of[0].name.endswith("a")
     assert of[0].closed
     assert repr(files) == "<List of 2 OpenFile instances>"
+
+
+def test_not_local():
+    with pytest.raises(ValueError, match="attribute local_file=True"):
+        open_local("memory://afile")

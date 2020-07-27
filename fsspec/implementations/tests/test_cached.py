@@ -502,3 +502,24 @@ def test_with_compression(impl, compression):
         assert f.read() == data
         assert "data" in os.listdir(cachedir)
         assert open(os.path.join(cachedir, "data"), "rb").read() == data
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_again(protocol):
+    d1 = tempfile.mkdtemp()
+    fn = os.path.join(d1, "afile")
+    with open(fn, "wb") as f:
+        f.write(b"hello")
+    d2 = tempfile.mkdtemp()
+    lurl = fsspec.open_local(f"{protocol}::{fn}", **{protocol: {"cache_storage": d2}})
+    assert os.path.exists(lurl)
+    assert d2 in lurl
+    assert open(lurl, "rb").read() == b"hello"
+
+    # remove cache dir
+    shutil.rmtree(d2)
+    assert not os.path.exists(lurl)
+
+    # gets recreated
+    lurl = fsspec.open_local(f"{protocol}::{fn}", **{protocol: {"cache_storage": d2}})
+    assert open(lurl, "rb").read() == b"hello"
