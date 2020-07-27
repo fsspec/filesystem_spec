@@ -130,9 +130,8 @@ class CachingFileSystem(AbstractFileSystem):
                             c["blocks"] = set(c["blocks"])
                     cached_files.append(loaded_cached_files)
             else:
-                if storage == self.storage[-1]:
-                    self._mkcache
                 cached_files.append({})
+        self._mkcache()
         self.cached_files = cached_files or [{}]
         self.last_cache = time.time()
 
@@ -170,6 +169,7 @@ class CachingFileSystem(AbstractFileSystem):
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
+        self._mkcache()
         if not self.cache_check:
             # explicitly told not to bother checking
             return
@@ -181,6 +181,7 @@ class CachingFileSystem(AbstractFileSystem):
     def _check_file(self, path):
         """Is path in cache and still valid"""
         path = self._strip_protocol(path)
+
         self._check_cache()
         if not path.startswith(self.target_protocol):
             store_path = self.target_protocol + "://" + path
