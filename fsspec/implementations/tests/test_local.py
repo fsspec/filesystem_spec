@@ -8,7 +8,6 @@ import sys
 from contextlib import contextmanager
 import posixpath
 import tempfile
-import getpass
 
 import pytest
 import fsspec
@@ -508,7 +507,7 @@ def test_strip_protocol_expanduser():
     stripped = LocalFileSystem._strip_protocol(path)
     assert path != stripped
     assert "file://" not in stripped
-    assert getpass.getuser() in stripped
+    assert stripped.startswith(os.path.expanduser("~"))
 
 
 def test_iterable(tmpdir):
