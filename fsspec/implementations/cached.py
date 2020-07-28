@@ -364,6 +364,7 @@ class CachingFileSystem(AbstractFileSystem):
             "clear_cache",
             "pop_from_cache",
             "_mkcache",
+            "local_file",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass

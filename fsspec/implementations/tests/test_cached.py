@@ -506,9 +506,8 @@ def test_with_compression(impl, compression):
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_again(protocol):
-    d1 = tempfile.mkdtemp()
-    fn = os.path.join(d1, "afile")
-    with open(fn, "wb") as f:
+    fn = "memory://afile"
+    with fsspec.open(fn, "wb") as f:
         f.write(b"hello")
     d2 = tempfile.mkdtemp()
     lurl = fsspec.open_local(f"{protocol}::{fn}", **{protocol: {"cache_storage": d2}})

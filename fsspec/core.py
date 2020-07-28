@@ -417,7 +417,7 @@ def open_local(url, mode="rb", **storage_options):
     if "r" not in mode:
         raise ValueError("Can only ensure local files when reading")
     of = open_files(url, mode=mode, **storage_options)
-    if not all(getattr(f.fs, "local_file", False) for f in of):
+    if not getattr(of[0].fs, "local_file", False):
         raise ValueError(
             "open_local can only be used on a filesystem which"
             " has attribute local_file=True"
