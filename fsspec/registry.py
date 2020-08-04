@@ -97,11 +97,11 @@ known_implementations = {
     },
     "http": {
         "class": "fsspec.implementations.http.HTTPFileSystem",
-        "err": 'HTTPFileSystem requires "requests" to be installed',
+        "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
     "https": {
         "class": "fsspec.implementations.http.HTTPFileSystem",
-        "err": 'HTTPFileSystem requires "requests" to be installed',
+        "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
     "zip": {"class": "fsspec.implementations.zip.ZipFileSystem"},
     "gcs": {
