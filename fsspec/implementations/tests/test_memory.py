@@ -74,3 +74,12 @@ def test_no_rewind_append_mode(m):
         f.write("content")
     with m.open("src/file.txt", "a") as f:
         assert f.tell() == 7
+
+
+def test_moves(m):
+    m.touch("source.txt")
+    m.mv("source.txt", "target.txt")
+
+    m.touch("source2.txt")
+    m.mv("source2.txt", "target2.txt", recursive=True)
+    assert m.find("") == ["target.txt", "target2.txt"]
