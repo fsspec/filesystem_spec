@@ -44,8 +44,12 @@ class MemoryFileSystem(AbstractFileSystem):
                         "type": "file",
                     }
                 )
-            elif path and all(
-                (a == b) for a, b in zip(path.split("/"), p.strip("/").split("/"))
+            elif (
+                path
+                and len(path) > len(p.strip("/"))
+                and all(
+                    (a == b) for a, b in zip(path.split("/"), p.strip("/").split("/"))
+                )
             ):
                 # implicit directory
                 ppath = "/".join(p.split("/")[: len(path.split("/")) + 1])
