@@ -46,7 +46,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 )
             elif (
                 path
-                and len(path) > len(p.strip("/"))
+                and len(path) < len(p.strip("/"))
                 and all(
                     (a == b) for a, b in zip(path.split("/"), p.strip("/").split("/"))
                 )
