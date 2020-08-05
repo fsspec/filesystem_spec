@@ -32,5 +32,6 @@ setup(
     packages=["fsspec", "fsspec.implementations"],
     python_requires=">3.6",
     install_requires=open("requirements.txt").read().strip().split("\n"),
+    extras_require={"http": ["requests", "aiohttp"]},
     zip_safe=False,
 )
