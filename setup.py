@@ -44,6 +44,7 @@ setup(
         "hdfs": ["pyarrow"],
         "http": ["requests", "aiohttp"],
         "sftp": ["paramiko"],
+        "s3": ["s3fs"],
         "smb": ["smbprotocol"],
         "ssh": ["paramiko"],
     },
