@@ -9,6 +9,7 @@ language: generic
 env:
   - TOXENV=py36
   - TOXENV=py37
+  - TOXENV=py38
   - TOXENV=coverage
   - TOXENV=lint
   - TOXENV=s3fs
