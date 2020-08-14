@@ -1053,6 +1053,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Alias of :ref:`FilesystemSpec.get`."""
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
+    def sign(self, path, expiration=100):
+        raise NotImplementedError("Sign is not implemented for this filesystem")
+
 
 class AbstractBufferedFile(io.IOBase):
     """Convenient class to derive from to provide buffering
