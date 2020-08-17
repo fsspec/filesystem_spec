@@ -141,6 +141,8 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         async with self.session.get(url, **kw) as r:
+            if r.status == 404:
+                raise FileNotFoundError(url)
             r.raise_for_status()
             out = await r.read()
         return out
@@ -149,6 +151,8 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         async with self.session.get(rpath, **self.kwargs) as r:
+            if r.status == 404:
+                raise FileNotFoundError(rpath)
             r.raise_for_status()
             with open(lpath, "wb") as fd:
                 chunk = True
@@ -247,6 +251,10 @@ class HTTPFileSystem(AsyncFileSystem):
             if size is False:
                 raise FileNotFoundError(url)
         return {"name": url, "size": size or None, "type": "file"}
+
+    def isdir(self, path):
+        # override, since all URLs are (also) files
+        return bool(self.ls(path))
 
 
 class HTTPFile(AbstractBufferedFile):
