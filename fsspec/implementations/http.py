@@ -252,6 +252,7 @@ class HTTPFileSystem(AsyncFileSystem):
         # override, since all URLs are (also) files
         return bool(self.ls(path))
 
+
 class HTTPFile(AbstractBufferedFile):
     """
     A file-like object pointing to a remove HTTP(S) resource
