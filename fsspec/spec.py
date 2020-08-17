@@ -1054,6 +1054,24 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
     def sign(self, path, expiration=100, **kwargs):
+        """Return the signed URL representing this FileSystem
+
+        Parameters
+        ----------
+        path : str
+             The path on the filesystem
+        expiration : int or float
+            Number of seconds to enable the URL for
+
+        Returns
+        -------
+        URL : str
+            The signed URL
+
+        Raises
+        ------
+        NotImplementedError : if method is not implemented for a fileystem
+        """
         raise NotImplementedError("Sign is not implemented for this filesystem")
 
 
