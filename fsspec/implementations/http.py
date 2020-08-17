@@ -248,6 +248,9 @@ class HTTPFileSystem(AsyncFileSystem):
                 raise FileNotFoundError(url)
         return {"name": url, "size": size or None, "type": "file"}
 
+    def isdir(self, path):
+        # override, since all URLs are (also) files
+        return bool(self.ls(path))
 
 class HTTPFile(AbstractBufferedFile):
     """

@@ -94,6 +94,12 @@ def test_list(server):
     assert out == [server + "/index/realfile"]
 
 
+def test_isdir(server):
+    h = fsspec.filesystem("http")
+    assert h.isdir(server + "/index/")
+    assert not h.isdir(server + "/index/realfile")
+
+
 def test_policy_arg(server):
     h = fsspec.filesystem("http", size_policy="get")
     out = h.glob(server + "/index/*")
