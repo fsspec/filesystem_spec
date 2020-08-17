@@ -109,6 +109,8 @@ def test_policy_arg(server):
 def test_exists(server):
     h = fsspec.filesystem("http")
     assert not h.exists(server + "/notafile")
+    with pytest.raises(FileNotFoundError):
+        h.cat(server + "/notafile")
 
 
 def test_read(server):
