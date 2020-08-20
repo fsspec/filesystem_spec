@@ -143,7 +143,7 @@ def run(fs, path, mount_point, foreground=True, threads=False):
 
     """
     func = lambda: FUSE(
-        FUSEr(fs, path), mount_point, nothreads=not threads, foreground=True
+        FUSEr(fs, path), mount_point, nothreads=not threads, foreground=foreground
     )
     if foreground is False:
         th = threading.Thread(target=func)
