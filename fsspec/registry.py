@@ -138,6 +138,10 @@ known_implementations = {
         "class": "adlfs.AzureBlobFileSystem",
         "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
     },
+    "az": {
+        "class": "adlfs.AzureBlobFileSystem",
+        "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
+    },
     "cached": {"class": "fsspec.implementations.cached.CachingFileSystem"},
     "blockcache": {"class": "fsspec.implementations.cached.CachingFileSystem"},
     "filecache": {"class": "fsspec.implementations.cached.WholeFileCacheFileSystem"},
