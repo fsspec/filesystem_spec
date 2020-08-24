@@ -1,4 +1,4 @@
-from hashlib import md5
+from hashlib import sha256
 import math
 import os
 import pathlib
@@ -275,7 +275,7 @@ def tokenize(*args, **kwargs):
     """
     if kwargs:
         args += (kwargs,)
-    return md5(str(args).encode()).hexdigest()
+    return sha256(str(args).encode()).hexdigest()
 
 
 def stringify_path(filepath):
