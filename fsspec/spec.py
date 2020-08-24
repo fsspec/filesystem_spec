@@ -2,7 +2,7 @@ import io
 import logging
 import os
 import warnings
-from hashlib import md5
+from hashlib import sha256
 from glob import has_magic
 
 from .dircache import DirCache
@@ -866,7 +866,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     def ukey(self, path):
         """Hash of file properties, to tell if it has changed"""
-        return md5(str(self.info(path)).encode()).hexdigest()
+        return sha256(str(self.info(path)).encode()).hexdigest()
 
     def read_block(self, fn, offset, length, delimiter=None):
         """ Read a block of bytes from
