@@ -273,6 +273,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         The specific keys, or perhaps a FileInfo class, or similar, is TBD,
         but must be consistent across implementations.
         Must include:
+
         - full path to the entry (without protocol)
         - size of the entry, in bytes. If the value cannot be determined, will
           be ``None``.
