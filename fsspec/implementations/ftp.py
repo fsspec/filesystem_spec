@@ -126,6 +126,8 @@ class FTPFileSystem(AbstractFileSystem):
         try:
             out = [f for f in files if f["name"] == path][0]
         except IndexError:
+            if path == "/":
+                return {"name": "/", "size": 0, "type": "dir"}
             raise FileNotFoundError(path)
         return out
 

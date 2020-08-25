@@ -18,3 +18,4 @@ dependencies:
   - python-libarchive-c
   - numpy
   - nomkl
+  - click
