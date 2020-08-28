@@ -13,7 +13,7 @@ library designed for task-graph creation and their scheduling.
 .. _hdfs3: https://hdfs3.readthedocs.io/en/latest/
 .. _adlfs: https://docs.microsoft.com/en-us/azure/data-lake-store/
 
-Here follows a brief description of some features of note of ``fsspec`` that promide to make
+Here follows a brief description of some features of note of ``fsspec`` that provides to make
 it an interesting project beyond some other file-system abstractions.
 
 Serialisability
@@ -225,7 +225,7 @@ for the dask case something like
 
 As a shorthand, particularly useful where you have multiple hops, is to "chain" the URLs with
 the special separator ``"::"``. The arguments to be passed on to each of the implementations referenced
-are keywed by the protocol names included in the URL. Here is the equivalent to the line above:
+are keyed by the protocol names included in the URL. Here is the equivalent to the line above:
 
 .. code-block:: python
 
