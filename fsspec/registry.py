@@ -112,6 +112,10 @@ known_implementations = {
         "class": "gcsfs.GCSFileSystem",
         "err": "Please install gcsfs to access Google Storage",
     },
+    "gdrive": {
+        "class": "gdrivefs.GoogleDriveFileSystem",
+        "err": "Please install gcloudfs for access to Google Drive"
+    },
     "sftp": {
         "class": "fsspec.implementations.sftp.SFTPFileSystem",
         "err": 'SFTPFileSystem requires "paramiko" to be installed',
