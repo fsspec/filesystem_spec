@@ -114,7 +114,7 @@ known_implementations = {
     },
     "gdrive": {
         "class": "gdrivefs.GoogleDriveFileSystem",
-        "err": "Please install gcloudfs for access to Google Drive"
+        "err": "Please install gdrivefs for access to Google Drive",
     },
     "sftp": {
         "class": "fsspec.implementations.sftp.SFTPFileSystem",

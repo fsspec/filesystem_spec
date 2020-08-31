@@ -611,6 +611,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
             If using a single path, these are the bytes to put there. Ignored if
             ``path`` is a dict
         """
+        path = (
+            self._strip_protocol(path)
+            if isinstance(path, str)
+            else [self._strip_protocol(p) for p in path]
+        )
         if isinstance(path, str):
             self.pipe_file(path, value, **kwargs)
         elif isinstance(path, dict):
@@ -626,7 +631,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         or the path has been otherwise expanded
         """
         paths = self.expand_path(path, recursive=recursive)
-        if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
+        if (
+            len(paths) > 1
+            or isinstance(path, list)
+            or paths[0] != self._strip_protocol(path)
+        ):
             return {path: self.cat_file(path, **kwargs) for path in paths}
         else:
             return self.cat_file(paths[0])

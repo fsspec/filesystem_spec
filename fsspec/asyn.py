@@ -202,7 +202,11 @@ class AsyncFileSystem(AbstractFileSystem):
     def cat(self, path, recursive=False, **kwargs):
         paths = self.expand_path(path, recursive=recursive)
         out = sync(self.loop, self._cat, paths, **kwargs)
-        if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
+        if (
+            len(paths) > 1
+            or isinstance(path, list)
+            or paths[0] != self._strip_protocol(path)
+        ):
             return {k: v for k, v in zip(paths, out)}
         else:
             return out[0]
