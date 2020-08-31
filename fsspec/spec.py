@@ -611,16 +611,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
             If using a single path, these are the bytes to put there. Ignored if
             ``path`` is a dict
         """
-        path = (
-            self._strip_protocol(path)
-            if isinstance(path, str)
-            else [self._strip_protocol(p) for p in path]
-        )
         if isinstance(path, str):
-            self.pipe_file(path, value, **kwargs)
+            self.pipe_file(self._strip_protocol(path), value, **kwargs)
         elif isinstance(path, dict):
             for k, v in path.items():
-                self.pipe_file(k, v, **kwargs)
+                self.pipe_file(self._strip_protocol(k), v, **kwargs)
         else:
             raise ValueError("path must be str or dict")
 
