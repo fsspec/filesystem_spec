@@ -613,10 +613,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
             ``path`` is a dict
         """
         if isinstance(path, str):
-            self.pipe_file(path, value, **kwargs)
+            self.pipe_file(self._strip_protocol(path), value, **kwargs)
         elif isinstance(path, dict):
             for k, v in path.items():
-                self.pipe_file(k, v, **kwargs)
+                self.pipe_file(self._strip_protocol(k), v, **kwargs)
         else:
             raise ValueError("path must be str or dict")
 
@@ -627,7 +627,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         or the path has been otherwise expanded
         """
         paths = self.expand_path(path, recursive=recursive)
-        if len(paths) > 1 or isinstance(path, list) or paths[0] != path:
+        if (
+            len(paths) > 1
+            or isinstance(path, list)
+            or paths[0] != self._strip_protocol(path)
+        ):
             return {path: self.cat_file(path, **kwargs) for path in paths}
         else:
             return self.cat_file(paths[0])
@@ -725,6 +729,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             out = self.expand_path([path], recursive, maxdepth)
         else:
             out = set()
+            path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if has_magic(p):
                     bit = set(self.glob(p))
