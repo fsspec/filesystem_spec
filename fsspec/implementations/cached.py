@@ -438,15 +438,17 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             self.fs.get(downpath, downfn)
 
             # update metadata - only happens when downloads are successful
-            newdetail = [{
-                "fn": hash_name(path, self.same_names),
-                "blocks": True,
-                "time": time.time(),
-                "uid": self.fs.ukey(path),
-            } for path in downpath]
+            newdetail = [
+                {
+                    "fn": hash_name(path, self.same_names),
+                    "blocks": True,
+                    "time": time.time(),
+                    "uid": self.fs.ukey(path),
+                }
+                for path in downpath
+            ]
             self.cached_files[-1].update(
-                {store_path: detail
-                 for store_path, detail in zip(downstore, newdetail)}
+                {store_path: detail for store_path, detail in zip(downstore, newdetail)}
             )
             self.save_cache()
 
