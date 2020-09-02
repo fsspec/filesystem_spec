@@ -529,16 +529,6 @@ def test_multi_cache(protocol):
     with fsspec.open_files("memory://file*", "wb", num=2) as files:
         for f in files:
             f.write(b"hello")
-    d2 = tempfile.mkdtemp()
-    lurl = fsspec.open_files(
-        f"{protocol}::memory://file*",
-        mode="rb",
-        **{protocol: {"cache_storage": d2, "same_names": True}}
-    )
-    with lurl as files:
-        for f in files:
-            assert os.path.basename(f.name) in ["file0", "file1"]
-            assert f.read() == b"hello"
 
     d2 = tempfile.mkdtemp()
     lurl = fsspec.open_local(
@@ -549,3 +539,20 @@ def test_multi_cache(protocol):
     assert all(d2 in u for u in lurl)
     assert all(os.path.basename(f) in ["file0", "file1"] for f in lurl)
     assert all(open(u, "rb").read() == b"hello" for u in lurl)
+
+    d2 = tempfile.mkdtemp()
+    lurl = fsspec.open_files(
+        f"{protocol}::memory://file*",
+        mode="rb",
+        **{protocol: {"cache_storage": d2, "same_names": True}}
+    )
+    with lurl as files:
+        for f in files:
+            assert os.path.basename(f.name) in ["file0", "file1"]
+            assert f.read() == b"hello"
+    fs = fsspec.filesystem("memory")
+    fs.store.clear()
+    with lurl as files:
+        for f in files:
+            assert os.path.basename(f.name) in ["file0", "file1"]
+            assert f.read() == b"hello"

@@ -427,12 +427,28 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         paths, store_paths = zip(*[self._paths_from_path(of.path) for of in open_files])
         details = [self._check_file(sp) for sp in store_paths]
         downpath = [p for p, d in zip(paths, details) if not d]
+        downstore = [p for p, d in zip(store_paths, details) if not d]
         downfn = [
             os.path.join(self.storage[-1], hash_name(p, self.same_names))
             for p, d in zip(paths, details)
             if not d
         ]
-        self.fs.get(downpath, downfn)
+        if downpath:
+            # skip if all files are already cached and up to date
+            self.fs.get(downpath, downfn)
+
+            # update metadata - only happens when downloads are successful
+            newdetail = [{
+                "fn": hash_name(path, self.same_names),
+                "blocks": True,
+                "time": time.time(),
+                "uid": self.fs.ukey(path),
+            } for path in downpath]
+            self.cached_files[-1].update(
+                {store_path: detail
+                 for store_path, detail in zip(downstore, newdetail)}
+            )
+            self.save_cache()
         return [
             open(fn0[0] if fn0 else fn1, mode=open_files.mode)
             for fn0, fn1 in zip(details, downfn)
@@ -467,10 +483,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         else:
             hash = hash_name(path, self.same_names)
             fn = os.path.join(self.storage[-1], hash)
-            blocks = True
             detail = {
                 "fn": hash,
-                "blocks": blocks,
+                "blocks": True,
                 "time": time.time(),
                 "uid": self.fs.ukey(path),
             }
