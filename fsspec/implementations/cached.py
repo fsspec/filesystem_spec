@@ -428,11 +428,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         details = [self._check_file(sp) for sp in store_paths]
         downpath = [p for p, d in zip(paths, details) if not d]
         downstore = [p for p, d in zip(store_paths, details) if not d]
-        downfn = [
+        downfn0 = [
             os.path.join(self.storage[-1], hash_name(p, self.same_names))
             for p, d in zip(paths, details)
-            if not d
-        ]
+        ]  # keep these path names for opening later
+        downfn = [fn for fn, d in zip(downfn0, details) if not d]
         if downpath:
             # skip if all files are already cached and up to date
             self.fs.get(downpath, downfn)
@@ -449,9 +449,14 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                  for store_path, detail in zip(downstore, newdetail)}
             )
             self.save_cache()
+
+        def firstpart(fn):
+            # helper to adapt both whole-file and simple-cache
+            return fn[1] if isinstance(fn, tuple) else fn
+
         return [
-            open(fn0[0] if fn0 else fn1, mode=open_files.mode)
-            for fn0, fn1 in zip(details, downfn)
+            open(firstpart(fn0) if fn0 else fn1, mode=open_files.mode)
+            for fn0, fn1 in zip(details, downfn0)
         ]
 
     def _paths_from_path(self, path):
