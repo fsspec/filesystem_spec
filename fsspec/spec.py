@@ -33,9 +33,6 @@ class _Cached(type):
     be made for a filesystem instance to be garbage collected.
     """
 
-    cachable = True
-    _extra_tokenize_attributes = ()
-
     def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Note: we intentionally create a reference here, to avoid garbage
@@ -68,6 +65,7 @@ class _Cached(type):
 
 
 try:  # optionally derive from pyarrow's FileSystem, if available
+    # TODO: it should be possible to disable this
     import pyarrow as pa
 
     up = pa.filesystem.DaskFileSystem
@@ -660,7 +658,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import make_path_posix
 
-        rpath = self._strip_protocol(rpath)
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
@@ -738,9 +735,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
                         out += self.expand_path(p)
                     continue
                 elif recursive:
-                    out |= set(self.find(p, withdirs=True))
-                # TODO: the following is maybe only necessary if NOT recursive
-                out.add(p)
+                    rec = set(self.find(p, withdirs=True))
+                    out |= rec
+                if p not in out and self.exists(p):
+                    # should only check once, for the root
+                    out.add(p)
         if not out:
             raise FileNotFoundError(path)
         return list(sorted(out))

@@ -146,7 +146,7 @@ def test_clear():
     assert fs._check_file(f1)
 
     fs.clear_cache()
-    assert not fs._check_file(f1)[0]
+    assert not fs._check_file(f1)
     assert len(os.listdir(cache1)) < 2
 
 
@@ -179,7 +179,7 @@ def test_pop():
         fs.pop_from_cache(f1)
     fs.pop_from_cache(f2)
     assert len(os.listdir(cache2)) == 1
-    assert fs._check_file(f2)[0] is False
+    assert not fs._check_file(f2)
     assert fs._check_file(f1)
 
 
@@ -522,3 +522,30 @@ def test_again(protocol):
     # gets recreated
     lurl = fsspec.open_local(f"{protocol}::{fn}", **{protocol: {"cache_storage": d2}})
     assert open(lurl, "rb").read() == b"hello"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_multi_cache(protocol):
+    with fsspec.open_files("memory://file*", "wb", num=2) as files:
+        for f in files:
+            f.write(b"hello")
+    d2 = tempfile.mkdtemp()
+    lurl = fsspec.open_files(
+        f"{protocol}::memory://file*",
+        mode="rb",
+        **{protocol: {"cache_storage": d2, "same_names": True}}
+    )
+    with lurl as files:
+        for f in files:
+            assert os.path.basename(f.name) in ["file0", "file1"]
+            assert f.read() == b"hello"
+
+    d2 = tempfile.mkdtemp()
+    lurl = fsspec.open_local(
+        f"{protocol}::memory://file*",
+        mode="rb",
+        **{protocol: {"cache_storage": d2, "same_names": True}}
+    )
+    assert all(d2 in u for u in lurl)
+    assert all(os.path.basename(f) in ["file0", "file1"] for f in lurl)
+    assert all(open(u, "rb").read() == b"hello" for u in lurl)

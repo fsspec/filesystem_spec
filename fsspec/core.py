@@ -1,8 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 import io
-import os
+from glob import has_magic
 import logging
+import os
 import re
 from .compression import compr
 from .utils import (
@@ -152,10 +153,31 @@ class OpenFiles(list):
     """List of OpenFile instances
 
     Can be used in a single context, which opens and closes all of the
-    contained files.
+    contained files. Normal list access to get the elements works as
+    normal.
+
+    A special case is made for caching filesystems - the files will
+    be down/uploaded together at the start or end of the context, and
+    this may happen concurrently, if the target filesystem supports it.
     """
 
+    def __init__(self, *args, mode="rb", fs=None):
+        self.mode = mode
+        self.fs = fs
+        super().__init__(*args)
+
     def __enter__(self):
+        if self.fs is None:
+            raise ValueError("Context has already been used")
+
+        fs = self.fs
+        while True:
+            if hasattr(fs, "open_many"):
+                return fs.open_many(self)
+            if hasattr(fs, "fs") and fs.fs is not None:
+                fs = fs.fs
+            else:
+                break
         return [s.__enter__() for s in self]
 
     def __exit__(self, *args):
@@ -264,7 +286,9 @@ def open_files(
                 newline=newline,
             )
             for path in paths
-        ]
+        ],
+        mode=mode,
+        fs=fs,
     )
 
 
@@ -422,8 +446,9 @@ def open_local(url, mode="rb", **storage_options):
             "open_local can only be used on a filesystem which"
             " has attribute local_file=True"
         )
-    paths = [f.open().name for f in of]
-    if isinstance(url, str) and "*" not in url:
+    with of as files:
+        paths = [f.name for f in files]
+    if isinstance(url, str) and not has_magic(url):
         return paths[0]
     return paths
 

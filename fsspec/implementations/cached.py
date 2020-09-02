@@ -201,7 +201,7 @@ class CachingFileSystem(AbstractFileSystem):
             fn = os.path.join(storage, detail["fn"])
             if os.path.exists(fn):
                 return detail, fn
-        return False, None
+        return False
 
     def clear_cache(self):
         """Remove all files and metadat from the cache
@@ -275,9 +275,10 @@ class CachingFileSystem(AbstractFileSystem):
                 cache_options=cache_options,
                 **kwargs
             )
-        detail, fn = self._check_file(store_path)
+        detail = self._check_file(store_path)
         if detail:
             # file is in cache
+            detail, fn = detail
             hash, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 # stored file is complete
@@ -365,6 +366,8 @@ class CachingFileSystem(AbstractFileSystem):
             "pop_from_cache",
             "_mkcache",
             "local_file",
+            "_paths_from_path",
+            "open_many",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -418,7 +421,24 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     protocol = "filecache"
     local_file = True
 
-    def _open(self, path, mode="rb", **kwargs):
+    def open_many(self, open_files):
+        if self.compression:
+            raise NotImplementedError
+        paths, store_paths = zip(*[self._paths_from_path(of.path) for of in open_files])
+        details = [self._check_file(sp) for sp in store_paths]
+        downpath = [p for p, d in zip(paths, details) if not d]
+        downfn = [
+            os.path.join(self.storage[-1], hash_name(p, self.same_names))
+            for p, d in zip(paths, details)
+            if not d
+        ]
+        self.fs.get(downpath, downfn)
+        return [
+            open(fn0[0] if fn0 else fn1, mode=open_files.mode)
+            for fn0, fn1 in zip(details, downfn)
+        ]
+
+    def _paths_from_path(self, path):
         path = self._strip_protocol(path)
 
         if not path.startswith(self.target_protocol):
@@ -426,10 +446,15 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         else:
             store_path = path
         path = self.fs._strip_protocol(store_path)
+        return path, store_path
+
+    def _open(self, path, mode="rb", **kwargs):
+        path, store_path = self._paths_from_path(path)
         if "r" not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
-        detail, fn = self._check_file(store_path)
+        detail = self._check_file(store_path)
         if detail:
+            detail, fn = detail
             hash, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 logger.debug("Opening local copy of %s" % path)
@@ -481,7 +506,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         return self._open(path, mode)
 
 
-class SimpleCacheFileSystem(CachingFileSystem):
+class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     """Caches whole remote files on first access
 
     This class is intended as a layer over any other file system, and
