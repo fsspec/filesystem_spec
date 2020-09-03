@@ -556,3 +556,32 @@ def test_multi_cache(protocol):
         for f in files:
             assert os.path.basename(f.name) in ["file0", "file1"]
             assert f.read() == b"hello"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_multi_cache_chain(protocol):
+    import zipfile
+    d = tempfile.mkdtemp()
+    fn = os.path.join(d, 'test.zip')
+    zipfile.ZipFile(fn, mode='w').open('test', 'w').write(b'hello')
+
+    with fsspec.open_files(f"zip://test::{protocol}::file://{fn}") as files:
+        assert d not in files[0]._fileobj._file.name
+        assert files[0].read() == b"hello"
+
+    # special test contains "file:" string
+    fn = os.path.join(d, 'file.zip')
+    zipfile.ZipFile(fn, mode='w').open('file', 'w').write(b'hello')
+    with fsspec.open_files(f"zip://file::{protocol}::file://{fn}") as files:
+        assert d not in files[0]._fileobj._file.name
+        assert files[0].read() == b"hello"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_cached_write(protocol):
+    d = tempfile.mkdtemp()
+    with fsspec.open_files(f"{protocol}::file://{d}/*.out", mode='wb', num=2) as files:
+        for f in files:
+            f.write(b"data")
+
+    assert sorted(os.listdir(d)) == ["0.out", "1.out"]

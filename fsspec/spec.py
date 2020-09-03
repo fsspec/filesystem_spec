@@ -689,7 +689,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import make_path_posix, LocalFileSystem
 
-        rpath = self._strip_protocol(rpath)
+        rpath = (self._strip_protocol(rpath) if isinstance(rpath, str)
+                 else [self._strip_protocol(p) for p in rpath])
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
