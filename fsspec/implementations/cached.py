@@ -368,6 +368,7 @@ class CachingFileSystem(AbstractFileSystem):
             "local_file",
             "_paths_from_path",
             "open_many",
+            "commit_many",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -422,9 +423,17 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     local_file = True
 
     def open_many(self, open_files):
+        paths, store_paths = zip(*[self._paths_from_path(of.path) for of in open_files])
+        if "r" in open_files.mode:
+            self._mkcache()
+        else:
+            return [
+                LocalTempFile(self.fs, path, mode=open_files.mode, autocommit=False)
+                for path in paths
+            ]
+
         if self.compression:
             raise NotImplementedError
-        paths, store_paths = zip(*[self._paths_from_path(of.path) for of in open_files])
         details = [self._check_file(sp) for sp in store_paths]
         downpath = [p for p, d in zip(paths, details) if not d]
         downstore = [p for p, d in zip(store_paths, details) if not d]
@@ -460,6 +469,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             open(firstpart(fn0) if fn0 else fn1, mode=open_files.mode)
             for fn0, fn1 in zip(details, downfn0)
         ]
+
+    def commit_many(self, open_files):
+        self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
 
     def _paths_from_path(self, path):
         path = self._strip_protocol(path)
@@ -518,8 +530,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             if getattr(f, "blocksize", 0) and f.size:
                 # opportunity to parallelise here
                 data = True
+                block = getattr(f, "blocksize", 5 * 2 ** 20)
                 while data:
-                    data = f.read(f.blocksize)
+                    data = f.read(block)
                     f2.write(data)
             else:
                 # this only applies to HTTP, should instead use streaming
@@ -591,33 +604,24 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         kwargs["mode"] = mode
 
         self._mkcache()
-        with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
-            if isinstance(f, AbstractBufferedFile):
-                # want no type of caching if just downloading whole thing
-                f.cache = BaseCache(0, f.cache.fetcher, f.size)
-            if getattr(f, "blocksize", 0) and f.size:
-                # opportunity to parallelise here (if not compressed)
-                if self.compression:
-                    comp = (
-                        infer_compression(path)
-                        if self.compression == "infer"
-                        else self.compression
-                    )
-                    f = compr[comp](f, mode="rb")
+        if self.compression:
+            with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
+                if isinstance(f, AbstractBufferedFile):
+                    # want no type of caching if just downloading whole thing
+                    f.cache = BaseCache(0, f.cache.fetcher, f.size)
+                comp = (
+                    infer_compression(path)
+                    if self.compression == "infer"
+                    else self.compression
+                )
+                f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    data = f.read(f.blocksize)
+                    block = getattr(f, "blocksize", 5 * 2 ** 20)
+                    data = f.read(block)
                     f2.write(data)
-            else:
-                # this only applies to HTTP, should instead use streaming
-                if self.compression:
-                    comp = (
-                        infer_compression(path)
-                        if self.compression == "infer"
-                        else self.compression
-                    )
-                    f = compr[comp](f, mode="rb")
-                f2.write(f.read())
+        else:
+            self.fs.get(path, fn)
         return self._open(path, mode)
 
 
