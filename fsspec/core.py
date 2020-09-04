@@ -174,6 +174,7 @@ class OpenFiles(list):
         fs = self.fs
         while True:
             if hasattr(fs, "open_many"):
+                # check for concurrent cache download; or set up for upload
                 self.files = fs.open_many(self)
                 return self.files
             if hasattr(fs, "fs") and fs.fs is not None:
@@ -184,15 +185,17 @@ class OpenFiles(list):
 
     def __exit__(self, *args):
         fs = self.fs
-        while True:
-            if hasattr(fs, "open_many"):
-                fs.commit_many(self.files)
-                self.files.clear()
-                return
-            if hasattr(fs, "fs") and fs.fs is not None:
-                fs = fs.fs
-            else:
-                break
+        if "r" not in self.mode:
+            while True:
+                if hasattr(fs, "open_many"):
+                    # check for concurrent cache upload
+                    fs.commit_many(self.files)
+                    self.files.clear()
+                    return
+                if hasattr(fs, "fs") and fs.fs is not None:
+                    fs = fs.fs
+                else:
+                    break
         [s.__exit__(*args) for s in self]
 
     def __repr__(self):

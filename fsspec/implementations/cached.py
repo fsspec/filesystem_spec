@@ -368,7 +368,7 @@ class CachingFileSystem(AbstractFileSystem):
             "local_file",
             "_paths_from_path",
             "open_many",
-            "commit_many"
+            "commit_many",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -424,11 +424,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
     def open_many(self, open_files):
         paths, store_paths = zip(*[self._paths_from_path(of.path) for of in open_files])
-        if 'r' in open_files.mode:
+        if "r" in open_files.mode:
             self._mkcache()
         else:
-            return [LocalTempFile(self.fs, path, mode=open_files.mode, autocommit=False)
-                    for path in paths]
+            return [
+                LocalTempFile(self.fs, path, mode=open_files.mode, autocommit=False)
+                for path in paths
+            ]
 
         if self.compression:
             raise NotImplementedError
@@ -469,8 +471,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         ]
 
     def commit_many(self, open_files):
-        self.fs.put([f.fn for f in open_files],
-                    [f.path for f in open_files])
+        self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
 
     def _paths_from_path(self, path):
         path = self._strip_protocol(path)
@@ -529,8 +530,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             if getattr(f, "blocksize", 0) and f.size:
                 # opportunity to parallelise here
                 data = True
+                block = getattr(f, "blocksize", 5 * 2 ** 20)
                 while data:
-                    data = f.read(f.blocksize)
+                    data = f.read(block)
                     f2.write(data)
             else:
                 # this only applies to HTTP, should instead use streaming
@@ -615,7 +617,8 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                 f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    data = f.read(f.blocksize)
+                    block = getattr(f, "blocksize", 5 * 2 ** 20)
+                    data = f.read(block)
                     f2.write(data)
         else:
             self.fs.get(path, fn)
