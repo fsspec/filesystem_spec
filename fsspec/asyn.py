@@ -14,6 +14,21 @@ thread_state = threading.local()
 private = re.compile("_[^_]")
 
 
+def _run_until_done(coro):
+    """execute coroutine, when already in the event loop"""
+    loop = asyncio.get_running_loop()
+    task = asyncio.current_task()
+    asyncio.tasks._unregister_task(task)
+    current_task = asyncio.tasks._current_tasks.get(loop)
+    assert task == current_task
+    del asyncio.tasks._current_tasks[loop]
+    runner = loop.create_task(coro)
+    while not runner.done():
+        loop._run_once()
+    asyncio.tasks._current_tasks[loop] = task
+    return runner.result()
+
+
 def sync(loop, func, *args, callback_timeout=None, **kwargs):
     """
     Run coroutine in loop running in separate thread.
@@ -70,8 +85,8 @@ def maybe_sync(func, self, *args, **kwargs):
         thread_state, "asynchronous", False
     ):
         if inspect.iscoroutinefunction(func):
-            # directly make awaitable and return is
-            return func(*args, **kwargs)
+            # run coroutine while pausing this one (because we are within async)
+            return _run_until_done(func(*args, **kwargs))
         else:
             # make awaitable which then calls the blocking function
             return _run_as_coroutine(func, *args, **kwargs)
@@ -85,6 +100,7 @@ def maybe_sync(func, self, *args, **kwargs):
 
 
 async def _run_as_coroutine(func, *args, **kwargs):
+    # This is not currently used
     return func(*args, **kwargs)
 
 
