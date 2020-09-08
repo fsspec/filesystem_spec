@@ -31,6 +31,11 @@ Installation
 
    pip install fsspec
 
+Not all included filesystems are usable by default without installing extra
+dependencies. For example to be able to access data in S3::
+
+   pip install fsspec[s3]
+
 or
 
    conda install -c conda-forge fsspec
