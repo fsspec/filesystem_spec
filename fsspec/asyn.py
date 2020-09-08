@@ -2,6 +2,7 @@ import asyncio
 import functools
 import inspect
 import re
+import os
 import sys
 import threading
 
@@ -245,6 +246,7 @@ class AsyncFileSystem(AbstractFileSystem):
         lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
+        [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
         return sync(self.loop, self._get, rpaths, lpaths)
 
 
