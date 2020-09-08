@@ -128,7 +128,7 @@ def test_move():
 def test_recursive_get_put(tmpdir):
     fs = MemoryFileSystem()
     os.makedirs(f"{tmpdir}/nest")
-    for file in ['one', 'two', 'nest/other']:
+    for file in ["one", "two", "nest/other"]:
         with open(f"{tmpdir}/{file}", "wb") as f:
             f.write(b"data")
 
@@ -136,10 +136,9 @@ def test_recursive_get_put(tmpdir):
 
     d = tempfile.mkdtemp()
     fs.get("test", d, recursive=True)
-    for file in ['one', 'two', 'nest/other']:
+    for file in ["one", "two", "nest/other"]:
         with open(f"{d}/{file}", "rb") as f:
             f.read() == b"data"
-
 
 
 def test_pipe_cat():
