@@ -125,6 +125,23 @@ def test_move():
     assert isinstance(fs.ukey("/otherfile"), str)
 
 
+def test_recursive_get_put(tmpdir):
+    fs = MemoryFileSystem()
+    os.makedirs(f"{tmpdir}/nest")
+    for file in ['one', 'two', 'nest/other']:
+        with open(f"{tmpdir}/{file}", "wb") as f:
+            f.write(b"data")
+
+    fs.put(str(tmpdir), "test", recursive=True)
+
+    d = tempfile.mkdtemp()
+    fs.get("test", d, recursive=True)
+    for file in ['one', 'two', 'nest/other']:
+        with open(f"{d}/{file}", "rb") as f:
+            f.read() == b"data"
+
+
+
 def test_pipe_cat():
     fs = MemoryFileSystem()
     fs.pipe("afile", b"contents")
