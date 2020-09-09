@@ -578,6 +578,15 @@ def test_multi_cache_chain(protocol):
         assert files[0].read() == b"hello"
 
 
+@pytest.mark.parametrize("protocol", ["blockcache", "simplecache", "filecache"])
+def test_strip(protocol):
+    fs = fsspec.filesystem(protocol, target_protocol="memory")
+    url1 = "memory://afile"
+    assert fs._strip_protocol(url1) == "afile"
+    assert fs._strip_protocol(protocol + "://afile") == "afile"
+    assert fs._strip_protocol(protocol + "::memory://afile") == "afile"
+
+
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_cached_write(protocol):
     d = tempfile.mkdtemp()

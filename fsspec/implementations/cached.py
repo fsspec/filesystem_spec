@@ -5,7 +5,9 @@ import os
 import hashlib
 from shutil import move, rmtree
 import tempfile
+import types
 import inspect
+
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.core import MMapCache, BaseCache
@@ -112,6 +114,12 @@ class CachingFileSystem(AbstractFileSystem):
         )
         self.load_cache()
         self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
+
+        def _strip_protocol(path):
+            # acts as a method, since each instance has a difference target
+            return self.fs._strip_protocol(type(self)._strip_protocol(path))
+
+        self._strip_protocol = _strip_protocol
 
     def _mkcache(self):
         os.makedirs(self.storage[-1], exist_ok=True)
@@ -375,9 +383,6 @@ class CachingFileSystem(AbstractFileSystem):
             return lambda *args, **kw: getattr(type(self), item)(self, *args, **kw)
         if item in ["__reduce_ex__"]:
             raise AttributeError
-        if item in ["_strip_protocol"]:
-            # class methods
-            return lambda *args, **kw: getattr(type(self), item)(*args, **kw)
         if item in ["_cache"]:
             # class attributes
             return getattr(type(self), item)
