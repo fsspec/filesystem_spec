@@ -16,8 +16,8 @@ ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
-async def get_client():
-    return aiohttp.ClientSession()
+async def get_client(**kwargs):
+    return aiohttp.ClientSession(**kwargs)
 
 
 class HTTPFileSystem(AsyncFileSystem):
@@ -42,6 +42,7 @@ class HTTPFileSystem(AsyncFileSystem):
         cache_options=None,
         asynchronous=False,
         loop=None,
+        client_kwargs=None,
         **storage_options
     ):
         """
@@ -59,9 +60,12 @@ class HTTPFileSystem(AsyncFileSystem):
             When doing ls/glob, if this is True, only consider paths that have
             http/https matching the input URLs.
         size_policy: this argument is deprecated
+        client_kwargs: dict
+            Passed to aiohttp.ClientSession, see
+            https://docs.aiohttp.org/en/stable/client_reference.html
+            For example, ``{'auth': aiohttp.BasicAuth('user', 'pass')}``
         storage_options: key-value
-            May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
-            other parameters passed on to requests
+            Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open
         """
         super().__init__(self, asynchronous=asynchronous, loop=loop, **storage_options)
@@ -70,9 +74,10 @@ class HTTPFileSystem(AsyncFileSystem):
         self.same_schema = same_scheme
         self.cache_type = cache_type
         self.cache_options = cache_options
+        self.client_kwargs = client_kwargs or {}
         self.kwargs = storage_options
         if not asynchronous:
-            self._session = sync(self.loop, get_client)
+            self._session = sync(self.loop, get_client, **self.client_kwargs)
             weakref.finalize(self, sync, self.loop, self.session.close)
         else:
             self._session = None
@@ -84,7 +89,7 @@ class HTTPFileSystem(AsyncFileSystem):
         return self._session
 
     async def set_session(self):
-        self._session = await get_client()
+        self._session = await get_client(**self.client_kwargs)
 
     @classmethod
     def _strip_protocol(cls, path):
