@@ -1055,7 +1055,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     def sign(self, path, expiration=100, **kwargs):
         """Create a signed URL representing the given path
-        
+
         Some implementations allow temporary URLs to be generated, as a
         way of delegating credentials.
 
