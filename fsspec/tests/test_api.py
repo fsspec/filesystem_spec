@@ -33,7 +33,7 @@ def test_pickle():
 
 
 def test_class_methods():
-    assert MemoryFileSystem._strip_protocol("memory:stuff") == "stuff"
+    assert MemoryFileSystem._strip_protocol("memory::stuff") == "stuff"
     assert MemoryFileSystem._strip_protocol("memory://stuff") == "stuff"
     assert MemoryFileSystem._strip_protocol("stuff") == "stuff"
     assert MemoryFileSystem._strip_protocol("other://stuff") == "other://stuff"
