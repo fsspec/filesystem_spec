@@ -1062,6 +1062,30 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Alias of :ref:`FilesystemSpec.get`."""
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
+    def sign(self, path, expiration=100, **kwargs):
+        """Create a signed URL representing the given path
+
+        Some implementations allow temporary URLs to be generated, as a
+        way of delegating credentials.
+
+        Parameters
+        ----------
+        path : str
+             The path on the filesystem
+        expiration : int
+            Number of seconds to enable the URL for (if supported)
+
+        Returns
+        -------
+        URL : str
+            The signed URL
+
+        Raises
+        ------
+        NotImplementedError : if method is not implemented for a fileystem
+        """
+        raise NotImplementedError("Sign is not implemented for this filesystem")
+
 
 class AbstractBufferedFile(io.IOBase):
     """Convenient class to derive from to provide buffering
