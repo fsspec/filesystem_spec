@@ -1054,14 +1054,17 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
     def sign(self, path, expiration=100, **kwargs):
-        """Return the signed URL representing this FileSystem
+        """Create a signed URL representing the given path
+        
+        Some implementations allow temporary URLs to be generated, as a
+        way of delegating credentials.
 
         Parameters
         ----------
         path : str
              The path on the filesystem
-        expiration : int or float
-            Number of seconds to enable the URL for
+        expiration : int
+            Number of seconds to enable the URL for (if supported)
 
         Returns
         -------
