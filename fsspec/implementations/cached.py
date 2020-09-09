@@ -5,7 +5,6 @@ import os
 import hashlib
 from shutil import move, rmtree
 import tempfile
-import types
 import inspect
 
 from fsspec import AbstractFileSystem, filesystem
