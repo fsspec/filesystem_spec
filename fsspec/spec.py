@@ -157,11 +157,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         path = stringify_path(path)
         protos = (cls.protocol,) if isinstance(cls.protocol, str) else cls.protocol
         for protocol in protos:
-            path = path.rstrip("/")
             if path.startswith(protocol + "://"):
                 path = path[len(protocol) + 3 :]
-            elif path.startswith(protocol + ":"):
-                path = path[len(protocol) + 1 :]
+            elif path.startswith(protocol + "::"):
+                path = path[len(protocol) + 2 :]
+        path = path.rstrip("/")
         # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
