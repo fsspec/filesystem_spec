@@ -199,7 +199,7 @@ class AsyncFileSystem(AbstractFileSystem):
     def copy(self, path1, path2, recursive=False, **kwargs):
         paths = self.expand_path(path1, recursive=recursive)
         path2 = other_paths(paths, path2)
-        sync(self.loop, self._copy, paths, path2)
+        sync(self.loop, self._copy, paths, path2, **kwargs)
 
     async def _pipe(self, path, value=None, **kwargs):
         if isinstance(path, str):
