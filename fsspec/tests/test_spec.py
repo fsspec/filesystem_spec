@@ -38,6 +38,10 @@ class DummyTestFS(AbstractFileSystem):
         },
         {"name": "misc", "type": "directory"},
         {"name": "misc/foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/hat/^foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/dollar/$foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/lbrace/{foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/rbrace/}foo.txt", "type": "file", "size": 100},
     )
 
     def __getitem__(self, name):
@@ -101,6 +105,10 @@ class DummyTestFS(AbstractFileSystem):
                 "top_level/second_level/date=2019-10-04/a.parquet",
             ],
         ),
+        ("mock://glob_test/hat/^foo.*", ["glob_test/hat/^foo.txt"]),
+        ("mock://glob_test/dollar/$foo.*", ["glob_test/dollar/$foo.txt"]),
+        ("mock://glob_test/lbrace/{foo.*", ["glob_test/lbrace/{foo.txt"]),
+        ("mock://glob_test/rbrace/}foo.*", ["glob_test/rbrace/}foo.txt"]),
     ],
 )
 def test_glob(test_path, expected):
