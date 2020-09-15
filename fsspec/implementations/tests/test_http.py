@@ -240,9 +240,12 @@ def test_async_this_thread(server):
         loop = asyncio.get_event_loop()
         fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
 
+        # fails because client creation has not yet been awaited
+        assert isinstance(
+            (await fs._cat([server + "/index/realfile"]))[0], RuntimeError
+        )
         with pytest.raises(RuntimeError):
-            # fails because client creation has not yet been awaited
-            await fs._cat([server + "/index/realfile"])
+            fs.cat([server + "/index/realfile"])
 
         await fs.set_session()  # creates client
 

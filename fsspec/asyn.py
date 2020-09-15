@@ -6,7 +6,7 @@ import os
 import sys
 import threading
 
-from .utils import other_paths
+from .utils import other_paths, is_exception
 from .spec import AbstractFileSystem
 
 # this global variable holds whether this thread is running async or not
@@ -72,7 +72,7 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
 def maybe_sync(func, self, *args, **kwargs):
     """Make function call into coroutine or maybe run
 
-    If we are running async, returns the coroutine object so that it can be awaited;
+    If we are running async, run coroutine on current loop until done;
     otherwise runs it on the loop (if is a coroutine already) or directly. Will guess
     we are running async if either "self" has an attribute asynchronous which is True,
     or thread_state does (this gets set in ``sync()`` itself, to avoid nesting loops).
@@ -189,7 +189,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
     def rm(self, path, recursive=False, **kwargs):
         path = self.expand_path(path, recursive=recursive)
-        sync(self.loop, self._rm, path, **kwargs)
+        maybe_sync(self._rm, self, path, **kwargs)
 
     async def _copy(self, paths, path2, **kwargs):
         await asyncio.gather(
@@ -199,7 +199,7 @@ class AsyncFileSystem(AbstractFileSystem):
     def copy(self, path1, path2, recursive=False, **kwargs):
         paths = self.expand_path(path1, recursive=recursive)
         path2 = other_paths(paths, path2)
-        sync(self.loop, self._copy, paths, path2)
+        maybe_sync(self._copy, self, paths, path2)
 
     async def _pipe(self, path, value=None, **kwargs):
         if isinstance(path, str):
@@ -213,18 +213,27 @@ class AsyncFileSystem(AbstractFileSystem):
             *[
                 asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop)
                 for path in paths
-            ]
+            ],
+            return_exceptions=True
         )
 
-    def cat(self, path, recursive=False, **kwargs):
+    def cat(self, path, recursive=False, on_error="raise", **kwargs):
         paths = self.expand_path(path, recursive=recursive)
-        out = sync(self.loop, self._cat, paths, **kwargs)
+        out = maybe_sync(self._cat, self, paths, **kwargs)
+        if on_error == "raise":
+            ex = next(filter(is_exception, out), False)
+            if ex:
+                raise ex
         if (
             len(paths) > 1
             or isinstance(path, list)
             or paths[0] != self._strip_protocol(path)
         ):
-            return {k: v for k, v in zip(paths, out)}
+            return {
+                k: v
+                for k, v in zip(paths, out)
+                if on_error != "omit" or not is_exception(v)
+            }
         else:
             return out[0]
 
@@ -245,9 +254,11 @@ class AsyncFileSystem(AbstractFileSystem):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
-        sync(self.loop, self._put, lpaths, rpaths, **kwargs)
+        maybe_sync(self._put, self, lpaths, rpaths, **kwargs)
 
     async def _get(self, rpaths, lpaths, **kwargs):
+        dirs = [os.path.dirname(lp) for lp in lpaths]
+        [os.makedirs(d, exist_ok=True) for d in dirs]
         return await asyncio.gather(
             *[
                 self._get_file(rpath, lpath, **kwargs)

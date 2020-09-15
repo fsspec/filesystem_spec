@@ -30,11 +30,18 @@ class FSMap(MutableMapping):
     b'Hello World'
     """
 
-    def __init__(self, root, fs, check=False, create=False):
+    def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
         self.fs = fs
         self.root = fs._strip_protocol(root).rstrip(
             "/"
         )  # we join on '/' in _key_to_str
+        if missing_exceptions is None:
+            missing_exceptions = (
+                FileNotFoundError,
+                IsADirectoryError,
+                NotADirectoryError,
+            )
+        self.missing_exceptions = missing_exceptions
         if create:
             if not self.fs.exists(root):
                 self.fs.mkdir(root)
@@ -56,7 +63,7 @@ class FSMap(MutableMapping):
         except:  # noqa: E722
             pass
 
-    def getitems(self, keys):
+    def getitems(self, keys, on_error="raise"):
         """Fetch multiple items from the store
 
         If the backend is async-able, this might proceed concurrently
@@ -65,17 +72,35 @@ class FSMap(MutableMapping):
         ----------
         keys: list(str)
             They keys to be fetched
+        on_error : "raise", "omit", "return"
+            If raise, an underlying exception will be raised (converted to KeyError
+            if the type is in self.missing_exceptions); if omit, keys with exception
+            will simply not be included in hte output; if "return", all keys are
+            included in the output, but the value will be bytes or an exception
+            instance.
 
         Returns
         -------
-        dict(key, bytes)
+        dict(key, bytes|exception)
         """
         keys2 = [self._key_to_str(k) for k in keys]
-        out = self.fs.cat(keys2)
-        return {k: v for k, v in zip(keys, out.values())}
+        oe = on_error if on_error == "raise" else "return"
+        try:
+            out = self.fs.cat(keys2, on_error=oe)
+        except self.missing_exceptions as e:
+            raise KeyError from e
+        out = {
+            k: (KeyError() if isinstance(v, self.missing_exceptions) else v)
+            for k, v in out.items()
+        }
+        return {
+            key: v
+            for key, (k, v) in zip(keys, out.items())
+            if on_error == "return" or not isinstance(v, BaseException)
+        }
 
     def setitems(self, values_dict):
-        """Set the values of multuple items in the store
+        """Set the values of multiple items in the store
 
         Parameters
         ----------
@@ -105,7 +130,7 @@ class FSMap(MutableMapping):
         k = self._key_to_str(key)
         try:
             result = self.fs.cat(k)
-        except (FileNotFoundError, IsADirectoryError, NotADirectoryError):
+        except self.missing_exceptions:
             if default is not None:
                 return default
             raise KeyError(key)
@@ -155,7 +180,7 @@ class FSMap(MutableMapping):
         self.root = root
 
 
-def get_mapper(url, check=False, create=False, **kwargs):
+def get_mapper(url, check=False, create=False, missing_exceptions=None, **kwargs):
     """Create key-value interface for given URL and options
 
     The URL will be of the form "protocol://location" and point to the root
@@ -174,6 +199,10 @@ def get_mapper(url, check=False, create=False, **kwargs):
     create: bool
         Whether to make the directory corresponding to the root before
         instantiating
+    missing_exceptions: None or tuple
+        If given, these excpetion types will be regarded as missing keys and
+        return KeyError when trying to read data. By default, you get
+        (FileNotFoundError, IsADirectoryError, NotADirectoryError)
 
     Returns
     -------
@@ -181,4 +210,4 @@ def get_mapper(url, check=False, create=False, **kwargs):
     """
     # Removing protocol here - could defer to each open() on the backend
     fs, urlpath = url_to_fs(url, **kwargs)
-    return FSMap(urlpath, fs, check, create)
+    return FSMap(urlpath, fs, check, create, missing_exceptions=missing_exceptions)
