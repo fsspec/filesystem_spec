@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
+from datetime import datetime
 from fsspec import AbstractFileSystem
 import logging
 
@@ -23,6 +24,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     "name": path,
                     "size": self.store[path].getbuffer().nbytes,
                     "type": "file",
+                    "created": self.store[path].created,
                 }
             ]
         else:
@@ -42,6 +44,7 @@ class MemoryFileSystem(AbstractFileSystem):
                         "name": has_slash + p,
                         "size": self.store[p2].getbuffer().nbytes,
                         "type": "file",
+                        "created": self.store[p2].created,
                     }
                 )
             elif (
@@ -174,6 +177,7 @@ class MemoryFile(BytesIO):
     def __init__(self, fs=None, path=None, data=None):
         self.fs = fs
         self.path = path
+        self.created = datetime.utcnow().timestamp()
         if data:
             self.write(data)
             self.size = len(data)
