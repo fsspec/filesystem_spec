@@ -75,7 +75,7 @@ class FSMap(MutableMapping):
         on_error : "raise", "omit", "return"
             If raise, an underlying exception will be raised (converted to KeyError
             if the type is in self.missing_exceptions); if omit, keys with exception
-            will simply not be included in hte output; if "return", all keys are
+            will simply not be included in the output; if "return", all keys are
             included in the output, but the value will be bytes or an exception
             instance.
 
@@ -94,9 +94,9 @@ class FSMap(MutableMapping):
             for k, v in out.items()
         }
         return {
-            key: v
-            for key, (k, v) in zip(keys, out.items())
-            if on_error == "return" or not isinstance(v, BaseException)
+            key: out[k2]
+            for key, k2 in zip(keys, keys2)
+            if on_error == "return" or not isinstance(out[k2], BaseException)
         }
 
     def setitems(self, values_dict):
