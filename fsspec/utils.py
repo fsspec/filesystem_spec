@@ -359,3 +359,7 @@ def other_paths(paths, path2, is_dir=None):
     else:
         assert len(paths) == len(path2)
     return path2
+
+
+def is_exception(obj):
+    return isinstance(obj, BaseException)
