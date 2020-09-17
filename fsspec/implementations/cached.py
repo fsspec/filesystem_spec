@@ -294,7 +294,7 @@ class CachingFileSystem(AbstractFileSystem):
             # TODO: action where partial file exists in read-only cache
             logger.debug("Opening partially cached copy of %s" % path)
         else:
-            hash = hash_name(path, self.same_names)
+            hash = self.hash_name(path, self.same_names)
             fn = os.path.join(self.storage[-1], hash)
             blocks = set()
             detail = {
@@ -338,6 +338,9 @@ class CachingFileSystem(AbstractFileSystem):
         f.close = lambda: self.close_and_update(f, close)
         self.save_cache()
         return f
+
+    def hash_name(self, path, same_name):
+        return hash_name(path, same_name=same_name)
 
     def close_and_update(self, f, close):
         """Called when a file is closing, so store the set of blocks"""
@@ -442,7 +445,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         downpath = [p for p, d in zip(paths, details) if not d]
         downstore = [p for p, d in zip(store_paths, details) if not d]
         downfn0 = [
-            os.path.join(self.storage[-1], hash_name(p, self.same_names))
+            os.path.join(self.storage[-1], self.hash_name(p, self.same_names))
             for p, d in zip(paths, details)
         ]  # keep these path names for opening later
         downfn = [fn for fn, d in zip(downfn0, details) if not d]
@@ -453,7 +456,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # update metadata - only happens when downloads are successful
             newdetail = [
                 {
-                    "fn": hash_name(path, self.same_names),
+                    "fn": self.hash_name(path, self.same_names),
                     "blocks": True,
                     "time": time.time(),
                     "uid": self.fs.ukey(path),
@@ -504,7 +507,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     "as a wholly cached file" % path
                 )
         else:
-            hash = hash_name(path, self.same_names)
+            hash = self.hash_name(path, self.same_names)
             fn = os.path.join(self.storage[-1], hash)
             detail = {
                 "fn": hash,
@@ -576,7 +579,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def _check_file(self, path):
         self._check_cache()
-        sha = hash_name(path, self.same_names)
+        sha = self.hash_name(path, self.same_names)
         for storage in self.storage:
             fn = os.path.join(storage, sha)
             if os.path.exists(fn):
@@ -602,7 +605,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         if fn:
             return open(fn, mode)
 
-        sha = hash_name(path, self.same_names)
+        sha = self.hash_name(path, self.same_names)
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache" % path)
         kwargs["mode"] = mode
