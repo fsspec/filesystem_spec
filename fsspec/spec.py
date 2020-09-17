@@ -625,6 +625,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
         or the path has been otherwise expanded
 
         on_error : "raise", "omit", "return"
+            If raise, an underlying exception will be raised (converted to KeyError
+            if the type is in self.missing_exceptions); if omit, keys with exception
+            will simply not be included in the output; if "return", all keys are
+            included in the output, but the value will be bytes or an exception
+            instance.
         """
         paths = self.expand_path(path, recursive=recursive)
         if (
