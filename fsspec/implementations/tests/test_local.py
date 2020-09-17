@@ -6,6 +6,7 @@ import os.path
 import pickle
 import sys
 from contextlib import contextmanager
+from distutils.version import LooseVersion
 import posixpath
 import tempfile
 
@@ -325,8 +326,11 @@ def test_get_pyarrow_filesystem():
     pa = pytest.importorskip("pyarrow")
 
     fs = LocalFileSystem()
-    assert isinstance(fs, pa.filesystem.FileSystem)
-    assert fs._get_pyarrow_filesystem() is fs
+    if LooseVersion(pa.__version__) < LooseVersion("2.0"):
+        assert isinstance(fs, pa.filesystem.FileSystem)
+        assert fs._get_pyarrow_filesystem() is fs
+    else:
+        assert not isinstance(fs, pa.filesystem.FileSystem)
 
     class UnknownFileSystem(object):
         pass
