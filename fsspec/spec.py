@@ -448,7 +448,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         We support ``"**"``,
         ``"?"`` and ``"[..]"``. We do not support ^ for pattern negation.
 
-        Search path names that contain embedded characters special to this implementation of glob may not produce expected results; e.g., 'foo/bar/*starredfilename*'.
+        Search path names that contain embedded characters special to this
+        implementation of glob may not produce expected results;
+        e.g., 'foo/bar/*starredfilename*'.
 
         kwargs are passed to ``ls``.
         """
@@ -488,8 +490,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
             depth = 20 if "**" in path else 1
 
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
-        # Escape characters special to python regex, leaving our supported special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html for shell globbing details.
+        # Escape characters special to python regex, leaving our supported
+        # special characters in place.
+        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
+        # for shell globbing details.
         pattern = (
             "^"
             + (
