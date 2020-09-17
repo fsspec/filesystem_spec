@@ -379,6 +379,7 @@ class CachingFileSystem(AbstractFileSystem):
             "_paths_from_path",
             "open_many",
             "commit_many",
+            "hash_name",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
