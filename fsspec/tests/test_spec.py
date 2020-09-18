@@ -1,11 +1,15 @@
 import pickle
 import json
 
+import os
 import pytest
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
+from fsspec.implementations.ftp import FTPFile, FTPFileSystem
+from fsspec.implementations.local import LocalFileSystem
 import fsspec
 
 import numpy as np
+from pathlib import Path
 
 
 class DummyTestFS(AbstractFileSystem):
@@ -231,6 +235,95 @@ def test_readinto_with_numpy(tmpdir, dt):
 
     arr2 = np.empty_like(arr)
     with fsspec.open(store_path, "rb") as f:
+        f.readinto(arr2)
+
+    assert np.array_equal(arr, arr2)
+
+
+class BrokenFTPFile(FTPFile):
+    """
+    This class is purely for test_readinto_with_multibyte below. I suspect a far more
+    elegant solution is possible for someone more familiar with fsspec but it enables
+    the test below which was the goal.
+    """
+    def __init__(self, fs, path, mode):
+        super(BrokenFTPFile, self).__init__(fs=fs, path=path, mode=mode)
+
+    def _connect(self):
+        pass
+
+    def _open(self):
+        return self.fs._open(self.path)
+
+    def _fetch_range(self, start, end):
+        # probably only used by cached FS
+        if "r" not in self.mode:
+            raise ValueError
+        self.f = self._open()
+        self.f.seek(start)
+        return self.f.read(end - start)
+
+    def info(self, path, **kwargs):
+        out = os.stat(path, follow_symlinks=False)
+        dest = False
+        if os.path.islink(path):
+            t = "link"
+            dest = os.readlink(path)
+        elif os.path.isdir(path):
+            t = "directory"
+        elif os.path.isfile(path):
+            t = "file"
+        else:
+            t = "other"
+        result = {"name": path, "size": out.st_size, "type": t, "created": out.st_ctime}
+        for field in ["mode", "uid", "gid", "mtime"]:
+            result[field] = getattr(out, "st_" + field)
+        if dest:
+            result["destination"] = dest
+            try:
+                out2 = os.stat(path, follow_symlinks=True)
+                result["size"] = out2.st_size
+            except IOError:
+                result["size"] = 0
+        return result
+
+    def cp_file(self, path1, path2, **kwargs):
+        pass
+
+    def created(self, path):
+        pass
+
+    def modified(self, path):
+        pass
+
+    def sign(self, path, expiration=100, **kwargs):
+        pass
+
+
+@pytest.mark.parametrize(
+    "dt",
+    [
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.float32,
+        np.float64,
+    ],
+)
+def test_readinto_with_multibyte(tmpdir, dt):
+    store_path = str(tmpdir / "test_arr.npy")
+    arr = np.arange(10, dtype=dt)
+    arr.tofile(store_path)
+
+    arr2 = np.empty_like(arr)
+
+    fs = LocalFileSystem()  # BrokenFTPFileSystem()
+    with BrokenFTPFile(fs, path=store_path, mode="rb") as f:
         f.readinto(arr2)
 
     assert np.array_equal(arr, arr2)
