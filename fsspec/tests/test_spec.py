@@ -4,12 +4,11 @@ import json
 import os
 import pytest
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
-from fsspec.implementations.ftp import FTPFile, FTPFileSystem
+from fsspec.implementations.ftp import FTPFile
 from fsspec.implementations.local import LocalFileSystem
 import fsspec
 
 import numpy as np
-from pathlib import Path
 
 
 class DummyTestFS(AbstractFileSystem):
