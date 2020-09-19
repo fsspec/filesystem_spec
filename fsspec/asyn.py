@@ -105,7 +105,7 @@ async def _run_as_coroutine(func, *args, **kwargs):
 
 
 def sync_wrapper(func, obj=None):
-    """Given a function, make so can be called in async or bocking contexts
+    """Given a function, make so can be called in async or blocking contexts
 
     Leave obj=None if defining within a class. Pass the instance if attaching
     as an attribute of the instance.
