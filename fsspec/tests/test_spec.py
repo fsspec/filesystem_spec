@@ -246,67 +246,58 @@ class BrokenFTPFile(FTPFile):
     enables the test below which was the goal.
     """
 
+    def __init__(self, fs, path, mode):
+        super(BrokenFTPFile, self).__init__(fs=fs, path=path, mode=mode)
 
-def __init__(self, fs, path, mode):
-    super(BrokenFTPFile, self).__init__(fs=fs, path=path, mode=mode)
+    def _connect(self):
+        pass
 
+    def _open(self):
+        return self.fs._open(self.path)
 
-def _connect(self):
-    pass
+    def _fetch_range(self, start, end):
+        # probably only used by cached FS
+        if "r" not in self.mode:
+            raise ValueError
+        self.f = self._open()
+        self.f.seek(start)
+        return self.f.read(end - start)
 
+    def info(self, path, **kwargs):
+        out = os.stat(path, follow_symlinks=False)
+        dest = False
+        if os.path.islink(path):
+            t = "link"
+            dest = os.readlink(path)
+        elif os.path.isdir(path):
+            t = "directory"
+        elif os.path.isfile(path):
+            t = "file"
+        else:
+            t = "other"
+        result = {"name": path, "size": out.st_size, "type": t, "created": out.st_ctime}
+        for field in ["mode", "uid", "gid", "mtime"]:
+            result[field] = getattr(out, "st_" + field)
+        if dest:
+            result["destination"] = dest
+            try:
+                out2 = os.stat(path, follow_symlinks=True)
+                result["size"] = out2.st_size
+            except IOError:
+                result["size"] = 0
+        return result
 
-def _open(self):
-    return self.fs._open(self.path)
+    def cp_file(self, path1, path2, **kwargs):
+        pass
 
+    def created(self, path):
+        pass
 
-def _fetch_range(self, start, end):
-    # probably only used by cached FS
-    if "r" not in self.mode:
-        raise ValueError
-    self.f = self._open()
-    self.f.seek(start)
-    return self.f.read(end - start)
+    def modified(self, path):
+        pass
 
-
-def info(self, path, **kwargs):
-    out = os.stat(path, follow_symlinks=False)
-    dest = False
-    if os.path.islink(path):
-        t = "link"
-        dest = os.readlink(path)
-    elif os.path.isdir(path):
-        t = "directory"
-    elif os.path.isfile(path):
-        t = "file"
-    else:
-        t = "other"
-    result = {"name": path, "size": out.st_size, "type": t, "created": out.st_ctime}
-    for field in ["mode", "uid", "gid", "mtime"]:
-        result[field] = getattr(out, "st_" + field)
-    if dest:
-        result["destination"] = dest
-        try:
-            out2 = os.stat(path, follow_symlinks=True)
-            result["size"] = out2.st_size
-        except IOError:
-            result["size"] = 0
-    return result
-
-
-def cp_file(self, path1, path2, **kwargs):
-    pass
-
-
-def created(self, path):
-    pass
-
-
-def modified(self, path):
-    pass
-
-
-def sign(self, path, expiration=100, **kwargs):
-    pass
+    def sign(self, path, expiration=100, **kwargs):
+        pass
 
 
 @pytest.mark.parametrize(
