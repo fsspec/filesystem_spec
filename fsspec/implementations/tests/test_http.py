@@ -276,7 +276,7 @@ def test_processes(server, method):
 
     q = ctx.Queue()
     if os.environ.get("TRAVIS", ""):
-        os.chdir("")
+        os.chdir("/")
     p = ctx.Process(target=_inner_pass, args=(fs, q, fn))
     p.start()
     assert q.get() == fs.cat(fn)
