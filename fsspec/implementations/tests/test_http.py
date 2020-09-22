@@ -12,7 +12,7 @@ port = 9898
 data = b"\n".join([b"some test data"] * 1000)
 realfile = "http://localhost:%i/index/realfile" % port
 index = b'<a href="%s">Link</a>' % realfile.encode()
-win = os.name == 'nt'
+win = os.name == "nt"
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):
@@ -267,6 +267,7 @@ def _inner_pass(fs, q, fn):
 @pytest.mark.parametrize("method", ["spawn", "forkserver", "fork"])
 def test_processes(server, method):
     import multiprocessing as mp
+
     if win and method != "spawn":
         pytest.skip("Windows can only spawn")
     ctx = mp.get_context(method)
