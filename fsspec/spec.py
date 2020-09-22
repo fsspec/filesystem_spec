@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import warnings
+from errno import ESPIPE
 from hashlib import sha256
 from glob import has_magic
 
@@ -1240,7 +1241,7 @@ class AbstractBufferedFile(io.IOBase):
         """
         loc = int(loc)
         if not self.mode == "rb":
-            raise OSError("Seek only available in read mode")
+            raise OSError(ESPIPE, "Seek only available in read mode")
         if whence == 0:
             nloc = loc
         elif whence == 1:
