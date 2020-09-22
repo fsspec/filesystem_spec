@@ -264,6 +264,7 @@ def _inner_pass(fs, q, fn):
     q.put(fs.cat(fn))
 
 
+@pytest.mark.skipif(os.environ.get("TRAVIS", ""), reason="Travis is weird in many ways")
 @pytest.mark.parametrize("method", ["spawn", "forkserver", "fork"])
 def test_processes(server, method):
     import multiprocessing as mp
@@ -275,8 +276,6 @@ def test_processes(server, method):
     fs = fsspec.filesystem("http")
 
     q = ctx.Queue()
-    if os.environ.get("TRAVIS", ""):
-        os.chdir(os.path.dirname(sys.executable))
     p = ctx.Process(target=_inner_pass, args=(fs, q, fn))
     p.start()
     assert q.get() == fs.cat(fn)
