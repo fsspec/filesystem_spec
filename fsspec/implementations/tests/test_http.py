@@ -265,7 +265,7 @@ def _inner_pass(fs, q, fn):
 
 
 @pytest.mark.parametrize("method", ["spawn", "forkserver", "fork"])
-def test_processes(server, method):
+def test_processes(server, method, monkeypatch):
     import multiprocessing as mp
 
     if win and method != "spawn":
@@ -276,7 +276,7 @@ def test_processes(server, method):
 
     q = ctx.Queue()
     if os.environ.get("TRAVIS", ""):
-        os.chdir("/")
+        monkeypatch.chdir(os.path.dirname(sys.executable))
     p = ctx.Process(target=_inner_pass, args=(fs, q, fn))
     p.start()
     assert q.get() == fs.cat(fn)
