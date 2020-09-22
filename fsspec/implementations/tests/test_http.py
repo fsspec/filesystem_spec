@@ -264,7 +264,9 @@ def _inner_pass(fs, q, fn):
     q.put(fs.cat(fn))
 
 
-@pytest.mark.skipif(os.environ.get("TRAVIS", ""), reason="Travis is weird in many ways")
+@pytest.mark.skipif(
+    bool(os.environ.get("TRAVIS", "")), reason="Travis is weird in many ways"
+)
 @pytest.mark.parametrize("method", ["spawn", "forkserver", "fork"])
 def test_processes(server, method):
     import multiprocessing as mp
