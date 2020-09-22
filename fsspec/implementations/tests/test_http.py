@@ -12,6 +12,7 @@ port = 9898
 data = b"\n".join([b"some test data"] * 1000)
 realfile = "http://localhost:%i/index/realfile" % port
 index = b'<a href="%s">Link</a>' % realfile.encode()
+win = os.name == "nt"
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):
@@ -254,3 +255,30 @@ def test_async_this_thread(server):
         assert out == [data]
 
     asyncio.run(_())
+
+
+def _inner_pass(fs, q, fn):
+    # pass the s3 instance, but don't use it; in new process, the instance
+    # cache should be skipped to make a new instance
+    fs = fsspec.filesystem("http")
+    q.put(fs.cat(fn))
+
+
+@pytest.mark.skipif(
+    bool(os.environ.get("TRAVIS", "")), reason="Travis is weird in many ways"
+)
+@pytest.mark.parametrize("method", ["spawn", "forkserver", "fork"])
+def test_processes(server, method):
+    import multiprocessing as mp
+
+    if win and method != "spawn":
+        pytest.skip("Windows can only spawn")
+    ctx = mp.get_context(method)
+    fn = server + "/index/realfile"
+    fs = fsspec.filesystem("http")
+
+    q = ctx.Queue()
+    p = ctx.Process(target=_inner_pass, args=(fs, q, fn))
+    p.start()
+    assert q.get() == fs.cat(fn)
+    p.join()

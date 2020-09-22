@@ -39,6 +39,7 @@ class _Cached(type):
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
         cls._cache = {}
+        cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):
         extra_tokens = tuple(
@@ -46,6 +47,9 @@ class _Cached(type):
         )
         token = tokenize(cls, *args, *extra_tokens, **kwargs)
         skip = kwargs.pop("skip_instance_cache", False)
+        if os.getpid() != cls._pid:
+            cls._cache.clear()
+            cls._pid = os.getpid()
         if not skip and cls.cachable and token in cls._cache:
             return cls._cache[token]
         else:
@@ -154,6 +158,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
+        if isinstance(path, list):
+            return [cls._strip_protocol(p) for p in path]
         path = stringify_path(path)
         protos = (cls.protocol,) if isinstance(cls.protocol, str) else cls.protocol
         for protocol in protos:
