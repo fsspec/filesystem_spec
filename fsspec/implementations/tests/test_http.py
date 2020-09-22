@@ -275,6 +275,8 @@ def test_processes(server, method):
     fs = fsspec.filesystem("http")
 
     q = ctx.Queue()
+    if os.environ.get("TRAVIS", ""):
+        os.chdir("")
     p = ctx.Process(target=_inner_pass, args=(fs, q, fn))
     p.start()
     assert q.get() == fs.cat(fn)
