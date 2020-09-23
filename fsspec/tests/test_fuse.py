@@ -21,7 +21,7 @@ def host_fuse(mountdir):
     run(fs, "/mounted/", mountdir)
 
 
-def test_basic(tmpdir):
+def test_basic(tmpdir, capfd):
     mountdir = str(tmpdir.mkdir("mount"))
 
     fuse_process = Process(target=host_fuse, args=(str(mountdir),))
@@ -56,6 +56,10 @@ def test_basic(tmpdir):
 
         with pytest.raises(OSError):
             os.rmdir(fn)
+
+        captured = capfd.readouterr()
+        assert "Traceback" not in captured.out
+        assert "Traceback" not in captured.err
 
         os.rmdir(fn + "/inner")
         os.rmdir(fn)
