@@ -159,7 +159,7 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
-        logger.debug(url)
+        logger.debug(rpath)
         async with self.session.get(rpath, **self.kwargs) as r:
             if r.status == 404:
                 raise FileNotFoundError(rpath)
@@ -174,7 +174,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         try:
-            logger.debug(url)
+            logger.debug(path)
             r = await self.session.get(path, **kw)
             async with r:
                 return r.status < 400

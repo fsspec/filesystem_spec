@@ -7,7 +7,7 @@ from fsspec.utils import (
     read_block,
     common_prefix,
     other_paths,
-    setup_logger
+    setup_logger,
 )
 
 
@@ -289,5 +289,6 @@ def test_other_paths(paths, other, is_dir, expected):
 
 def test_log():
     import logging
+
     logger = setup_logger("fsspec.test")
     assert logger.level == logging.DEBUG

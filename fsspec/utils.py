@@ -367,10 +367,12 @@ def is_exception(obj):
 
 def setup_logger(logname, level="DEBUG"):
     import logging
+
     logger = logging.getLogger(logname)
     handle = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s '
-                                  '- %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s " "- %(message)s"
+    )
     handle.setFormatter(formatter)
     logger.addHandler(handle)
     logger.setLevel(level)
