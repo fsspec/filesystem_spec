@@ -218,7 +218,7 @@ class BlockCache(BaseCache):
 
         # these are cached, so safe to do multiple calls for the same start and end.
         for block_number in range(start_block_number, end_block_number + 1):
-            self._fetch_block(block_number)
+            self._fetch_block_cached(block_number)
 
         return self._read_cache(
             start,
