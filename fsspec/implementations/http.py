@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import aiohttp
 import asyncio
+import logging
 import re
 import requests
 import weakref
@@ -14,6 +15,7 @@ from ..caching import AllBytes
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
+logger = logging.getLogger("fsspec.http")
 
 
 async def get_client(**kwargs):
@@ -101,6 +103,7 @@ class HTTPFileSystem(AsyncFileSystem):
         # ignoring URL-encoded arguments
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        logger.debug(url)
         async with self.session.get(url, **self.kwargs) as r:
             r.raise_for_status()
             text = await r.text()
@@ -145,6 +148,7 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _cat_file(self, url, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        logger.debug(url)
         async with self.session.get(url, **kw) as r:
             if r.status == 404:
                 raise FileNotFoundError(url)
@@ -155,6 +159,7 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        logger.debug(url)
         async with self.session.get(rpath, **self.kwargs) as r:
             if r.status == 404:
                 raise FileNotFoundError(rpath)
@@ -169,6 +174,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         try:
+            logger.debug(url)
             r = await self.session.get(path, **kw)
             async with r:
                 return r.status < 400
@@ -370,6 +376,7 @@ class HTTPFile(AbstractBufferedFile):
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+        logger.debug(self.url + " : " + headers["Range"])
         r = await self.session.get(self.url, headers=headers, **kwargs)
         async with r:
             if r.status == 416:
