@@ -16,7 +16,7 @@ private = re.compile("_[^_]")
 
 def _run_until_done(coro):
     """execute coroutine, when already in the event loop"""
-    loop = asyncio.get_running_loop()
+    loop = asyncio.get_event_loop()
     task = asyncio.current_task()
     asyncio.tasks._unregister_task(task)
     current_task = asyncio.tasks._current_tasks.get(loop)
