@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import warnings
+from distutils.version import LooseVersion
 from errno import ESPIPE
 from hashlib import sha256
 from glob import has_magic
@@ -70,12 +71,15 @@ class _Cached(type):
 
 
 try:  # optionally derive from pyarrow's FileSystem, if available
-    # TODO: it should be possible to disable this
     import pyarrow as pa
-
-    up = pa.filesystem.DaskFileSystem
 except ImportError:
     up = object
+else:
+    # only derive from the legacy pyarrow's FileSystem for older pyarrow versions
+    if LooseVersion(pa.__version__) < LooseVersion("2.0"):
+        up = pa.filesystem.DaskFileSystem
+    else:
+        up = object
 
 
 class AbstractFileSystem(up, metaclass=_Cached):
@@ -1108,6 +1112,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
         NotImplementedError : if method is not implemented for a fileystem
         """
         raise NotImplementedError("Sign is not implemented for this filesystem")
+
+    def _isfilestore(self):
+        # Originally inherited from pyarrow DaskFileSystem. Keeping this
+        # here for backwards compatibility as long as pyarrow uses its
+        # legacy ffspec-compatible filesystems and thus accepts fsspec
+        # filesystems as well
+        return False
 
 
 class AbstractBufferedFile(io.IOBase):
