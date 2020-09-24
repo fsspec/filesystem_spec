@@ -146,15 +146,17 @@ class FTPFileSystem(AbstractFileSystem):
     def _rm(self, path):
         path = self._strip_protocol(path)
         self.ftp.delete(path)
-        self.invalidate_cache(path.rsplit("/", 1)[0])
+        self.invalidate_cache(self._parent(path))
 
     def mkdir(self, path, **kwargs):
         path = self._strip_protocol(path)
         self.ftp.mkd(path)
+        self.invalidate_cache(self._parent(path))
 
     def rmdir(self, path):
         path = self._strip_protocol(path)
         self.ftp.rmd(path)
+        self.invalidate_cache(self._parent(path))
 
     def mv(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
@@ -165,6 +167,13 @@ class FTPFileSystem(AbstractFileSystem):
 
     def __del__(self):
         self.ftp.close()
+
+    def invalidate_cache(self, path=None):
+        if path and path in self.dircache:
+            del self.dircache[path]
+        else:
+            self.dircache.clear()
+        super(FTPFileSystem, self).invalidate_cache(path)
 
 
 class TransferDone(Exception):
