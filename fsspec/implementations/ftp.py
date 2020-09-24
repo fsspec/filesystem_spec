@@ -169,10 +169,10 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp.close()
 
     def invalidate_cache(self, path=None):
-        if path and path in self.dircache:
-            del self.dircache[path]
-        else:
+        if path is None:
             self.dircache.clear()
+        else:
+            self.dircache.pop(path, None)
         super(FTPFileSystem, self).invalidate_cache(path)
 
 

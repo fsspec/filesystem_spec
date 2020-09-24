@@ -127,7 +127,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self._cached = True
         self._intrans = False
         self._transaction = None
-        self._invalidated_caches_in_txn = []
+        self._invalidated_caches_in_transaction = []
         self.dircache = DirCache(**storage_options)
 
         if storage_options.pop("add_docs", None):
@@ -219,12 +219,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         self.transaction.complete()
         self._transaction = None
         # The invalid cache must be cleared after the transcation is completed.
-        for path in self._invalidated_caches_in_txn:
+        for path in self._invalidated_caches_in_transaction:
             self.invalidate_cache(path)
-
-    def _record_invalidated_cache(self, path):
-        if bool(self._transaction):
-            self._invalidated_caches_in_txn.append(path)
+        self._invalidated_caches_in_transaction.clear()
 
     def invalidate_cache(self, path=None):
         """
@@ -240,7 +237,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
         # But if have, you should call this method of parent class from your
         # subclass to ensure expiring caches after transacations correctly.
         # See the implementaion of FTPFileSystem in ftp.py
-        self._record_invalidated_cache(path)
+        if bool(self._transaction):
+            self._invalidated_caches_in_transaction.append(path)
 
     def mkdir(self, path, create_parents=True, **kwargs):
         """
@@ -820,7 +818,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def _parent(cls, path):
         path = cls._strip_protocol(path.rstrip("/"))
         if "/" in path:
-            return cls.root_marker + path.rsplit("/", 1)[0]
+            return os.path.join(cls.root_marker, path.rsplit("/", 1)[0])
         else:
             return cls.root_marker
 
