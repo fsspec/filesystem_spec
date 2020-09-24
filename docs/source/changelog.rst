@@ -1,6 +1,93 @@
 Changelog
 =========
 
+Version 0.8.3
+-------------
+
+Features:
+
+- error options for cat
+- memory fs created time in detailed `ls`
+
+
+Fixes:
+
+- duplicate directories could appear in MemoreFileSystem
+- Added support for hat dollar lbrace rbrace regex character escapes in glob
+- Fix blockcache (was doing unnecessary work)
+- handle multibyte dtypes in readinto
+- Fix missing kwargs in call to _copy in asyn
+
+Other:
+
+- Stop inheriting from pyarrow.filesystem for pyarrow>=2.0
+- Raise low-level program friendly OSError.
+- Guard against instance reuse in new processes
+- Make hash_name a method on CachingFileSystem to make it easier to change.
+- Use get_event_loop for py3.6 compatibility
+
+Version 0.8.2
+-------------
+
+Fixes:
+
+- More careful strip for caching
+
+Version 0.8.1
+-------------
+
+Features:
+
+- add sign to base class
+- Allow calling of coroutines from normal code when running async
+- Implement writing for cached many files
+- Allow concurrent caching of remote files
+- Add gdrive:// protocol
+
+Fixes:
+
+- Fix memfs with exact ls
+- HTTPFileSystem requires requests and aiohttp in registry
+
+Other:
+
+- Allow http kwargs to clientSession
+- Use extras_require in setup.py for optional dependencies
+- Replacing md5 with sha256 for hash (CVE req)
+- Test against Python 3.8, drop 3.5 testing
+- add az alias for abfs
+
+Version 0.8.0
+-------------
+
+Major release allowing async implementations with concurrent batch
+operations.
+
+Features:
+
+- async filesystem spec, first applied to HTTP
+- OpenFiles cContext for multiple files
+- Document async, and ensure docstrings
+- Make LocalFileOpener iterable
+- handle smb:// protocol using smbprotocol package
+- allow Path object in open
+- simplecache write mode
+
+Fixes:
+
+- test_local: fix username not in home path
+- Tighten cacheFS if dir deleted
+- Fix race condition of lzma import when using threads
+- properly rewind MemoryFile
+- OpenFile newline in reduce
+
+Other:
+
+- Add aiobotocore to deps for s3fs check
+- Set default clobber=True on impl register
+- Use _get_kwargs_from_url when unchaining
+- Add cache_type and cache_options to HTTPFileSystem constructor
+
 Version 0.7.5
 -------------
 
