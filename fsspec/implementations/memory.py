@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 from datetime import datetime
+from errno import ENOTEMPTY
 from fsspec import AbstractFileSystem
 import logging
 
@@ -102,7 +103,7 @@ class MemoryFileSystem(AbstractFileSystem):
             if not self.ls(path):
                 self.pseudo_dirs.remove(path)
             else:
-                raise OSError("Directory %s not empty" % path)
+                raise OSError(ENOTEMPTY, "Directory not empty", path)
         else:
             raise FileNotFoundError(path)
 

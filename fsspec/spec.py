@@ -3,6 +3,7 @@ import logging
 import os
 import warnings
 from distutils.version import LooseVersion
+from errno import ESPIPE
 from hashlib import sha256
 from glob import has_magic
 
@@ -40,6 +41,7 @@ class _Cached(type):
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
         cls._cache = {}
+        cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):
         extra_tokens = tuple(
@@ -47,6 +49,9 @@ class _Cached(type):
         )
         token = tokenize(cls, *args, *extra_tokens, **kwargs)
         skip = kwargs.pop("skip_instance_cache", False)
+        if os.getpid() != cls._pid:
+            cls._cache.clear()
+            cls._pid = os.getpid()
         if not skip and cls.cachable and token in cls._cache:
             return cls._cache[token]
         else:
@@ -158,6 +163,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
+        if isinstance(path, list):
+            return [cls._strip_protocol(p) for p in path]
         path = stringify_path(path)
         protos = (cls.protocol,) if isinstance(cls.protocol, str) else cls.protocol
         for protocol in protos:
@@ -622,11 +629,18 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             raise ValueError("path must be str or dict")
 
-    def cat(self, path, recursive=False, **kwargs):
+    def cat(self, path, recursive=False, on_error="raise", **kwargs):
         """Fetch (potentially multiple) paths' contents
 
         Returns a dict of {path: contents} if there are multiple paths
         or the path has been otherwise expanded
+
+        on_error : "raise", "omit", "return"
+            If raise, an underlying exception will be raised (converted to KeyError
+            if the type is in self.missing_exceptions); if omit, keys with exception
+            will simply not be included in the output; if "return", all keys are
+            included in the output, but the value will be bytes or an exception
+            instance.
         """
         paths = self.expand_path(path, recursive=recursive)
         if (
@@ -634,7 +648,16 @@ class AbstractFileSystem(up, metaclass=_Cached):
             or isinstance(path, list)
             or paths[0] != self._strip_protocol(path)
         ):
-            return {path: self.cat_file(path, **kwargs) for path in paths}
+            out = {}
+            for path in paths:
+                try:
+                    out[path] = self.cat_file(path, **kwargs)
+                except Exception as e:
+                    if on_error == "raise":
+                        raise
+                    if on_error == "return":
+                        out[path] = e
+            return out
         else:
             return self.cat_file(paths[0])
 
@@ -1235,7 +1258,7 @@ class AbstractBufferedFile(io.IOBase):
         """
         loc = int(loc)
         if not self.mode == "rb":
-            raise OSError("Seek only available in read mode")
+            raise OSError(ESPIPE, "Seek only available in read mode")
         if whence == 0:
             nloc = loc
         elif whence == 1:
@@ -1359,8 +1382,9 @@ class AbstractBufferedFile(io.IOBase):
 
         https://docs.python.org/3/library/io.html#io.RawIOBase.readinto
         """
-        data = self.read(len(b))
-        memoryview(b).cast("B")[: len(data)] = data
+        out = memoryview(b).cast("B")
+        data = self.read(out.nbytes)
+        out[: len(data)] = data
         return len(data)
 
     def readuntil(self, char=b"\n", blocks=None):

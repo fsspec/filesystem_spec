@@ -16,25 +16,21 @@ def test_block_cache_lru():
     cache = BlockCache(4, letters_fetcher, len(string.ascii_letters), maxblocks=2)
     # miss
     cache._fetch(0, 2)
-    assert cache.cache_info().hits == 0
     assert cache.cache_info().misses == 1
     assert cache.cache_info().currsize == 1
 
     # hit
     cache._fetch(0, 2)
-    assert cache.cache_info().hits == 1
     assert cache.cache_info().misses == 1
     assert cache.cache_info().currsize == 1
 
     # miss
     cache._fetch(4, 6)
-    assert cache.cache_info().hits == 1
     assert cache.cache_info().misses == 2
     assert cache.cache_info().currsize == 2
 
     # miss & evict
     cache._fetch(12, 13)
-    assert cache.cache_info().hits == 1
     assert cache.cache_info().misses == 3
     assert cache.cache_info().currsize == 2
 

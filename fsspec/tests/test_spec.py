@@ -1,11 +1,12 @@
-import pickle
 import json
-
-import pytest
-from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
-import fsspec
+import pickle
 
 import numpy as np
+import pytest
+
+import fsspec
+from fsspec.implementations.ftp import FTPFileSystem
+from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 
 
 class DummyTestFS(AbstractFileSystem):
@@ -232,5 +233,35 @@ def test_readinto_with_numpy(tmpdir, dt):
     arr2 = np.empty_like(arr)
     with fsspec.open(store_path, "rb") as f:
         f.readinto(arr2)
+
+    assert np.array_equal(arr, arr2)
+
+
+@pytest.mark.parametrize(
+    "dt",
+    [
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.float32,
+        np.float64,
+    ],
+)
+def test_readinto_with_multibyte(ftp_writable, tmpdir, dt):
+    host, port, user, pw = ftp_writable
+    ftp = FTPFileSystem(host=host, port=port, username=user, password=pw)
+
+    with ftp.open("/out", "wb") as fp:
+        arr = np.arange(10, dtype=dt)
+        fp.write(arr.tobytes())
+
+    with ftp.open("/out", "rb") as fp:
+        arr2 = np.empty_like(arr)
+        fp.readinto(arr2)
 
     assert np.array_equal(arr, arr2)
