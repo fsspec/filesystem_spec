@@ -66,15 +66,15 @@ class _Cached(type):
 
 
 try:  # optionally derive from pyarrow's FileSystem, if available
-    # TODO: it should be possible to disable this
     import pyarrow as pa
-
+except ImportError:
+    up = object
+else:
+    # only derive from the legacy pyarrow's FileSystem for older pyarrow versions
     if LooseVersion(pa.__version__) < LooseVersion("2.0"):
         up = pa.filesystem.DaskFileSystem
     else:
         up = object
-except ImportError:
-    up = object
 
 
 class AbstractFileSystem(up, metaclass=_Cached):
