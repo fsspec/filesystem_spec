@@ -86,7 +86,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     )
                     paths.add(ppath)
         for p2 in self.pseudo_dirs:
-            if self._parent(p2).strip("/") == path and p2.strip('/') not in paths:
+            if self._parent(p2).strip("/") == path and p2.strip("/") not in paths:
                 out.append({"name": p2 + "/", "size": 0, "type": "directory"})
         if detail:
             return out

@@ -24,7 +24,7 @@ def test_1(m):
 )
 def test_ls(m):
     m.mkdir("/dir")
-    m.mkdir('/dir/dir1')
+    m.mkdir("/dir/dir1")
 
     m.touch("/dir/afile")
     m.touch("/dir/dir1/bfile")
