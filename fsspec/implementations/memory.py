@@ -10,7 +10,11 @@ logger = logging.Logger("fsspec.memoryfs")
 
 
 class MemoryFileSystem(AbstractFileSystem):
-    """A filesystem based on a dict of BytesIO objects"""
+    """A filesystem based on a dict of BytesIO objects
+
+    This is a global filesystem so instances of this class all point to the same
+    in memory filesystem.
+    """
 
     store = {}  # global
     pseudo_dirs = []
@@ -82,7 +86,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     )
                     paths.add(ppath)
         for p2 in self.pseudo_dirs:
-            if self._parent(p2).strip("/").rstrip("/") == path:
+            if self._parent(p2).strip("/") == path and p2.strip('/') not in paths:
                 out.append({"name": p2 + "/", "size": 0, "type": "directory"})
         if detail:
             return out

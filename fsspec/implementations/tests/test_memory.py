@@ -23,6 +23,9 @@ def test_1(m):
     reason="py35 error, see https://github.com/intake/filesystem_spec/issues/148",
 )
 def test_ls(m):
+    m.mkdir("/dir")
+    m.mkdir('/dir/dir1')
+
     m.touch("/dir/afile")
     m.touch("/dir/dir1/bfile")
     m.touch("/dir/dir1/cfile")
