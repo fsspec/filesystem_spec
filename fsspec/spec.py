@@ -237,7 +237,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         # But if have, you should call this method of parent class from your
         # subclass to ensure expiring caches after transacations correctly.
         # See the implementaion of FTPFileSystem in ftp.py
-        if bool(self._transaction):
+        if self._intrans:
             self._invalidated_caches_in_transaction.append(path)
 
     def mkdir(self, path, create_parents=True, **kwargs):
