@@ -818,7 +818,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def _parent(cls, path):
         path = cls._strip_protocol(path.rstrip("/"))
         if "/" in path:
-            return os.path.join(cls.root_marker, path.rsplit("/", 1)[0])
+            parent = path.rsplit("/", 1)[0].lstrip(cls.root_marker)
+            return cls.root_marker + parent
         else:
             return cls.root_marker
 
