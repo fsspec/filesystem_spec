@@ -13,6 +13,8 @@ data = b"\n".join([b"some test data"] * 1000)
 realfile = "http://localhost:%i/index/realfile" % port
 index = b'<a href="%s">Link</a>' % realfile.encode()
 win = os.name == "nt"
+if sys.version_info < (3, 7):
+    pytest.skip("Async on py36 is incomplete")
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):

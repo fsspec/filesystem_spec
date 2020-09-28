@@ -1,3 +1,4 @@
+import array
 from collections.abc import MutableMapping
 from .core import url_to_fs
 
@@ -146,6 +147,9 @@ class FSMap(MutableMapping):
     def __setitem__(self, key, value):
         """Store value in key"""
         key = self._key_to_str(key)
+        if isinstance(value, array.array):  # pragma: no cover
+            # back compat, array.array used to work
+            value = bytearray(value)
         self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
         self.fs.pipe_file(key, value)
 
