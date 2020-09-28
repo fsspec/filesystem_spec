@@ -1,4 +1,6 @@
+import pytest
 import asyncio
+import sys
 from fsspec.asyn import _run_until_done
 
 
@@ -12,6 +14,7 @@ async def outer():
     return _run_until_done(inner())
 
 
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="Async fails on py36")
 def test_runtildone():
     loop = asyncio.get_event_loop()
     assert loop.run_until_complete(outer())

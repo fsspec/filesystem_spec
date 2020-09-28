@@ -181,6 +181,11 @@ class AsyncFileSystem(AbstractFileSystem):
     async_impl = True
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
+        if sys.version_info < (3, 7):  # pragma: no cover
+            raise RuntimeError(
+                "async file systems do not work on py<37. "
+                "Please downgrade your fsspec or upgrade python."
+            )
         self.asynchronous = asynchronous
         self.loop = loop or get_loop()
         super().__init__(*args, **kwargs)
