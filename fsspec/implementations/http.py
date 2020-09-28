@@ -95,8 +95,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        """ For HTTP, we always want to keep the full URL
-        """
+        """For HTTP, we always want to keep the full URL"""
         return path
 
     async def _ls(self, url, detail=True, **kwargs):

@@ -160,7 +160,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     @classmethod
     def _strip_protocol(cls, path):
-        """ Turn path from fully-qualified to file-system-specific
+        """Turn path from fully-qualified to file-system-specific
 
         May require FS-specific handling, e.g., for relative paths or links.
         """
@@ -192,7 +192,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
     @classmethod
     def current(cls):
-        """ Return the most recently created FileSystem
+        """Return the most recently created FileSystem
 
         If no instance has been created, then create one with defaults
         """
@@ -344,7 +344,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             pass
 
     def walk(self, path, maxdepth=None, **kwargs):
-        """ Return all files belows path
+        """Return all files belows path
 
         List all files, recursing into subdirectories; output is iterator-style,
         like ``os.walk()``. For a simple list of files, ``find()`` is available.
@@ -907,7 +907,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             return f
 
     def touch(self, path, truncate=True, **kwargs):
-        """ Create empty file, or update timestamp
+        """Create empty file, or update timestamp
 
         Parameters
         ----------
@@ -928,7 +928,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return sha256(str(self.info(path)).encode()).hexdigest()
 
     def read_block(self, fn, offset, length, delimiter=None):
-        """ Read a block of bytes from
+        """Read a block of bytes from
 
         Starting at ``offset`` of the file, read ``length`` bytes.  If
         ``delimiter`` is set then we ensure that the read starts and stops at
@@ -1270,7 +1270,7 @@ class AbstractBufferedFile(io.IOBase):
         return self.loc
 
     def seek(self, loc, whence=0):
-        """ Set current file location
+        """Set current file location
 
         Parameters
         ----------
@@ -1358,7 +1358,7 @@ class AbstractBufferedFile(io.IOBase):
             self.buffer = io.BytesIO()
 
     def _upload_chunk(self, final=False):
-        """ Write one part of a multi-block file upload
+        """Write one part of a multi-block file upload
 
         Parameters
         ==========
@@ -1470,7 +1470,7 @@ class AbstractBufferedFile(io.IOBase):
         return self.readinto(b)
 
     def close(self):
-        """ Close file
+        """Close file
 
         Finalizes writes, discards cache
         """

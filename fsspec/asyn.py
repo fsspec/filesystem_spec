@@ -16,6 +16,12 @@ private = re.compile("_[^_]")
 
 def _run_until_done(coro):
     """execute coroutine, when already in the event loop"""
+    if sys.version_info < (3, 7):  # pragma: no cover
+        raise RuntimeError(
+            "async file systems do not work completely on py<37. "
+            "The nested call currently underway cannot be processed. "
+            "Please downgrade your fsspec or upgrade python."
+        )
     loop = asyncio.get_event_loop()
     assert loop.is_running()
     task = asyncio.current_task()

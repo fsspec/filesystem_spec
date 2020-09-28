@@ -190,20 +190,15 @@ class CachingFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
 
         self._check_cache()
-        if not path.startswith(self.target_protocol):
-            store_path = self.target_protocol + "://" + path
-            path = self.fs._strip_protocol(store_path)
-        else:
-            store_path = path
         for storage, cache in zip(self.storage, self.cached_files):
-            if store_path not in cache:
+            if path not in cache:
                 continue
-            detail = cache[store_path].copy()
+            detail = cache[path].copy()
             if self.check_files:
                 if detail["uid"] != self.fs.ukey(path):
                     continue
             if self.expiry:
-                if detail["time"] - time.time() > self.expiry:
+                if time.time() - detail["time"] > self.expiry:
                     continue
             fn = os.path.join(storage, detail["fn"])
             if os.path.exists(fn):
@@ -227,18 +222,13 @@ class CachingFileSystem(AbstractFileSystem):
         raises PermissionError
         """
         path = self._strip_protocol(path)
-        if not path.startswith(self.target_protocol):
-            store_path = self.target_protocol + "://" + path
-            path = self.fs._strip_protocol(store_path)
-        else:
-            store_path = path
         _, fn = self._check_file(path)
         if fn is None:
             return
         if fn.startswith(self.storage[-1]):
             # is in in writable cache
             os.remove(fn)
-            self.cached_files[-1].pop(store_path)
+            self.cached_files[-1].pop(path)
             self.save_cache()
         else:
             raise PermissionError(
@@ -268,11 +258,7 @@ class CachingFileSystem(AbstractFileSystem):
         """
         path = self._strip_protocol(path)
 
-        if not path.startswith(self.target_protocol):
-            store_path = self.target_protocol + "://" + path
-        else:
-            store_path = path
-        path = self.fs._strip_protocol(store_path)
+        path = self.fs._strip_protocol(path)
         if "r" not in mode:
             return self.fs._open(
                 path,
@@ -282,7 +268,7 @@ class CachingFileSystem(AbstractFileSystem):
                 cache_options=cache_options,
                 **kwargs
             )
-        detail = self._check_file(store_path)
+        detail = self._check_file(path)
         if detail:
             # file is in cache
             detail, fn = detail
@@ -303,7 +289,7 @@ class CachingFileSystem(AbstractFileSystem):
                 "time": time.time(),
                 "uid": self.fs.ukey(path),
             }
-            self.cached_files[-1][store_path] = detail
+            self.cached_files[-1][path] = detail
             logger.debug("Creating local sparse file for %s" % path)
 
         # call target filesystems open
@@ -346,9 +332,7 @@ class CachingFileSystem(AbstractFileSystem):
         """Called when a file is closing, so store the set of blocks"""
         path = self._strip_protocol(f.path)
 
-        if not path.startswith(self.target_protocol):
-            store_path = self.target_protocol + "://" + path
-        c = self.cached_files[-1][store_path]
+        c = self.cached_files[-1][path]
         if c["blocks"] is not True and len(["blocks"]) * f.blocksize >= f.size:
             c["blocks"] = True
         self.save_cache()
@@ -372,6 +356,7 @@ class CachingFileSystem(AbstractFileSystem):
             "head",
             "_check_file",
             "_check_cache",
+            "_mkcache",
             "clear_cache",
             "pop_from_cache",
             "_mkcache",
@@ -431,7 +416,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     local_file = True
 
     def open_many(self, open_files):
-        paths, store_paths = zip(*[self._paths_from_path(of.path) for of in open_files])
+        paths = [of.path for of in open_files]
         if "r" in open_files.mode:
             self._mkcache()
         else:
@@ -442,9 +427,8 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
         if self.compression:
             raise NotImplementedError
-        details = [self._check_file(sp) for sp in store_paths]
+        details = [self._check_file(sp) for sp in paths]
         downpath = [p for p, d in zip(paths, details) if not d]
-        downstore = [p for p, d in zip(store_paths, details) if not d]
         downfn0 = [
             os.path.join(self.storage[-1], self.hash_name(p, self.same_names))
             for p, d in zip(paths, details)
@@ -465,7 +449,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 for path in downpath
             ]
             self.cached_files[-1].update(
-                {store_path: detail for store_path, detail in zip(downstore, newdetail)}
+                {path: detail for path, detail in zip(downpath, newdetail)}
             )
             self.save_cache()
 
@@ -481,21 +465,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def commit_many(self, open_files):
         self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
 
-    def _paths_from_path(self, path):
-        path = self._strip_protocol(path)
-
-        if not path.startswith(self.target_protocol):
-            store_path = self.target_protocol + "://" + path
-        else:
-            store_path = path
-        path = self.fs._strip_protocol(store_path)
-        return path, store_path
-
     def _open(self, path, mode="rb", **kwargs):
-        path, store_path = self._paths_from_path(path)
+        path = self._strip_protocol(path)
         if "r" not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
-        detail = self._check_file(store_path)
+        detail = self._check_file(path)
         if detail:
             detail, fn = detail
             hash, blocks = detail["fn"], detail["blocks"]
@@ -516,35 +490,30 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 "time": time.time(),
                 "uid": self.fs.ukey(path),
             }
-            self.cached_files[-1][store_path] = detail
+            self.cached_files[-1][path] = detail
             logger.debug("Copying %s to local cache" % path)
         kwargs["mode"] = mode
 
         # call target filesystems open
-        # TODO: why not just use fs.get ??
-        f = self.fs._open(path, **kwargs)
-        if self.compression:
-            comp = (
-                infer_compression(path)
-                if self.compression == "infer"
-                else self.compression
-            )
-            f = compr[comp](f, mode="rb")
         self._mkcache()
-        with open(fn, "wb") as f2:
-            if isinstance(f, AbstractBufferedFile):
-                # want no type of caching if just downloading whole thing
-                f.cache = BaseCache(0, f.cache.fetcher, f.size)
-            if getattr(f, "blocksize", 0) and f.size:
-                # opportunity to parallelise here
+        if self.compression:
+            with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
+                if isinstance(f, AbstractBufferedFile):
+                    # want no type of caching if just downloading whole thing
+                    f.cache = BaseCache(0, f.cache.fetcher, f.size)
+                comp = (
+                    infer_compression(path)
+                    if self.compression == "infer"
+                    else self.compression
+                )
+                f = compr[comp](f, mode="rb")
                 data = True
-                block = getattr(f, "blocksize", 5 * 2 ** 20)
                 while data:
+                    block = getattr(f, "blocksize", 5 * 2 ** 20)
                     data = f.read(block)
                     f2.write(data)
-            else:
-                # this only applies to HTTP, should instead use streaming
-                f2.write(f.read())
+        else:
+            self.fs.get(path, fn)
         self.save_cache()
         return self._open(path, mode)
 
@@ -595,11 +564,6 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
 
-        if not path.startswith(self.target_protocol):
-            store_path = self.target_protocol + "://" + path
-        else:
-            store_path = path
-        path = self.fs._strip_protocol(store_path)
         if "r" not in mode:
             return LocalTempFile(self, path, mode=mode)
         fn = self._check_file(path)

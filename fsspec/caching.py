@@ -109,7 +109,7 @@ class MMapCache(BaseCache):
 
 
 class ReadAheadCache(BaseCache):
-    """ Cache which reads only when we get beyond a block of data
+    """Cache which reads only when we get beyond a block of data
 
     This is a much simpler version of BytesCache, and does not attempt to
     fill holes in the cache or keep fragments alive. It is best suited to

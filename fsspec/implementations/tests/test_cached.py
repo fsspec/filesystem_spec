@@ -62,8 +62,8 @@ def test_blockcache_workflow(ftp_writable, tmp_path):
     # Check that cache file only has the first two blocks
     with open(tmp_path / "cache", "rb") as f:
         cache = pickle.load(f)
-        assert "ftp:///out" in cache
-        assert cache["ftp:///out"]["blocks"] == [0, 1]
+        assert "/out" in cache
+        assert cache["/out"]["blocks"] == [0, 1]
 
     # Reopen the same cache and read some more...
     fs = fsspec.filesystem("blockcache", **fs_kwargs)
@@ -88,9 +88,9 @@ def test_workflow(ftp_writable, impl):
     with fs.open("/out") as f:
         assert os.listdir(fs.storage[-1])
         assert f.read() == b"test"
-        assert fs.cached_files[-1]["ftp:///out"]["blocks"]
+        assert fs.cached_files[-1]["/out"]["blocks"]
     assert fs.cat("/out") == b"test"
-    assert fs.cached_files[-1]["ftp:///out"]["blocks"] is True
+    assert fs.cached_files[-1]["/out"]["blocks"] is True
 
     with fs.open("/out", "wb") as f:
         f.write(b"changed")
@@ -595,3 +595,47 @@ def test_cached_write(protocol):
             f.write(b"data")
 
     assert sorted(os.listdir(d)) == ["0.out", "1.out"]
+
+
+def test_expiry():
+    import time
+
+    d = tempfile.mkdtemp()
+    fs = fsspec.filesystem("memory")
+    fn = "afile"
+    fn0 = "memory://afile"
+    data = b"hello"
+    with fs.open(fn0, "wb") as f:
+        f.write(data)
+
+    fs = fsspec.filesystem(
+        "filecache",
+        fs=fs,
+        cache_storage=d,
+        check_files=False,
+        expiry_time=0.1,
+        same_names=True,
+    )
+
+    # get file
+    assert fs._check_file(fn0) is False
+    assert fs.open(fn0, mode="rb").read() == data
+    start_time = fs.cached_files[-1][fn]["time"]
+
+    # cache time..
+    assert fs.last_cache - start_time < 0.19
+
+    # cache should have refreshed
+    time.sleep(0.01)
+
+    # file should still be valid... re-read
+    assert fs.open(fn0, mode="rb").read() == data
+    detail, _ = fs._check_file(fn0)
+    assert detail["time"] == start_time
+
+    time.sleep(0.11)
+    # file should still be invalid... re-read
+    assert fs._check_file(fn0) is False
+    assert fs.open(fn0, mode="rb").read() == data
+    detail, _ = fs._check_file(fn0)
+    assert detail["time"] - start_time > 0.09

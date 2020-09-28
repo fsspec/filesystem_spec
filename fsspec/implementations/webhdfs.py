@@ -358,7 +358,7 @@ class WebHDFile(AbstractBufferedFile):
             self.path = "/".join([tempdir, str(uuid.uuid4())])
 
     def _upload_chunk(self, final=False):
-        """ Write one part of a multi-block file upload
+        """Write one part of a multi-block file upload
 
         Parameters
         ==========

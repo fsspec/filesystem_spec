@@ -1,3 +1,4 @@
+import array
 from collections.abc import MutableMapping
 from .core import url_to_fs
 
@@ -55,8 +56,7 @@ class FSMap(MutableMapping):
             self.fs.rm(root + "/a")
 
     def clear(self):
-        """Remove all keys below root - empties out mapping
-        """
+        """Remove all keys below root - empties out mapping"""
         try:
             self.fs.rm(self.root, True)
             self.fs.mkdir(self.root)
@@ -147,9 +147,11 @@ class FSMap(MutableMapping):
     def __setitem__(self, key, value):
         """Store value in key"""
         key = self._key_to_str(key)
+        if isinstance(value, array.array):  # pragma: no cover
+            # back compat, array.array used to work
+            value = bytearray(value)
         self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
-        with self.fs.open(key, "wb") as f:
-            f.write(value)
+        self.fs.pipe_file(key, value)
 
     def __iter__(self):
         return (self._str_to_key(x) for x in self.fs.find(self.root))
