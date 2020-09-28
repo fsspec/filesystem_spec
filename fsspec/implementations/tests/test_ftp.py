@@ -115,3 +115,17 @@ def test_transaction(ftp_writable):
 
     fs.rm(fn)
     assert not fs.exists(fn)
+
+
+def test_transaction_with_cache(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    fs.mkdir("/tmp")
+    fs.mkdir("/tmp/dir")
+    assert "dir" in fs.ls("/tmp", detail=False)
+
+    with fs.transaction:
+        fs.rmdir("/tmp/dir")
+
+    assert "dir" not in fs.ls("/tmp", detail=False)
+    assert not fs.exists("/tmp/dir")
