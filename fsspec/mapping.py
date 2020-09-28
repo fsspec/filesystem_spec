@@ -148,8 +148,7 @@ class FSMap(MutableMapping):
         """Store value in key"""
         key = self._key_to_str(key)
         self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
-        with self.fs.open(key, "wb") as f:
-            f.write(value)
+        self.fs.pipe_file(key, value)
 
     def __iter__(self):
         return (self._str_to_key(x) for x in self.fs.find(self.root))
