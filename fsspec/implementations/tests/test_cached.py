@@ -608,16 +608,19 @@ def test_expiry():
     with fs.open(fn0, "wb") as f:
         f.write(data)
 
-    fs = fsspec.filesystem('filecache', fs=fs,
-                                  cache_storage=d,
-                                  check_files=False,
-                                  expiry_time=0.1,
-                                  same_names=True)
+    fs = fsspec.filesystem(
+        "filecache",
+        fs=fs,
+        cache_storage=d,
+        check_files=False,
+        expiry_time=0.1,
+        same_names=True,
+    )
 
     # get file
     assert fs._check_file(fn0) is False
-    assert fs.open(fn0, mode='rb').read() == data
-    start_time = fs.cached_files[-1][fn]['time']
+    assert fs.open(fn0, mode="rb").read() == data
+    start_time = fs.cached_files[-1][fn]["time"]
 
     # cache time..
     assert fs.last_cache - start_time < 0.19
@@ -626,13 +629,13 @@ def test_expiry():
     time.sleep(0.01)
 
     # file should still be valid... re-read
-    assert fs.open(fn0, mode='rb').read() == data
+    assert fs.open(fn0, mode="rb").read() == data
     detail, _ = fs._check_file(fn0)
-    assert detail['time'] == start_time
+    assert detail["time"] == start_time
 
     time.sleep(0.11)
     # file should still be invalid... re-read
     assert fs._check_file(fn0) is False
-    assert fs.open(fn0, mode='rb').read() == data
+    assert fs.open(fn0, mode="rb").read() == data
     detail, _ = fs._check_file(fn0)
-    assert detail['time'] - start_time > 0.09
+    assert detail["time"] - start_time > 0.09

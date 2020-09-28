@@ -224,7 +224,7 @@ def open_files(
     expand=True,
     **kwargs
 ):
-    """ Given a path or paths, return a list of ``OpenFile`` objects.
+    """Given a path or paths, return a list of ``OpenFile`` objects.
 
     For writing, a str path must contain the "*" character, which will be filled
     in by increasing numbers, e.g., "part*" ->  "part1", "part2" if num=2.
@@ -388,7 +388,7 @@ def open(
     newline=None,
     **kwargs
 ):
-    """ Given a path or paths, return one ``OpenFile`` object.
+    """Given a path or paths, return one ``OpenFile`` object.
 
     Parameters
     ----------

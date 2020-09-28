@@ -36,8 +36,7 @@ class SigSlot(object):
         self._setup()
 
     def _setup(self):
-        """Create GUI elements and register signals
-        """
+        """Create GUI elements and register signals"""
         self.panel = pn.pane.PaneBase()
         # no signals to set up in the base class
 

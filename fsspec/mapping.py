@@ -55,8 +55,7 @@ class FSMap(MutableMapping):
             self.fs.rm(root + "/a")
 
     def clear(self):
-        """Remove all keys below root - empties out mapping
-        """
+        """Remove all keys below root - empties out mapping"""
         try:
             self.fs.rm(self.root, True)
             self.fs.mkdir(self.root)

@@ -113,7 +113,7 @@ class FUSEr(Operations):
 
 
 def run(fs, path, mount_point, foreground=True, threads=False):
-    """ Mount stuff in a local directory
+    """Mount stuff in a local directory
 
     This uses fusepy to make it appear as if a given path on an fsspec
     instance is in fact resident within the local file-system.

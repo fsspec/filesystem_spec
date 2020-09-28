@@ -10,7 +10,7 @@ DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
 
 def infer_storage_options(urlpath, inherit_storage_options=None):
-    """ Infer storage options from URL path and merge it with existing storage
+    """Infer storage options from URL path and merge it with existing storage
     options.
 
     Parameters
@@ -120,7 +120,7 @@ def infer_compression(filename):
 
 
 def build_name_function(max_int):
-    """ Returns a function that receives a single integer
+    """Returns a function that receives a single integer
     and returns it as a string padded by enough zero characters
     to align with maximum possible integer
 
@@ -198,7 +198,7 @@ def seek_delimiter(file, delimiter, blocksize):
 
 
 def read_block(f, offset, length, delimiter=None, split_before=False):
-    """ Read a block of bytes from a file
+    """Read a block of bytes from a file
 
     Parameters
     ----------
@@ -263,7 +263,7 @@ def read_block(f, offset, length, delimiter=None, split_before=False):
 
 
 def tokenize(*args, **kwargs):
-    """ Deterministic token
+    """Deterministic token
 
     (modified from dask.base)
 
@@ -279,7 +279,7 @@ def tokenize(*args, **kwargs):
 
 
 def stringify_path(filepath):
-    """ Attempt to convert a path-like object to a string.
+    """Attempt to convert a path-like object to a string.
 
     Parameters
     ----------

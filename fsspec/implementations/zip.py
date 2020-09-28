@@ -139,7 +139,7 @@ class ZipFileSystem(AbstractFileSystem):
         return tokenize(path, self.fo, self.protocol)
 
     def _all_dirnames(self, paths):
-        """ Returns *all* directory names for each path in paths, including intermediate ones.
+        """Returns *all* directory names for each path in paths, including intermediate ones.
 
         Parameters
         ----------
