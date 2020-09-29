@@ -1,10 +1,10 @@
-import time
 import pickle
 import logging
 import os
 import hashlib
 from shutil import move, rmtree
 import tempfile
+import time
 import inspect
 
 from fsspec import AbstractFileSystem, filesystem
@@ -330,6 +330,8 @@ class CachingFileSystem(AbstractFileSystem):
 
     def close_and_update(self, f, close):
         """Called when a file is closing, so store the set of blocks"""
+        if f.closed:
+            return
         path = self._strip_protocol(f.path)
 
         c = self.cached_files[-1][path]

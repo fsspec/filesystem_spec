@@ -1501,7 +1501,8 @@ class AbstractBufferedFile(io.IOBase):
         return self.mode in {"wb", "ab"} and not self.closed
 
     def __del__(self):
-        self.close()
+        if not self.closed:
+            self.close()
 
     def __str__(self):
         return "<File-like object %s, %s>" % (type(self.fs).__name__, self.path)
