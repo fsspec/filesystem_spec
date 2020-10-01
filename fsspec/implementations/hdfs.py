@@ -9,6 +9,7 @@ class PyArrowHDFS(AbstractFileSystem):
     This is a very simple wrapper over pa.hdfs.HadoopFileSystem, which
     passes on all calls to the underlying class.
     """
+    protocol = "hdfs"
 
     def __init__(
         self,

@@ -166,6 +166,14 @@ known_implementations = {
         "class": "fsspec.implementations.smb.SMBFileSystem",
         "err": 'SMB requires "smbprotocol" or "smbprotocol[kerberos]" installed',
     },
+    "jupyter": {
+        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
+        "err": 'Jupyter FS requires requests to be installed',
+    },
+    "jlab": {
+        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
+        "err": 'Jupyter FS requires requests to be installed',
+    },
 }
 
 minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}
