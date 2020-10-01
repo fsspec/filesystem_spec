@@ -6,13 +6,28 @@ import requests
 
 
 class JupyterFileSystem(fsspec.AbstractFileSystem):
+    """View of the files as seen by a Jupyter server (notebook or lab)"""
 
     protocol = ("jupyter", "jlab")
 
     def __init__(self, url, tok=None, **kwargs):
+        """
+
+        Parameters
+        ----------
+        url : str
+            Base URL of the server, like "http://127.0.0.1:8888". May include
+            token in the string, which is given by the process when starting up/
+        tok : str
+            If the token is obtained separately, can be given here
+        kwargs
+        """
         if "?" in url:
             if tok is None:
-                tok = re.findall("token=([a-f0-9]+)")[0]
+                try:
+                    tok = re.findall("token=([a-f0-9]+)", url)[0]
+                except IndexError as e:
+                    raise ValueError("Could not determine token") from e
             url = url.split("?", 1)[0]
         self.url = url.rstrip("/") + '/api/contents'
         self.session = requests.Session()
@@ -22,6 +37,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         super().__init__(**kwargs)
 
     def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path)
         r = self.session.get(self.url + '/' + path)
         if r.status_code == 404:
             return FileNotFoundError(path)
@@ -42,6 +58,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         return [o['name'] for o in out]
 
     def cat_file(self, path):
+        path = self._strip_protocol(path)
         r = self.session.get(self.url + '/' + path)
         if r.status_code == 404:
             return FileNotFoundError(path)
@@ -54,6 +71,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             return base64.b64decode(out['content'])
 
     def pipe_file(self, path, value, **_):
+        path = self._strip_protocol(path)
         json = {'name': path.rsplit('/', 1)[-1],
                 'path': path,
                 'size': len(value),
@@ -63,6 +81,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         self.session.put(self.url + '/' + path, json=json)
 
     def mkdir(self, path, create_parents=True, **kwargs):
+        path = self._strip_protocol(path)
         if create_parents and '/' in path:
             self.mkdir(path.rsplit('/', 1)[0], True)
         json = {'name': path.rsplit('/', 1)[-1],
@@ -73,6 +92,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         self.session.put(self.url + '/' + path, json=json)
 
     def _rm(self, path):
+        path = self._strip_protocol(path)
         self.session.delete(self.url + '/' + path)
 
     def _open(
@@ -81,6 +101,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         mode="rb",
         **kwargs
     ):
+        path = self._strip_protocol(path)
         if mode == 'rb':
             data = self.cat_file(path)
             return io.BytesIO(data)
