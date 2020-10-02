@@ -18,6 +18,9 @@ def jupyter(tmpdir):
                                          f" --no-browser --port=5566"),
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        pytest.skip("notebook not installed correctly")
+    try:
         timeout = 5
         while True:
             try:
