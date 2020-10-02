@@ -29,7 +29,11 @@ def jupyter(tmpdir):
                 timeout -= 0.1
                 assert timeout > 0, "Timed out for jupyter"
             txt = P.stdout.read(600).decode()
-            url = re.findall("(http://[^\\n]+)", txt)[0]
+            try:
+                url = re.findall("(http://[^\\n]+)", txt)[0]
+            except IndexError:
+                print(txt)  # debug on fail
+                raise
             yield url, tmpdir
     finally:
         P.terminate()
