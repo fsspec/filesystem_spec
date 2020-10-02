@@ -12,10 +12,12 @@ from .spec import AbstractFileSystem
 # this global variable holds whether this thread is running async or not
 thread_state = threading.local()
 private = re.compile("_[^_]")
+depth = [0]
 
 
 def _run_until_done(coro):
     """execute coroutine, when already in the event loop"""
+    depth[0] += 1
     if sys.version_info < (3, 7):  # pragma: no cover
         raise RuntimeError(
             "async file systems do not work completely on py<37. "
@@ -26,17 +28,21 @@ def _run_until_done(coro):
     assert loop.is_running()
     task = asyncio.current_task()
     asyncio.tasks._unregister_task(task)
-    current_task = asyncio.tasks._current_tasks.get(loop)
-    assert task == current_task
     del asyncio.tasks._current_tasks[loop]
     runner = loop.create_task(coro)
     while not runner.done():
-        loop._run_once()
+        print(depth[0])
+        try:
+            loop._run_once()
+        except IndexError as e:
+            pass
+    asyncio.tasks._register_task(task)
     asyncio.tasks._current_tasks[loop] = task
+    depth[0] -= 1
     return runner.result()
 
 
-def sync(loop, func, *args, callback_timeout=None, **kwargs):
+def sync(loop, func, *args, **kwargs):
     """
     Run coroutine in loop running in separate thread.
     """
@@ -50,11 +56,8 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
         try:
             if main_tid == threading.get_ident():
                 raise RuntimeError("sync() called from thread of running loop")
-            await asyncio.sleep(0)
             thread_state.asynchronous = True
             future = func(*args, **kwargs)
-            if callback_timeout is not None:
-                future = asyncio.wait_for(future, callback_timeout)
             result[0] = await future
         except Exception:
             error[0] = sys.exc_info()
@@ -63,12 +66,8 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
             e.set()
 
     asyncio.run_coroutine_threadsafe(f(), loop=loop)
-    if callback_timeout is not None:
-        if not e.wait(callback_timeout):
-            raise TimeoutError("timed out after %s s." % (callback_timeout,))
-    else:
-        while not e.is_set():
-            e.wait(10)
+    while not e.is_set():
+        e.wait(10)
     if error[0]:
         typ, exc, tb = error[0]
         raise exc.with_traceback(tb)
@@ -139,7 +138,7 @@ def async_wrapper(func):
 def get_loop():
     """Create a running loop in another thread"""
     loop = asyncio.new_event_loop()
-    t = threading.Thread(target=loop.run_forever)
+    t = threading.Thread(target=loop.run_forever, name="AsyncIOEventLoop")
     t.daemon = True
     t.start()
     return loop
