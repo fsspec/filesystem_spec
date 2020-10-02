@@ -5,6 +5,7 @@ import re
 import os
 import sys
 import threading
+import time
 
 from .utils import other_paths, is_exception
 from .spec import AbstractFileSystem
@@ -12,12 +13,10 @@ from .spec import AbstractFileSystem
 # this global variable holds whether this thread is running async or not
 thread_state = threading.local()
 private = re.compile("_[^_]")
-depth = [0]
 
 
 def _run_until_done(coro):
     """execute coroutine, when already in the event loop"""
-    depth[0] += 1
     if sys.version_info < (3, 7):  # pragma: no cover
         raise RuntimeError(
             "async file systems do not work completely on py<37. "
@@ -31,14 +30,12 @@ def _run_until_done(coro):
     del asyncio.tasks._current_tasks[loop]
     runner = loop.create_task(coro)
     while not runner.done():
-        print(depth[0])
         try:
             loop._run_once()
         except IndexError as e:
-            pass
+            time.sleep(0.001)
     asyncio.tasks._register_task(task)
     asyncio.tasks._current_tasks[loop] = task
-    depth[0] -= 1
     return runner.result()
 
 
