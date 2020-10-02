@@ -17,7 +17,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         ----------
         url : str
             Base URL of the server, like "http://127.0.0.1:8888". May include
-            token in the string, which is given by the process when starting up/
+            token in the string, which is given by the process when starting up
         tok : str
             If the token is obtained separately, can be given here
         kwargs
