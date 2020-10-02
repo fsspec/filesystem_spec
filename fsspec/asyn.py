@@ -32,7 +32,7 @@ def _run_until_done(coro):
     while not runner.done():
         try:
             loop._run_once()
-        except IndexError as e:
+        except IndexError:
             time.sleep(0.001)
     asyncio.tasks._register_task(task)
     asyncio.tasks._current_tasks[loop] = task
