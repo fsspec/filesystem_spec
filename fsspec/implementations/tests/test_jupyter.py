@@ -6,6 +6,7 @@ import time
 import pytest
 
 import fsspec
+
 pytest.importorskip("notebook")
 requests = pytest.importorskip("requests")
 
@@ -14,10 +15,14 @@ requests = pytest.importorskip("requests")
 def jupyter(tmpdir):
     tmpdir = str(tmpdir)
     try:
-        P = subprocess.Popen(shlex.split(f"jupyter notebook --notebook-dir={tmpdir}"
-                                         f" --no-browser --port=5566"),
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             stdin=subprocess.DEVNULL)
+        P = subprocess.Popen(
+            shlex.split(
+                f"jupyter notebook --notebook-dir={tmpdir}" f" --no-browser --port=5566"
+            ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+        )
     except FileNotFoundError:
         pytest.skip("notebook not installed correctly")
     try:
@@ -30,13 +35,12 @@ def jupyter(tmpdir):
             except:
                 time.sleep(0.1)
                 timeout -= 0.1
-                assert timeout > 0, "Timed out for jupyter"
+                pytest.skip("Timed out for jupyter")
             txt = P.stdout.read(600).decode()
             try:
                 url = re.findall("(http[s]*://[^\\n]+)", txt)[0]
             except IndexError:
-                print(txt)  # debug on fail
-                raise
+                pytest.skip("No notebook URL: " + txt)  # debug on fail
             yield url, tmpdir
     finally:
         P.terminate()
@@ -56,7 +60,7 @@ def test_simple(jupyter):
     with fs.open("bfile", "rb") as f:
         assert f.read() == b"more"
 
-    assert fs.info("bfile")['size'] == 4
-    fs.rm('afile')
+    assert fs.info("bfile")["size"] == 4
+    fs.rm("afile")
 
-    assert 'afile' not in os.listdir(d)
+    assert "afile" not in os.listdir(d)

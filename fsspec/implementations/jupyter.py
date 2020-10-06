@@ -29,88 +29,86 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
                 except IndexError as e:
                     raise ValueError("Could not determine token") from e
             url = url.split("?", 1)[0]
-        self.url = url.rstrip("/") + '/api/contents'
+        self.url = url.rstrip("/") + "/api/contents"
         self.session = requests.Session()
         if tok:
-            self.session.headers['Authorization'] = f'token {tok}'
+            self.session.headers["Authorization"] = f"token {tok}"
 
         super().__init__(**kwargs)
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
-        r = self.session.get(self.url + '/' + path)
+        r = self.session.get(self.url + "/" + path)
         if r.status_code == 404:
             return FileNotFoundError(path)
         r.raise_for_status()
         out = r.json()
 
-        if out['type'] == 'directory':
-            out = out['content']
+        if out["type"] == "directory":
+            out = out["content"]
         else:
             out = [out]
         for o in out:
-            o['name'] = o.pop('path')
-            o.pop('content')
-            if o['type'] == 'notebook':
-                o['type'] = 'file'
+            o["name"] = o.pop("path")
+            o.pop("content")
+            if o["type"] == "notebook":
+                o["type"] = "file"
         if detail:
             return out
-        return [o['name'] for o in out]
+        return [o["name"] for o in out]
 
     def cat_file(self, path):
         path = self._strip_protocol(path)
-        r = self.session.get(self.url + '/' + path)
+        r = self.session.get(self.url + "/" + path)
         if r.status_code == 404:
             return FileNotFoundError(path)
         r.raise_for_status()
         out = r.json()
-        if out['format'] == 'text':
+        if out["format"] == "text":
             # data should be binary
-            return out['content'].encode()
+            return out["content"].encode()
         else:
-            return base64.b64decode(out['content'])
+            return base64.b64decode(out["content"])
 
     def pipe_file(self, path, value, **_):
         path = self._strip_protocol(path)
-        json = {'name': path.rsplit('/', 1)[-1],
-                'path': path,
-                'size': len(value),
-                'content': base64.b64encode(value),
-                'format': 'base64',
-                'type': 'file'}
-        self.session.put(self.url + '/' + path, json=json)
+        json = {
+            "name": path.rsplit("/", 1)[-1],
+            "path": path,
+            "size": len(value),
+            "content": base64.b64encode(value),
+            "format": "base64",
+            "type": "file",
+        }
+        self.session.put(self.url + "/" + path, json=json)
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
-        if create_parents and '/' in path:
-            self.mkdir(path.rsplit('/', 1)[0], True)
-        json = {'name': path.rsplit('/', 1)[-1],
-                'path': path,
-                'size': None,
-                'content': None,
-                'type': 'directory'}
-        self.session.put(self.url + '/' + path, json=json)
+        if create_parents and "/" in path:
+            self.mkdir(path.rsplit("/", 1)[0], True)
+        json = {
+            "name": path.rsplit("/", 1)[-1],
+            "path": path,
+            "size": None,
+            "content": None,
+            "type": "directory",
+        }
+        self.session.put(self.url + "/" + path, json=json)
 
     def _rm(self, path):
         path = self._strip_protocol(path)
-        self.session.delete(self.url + '/' + path)
+        self.session.delete(self.url + "/" + path)
 
-    def _open(
-        self,
-        path,
-        mode="rb",
-        **kwargs
-    ):
+    def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
-        if mode == 'rb':
+        if mode == "rb":
             data = self.cat_file(path)
             return io.BytesIO(data)
         else:
-            return SimpleFileWriter(self, path, mode='wb')
+            return SimpleFileWriter(self, path, mode="wb")
 
 
 class SimpleFileWriter(fsspec.spec.AbstractBufferedFile):
-
     def _upload_chunk(self, final=False):
         """Never uploads a chunk until file is done
 

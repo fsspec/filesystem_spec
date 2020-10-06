@@ -168,11 +168,11 @@ known_implementations = {
     },
     "jupyter": {
         "class": "fsspec.implementations.jupyter.JupyterFileSystem",
-        "err": 'Jupyter FS requires requests to be installed',
+        "err": "Jupyter FS requires requests to be installed",
     },
     "jlab": {
         "class": "fsspec.implementations.jupyter.JupyterFileSystem",
-        "err": 'Jupyter FS requires requests to be installed',
+        "err": "Jupyter FS requires requests to be installed",
     },
 }
 
