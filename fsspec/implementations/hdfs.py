@@ -124,7 +124,8 @@ class PyArrowHDFS(AbstractFileSystem):
     def __getattribute__(self, item):
         if item in [
             "_open",
-            "close" "__init__",
+            "close",
+            "__init__",
             "__getattribute__",
             "__reduce_ex__",
             "open",
