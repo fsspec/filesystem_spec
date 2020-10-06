@@ -87,8 +87,8 @@ def test_pathobject(tmpdir):
 
     tmpdir = str(tmpdir)
     plist_str = [os.path.join(str(tmpdir), f) for f in ["a", "b"]]
-    open(plist_str[0], "w").write('first file')
-    open(plist_str[1], "w").write('second file')
+    open(plist_str[0], "w").write("first file")
+    open(plist_str[1], "w").write("second file")
     plist = [pathlib.Path(p) for p in plist_str]
     of = open_files(plist)
     assert len(of) == 2
