@@ -113,6 +113,9 @@ class PyArrowHDFS(AbstractFileSystem):
             out["port"] = ops["port"]
         return out
 
+    def close(self):
+        self.pahdfs.close()
+
     @classmethod
     def _strip_protocol(cls, path):
         ops = infer_storage_options(path)
@@ -121,7 +124,7 @@ class PyArrowHDFS(AbstractFileSystem):
     def __getattribute__(self, item):
         if item in [
             "_open",
-            "__init__",
+            "close" "__init__",
             "__getattribute__",
             "__reduce_ex__",
             "open",
