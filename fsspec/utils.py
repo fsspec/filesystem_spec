@@ -365,6 +365,24 @@ def is_exception(obj):
     return isinstance(obj, BaseException)
 
 
+def get_protocol(url):
+    parts = re.split(r"(\:\:|\://)", url, 1)
+    if len(parts) > 1:
+        return parts[0]
+    return "file"
+
+
+def can_be_local(path):
+    """Can the given URL be used wih open_local?"""
+    from fsspec import get_filesystem_class
+    try:
+        return getattr(get_filesystem_class(get_protocol(path)),
+                       "local_file", False)
+    except (ValueError, ImportError):
+        # not in registry or import failed
+        return False
+
+
 def setup_logger(logname, level="DEBUG"):
     import logging
 
