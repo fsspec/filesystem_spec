@@ -1,3 +1,4 @@
+import weakref
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
 from pyarrow.hdfs import HadoopFileSystem
@@ -41,7 +42,7 @@ class PyArrowHDFS(AbstractFileSystem):
             return
         AbstractFileSystem.__init__(self, **kwargs)
         self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
-        self.pahdfs = HadoopFileSystem(
+        pahdfs = HadoopFileSystem(
             host=host,
             port=port,
             user=user,
@@ -49,6 +50,8 @@ class PyArrowHDFS(AbstractFileSystem):
             driver=driver,
             extra_conf=extra_conf,
         )
+        weakref.finalize(self, lambda: pahdfs.close())
+        self.pahdfs = pahdfs
 
     def _open(
         self,
