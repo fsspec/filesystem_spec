@@ -11,6 +11,8 @@ class PyArrowHDFS(AbstractFileSystem):
     passes on all calls to the underlying class.
     """
 
+    protocol = "hdfs"
+
     def __init__(
         self,
         host="default",
