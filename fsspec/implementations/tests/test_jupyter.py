@@ -13,6 +13,7 @@ requests = pytest.importorskip("requests")
 
 @pytest.fixture()
 def jupyter(tmpdir):
+    import requests
     tmpdir = str(tmpdir)
     try:
         P = subprocess.Popen(
@@ -32,7 +33,7 @@ def jupyter(tmpdir):
                 r = requests.get("http://127.0.0.1:5566/")
                 r.raise_for_status()
                 break
-            except:
+            except (requests.exceptions.BaseHTTPError, IOError):
                 time.sleep(0.1)
                 timeout -= 0.1
                 pytest.skip("Timed out for jupyter")
