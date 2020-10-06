@@ -65,6 +65,7 @@ def test_pickle():
     m["key"] = b"data"
     m2 = pickle.loads(pickle.dumps(m))
     assert list(m) == list(m2)
+    assert m.missing_exceptions == m2.missing_exceptions
 
 
 def test_keys_view():

@@ -171,15 +171,8 @@ class FSMap(MutableMapping):
         path = self._key_to_str(key)
         return self.fs.exists(path) and self.fs.isfile(path)
 
-    def __getstate__(self):
-        """Mapping should be pickleable"""
-        # TODO: replace with reduce to reinstantiate?
-        return self.fs, self.root
-
-    def __setstate__(self, state):
-        fs, root = state
-        self.fs = fs
-        self.root = root
+    def __reduce__(self):
+        return FSMap, (self.root, self.fs, False, False, self.missing_exceptions)
 
 
 def get_mapper(url, check=False, create=False, missing_exceptions=None, **kwargs):
