@@ -2,6 +2,7 @@ import io
 import pytest
 import sys
 from fsspec.utils import (
+    can_be_local,
     infer_storage_options,
     seek_delimiter,
     read_block,
@@ -292,3 +293,19 @@ def test_log():
 
     logger = setup_logger("fsspec.test")
     assert logger.level == logging.DEBUG
+
+
+@pytest.mark.parametrize(
+    "par",
+    [
+        ("afile", True),
+        ("file://afile", True),
+        ("noproto://afile", False),
+        ("noproto::stuff", False),
+        ("simplecache::stuff", True),
+        ("simplecache://stuff", True),
+    ],
+)
+def test_can_local(par):
+    url, outcome = par
+    assert can_be_local(url) == outcome
