@@ -14,6 +14,7 @@ requests = pytest.importorskip("requests")
 @pytest.fixture()
 def jupyter(tmpdir):
     import requests
+
     tmpdir = str(tmpdir)
     try:
         P = subprocess.Popen(
