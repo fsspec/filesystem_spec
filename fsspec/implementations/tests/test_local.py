@@ -511,7 +511,7 @@ def test_strip_protocol_expanduser():
     stripped = LocalFileSystem._strip_protocol(path)
     assert path != stripped
     assert "file://" not in stripped
-    assert stripped.startswith(os.path.expanduser("~"))
+    assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
 
 
 def test_iterable(tmpdir):

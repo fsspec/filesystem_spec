@@ -76,7 +76,7 @@ def test_xz_lzma_compressions():
 def test_list():
     here = os.path.abspath(os.path.dirname(__file__))
     flist = os.listdir(here)
-    plist = [os.path.join(here, p) for p in flist]
+    plist = [os.path.join(here, p).replace("\\", "/") for p in flist]
     of = open_files(plist)
     assert len(of) == len(flist)
     assert [f.path for f in of] == plist
@@ -86,7 +86,7 @@ def test_pathobject(tmpdir):
     import pathlib
 
     tmpdir = str(tmpdir)
-    plist_str = [os.path.join(str(tmpdir), f) for f in ["a", "b"]]
+    plist_str = [os.path.join(str(tmpdir), f).replace("\\", "/") for f in ["a", "b"]]
     open(plist_str[0], "w").write("first file")
     open(plist_str[1], "w").write("second file")
     plist = [pathlib.Path(p) for p in plist_str]
