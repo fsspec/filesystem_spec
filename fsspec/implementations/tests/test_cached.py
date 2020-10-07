@@ -229,9 +229,7 @@ def test_local_filecache_creates_dir_if_needed(impl):
         f.write(data)
 
     # we can access the file and read it
-    fs = fsspec.filesystem(
-        impl, target_protocol="file", cache_storage=cache_location
-    )
+    fs = fsspec.filesystem(impl, target_protocol="file", cache_storage=cache_location)
 
     with fs.open(original_file, "rb") as f:
         data_in_cache = f.read()
