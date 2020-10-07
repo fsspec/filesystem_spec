@@ -223,24 +223,20 @@ def test_local_filecache_creates_dir_if_needed(impl):
     os.rmdir(cache_location)
     assert not os.path.exists(cache_location)
 
-    try:
-        original_file = os.path.join(original_location, "afile")
-        data = b"test data"
-        with open(original_file, "wb") as f:
-            f.write(data)
+    original_file = os.path.join(original_location, "afile")
+    data = b"test data"
+    with open(original_file, "wb") as f:
+        f.write(data)
 
-        # we can access the file and read it
-        fs = fsspec.filesystem(
-            impl, target_protocol="file", cache_storage=cache_location
-        )
+    # we can access the file and read it
+    fs = fsspec.filesystem(
+        impl, target_protocol="file", cache_storage=cache_location
+    )
 
-        with fs.open(original_file, "rb") as f:
-            data_in_cache = f.read()
+    with fs.open(original_file, "rb") as f:
+        data_in_cache = f.read()
 
-        assert os.path.exists(cache_location)
-
-    finally:
-        shutil.rmtree(cache_location)
+    assert os.path.exists(cache_location)
 
     assert data_in_cache == data
 
