@@ -6,3 +6,4 @@ dependencies:
   - paramiko
   - requests
   - numpydoc
+  - sphinx_rtd_theme
