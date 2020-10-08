@@ -55,7 +55,7 @@ The current list of known implementations can be found as follows
     known_implementations
 
 These are only imported on request, which may fail if a required dependency is missing. The dictionary
-``fsspec.registry`` contains all imported implementations, and can be mutated by user code, if necessary.
+:py:class:`fsspec.registry` contains all imported implementations, and can be mutated by user code, if necessary.
 
 
 .. toctree::
