@@ -505,10 +505,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
         elif "/" in path[:ind]:
             ind2 = path[:ind].rindex("/")
             root = path[: ind2 + 1]
-            depth = 20 if "**" in path else path[ind2 + 1 :].count("/") + 1
+            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
         else:
             root = ""
-            depth = 20 if "**" in path else 1
+            depth = None if "**" in path else 1
 
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
         # Escape characters special to python regex, leaving our supported
