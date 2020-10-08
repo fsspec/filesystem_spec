@@ -23,11 +23,8 @@ def _run_until_done(coro):
             "Please downgrade your fsspec or upgrade python."
         )
     loop = asyncio.get_event_loop()
-    assert loop.is_running()
     task = asyncio.current_task()
     asyncio.tasks._unregister_task(task)
-    current_task = asyncio.tasks._current_tasks.get(loop)
-    assert task == current_task
     del asyncio.tasks._current_tasks[loop]
     runner = loop.create_task(coro)
     while not runner.done():
