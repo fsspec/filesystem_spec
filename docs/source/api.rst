@@ -81,6 +81,7 @@ Built-in Implementations
 ------------------------
 
 .. autosummary::
+   fsspec.registry.known_implementations
    fsspec.implementations.ftp.FTPFileSystem
    fsspec.implementations.hdfs.PyArrowHDFS
    fsspec.implementations.dask.DaskWorkerFileSystem
@@ -98,6 +99,8 @@ Built-in Implementations
    fsspec.implementations.git.GitFileSystem
    fsspec.implementations.smb.SMBFileSystem
    fsspec.implementations.jupyter.JupyterFileSystem
+   
+.. autofunction:: fsspec.registry.known_implementations
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
