@@ -177,7 +177,7 @@ class HTTPFileSystem(AsyncFileSystem):
             r = await self.session.get(path, **kw)
             async with r:
                 return r.status < 400
-        except requests.HTTPError:
+        except (requests.HTTPError, aiohttp.client_exceptions.ClientError):
             return False
 
     async def _isfile(self, path, **kwargs):
