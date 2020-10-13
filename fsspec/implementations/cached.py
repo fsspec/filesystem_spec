@@ -501,6 +501,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             fns.append(fn)
         if getpaths:
             self.fs.get(getpaths, storepaths)
+            self.save_cache()
         out = {path: open(fn, "rb").read() for path, fn in zip(paths, fns)}
         if isinstance(path, str) and len(paths) == 1 and recursive is False:
             out = out[paths[0]]
