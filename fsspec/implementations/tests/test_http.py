@@ -205,6 +205,13 @@ def test_mcat(server):
     assert out == {urla: data, urlb: data}
 
 
+def test_mcat_cache(server):
+    urla = server + "/index/realfile"
+    urlb = server + "/index/otherfile"
+    fs = fsspec.filesystem("simplecache", target_protocol="http")
+    assert fs.cat([urla, urlb]) == {urla: data, urlb: data}
+
+
 def test_mcat_expand(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     out = h.cat(server + "/index/*")

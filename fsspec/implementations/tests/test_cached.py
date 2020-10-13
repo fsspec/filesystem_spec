@@ -552,6 +552,19 @@ def test_multi_cache(protocol):
             assert f.read() == b"hello"
 
 
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache", "blockcache"])
+def test_multi_cat(protocol, ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    for fn in {"/file0", "/file1"}:
+        with fs.open(fn, "wb") as f:
+            f.write(b"hello")
+
+    d2 = tempfile.mkdtemp()
+    fs = fsspec.filesystem(protocol, storage=d2, fs=fs)
+    assert fs.cat("file*") == {"/file0": b"hello", "/file1": b"hello"}
+
+
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_multi_cache_chain(protocol):
     import zipfile

@@ -105,6 +105,8 @@ class CachingFileSystem(AbstractFileSystem):
         self.check_files = check_files
         self.expiry = expiry_time
         self.compression = compression
+        # TODO: same_names should allow for variable prefix, not only
+        #  to keep the basename
         self.same_names = same_names
         self.target_protocol = (
             target_protocol
@@ -349,6 +351,7 @@ class CachingFileSystem(AbstractFileSystem):
             "__init__",
             "__getattribute__",
             "__reduce__",
+            "_make_local_details",
             "open",
             "cat",
             "cat_file",
@@ -467,6 +470,43 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def commit_many(self, open_files):
         self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
 
+    def _make_local_details(self, path):
+        hash = self.hash_name(path, self.same_names)
+        fn = os.path.join(self.storage[-1], hash)
+        detail = {
+            "fn": hash,
+            "blocks": True,
+            "time": time.time(),
+            "uid": self.fs.ukey(path),
+        }
+        self.cached_files[-1][path] = detail
+        logger.debug("Copying %s to local cache" % path)
+        return fn
+
+    def cat(self, path, recursive=False, on_error="raise", **kwargs):
+        paths = self.expand_path(
+            path, recursive=recursive, maxdepth=kwargs.get("maxdepth", None)
+        )
+        getpaths = []
+        storepaths = []
+        fns = []
+        for p in paths:
+            detail = self._check_file(p)
+            if not detail:
+                fn = self._make_local_details(p)
+                getpaths.append(p)
+                storepaths.append(fn)
+            else:
+                detail, fn = detail if isinstance(detail, tuple) else (None, detail)
+            fns.append(fn)
+        if getpaths:
+            self.fs.get(getpaths, storepaths)
+            self.save_cache()
+        out = {path: open(fn, "rb").read() for path, fn in zip(paths, fns)}
+        if isinstance(path, str) and len(paths) == 1 and recursive is False:
+            out = out[paths[0]]
+        return out
+
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         if "r" not in mode:
@@ -474,7 +514,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         detail = self._check_file(path)
         if detail:
             detail, fn = detail
-            hash, blocks = detail["fn"], detail["blocks"]
+            _, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 logger.debug("Opening local copy of %s" % path)
                 return open(fn, mode)
@@ -484,16 +524,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     "as a wholly cached file" % path
                 )
         else:
-            hash = self.hash_name(path, self.same_names)
-            fn = os.path.join(self.storage[-1], hash)
-            detail = {
-                "fn": hash,
-                "blocks": True,
-                "time": time.time(),
-                "uid": self.fs.ukey(path),
-            }
-            self.cached_files[-1][path] = detail
-            logger.debug("Copying %s to local cache" % path)
+            fn = self._make_local_details(path)
         kwargs["mode"] = mode
 
         # call target filesystems open
