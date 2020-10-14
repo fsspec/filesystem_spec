@@ -1,6 +1,22 @@
 Changelog
 =========
 
+Version 0.8.4
+-------------
+
+Features:
+
+- function ``can_be_local`` to see whether URL is compatible with ``open_local``
+- concurrent cat with filecaches, if backend supports it
+
+Fixes:
+
+- dircache expiry after transaction
+- blockcache garbage collection
+- close for HDFS
+- windows tests
+- glob depth with "**"
+
 Version 0.8.3
 -------------
 
