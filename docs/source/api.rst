@@ -94,7 +94,6 @@ Built-in Implementations
    fsspec.implementations.cached.CachingFileSystem
    fsspec.implementations.cached.WholeFileCacheFileSystem
    fsspec.implementations.cached.SimpleCacheFileSystem
-   fsspec.implementations.github.GithubFileSystem
    fsspec.implementations.git.GitFileSystem
    fsspec.implementations.smb.SMBFileSystem
    fsspec.implementations.jupyter.JupyterFileSystem
@@ -115,9 +114,6 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.memory.MemoryFileSystem
-   :members: __init__
-
-.. autoclass:: fsspec.implementations.github.GithubFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.sftp.SFTPFileSystem
