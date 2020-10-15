@@ -24,6 +24,8 @@ def set_conf_env(conf_dict, envdict=os.environ):
     """
     for key in envdict:
         if key.startswith("FSSPEC"):
+            if key.count("_") < 2:
+                continue
             _, proto, kwarg = key.split("_", 2)
             conf_dict.setdefault(proto.lower(), {})[kwarg.lower()] = envdict[key]
 
@@ -47,12 +49,14 @@ def set_conf_files(cdir, conf_dict):
     """
     if not os.path.isdir(cdir):
         return
-    allfiles = os.listdir(cdir)
+    allfiles = sorted(os.listdir(cdir))
     for fn in allfiles:
         if fn.endswith(".ini"):
             ini = configparser.ConfigParser()
             ini.read(os.path.join(cdir, fn))
             for key in ini:
+                if key == "DEFAULT":
+                    continue
                 conf_dict.setdefault(key, {}).update(dict(ini[key]))
         if fn.endswith(".json"):
             js = json.load(open(os.path.join(cdir, fn)))
@@ -77,7 +81,7 @@ def apply_config(cls, kwargs, conf_dict=conf):
     -------
     dict : the modified set of kwargs
     """
-    protos = cls.protocol if isinstance(cls.protocol, tuple) else cls.protocol
+    protos = cls.protocol if isinstance(cls.protocol, tuple) else [cls.protocol]
     kw = {}
     for proto in protos:
         # default kwargs from the current state of the config
