@@ -45,6 +45,8 @@ def set_conf_files(cdir, conf_dict):
     conf_dict : dict(str, dict)
         This dict will be mutated
     """
+    if not os.path.isdir(cdir):
+        return
     allfiles = os.listdir(cdir)
     for fn in allfiles:
         if fn.endswith(".ini"):
