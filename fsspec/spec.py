@@ -58,7 +58,9 @@ class _Cached(type):
             return cls._cache[token]
         else:
             if proto in conf:
-                kwargs = dict(**conf[proto], **kwargs)
+                kw = conf[proto].copy()
+                kw.update(**kwargs)
+                kwargs = kw
             obj = super().__call__(*args, **kwargs)
             # Setting _fs_token here causes some static linters to complain.
             obj._fs_token_ = token
