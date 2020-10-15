@@ -53,7 +53,7 @@ def test_from_file_json(clean_conf, tmpdir):
     with open(file1, "w") as f:
         f.write(
             """{"proto":
-{"key": "value", 
+{"key": "value",
 "other_key": "othervalue",
 "overwritten": false}}
         """

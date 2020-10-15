@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Version
+-------
+
+Features:
+
+- config system
+
 Version 0.8.4
 -------------
 
@@ -8,6 +15,7 @@ Features:
 
 - function ``can_be_local`` to see whether URL is compatible with ``open_local``
 - concurrent cat with filecaches, if backend supports it
+- jupyter FS
 
 Fixes:
 
@@ -28,7 +36,7 @@ Features:
 
 Fixes:
 
-- duplicate directories could appear in MemoreFileSystem
+- duplicate directories could appear in MemoryFileSystem
 - Added support for hat dollar lbrace rbrace regex character escapes in glob
 - Fix blockcache (was doing unnecessary work)
 - handle multibyte dtypes in readinto
