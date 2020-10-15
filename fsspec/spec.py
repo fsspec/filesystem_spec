@@ -10,7 +10,7 @@ from glob import has_magic
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path, other_paths
-from .config import conf
+from .config import apply_config
 
 logger = logging.getLogger("fsspec")
 
@@ -45,7 +45,7 @@ class _Cached(type):
         cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):
-        proto = cls.protocol if isinstance(cls.protocol, str) else cls.protocol[0]
+        kwargs = apply_config(cls, kwargs)
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
@@ -57,10 +57,6 @@ class _Cached(type):
         if not skip and cls.cachable and token in cls._cache:
             return cls._cache[token]
         else:
-            if proto in conf:
-                kw = conf[proto].copy()
-                kw.update(**kwargs)
-                kwargs = kw
             obj = super().__call__(*args, **kwargs)
             # Setting _fs_token here causes some static linters to complain.
             obj._fs_token_ = token
