@@ -81,7 +81,7 @@ def apply_config(cls, kwargs, conf_dict=conf):
     -------
     dict : the modified set of kwargs
     """
-    protos = cls.protocol if isinstance(cls.protocol, tuple) else [cls.protocol]
+    protos = cls.protocol if isinstance(cls.protocol, (tuple, list)) else [cls.protocol]
     kw = {}
     for proto in protos:
         # default kwargs from the current state of the config
