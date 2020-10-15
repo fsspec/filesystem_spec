@@ -4,7 +4,7 @@ import os
 
 
 conf = {}
-default_conf_dir = os.path.join(os.path.expanduser("~"), ".fsspec")
+default_conf_dir = os.path.join(os.path.expanduser("~"), ".config/fsspec")
 conf_dir = os.environ.get("FSSPEC_CONFIG_DIR", default_conf_dir)
 
 
