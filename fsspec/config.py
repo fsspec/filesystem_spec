@@ -8,21 +8,24 @@ default_conf_dir = os.path.join(os.path.expanduser("~"), ".fsspec")
 conf_dir = os.environ.get("FSSPEC_CONFIG_DIR", default_conf_dir)
 
 
-def set_conf_env(conf_dict):
+def set_conf_env(conf_dict, envdict=os.environ):
     """Set config values from environment variables
 
     Looks for variable of the form ``FSSPEC_<protocol>_<kwarg>``.
-    There is no attempt to convert strings.
+    There is no attempt to convert strings, but the kwarg keys will
+    be lower-cased.
 
     Parameters
     ----------
     conf_dict : dict(str, dict)
         This dict will be mutated
+    envdict : dict-like(str, str)
+        Source for the values - usually the real environment
     """
-    for key in os.environ:
+    for key in envdict:
         if key.startswith("FSSPEC"):
             _, proto, kwarg = key.split("_", 2)
-            conf_dict.setdefault(proto.lower(), {})[kwarg.lower()] = os.environ[key]
+            conf_dict.setdefault(proto.lower(), {})[kwarg.lower()] = envdict[key]
 
 
 def set_conf_files(cdir, conf_dict):
