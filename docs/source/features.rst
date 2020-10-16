@@ -342,6 +342,53 @@ The interface provides the following outputs:
 - ``.fs``: the current filesystem instance
 - ``.open_file()``: produces an ``OpenFile`` instance for the current selection
 
+Configuration
+-------------
+
+You can set default keyword arguments to pass to any fsspec backend by editing
+config files, providing environment variables, or editing the contents of
+the dictionary ``fsspec.config.conf``.
+
+Files are stored in the directory pointed to by ``FSSPEC_CONFIG_DIR``,
+``"~/.config/fsspec/`` by default. All *.ini and *.json files will be
+loaded and parsed from their respective formats and fed into the config dict
+at import time. For example, if there is a file "~/.config/fsspec/conf.json"
+containing
+
+.. code-block:: json
+
+   {"file": {"auto_mkdir": true}}
+
+then any instance of the file system whose protocol is "file" (i.e.,
+``LocalFileSystem``) with be passed the kwargs ``auto_mkdir=True``
+**unless** the user supplies the kwarg themselves.
+
+For instance:
+
+.. code-block:: python
+
+    import fsspec
+    fs = fsspec.filesystem("file")
+    assert fs.auto_mkdir == True
+    fs = fsspec.filesystem("file", auto_mkdir=False)
+    assert fs.auto_mkdir == False
+
+Obviously, you should only define default values that are appropriate for
+a given file system implementation. INI files only support string values.
+
+Alternatively, you can provide overrides with environment variables of
+the style "FSSPEC_{protocol}_{kwargname}=value".
+
+Configuration is determined in the following order, with later items winning:
+
+- the contents of ini files, and json files in the config directory, sorted
+  alphabetically
+- environment variables
+- the contents of ``fsspec.config.conf``, which can be edited at runtime
+- kwargs explicitly passed, whether with ``fsspec.open``, ``fsspec.filesystem``
+  or directly instantiating the implementation class.
+
+
 Async
 =====
 

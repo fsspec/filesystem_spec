@@ -10,6 +10,7 @@ from glob import has_magic
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import read_block, tokenize, stringify_path, other_paths
+from .config import apply_config
 
 logger = logging.getLogger("fsspec")
 
@@ -44,6 +45,7 @@ class _Cached(type):
         cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):
+        kwargs = apply_config(cls, kwargs)
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
