@@ -63,6 +63,17 @@ def test_mv_recursive(m):
     assert not m.exists("src")
 
 
+def test_rm_no_psuedo_dir(m):
+    m.touch("/dir1/dir2/file")
+    m.rm("/dir1", recursive=True)
+    assert not m.exists("/dir1/dir2/file")
+    assert not m.exists("/dir1/dir2")
+    assert not m.exists("/dir1")
+
+    with pytest.raises(FileNotFoundError):
+        m.rm("/dir1", recursive=True)
+
+
 def test_rewind(m):
     # https://github.com/intake/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:
