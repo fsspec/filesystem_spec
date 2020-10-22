@@ -332,12 +332,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
         but contains nothing), None if not in cache.
         """
         parent = self._parent(path)
-        try:
+        if path.rstrip("/") in self.dircache:
             return self.dircache[path]
-        except KeyError:
-            pass
         try:
-            files = [f for f in self.dircache[parent] if f["name"] == path]
+            files = [
+                f
+                for f in self.dircache[parent]
+                if f["name"] == path
+                or (f["name"] == path.rstrip("/") and f["type"] == "directory")
+            ]
             if len(files) == 0:
                 # parent dir was listed but did not contain this file
                 raise FileNotFoundError(path)
