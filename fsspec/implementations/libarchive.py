@@ -1,8 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
-from itertools import dropwhile
-from io import RawIOBase
 
 import libarchive
 from fsspec import AbstractFileSystem, open_files
@@ -106,8 +104,8 @@ class LibArchiveFileSystem(AbstractFileSystem):
                 list_names.append(entry.name)
 
                 self.dir_cache[f["name"]] = f
-        # libarchive does not seem to return an entry for the directories (at least not in all formats)
-        # get the directories names from the files names
+        # libarchive does not seem to return an entry for the directories (at least
+        # not in all formats), so get the directories names from the files names
         self.dir_cache.update(
             {
                 dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
@@ -164,7 +162,6 @@ class LibArchiveFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         if mode != "rb":
             raise NotImplementedError
-        info = self.info(path)
 
         data = bytes()
         with self._open_archive() as arc:
