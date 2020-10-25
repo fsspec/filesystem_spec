@@ -177,7 +177,7 @@ known_implementations = {
     "libarchive": {
         "class": "fsspec.implementations.libarchive.LibArchiveFileSystem",
         "err": "LibArchive requires to be installed",
-    }
+    },
 }
 
 minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}
