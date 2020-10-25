@@ -3,7 +3,6 @@ from contextlib import contextmanager
 import os
 import pickle
 import pytest
-import sys
 import tempfile
 import fsspec
 
@@ -125,7 +124,8 @@ def test_info():
             fs_cache.info("i-do-not-exist")
 
         # Iterate over all directories
-        # The 7zip archive does not include additional information about the directories,
+        # The 7zip archive does not include additional information about the
+        # directories
         for d in fs_cache._all_dirnames(data.keys()):
             lhs = fs_cache.info(d)
             expected = {"name": f"{d}/", "size": 0, "type": "directory"}
