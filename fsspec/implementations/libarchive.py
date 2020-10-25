@@ -19,7 +19,7 @@ class LibArchiveFileSystem(AbstractFileSystem):
     """
 
     root_marker = ""
-    
+
     extensions = "7z", "rar"
 
     def __init__(
@@ -58,7 +58,7 @@ class LibArchiveFileSystem(AbstractFileSystem):
                 )
             fo = files[0]
         self.fo = fo.__enter__()  # the whole instance is a context
-        #self.arc_reader = 
+        # self.arc_reader =
         self.block_size = block_size
         self.dir_cache = None
 
@@ -72,30 +72,48 @@ class LibArchiveFileSystem(AbstractFileSystem):
     def _strip_protocol(cls, path):
         # file paths are always relative to the archive root
         return super()._strip_protocol(path).lstrip("/")
-        
+
     def _get_dirs(self):
-        fields = {"name": "pathname",
-                  "size": "size",
-                  "created": "ctime",
-                  "mode": "mode",
-                  "uid": "uid",
-                  "gid": "gid",
-                  "mtime": "mtime",
-                  }
-    
+        fields = {
+            "name": "pathname",
+            "size": "size",
+            "created": "ctime",
+            "mode": "mode",
+            "uid": "uid",
+            "gid": "gid",
+            "mtime": "mtime",
+        }
+
         if self.dir_cache is not None:
             return
-        
+
         self.dir_cache = {}
+        list_names = []
         with self._open_archive() as arc:
             for entry in arc:
                 if not entry.isdir and not entry.isfile:
                     # Skip symbolic links, fifo entries, etc.
                     continue
+                self.dir_cache.update(
+                    {
+                        dirname
+                        + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                        for dirname in self._all_dirnames(set(entry.name))
+                    }
+                )
                 f = {key: getattr(entry, fields[key]) for key in fields}
                 f["type"] = "directory" if entry.isdir else "file"
-            
+                list_names.append(entry.name)
+
                 self.dir_cache[f["name"]] = f
+        # libarchive does not seem to return an entry for the directories (at least not in all formats)
+        # get the directories names from the files names
+        self.dir_cache.update(
+            {
+                dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                for dirname in self._all_dirnames(list_names)
+            }
+        )
 
     def info(self, path, **kwargs):
         self._get_dirs()
@@ -110,6 +128,7 @@ class LibArchiveFileSystem(AbstractFileSystem):
     def ls(self, path, detail=False, **kwargs):
         self._get_dirs()
         paths = {}
+
         for p, f in self.dir_cache.items():
             p = p.rstrip("/")
             if "/" in p:
@@ -146,25 +165,25 @@ class LibArchiveFileSystem(AbstractFileSystem):
         if mode != "rb":
             raise NotImplementedError
         info = self.info(path)
-        
+
         data = bytes()
         with self._open_archive() as arc:
             # FIXME? dropwhile would increase performance but less readable
             for entry in arc:
-                if entry.pathname != path: continue
+                if entry.pathname != path:
+                    continue
                 for block in entry.get_blocks(entry.size):
                     data = block
                     break
                 else:
                     raise ValueError
-        print(data)
         return MemoryFile(fs=self, path=path, data=data)
-        
+
     def ukey(self, path):
         return tokenize(path, self.fo, self.protocol)
 
     def _all_dirnames(self, paths):
-        """ Returns *all* directory names for each path in paths, including intermediate ones.
+        """Returns *all* directory names for each path in paths, including intermediate ones.
 
         Parameters
         ----------
