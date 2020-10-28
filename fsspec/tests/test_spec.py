@@ -65,6 +65,11 @@ class DummyTestFS(AbstractFileSystem):
 
         return list(sorted(files))
 
+    def get_all_file_paths(self):
+        """Helper that returns all expected file paths"""
+        all = [file["name"] for file in self._fs_contents if
+               file["type"] == "file"]
+        return all
 
 @pytest.mark.parametrize(
     "test_path, expected",
@@ -122,6 +127,15 @@ def test_glob(test_path, expected):
     assert sorted(res) == expected  # FIXME: py35 back-compat
     for name, info in res.items():
         assert info == test_fs[name]
+
+
+def test_expand_path_recursive():
+    test_fs = DummyTestFS()
+    paths = test_fs.expand_path(test_fs.root_marker, recursive=True)
+    # fails because also directories include root_marker are returned in
+    # contrast to docstring where it says files
+    assert set(paths) == set(test_fs.get_all_file_paths()), \
+        "root marker didn't expand to all file paths"
 
 
 def test_find_details():
