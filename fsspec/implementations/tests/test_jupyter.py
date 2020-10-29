@@ -13,7 +13,6 @@ requests = pytest.importorskip("requests")
 
 @pytest.fixture()
 def jupyter(tmpdir):
-    import requests
 
     tmpdir = str(tmpdir)
     try:
@@ -37,8 +36,10 @@ def jupyter(tmpdir):
             except (requests.exceptions.BaseHTTPError, IOError):
                 time.sleep(0.1)
                 timeout -= 0.1
-                pytest.skip("Timed out for jupyter")
-            txt = P.stdout.read(600).decode()
+                if timeout < 0:
+                    pytest.skip("Timed out for jupyter")
+            txt = P.stdout.read(900).decode()
+
             try:
                 url = re.findall("(http[s]*://[^\\n]+)", txt)[0]
             except IndexError:
