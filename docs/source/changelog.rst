@@ -1,12 +1,13 @@
 Changelog
 =========
 
-Version
--------
+Version 0.8.5
+-------------
 
 Features:
 
 - config system
+- libarchive implementation
 
 Version 0.8.4
 -------------

@@ -53,6 +53,7 @@ def test_pickle():
     with temparchive(data) as archive_file:
         fs = fsspec.filesystem("libarchive", fo=archive_file)
         fs2 = pickle.loads(pickle.dumps(fs))
+        assert fs2 is fs
         assert fs2.cat("b") == b"hello"
 
 

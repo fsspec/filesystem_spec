@@ -9,7 +9,13 @@ from fsspec.implementations.memory import MemoryFile
 
 
 class LibArchiveFileSystem(AbstractFileSystem):
-    """Read contents of compressed archive as a file-system
+    """Compressed archives as a file-system (read-only)
+
+    Supports the following formats:
+    tar, pax , cpio, ISO9660, zip, mtree, shar, ar, raw, xar, lha/lzh, rar
+    Microsoft CAB, 7-Zip, WARC
+
+    See the libarchive documentation for further restrictions.
 
     Keeps file object open while instance lives.
 
@@ -17,8 +23,7 @@ class LibArchiveFileSystem(AbstractFileSystem):
     """
 
     root_marker = ""
-
-    extensions = "7z", "rar"
+    protocol = "libarchive"
 
     def __init__(
         self,
