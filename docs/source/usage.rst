@@ -55,7 +55,9 @@ you have ``pandas`` installed, for example, you can do the following:
 
 .. code-block:: python
 
-    with fs.open('https://raw.githubusercontent.com/dask/'
+    import fsspec
+    import pandas as pd
+    with fsspec.open('https://raw.githubusercontent.com/dask/'
                  'fastparquet/master/test-data/nation.csv') as f:
         df = pd.read_csv(f, sep='|', header=None)
 

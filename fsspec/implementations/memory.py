@@ -164,6 +164,17 @@ class MemoryFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError
 
+    def rm(self, path, recursive=False, maxdepth=None):
+        paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        for p in reversed(paths):
+            # If the expanded path doesn't exist, it is only because the expanded
+            # path was a directory that does not exist in self.pseudo_dirs. This
+            # is possible if you directly create files without making the
+            # directories first.
+            if not self.exists(p):
+                continue
+            self.rm_file(p)
+
     def size(self, path):
         """Size in bytes of the file at path"""
         if path not in self.store:
