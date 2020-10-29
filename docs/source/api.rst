@@ -97,6 +97,7 @@ Built-in Implementations
    fsspec.implementations.git.GitFileSystem
    fsspec.implementations.smb.SMBFileSystem
    fsspec.implementations.jupyter.JupyterFileSystem
+   fsspec.implementations.libarchive.LibArchiveFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -144,6 +145,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.jupyter.JupyterFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.libarchive.LibArchiveFileSystem
    :members: __init__
 
 Other Known Implementations
