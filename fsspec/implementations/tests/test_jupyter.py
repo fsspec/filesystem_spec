@@ -38,13 +38,13 @@ def jupyter(tmpdir):
                 timeout -= 0.1
                 if timeout < 0:
                     pytest.skip("Timed out for jupyter")
-            txt = P.stdout.read(900).decode()
+        txt = P.stdout.read(900).decode()
 
-            try:
-                url = re.findall("(http[s]*://[^\\n]+)", txt)[0]
-            except IndexError:
-                pytest.skip("No notebook URL: " + txt)  # debug on fail
-            yield url, tmpdir
+        try:
+            url = re.findall("(http[s]*://[^\\n]+)", txt)[0]
+        except IndexError:
+            pytest.skip("No notebook URL: " + txt)  # debug on fail
+        yield url, tmpdir
     finally:
         P.terminate()
 
