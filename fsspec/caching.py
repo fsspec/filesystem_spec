@@ -364,10 +364,13 @@ class BytesCache(BaseCache):
         return len(self.cache)
 
 
-class AllBytes(object):
+class AllBytes(BaseCache):
     """Cache entire contents of the file"""
 
-    def __init__(self, data):
+    def __init__(self, data=None, **kwargs):
+        super().__init__(**kwargs)
+        if data is None:
+            data = self.fetcher(0, self.size)
         self.data = data
 
     def _fetch(self, start, end):
@@ -380,4 +383,5 @@ caches = {
     "bytes": BytesCache,
     "readahead": ReadAheadCache,
     "block": BlockCache,
+    "all": AllBytes,
 }

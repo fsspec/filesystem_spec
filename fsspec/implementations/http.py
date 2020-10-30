@@ -359,7 +359,9 @@ class HTTPFile(AbstractBufferedFile):
             async with r:
                 r.raise_for_status()
                 out = await r.read()
-                self.cache = AllBytes(out)
+                self.cache = AllBytes(
+                    size=len(out), fetcher=None, blocksize=None, data=out
+                )
                 self.size = len(out)
 
     _fetch_all = sync_wrapper(async_fetch_all)
