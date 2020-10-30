@@ -626,9 +626,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
         except:  # noqa: E722
             return False
 
-    def cat_file(self, path):
+    def cat_file(self, path, start=None, end=None, **kwargs):
         """ Get the content of a file """
-        return self.open(path, "rb").read()
+        # explicitly set buffering off?
+        with self.open(path, "rb", **kwargs) as f:
+            if start is not None:
+                f.seek(start)
+            if end is not None:
+                return f.read(end - f.tell())
+            return f.read()
 
     def pipe_file(self, path, value, **kwargs):
         """Set the bytes of given file"""
