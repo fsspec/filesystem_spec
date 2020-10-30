@@ -367,8 +367,8 @@ class BytesCache(BaseCache):
 class AllBytes(BaseCache):
     """Cache entire contents of the file"""
 
-    def __init__(self, data=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, blocksize=None, fetcher=None, size=None, data=None):
+        super().__init__(blocksize, fetcher, size)
         if data is None:
             data = self.fetcher(0, self.size)
         self.data = data
