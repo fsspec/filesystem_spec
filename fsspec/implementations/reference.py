@@ -17,6 +17,9 @@ class ReferenceFileSystem(AsyncFileSystem):
     Configuration is by passing a dict of references at init, or a URL to
     a JSON file containing the same; this dict
     can also contain concrete data for some set of paths.
+
+    Reference dict format:
+    {path0: bytes_data, path1: (target_url, start, end)}
     """
 
     protocol = "reference"
@@ -31,6 +34,30 @@ class ReferenceFileSystem(AsyncFileSystem):
         fs=None,
         **kwargs
     ):
+        """
+
+        Parameters
+        ----------
+        references : dict or str
+            The set of references to use for this instance, with a structure as above.
+            If str, will use fsspec.open, in conjunction with ref_storage_args to
+            open and parse JSON at this location.
+        target : str
+            For any references having target_url as None, this is the default file
+            target to use
+        ref_storage_args : dict
+            If references is a str, use these kwargs for loading the JSON file
+        target_protocol : str
+            If fs is None, instantiate a file system using this protocol
+        target_options : dict
+            If fs is None, instantiate a filesystem using these kwargs
+        fs : file system instance
+            Directly provide a file system, if you want to configure it beforehand. This
+            takes precedence over target_protocol/target_options
+        kwargs : passed to parent class
+        """
+        if fs is not None:
+            kwargs["loop"] = fs.loop
         super().__init__(**kwargs)
         if isinstance(references, str):
             with open(references, "rb", **(ref_storage_args or {})) as f:
@@ -54,7 +81,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references(self):
         if "zarr_consolidated_format" in self.references:
-            self.references = unmodel_hds(self.references)
+            self.references = _unmodel_hdf5(self.references)
         self.dircache = {"": []}
         for path, part in self.references.items():
             if isinstance(part, bytes):
@@ -83,7 +110,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         return [o["name"] for o in out]
 
 
-def unmodel_hds(references):
+def _unmodel_hdf5(references):
+    """Special JSON format from HDF5"""
+    # see https://gist.github.com/ajelenak/80354a95b449cedea5cca508004f97a9
     import re
 
     ref = {}
