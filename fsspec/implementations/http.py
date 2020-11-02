@@ -98,6 +98,14 @@ class HTTPFileSystem(AsyncFileSystem):
         """For HTTP, we always want to keep the full URL"""
         return path
 
+    @classmethod
+    def _parent(cls, path):
+        # override, since _strip_protocol is different for URLs
+        par = super()._parent(path)
+        if len(par) > 7:  # "http://..."
+            return par
+        return ""
+
     async def _ls(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
         kw = self.kwargs.copy()
@@ -144,10 +152,16 @@ class HTTPFileSystem(AsyncFileSystem):
         else:
             return list(sorted(out))
 
-    async def _cat_file(self, url, **kwargs):
+    async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
+        if (start is None) ^ (end is None):
+            raise ValueError("Give start and end or neither")
+        if start:
+            headers = kwargs.pop("headers", {}).copy()
+            headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+            kwargs["headers"] = headers
         async with self.session.get(url, **kw) as r:
             if r.status == 404:
                 raise FileNotFoundError(url)
