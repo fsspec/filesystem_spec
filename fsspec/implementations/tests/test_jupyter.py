@@ -16,25 +16,22 @@ def jupyter(tmpdir):
     tmpdir = str(tmpdir)
     os.environ["JUPYTER_TOKEN"] = "blah"
     try:
-        P = subprocess.Popen(
-            shlex.split(
-                f"jupyter notebook --notebook-dir={tmpdir}" f" --no-browser --port=5566"
-            ),
-        )
+        cmd = f"jupyter notebook --notebook-dir={tmpdir} --no-browser --port=5566"
+        P = subprocess.Popen(shlex.split(cmd))
     except FileNotFoundError:
         pytest.skip("notebook not installed correctly")
     try:
         timeout = 5
         while True:
             try:
-                r = requests.get("http://127.0.0.1:5566/")
+                r = requests.get("http://127.0.0.1:5566/?token=blah")
                 r.raise_for_status()
                 break
             except (requests.exceptions.BaseHTTPError, IOError):
                 time.sleep(0.1)
                 timeout -= 0.1
                 if timeout < 0:
-                    pytest.skip("Timed out for jupyter")
+                    pytest.xfail("Timed out for jupyter")
         yield "http://127.0.0.1:5566/?token=blah", tmpdir
     finally:
         P.terminate()
