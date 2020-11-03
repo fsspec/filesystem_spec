@@ -21,7 +21,7 @@ def jupyter(tmpdir):
     except FileNotFoundError:
         pytest.skip("notebook not installed correctly")
     try:
-        timeout = 5
+        timeout = 15
         while True:
             try:
                 r = requests.get("http://localhost:5566/?token=blah")
