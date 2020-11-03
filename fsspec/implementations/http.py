@@ -158,10 +158,10 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(url)
         if (start is None) ^ (end is None):
             raise ValueError("Give start and end or neither")
-        if start:
-            headers = kwargs.pop("headers", {}).copy()
+        if start is not None:
+            headers = kw.pop("headers", {}).copy()
             headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-            kwargs["headers"] = headers
+            kw["headers"] = headers
         async with self.session.get(url, **kw) as r:
             if r.status == 404:
                 raise FileNotFoundError(url)
