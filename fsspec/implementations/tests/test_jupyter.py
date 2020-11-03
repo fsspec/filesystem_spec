@@ -24,7 +24,7 @@ def jupyter(tmpdir):
         timeout = 5
         while True:
             try:
-                r = requests.get("http://127.0.0.1:5566/?token=blah")
+                r = requests.get("http://localhost:5566/?token=blah")
                 r.raise_for_status()
                 break
             except (requests.exceptions.BaseHTTPError, IOError):
@@ -32,7 +32,7 @@ def jupyter(tmpdir):
                 timeout -= 0.1
                 if timeout < 0:
                     pytest.xfail("Timed out for jupyter")
-        yield "http://127.0.0.1:5566/?token=blah", tmpdir
+        yield "http://localhost:5566/?token=blah", tmpdir
     finally:
         P.terminate()
 
