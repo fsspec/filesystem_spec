@@ -23,6 +23,7 @@ def test_ls(server):  # noqa: F811
     fs = fsspec.filesystem("reference", references=refs, fs=h)
 
     assert fs.ls("", detail=False) == ["a", "b", "c"]
+    assert {"name": "c", "type": "directory", "size": 0} in fs.ls("", detail=True)
     assert fs.find("") == ["a", "b", "c/d"]
     assert fs.find("", withdirs=True) == ["a", "b", "c", "c/d"]
 
@@ -30,6 +31,18 @@ def test_ls(server):  # noqa: F811
 def test_err(m):
     with pytest.raises(NotImplementedError):
         fsspec.filesystem("reference", references={}, fs=m)
+    with pytest.raises(NotImplementedError):
+        fsspec.filesystem("reference", references={}, target_protocol="memory")
+
+
+def test_defaults(server):  # noqa: F811
+    refs = {"a": b"data", "b": (None, 0, 5)}
+    fs = fsspec.filesystem(
+        "reference", references=refs, target_protocol="http", target=realfile
+    )
+
+    assert fs.cat("a") == b"data"
+    assert fs.cat("b") == data[:5]
 
 
 jdata = """{

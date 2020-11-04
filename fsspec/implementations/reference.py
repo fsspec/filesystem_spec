@@ -56,19 +56,21 @@ class ReferenceFileSystem(AsyncFileSystem):
             takes precedence over target_protocol/target_options
         kwargs : passed to parent class
         """
-        if not fs.async_impl:
-            raise NotImplementedError("Only works with async targets")
         if fs is not None:
+            if not fs.async_impl:
+                raise NotImplementedError("Only works with async targets")
             kwargs["loop"] = fs.loop
         super().__init__(**kwargs)
+        if fs is None:
+            fs = filesystem(target_protocol, loop=self.loop, **(target_options or {}))
+        if not fs.async_impl:
+            raise NotImplementedError("Only works with async targets")
         if isinstance(references, str):
             with open(references, "rb", **(ref_storage_args or {})) as f:
                 references = json.load(f)
         self.references = references
         self.target = target
         self._process_references()
-        if fs is None:
-            fs = filesystem(target_protocol, loop=self.loop, **(target_options or {}))
         self.fs = fs
 
     async def _cat_file(self, path):
