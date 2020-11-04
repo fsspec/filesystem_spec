@@ -6,9 +6,9 @@ from ..core import open, filesystem
 class ReferenceFileSystem(AsyncFileSystem):
     """View byte ranges of some other file as a file system
 
-    Initial version: single URL for the reference target. Later versions
-    may allow multiple files from a file system or arbitrary URLs for the
-    targets.
+    Initial version: single file system target, which must support
+    async, and must allow start and end args in _cat_file. Later versions
+    may allow multiple arbitrary URLs for the targets.
 
     This FileSystem is read-only. It is designed to be used with async
     targets (for now). This FileSystem only allows whole-file access, no
@@ -56,6 +56,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             takes precedence over target_protocol/target_options
         kwargs : passed to parent class
         """
+        if not fs.async_impl:
+            raise NotImplementedError("Only works with async targets")
         if fs is not None:
             kwargs["loop"] = fs.loop
         super().__init__(**kwargs)

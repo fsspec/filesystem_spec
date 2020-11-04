@@ -1,5 +1,9 @@
+import json
+import pytest
+
 import fsspec
 from .test_http import data, realfile, server  # noqa: F401
+from fsspec.implementations.reference import _unmodel_hdf5
 
 
 def test_simple(server):  # noqa: F811
@@ -11,3 +15,54 @@ def test_simple(server):  # noqa: F811
     assert fs.cat("a") == b"data"
     assert fs.cat("b") == data[:5]
     assert fs.cat("c") == data[1:6]
+
+
+def test_err(m):
+    with pytest.raises(NotImplementedError):
+        fsspec.filesystem("reference", references={}, fs=m)
+
+
+data = """{
+    "metadata": {
+        ".zattrs": {
+            "Conventions": "UGRID-0.9.0"
+        },
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "adcirc_mesh/.zarray": {
+            "chunks": [
+                1
+            ],
+            "dtype": "<i4",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "adcirc_mesh/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "mesh"
+            ],
+            "cf_role": "mesh_topology"
+        },
+        "adcirc_mesh/.zchunkstore": {
+            "adcirc_mesh/0": {
+                "offset": 8928,
+                "size": 4
+            },
+            "source": {
+                "array_name": "/adcirc_mesh",
+                "uri": "https://url"
+            }
+        }
+    },
+    "zarr_consolidated_format": 1
+}
+"""
+
+
+def test_unmodel():
+    refs = _unmodel_hdf5(json.loads(data))
+    assert b'"Conventions": "UGRID-0.9.0"' in refs[".zattrs"]
+    assert refs["adcirc_mesh/0"] == ("https://url", 8928, 8932)
