@@ -6,9 +6,9 @@ from ..core import open, filesystem
 class ReferenceFileSystem(AsyncFileSystem):
     """View byte ranges of some other file as a file system
 
-    Initial version: single URL for the reference target. Later versions
-    may allow multiple files from a file system or arbitrary URLs for the
-    targets.
+    Initial version: single file system target, which must support
+    async, and must allow start and end args in _cat_file. Later versions
+    may allow multiple arbitrary URLs for the targets.
 
     This FileSystem is read-only. It is designed to be used with async
     targets (for now). This FileSystem only allows whole-file access, no
@@ -57,16 +57,20 @@ class ReferenceFileSystem(AsyncFileSystem):
         kwargs : passed to parent class
         """
         if fs is not None:
+            if not fs.async_impl:
+                raise NotImplementedError("Only works with async targets")
             kwargs["loop"] = fs.loop
         super().__init__(**kwargs)
+        if fs is None:
+            fs = filesystem(target_protocol, loop=self.loop, **(target_options or {}))
+        if not fs.async_impl:
+            raise NotImplementedError("Only works with async targets")
         if isinstance(references, str):
             with open(references, "rb", **(ref_storage_args or {})) as f:
                 references = json.load(f)
         self.references = references
         self.target = target
         self._process_references()
-        if fs is None:
-            fs = filesystem(target_protocol, loop=self.loop, **(target_options or {}))
         self.fs = fs
 
     async def _cat_file(self, path):
