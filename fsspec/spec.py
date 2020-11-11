@@ -555,7 +555,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def exists(self, path, **kwargs):
         """Is there a file at the given path"""
         try:
-            self.info(path, kwargs)
+            self.info(path, **kwargs)
             return True
         except:  # noqa: E722
             # any exception allowed bar FileNotFoundError?
