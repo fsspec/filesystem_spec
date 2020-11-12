@@ -78,6 +78,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         part = self.references[path]
         if isinstance(part, bytes):
             return part
+        elif isinstance(part, str):
+            return part.encode()
         url, start, end = part
         if url is None:
             url = self.target
@@ -88,7 +90,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             self.references = _unmodel_hdf5(self.references)
         self.dircache = {"": []}
         for path, part in self.references.items():
-            if isinstance(part, bytes):
+            if isinstance(part, (bytes, str)):
                 size = len(part)
             else:
                 _, start, end = part
