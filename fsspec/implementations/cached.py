@@ -159,6 +159,7 @@ class CachingFileSystem(AbstractFileSystem):
                         c["blocks"] = True
                     else:
                         c["blocks"] = set(c["blocks"]).union(cache[k]["blocks"])
+                    c["time"] = max(c["time"], cache[k]["time"])
 
             # Files can be added to cache after it was written once
             for k, c in cache.items():
