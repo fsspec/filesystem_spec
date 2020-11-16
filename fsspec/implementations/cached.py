@@ -154,8 +154,8 @@ class CachingFileSystem(AbstractFileSystem):
             with open(fn, "rb") as f:
                 cached_files = pickle.load(f)
             for k, c in cached_files.items():
-                if c["blocks"] is not True:
-                    if cache[k]["blocks"] is True:
+                if k in cache:
+                    if c["blocks"] is True or cache[k]["blocks"] is True:
                         c["blocks"] = True
                     else:
                         c["blocks"] = set(c["blocks"]).union(cache[k]["blocks"])
@@ -175,6 +175,8 @@ class CachingFileSystem(AbstractFileSystem):
             pickle.dump(cache, f)
         self._mkcache()
         move(fn2, fn)
+        self.cached_files[-1] = cached_files
+        self.last_cache = time.time()
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
@@ -339,7 +341,14 @@ class CachingFileSystem(AbstractFileSystem):
         c = self.cached_files[-1][path]
         if c["blocks"] is not True and len(["blocks"]) * f.blocksize >= f.size:
             c["blocks"] = True
-        self.save_cache()
+        try:
+            logger.debug("going to save")
+            self.save_cache()
+            logger.debug("saved")
+        except (IOError, OSError):
+            logger.debug("Cache saving failed while closing file")
+        except NameError:
+            logger.debug("Cache save failed due to interpreter shutdown")
         close()
 
     def __getattribute__(self, item):
