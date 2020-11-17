@@ -452,7 +452,7 @@ class HTTPStreamFile(AbstractBufferedFile):
         self.r = sync(self.loop, get, self.session, url, **kwargs)
 
     def seek(self, *args, **kwargs):
-        raise ValueError("Cannot seek strteaming HTTP file")
+        raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
         out = await self.r.content.read(num)
