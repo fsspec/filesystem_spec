@@ -125,6 +125,28 @@ def test_read(server):
         assert f.read(100) + f.read() == data
 
 
+def test_file_pickle(server):
+    import pickle
+
+    # via HTTPFile
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    out = server + "/index/realfile"
+    with h.open(out, "rb") as f:
+        pic = pickle.dumps(f)
+        assert f.read() == data
+    with pickle.loads(pic) as f:
+        assert f.read() == data
+
+    # via HTTPStreamFile
+    h = fsspec.filesystem("http")
+    out = server + "/index/realfile"
+    with h.open(out, "rb") as f:
+        out = pickle.dumps(f)
+        assert f.read() == data
+    with pickle.loads(out) as f:
+        assert f.read() == data
+
+
 def test_methods(server):
     h = fsspec.filesystem("http")
     url = server + "/index/realfile"
