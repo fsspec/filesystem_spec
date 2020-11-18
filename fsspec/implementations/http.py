@@ -205,6 +205,7 @@ class HTTPFileSystem(AsyncFileSystem):
         autocommit=None,  # XXX: This differs from the base class.
         cache_type=None,
         cache_options=None,
+        size=None,
         **kwargs
     ):
         """Make a file-like object
@@ -227,7 +228,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
-        size = self.size(path)
+        size = size or self.size(path)
         if block_size and size:
             return HTTPFile(
                 self,
@@ -434,9 +435,14 @@ class HTTPFile(AbstractBufferedFile):
     def close(self):
         pass
 
+    def __reduce__(self):
+        return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name,
+                        self.size)
 
-async def get(session, url, **kwargs):
-    return await session.get(url, **kwargs)
+
+def reopen(fs, url, mode, blocksize, cache_type, size=None):
+    return fs.open(url, mode=mode, block_size=blocksize, cache_type=cache_type,
+                   size=size)
 
 
 class HTTPStreamFile(AbstractBufferedFile):
@@ -449,7 +455,7 @@ class HTTPStreamFile(AbstractBufferedFile):
             raise ValueError
         self.details = {"name": url, "size": None}
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
-        self.r = sync(self.loop, get, self.session, url, **kwargs)
+        self.r = sync(self.loop, self.session.get, url, **kwargs)
 
     def seek(self, *args, **kwargs):
         raise ValueError("Cannot seek streaming HTTP file")
@@ -466,6 +472,9 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+
+    def __reduce__(self):
+        return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)
 
 
 async def get_range(session, url, start, end, file=None, **kwargs):
