@@ -436,13 +436,20 @@ class HTTPFile(AbstractBufferedFile):
         pass
 
     def __reduce__(self):
-        return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name,
-                        self.size)
+        return reopen, (
+            self.fs,
+            self.url,
+            self.mode,
+            self.blocksize,
+            self.cache.name,
+            self.size,
+        )
 
 
 def reopen(fs, url, mode, blocksize, cache_type, size=None):
-    return fs.open(url, mode=mode, block_size=blocksize, cache_type=cache_type,
-                   size=size)
+    return fs.open(
+        url, mode=mode, block_size=blocksize, cache_type=cache_type, size=size
+    )
 
 
 class HTTPStreamFile(AbstractBufferedFile):

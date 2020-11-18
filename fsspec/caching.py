@@ -22,6 +22,7 @@ class BaseCache(object):
     size: int
         How big this file is
     """
+
     name = "none"
 
     def __init__(self, blocksize, fetcher, size):
@@ -47,6 +48,7 @@ class MMapCache(BaseCache):
 
     This cache method might only work on posix
     """
+
     name = "mmap"
 
     def __init__(self, blocksize, fetcher, size, location=None, blocks=None):
@@ -117,6 +119,7 @@ class ReadAheadCache(BaseCache):
     fill holes in the cache or keep fragments alive. It is best suited to
     many small reads in a sequential order (e.g., reading lines from a file).
     """
+
     name = "readahead"
 
     def __init__(self, blocksize, fetcher, size):
@@ -173,6 +176,7 @@ class BlockCache(BaseCache):
         The maximum number of blocks to cache for. The maximum memory
         use for this cache is then ``blocksize * maxblocks``.
     """
+
     name = "blockcache"
 
     def __init__(self, blocksize, fetcher, size, maxblocks=32):
@@ -295,6 +299,7 @@ class BytesCache(BaseCache):
         As we read more data, whether to discard the start of the buffer when
         we are more than a blocksize ahead of it.
     """
+
     name = "bytes"
 
     def __init__(self, blocksize, fetcher, size, trim=True):
@@ -371,6 +376,7 @@ class BytesCache(BaseCache):
 
 class AllBytes(BaseCache):
     """Cache entire contents of the file"""
+
     name = "all"
 
     def __init__(self, blocksize=None, fetcher=None, size=None, data=None):
