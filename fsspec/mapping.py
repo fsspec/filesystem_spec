@@ -106,7 +106,7 @@ class FSMap(MutableMapping):
         ----------
         values_dict: dict(str, bytes)
         """
-        values = {self._key_to_str(k): v for k, v in values_dict.items()}
+        values = {self._key_to_str(k): maybe_convert(v) for k, v in values_dict.items()}
         self.fs.pipe(values)
 
     def delitems(self, keys):
@@ -147,11 +147,8 @@ class FSMap(MutableMapping):
     def __setitem__(self, key, value):
         """Store value in key"""
         key = self._key_to_str(key)
-        if isinstance(value, array.array):  # pragma: no cover
-            # back compat, array.array used to work
-            value = bytearray(value)
         self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
-        self.fs.pipe_file(key, value)
+        self.fs.pipe_file(key, maybe_convert(value))
 
     def __iter__(self):
         return (self._str_to_key(x) for x in self.fs.find(self.root))
@@ -173,6 +170,13 @@ class FSMap(MutableMapping):
 
     def __reduce__(self):
         return FSMap, (self.root, self.fs, False, False, self.missing_exceptions)
+
+
+def maybe_convert(value):
+    if isinstance(value, array.array) or hasattr(value, "__array__"):
+        # bytes-like things
+        value = bytearray(memoryview(value))
+    return value
 
 
 def get_mapper(url, check=False, create=False, missing_exceptions=None, **kwargs):
