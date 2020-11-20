@@ -37,6 +37,12 @@ def test_empty():
         assert fs.ls("") == []
 
 
+def test_glob():
+    with tempzip(data) as z:
+        fs = fsspec.filesystem("zip", fo=z)
+        assert fs.glob("*/*/*th") == ["deeply/nested/path"]
+
+
 @pytest.mark.xfail(sys.version_info < (3, 6), reason="zip-info odd on py35")
 def test_mapping():
     with tempzip(data) as z:
