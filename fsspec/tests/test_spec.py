@@ -65,10 +65,11 @@ class DummyTestFS(AbstractFileSystem):
 
         return list(sorted(files))
 
-    def get_all_file_paths(self):
-        """Helper that returns all expected file paths"""
-        all = [file["name"] for file in self._fs_contents if
-               file["type"] == "file"]
+    @classmethod
+    def get_test_paths(cls, start_with=""):
+        """Helper to return directory and file paths with no details"""
+        all = [file["name"] for file in cls._fs_contents if
+               file["name"].startswith(start_with)]
         return all
 
 @pytest.mark.parametrize(
@@ -128,14 +129,25 @@ def test_glob(test_path, expected):
     for name, info in res.items():
         assert info == test_fs[name]
 
-
-def test_expand_path_recursive():
+@pytest.mark.parametrize(["test_path", "expected"],
+                         [("top_level/second_level",
+                           ["top_level/second_level",
+                            "top_level/second_level/date=2019-10-01",
+                            "top_level/second_level/date=2019-10-01/a.parquet",
+                            "top_level/second_level/date=2019-10-01/b.parquet",
+                            "top_level/second_level/date=2019-10-02",
+                            "top_level/second_level/date=2019-10-02/a.parquet",
+                            "top_level/second_level/date=2019-10-04",
+                            "top_level/second_level/date=2019-10-04/a.parquet",
+                            ]),
+                          # Note: fails because 'glob_test' files are missing (intentionally?) in ls
+                          # (DummyTestFS.root_marker, DummyTestFS.get_test_paths() + [DummyTestFS.root_marker])
+                          ])
+def test_expand_path_recursive(test_path, expected):
     test_fs = DummyTestFS()
-    paths = test_fs.expand_path(test_fs.root_marker, recursive=True)
-    # fails because also directories include root_marker are returned in
-    # contrast to docstring where it says files
-    assert set(paths) == set(test_fs.get_all_file_paths()), \
-        "root marker didn't expand to all file paths"
+    paths = test_fs.expand_path(test_path, recursive=True)
+    assert sorted(paths) == sorted(expected), \
+        f"path(s) '{test_path}' didn't expand as expected"
 
 
 def test_find_details():
