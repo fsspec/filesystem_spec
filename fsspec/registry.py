@@ -174,6 +174,11 @@ known_implementations = {
         "class": "fsspec.implementations.jupyter.JupyterFileSystem",
         "err": "Jupyter FS requires requests to be installed",
     },
+    "libarchive": {
+        "class": "fsspec.implementations.libarchive.LibArchiveFileSystem",
+        "err": "LibArchive requires to be installed",
+    },
+    "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
 }
 
 minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}

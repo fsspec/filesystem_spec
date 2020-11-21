@@ -88,3 +88,25 @@ def test_multi():
     assert m.getitems(list(data)) == data
     m.delitems(list(data))
     assert not list(m)
+
+
+def test_setitem_types():
+    import array
+
+    m = fsspec.get_mapper("memory://")
+    m["a"] = array.array("i", [1])
+    assert m["a"] == b"\x01\x00\x00\x00"
+    m["b"] = bytearray(b"123")
+    assert m["b"] == b"123"
+    m.setitems({"c": array.array("i", [1]), "d": bytearray(b"123")})
+    assert m["c"] == b"\x01\x00\x00\x00"
+    assert m["d"] == b"123"
+
+
+def test_setitem_numpy():
+    m = fsspec.get_mapper("memory://")
+    np = pytest.importorskip("numpy")
+    m["c"] = np.array(1, dtype="int32")  # scalar
+    assert m["c"] == b"\x01\x00\x00\x00"
+    m["c"] = np.array([1, 2], dtype="int32")  # array
+    assert m["c"] == b"\x01\x00\x00\x00\x02\x00\x00\x00"

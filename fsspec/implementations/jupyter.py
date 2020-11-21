@@ -25,7 +25,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         if "?" in url:
             if tok is None:
                 try:
-                    tok = re.findall("token=([a-f0-9]+)", url)[0]
+                    tok = re.findall("token=([a-z0-9]+)", url)[0]
                 except IndexError as e:
                     raise ValueError("Could not determine token") from e
             url = url.split("?", 1)[0]

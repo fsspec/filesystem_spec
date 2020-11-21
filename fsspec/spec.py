@@ -513,7 +513,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else 1
+            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
 
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
         # Escape characters special to python regex, leaving our supported
@@ -552,10 +552,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             return list(out)
 
-    def exists(self, path):
+    def exists(self, path, **kwargs):
         """Is there a file at the given path"""
         try:
-            self.info(path)
+            self.info(path, **kwargs)
             return True
         except:  # noqa: E722
             # any exception allowed bar FileNotFoundError?
@@ -626,9 +626,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
         except:  # noqa: E722
             return False
 
-    def cat_file(self, path):
+    def cat_file(self, path, start=None, end=None, **kwargs):
         """ Get the content of a file """
-        return self.open(path, "rb").read()
+        # explicitly set buffering off?
+        with self.open(path, "rb", **kwargs) as f:
+            if start is not None:
+                f.seek(start)
+            if end is not None:
+                return f.read(end - f.tell())
+            return f.read()
 
     def pipe_file(self, path, value, **kwargs):
         """Set the bytes of given file"""

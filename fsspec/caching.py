@@ -23,6 +23,8 @@ class BaseCache(object):
         How big this file is
     """
 
+    name = "none"
+
     def __init__(self, blocksize, fetcher, size):
         self.blocksize = blocksize
         self.fetcher = fetcher
@@ -46,6 +48,8 @@ class MMapCache(BaseCache):
 
     This cache method might only work on posix
     """
+
+    name = "mmap"
 
     def __init__(self, blocksize, fetcher, size, location=None, blocks=None):
         super().__init__(blocksize, fetcher, size)
@@ -116,6 +120,8 @@ class ReadAheadCache(BaseCache):
     many small reads in a sequential order (e.g., reading lines from a file).
     """
 
+    name = "readahead"
+
     def __init__(self, blocksize, fetcher, size):
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
@@ -170,6 +176,8 @@ class BlockCache(BaseCache):
         The maximum number of blocks to cache for. The maximum memory
         use for this cache is then ``blocksize * maxblocks``.
     """
+
+    name = "blockcache"
 
     def __init__(self, blocksize, fetcher, size, maxblocks=32):
         super().__init__(blocksize, fetcher, size)
@@ -292,6 +300,8 @@ class BytesCache(BaseCache):
         we are more than a blocksize ahead of it.
     """
 
+    name = "bytes"
+
     def __init__(self, blocksize, fetcher, size, trim=True):
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
@@ -364,10 +374,15 @@ class BytesCache(BaseCache):
         return len(self.cache)
 
 
-class AllBytes(object):
+class AllBytes(BaseCache):
     """Cache entire contents of the file"""
 
-    def __init__(self, data):
+    name = "all"
+
+    def __init__(self, blocksize=None, fetcher=None, size=None, data=None):
+        super().__init__(blocksize, fetcher, size)
+        if data is None:
+            data = self.fetcher(0, self.size)
         self.data = data
 
     def _fetch(self, start, end):
@@ -380,4 +395,5 @@ caches = {
     "bytes": BytesCache,
     "readahead": ReadAheadCache,
     "block": BlockCache,
+    "all": AllBytes,
 }

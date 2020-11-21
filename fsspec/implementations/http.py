@@ -98,6 +98,14 @@ class HTTPFileSystem(AsyncFileSystem):
         """For HTTP, we always want to keep the full URL"""
         return path
 
+    @classmethod
+    def _parent(cls, path):
+        # override, since _strip_protocol is different for URLs
+        par = super()._parent(path)
+        if len(par) > 7:  # "http://..."
+            return par
+        return ""
+
     async def _ls(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
         kw = self.kwargs.copy()
@@ -144,10 +152,16 @@ class HTTPFileSystem(AsyncFileSystem):
         else:
             return list(sorted(out))
 
-    async def _cat_file(self, url, **kwargs):
+    async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
+        if (start is None) ^ (end is None):
+            raise ValueError("Give start and end or neither")
+        if start is not None:
+            headers = kw.pop("headers", {}).copy()
+            headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+            kw["headers"] = headers
         async with self.session.get(url, **kw) as r:
             if r.status == 404:
                 raise FileNotFoundError(url)
@@ -191,6 +205,7 @@ class HTTPFileSystem(AsyncFileSystem):
         autocommit=None,  # XXX: This differs from the base class.
         cache_type=None,
         cache_options=None,
+        size=None,
         **kwargs
     ):
         """Make a file-like object
@@ -213,7 +228,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
-        size = self.size(path)
+        size = size or self.size(path)
         if block_size and size:
             return HTTPFile(
                 self,
@@ -359,7 +374,9 @@ class HTTPFile(AbstractBufferedFile):
             async with r:
                 r.raise_for_status()
                 out = await r.read()
-                self.cache = AllBytes(out)
+                self.cache = AllBytes(
+                    size=len(out), fetcher=None, blocksize=None, data=out
+                )
                 self.size = len(out)
 
     _fetch_all = sync_wrapper(async_fetch_all)
@@ -418,9 +435,21 @@ class HTTPFile(AbstractBufferedFile):
     def close(self):
         pass
 
+    def __reduce__(self):
+        return reopen, (
+            self.fs,
+            self.url,
+            self.mode,
+            self.blocksize,
+            self.cache.name,
+            self.size,
+        )
 
-async def get(session, url, **kwargs):
-    return await session.get(url, **kwargs)
+
+def reopen(fs, url, mode, blocksize, cache_type, size=None):
+    return fs.open(
+        url, mode=mode, block_size=blocksize, cache_type=cache_type, size=size
+    )
 
 
 class HTTPStreamFile(AbstractBufferedFile):
@@ -433,10 +462,10 @@ class HTTPStreamFile(AbstractBufferedFile):
             raise ValueError
         self.details = {"name": url, "size": None}
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
-        self.r = sync(self.loop, get, self.session, url, **kwargs)
+        self.r = sync(self.loop, self.session.get, url, **kwargs)
 
     def seek(self, *args, **kwargs):
-        raise ValueError("Cannot seek strteaming HTTP file")
+        raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
         out = await self.r.content.read(num)
@@ -450,6 +479,9 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+
+    def __reduce__(self):
+        return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)
 
 
 async def get_range(session, url, start, end, file=None, **kwargs):

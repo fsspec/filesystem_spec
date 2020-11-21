@@ -214,6 +214,77 @@ def test_blocksize(ftp_writable):
         fs.open("/out_block", block_size=30)
 
 
+def test_blockcache_multiinstance(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/one", "wb") as f:
+        f.write(b"test" * 40)
+    with fs.open("/two", "wb") as f:
+        f.write(b"test" * 40)
+    fs = fsspec.filesystem(
+        "blockcache",
+        target_protocol="ftp",
+        target_options={"host": host, "port": port, "username": user, "password": pw},
+    )
+
+    with fs.open("/one", block_size=20) as f:
+        assert f.read(1) == b"t"
+    fs2 = fsspec.filesystem(
+        "blockcache",
+        target_protocol="ftp",
+        target_options={"host": host, "port": port, "username": user, "password": pw},
+        skip_instance_cache=True,
+        cache_storage=fs.storage,
+    )
+    assert fs2.cached_files  # loaded from metadata for "one"
+    with fs2.open("/two", block_size=20) as f:
+        assert f.read(1) == b"t"
+    assert "/two" in fs2.cached_files[-1]
+    fs.save_cache()
+    assert list(fs.cached_files[-1]) == ["/one", "/two"]
+    assert list(fs2.cached_files[-1]) == ["/one", "/two"]
+
+
+def test_metadata_save_blocked(ftp_writable, caplog):
+    import logging
+
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/one", "wb") as f:
+        f.write(b"test" * 40)
+    fs = fsspec.filesystem(
+        "blockcache",
+        target_protocol="ftp",
+        target_options={"host": host, "port": port, "username": user, "password": pw},
+    )
+
+    with fs.open("/one", block_size=20) as f:
+        assert f.read(1) == b"t"
+    fn = os.path.join(fs.storage[-1], "cache")
+    with caplog.at_level(logging.DEBUG):
+        with fs.open("/one", block_size=20) as f:
+            f.seek(21)
+            assert f.read(1)
+            os.remove(fn)
+            os.mkdir(fn)
+    assert "Cache saving failed while closing file" in caplog.text
+    os.rmdir(fn)
+
+    def open_raise(*_, **__):
+        raise NameError
+
+    try:
+
+        with caplog.at_level(logging.DEBUG):
+            with fs.open("/one", block_size=20) as f:
+                fsspec.implementations.cached.open = open_raise
+                f.seek(21)
+                assert f.read(1)
+    finally:
+        fsspec.implementations.cached.__dict__.pop("open", None)
+    assert "Cache save failed due to interpreter shutdown" in caplog.text
+
+
 @pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
 def test_local_filecache_creates_dir_if_needed(impl):
     import tempfile

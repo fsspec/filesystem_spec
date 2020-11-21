@@ -1,5 +1,6 @@
 import pickle
 import pytest
+import shlex
 import subprocess
 import time
 import fsspec
@@ -11,14 +12,14 @@ from fsspec.implementations.webhdfs import WebHDFS  # noqa: E402
 
 @pytest.fixture(scope="module")
 def hdfs_cluster():
-    cmd0 = "htcluster shutdown".split()
+    cmd0 = shlex.split("htcluster shutdown")
     try:
         subprocess.check_output(cmd0, stderr=subprocess.STDOUT)
     except FileNotFoundError:
         pytest.skip("htcluster not found")
     except subprocess.CalledProcessError as ex:
         pytest.skip("htcluster failed: " + ex.output.decode())
-    cmd1 = "htcluster startup --image base".split()
+    cmd1 = shlex.split("htcluster startup --image base")
     subprocess.check_output(cmd1)
     try:
         while True:
