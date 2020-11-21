@@ -68,9 +68,13 @@ class DummyTestFS(AbstractFileSystem):
     @classmethod
     def get_test_paths(cls, start_with=""):
         """Helper to return directory and file paths with no details"""
-        all = [file["name"] for file in cls._fs_contents if
-               file["name"].startswith(start_with)]
+        all = [
+            file["name"]
+            for file in cls._fs_contents
+            if file["name"].startswith(start_with)
+        ]
         return all
+
 
 @pytest.mark.parametrize(
     "test_path, expected",
@@ -129,36 +133,48 @@ def test_glob(test_path, expected):
     for name, info in res.items():
         assert info == test_fs[name]
 
-@pytest.mark.parametrize(["test_paths", "expected"],
-                         [(("top_level/second_level", "top_level/sec*", "top_level/*"),
-                           ["top_level/second_level",
-                            "top_level/second_level/date=2019-10-01",
-                            "top_level/second_level/date=2019-10-01/a.parquet",
-                            "top_level/second_level/date=2019-10-01/b.parquet",
-                            "top_level/second_level/date=2019-10-02",
-                            "top_level/second_level/date=2019-10-02/a.parquet",
-                            "top_level/second_level/date=2019-10-04",
-                            "top_level/second_level/date=2019-10-04/a.parquet",
-                            ]),
-                          # Note: fails because 'glob_test' files are missing (intentionally?) from ls
-                          # Todo: figure out what ls ought to return
-                          # ((DummyTestFS.root_marker, ), DummyTestFS.get_test_paths() + [DummyTestFS.root_marker])
-                          ])
+
+@pytest.mark.parametrize(
+    ["test_paths", "expected"],
+    [
+        (
+            ("top_level/second_level", "top_level/sec*", "top_level/*"),
+            [
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (("misc/foo.txt", "misc/*.txt"), ["misc/foo.txt"]),
+        # Note: fails because 'glob_test' paths are missing (intentionally?) from ls,
+        #  remove comments and add id to fail it
+        # Todo: figure out what test_fs.ls("") ought to return
+        # ((DummyTestFS.root_marker,), DummyTestFS.get_test_paths() + [DummyTestFS.root_marker]),
+    ],
+    ids=["all_second_level", "single_file"],
+)
 def test_expand_path_recursive(test_paths, expected):
-    """Test a number of querys and then their combination that all should yield
+    """Test a number of paths and then their combination which should all yield
     the same set of expanded paths"""
     test_fs = DummyTestFS()
 
     # test single query
     for test_path in test_paths:
         paths = test_fs.expand_path(test_path, recursive=True)
-        assert sorted(paths) == sorted(expected), \
-            f"path(s) '{test_path}' didn't expand as expected"
+        assert sorted(paths) == sorted(
+            expected
+        ), f"path(s) '{test_path}' didn't expand as expected"
 
     # test with all queries
     paths = test_fs.expand_path(list(test_paths), recursive=True)
-    assert sorted(paths) == sorted(expected), \
-        f"all test paths didn't expand as expected"
+    assert sorted(paths) == sorted(
+        expected
+    ), f"all test paths didn't expand as expected"
 
 
 def test_find_details():

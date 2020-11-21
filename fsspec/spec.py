@@ -802,8 +802,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
                         # We add all the globbed results under the assumption
                         # .glob() expands paths (only files are documented but
                         # in test they do) and files paths are OK with this function
-                        out |= set(self.expand_path(list(bit), recursive=recursive,
-                                                    maxdepth=maxdepth))
+                        out |= set(
+                            self.expand_path(
+                                list(bit), recursive=recursive, maxdepth=maxdepth
+                            )
+                        )
                     continue
                 elif recursive:
                     # TODO: maxdepth is not used and probably should
