@@ -129,8 +129,8 @@ def test_glob(test_path, expected):
     for name, info in res.items():
         assert info == test_fs[name]
 
-@pytest.mark.parametrize(["test_path", "expected"],
-                         [("top_level/second_level",
+@pytest.mark.parametrize(["test_paths", "expected"],
+                         [(("top_level/second_level", "top_level/sec*", "top_level/*"),
                            ["top_level/second_level",
                             "top_level/second_level/date=2019-10-01",
                             "top_level/second_level/date=2019-10-01/a.parquet",
@@ -140,14 +140,25 @@ def test_glob(test_path, expected):
                             "top_level/second_level/date=2019-10-04",
                             "top_level/second_level/date=2019-10-04/a.parquet",
                             ]),
-                          # Note: fails because 'glob_test' files are missing (intentionally?) in ls
-                          # (DummyTestFS.root_marker, DummyTestFS.get_test_paths() + [DummyTestFS.root_marker])
+                          # Note: fails because 'glob_test' files are missing (intentionally?) from ls
+                          # Todo: figure out what ls ought to return
+                          # ((DummyTestFS.root_marker, ), DummyTestFS.get_test_paths() + [DummyTestFS.root_marker])
                           ])
-def test_expand_path_recursive(test_path, expected):
+def test_expand_path_recursive(test_paths, expected):
+    """Test a number of querys and then their combination that all should yield
+    the same set of expanded paths"""
     test_fs = DummyTestFS()
-    paths = test_fs.expand_path(test_path, recursive=True)
+
+    # test single query
+    for test_path in test_paths:
+        paths = test_fs.expand_path(test_path, recursive=True)
+        assert sorted(paths) == sorted(expected), \
+            f"path(s) '{test_path}' didn't expand as expected"
+
+    # test with all queries
+    paths = test_fs.expand_path(list(test_paths), recursive=True)
     assert sorted(paths) == sorted(expected), \
-        f"path(s) '{test_path}' didn't expand as expected"
+        f"all test paths didn't expand as expected"
 
 
 def test_find_details():
