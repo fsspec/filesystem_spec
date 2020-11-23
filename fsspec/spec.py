@@ -778,7 +778,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         raise NotImplementedError
 
     def copy(self, path1, path2, recursive=False, on_error=None, **kwargs):
-        """ Copy within two locations in the filesystem
+        """Copy within two locations in the filesystem
 
         on_error : "raise", "ignore"
             If raise, any not-found exceptions will be raised; if ignore any
