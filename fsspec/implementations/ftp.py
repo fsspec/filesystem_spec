@@ -46,6 +46,8 @@ class FTPFileSystem(AbstractFileSystem):
             If given, the read-ahead or write buffer size.
         tempdir: str
             Directory on remote to put temporary files when in a transaction
+        timeout: int
+            Timeout of the ftp connection in seconds
         """
         super(FTPFileSystem, self).__init__(**kwargs)
         self.host = host
