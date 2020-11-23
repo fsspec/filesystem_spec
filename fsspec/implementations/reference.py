@@ -19,7 +19,9 @@ class ReferenceFileSystem(AsyncFileSystem):
     can also contain concrete data for some set of paths.
 
     Reference dict format:
-    {path0: bytes_data, path1: (target_url, start, end)}
+    {path0: bytes_data, path1: (target_url, offset, size)}
+
+    https://github.com/intake/fsspec-reference-maker/blob/main/README.md
     """
 
     protocol = "reference"
@@ -80,7 +82,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part
         elif isinstance(part, str):
             return part.encode()
-        url, start, end = part
+        url, start, size = part
+        end = start + size
         if url is None:
             url = self.target
         return await self.fs._cat_file(url, start=start, end=end)
