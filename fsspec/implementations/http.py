@@ -277,6 +277,84 @@ class HTTPFileSystem(AsyncFileSystem):
                 raise FileNotFoundError(url)
         return {"name": url, "size": size or None, "type": "file"}
 
+    def glob(self, path, **kwargs):
+        """
+        Find files by glob-matching.
+
+        This implementation is idntical to the one in AbstractFileSystem,
+        but "?" is not considered as a character for globbing, because it is
+        so common in URLs, often identifying the "query" part.
+        """
+        import re
+
+        ends = path.endswith("/")
+        path = self._strip_protocol(path)
+        indstar = path.find("*") if path.find("*") >= 0 else len(path)
+        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+
+        ind = min(indstar, indbrace)
+
+        detail = kwargs.pop("detail", False)
+
+        if not has_magic(path):
+            root = path
+            depth = 1
+            if ends:
+                path += "/*"
+            elif self.exists(path):
+                if not detail:
+                    return [path]
+                else:
+                    return {path: self.info(path)}
+            else:
+                if not detail:
+                    return []  # glob of non-existent returns empty
+                else:
+                    return {}
+        elif "/" in path[:ind]:
+            ind2 = path[:ind].rindex("/")
+            root = path[: ind2 + 1]
+            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        else:
+            root = ""
+            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+
+        allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
+        # Escape characters special to python regex, leaving our supported
+        # special characters in place.
+        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
+        # for shell globbing details.
+        pattern = (
+            "^"
+            + (
+                path.replace("\\", r"\\")
+                .replace(".", r"\.")
+                .replace("+", r"\+")
+                .replace("//", "/")
+                .replace("(", r"\(")
+                .replace(")", r"\)")
+                .replace("|", r"\|")
+                .replace("^", r"\^")
+                .replace("$", r"\$")
+                .replace("{", r"\{")
+                .replace("}", r"\}")
+                .rstrip("/")
+            )
+            + "$"
+        )
+        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
+        pattern = re.sub("[*]", "[^/]*", pattern)
+        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+        out = {
+            p: allpaths[p]
+            for p in sorted(allpaths)
+            if pattern.match(p.replace("//", "/").rstrip("/"))
+        }
+        if detail:
+            return out
+        else:
+            return list(out)
+
     def isdir(self, path):
         # override, since all URLs are (also) files
         return bool(self.ls(path))
@@ -431,84 +509,6 @@ class HTTPFile(AbstractBufferedFile):
             return out
 
     _fetch_range = sync_wrapper(async_fetch_range)
-
-    def glob(self, path, **kwargs):
-        """
-        Find files by glob-matching.
-
-        This implementation is idntical to the one in AbstractFileSystem,
-        but "?" is not considered as a character for globbing, because it is
-        so common in URLs, often identifying the "query" part.
-        """
-        import re
-
-        ends = path.endswith("/")
-        path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
-
-        ind = min(indstar, indbrace)
-
-        detail = kwargs.pop("detail", False)
-
-        if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif self.exists(path):
-                if not detail:
-                    return [path]
-                else:
-                    return {path: self.info(path)}
-            else:
-                if not detail:
-                    return []  # glob of non-existent returns empty
-                else:
-                    return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
-        else:
-            root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
-
-        allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
-        # Escape characters special to python regex, leaving our supported
-        # special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
-        # for shell globbing details.
-        pattern = (
-            "^"
-            + (
-                path.replace("\\", r"\\")
-                .replace(".", r"\.")
-                .replace("+", r"\+")
-                .replace("//", "/")
-                .replace("(", r"\(")
-                .replace(")", r"\)")
-                .replace("|", r"\|")
-                .replace("^", r"\^")
-                .replace("$", r"\$")
-                .replace("{", r"\{")
-                .replace("}", r"\}")
-                .rstrip("/")
-            )
-            + "$"
-        )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
-        out = {
-            p: allpaths[p]
-            for p in sorted(allpaths)
-            if pattern.match(p.replace("//", "/").rstrip("/"))
-        }
-        if detail:
-            return out
-        else:
-            return list(out)
 
     def close(self):
         pass
