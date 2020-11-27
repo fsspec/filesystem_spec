@@ -14,7 +14,7 @@ def test_simple(server):  # noqa: F811
 
     assert fs.cat("a") == b"data"
     assert fs.cat("b") == data[:5]
-    assert fs.cat("c") == data[1:1+5]
+    assert fs.cat("c") == data[1 : 1 + 5]
 
 
 def test_ls(server):  # noqa: F811
