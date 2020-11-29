@@ -581,7 +581,8 @@ def test_copy_errors(tmpdir):
     ]
 
     # Recursive should raise an error only if we specify raise
-    # the patch simulates the filesystem finding a file that does not exist in the directory
+    # the patch simulates the filesystem finding a file that does not
+    # exist in the directory
     current_files = localfs.expand_path(src, recursive=True)
     with patch.object(localfs, "expand_path", return_value=current_files + [dne]):
         with pytest.raises(FileNotFoundError):

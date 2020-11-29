@@ -8,13 +8,13 @@ from fsspec.implementations.reference import _unmodel_hdf5
 
 def test_simple(server):  # noqa: F811
 
-    refs = {"a": b"data", "b": (realfile, 0, 5), "c": (realfile, 1, 6)}
+    refs = {"a": b"data", "b": (realfile, 0, 5), "c": (realfile, 1, 5)}
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", references=refs, fs=h)
 
     assert fs.cat("a") == b"data"
     assert fs.cat("b") == data[:5]
-    assert fs.cat("c") == data[1:6]
+    assert fs.cat("c") == data[1 : 1 + 5]
 
 
 def test_ls(server):  # noqa: F811
