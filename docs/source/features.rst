@@ -118,7 +118,7 @@ can be used like
 .. code-block:: python
 
     fs = fsspec.filesystem(...)
-    with fs.transation:
+    with fs.transaction:
         with fs.open('file1', 'wb') as f:
             f.write(b'some data')
         with fs.open('file2', 'wb') as f:
