@@ -1,6 +1,6 @@
 # filesystem_spec
 
-![Build](https://github.com/martindurant/filesystem_spec/workflows/CI/badge.svg)
+![Build](https://github.com/intake/filesystem_spec/workflows/CI/badge.svg)
 [![Docs](https://readthedocs.org/projects/filesystem-spec/badge/?version=latest)](https://filesystem-spec.readthedocs.io/en/latest/?badge=latest)
 
 A specification for pythonic filesystems.
