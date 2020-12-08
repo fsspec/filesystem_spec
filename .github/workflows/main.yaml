@@ -31,11 +31,6 @@ jobs:
           activate-environment: test_env
           environment-file: ci/environment-py38.yml
 
-      - name: extra-install
-        shell: bash -l {0}
-        run: |
-          sudo apt-get install fuse
-
       - name: Run Tests
         shell: bash -l {0}
         run: |
@@ -66,7 +61,7 @@ jobs:
           environment-file: ci/environment-py38.yml
 
       - name: Run Tests
-        shell: cmd /C call {0}
+        shell: bash -l {0}
         run: |
           tox -v
 
