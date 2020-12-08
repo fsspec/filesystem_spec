@@ -66,7 +66,7 @@ jobs:
           environment-file: ci/environment-py38.yml
 
       - name: Run Tests
-        shell: bash -l {0}
+        shell: cmd /C call {0}
         run: |
           tox -v
 
