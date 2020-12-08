@@ -1,6 +1,6 @@
 # filesystem_spec
 
-[![Build Status](https://travis-ci.org/intake/filesystem_spec.svg?branch=master)](https://travis-ci.org/martindurant/filesystem_spec)
+![Build](https://github.com/martindurant/filesystem_spec/workflows/CI/badge.svg)
 [![Docs](https://readthedocs.org/projects/filesystem-spec/badge/?version=latest)](https://filesystem-spec.readthedocs.io/en/latest/?badge=latest)
 
 A specification for pythonic filesystems.
