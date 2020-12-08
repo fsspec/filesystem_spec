@@ -17,4 +17,3 @@ dependencies:
   - python-libarchive-c
   - numpy
   - nomkl
-  - smbprotocol
