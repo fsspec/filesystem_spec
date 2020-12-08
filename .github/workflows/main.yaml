@@ -42,7 +42,7 @@ jobs:
           tox -v
 
   win:
-    name: ${{ matrix.TOXENV }}-pytest
+    name: ${{ matrix.TOXENV }}-pytest-win
     runs-on: windows-2019
     strategy:
       fail-fast: false
