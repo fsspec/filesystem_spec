@@ -1,0 +1,7 @@
+name: test_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - tox
+  - tox-conda

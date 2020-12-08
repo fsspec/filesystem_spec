@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: "*"
+  pull_request:
+    branches: master
+
+jobs:
+  test:
+    name: ${{ matrix.CONDA_ENV }}-pytest
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        TOXENV: [py38]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          auto-activate-base: false
+          activate-environment: test_env
+          environment-file: scripts/ci/environment-py38.yml
+
+      - name: extra-install
+        shell: bash -l {0}
+        run: |
+          sudo apt-get install fuse
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          tox -v
+
+  lint:
+    name: lint
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - name: Lint
+        shell: bash -l {0}
+        run: |
+          flake8 s3fs
+          black s3fs --check
