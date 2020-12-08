@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: ${{ matrix.CONDA_ENV }}-pytest
+    name: ${{ matrix.TOXENV }}-pytest
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -24,7 +24,7 @@ jobs:
           auto-update-conda: true
           auto-activate-base: false
           activate-environment: test_env
-          environment-file: scripts/ci/environment-py38.yml
+          environment-file: ci/environment-py38.yml
 
       - name: extra-install
         shell: bash -l {0}
@@ -42,6 +42,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
+      - name: pip-install
+        shell: bash -l {0}
+        run: |
+          pip install flake8 black
       - name: Lint
         shell: bash -l {0}
         run: |
