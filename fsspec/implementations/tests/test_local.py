@@ -553,6 +553,7 @@ def test_mv_recursive(tmpdir):
     assert localfs.info(os.path.join(dest, "afile"))
 
 
+@pytest.mark.xfail(WIN, reason="windows expand path to be revisited")
 def test_copy_errors(tmpdir):
     localfs = fsspec.filesystem("file")
 
@@ -576,8 +577,8 @@ def test_copy_errors(tmpdir):
 
     localfs.copy([file1, file2, dne], dest1, on_error="ignore")
     assert sorted(localfs.ls(dest1)) == [
-        os.path.join(dest1, "afile1"),
-        os.path.join(dest1, "afile2"),
+        make_path_posix(os.path.join(dest1, "afile1")),
+        make_path_posix(os.path.join(dest1, "afile2")),
     ]
 
     # Recursive should raise an error only if we specify raise
@@ -590,6 +591,6 @@ def test_copy_errors(tmpdir):
 
         localfs.copy(src, dest2, recursive=True)
         assert sorted(localfs.ls(dest2)) == [
-            os.path.join(dest2, "afile1"),
-            os.path.join(dest2, "afile2"),
+            make_path_posix(os.path.join(dest2, "afile1")),
+            make_path_posix(os.path.join(dest2, "afile2")),
         ]
