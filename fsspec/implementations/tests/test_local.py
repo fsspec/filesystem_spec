@@ -553,6 +553,7 @@ def test_mv_recursive(tmpdir):
     assert localfs.info(os.path.join(dest, "afile"))
 
 
+@pytest.mark.xfail(WIN, reason="windows expand path to be revisited")
 def test_copy_errors(tmpdir):
     localfs = fsspec.filesystem("file")
 
