@@ -811,7 +811,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     bit = set(self.glob(p))
                     out |= bit
                     if recursive:
-                        out += self.expand_path(p)
+                        rec = set(self.expand_path(p))
+                        out |= rec
                     continue
                 elif recursive:
                     rec = set(self.find(p, withdirs=True))
