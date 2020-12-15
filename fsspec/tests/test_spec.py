@@ -39,9 +39,14 @@ class DummyTestFS(AbstractFileSystem):
         },
         {"name": "misc", "type": "directory"},
         {"name": "misc/foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test", "type": "directory", "size": 0},
+        {"name": "glob_test/hat", "type": "directory", "size": 0},
         {"name": "glob_test/hat/^foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/dollar", "type": "directory", "size": 0},
         {"name": "glob_test/dollar/$foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/lbrace", "type": "directory", "size": 0},
         {"name": "glob_test/lbrace/{foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/rbrace", "type": "directory", "size": 0},
         {"name": "glob_test/rbrace/}foo.txt", "type": "file", "size": 100},
     )
 
@@ -64,6 +69,16 @@ class DummyTestFS(AbstractFileSystem):
             return [files[name] for name in sorted(files)]
 
         return list(sorted(files))
+
+    @classmethod
+    def get_test_paths(cls, start_with=""):
+        """Helper to return directory and file paths with no details"""
+        all = [
+            file["name"]
+            for file in cls._fs_contents
+            if file["name"].startswith(start_with)
+        ]
+        return all
 
 
 @pytest.mark.parametrize(
@@ -122,6 +137,45 @@ def test_glob(test_path, expected):
     assert sorted(res) == expected  # FIXME: py35 back-compat
     for name, info in res.items():
         assert info == test_fs[name]
+
+
+@pytest.mark.parametrize(
+    ["test_paths", "expected"],
+    [
+        (
+            ("top_level/second_level", "top_level/sec*", "top_level/*"),
+            [
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (("misc/foo.txt", "misc/*.txt"), ["misc/foo.txt"]),
+        (
+            ("",),
+            DummyTestFS.get_test_paths() + [DummyTestFS.root_marker],
+        ),
+    ],
+    # ids=["all_second_level", "single_file"],
+)
+def test_expand_path_recursive(test_paths, expected):
+    """Test a number of paths and then their combination which should all yield
+    the same set of expanded paths"""
+    test_fs = DummyTestFS()
+
+    # test single query
+    for test_path in test_paths:
+        paths = test_fs.expand_path(test_path, recursive=True)
+        assert sorted(paths) == sorted(expected)
+
+    # test with all queries
+    paths = test_fs.expand_path(list(test_paths), recursive=True)
+    assert sorted(paths) == sorted(expected)
 
 
 def test_find_details():
