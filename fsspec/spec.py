@@ -777,12 +777,27 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def cp_file(self, path1, path2, **kwargs):
         raise NotImplementedError
 
-    def copy(self, path1, path2, recursive=False, **kwargs):
-        """ Copy within two locations in the filesystem"""
+    def copy(self, path1, path2, recursive=False, on_error=None, **kwargs):
+        """Copy within two locations in the filesystem
+
+        on_error : "raise", "ignore"
+            If raise, any not-found exceptions will be raised; if ignore any
+            not-found exceptions will cause the path to be skipped; defaults to
+            raise unless recursive is true, where the default is ignore
+        """
+        if on_error is None and recursive:
+            on_error = "ignore"
+        elif on_error is None:
+            on_error = "raise"
+
         paths = self.expand_path(path1, recursive=recursive)
         path2 = other_paths(paths, path2)
         for p1, p2 in zip(paths, path2):
-            self.cp_file(p1, p2, **kwargs)
+            try:
+                self.cp_file(p1, p2, **kwargs)
+            except FileNotFoundError:
+                if on_error == "raise":
+                    raise
 
     def expand_path(self, path, recursive=False, maxdepth=None):
         """Turn one or more globs or directories into a list of all matching paths

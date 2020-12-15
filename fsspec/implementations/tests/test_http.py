@@ -294,7 +294,7 @@ def _inner_pass(fs, q, fn):
 
 
 @pytest.mark.skipif(
-    bool(os.environ.get("TRAVIS", "")), reason="Travis is weird in many ways"
+    bool(os.environ.get("CIRUN", "")), reason="CI runs are weird in many ways"
 )
 @pytest.mark.parametrize("method", ["spawn", "forkserver", "fork"])
 def test_processes(server, method):

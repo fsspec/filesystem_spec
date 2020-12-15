@@ -1,0 +1,19 @@
+name: test_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - aiohttp
+  - pip
+  - requests
+  - zstandard
+  - python-snappy
+  - lz4
+  - pyftpdlib
+  - cloudpickle
+  - pytest
+  - pytest-benchmark
+  - pytest-cov
+  - python-libarchive-c
+  - numpy
+  - nomkl

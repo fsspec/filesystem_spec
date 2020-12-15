@@ -87,8 +87,10 @@ class LocalFileSystem(AbstractFileSystem):
             self.makedirs(self._parent(path2), exist_ok=True)
         if self.isfile(path1):
             shutil.copyfile(path1, path2)
-        else:
+        elif self.isdir(path1):
             self.mkdirs(path2, exist_ok=True)
+        else:
+            raise FileNotFoundError
 
     def get_file(self, path1, path2, **kwargs):
         return self.cp_file(path1, path2, **kwargs)

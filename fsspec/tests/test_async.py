@@ -16,6 +16,7 @@ async def outer():
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="Async fails on py36")
 def test_runtildone():
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     assert loop.run_until_complete(outer())
     loop.close()

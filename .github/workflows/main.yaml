@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: "*"
+  pull_request:
+    branches: master
+
+jobs:
+  linux:
+    name: ${{ matrix.TOXENV }}-pytest
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        TOXENV: [py37, py38, s3fs, gcsfs]
+
+    env:
+      TOXENV: ${{ matrix.TOXENV }}
+      CIRUN: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          auto-activate-base: false
+          activate-environment: test_env
+          environment-file: ci/environment-py38.yml
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          tox -v
+
+  win:
+    name: ${{ matrix.TOXENV }}-pytest-win
+    runs-on: windows-2019
+    strategy:
+      fail-fast: false
+      matrix:
+        TOXENV: [py38]
+
+    env:
+      TOXENV: ${{ matrix.TOXENV }}
+      CIRUN: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          auto-activate-base: false
+          activate-environment: test_env
+          environment-file: ci/environment-win.yml
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          pytest -v
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - name: pip-install
+        shell: bash -l {0}
+        run: |
+          pip install flake8 black
+      - name: Lint
+        shell: bash -l {0}
+        run: |
+          flake8 fsspec
+          black fsspec --check

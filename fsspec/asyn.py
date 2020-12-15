@@ -196,14 +196,25 @@ class AsyncFileSystem(AbstractFileSystem):
         maybe_sync(self._rm, self, path, **kwargs)
 
     async def _copy(self, paths, path2, **kwargs):
-        await asyncio.gather(
-            *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
+        return await asyncio.gather(
+            *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)],
+            return_exceptions=True
         )
 
-    def copy(self, path1, path2, recursive=False, **kwargs):
+    def copy(self, path1, path2, recursive=False, on_error=None, **kwargs):
+        if on_error is None and recursive:
+            on_error = "ignore"
+        elif on_error is None:
+            on_error = "raise"
+
         paths = self.expand_path(path1, recursive=recursive)
         path2 = other_paths(paths, path2)
-        maybe_sync(self._copy, self, paths, path2, **kwargs)
+        result = maybe_sync(self._copy, self, paths, path2, **kwargs)
+
+        for ex in filter(is_exception, result):
+            if on_error == "ignore" and isinstance(ex, FileNotFoundError):
+                continue
+            raise ex
 
     async def _pipe(self, path, value=None, **kwargs):
         if isinstance(path, str):

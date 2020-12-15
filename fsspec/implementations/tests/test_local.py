@@ -12,6 +12,7 @@ import tempfile
 
 import pytest
 import fsspec
+from unittest.mock import patch
 from fsspec.core import open_files, get_fs_token_paths, OpenFile
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec import compression
@@ -550,3 +551,46 @@ def test_mv_recursive(tmpdir):
     assert localfs.isdir(src) is False
     assert localfs.isdir(dest)
     assert localfs.info(os.path.join(dest, "afile"))
+
+
+@pytest.mark.xfail(WIN, reason="windows expand path to be revisited")
+def test_copy_errors(tmpdir):
+    localfs = fsspec.filesystem("file")
+
+    dest1 = os.path.join(str(tmpdir), "dest1")
+    dest2 = os.path.join(str(tmpdir), "dest2")
+
+    src = os.path.join(str(tmpdir), "src")
+    file1 = os.path.join(src, "afile1")
+    file2 = os.path.join(src, "afile2")
+    dne = os.path.join(str(tmpdir), "src", "notafile")
+
+    localfs.mkdir(src)
+    localfs.mkdir(dest1)
+    localfs.mkdir(dest2)
+    localfs.touch(file1)
+    localfs.touch(file2)
+
+    # Non recursive should raise an error unless we specify ignore
+    with pytest.raises(FileNotFoundError):
+        localfs.copy([file1, file2, dne], dest1)
+
+    localfs.copy([file1, file2, dne], dest1, on_error="ignore")
+    assert sorted(localfs.ls(dest1)) == [
+        make_path_posix(os.path.join(dest1, "afile1")),
+        make_path_posix(os.path.join(dest1, "afile2")),
+    ]
+
+    # Recursive should raise an error only if we specify raise
+    # the patch simulates the filesystem finding a file that does not
+    # exist in the directory
+    current_files = localfs.expand_path(src, recursive=True)
+    with patch.object(localfs, "expand_path", return_value=current_files + [dne]):
+        with pytest.raises(FileNotFoundError):
+            localfs.copy(src, dest2, recursive=True, on_error="raise")
+
+        localfs.copy(src, dest2, recursive=True)
+        assert sorted(localfs.ls(dest2)) == [
+            make_path_posix(os.path.join(dest2, "afile1")),
+            make_path_posix(os.path.join(dest2, "afile2")),
+        ]
