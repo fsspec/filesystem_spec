@@ -39,9 +39,14 @@ class DummyTestFS(AbstractFileSystem):
         },
         {"name": "misc", "type": "directory"},
         {"name": "misc/foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test", "type": "directory", "size": 0},
+        {"name": "glob_test/hat", "type": "directory", "size": 0},
         {"name": "glob_test/hat/^foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/dollar", "type": "directory", "size": 0},
         {"name": "glob_test/dollar/$foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/lbrace", "type": "directory", "size": 0},
         {"name": "glob_test/lbrace/{foo.txt", "type": "file", "size": 100},
+        {"name": "glob_test/rbrace", "type": "directory", "size": 0},
         {"name": "glob_test/rbrace/}foo.txt", "type": "file", "size": 100},
     )
 
@@ -151,12 +156,12 @@ def test_glob(test_path, expected):
             ],
         ),
         (("misc/foo.txt", "misc/*.txt"), ["misc/foo.txt"]),
-        # Note: fails because 'glob_test' paths are missing (intentionally?) from ls,
-        #  remove comments and add id to fail it
-        # Todo: figure out what test_fs.ls("") ought to return
-        # ((DummyTestFS.root_marker,), DummyTestFS.get_test_paths() + [DummyTestFS.root_marker]),
+        (
+            ("",),
+            DummyTestFS.get_test_paths() + [DummyTestFS.root_marker],
+        ),
     ],
-    ids=["all_second_level", "single_file"],
+    # ids=["all_second_level", "single_file"],
 )
 def test_expand_path_recursive(test_paths, expected):
     """Test a number of paths and then their combination which should all yield
@@ -166,15 +171,11 @@ def test_expand_path_recursive(test_paths, expected):
     # test single query
     for test_path in test_paths:
         paths = test_fs.expand_path(test_path, recursive=True)
-        assert sorted(paths) == sorted(
-            expected
-        ), f"path(s) '{test_path}' didn't expand as expected"
+        assert sorted(paths) == sorted(expected)
 
     # test with all queries
     paths = test_fs.expand_path(list(test_paths), recursive=True)
-    assert sorted(paths) == sorted(
-        expected
-    ), f"all test paths didn't expand as expected"
+    assert sorted(paths) == sorted(expected)
 
 
 def test_find_details():

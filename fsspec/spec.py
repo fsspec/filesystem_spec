@@ -814,9 +814,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     bit = set(self.glob(p))
                     out |= bit
                     if recursive:
-                        # We add all the globbed results under the assumption
-                        # .glob() expands paths (only files are documented but
-                        # in test they do) and files paths are OK with this function
                         out |= set(
                             self.expand_path(
                                 list(bit), recursive=recursive, maxdepth=maxdepth
@@ -824,8 +821,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                         )
                     continue
                 elif recursive:
-                    # TODO: maxdepth is not used and probably should
-                    rec = set(self.find(p, withdirs=True))
+                    rec = set(self.find(p, maxdepth=maxdepth, withdirs=True))
                     out |= rec
                 if p not in out and (recursive is False or self.exists(p)):
                     # should only check once, for the root
