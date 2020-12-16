@@ -103,7 +103,5 @@ def test_rm_reursive_empty_subdir(m):
     # https://github.com/intake/filesystem_spec/issues/500
     m.mkdir("dir")
     m.mkdir("dir/subdir2")
-    assert len(m.find("")) == 0
-    assert len(m.find("", withdirs=True)) == 2
     m.rm("dir/", recursive=True)
     assert not m.exists("dir")
