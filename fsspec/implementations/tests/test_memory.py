@@ -97,3 +97,11 @@ def test_moves(m):
     m.touch("source2.txt")
     m.mv("source2.txt", "target2.txt", recursive=True)
     assert m.find("") == ["target.txt", "target2.txt"]
+
+
+def test_rm_reursive_empty_subdir(m):
+    # https://github.com/intake/filesystem_spec/issues/500
+    m.mkdir("recdir")
+    m.mkdir("recdir/subdir2")
+    m.rm("recdir/", recursive=True)
+    assert not m.exists("dir")

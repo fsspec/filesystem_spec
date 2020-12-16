@@ -112,6 +112,7 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def exists(self, path):
+        path = self._strip_protocol(path)
         return path in self.store or path in self.pseudo_dirs
 
     def _open(
