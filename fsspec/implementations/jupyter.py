@@ -76,7 +76,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "name": path.rsplit("/", 1)[-1],
             "path": path,
             "size": len(value),
-            "content": base64.b64encode(value),
+            "content": base64.b64encode(value).decode(),
             "format": "base64",
             "type": "file",
         }
