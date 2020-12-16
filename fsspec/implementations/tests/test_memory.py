@@ -101,7 +101,7 @@ def test_moves(m):
 
 def test_rm_reursive_empty_subdir(m):
     # https://github.com/intake/filesystem_spec/issues/500
-    m.mkdir("dir")
-    m.mkdir("dir/subdir2")
-    m.rm("dir/", recursive=True)
+    m.mkdir("recdir")
+    m.mkdir("recdir/subdir2")
+    m.rm("recdir/", recursive=True)
     assert not m.exists("dir")
