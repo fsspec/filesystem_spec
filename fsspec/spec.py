@@ -9,7 +9,13 @@ from glob import has_magic
 
 from .dircache import DirCache
 from .transaction import Transaction
-from .utils import read_block, tokenize, stringify_path, other_paths
+from .utils import (
+    read_block,
+    tokenize,
+    stringify_path,
+    other_paths,
+    get_package_version_without_import,
+)
 from .config import apply_config
 
 logger = logging.getLogger("fsspec")
@@ -72,16 +78,13 @@ class _Cached(type):
             return obj
 
 
-try:  # optionally derive from pyarrow's FileSystem, if available
+pa_version = get_package_version_without_import("pyarrow")
+if LooseVersion(pa_version) < LooseVersion("2.0"):
     import pyarrow as pa
-except ImportError:
-    up = object
+
+    up = pa.filesystem.DaskFileSystem
 else:
-    # only derive from the legacy pyarrow's FileSystem for older pyarrow versions
-    if LooseVersion(pa.__version__) < LooseVersion("2.0"):
-        up = pa.filesystem.DaskFileSystem
-    else:
-        up = object
+    up = object
 
 
 class AbstractFileSystem(up, metaclass=_Cached):
