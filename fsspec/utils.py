@@ -3,6 +3,7 @@ import math
 import os
 import pathlib
 import re
+import sys
 from urllib.parse import urlsplit
 
 
@@ -383,10 +384,13 @@ def can_be_local(path):
         return False
 
 
-def setup_logger(logname, level="DEBUG"):
+def setup_logger(logname, level="DEBUG", clear=True):
+    """Add standard logging handler to logger of given name"""
     import logging
 
     logger = logging.getLogger(logname)
+    if clear:
+        logger.handlers.clear()
     handle = logging.StreamHandler()
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s " "- %(message)s"
@@ -395,3 +399,39 @@ def setup_logger(logname, level="DEBUG"):
     logger.addHandler(handle)
     logger.setLevel(level)
     return logger
+
+
+def get_package_version_without_import(name):
+    """For given package name, try to find the version without importing it
+
+    Import and package.__version__ is still the backup here, so an import
+    *might* happen.
+
+    Returns either the version string, or None if the package
+    or the version was not readily  found.
+    """
+    if name in sys.modules:
+        mod = sys.modules[name]
+        if hasattr(mod, "__version__"):
+            return mod.__version__
+    if sys.version_info >= (3, 8):
+        try:
+            import importlib.metadata
+
+            return importlib.metadata.distribution(name).version
+        except ImportError:
+            pass
+    else:
+        try:
+            import importlib_metadata
+
+            return importlib_metadata.distribution(name).version
+        except ImportError:
+            pass
+    try:
+        import importlib
+
+        mod = importlib.import_module(name)
+        return mod.__version__
+    except (ImportError, AttributeError):
+        return None
