@@ -4,6 +4,7 @@ import os
 import warnings
 from errno import ESPIPE
 from hashlib import sha256
+from distutils.version import LooseVersion
 from glob import has_magic
 
 from .dircache import DirCache
@@ -11,7 +12,6 @@ from .transaction import Transaction
 from .utils import (
     read_block,
     tokenize,
-    loose_version,
     stringify_path,
     other_paths,
     get_package_version_without_import,
@@ -79,7 +79,7 @@ class _Cached(type):
 
 
 pa_version = get_package_version_without_import("pyarrow")
-if pa_version and loose_version(pa_version) < loose_version("2.0"):
+if pa_version and LooseVersion(pa_version) < LooseVersion("2.0"):
     import pyarrow as pa
 
     up = pa.filesystem.DaskFileSystem
