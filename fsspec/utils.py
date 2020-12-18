@@ -415,15 +415,19 @@ def get_package_version_without_import(name):
         if hasattr(mod, "__version__"):
             return mod.__version__
     if sys.version_info >= (3, 8):
-        import importlib.metadata
+        try:
+            import importlib.metadata
 
-        return importlib.metadata.distribution(name).version
-    try:
-        import importlib_metadata
+            return importlib.metadata.distribution(name).version
+        except ImportError:
+            pass
+    else:
+        try:
+            import importlib_metadata
 
-        return importlib_metadata.distribution(name).version
-    except ImportError:
-        pass
+            return importlib_metadata.distribution(name).version
+        except ImportError:
+            pass
     try:
         import importlib
 
