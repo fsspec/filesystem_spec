@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Dev
+-------------
+
+Fixes:
+
+- random appending of a directory within the filesystems ``find()`` method
+
 Version 0.8.5
 -------------
 
