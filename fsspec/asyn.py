@@ -201,13 +201,15 @@ class AsyncFileSystem(AbstractFileSystem):
             return_exceptions=True
         )
 
-    def copy(self, path1, path2, recursive=False, on_error=None, **kwargs):
+    def copy(
+        self, path1, path2, recursive=False, on_error=None, maxdepth=None, **kwargs
+    ):
         if on_error is None and recursive:
             on_error = "ignore"
         elif on_error is None:
             on_error = "raise"
 
-        paths = self.expand_path(path1, recursive=recursive)
+        paths = self.expand_path(path1, maxdepth=maxdepth, recursive=recursive)
         path2 = other_paths(paths, path2)
         result = maybe_sync(self._copy, self, paths, path2, **kwargs)
 
