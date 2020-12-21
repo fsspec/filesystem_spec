@@ -171,9 +171,10 @@ class DatabricksFileSystem(AbstractFileSystem):
         A note from the original [databricks API manual]
         (https://docs.databricks.com/dev-tools/api/latest/dbfs.html#move).
 
-        When moving a large number of files the API call will time out after approximately 60s,
-        potentially resulting in partially moved data. Therefore, for operations that move more
-        than 10k files, we strongly discourage using the DBFS REST API.
+        When moving a large number of files the API call will time out after
+        approximately 60s, potentially resulting in partially moved data.
+        Therefore, for operations that move more than 10k files, we strongly
+        discourage using the DBFS REST API.
 
         Parameters
         ----------
@@ -248,7 +249,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             # if that fails, fall back to the original exception
             try:
                 exception_json = e.response.json()
-            except:
+            except Exception:
                 raise e
 
             raise DatabricksException(**exception_json)
