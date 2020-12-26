@@ -427,7 +427,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         path = self._strip_protocol(path)
         out = dict()
         detail = kwargs.pop("detail", False)
-        for path_, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
+        for _, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
                 files.update(dirs)
             out.update({info["name"]: info for name, info in files.items()})
