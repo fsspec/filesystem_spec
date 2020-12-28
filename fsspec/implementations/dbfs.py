@@ -1,5 +1,5 @@
 import base64
-import os
+import urllib
 
 import requests
 
@@ -236,7 +236,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         else:
             raise ValueError(f"Do not understand method {method}")
 
-        url = os.path.join(f"https://{self.instance}/api/2.0/dbfs", endpoint)
+        url = urllib.parse.urljoin(f"https://{self.instance}/api/2.0/dbfs/", endpoint)
 
         r = session_call(url, json=json)
 
