@@ -4,3 +4,6 @@ include fsspec/_version.py
 include LICENSE
 include README.rst
 include requirements.txt
+prune docs
+prune fsspec/tests
+prune fsspec/implementations/tests
