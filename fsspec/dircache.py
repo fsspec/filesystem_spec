@@ -54,7 +54,7 @@ class DirCache(MutableMapping):
         self.max_paths = max_paths
 
     def __getitem__(self, item):
-        if self.listings_expiry_time:
+        if self.listings_expiry_time is not None:
             if self._times.get(item, 0) - time.time() < -self.listings_expiry_time:
                 del self._cache[item]
         if self.max_paths:
@@ -80,7 +80,7 @@ class DirCache(MutableMapping):
         if self.max_paths:
             self._q(key)
         self._cache[key] = value
-        if self.listings_expiry_time:
+        if self.listings_expiry_time is not None:
             self._times[key] = time.time()
 
     def __delitem__(self, key):
