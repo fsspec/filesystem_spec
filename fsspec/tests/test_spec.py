@@ -6,6 +6,7 @@ import pytest
 
 import fsspec
 from fsspec.implementations.ftp import FTPFileSystem
+from fsspec.implementations.http import HTTPFileSystem
 from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
 
 
@@ -176,6 +177,57 @@ def test_expand_path_recursive(test_paths, expected):
     # test with all queries
     paths = test_fs.expand_path(list(test_paths), recursive=True)
     assert sorted(paths) == sorted(expected)
+
+
+@pytest.mark.parametrize(
+    ["filesystem", "host", "test_path", "expected"],
+    [
+        (
+            FTPFileSystem,
+            "ftp.fau.de",
+            "ftp://ftp.fau.de/debian-cd/current/amd64/log/success",
+            [
+                "/debian-cd/current/amd64/log/success/BD.log",
+                "/debian-cd/current/amd64/log/success/DLBD.log",
+                "/debian-cd/current/amd64/log/success/DVD.log",
+                "/debian-cd/current/amd64/log/success/EDUNI.log",
+                "/debian-cd/current/amd64/log/success/EDUUSB.log",
+                "/debian-cd/current/amd64/log/success/MACNI.log",
+                "/debian-cd/current/amd64/log/success/NI.log",
+                "/debian-cd/current/amd64/log/success/USB16G.log",
+                "/debian-cd/current/amd64/log/success/XFCECD.log",
+            ],
+        ),
+        (
+            HTTPFileSystem,
+            "https://ftp.fau.de",
+            "https://ftp.fau.de/debian-cd/current/amd64/log/success",
+            [
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=D;O=A",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=M;O=A",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=N;O=D",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=S;O=A",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/BD.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/DLBD.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/DVD.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/EDUNI.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/EDUUSB.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/MACNI.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/NI.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/USB16G.log",
+                "https://ftp.fau.de/debian-cd/current/amd64/log/success/XFCECD.log",
+            ],
+        ),
+    ],
+)
+def test_find(filesystem, host, test_path, expected):
+    """ Test .find() method on debian server (available as ftp and https) with constant folder """
+    test_fs = filesystem(host)
+
+    filenames = test_fs.find(test_path)
+
+    assert filenames == expected
 
 
 def test_find_details():
