@@ -154,6 +154,10 @@ known_implementations = {
         "class": "fsspec.implementations.dask.DaskWorkerFileSystem",
         "err": "Install dask distributed to access worker file system",
     },
+    "dbfs": {
+        "class": "fsspec.implementations.dbfs.DatabricksFileSystem",
+        "err": "Install the requests package to use the DatabricksFileSystem",
+    },
     "github": {
         "class": "fsspec.implementations.github.GithubFileSystem",
         "err": "Install the requests package to use the github FS",
