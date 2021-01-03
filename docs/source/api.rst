@@ -98,6 +98,7 @@ Built-in Implementations
    fsspec.implementations.smb.SMBFileSystem
    fsspec.implementations.jupyter.JupyterFileSystem
    fsspec.implementations.libarchive.LibArchiveFileSystem
+   fsspec.implementations.dbfs.DatabricksFileSystem
    fsspec.implementations.reference.ReferenceFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
@@ -149,6 +150,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.libarchive.LibArchiveFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.dbfs.DatabricksFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.reference.ReferenceFileSystem
