@@ -33,6 +33,7 @@ setup(
     python_requires=">3.6",
     install_requires=open("requirements.txt").read().strip().split("\n"),
     extras_require={
+        ":python_version < '3.8'": ['importlib_metadata'],
         "abfs": ["adlfs"],
         "adl": ["adlfs"],
         "dask": ["dask", "distributed"],
