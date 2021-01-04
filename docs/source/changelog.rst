@@ -4,6 +4,10 @@ Changelog
 Dev
 -------------
 
+Features:
+
+- Add dbfs:// support
+
 Fixes:
 
 - random appending of a directory within the filesystems ``find()`` method
