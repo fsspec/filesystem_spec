@@ -1,13 +1,22 @@
+import sys
+from unittest.mock import create_autospec, patch
+
 import pytest
+
 from fsspec.registry import (
-    get_filesystem_class,
-    _registry,
-    registry,
-    register_implementation,
     ReadOnlyError,
+    _registry,
+    get_filesystem_class,
     known_implementations,
+    register_implementation,
+    registry,
 )
 from fsspec.spec import AbstractFileSystem
+
+try:
+    from importlib.metadata import EntryPoint
+except ImportError:  # python < 3.8
+    from importlib_metadata import EntryPoint
 
 
 @pytest.fixture()
@@ -17,6 +26,16 @@ def clear_registry():
     finally:
         _registry.clear()
         known_implementations.pop("test", None)
+
+
+@pytest.fixture()
+def clean_imports():
+    try:
+        real_module = sys.modules["fsspec"]
+        del sys.modules["fsspec"]
+        yield
+    finally:
+        sys.modules["fsspec"] = real_module
 
 
 @pytest.mark.parametrize(
@@ -85,3 +104,18 @@ def test_register_fail(clear_registry):
     with pytest.raises(ValueError):
         register_implementation("test", AbstractFileSystem, clobber=False)
     register_implementation("test", AbstractFileSystem, clobber=True)
+
+
+def test_entry_points_registered_on_import(clear_registry, clean_imports):
+    mock_ep = create_autospec(EntryPoint, module="fsspec.spec.AbstractFileSystem")
+    mock_ep.name = "test"  # this can't be set in the constructor...
+    if sys.version_info < (3, 8):
+        import_location = "importlib_metadata.entry_points"
+    else:
+        import_location = "importlib.metadata.entry_points"
+    with patch(import_location, return_value={"fsspec.specs": [mock_ep]}):
+        assert "test" not in registry
+        import fsspec
+
+        get_filesystem_class("test")
+        assert "test" in registry

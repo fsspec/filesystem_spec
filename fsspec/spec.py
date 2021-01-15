@@ -80,10 +80,14 @@ class _Cached(type):
 
 pa_version = get_package_version_without_import("pyarrow")
 if pa_version and LooseVersion(pa_version) < LooseVersion("2.0"):
-    import pyarrow as pa
+    try:
+        import pyarrow as pa
 
-    up = pa.filesystem.DaskFileSystem
-else:
+        up = pa.filesystem.DaskFileSystem
+    except ImportError:  # pragma: no cover
+        # pyarrow exists but doesn't import for some reason
+        up = object
+else:  # pragma: no cover
     up = object
 
 
