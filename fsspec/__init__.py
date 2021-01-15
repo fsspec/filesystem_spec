@@ -1,7 +1,11 @@
 try:
     from importlib.metadata import entry_points
 except ImportError:  # python < 3.8
-    from importlib_metadata import entry_points
+    try:
+        from importlib_metadata import entry_points
+    except ImportError:
+        entry_points = None
+
 
 from . import caching
 from ._version import get_versions
@@ -34,7 +38,8 @@ __all__ = [
     "caching",
 ]
 
-entry_points = entry_points()
-for spec in entry_points.get("fsspec.specs", []):
-    err_msg = f"Unable to load filesystem from {spec}"
-    register_implementation(spec.name, spec.module, errtxt=err_msg)
+if entry_points is not None:
+    entry_points = entry_points()
+    for spec in entry_points.get("fsspec.specs", []):
+        err_msg = f"Unable to load filesystem from {spec}"
+        register_implementation(spec.name, spec.module, errtxt=err_msg)
