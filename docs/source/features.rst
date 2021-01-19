@@ -316,8 +316,8 @@ to the target URL, in this case on S3. The file-like object ``f`` can be passed 
 library expecting to write to a file. Note that we pass parameters to ``S3FileSystem`` using
 the key ``"s3"``, the same as the name of the protocol.
 
-File Selector
--------------
+File Selector (GUI)
+-------------------
 
 The module ``fsspec.gui`` contains a graphical file selector interface. It is built
 using `panel`_, which must be installed in order to use the GUI. Upon instantiation,
