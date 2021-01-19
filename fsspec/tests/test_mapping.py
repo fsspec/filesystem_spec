@@ -1,7 +1,9 @@
 import os
+import pickle
+import sys
+
 import fsspec
 from fsspec.implementations.memory import MemoryFileSystem
-import pickle
 import pytest
 
 
@@ -95,18 +97,24 @@ def test_setitem_types():
 
     m = fsspec.get_mapper("memory://")
     m["a"] = array.array("i", [1])
-    assert m["a"] == b"\x01\x00\x00\x00"
+    if sys.byteorder == "little":
+        assert m["a"] == b"\x01\x00\x00\x00"
+    else:
+        assert m["a"] == b"\x00\x00\x00\x01"
     m["b"] = bytearray(b"123")
     assert m["b"] == b"123"
     m.setitems({"c": array.array("i", [1]), "d": bytearray(b"123")})
-    assert m["c"] == b"\x01\x00\x00\x00"
+    if sys.byteorder == "little":
+        assert m["c"] == b"\x01\x00\x00\x00"
+    else:
+        assert m["c"] == b"\x00\x00\x00\x01"
     assert m["d"] == b"123"
 
 
 def test_setitem_numpy():
     m = fsspec.get_mapper("memory://")
     np = pytest.importorskip("numpy")
-    m["c"] = np.array(1, dtype="int32")  # scalar
+    m["c"] = np.array(1, dtype="<i4")  # scalar
     assert m["c"] == b"\x01\x00\x00\x00"
-    m["c"] = np.array([1, 2], dtype="int32")  # array
+    m["c"] = np.array([1, 2], dtype="<i4")  # array
     assert m["c"] == b"\x01\x00\x00\x00\x02\x00\x00\x00"
