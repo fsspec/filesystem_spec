@@ -6,3 +6,9 @@ dependencies:
   - paramiko
   - requests
   - numpydoc
+  - aiohttp
+  - smbclient
+  - pygit2
+  - distributed
+  - pyarrow=1
+  - libarchive
