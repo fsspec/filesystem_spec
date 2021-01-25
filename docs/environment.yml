@@ -12,6 +12,4 @@ dependencies:
   - distributed
   - pyarrow=1
   - libarchive
-  - pip
-  - pip:
-      - smbclient
+  - smbprotocol
