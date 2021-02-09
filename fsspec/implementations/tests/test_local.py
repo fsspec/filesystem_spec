@@ -597,7 +597,7 @@ def test_copy_errors(tmpdir):
 
 
 def test_transaction(tmpdir):
-    file = (tmpdir / "test.txt").as_posix()
+    file = str(tmpdir / "test.txt")
     fs = LocalFileSystem()
 
     with fs.transaction:
