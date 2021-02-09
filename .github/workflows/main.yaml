@@ -71,12 +71,5 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-      - name: pip-install
-        shell: bash -l {0}
-        run: |
-          pip install flake8 black
-      - name: Lint
-        shell: bash -l {0}
-        run: |
-          flake8 fsspec
-          black fsspec --check
+      - uses: pre-commit/action@v2.0.0
+      
