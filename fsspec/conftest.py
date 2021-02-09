@@ -15,7 +15,7 @@ def m():
     """
     Fixture providing a memory filesystem.
     """
-    m = fsspec.filesystem('memory')
+    m = fsspec.filesystem("memory")
     m.store.clear()
     try:
         yield m
@@ -28,20 +28,20 @@ def ftp_writable(tmpdir):
     """
     Fixture providing a writable FTP filesystem.
     """
-    pytest.importorskip('pyftpdlib')
+    pytest.importorskip("pyftpdlib")
     from fsspec.implementations.ftp import FTPFileSystem
 
     FTPFileSystem.clear_instance_cache()  # remove lingering connections
     CachingFileSystem.clear_instance_cache()
     d = str(tmpdir)
-    with open(os.path.join(d, 'out'), 'wb') as f:
-        f.write(b'hello' * 10000)
+    with open(os.path.join(d, "out"), "wb") as f:
+        f.write(b"hello" * 10000)
     P = subprocess.Popen(
-        [sys.executable, '-m', 'pyftpdlib', '-d', d, '-u', 'user', '-P', 'pass', '-w']
+        [sys.executable, "-m", "pyftpdlib", "-d", d, "-u", "user", "-P", "pass", "-w"]
     )
     try:
         time.sleep(1)
-        yield 'localhost', 2121, 'user', 'pass'
+        yield "localhost", 2121, "user", "pass"
     finally:
         P.terminate()
         P.wait()

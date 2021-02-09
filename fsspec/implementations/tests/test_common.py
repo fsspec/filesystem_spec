@@ -7,7 +7,7 @@ from fsspec import AbstractFileSystem
 from fsspec.implementations.tests.conftest import READ_ONLY_FILESYSTEMS
 
 
-@pytest.mark.parametrize('fs', ['local'], indirect=['fs'])
+@pytest.mark.parametrize("fs", ["local"], indirect=["fs"])
 def test_created(fs: AbstractFileSystem, temp_file):
     try:
         fs.touch(temp_file)
@@ -18,7 +18,7 @@ def test_created(fs: AbstractFileSystem, temp_file):
             fs.rm(temp_file)
 
 
-@pytest.mark.parametrize('fs', ['local'], indirect=['fs'])
+@pytest.mark.parametrize("fs", ["local"], indirect=["fs"])
 def test_modified(fs: AbstractFileSystem, temp_file):
     try:
         fs.touch(temp_file)

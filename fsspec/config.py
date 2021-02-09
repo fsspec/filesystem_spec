@@ -3,8 +3,8 @@ import json
 import os
 
 conf = {}
-default_conf_dir = os.path.join(os.path.expanduser('~'), '.config/fsspec')
-conf_dir = os.environ.get('FSSPEC_CONFIG_DIR', default_conf_dir)
+default_conf_dir = os.path.join(os.path.expanduser("~"), ".config/fsspec")
+conf_dir = os.environ.get("FSSPEC_CONFIG_DIR", default_conf_dir)
 
 
 def set_conf_env(conf_dict, envdict=os.environ):
@@ -22,10 +22,10 @@ def set_conf_env(conf_dict, envdict=os.environ):
         Source for the values - usually the real environment
     """
     for key in envdict:
-        if key.startswith('FSSPEC'):
-            if key.count('_') < 2:
+        if key.startswith("FSSPEC"):
+            if key.count("_") < 2:
                 continue
-            _, proto, kwarg = key.split('_', 2)
+            _, proto, kwarg = key.split("_", 2)
             conf_dict.setdefault(proto.lower(), {})[kwarg.lower()] = envdict[key]
 
 
@@ -50,14 +50,14 @@ def set_conf_files(cdir, conf_dict):
         return
     allfiles = sorted(os.listdir(cdir))
     for fn in allfiles:
-        if fn.endswith('.ini'):
+        if fn.endswith(".ini"):
             ini = configparser.ConfigParser()
             ini.read(os.path.join(cdir, fn))
             for key in ini:
-                if key == 'DEFAULT':
+                if key == "DEFAULT":
                     continue
                 conf_dict.setdefault(key, {}).update(dict(ini[key]))
-        if fn.endswith('.json'):
+        if fn.endswith(".json"):
             js = json.load(open(os.path.join(cdir, fn)))
             for key in js:
                 conf_dict.setdefault(key, {}).update(dict(js[key]))

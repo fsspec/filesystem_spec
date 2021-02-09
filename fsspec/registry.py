@@ -1,7 +1,7 @@
 import importlib
 from distutils.version import LooseVersion
 
-__all__ = ['registry', 'get_filesystem_class', 'default']
+__all__ = ["registry", "get_filesystem_class", "default"]
 
 # mapping protocol: implementation class object
 _registry = {}  # internal, mutable
@@ -64,128 +64,128 @@ def register_implementation(name, cls, clobber=True, errtxt=None):
     if isinstance(cls, str):
         if name in known_implementations and clobber is False:
             raise ValueError(
-                'Name (%s) already in the known_implementations and clobber '
-                'is False' % name
+                "Name (%s) already in the known_implementations and clobber "
+                "is False" % name
             )
         known_implementations[name] = {
-            'class': cls,
-            'err': errtxt or '%s import failed for protocol %s' % (cls, name),
+            "class": cls,
+            "err": errtxt or "%s import failed for protocol %s" % (cls, name),
         }
 
     else:
         if name in registry and clobber is False:
             raise ValueError(
-                'Name (%s) already in the registry and clobber is False' % name
+                "Name (%s) already in the registry and clobber is False" % name
             )
         _registry[name] = cls
 
 
 registry = ReadOnlyRegistry(_registry)
-default = 'file'
+default = "file"
 
 # protocols mapped to the class which implements them. This dict can
 # updated with register_implementation
 known_implementations = {
-    'file': {'class': 'fsspec.implementations.local.LocalFileSystem'},
-    'memory': {'class': 'fsspec.implementations.memory.MemoryFileSystem'},
-    'dropbox': {
-        'class': 'dropboxdrivefs.DropboxDriveFileSystem',
-        'err': (
+    "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
+    "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
+    "dropbox": {
+        "class": "dropboxdrivefs.DropboxDriveFileSystem",
+        "err": (
             'DropboxFileSystem requires "dropboxdrivefs",'
             '"requests" and "dropbox" to be installed'
         ),
     },
-    'http': {
-        'class': 'fsspec.implementations.http.HTTPFileSystem',
-        'err': 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
+    "http": {
+        "class": "fsspec.implementations.http.HTTPFileSystem",
+        "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
-    'https': {
-        'class': 'fsspec.implementations.http.HTTPFileSystem',
-        'err': 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
+    "https": {
+        "class": "fsspec.implementations.http.HTTPFileSystem",
+        "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
-    'zip': {'class': 'fsspec.implementations.zip.ZipFileSystem'},
-    'gcs': {
-        'class': 'gcsfs.GCSFileSystem',
-        'err': 'Please install gcsfs to access Google Storage',
+    "zip": {"class": "fsspec.implementations.zip.ZipFileSystem"},
+    "gcs": {
+        "class": "gcsfs.GCSFileSystem",
+        "err": "Please install gcsfs to access Google Storage",
     },
-    'gs': {
-        'class': 'gcsfs.GCSFileSystem',
-        'err': 'Please install gcsfs to access Google Storage',
+    "gs": {
+        "class": "gcsfs.GCSFileSystem",
+        "err": "Please install gcsfs to access Google Storage",
     },
-    'gdrive': {
-        'class': 'gdrivefs.GoogleDriveFileSystem',
-        'err': 'Please install gdrivefs for access to Google Drive',
+    "gdrive": {
+        "class": "gdrivefs.GoogleDriveFileSystem",
+        "err": "Please install gdrivefs for access to Google Drive",
     },
-    'sftp': {
-        'class': 'fsspec.implementations.sftp.SFTPFileSystem',
-        'err': 'SFTPFileSystem requires "paramiko" to be installed',
+    "sftp": {
+        "class": "fsspec.implementations.sftp.SFTPFileSystem",
+        "err": 'SFTPFileSystem requires "paramiko" to be installed',
     },
-    'ssh': {
-        'class': 'fsspec.implementations.sftp.SFTPFileSystem',
-        'err': 'SFTPFileSystem requires "paramiko" to be installed',
+    "ssh": {
+        "class": "fsspec.implementations.sftp.SFTPFileSystem",
+        "err": 'SFTPFileSystem requires "paramiko" to be installed',
     },
-    'ftp': {'class': 'fsspec.implementations.ftp.FTPFileSystem'},
-    'hdfs': {
-        'class': 'fsspec.implementations.hdfs.PyArrowHDFS',
-        'err': 'pyarrow and local java libraries required for HDFS',
+    "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
+    "hdfs": {
+        "class": "fsspec.implementations.hdfs.PyArrowHDFS",
+        "err": "pyarrow and local java libraries required for HDFS",
     },
-    'webhdfs': {
-        'class': 'fsspec.implementations.webhdfs.WebHDFS',
-        'err': 'webHDFS access requires "requests" to be installed',
+    "webhdfs": {
+        "class": "fsspec.implementations.webhdfs.WebHDFS",
+        "err": 'webHDFS access requires "requests" to be installed',
     },
-    's3': {'class': 's3fs.S3FileSystem', 'err': 'Install s3fs to access S3'},
-    'adl': {
-        'class': 'adlfs.AzureDatalakeFileSystem',
-        'err': 'Install adlfs to access Azure Datalake Gen1',
+    "s3": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
+    "adl": {
+        "class": "adlfs.AzureDatalakeFileSystem",
+        "err": "Install adlfs to access Azure Datalake Gen1",
     },
-    'abfs': {
-        'class': 'adlfs.AzureBlobFileSystem',
-        'err': 'Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage',
+    "abfs": {
+        "class": "adlfs.AzureBlobFileSystem",
+        "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
     },
-    'az': {
-        'class': 'adlfs.AzureBlobFileSystem',
-        'err': 'Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage',
+    "az": {
+        "class": "adlfs.AzureBlobFileSystem",
+        "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
     },
-    'cached': {'class': 'fsspec.implementations.cached.CachingFileSystem'},
-    'blockcache': {'class': 'fsspec.implementations.cached.CachingFileSystem'},
-    'filecache': {'class': 'fsspec.implementations.cached.WholeFileCacheFileSystem'},
-    'simplecache': {'class': 'fsspec.implementations.cached.SimpleCacheFileSystem'},
-    'dask': {
-        'class': 'fsspec.implementations.dask.DaskWorkerFileSystem',
-        'err': 'Install dask distributed to access worker file system',
+    "cached": {"class": "fsspec.implementations.cached.CachingFileSystem"},
+    "blockcache": {"class": "fsspec.implementations.cached.CachingFileSystem"},
+    "filecache": {"class": "fsspec.implementations.cached.WholeFileCacheFileSystem"},
+    "simplecache": {"class": "fsspec.implementations.cached.SimpleCacheFileSystem"},
+    "dask": {
+        "class": "fsspec.implementations.dask.DaskWorkerFileSystem",
+        "err": "Install dask distributed to access worker file system",
     },
-    'dbfs': {
-        'class': 'fsspec.implementations.dbfs.DatabricksFileSystem',
-        'err': 'Install the requests package to use the DatabricksFileSystem',
+    "dbfs": {
+        "class": "fsspec.implementations.dbfs.DatabricksFileSystem",
+        "err": "Install the requests package to use the DatabricksFileSystem",
     },
-    'github': {
-        'class': 'fsspec.implementations.github.GithubFileSystem',
-        'err': 'Install the requests package to use the github FS',
+    "github": {
+        "class": "fsspec.implementations.github.GithubFileSystem",
+        "err": "Install the requests package to use the github FS",
     },
-    'git': {
-        'class': 'fsspec.implementations.git.GitFileSystem',
-        'err': 'Install pygit2 to browse local git repos',
+    "git": {
+        "class": "fsspec.implementations.git.GitFileSystem",
+        "err": "Install pygit2 to browse local git repos",
     },
-    'smb': {
-        'class': 'fsspec.implementations.smb.SMBFileSystem',
-        'err': 'SMB requires "smbprotocol" or "smbprotocol[kerberos]" installed',
+    "smb": {
+        "class": "fsspec.implementations.smb.SMBFileSystem",
+        "err": 'SMB requires "smbprotocol" or "smbprotocol[kerberos]" installed',
     },
-    'jupyter': {
-        'class': 'fsspec.implementations.jupyter.JupyterFileSystem',
-        'err': 'Jupyter FS requires requests to be installed',
+    "jupyter": {
+        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
+        "err": "Jupyter FS requires requests to be installed",
     },
-    'jlab': {
-        'class': 'fsspec.implementations.jupyter.JupyterFileSystem',
-        'err': 'Jupyter FS requires requests to be installed',
+    "jlab": {
+        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
+        "err": "Jupyter FS requires requests to be installed",
     },
-    'libarchive': {
-        'class': 'fsspec.implementations.libarchive.LibArchiveFileSystem',
-        'err': 'LibArchive requires to be installed',
+    "libarchive": {
+        "class": "fsspec.implementations.libarchive.LibArchiveFileSystem",
+        "err": "LibArchive requires to be installed",
     },
-    'reference': {'class': 'fsspec.implementations.reference.ReferenceFileSystem'},
+    "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
 }
 
-minversions = {'s3fs': LooseVersion('0.3.0'), 'gcsfs': LooseVersion('0.3.0')}
+minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}
 
 
 def get_filesystem_class(protocol):
@@ -205,31 +205,31 @@ def get_filesystem_class(protocol):
 
     if protocol not in registry:
         if protocol not in known_implementations:
-            raise ValueError('Protocol not known: %s' % protocol)
+            raise ValueError("Protocol not known: %s" % protocol)
         bit = known_implementations[protocol]
         try:
-            register_implementation(protocol, _import_class(bit['class']))
+            register_implementation(protocol, _import_class(bit["class"]))
         except ImportError as e:
-            raise ImportError(bit['err']) from e
+            raise ImportError(bit["err"]) from e
     cls = registry[protocol]
-    if getattr(cls, 'protocol', None) in ('abstract', None):
+    if getattr(cls, "protocol", None) in ("abstract", None):
         cls.protocol = protocol
 
     return cls
 
 
 def _import_class(cls, minv=None):
-    mod, name = cls.rsplit('.', 1)
+    mod, name = cls.rsplit(".", 1)
     minv = minv or minversions
     minversion = minv.get(mod, None)
 
     mod = importlib.import_module(mod)
     if minversion:
-        version = getattr(mod, '__version__', None)
+        version = getattr(mod, "__version__", None)
         if version and LooseVersion(version) < minversion:
             raise RuntimeError(
                 "'{}={}' is installed, but version '{}' or "
-                'higher is required'.format(mod.__name__, version, minversion)
+                "higher is required".format(mod.__name__, version, minversion)
             )
     return getattr(mod, name)
 

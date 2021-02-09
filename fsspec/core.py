@@ -24,7 +24,7 @@ from .utils import (
     update_storage_options,
 )
 
-logger = logging.getLogger('fsspec')
+logger = logging.getLogger("fsspec")
 
 
 class OpenFile(object):
@@ -60,7 +60,7 @@ class OpenFile(object):
         self,
         fs,
         path,
-        mode='rb',
+        mode="rb",
         compression=None,
         encoding=None,
         errors=None,
@@ -97,7 +97,7 @@ class OpenFile(object):
         return self.open().__fspath__()
 
     def __enter__(self):
-        mode = self.mode.replace('t', '').replace('b', '') + 'b'
+        mode = self.mode.replace("t", "").replace("b", "") + "b"
 
         f = self.fs.open(self.path, mode=mode)
 
@@ -108,7 +108,7 @@ class OpenFile(object):
             f = compress(f, mode=mode[0])
             self.fobjects.append(f)
 
-        if 'b' not in self.mode:
+        if "b" not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
             f = io.TextIOWrapper(
                 f, encoding=self.encoding, errors=self.errors, newline=self.newline
@@ -161,7 +161,7 @@ class OpenFiles(list):
     this may happen concurrently, if the target filesystem supports it.
     """
 
-    def __init__(self, *args, mode='rb', fs=None):
+    def __init__(self, *args, mode="rb", fs=None):
         self.mode = mode
         self.fs = fs
         self.files = []
@@ -169,15 +169,15 @@ class OpenFiles(list):
 
     def __enter__(self):
         if self.fs is None:
-            raise ValueError('Context has already been used')
+            raise ValueError("Context has already been used")
 
         fs = self.fs
         while True:
-            if hasattr(fs, 'open_many'):
+            if hasattr(fs, "open_many"):
                 # check for concurrent cache download; or set up for upload
                 self.files = fs.open_many(self)
                 return self.files
-            if hasattr(fs, 'fs') and fs.fs is not None:
+            if hasattr(fs, "fs") and fs.fs is not None:
                 fs = fs.fs
             else:
                 break
@@ -185,26 +185,26 @@ class OpenFiles(list):
 
     def __exit__(self, *args):
         fs = self.fs
-        if 'r' not in self.mode:
+        if "r" not in self.mode:
             while True:
-                if hasattr(fs, 'open_many'):
+                if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
                     fs.commit_many(self.files)
                     self.files.clear()
                     return
-                if hasattr(fs, 'fs') and fs.fs is not None:
+                if hasattr(fs, "fs") and fs.fs is not None:
                     fs = fs.fs
                 else:
                     break
         [s.__exit__(*args) for s in self]
 
     def __repr__(self):
-        return '<List of %s OpenFile instances>' % len(self)
+        return "<List of %s OpenFile instances>" % len(self)
 
 
 def _close(fobjects, mode):
     for f in reversed(fobjects):
-        if 'r' not in mode and not f.closed:
+        if "r" not in mode and not f.closed:
             f.flush()
         f.close()
     fobjects.clear()
@@ -212,9 +212,9 @@ def _close(fobjects, mode):
 
 def open_files(
     urlpath,
-    mode='rb',
+    mode="rb",
     compression=None,
-    encoding='utf8',
+    encoding="utf8",
     errors=None,
     name_function=None,
     num=1,
@@ -286,7 +286,7 @@ def open_files(
         protocol=protocol,
         expand=expand,
     )
-    if 'r' not in mode and auto_mkdir:
+    if "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
         [fs.makedirs(parent, exist_ok=True) for parent in parents]
     return OpenFiles(
@@ -314,17 +314,17 @@ def _un_chain(path, kwargs):
         for pbit in zip(*bits):
             paths, protocols, kwargs = zip(*pbit)
             if len(set(protocols)) > 1:
-                raise ValueError('Protocol mismatch in URL chain')
+                raise ValueError("Protocol mismatch in URL chain")
             if len(set(paths)) == 1:
                 paths = paths[0]
             else:
                 paths = list(paths)
             out.append([paths, protocols[0], kwargs[0]])
         return out
-    x = re.compile('.*[^a-z]+.*')  # test for non protocol-like single word
+    x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
     bits = (
-        [p if '://' in p or x.match(p) else p + '://' for p in path.split('::')]
-        if '::' in path
+        [p if "://" in p or x.match(p) else p + "://" for p in path.split("::")]
+        if "::" in path
         else [path]
     )
     if len(bits) < 2:
@@ -334,14 +334,14 @@ def _un_chain(path, kwargs):
     previous_bit = None
     previous_protocol = None
     for bit in reversed(bits):
-        protocol = split_protocol(bit)[0] or 'file'
+        protocol = split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
         extra_kwargs = cls._get_kwargs_from_urls(bit)
-        kws = kwargs.get(split_protocol(bit)[0] or 'file', {})
+        kws = kwargs.get(split_protocol(bit)[0] or "file", {})
         kw = dict(**extra_kwargs, **kws)
         if (
-            protocol in {'blockcache', 'filecache', 'simplecache'}
-            and 'target_protocol' not in kw
+            protocol in {"blockcache", "filecache", "simplecache"}
+            and "target_protocol" not in kw
         ):
             bit = previous_bit.replace(previous_protocol, protocol, 1)
         out.append((bit, protocol, kw))
@@ -349,8 +349,8 @@ def _un_chain(path, kwargs):
         previous_protocol = protocol
     out = list(reversed(out))
     # We should only do the url rewrite if the cache is in the middle of the chain
-    if out[0][1] in {'blockcache', 'filecache', 'simplecache'}:
-        out[0] = (f'{out[0][1]}://', out[0][1], out[0][2])
+    if out[0][1] in {"blockcache", "filecache", "simplecache"}:
+        out[0] = (f"{out[0][1]}://", out[0][1], out[0][2])
     return out
 
 
@@ -364,12 +364,12 @@ def url_to_fs(url, **kwargs):
             urls, protocol, kw = ch
             if i == 0:
                 continue
-            inkwargs['target_protocol'] = protocol
-            inkwargs['target_options'] = kw.copy()
-            inkwargs['fo'] = urls
-            inkwargs = inkwargs['target_options']
+            inkwargs["target_protocol"] = protocol
+            inkwargs["target_options"] = kw.copy()
+            inkwargs["fo"] = urls
+            inkwargs = inkwargs["target_options"]
         protocol = chain[0][1]
-        urlpath = chain[-1][1] + '://' + split_protocol(urls)[1]
+        urlpath = chain[-1][1] + "://" + split_protocol(urls)[1]
         fs = filesystem(protocol, **kwargs)
     else:
         protocol, urlpath = split_protocol(url)
@@ -380,9 +380,9 @@ def url_to_fs(url, **kwargs):
 
 def open(
     urlpath,
-    mode='rb',
+    mode="rb",
     compression=None,
-    encoding='utf8',
+    encoding="utf8",
     errors=None,
     protocol=None,
     newline=None,
@@ -439,7 +439,7 @@ def open(
     )[0]
 
 
-def open_local(url, mode='rb', **storage_options):
+def open_local(url, mode="rb", **storage_options):
     """Open file(s) which can be resolved to local
 
     For files which either are local, or get downloaded upon open
@@ -453,13 +453,13 @@ def open_local(url, mode='rb', **storage_options):
     storage_options:
         passed on to FS for or used by open_files (e.g., compression)
     """
-    if 'r' not in mode:
-        raise ValueError('Can only ensure local files when reading')
+    if "r" not in mode:
+        raise ValueError("Can only ensure local files when reading")
     of = open_files(url, mode=mode, **storage_options)
-    if not getattr(of[0].fs, 'local_file', False):
+    if not getattr(of[0].fs, "local_file", False):
         raise ValueError(
-            'open_local can only be used on a filesystem which'
-            ' has attribute local_file=True'
+            "open_local can only be used on a filesystem which"
+            " has attribute local_file=True"
         )
     with of as files:
         paths = [f.name for f in files]
@@ -469,18 +469,18 @@ def open_local(url, mode='rb', **storage_options):
 
 
 def get_compression(urlpath, compression):
-    if compression == 'infer':
+    if compression == "infer":
         compression = infer_compression(urlpath)
     if compression is not None and compression not in compr:
-        raise ValueError('Compression type %s not supported' % compression)
+        raise ValueError("Compression type %s not supported" % compression)
     return compression
 
 
 def split_protocol(urlpath):
     """Return protocol, path pair"""
     urlpath = stringify_path(urlpath)
-    if '://' in urlpath:
-        protocol, path = urlpath.split('://', 1)
+    if "://" in urlpath:
+        protocol, path = urlpath.split("://", 1)
         if len(protocol) > 1:
             # excludes Windows paths
             return protocol, path
@@ -511,13 +511,13 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     """
     expanded_paths = []
     paths = list(paths)
-    if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
-        raise ValueError('When writing data, only one filename mask can be specified.')
-    elif 'w' in mode:
+    if "w" in mode and sum([1 for p in paths if "*" in p]) > 1:
+        raise ValueError("When writing data, only one filename mask can be specified.")
+    elif "w" in mode:
         num = max(num, len(paths))
     for curr_path in paths:
-        if '*' in curr_path:
-            if 'w' in mode:
+        if "*" in curr_path:
+            if "w" in mode:
                 # expand using name_function
                 expanded_paths.extend(_expand_paths(curr_path, name_function, num))
             else:
@@ -526,14 +526,14 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
         else:
             expanded_paths.append(curr_path)
     # if we generated more paths that asked for, trim the list
-    if 'w' in mode and len(expanded_paths) > num:
+    if "w" in mode and len(expanded_paths) > num:
         expanded_paths = expanded_paths[:num]
     return expanded_paths
 
 
 def get_fs_token_paths(
     urlpath,
-    mode='rb',
+    mode="rb",
     num=1,
     name_function=None,
     storage_options=None,
@@ -575,27 +575,27 @@ def get_fs_token_paths(
             urls, protocol, kw = ch
             if isinstance(urls, str):
                 if not urlpath and split_protocol(urls)[1]:
-                    urlpath = protocol + '://' + split_protocol(urls)[1]
+                    urlpath = protocol + "://" + split_protocol(urls)[1]
             else:
                 if not urlpath and any(split_protocol(u)[1] for u in urls):
-                    urlpath = [protocol + '://' + split_protocol(u)[1] for u in urls]
+                    urlpath = [protocol + "://" + split_protocol(u)[1] for u in urls]
             if i == 0:
                 continue
-            inkwargs['target_protocol'] = protocol
-            inkwargs['target_options'] = kw.copy()
-            inkwargs['fo'] = urls
-            inkwargs = inkwargs['target_options']
+            inkwargs["target_protocol"] = protocol
+            inkwargs["target_options"] = kw.copy()
+            inkwargs["fo"] = urls
+            inkwargs = inkwargs["target_options"]
         protocol = chain[0][1]
     if isinstance(urlpath, (list, tuple)):
         if not urlpath:
-            raise ValueError('empty urlpath sequence')
+            raise ValueError("empty urlpath sequence")
         protocols, paths = zip(*map(split_protocol, urlpath))
         if protocol is None:
             protocol = protocols[0]
             if not all(p == protocol for p in protocols):
                 raise ValueError(
-                    'When specifying a list of paths, all paths must '
-                    'share the same protocol'
+                    "When specifying a list of paths, all paths must "
+                    "share the same protocol"
                 )
         cls = get_filesystem_class(protocol)
         optionss = list(map(cls._get_kwargs_from_urls, urlpath))
@@ -603,14 +603,14 @@ def get_fs_token_paths(
         options = optionss[0]
         if not all(o == options for o in optionss):
             raise ValueError(
-                'When specifying a list of paths, all paths must '
-                'share the same file-system options'
+                "When specifying a list of paths, all paths must "
+                "share the same file-system options"
             )
         update_storage_options(options, storage_options)
         fs = cls(**options)
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
-    elif isinstance(urlpath, str) or hasattr(urlpath, 'name'):
+    elif isinstance(urlpath, str) or hasattr(urlpath, "name"):
         protocols, path = split_protocol(urlpath)
         protocol = protocol or protocols
         cls = get_filesystem_class(protocol)
@@ -620,42 +620,42 @@ def get_fs_token_paths(
         update_storage_options(options, storage_options)
         fs = cls(**options)
 
-        if 'w' in mode and expand:
+        if "w" in mode and expand:
             paths = _expand_paths(path, name_function, num)
-        elif '*' in path:
+        elif "*" in path:
             paths = [f for f in sorted(fs.glob(path)) if not fs.isdir(f)]
         else:
             paths = [path]
 
     else:
-        raise TypeError('url type not understood: %s' % urlpath)
+        raise TypeError("url type not understood: %s" % urlpath)
 
     return fs, fs._fs_token, paths
 
 
 def _expand_paths(path, name_function, num):
     if isinstance(path, str):
-        if path.count('*') > 1:
+        if path.count("*") > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
-        elif '*' not in path:
-            path = os.path.join(path, '*.part')
+        elif "*" not in path:
+            path = os.path.join(path, "*.part")
 
         if name_function is None:
             name_function = build_name_function(num - 1)
 
-        paths = [path.replace('*', name_function(i)) for i in range(num)]
+        paths = [path.replace("*", name_function(i)) for i in range(num)]
         if paths != sorted(paths):
             logger.warning(
-                'In order to preserve order between partitions'
-                ' paths created with ``name_function`` should '
-                'sort to partition order'
+                "In order to preserve order between partitions"
+                " paths created with ``name_function`` should "
+                "sort to partition order"
             )
     elif isinstance(path, (tuple, list)):
         assert len(path) == num
         paths = list(path)
     else:
         raise ValueError(
-            'Path should be either\n'
+            "Path should be either\n"
             "1. A list of paths: ['foo.json', 'bar.json', ...]\n"
             "2. A directory: 'foo/\n"
             "3. A path with a '*' in it: 'foo.*.json'"

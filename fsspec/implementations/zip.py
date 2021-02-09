@@ -14,12 +14,12 @@ class ZipFileSystem(AbstractFileSystem):
     This class is pickleable, but not necessarily thread-safe
     """
 
-    root_marker = ''
+    root_marker = ""
 
     def __init__(
         self,
-        fo='',
-        mode='r',
+        fo="",
+        mode="r",
         target_protocol=None,
         target_options=None,
         block_size=DEFAULT_BLOCK_SIZE,
@@ -41,8 +41,8 @@ class ZipFileSystem(AbstractFileSystem):
             a string.
         """
         super().__init__(self, **kwargs)
-        if mode != 'r':
-            raise ValueError('Only read from zip files accepted')
+        if mode != "r":
+            raise ValueError("Only read from zip files accepted")
         if isinstance(fo, str):
             files = open_files(fo, protocol=target_protocol, **(target_options or {}))
             if len(files) != 1:
@@ -59,33 +59,33 @@ class ZipFileSystem(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         # zip file paths are always relative to the archive root
-        return super()._strip_protocol(path).lstrip('/')
+        return super()._strip_protocol(path).lstrip("/")
 
     def _get_dirs(self):
         if self.dir_cache is None:
             files = self.zip.infolist()
             self.dir_cache = {
-                dirname + '/': {'name': dirname + '/', 'size': 0, 'type': 'directory'}
+                dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
                 for dirname in self._all_dirnames(self.zip.namelist())
             }
             for z in files:
                 f = {s: getattr(z, s) for s in zipfile.ZipInfo.__slots__}
                 f.update(
                     {
-                        'name': z.filename,
-                        'size': z.file_size,
-                        'type': ('directory' if z.is_dir() else 'file'),
+                        "name": z.filename,
+                        "size": z.file_size,
+                        "type": ("directory" if z.is_dir() else "file"),
                     }
                 )
-                self.dir_cache[f['name']] = f
+                self.dir_cache[f["name"]] = f
 
     def info(self, path, **kwargs):
         self._get_dirs()
         path = self._strip_protocol(path)
         if path in self.dir_cache:
             return self.dir_cache[path]
-        elif path + '/' in self.dir_cache:
-            return self.dir_cache[path + '/']
+        elif path + "/" in self.dir_cache:
+            return self.dir_cache[path + "/"]
         else:
             raise FileNotFoundError(path)
 
@@ -93,27 +93,27 @@ class ZipFileSystem(AbstractFileSystem):
         self._get_dirs()
         paths = {}
         for p, f in self.dir_cache.items():
-            p = p.rstrip('/')
-            if '/' in p:
-                root = p.rsplit('/', 1)[0]
+            p = p.rstrip("/")
+            if "/" in p:
+                root = p.rsplit("/", 1)[0]
             else:
-                root = ''
-            if root == path.rstrip('/'):
+                root = ""
+            if root == path.rstrip("/"):
                 paths[p] = f
             elif all(
                 (a == b)
-                for a, b in zip(path.split('/'), [''] + p.strip('/').split('/'))
+                for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
             ):
                 # root directory entry
-                ppath = p.rstrip('/').split('/', 1)[0]
+                ppath = p.rstrip("/").split("/", 1)[0]
                 if ppath not in paths:
-                    out = {'name': ppath + '/', 'size': 0, 'type': 'directory'}
+                    out = {"name": ppath + "/", "size": 0, "type": "directory"}
                     paths[ppath] = out
         out = list(paths.values())
         if detail:
             return out
         else:
-            return list(sorted(f['name'] for f in out))
+            return list(sorted(f["name"] for f in out))
 
     def cat(self, path):
         return self.zip.read(path)
@@ -121,19 +121,19 @@ class ZipFileSystem(AbstractFileSystem):
     def _open(
         self,
         path,
-        mode='rb',
+        mode="rb",
         block_size=None,
         autocommit=True,
         cache_options=None,
         **kwargs,
     ):
         path = self._strip_protocol(path)
-        if mode != 'rb':
+        if mode != "rb":
             raise NotImplementedError
         info = self.info(path)
-        out = self.zip.open(path, 'r')
-        out.size = info['size']
-        out.name = info['name']
+        out = self.zip.open(path, "r")
+        out.size = info["size"]
+        out.name = info["name"]
         return out
 
     def ukey(self, path):

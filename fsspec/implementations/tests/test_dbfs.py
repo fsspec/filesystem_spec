@@ -27,12 +27,12 @@ import pytest
 
 import fsspec
 
-DUMMY_INSTANCE = 'my_instance.com'
-INSTANCE = os.getenv('DBFS_INSTANCE', DUMMY_INSTANCE)
-TOKEN = os.getenv('DBFS_TOKEN', '')
+DUMMY_INSTANCE = "my_instance.com"
+INSTANCE = os.getenv("DBFS_INSTANCE", DUMMY_INSTANCE)
+TOKEN = os.getenv("DBFS_TOKEN", "")
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def vcr_config():
     """
     To not record information in the instance and token details
@@ -46,8 +46,8 @@ def vcr_config():
 
     def before_record_response(response):
         try:
-            del response['headers']['x-databricks-org-id']
-            del response['headers']['date']
+            del response["headers"]["x-databricks-org-id"]
+            del response["headers"]["date"]
         except KeyError:
             pass
         return response
@@ -62,21 +62,21 @@ def vcr_config():
 
     if TOKEN:
         return {
-            'record_mode': 'once',
-            'filter_headers': [('authorization', 'DUMMY')],
-            'before_record_response': before_record_response,
-            'before_record_request': before_record_request,
+            "record_mode": "once",
+            "filter_headers": [("authorization", "DUMMY")],
+            "before_record_response": before_record_response,
+            "before_record_request": before_record_request,
         }
     else:
         return {
-            'record_mode': 'none',
+            "record_mode": "none",
         }
 
 
 @pytest.fixture
 def dbfsFS():
     fs = fsspec.filesystem(
-        'dbfs',
+        "dbfs",
         instance=INSTANCE,
         token=TOKEN,
     )
@@ -86,49 +86,49 @@ def dbfsFS():
 
 @pytest.mark.vcr()
 def test_dbfs_file_listing(dbfsFS):
-    assert '/FileStore' in dbfsFS.ls('/', detail=False)
-    assert {'name': '/FileStore', 'size': 0, 'type': 'directory'} in dbfsFS.ls(
-        '/', detail=True
+    assert "/FileStore" in dbfsFS.ls("/", detail=False)
+    assert {"name": "/FileStore", "size": 0, "type": "directory"} in dbfsFS.ls(
+        "/", detail=True
     )
 
 
 @pytest.mark.vcr()
 def test_dbfs_mkdir(dbfsFS):
-    dbfsFS.rm('/FileStore/my', recursive=True)
-    assert '/FileStore/my' not in dbfsFS.ls('/FileStore/', detail=False)
+    dbfsFS.rm("/FileStore/my", recursive=True)
+    assert "/FileStore/my" not in dbfsFS.ls("/FileStore/", detail=False)
 
-    dbfsFS.mkdir('/FileStore/my/dir', create_parents=True)
+    dbfsFS.mkdir("/FileStore/my/dir", create_parents=True)
 
-    assert '/FileStore/my' in dbfsFS.ls('/FileStore/', detail=False)
-    assert '/FileStore/my/dir' in dbfsFS.ls('/FileStore/my/', detail=False)
+    assert "/FileStore/my" in dbfsFS.ls("/FileStore/", detail=False)
+    assert "/FileStore/my/dir" in dbfsFS.ls("/FileStore/my/", detail=False)
 
     with pytest.raises(FileExistsError):
-        dbfsFS.mkdir('/FileStore/my/dir', create_parents=True, exist_ok=False)
+        dbfsFS.mkdir("/FileStore/my/dir", create_parents=True, exist_ok=False)
 
     with pytest.raises(OSError):
-        dbfsFS.rm('/FileStore/my', recursive=False)
+        dbfsFS.rm("/FileStore/my", recursive=False)
 
-    assert '/FileStore/my' in dbfsFS.ls('/FileStore/', detail=False)
+    assert "/FileStore/my" in dbfsFS.ls("/FileStore/", detail=False)
 
-    dbfsFS.rm('/FileStore/my', recursive=True)
-    assert '/FileStore/my' not in dbfsFS.ls('/FileStore/', detail=False)
+    dbfsFS.rm("/FileStore/my", recursive=True)
+    assert "/FileStore/my" not in dbfsFS.ls("/FileStore/", detail=False)
 
 
 @pytest.mark.vcr()
 def test_dbfs_write_and_read(dbfsFS):
-    dbfsFS.rm('/FileStore/file.csv')
-    assert '/FileStore/file.csv' not in dbfsFS.ls('/FileStore/', detail=False)
+    dbfsFS.rm("/FileStore/file.csv")
+    assert "/FileStore/file.csv" not in dbfsFS.ls("/FileStore/", detail=False)
 
-    content = b'This is a test\n' * 100000 + b'For this is the end\n'
+    content = b"This is a test\n" * 100000 + b"For this is the end\n"
 
-    with dbfsFS.open('/FileStore/file.csv', 'wb') as f:
+    with dbfsFS.open("/FileStore/file.csv", "wb") as f:
         f.write(content)
 
-    assert '/FileStore/file.csv' in dbfsFS.ls('/FileStore', detail=False)
+    assert "/FileStore/file.csv" in dbfsFS.ls("/FileStore", detail=False)
 
-    with dbfsFS.open('/FileStore/file.csv', 'rb') as f:
+    with dbfsFS.open("/FileStore/file.csv", "rb") as f:
         data = f.read()
         assert data == content
 
-    dbfsFS.rm('/FileStore/file.csv')
-    assert '/FileStore/file.csv' not in dbfsFS.ls('/FileStore/', detail=False)
+    dbfsFS.rm("/FileStore/file.csv")
+    assert "/FileStore/file.csv" not in dbfsFS.ls("/FileStore/", detail=False)

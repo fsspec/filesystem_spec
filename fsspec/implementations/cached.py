@@ -13,7 +13,7 @@ from fsspec.core import BaseCache, MMapCache
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_compression
 
-logger = logging.getLogger('fsspec')
+logger = logging.getLogger("fsspec")
 
 
 class CachingFileSystem(AbstractFileSystem):
@@ -35,12 +35,12 @@ class CachingFileSystem(AbstractFileSystem):
       allowed, for testing
     """
 
-    protocol = ('blockcache', 'cached')
+    protocol = ("blockcache", "cached")
 
     def __init__(
         self,
         target_protocol=None,
-        cache_storage='TMP',
+        cache_storage="TMP",
         cache_check=10,
         check_files=False,
         expiry_time=604800,
@@ -88,10 +88,10 @@ class CachingFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
         if not (fs is None) ^ (target_protocol is None):
             raise ValueError(
-                'Please provide one of filesystem instance (fs) or'
-                ' remote_protocol, not both'
+                "Please provide one of filesystem instance (fs) or"
+                " remote_protocol, not both"
             )
-        if cache_storage == 'TMP':
+        if cache_storage == "TMP":
             storage = [tempfile.mkdtemp()]
         else:
             if isinstance(cache_storage, str):
@@ -129,14 +129,14 @@ class CachingFileSystem(AbstractFileSystem):
         """Read set of stored blocks from file"""
         cached_files = []
         for storage in self.storage:
-            fn = os.path.join(storage, 'cache')
+            fn = os.path.join(storage, "cache")
             if os.path.exists(fn):
-                with open(fn, 'rb') as f:
+                with open(fn, "rb") as f:
                     # TODO: consolidate blocks here
                     loaded_cached_files = pickle.load(f)
                     for c in loaded_cached_files.values():
-                        if isinstance(c['blocks'], list):
-                            c['blocks'] = set(c['blocks'])
+                        if isinstance(c["blocks"], list):
+                            c["blocks"] = set(c["blocks"])
                     cached_files.append(loaded_cached_files)
             else:
                 cached_files.append({})
@@ -146,20 +146,20 @@ class CachingFileSystem(AbstractFileSystem):
 
     def save_cache(self):
         """Save set of stored blocks from file"""
-        fn = os.path.join(self.storage[-1], 'cache')
+        fn = os.path.join(self.storage[-1], "cache")
         # TODO: a file lock could be used to ensure file does not change
         #  between re-read and write; but occasional duplicated reads ok.
         cache = self.cached_files[-1]
         if os.path.exists(fn):
-            with open(fn, 'rb') as f:
+            with open(fn, "rb") as f:
                 cached_files = pickle.load(f)
             for k, c in cached_files.items():
                 if k in cache:
-                    if c['blocks'] is True or cache[k]['blocks'] is True:
-                        c['blocks'] = True
+                    if c["blocks"] is True or cache[k]["blocks"] is True:
+                        c["blocks"] = True
                     else:
-                        c['blocks'] = set(c['blocks']).union(cache[k]['blocks'])
-                    c['time'] = max(c['time'], cache[k]['time'])
+                        c["blocks"] = set(c["blocks"]).union(cache[k]["blocks"])
+                    c["time"] = max(c["time"], cache[k]["time"])
 
             # Files can be added to cache after it was written once
             for k, c in cache.items():
@@ -169,10 +169,10 @@ class CachingFileSystem(AbstractFileSystem):
             cached_files = cache
         cache = {k: v.copy() for k, v in cached_files.items()}
         for c in cache.values():
-            if isinstance(c['blocks'], set):
-                c['blocks'] = list(c['blocks'])
+            if isinstance(c["blocks"], set):
+                c["blocks"] = list(c["blocks"])
         fn2 = tempfile.mktemp()
-        with open(fn2, 'wb') as f:
+        with open(fn2, "wb") as f:
             pickle.dump(cache, f)
         self._mkcache()
         move(fn2, fn)
@@ -200,12 +200,12 @@ class CachingFileSystem(AbstractFileSystem):
                 continue
             detail = cache[path].copy()
             if self.check_files:
-                if detail['uid'] != self.fs.ukey(path):
+                if detail["uid"] != self.fs.ukey(path):
                     continue
             if self.expiry:
-                if time.time() - detail['time'] > self.expiry:
+                if time.time() - detail["time"] > self.expiry:
                     continue
-            fn = os.path.join(storage, detail['fn'])
+            fn = os.path.join(storage, detail["fn"])
             if os.path.exists(fn):
                 return detail, fn
         return False
@@ -237,13 +237,13 @@ class CachingFileSystem(AbstractFileSystem):
             self.save_cache()
         else:
             raise PermissionError(
-                'Can only delete cached file in last, writable cache location'
+                "Can only delete cached file in last, writable cache location"
             )
 
     def _open(
         self,
         path,
-        mode='rb',
+        mode="rb",
         block_size=None,
         autocommit=True,
         cache_options=None,
@@ -264,7 +264,7 @@ class CachingFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
 
         path = self.fs._strip_protocol(path)
-        if 'r' not in mode:
+        if "r" not in mode:
             return self.fs._open(
                 path,
                 mode=mode,
@@ -277,25 +277,25 @@ class CachingFileSystem(AbstractFileSystem):
         if detail:
             # file is in cache
             detail, fn = detail
-            hash, blocks = detail['fn'], detail['blocks']
+            hash, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 # stored file is complete
-                logger.debug('Opening local copy of %s' % path)
+                logger.debug("Opening local copy of %s" % path)
                 return open(fn, mode)
             # TODO: action where partial file exists in read-only cache
-            logger.debug('Opening partially cached copy of %s' % path)
+            logger.debug("Opening partially cached copy of %s" % path)
         else:
             hash = self.hash_name(path, self.same_names)
             fn = os.path.join(self.storage[-1], hash)
             blocks = set()
             detail = {
-                'fn': hash,
-                'blocks': blocks,
-                'time': time.time(),
-                'uid': self.fs.ukey(path),
+                "fn": hash,
+                "blocks": blocks,
+                "time": time.time(),
+                "uid": self.fs.ukey(path),
             }
             self.cached_files[-1][path] = detail
-            logger.debug('Creating local sparse file for %s' % path)
+            logger.debug("Creating local sparse file for %s" % path)
 
         # call target filesystems open
         self._mkcache()
@@ -311,19 +311,19 @@ class CachingFileSystem(AbstractFileSystem):
         if self.compression:
             comp = (
                 infer_compression(path)
-                if self.compression == 'infer'
+                if self.compression == "infer"
                 else self.compression
             )
-            f = compr[comp](f, mode='rb')
-        if 'blocksize' in detail:
-            if detail['blocksize'] != f.blocksize:
+            f = compr[comp](f, mode="rb")
+        if "blocksize" in detail:
+            if detail["blocksize"] != f.blocksize:
                 raise ValueError(
-                    'Cached file must be reopened with same block'
-                    'size as original (old: %i, new %i)'
-                    '' % (detail['blocksize'], f.blocksize)
+                    "Cached file must be reopened with same block"
+                    "size as original (old: %i, new %i)"
+                    "" % (detail["blocksize"], f.blocksize)
                 )
         else:
-            detail['blocksize'] = f.blocksize
+            detail["blocksize"] = f.blocksize
         f.cache = MMapCache(f.blocksize, f._fetch_range, f.size, fn, blocks)
         close = f.close
         f.close = lambda: self.close_and_update(f, close)
@@ -340,59 +340,59 @@ class CachingFileSystem(AbstractFileSystem):
         path = self._strip_protocol(f.path)
 
         c = self.cached_files[-1][path]
-        if c['blocks'] is not True and len(['blocks']) * f.blocksize >= f.size:
-            c['blocks'] = True
+        if c["blocks"] is not True and len(["blocks"]) * f.blocksize >= f.size:
+            c["blocks"] = True
         try:
-            logger.debug('going to save')
+            logger.debug("going to save")
             self.save_cache()
-            logger.debug('saved')
+            logger.debug("saved")
         except (IOError, OSError):
-            logger.debug('Cache saving failed while closing file')
+            logger.debug("Cache saving failed while closing file")
         except NameError:
-            logger.debug('Cache save failed due to interpreter shutdown')
+            logger.debug("Cache save failed due to interpreter shutdown")
         close()
 
     def __getattribute__(self, item):
         if item in [
-            'load_cache',
-            '_open',
-            'save_cache',
-            'close_and_update',
-            '__init__',
-            '__getattribute__',
-            '__reduce__',
-            '_make_local_details',
-            'open',
-            'cat',
-            'cat_file',
-            'get',
-            'read_block',
-            'tail',
-            'head',
-            '_check_file',
-            '_check_cache',
-            '_mkcache',
-            'clear_cache',
-            'pop_from_cache',
-            '_mkcache',
-            'local_file',
-            '_paths_from_path',
-            'open_many',
-            'commit_many',
-            'hash_name',
+            "load_cache",
+            "_open",
+            "save_cache",
+            "close_and_update",
+            "__init__",
+            "__getattribute__",
+            "__reduce__",
+            "_make_local_details",
+            "open",
+            "cat",
+            "cat_file",
+            "get",
+            "read_block",
+            "tail",
+            "head",
+            "_check_file",
+            "_check_cache",
+            "_mkcache",
+            "clear_cache",
+            "pop_from_cache",
+            "_mkcache",
+            "local_file",
+            "_paths_from_path",
+            "open_many",
+            "commit_many",
+            "hash_name",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(type(self), item)(self, *args, **kw)
-        if item in ['__reduce_ex__']:
+        if item in ["__reduce_ex__"]:
             raise AttributeError
-        if item in ['_cache']:
+        if item in ["_cache"]:
             # class attributes
             return getattr(type(self), item)
-        if item == '__class__':
+        if item == "__class__":
             return type(self)
-        d = object.__getattribute__(self, '__dict__')
-        fs = d.get('fs', None)  # fs is not immediately defined
+        d = object.__getattribute__(self, "__dict__")
+        fs = d.get("fs", None)  # fs is not immediately defined
         if item in d:
             return d[item]
         elif fs is not None:
@@ -403,7 +403,7 @@ class CachingFileSystem(AbstractFileSystem):
             cls = type(fs)
             m = getattr(cls, item)
             if inspect.isfunction(m) and (
-                not hasattr(m, '__self__') or m.__self__ is None
+                not hasattr(m, "__self__") or m.__self__ is None
             ):
                 # instance method
                 return m.__get__(fs, cls)
@@ -427,12 +427,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     and may refresh cached files.
     """
 
-    protocol = 'filecache'
+    protocol = "filecache"
     local_file = True
 
     def open_many(self, open_files):
         paths = [of.path for of in open_files]
-        if 'r' in open_files.mode:
+        if "r" in open_files.mode:
             self._mkcache()
         else:
             return [
@@ -456,10 +456,10 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # update metadata - only happens when downloads are successful
             newdetail = [
                 {
-                    'fn': self.hash_name(path, self.same_names),
-                    'blocks': True,
-                    'time': time.time(),
-                    'uid': self.fs.ukey(path),
+                    "fn": self.hash_name(path, self.same_names),
+                    "blocks": True,
+                    "time": time.time(),
+                    "uid": self.fs.ukey(path),
                 }
                 for path in downpath
             ]
@@ -484,18 +484,18 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         hash = self.hash_name(path, self.same_names)
         fn = os.path.join(self.storage[-1], hash)
         detail = {
-            'fn': hash,
-            'blocks': True,
-            'time': time.time(),
-            'uid': self.fs.ukey(path),
+            "fn": hash,
+            "blocks": True,
+            "time": time.time(),
+            "uid": self.fs.ukey(path),
         }
         self.cached_files[-1][path] = detail
-        logger.debug('Copying %s to local cache' % path)
+        logger.debug("Copying %s to local cache" % path)
         return fn
 
-    def cat(self, path, recursive=False, on_error='raise', **kwargs):
+    def cat(self, path, recursive=False, on_error="raise", **kwargs):
         paths = self.expand_path(
-            path, recursive=recursive, maxdepth=kwargs.get('maxdepth', None)
+            path, recursive=recursive, maxdepth=kwargs.get("maxdepth", None)
         )
         getpaths = []
         storepaths = []
@@ -512,47 +512,47 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         if getpaths:
             self.fs.get(getpaths, storepaths)
             self.save_cache()
-        out = {path: open(fn, 'rb').read() for path, fn in zip(paths, fns)}
+        out = {path: open(fn, "rb").read() for path, fn in zip(paths, fns)}
         if isinstance(path, str) and len(paths) == 1 and recursive is False:
             out = out[paths[0]]
         return out
 
-    def _open(self, path, mode='rb', **kwargs):
+    def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
-        if 'r' not in mode:
+        if "r" not in mode:
             return self.fs._open(path, mode=mode, **kwargs)
         detail = self._check_file(path)
         if detail:
             detail, fn = detail
-            _, blocks = detail['fn'], detail['blocks']
+            _, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
-                logger.debug('Opening local copy of %s' % path)
+                logger.debug("Opening local copy of %s" % path)
                 return open(fn, mode)
             else:
                 raise ValueError(
-                    'Attempt to open partially cached file %s'
-                    'as a wholly cached file' % path
+                    "Attempt to open partially cached file %s"
+                    "as a wholly cached file" % path
                 )
         else:
             fn = self._make_local_details(path)
-        kwargs['mode'] = mode
+        kwargs["mode"] = mode
 
         # call target filesystems open
         self._mkcache()
         if self.compression:
-            with self.fs._open(path, **kwargs) as f, open(fn, 'wb') as f2:
+            with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
                 if isinstance(f, AbstractBufferedFile):
                     # want no type of caching if just downloading whole thing
                     f.cache = BaseCache(0, f.cache.fetcher, f.size)
                 comp = (
                     infer_compression(path)
-                    if self.compression == 'infer'
+                    if self.compression == "infer"
                     else self.compression
                 )
-                f = compr[comp](f, mode='rb')
+                f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    block = getattr(f, 'blocksize', 5 * 2 ** 20)
+                    block = getattr(f, "blocksize", 5 * 2 ** 20)
                     data = f.read(block)
                     f2.write(data)
         else:
@@ -577,12 +577,12 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     """
 
-    protocol = 'simplecache'
+    protocol = "simplecache"
     local_file = True
 
     def __init__(self, **kwargs):
         kw = kwargs.copy()
-        for key in ['cache_check', 'expiry_time', 'check_files']:
+        for key in ["cache_check", "expiry_time", "check_files"]:
             kw[key] = False
         super().__init__(**kw)
         for storage in self.storage:
@@ -604,10 +604,10 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     def load_cache(self):
         pass
 
-    def _open(self, path, mode='rb', **kwargs):
+    def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
 
-        if 'r' not in mode:
+        if "r" not in mode:
             return LocalTempFile(self, path, mode=mode)
         fn = self._check_file(path)
         if fn:
@@ -615,24 +615,24 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
         sha = self.hash_name(path, self.same_names)
         fn = os.path.join(self.storage[-1], sha)
-        logger.debug('Copying %s to local cache' % path)
-        kwargs['mode'] = mode
+        logger.debug("Copying %s to local cache" % path)
+        kwargs["mode"] = mode
 
         self._mkcache()
         if self.compression:
-            with self.fs._open(path, **kwargs) as f, open(fn, 'wb') as f2:
+            with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
                 if isinstance(f, AbstractBufferedFile):
                     # want no type of caching if just downloading whole thing
                     f.cache = BaseCache(0, f.cache.fetcher, f.size)
                 comp = (
                     infer_compression(path)
-                    if self.compression == 'infer'
+                    if self.compression == "infer"
                     else self.compression
                 )
-                f = compr[comp](f, mode='rb')
+                f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    block = getattr(f, 'blocksize', 5 * 2 ** 20)
+                    block = getattr(f, "blocksize", 5 * 2 ** 20)
                     data = f.read(block)
                     f2.write(data)
         else:
@@ -643,7 +643,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 class LocalTempFile:
     """A temporary local file, which will be uploaded on commit"""
 
-    def __init__(self, fs, path, fn=None, mode='wb', autocommit=True, seek=0):
+    def __init__(self, fs, path, fn=None, mode="wb", autocommit=True, seek=0):
         fn = fn or tempfile.mktemp()
         self.mode = mode
         self.fn = fn
@@ -659,7 +659,7 @@ class LocalTempFile:
         # always open in rb+ to allow continuing writing at a location
         return (
             LocalTempFile,
-            (self.fs, self.path, self.fn, 'rb+', self.autocommit, self.tell()),
+            (self.fs, self.path, self.fn, "rb+", self.autocommit, self.tell()),
         )
 
     def __enter__(self):

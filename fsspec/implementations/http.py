@@ -18,7 +18,7 @@ from ..caching import AllBytes
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
-logger = logging.getLogger('fsspec.http')
+logger = logging.getLogger("fsspec.http")
 
 
 async def get_client(**kwargs):
@@ -35,7 +35,7 @@ class HTTPFileSystem(AsyncFileSystem):
     HTML href tags will be used.
     """
 
-    sep = '/'
+    sep = "/"
 
     def __init__(
         self,
@@ -43,7 +43,7 @@ class HTTPFileSystem(AsyncFileSystem):
         block_size=None,
         same_scheme=True,
         size_policy=None,
-        cache_type='bytes',
+        cache_type="bytes",
         cache_options=None,
         asynchronous=False,
         loop=None,
@@ -90,7 +90,7 @@ class HTTPFileSystem(AsyncFileSystem):
     @property
     def session(self):
         if self._session is None:
-            raise RuntimeError('please await ``.set_session`` before anything else')
+            raise RuntimeError("please await ``.set_session`` before anything else")
         return self._session
 
     async def set_session(self):
@@ -107,7 +107,7 @@ class HTTPFileSystem(AsyncFileSystem):
         par = super()._parent(path)
         if len(par) > 7:  # "http://..."
             return par
-        return ''
+        return ""
 
     async def _ls(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
@@ -126,29 +126,29 @@ class HTTPFileSystem(AsyncFileSystem):
         for l in links:
             if isinstance(l, tuple):
                 l = l[1]
-            if l.startswith('/') and len(l) > 1:
+            if l.startswith("/") and len(l) > 1:
                 # absolute URL on this server
-                l = parts.scheme + '://' + parts.netloc + l
-            if l.startswith('http'):
-                if self.same_schema and l.startswith(url.rstrip('/') + '/'):
+                l = parts.scheme + "://" + parts.netloc + l
+            if l.startswith("http"):
+                if self.same_schema and l.startswith(url.rstrip("/") + "/"):
                     out.add(l)
-                elif l.replace('https', 'http').startswith(
-                    url.replace('https', 'http').rstrip('/') + '/'
+                elif l.replace("https", "http").startswith(
+                    url.replace("https", "http").rstrip("/") + "/"
                 ):
                     # allowed to cross http <-> https
                     out.add(l)
             else:
-                if l not in ['..', '../']:
+                if l not in ["..", "../"]:
                     # Ignore FTP-like "parent"
-                    out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
-        if not out and url.endswith('/'):
-            return await self._ls(url.rstrip('/'), detail=True)
+                    out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
+        if not out and url.endswith("/"):
+            return await self._ls(url.rstrip("/"), detail=True)
         if detail:
             return [
                 {
-                    'name': u,
-                    'size': None,
-                    'type': 'directory' if u.endswith('/') else 'file',
+                    "name": u,
+                    "size": None,
+                    "type": "directory" if u.endswith("/") else "file",
                 }
                 for u in out
             ]
@@ -160,11 +160,11 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(url)
         if (start is None) ^ (end is None):
-            raise ValueError('Give start and end or neither')
+            raise ValueError("Give start and end or neither")
         if start is not None:
-            headers = kw.pop('headers', {}).copy()
-            headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
-            kw['headers'] = headers
+            headers = kw.pop("headers", {}).copy()
+            headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+            kw["headers"] = headers
         async with self.session.get(url, **kw) as r:
             if r.status == 404:
                 raise FileNotFoundError(url)
@@ -180,7 +180,7 @@ class HTTPFileSystem(AsyncFileSystem):
             if r.status == 404:
                 raise FileNotFoundError(rpath)
             r.raise_for_status()
-            with open(lpath, 'wb') as fd:
+            with open(lpath, "wb") as fd:
                 chunk = True
                 while chunk:
                     chunk = await r.content.read(chunk_size)
@@ -203,7 +203,7 @@ class HTTPFileSystem(AsyncFileSystem):
     def _open(
         self,
         path,
-        mode='rb',
+        mode="rb",
         block_size=None,
         autocommit=None,  # XXX: This differs from the base class.
         cache_type=None,
@@ -225,11 +225,11 @@ class HTTPFileSystem(AsyncFileSystem):
         kwargs: key-value
             Any other parameters, passed to requests calls
         """
-        if mode != 'rb':
+        if mode != "rb":
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
         kw = self.kwargs.copy()
-        kw['asynchronous'] = self.asynchronous
+        kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
         size = size or self.size(path)
         if block_size and size:
@@ -265,7 +265,7 @@ class HTTPFileSystem(AsyncFileSystem):
         corresponding file will not work).
         """
         size = False
-        for policy in ['head', 'get']:
+        for policy in ["head", "get"]:
             try:
                 size = await _file_size(
                     url, size_policy=policy, session=self.session, **self.kwargs
@@ -278,7 +278,7 @@ class HTTPFileSystem(AsyncFileSystem):
             # get failed, so conclude URL does not exist
             if size is False:
                 raise FileNotFoundError(url)
-        return {'name': url, 'size': size or None, 'type': 'file'}
+        return {"name": url, "size": size or None, "type": "file"}
 
     def glob(self, path, **kwargs):
         """
@@ -290,20 +290,20 @@ class HTTPFileSystem(AsyncFileSystem):
         """
         import re
 
-        ends = path.endswith('/')
+        ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find('*') if path.find('*') >= 0 else len(path)
-        indbrace = path.find('[') if path.find('[') >= 0 else len(path)
+        indstar = path.find("*") if path.find("*") >= 0 else len(path)
+        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
 
         ind = min(indstar, indbrace)
 
-        detail = kwargs.pop('detail', False)
+        detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
             root = path
             depth = 1
             if ends:
-                path += '/*'
+                path += "/*"
             elif self.exists(path):
                 if not detail:
                     return [path]
@@ -314,13 +314,13 @@ class HTTPFileSystem(AsyncFileSystem):
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif '/' in path[:ind]:
-            ind2 = path[:ind].rindex('/')
+        elif "/" in path[:ind]:
+            ind2 = path[:ind].rindex("/")
             root = path[: ind2 + 1]
-            depth = None if '**' in path else path[ind2 + 1 :].count('/') + 1
+            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
         else:
-            root = ''
-            depth = None if '**' in path else path[ind + 1 :].count('/') + 1
+            root = ""
+            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
 
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
         # Escape characters special to python regex, leaving our supported
@@ -328,30 +328,30 @@ class HTTPFileSystem(AsyncFileSystem):
         # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
         # for shell globbing details.
         pattern = (
-            '^'
+            "^"
             + (
-                path.replace('\\', r'\\')
-                .replace('.', r'\.')
-                .replace('+', r'\+')
-                .replace('//', '/')
-                .replace('(', r'\(')
-                .replace(')', r'\)')
-                .replace('|', r'\|')
-                .replace('^', r'\^')
-                .replace('$', r'\$')
-                .replace('{', r'\{')
-                .replace('}', r'\}')
-                .rstrip('/')
+                path.replace("\\", r"\\")
+                .replace(".", r"\.")
+                .replace("+", r"\+")
+                .replace("//", "/")
+                .replace("(", r"\(")
+                .replace(")", r"\)")
+                .replace("|", r"\|")
+                .replace("^", r"\^")
+                .replace("$", r"\$")
+                .replace("{", r"\{")
+                .replace("}", r"\}")
+                .rstrip("/")
             )
-            + '$'
+            + "$"
         )
-        pattern = re.sub('[*]{2}', '=PLACEHOLDER=', pattern)
-        pattern = re.sub('[*]', '[^/]*', pattern)
-        pattern = re.compile(pattern.replace('=PLACEHOLDER=', '.*'))
+        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
+        pattern = re.sub("[*]", "[^/]*", pattern)
+        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
         out = {
             p: allpaths[p]
             for p in sorted(allpaths)
-            if pattern.match(p.replace('//', '/').rstrip('/'))
+            if pattern.match(p.replace("//", "/").rstrip("/"))
         }
         if detail:
             return out
@@ -394,20 +394,20 @@ class HTTPFile(AbstractBufferedFile):
         url,
         session=None,
         block_size=None,
-        mode='rb',
-        cache_type='bytes',
+        mode="rb",
+        cache_type="bytes",
         cache_options=None,
         size=None,
         loop=None,
         asynchronous=False,
         **kwargs,
     ):
-        if mode != 'rb':
-            raise NotImplementedError('File mode not supported')
+        if mode != "rb":
+            raise NotImplementedError("File mode not supported")
         self.asynchronous = asynchronous
         self.url = url
         self.session = session
-        self.details = {'name': url, 'size': size, 'type': 'file'}
+        self.details = {"name": url, "size": size, "type": "file"}
         super().__init__(
             fs=fs,
             path=url,
@@ -471,26 +471,26 @@ class HTTPFile(AbstractBufferedFile):
         requested, an exception is raised.
         """
         kwargs = self.kwargs.copy()
-        headers = kwargs.pop('headers', {}).copy()
-        headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
-        logger.debug(self.url + ' : ' + headers['Range'])
+        headers = kwargs.pop("headers", {}).copy()
+        headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+        logger.debug(self.url + " : " + headers["Range"])
         r = await self.session.get(self.url, headers=headers, **kwargs)
         async with r:
             if r.status == 416:
                 # range request outside file
-                return b''
+                return b""
             r.raise_for_status()
             if r.status == 206:
                 # partial content, as expected
                 out = await r.read()
-            elif 'Content-Length' in r.headers:
-                cl = int(r.headers['Content-Length'])
+            elif "Content-Length" in r.headers:
+                cl = int(r.headers["Content-Length"])
                 if cl <= end - start:
                     # data size OK
                     out = await r.read()
                 else:
                     raise ValueError(
-                        'Got more bytes (%i) than requested (%i)' % (cl, end - start)
+                        "Got more bytes (%i) than requested (%i)" % (cl, end - start)
                     )
             else:
                 cl = 0
@@ -503,12 +503,12 @@ class HTTPFile(AbstractBufferedFile):
                         cl += len(chunk)
                         if cl > end - start:
                             raise ValueError(
-                                'Got more bytes so far (>%i) than requested (%i)'
+                                "Got more bytes so far (>%i) than requested (%i)"
                                 % (cl, end - start)
                             )
                     else:
                         break
-                out = b''.join(out)
+                out = b"".join(out)
             return out
 
     _fetch_range = sync_wrapper(async_fetch_range)
@@ -533,7 +533,7 @@ def reopen(fs, url, mode, blocksize, cache_type, size=None):
     )
 
 
-magic_check = re.compile('([*[])')
+magic_check = re.compile("([*[])")
 
 
 def has_magic(s):
@@ -542,19 +542,19 @@ def has_magic(s):
 
 
 class HTTPStreamFile(AbstractBufferedFile):
-    def __init__(self, fs, url, mode='rb', loop=None, session=None, **kwargs):
-        self.asynchronous = kwargs.pop('asynchronous', False)
+    def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
+        self.asynchronous = kwargs.pop("asynchronous", False)
         self.url = url
         self.loop = loop
         self.session = session
-        if mode != 'rb':
+        if mode != "rb":
             raise ValueError
-        self.details = {'name': url, 'size': None}
-        super().__init__(fs=fs, path=url, mode=mode, cache_type='none', **kwargs)
+        self.details = {"name": url, "size": None}
+        super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
         self.r = sync(self.loop, self.session.get, url, **kwargs)
 
     def seek(self, *args, **kwargs):
-        raise ValueError('Cannot seek streaming HTTP file')
+        raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
         out = await self.r.content.read(num)
@@ -576,42 +576,42 @@ class HTTPStreamFile(AbstractBufferedFile):
 async def get_range(session, url, start, end, file=None, **kwargs):
     # explicit get a range when we know it must be safe
     kwargs = kwargs.copy()
-    headers = kwargs.pop('headers', {}).copy()
-    headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
+    headers = kwargs.pop("headers", {}).copy()
+    headers["Range"] = "bytes=%i-%i" % (start, end - 1)
     r = await session.get(url, headers=headers, **kwargs)
     r.raise_for_status()
     async with r:
         out = await r.read()
     if file:
-        with open(file, 'rb+') as f:
+        with open(file, "rb+") as f:
             f.seek(start)
             f.write(out)
     else:
         return out
 
 
-async def _file_size(url, session=None, size_policy='head', **kwargs):
+async def _file_size(url, session=None, size_policy="head", **kwargs):
     """Call HEAD on the server to get file size
 
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
     """
     kwargs = kwargs.copy()
-    ar = kwargs.pop('allow_redirects', True)
-    head = kwargs.get('headers', {}).copy()
-    head['Accept-Encoding'] = 'identity'
+    ar = kwargs.pop("allow_redirects", True)
+    head = kwargs.get("headers", {}).copy()
+    head["Accept-Encoding"] = "identity"
     session = session or await get_client()
-    if size_policy == 'head':
+    if size_policy == "head":
         r = await session.head(url, allow_redirects=ar, **kwargs)
-    elif size_policy == 'get':
+    elif size_policy == "get":
         r = await session.get(url, allow_redirects=ar, **kwargs)
     else:
-        raise TypeError('size_policy must be "head" or "get", got %s' '' % size_policy)
+        raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
     async with r:
-        if 'Content-Length' in r.headers:
-            return int(r.headers['Content-Length'])
-        elif 'Content-Range' in r.headers:
-            return int(r.headers['Content-Range'].split('/')[1])
+        if "Content-Length" in r.headers:
+            return int(r.headers["Content-Length"])
+        elif "Content-Range" in r.headers:
+            return int(r.headers["Content-Range"].split("/")[1])
 
 
 file_size = sync_wrapper(_file_size)

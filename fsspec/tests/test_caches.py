@@ -8,9 +8,9 @@ from fsspec.caching import BlockCache, caches
 
 def test_cache_getitem(Cache_imp):
     cacher = Cache_imp(4, letters_fetcher, len(string.ascii_letters))
-    assert cacher._fetch(0, 4) == b'abcd'
-    assert cacher._fetch(None, 4) == b'abcd'
-    assert cacher._fetch(2, 4) == b'cd'
+    assert cacher._fetch(0, 4) == b"abcd"
+    assert cacher._fetch(None, 4) == b"abcd"
+    assert cacher._fetch(2, 4) == b"cd"
 
 
 def test_block_cache_lru():
@@ -37,7 +37,7 @@ def test_block_cache_lru():
 
 
 def _fetcher(start, end):
-    return b'0' * (end - start)
+    return b"0" * (end - start)
 
 
 def letters_fetcher(start, end):
@@ -53,7 +53,7 @@ def test_cache_empty_file(Cache_imp):
     blocksize = 5
     size = 0
     cache = Cache_imp(blocksize, _fetcher, size)
-    assert cache._fetch(0, 0) == b''
+    assert cache._fetch(0, 0) == b""
 
 
 def test_cache_pickleable(Cache_imp):
@@ -65,14 +65,14 @@ def test_cache_pickleable(Cache_imp):
     assert isinstance(unpickled, Cache_imp)
     assert unpickled.blocksize == blocksize
     assert unpickled.size == size
-    assert unpickled._fetch(0, 10) == b'0' * 10
+    assert unpickled._fetch(0, 10) == b"0" * 10
 
 
 @pytest.mark.parametrize(
-    'size_requests',
+    "size_requests",
     [[(0, 30), (0, 35), (51, 52)], [(0, 1), (1, 11), (1, 52)], [(0, 52), (11, 15)]],
 )
-@pytest.mark.parametrize('blocksize', [1, 10, 52, 100])
+@pytest.mark.parametrize("blocksize", [1, 10, 52, 100])
 def test_cache_basic(Cache_imp, blocksize, size_requests):
     cache = Cache_imp(blocksize, letters_fetcher, len(string.ascii_letters))
 

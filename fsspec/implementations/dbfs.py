@@ -44,7 +44,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         self.token = token
 
         self.session = requests.Session()
-        self.session.headers.update({'Authorization': f'Bearer {self.token}'})
+        self.session.headers.update({"Authorization": f"Bearer {self.token}"})
 
         super().__init__(**kwargs)
 
@@ -65,19 +65,19 @@ class DatabricksFileSystem(AbstractFileSystem):
         if not out:
             try:
                 r = self._send_to_api(
-                    method='get', endpoint='list', json={'path': path}
+                    method="get", endpoint="list", json={"path": path}
                 )
             except DatabricksException as e:
-                if e.error_code == 'RESOURCE_DOES_NOT_EXIST':
+                if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                     raise FileNotFoundError(e.message)
 
                 raise e
-            files = r['files']
+            files = r["files"]
             out = [
                 {
-                    'name': o['path'],
-                    'type': 'directory' if o['is_dir'] else 'file',
-                    'size': o['file_size'],
+                    "name": o["path"],
+                    "type": "directory" if o["is_dir"] else "file",
+                    "size": o["file_size"],
                 }
                 for o in files
             ]
@@ -85,7 +85,7 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         if detail:
             return out
-        return [o['name'] for o in out]
+        return [o["name"] for o in out]
 
     def makedirs(self, path, exist_ok=True):
         """
@@ -104,17 +104,17 @@ class DatabricksFileSystem(AbstractFileSystem):
             try:
                 # If the folowing succeeds, the path is already present
                 self._send_to_api(
-                    method='get', endpoint='get-status', json={'path': path}
+                    method="get", endpoint="get-status", json={"path": path}
                 )
-                raise FileExistsError(f'Path {path} already exists')
+                raise FileExistsError(f"Path {path} already exists")
             except DatabricksException as e:
-                if e.error_code == 'RESOURCE_DOES_NOT_EXIST':
+                if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                     pass
 
         try:
-            self._send_to_api(method='post', endpoint='mkdirs', json={'path': path})
+            self._send_to_api(method="post", endpoint="mkdirs", json={"path": path})
         except DatabricksException as e:
-            if e.error_code == 'RESOURCE_ALREADY_EXISTS':
+            if e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message)
 
             raise e
@@ -149,16 +149,16 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         try:
             self._send_to_api(
-                method='post',
-                endpoint='delete',
-                json={'path': path, 'recursive': recursive},
+                method="post",
+                endpoint="delete",
+                json={"path": path, "recursive": recursive},
             )
         except DatabricksException as e:
             # This is not really an exception, it just means
             # not everything was deleted so far
-            if e.error_code == 'PARTIAL_DELETE':
+            if e.error_code == "PARTIAL_DELETE":
                 self.rm(path=path, recursive=recursive)
-            elif e.error_code == 'IO_ERROR':
+            elif e.error_code == "IO_ERROR":
                 # Using the same exception as the os module would use here
                 raise OSError(e.message)
 
@@ -194,19 +194,19 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         try:
             self._send_to_api(
-                method='post',
-                endpoint='move',
-                json={'source_path': source_path, 'destination_path': destination_path},
+                method="post",
+                endpoint="move",
+                json={"source_path": source_path, "destination_path": destination_path},
             )
         except DatabricksException as e:
-            if e.error_code == 'RESOURCE_DOES_NOT_EXIST':
+            if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message)
-            elif e.error_code == 'RESOURCE_ALREADY_EXISTS':
+            elif e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message)
 
             raise e
 
-    def _open(self, path, mode='rb', block_size='default', **kwargs):
+    def _open(self, path, mode="rb", block_size="default", **kwargs):
         """
         Overwrite the base class method to make sure to create a DBFile.
         All arguments are copied from the base method.
@@ -229,14 +229,14 @@ class DatabricksFileSystem(AbstractFileSystem):
         json: dict
             Dictionary of information to send
         """
-        if method == 'post':
+        if method == "post":
             session_call = self.session.post
-        elif method == 'get':
+        elif method == "get":
             session_call = self.session.get
         else:
-            raise ValueError(f'Do not understand method {method}')
+            raise ValueError(f"Do not understand method {method}")
 
-        url = urllib.parse.urljoin(f'https://{self.instance}/api/2.0/dbfs/', endpoint)
+        url = urllib.parse.urljoin(f"https://{self.instance}/api/2.0/dbfs/", endpoint)
 
         r = session_call(url, json=json)
 
@@ -276,13 +276,13 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         try:
             r = self._send_to_api(
-                method='post',
-                endpoint='create',
-                json={'path': path, 'overwrite': overwrite},
+                method="post",
+                endpoint="create",
+                json={"path": path, "overwrite": overwrite},
             )
-            return r['handle']
+            return r["handle"]
         except DatabricksException as e:
-            if e.error_code == 'RESOURCE_ALREADY_EXISTS':
+            if e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message)
 
             raise e
@@ -297,9 +297,9 @@ class DatabricksFileSystem(AbstractFileSystem):
             Which handle to close.
         """
         try:
-            self._send_to_api(method='post', endpoint='close', json={'handle': handle})
+            self._send_to_api(method="post", endpoint="close", json={"handle": handle})
         except DatabricksException as e:
-            if e.error_code == 'RESOURCE_DOES_NOT_EXIST':
+            if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message)
 
             raise e
@@ -322,14 +322,14 @@ class DatabricksFileSystem(AbstractFileSystem):
         data = base64.b64encode(data).decode()
         try:
             self._send_to_api(
-                method='post',
-                endpoint='add-block',
-                json={'handle': handle, 'data': data},
+                method="post",
+                endpoint="add-block",
+                json={"handle": handle, "data": data},
             )
         except DatabricksException as e:
-            if e.error_code == 'RESOURCE_DOES_NOT_EXIST':
+            if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message)
-            elif e.error_code == 'MAX_BLOCK_SIZE_EXCEEDED':
+            elif e.error_code == "MAX_BLOCK_SIZE_EXCEEDED":
                 raise ValueError(e.message)
 
             raise e
@@ -351,15 +351,15 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         try:
             r = self._send_to_api(
-                method='get',
-                endpoint='read',
-                json={'path': path, 'offset': start, 'length': end - start},
+                method="get",
+                endpoint="read",
+                json={"path": path, "offset": start, "length": end - start},
             )
-            return base64.b64decode(r['data'])
+            return base64.b64decode(r["data"])
         except DatabricksException as e:
-            if e.error_code == 'RESOURCE_DOES_NOT_EXIST':
+            if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message)
-            elif e.error_code in ['INVALID_PARAMETER_VALUE', 'MAX_READ_SIZE_EXCEEDED']:
+            elif e.error_code in ["INVALID_PARAMETER_VALUE", "MAX_READ_SIZE_EXCEEDED"]:
                 raise ValueError(e.message)
 
             raise e
@@ -376,10 +376,10 @@ class DatabricksFile(AbstractBufferedFile):
         self,
         fs,
         path,
-        mode='rb',
-        block_size='default',
+        mode="rb",
+        block_size="default",
         autocommit=True,
-        cache_type='readahead',
+        cache_type="readahead",
         cache_options=None,
         **kwargs,
     ):
@@ -388,12 +388,12 @@ class DatabricksFile(AbstractBufferedFile):
 
         The blocksize needs to be the default one.
         """
-        if block_size is None or block_size == 'default':
+        if block_size is None or block_size == "default":
             block_size = self.DEFAULT_BLOCK_SIZE
 
         assert (
             block_size == self.DEFAULT_BLOCK_SIZE
-        ), f'Only the default block size is allowed, not {block_size}'
+        ), f"Only the default block size is allowed, not {block_size}"
 
         super().__init__(
             fs,
@@ -428,7 +428,7 @@ class DatabricksFile(AbstractBufferedFile):
 
     def _fetch_range(self, start, end):
         """Internal function to download a block of data"""
-        return_buffer = b''
+        return_buffer = b""
 
         total_length = end - start
         for chunk_start, chunk_end in self._to_sized_blocks(total_length):

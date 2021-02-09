@@ -25,7 +25,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     https://github.com/intake/fsspec-reference-maker/blob/main/README.md
     """
 
-    protocol = 'reference'
+    protocol = "reference"
 
     def __init__(
         self,
@@ -61,15 +61,15 @@ class ReferenceFileSystem(AsyncFileSystem):
         """
         if fs is not None:
             if not fs.async_impl:
-                raise NotImplementedError('Only works with async targets')
-            kwargs['loop'] = fs.loop
+                raise NotImplementedError("Only works with async targets")
+            kwargs["loop"] = fs.loop
         super().__init__(**kwargs)
         if fs is None:
             fs = filesystem(target_protocol, loop=self.loop, **(target_options or {}))
         if not fs.async_impl:
-            raise NotImplementedError('Only works with async targets')
+            raise NotImplementedError("Only works with async targets")
         if isinstance(references, str):
-            with open(references, 'rb', **(ref_storage_args or {})) as f:
+            with open(references, "rb", **(ref_storage_args or {})) as f:
                 references = json.load(f)
         self.references = references
         self.target = target
@@ -90,9 +90,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         return await self.fs._cat_file(url, start=start, end=end)
 
     def _process_references(self):
-        if 'zarr_consolidated_format' in self.references:
+        if "zarr_consolidated_format" in self.references:
             self.references = _unmodel_hdf5(self.references)
-        self.dircache = {'': []}
+        self.dircache = {"": []}
         for path, part in self.references.items():
             if isinstance(part, (bytes, str)):
                 size = len(part)
@@ -106,18 +106,18 @@ class ReferenceFileSystem(AsyncFileSystem):
                 if par0 not in self.dircache:
                     self.dircache[par0] = []
                     self.dircache.setdefault(self._parent(par0), []).append(
-                        {'name': par0, 'type': 'directory', 'size': 0}
+                        {"name": par0, "type": "directory", "size": 0}
                     )
                 par0 = self._parent(par0)
 
-            self.dircache[par].append({'name': path, 'type': 'file', 'size': size})
+            self.dircache[par].append({"name": path, "type": "file", "size": size})
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         out = self._ls_from_cache(path)
         if detail:
             return out
-        return [o['name'] for o in out]
+        return [o["name"] for o in out]
 
 
 def _unmodel_hdf5(references):
@@ -126,16 +126,16 @@ def _unmodel_hdf5(references):
     import re
 
     ref = {}
-    for key, value in references['metadata'].items():
-        if key.endswith('.zchunkstore'):
-            source = value.pop('source')['uri']
-            match = re.findall(r'https://([^.]+)\.s3\.amazonaws\.com', source)
+    for key, value in references["metadata"].items():
+        if key.endswith(".zchunkstore"):
+            source = value.pop("source")["uri"]
+            match = re.findall(r"https://([^.]+)\.s3\.amazonaws\.com", source)
             if match:
                 source = source.replace(
-                    f'https://{match[0]}.s3.amazonaws.com', match[0]
+                    f"https://{match[0]}.s3.amazonaws.com", match[0]
                 )
             for k, v in value.items():
-                ref[k] = (source, v['offset'], v['offset'] + v['size'])
+                ref[k] = (source, v["offset"], v["offset"] + v["size"])
         else:
             ref[key] = json.dumps(value).encode()
     return ref

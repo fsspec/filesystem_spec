@@ -32,8 +32,8 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
         if not (fs is None) ^ (target_protocol is None):
             raise ValueError(
-                'Please provide one of filesystem instance (fs) or'
-                ' target_protocol, not both'
+                "Please provide one of filesystem instance (fs) or"
+                " target_protocol, not both"
             )
         self.target_protocol = target_protocol
         self.target_options = target_options
@@ -45,8 +45,8 @@ class DaskWorkerFileSystem(AbstractFileSystem):
     @staticmethod
     def _get_kwargs_from_urls(path):
         so = infer_storage_options(path)
-        if 'host' in so and 'port' in so:
-            return {'client': f"{so['host']}:{so['port']}"}
+        if "host" in so and "port" in so:
+            return {"client": f"{so['host']}:{so['port']}"}
         else:
             return {}
 
@@ -96,7 +96,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
     def _open(
         self,
         path,
-        mode='rb',
+        mode="rb",
         block_size=None,
         autocommit=True,
         cache_options=None,
@@ -132,8 +132,8 @@ class DaskWorkerFileSystem(AbstractFileSystem):
 
 
 class DaskFile(AbstractBufferedFile):
-    def __init__(self, mode='rb', **kwargs):
-        if mode != 'rb':
+    def __init__(self, mode="rb", **kwargs):
+        if mode != "rb":
             raise ValueError('Remote dask files can only be opened in "rb" mode')
         super().__init__(**kwargs)
 

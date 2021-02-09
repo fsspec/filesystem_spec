@@ -2,7 +2,7 @@ import pytest
 
 import fsspec
 
-pytest.importorskip('distributed')
+pytest.importorskip("distributed")
 
 
 @pytest.fixture()
@@ -12,9 +12,9 @@ def cli(tmpdir):
     client = dask.distributed.Client(n_workers=1)
 
     def setup():
-        m = fsspec.filesystem('memory')
-        with m.open('afile', 'wb') as f:
-            f.write(b'data')
+        m = fsspec.filesystem("memory")
+        with m.open("afile", "wb") as f:
+            f.write(b"data")
 
     client.run(setup)
     try:
@@ -25,6 +25,6 @@ def cli(tmpdir):
 
 def test_basic(cli):
 
-    fs = fsspec.filesystem('dask', target_protocol='memory')
-    assert fs.ls('') == ['afile']
-    assert fs.cat('afile') == b'data'
+    fs = fsspec.filesystem("dask", target_protocol="memory")
+    assert fs.ls("") == ["afile"]
+    assert fs.cat("afile") == b"data"

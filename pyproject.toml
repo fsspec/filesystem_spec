@@ -1,7 +1,7 @@
 [tool.black]
 target_version = ['py37', 'py38']
 line-length = 88
-skip-string-normalization = true
+skip-string-normalization = false
 exclude = '''
 
 (

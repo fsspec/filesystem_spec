@@ -20,13 +20,13 @@ from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.tests.test_utils import WIN
 
 files = {
-    '.test.accounts.1.json': (
+    ".test.accounts.1.json": (
         b'{"amount": 100, "name": "Alice"}\n'
         b'{"amount": 200, "name": "Bob"}\n'
         b'{"amount": 300, "name": "Charlie"}\n'
         b'{"amount": 400, "name": "Dennis"}\n'
     ),
-    '.test.accounts.2.json': (
+    ".test.accounts.2.json": (
         b'{"amount": 500, "name": "Alice"}\n'
         b'{"amount": 600, "name": "Bob"}\n'
         b'{"amount": 700, "name": "Charlie"}\n'
@@ -36,14 +36,14 @@ files = {
 
 
 csv_files = {
-    '.test.fakedata.1.csv': (b'a,b\n' b'1,2\n'),
-    '.test.fakedata.2.csv': (b'a,b\n' b'3,4\n'),
+    ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
+    ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
 }
 odir = os.getcwd()
 
 
 @contextmanager
-def filetexts(d, open=open, mode='t'):
+def filetexts(d, open=open, mode="t"):
     """Dumps a number of textfiles to disk
 
     d - dict
@@ -57,7 +57,7 @@ def filetexts(d, open=open, mode='t'):
     try:
         os.chdir(dirname)
         for filename, text in d.items():
-            f = open(filename, 'w' + mode)
+            f = open(filename, "w" + mode)
             try:
                 f.write(text)
             finally:
@@ -80,15 +80,15 @@ def filetexts(d, open=open, mode='t'):
 
 def test_urlpath_inference_strips_protocol(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
-    paths = ['/'.join([tmpdir, 'test.%02d.csv' % i]) for i in range(20)]
+    paths = ["/".join([tmpdir, "test.%02d.csv" % i]) for i in range(20)]
 
     for path in paths:
-        with open(path, 'wb') as f:
-            f.write(b'1,2,3\n' * 10)
+        with open(path, "wb") as f:
+            f.write(b"1,2,3\n" * 10)
 
     # globstring
-    protocol = 'file:///' if sys.platform == 'win32' else 'file://'
-    urlpath = protocol + os.path.join(tmpdir, 'test.*.csv')
+    protocol = "file:///" if sys.platform == "win32" else "file://"
+    urlpath = protocol + os.path.join(tmpdir, "test.*.csv")
     _, _, paths2 = get_fs_token_paths(urlpath)
     assert paths2 == paths
 
@@ -101,44 +101,44 @@ def test_urlpath_inference_errors():
     # Empty list
     with pytest.raises(ValueError) as err:
         get_fs_token_paths([])
-    assert 'empty' in str(err.value)
+    assert "empty" in str(err.value)
 
     # Protocols differ
     with pytest.raises(ValueError) as err:
-        get_fs_token_paths(['s3://test/path.csv', '/other/path.csv'])
-    assert 'protocol' in str(err.value)
+        get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
+    assert "protocol" in str(err.value)
 
 
 def test_urlpath_expand_read():
     """Make sure * is expanded in file paths when reading."""
     # when reading, globs should be expanded to read files by mask
-    with filetexts(csv_files, mode='b'):
-        _, _, paths = get_fs_token_paths('./.*.csv')
+    with filetexts(csv_files, mode="b"):
+        _, _, paths = get_fs_token_paths("./.*.csv")
         assert len(paths) == 2
-        _, _, paths = get_fs_token_paths(['./.*.csv'])
+        _, _, paths = get_fs_token_paths(["./.*.csv"])
         assert len(paths) == 2
 
 
 def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
-    _, _, paths = get_fs_token_paths('prefix-*.csv', mode='wb', num=2)
+    _, _, paths = get_fs_token_paths("prefix-*.csv", mode="wb", num=2)
     assert all(
-        [p.endswith(pa) for p, pa in zip(paths, ['/prefix-0.csv', '/prefix-1.csv'])]
+        [p.endswith(pa) for p, pa in zip(paths, ["/prefix-0.csv", "/prefix-1.csv"])]
     )
-    _, _, paths = get_fs_token_paths(['prefix-*.csv'], mode='wb', num=2)
+    _, _, paths = get_fs_token_paths(["prefix-*.csv"], mode="wb", num=2)
     assert all(
-        [p.endswith(pa) for p, pa in zip(paths, ['/prefix-0.csv', '/prefix-1.csv'])]
+        [p.endswith(pa) for p, pa in zip(paths, ["/prefix-0.csv", "/prefix-1.csv"])]
     )
     # we can read with multiple masks, but not write
     with pytest.raises(ValueError):
         _, _, paths = get_fs_token_paths(
-            ['prefix1-*.csv', 'prefix2-*.csv'], mode='wb', num=2
+            ["prefix1-*.csv", "prefix2-*.csv"], mode="wb", num=2
         )
 
 
 def test_open_files():
-    with filetexts(files, mode='b'):
-        myfiles = open_files('./.test.accounts.*')
+    with filetexts(files, mode="b"):
+        myfiles = open_files("./.test.accounts.*")
         assert len(myfiles) == len(files)
         for lazy_file, data_file in zip(myfiles, sorted(files)):
             with lazy_file as f:
@@ -146,10 +146,10 @@ def test_open_files():
                 assert x == files[data_file]
 
 
-@pytest.mark.parametrize('encoding', ['utf-8', 'ascii'])
+@pytest.mark.parametrize("encoding", ["utf-8", "ascii"])
 def test_open_files_text_mode(encoding):
-    with filetexts(files, mode='b'):
-        myfiles = open_files('./.test.accounts.*', mode='rt', encoding=encoding)
+    with filetexts(files, mode="b"):
+        myfiles = open_files("./.test.accounts.*", mode="rt", encoding=encoding)
         assert len(myfiles) == len(files)
         data = []
         for file in myfiles:
@@ -158,17 +158,17 @@ def test_open_files_text_mode(encoding):
         assert list(data) == [files[k].decode(encoding) for k in sorted(files)]
 
 
-@pytest.mark.parametrize('mode', ['rt', 'rb'])
-@pytest.mark.parametrize('fmt', list(compression.compr))
+@pytest.mark.parametrize("mode", ["rt", "rb"])
+@pytest.mark.parametrize("fmt", list(compression.compr))
 def test_compressions(fmt, mode, tmpdir):
-    if fmt == 'zip' and sys.version_info < (3, 6):
-        pytest.xfail('zip compression requires python3.6 or higher')
+    if fmt == "zip" and sys.version_info < (3, 6):
+        pytest.xfail("zip compression requires python3.6 or higher")
 
     tmpdir = str(tmpdir)
-    fn = os.path.join(tmpdir, '.tmp.getsize')
+    fn = os.path.join(tmpdir, ".tmp.getsize")
     fs = LocalFileSystem()
-    f = OpenFile(fs, fn, compression=fmt, mode='wb')
-    data = b'Long line of readily compressible text'
+    f = OpenFile(fs, fn, compression=fmt, mode="wb")
+    data = b"Long line of readily compressible text"
     with f as fo:
         fo.write(data)
     if fmt is None:
@@ -178,71 +178,71 @@ def test_compressions(fmt, mode, tmpdir):
 
     f = OpenFile(fs, fn, compression=fmt, mode=mode)
     with f as fo:
-        if mode == 'rb':
+        if mode == "rb":
             assert fo.read() == data
         else:
             assert fo.read() == data.decode()
 
 
 def test_bad_compression():
-    with filetexts(files, mode='b'):
+    with filetexts(files, mode="b"):
         for func in [open_files]:
             with pytest.raises(ValueError):
-                func('./.test.accounts.*', compression='not-found')
+                func("./.test.accounts.*", compression="not-found")
 
 
 def test_not_found():
-    fn = 'not-a-file'
+    fn = "not-a-file"
     fs = LocalFileSystem()
     with pytest.raises((FileNotFoundError, OSError)):
-        with OpenFile(fs, fn, mode='rb'):
+        with OpenFile(fs, fn, mode="rb"):
             pass
 
 
 def test_isfile():
     fs = LocalFileSystem()
-    with filetexts(files, mode='b'):
+    with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
-            assert fs.isfile('file://' + f)
-        assert not fs.isfile('not-a-file')
-        assert not fs.isfile('file://not-a-file')
+            assert fs.isfile("file://" + f)
+        assert not fs.isfile("not-a-file")
+        assert not fs.isfile("file://not-a-file")
 
 
 def test_isdir():
     fs = LocalFileSystem()
-    with filetexts(files, mode='b'):
+    with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isdir(os.path.dirname(os.path.abspath(f)))
             assert not fs.isdir(f)
-        assert not fs.isdir('not-a-dir')
+        assert not fs.isdir("not-a-dir")
 
 
-@pytest.mark.parametrize('compression_opener', [(None, open), ('gzip', gzip.open)])
+@pytest.mark.parametrize("compression_opener", [(None, open), ("gzip", gzip.open)])
 def test_open_files_write(tmpdir, compression_opener):
     tmpdir = str(tmpdir)
     compression, opener = compression_opener
-    fn = str(tmpdir) + '/*.part'
-    files = open_files(fn, num=2, mode='wb', compression=compression)
+    fn = str(tmpdir) + "/*.part"
+    files = open_files(fn, num=2, mode="wb", compression=compression)
     assert len(files) == 2
-    assert {f.mode for f in files} == {'wb'}
+    assert {f.mode for f in files} == {"wb"}
     for fil in files:
         with fil as f:
-            f.write(b'000')
+            f.write(b"000")
     files = sorted(os.listdir(tmpdir))
-    assert files == ['0.part', '1.part']
+    assert files == ["0.part", "1.part"]
 
-    with opener(os.path.join(tmpdir, files[0]), 'rb') as f:
+    with opener(os.path.join(tmpdir, files[0]), "rb") as f:
         d = f.read()
-    assert d == b'000'
+    assert d == b"000"
 
 
 def test_pickability_of_lazy_files(tmpdir):
     tmpdir = str(tmpdir)
-    cloudpickle = pytest.importorskip('cloudpickle')
+    cloudpickle = pytest.importorskip("cloudpickle")
 
-    with filetexts(files, mode='b'):
-        myfiles = open_files('./.test.accounts.*')
+    with filetexts(files, mode="b"):
+        myfiles = open_files("./.test.accounts.*")
         myfiles2 = cloudpickle.loads(cloudpickle.dumps(myfiles))
 
         for f, f2 in zip(myfiles, myfiles2):
@@ -256,12 +256,12 @@ def test_abs_paths(tmpdir):
     tmpdir = str(tmpdir)
     here = os.getcwd()
     os.chdir(tmpdir)
-    with open('tmp', 'w') as f:
-        f.write('hi')
-    out = LocalFileSystem().glob('./*')
+    with open("tmp", "w") as f:
+        f.write("hi")
+    out = LocalFileSystem().glob("./*")
     assert len(out) == 1
-    assert '/' in out[0]
-    assert 'tmp' in out[0]
+    assert "/" in out[0]
+    assert "tmp" in out[0]
 
     # I don't know what this was testing - but should avoid local paths anyway
     # fs = LocalFileSystem()
@@ -271,64 +271,64 @@ def test_abs_paths(tmpdir):
     # assert res == 'hi'
 
 
-@pytest.mark.parametrize('sep', ['/', '\\'])
-@pytest.mark.parametrize('chars', ['+', '++', '(', ')', '|', '\\'])
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize("chars", ["+", "++", "(", ")", "|", "\\"])
 def test_glob_weird_characters(tmpdir, sep, chars):
     tmpdir = make_path_posix(str(tmpdir))
 
-    subdir = tmpdir + sep + 'test' + chars + 'x'
+    subdir = tmpdir + sep + "test" + chars + "x"
     try:
         os.makedirs(subdir, exist_ok=True)
     except OSError as e:
-        if WIN and 'label syntax' in str(e):
-            pytest.xfail('Illegal windows directory name')
+        if WIN and "label syntax" in str(e):
+            pytest.xfail("Illegal windows directory name")
         else:
             raise
-    with open(subdir + sep + 'tmp', 'w') as f:
-        f.write('hi')
+    with open(subdir + sep + "tmp", "w") as f:
+        f.write("hi")
 
-    out = LocalFileSystem().glob(subdir + sep + '*')
+    out = LocalFileSystem().glob(subdir + sep + "*")
     assert len(out) == 1
-    assert '/' in out[0]
-    assert 'tmp' in out[0]
+    assert "/" in out[0]
+    assert "tmp" in out[0]
 
 
 def test_globfind_dirs(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
-    fs = fsspec.filesystem('file')
-    fs.mkdir(tmpdir + '/dir')
-    fs.touch(tmpdir + '/dir/afile')
-    assert [tmpdir + '/dir'] == fs.glob(tmpdir + '/*')
-    assert fs.glob(tmpdir + '/*', detail=True)[tmpdir + '/dir']['type'] == 'directory'
+    fs = fsspec.filesystem("file")
+    fs.mkdir(tmpdir + "/dir")
+    fs.touch(tmpdir + "/dir/afile")
+    assert [tmpdir + "/dir"] == fs.glob(tmpdir + "/*")
+    assert fs.glob(tmpdir + "/*", detail=True)[tmpdir + "/dir"]["type"] == "directory"
     assert (
-        fs.glob(tmpdir + '/dir/*', detail=True)[tmpdir + '/dir/afile']['type'] == 'file'
+        fs.glob(tmpdir + "/dir/*", detail=True)[tmpdir + "/dir/afile"]["type"] == "file"
     )
-    assert [tmpdir + '/dir/afile'] == fs.find(tmpdir)
-    assert [tmpdir + '/dir', tmpdir + '/dir/afile'] == fs.find(tmpdir, withdirs=True)
+    assert [tmpdir + "/dir/afile"] == fs.find(tmpdir)
+    assert [tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(tmpdir, withdirs=True)
 
 
 def test_touch(tmpdir):
     import time
 
-    fn = tmpdir + '/in/file'
-    fs = fsspec.filesystem('file', auto_mkdir=False)
+    fn = tmpdir + "/in/file"
+    fs = fsspec.filesystem("file", auto_mkdir=False)
     with pytest.raises(OSError):
         fs.touch(fn)
-    fs = fsspec.filesystem('file', auto_mkdir=True)
+    fs = fsspec.filesystem("file", auto_mkdir=True)
     fs.touch(fn)
     info = fs.info(fn)
     time.sleep(0.2)
     fs.touch(fn)
     info2 = fs.info(fn)
     if not WIN:
-        assert info2['mtime'] > info['mtime']
+        assert info2["mtime"] > info["mtime"]
 
 
 def test_get_pyarrow_filesystem():
-    pa = pytest.importorskip('pyarrow')
+    pa = pytest.importorskip("pyarrow")
 
     fs = LocalFileSystem()
-    if LooseVersion(pa.__version__) < LooseVersion('2.0'):
+    if LooseVersion(pa.__version__) < LooseVersion("2.0"):
         assert isinstance(fs, pa.filesystem.FileSystem)
         assert fs._get_pyarrow_filesystem() is fs
     else:
@@ -343,10 +343,10 @@ def test_get_pyarrow_filesystem():
 def test_directories(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
-    fs.mkdir(tmpdir + '/dir')
-    assert tmpdir + '/dir' in fs.ls(tmpdir)
-    assert fs.ls(tmpdir, True)[0]['type'] == 'directory'
-    fs.rmdir(tmpdir + '/dir')
+    fs.mkdir(tmpdir + "/dir")
+    assert tmpdir + "/dir" in fs.ls(tmpdir)
+    assert fs.ls(tmpdir, True)[0]["type"] == "directory"
+    fs.rmdir(tmpdir + "/dir")
     assert not fs.ls(tmpdir)
 
 
@@ -354,28 +354,28 @@ def test_file_ops(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem(auto_mkdir=True)
     with pytest.raises(FileNotFoundError):
-        fs.info(tmpdir + '/nofile')
-    fs.touch(tmpdir + '/afile')
-    i1 = fs.ukey(tmpdir + '/afile')
+        fs.info(tmpdir + "/nofile")
+    fs.touch(tmpdir + "/afile")
+    i1 = fs.ukey(tmpdir + "/afile")
 
-    assert tmpdir + '/afile' in fs.ls(tmpdir)
+    assert tmpdir + "/afile" in fs.ls(tmpdir)
 
-    with fs.open(tmpdir + '/afile', 'wb') as f:
-        f.write(b'data')
-    i2 = fs.ukey(tmpdir + '/afile')
+    with fs.open(tmpdir + "/afile", "wb") as f:
+        f.write(b"data")
+    i2 = fs.ukey(tmpdir + "/afile")
     assert i1 != i2  # because file changed
 
-    fs.copy(tmpdir + '/afile', tmpdir + '/afile2')
-    assert tmpdir + '/afile2' in fs.ls(tmpdir)
+    fs.copy(tmpdir + "/afile", tmpdir + "/afile2")
+    assert tmpdir + "/afile2" in fs.ls(tmpdir)
 
-    fs.move(tmpdir + '/afile', tmpdir + '/afile3')
-    assert not fs.exists(tmpdir + '/afile')
+    fs.move(tmpdir + "/afile", tmpdir + "/afile3")
+    assert not fs.exists(tmpdir + "/afile")
 
-    fs.cp(tmpdir + '/afile3', tmpdir + '/deeply/nested/file')
-    assert fs.exists(tmpdir + '/deeply/nested/file')
+    fs.cp(tmpdir + "/afile3", tmpdir + "/deeply/nested/file")
+    assert fs.exists(tmpdir + "/deeply/nested/file")
 
-    fs.rm(tmpdir + '/afile3', recursive=True)
-    assert not fs.exists(tmpdir + '/afile3')
+    fs.rm(tmpdir + "/afile3", recursive=True)
+    assert not fs.exists(tmpdir + "/afile3")
 
     fs.rm(tmpdir, recursive=True)
     assert not fs.exists(tmpdir)
@@ -385,102 +385,102 @@ def test_recursive_get_put(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem(auto_mkdir=True)
 
-    fs.mkdir(tmpdir + '/a1/a2/a3')
-    fs.touch(tmpdir + '/a1/a2/a3/afile')
-    fs.touch(tmpdir + '/a1/afile')
+    fs.mkdir(tmpdir + "/a1/a2/a3")
+    fs.touch(tmpdir + "/a1/a2/a3/afile")
+    fs.touch(tmpdir + "/a1/afile")
 
-    fs.get('file://{0}/a1'.format(tmpdir), tmpdir + '/b1', recursive=True)
-    assert fs.isfile(tmpdir + '/b1/afile')
-    assert fs.isfile(tmpdir + '/b1/a2/a3/afile')
+    fs.get("file://{0}/a1".format(tmpdir), tmpdir + "/b1", recursive=True)
+    assert fs.isfile(tmpdir + "/b1/afile")
+    assert fs.isfile(tmpdir + "/b1/a2/a3/afile")
 
-    fs.put(tmpdir + '/b1', 'file://{0}/c1'.format(tmpdir), recursive=True)
-    assert fs.isfile(tmpdir + '/c1/afile')
-    assert fs.isfile(tmpdir + '/c1/a2/a3/afile')
+    fs.put(tmpdir + "/b1", "file://{0}/c1".format(tmpdir), recursive=True)
+    assert fs.isfile(tmpdir + "/c1/afile")
+    assert fs.isfile(tmpdir + "/c1/a2/a3/afile")
 
 
 def test_commit_discard(tmpdir):
     tmpdir = str(tmpdir)
     fs = LocalFileSystem()
     with fs.transaction:
-        with fs.open(tmpdir + '/afile', 'wb') as f:
-            assert not fs.exists(tmpdir + '/afile')
-            f.write(b'data')
-        assert not fs.exists(tmpdir + '/afile')
+        with fs.open(tmpdir + "/afile", "wb") as f:
+            assert not fs.exists(tmpdir + "/afile")
+            f.write(b"data")
+        assert not fs.exists(tmpdir + "/afile")
 
     assert fs._transaction is None
-    assert fs.cat(tmpdir + '/afile') == b'data'
+    assert fs.cat(tmpdir + "/afile") == b"data"
 
     try:
         with fs.transaction:
-            with fs.open(tmpdir + '/bfile', 'wb') as f:
-                f.write(b'data')
+            with fs.open(tmpdir + "/bfile", "wb") as f:
+                f.write(b"data")
             raise KeyboardInterrupt
     except KeyboardInterrupt:
-        assert not fs.exists(tmpdir + '/bfile')
+        assert not fs.exists(tmpdir + "/bfile")
 
 
 def test_make_path_posix():
     cwd = os.getcwd()
     if WIN:
         drive = cwd[0]
-        assert make_path_posix('/a/posix/path') == f'{drive}:/a/posix/path'
-        assert make_path_posix('/posix') == f'{drive}:/posix'
+        assert make_path_posix("/a/posix/path") == f"{drive}:/a/posix/path"
+        assert make_path_posix("/posix") == f"{drive}:/posix"
     else:
-        assert make_path_posix('/a/posix/path') == '/a/posix/path'
-        assert make_path_posix('/posix') == '/posix'
-    assert make_path_posix('relpath', sep='/') == posixpath.join(
-        make_path_posix(cwd), 'relpath'
+        assert make_path_posix("/a/posix/path") == "/a/posix/path"
+        assert make_path_posix("/posix") == "/posix"
+    assert make_path_posix("relpath", sep="/") == posixpath.join(
+        make_path_posix(cwd), "relpath"
     )
-    assert make_path_posix('rel/path', sep='/') == posixpath.join(
-        make_path_posix(cwd), 'rel/path'
+    assert make_path_posix("rel/path", sep="/") == posixpath.join(
+        make_path_posix(cwd), "rel/path"
     )
-    assert make_path_posix('C:\\path', sep='\\') == 'C:/path'
+    assert make_path_posix("C:\\path", sep="\\") == "C:/path"
     assert (
         make_path_posix(
-            '\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet'
+            "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet"
         )
-        == '//windows-server/someshare/path/more/path/dir/foo.parquet'
+        == "//windows-server/someshare/path/more/path/dir/foo.parquet"
     )
     assert (
         make_path_posix(
-            r'\\SERVER\UserHomeFolder$\me\My Documents\project1\data\filen.csv'
+            r"\\SERVER\UserHomeFolder$\me\My Documents\project1\data\filen.csv"
         )
-        == '//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv'
+        == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
     )
-    assert '/' in make_path_posix('rel\\path', sep='\\')
+    assert "/" in make_path_posix("rel\\path", sep="\\")
 
 
 def test_links(tmpdir):
     tmpdir = str(tmpdir)
-    fn0 = os.path.join(tmpdir, 'target')
-    fn1 = os.path.join(tmpdir, 'link1')
-    fn2 = os.path.join(tmpdir, 'link2')
-    data = b'my target data'
-    with open(fn0, 'wb') as f:
+    fn0 = os.path.join(tmpdir, "target")
+    fn1 = os.path.join(tmpdir, "link1")
+    fn2 = os.path.join(tmpdir, "link2")
+    data = b"my target data"
+    with open(fn0, "wb") as f:
         f.write(data)
     try:
         os.symlink(fn0, fn1)
         os.symlink(fn0, fn2)
     except OSError:
         if WIN:
-            pytest.xfail('Ran on win without admin permissions')
+            pytest.xfail("Ran on win without admin permissions")
         else:
             raise
 
     fs = LocalFileSystem()
-    assert fs.info(fn0)['type'] == 'file'
-    assert fs.info(fn1)['type'] == 'link'
-    assert fs.info(fn2)['type'] == 'link'
+    assert fs.info(fn0)["type"] == "file"
+    assert fs.info(fn1)["type"] == "link"
+    assert fs.info(fn2)["type"] == "link"
 
-    assert fs.info(fn0)['size'] == len(data)
-    assert fs.info(fn1)['size'] == len(data)
-    assert fs.info(fn2)['size'] == len(data)
+    assert fs.info(fn0)["size"] == len(data)
+    assert fs.info(fn1)["size"] == len(data)
+    assert fs.info(fn2)["size"] == len(data)
 
-    of = fsspec.open(fn1, 'rb')
+    of = fsspec.open(fn1, "rb")
     with of as f:
         assert f.read() == data
 
-    of = fsspec.open(fn2, 'rb')
+    of = fsspec.open(fn2, "rb")
     with of as f:
         assert f.read() == data
 
@@ -493,44 +493,44 @@ def test_isfilestore():
 def test_pickle(tmpdir):
     fs = LocalFileSystem()
     tmpdir = str(tmpdir)
-    fn0 = os.path.join(tmpdir, 'target')
+    fn0 = os.path.join(tmpdir, "target")
 
-    with open(fn0, 'wb') as f:
-        f.write(b'data')
+    with open(fn0, "wb") as f:
+        f.write(b"data")
 
-    f = fs.open(fn0, 'rb')
+    f = fs.open(fn0, "rb")
     f.seek(1)
     f2 = pickle.loads(pickle.dumps(f))
     assert f2.read() == f.read()
 
-    f = fs.open(fn0, 'wb')
+    f = fs.open(fn0, "wb")
     with pytest.raises(ValueError):
         pickle.dumps(f)
 
 
 def test_strip_protocol_expanduser():
-    path = 'file://~\\foo\\bar' if sys.platform == 'win32' else 'file://~/foo/bar'
+    path = "file://~\\foo\\bar" if sys.platform == "win32" else "file://~/foo/bar"
     stripped = LocalFileSystem._strip_protocol(path)
     assert path != stripped
-    assert 'file://' not in stripped
-    assert stripped.startswith(os.path.expanduser('~').replace('\\', '/'))
+    assert "file://" not in stripped
+    assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
 
 
 def test_iterable(tmpdir):
-    data = b'a\nhello\noi'
-    fn = os.path.join(tmpdir, 'test')
-    with open(fn, 'wb') as f:
+    data = b"a\nhello\noi"
+    fn = os.path.join(tmpdir, "test")
+    with open(fn, "wb") as f:
         f.write(data)
-    of = fsspec.open('file://%s' % fn, 'rb')
+    of = fsspec.open("file://%s" % fn, "rb")
     with of as f:
         out = list(f)
-    assert b''.join(out) == data
+    assert b"".join(out) == data
 
 
 def test_mv_empty(tmpdir):
-    localfs = fsspec.filesystem('file')
-    src = os.path.join(str(tmpdir), 'src')
-    dest = os.path.join(str(tmpdir), 'dest')
+    localfs = fsspec.filesystem("file")
+    src = os.path.join(str(tmpdir), "src")
+    dest = os.path.join(str(tmpdir), "dest")
     assert localfs.isdir(src) is False
     localfs.mkdir(src)
     assert localfs.isdir(src)
@@ -541,30 +541,30 @@ def test_mv_empty(tmpdir):
 
 
 def test_mv_recursive(tmpdir):
-    localfs = fsspec.filesystem('file')
-    src = os.path.join(str(tmpdir), 'src')
-    dest = os.path.join(str(tmpdir), 'dest')
+    localfs = fsspec.filesystem("file")
+    src = os.path.join(str(tmpdir), "src")
+    dest = os.path.join(str(tmpdir), "dest")
     assert localfs.isdir(src) is False
     localfs.mkdir(src)
     assert localfs.isdir(src)
-    localfs.touch(os.path.join(src, 'afile'))
+    localfs.touch(os.path.join(src, "afile"))
     localfs.move(src, dest, recursive=True)
     assert localfs.isdir(src) is False
     assert localfs.isdir(dest)
-    assert localfs.info(os.path.join(dest, 'afile'))
+    assert localfs.info(os.path.join(dest, "afile"))
 
 
-@pytest.mark.xfail(WIN, reason='windows expand path to be revisited')
+@pytest.mark.xfail(WIN, reason="windows expand path to be revisited")
 def test_copy_errors(tmpdir):
-    localfs = fsspec.filesystem('file')
+    localfs = fsspec.filesystem("file")
 
-    dest1 = os.path.join(str(tmpdir), 'dest1')
-    dest2 = os.path.join(str(tmpdir), 'dest2')
+    dest1 = os.path.join(str(tmpdir), "dest1")
+    dest2 = os.path.join(str(tmpdir), "dest2")
 
-    src = os.path.join(str(tmpdir), 'src')
-    file1 = os.path.join(src, 'afile1')
-    file2 = os.path.join(src, 'afile2')
-    dne = os.path.join(str(tmpdir), 'src', 'notafile')
+    src = os.path.join(str(tmpdir), "src")
+    file1 = os.path.join(src, "afile1")
+    file2 = os.path.join(src, "afile2")
+    dne = os.path.join(str(tmpdir), "src", "notafile")
 
     localfs.mkdir(src)
     localfs.mkdir(dest1)
@@ -576,22 +576,22 @@ def test_copy_errors(tmpdir):
     with pytest.raises(FileNotFoundError):
         localfs.copy([file1, file2, dne], dest1)
 
-    localfs.copy([file1, file2, dne], dest1, on_error='ignore')
+    localfs.copy([file1, file2, dne], dest1, on_error="ignore")
     assert sorted(localfs.ls(dest1)) == [
-        make_path_posix(os.path.join(dest1, 'afile1')),
-        make_path_posix(os.path.join(dest1, 'afile2')),
+        make_path_posix(os.path.join(dest1, "afile1")),
+        make_path_posix(os.path.join(dest1, "afile2")),
     ]
 
     # Recursive should raise an error only if we specify raise
     # the patch simulates the filesystem finding a file that does not
     # exist in the directory
     current_files = localfs.expand_path(src, recursive=True)
-    with patch.object(localfs, 'expand_path', return_value=current_files + [dne]):
+    with patch.object(localfs, "expand_path", return_value=current_files + [dne]):
         with pytest.raises(FileNotFoundError):
-            localfs.copy(src, dest2, recursive=True, on_error='raise')
+            localfs.copy(src, dest2, recursive=True, on_error="raise")
 
         localfs.copy(src, dest2, recursive=True)
         assert sorted(localfs.ls(dest2)) == [
-            make_path_posix(os.path.join(dest2, 'afile1')),
-            make_path_posix(os.path.join(dest2, 'afile2')),
+            make_path_posix(os.path.join(dest2, "afile1")),
+            make_path_posix(os.path.join(dest2, "afile2")),
         ]
