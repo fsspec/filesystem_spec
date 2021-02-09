@@ -29,14 +29,20 @@ These are described further in the :doc:`features` section.
 Installation
 ------------
 
+.. code-block:: sh
+
    pip install fsspec
 
 Not all included filesystems are usable by default without installing extra
-dependencies. For example to be able to access data in S3::
+dependencies. For example to be able to access data in S3:
+
+.. code-block:: sh
 
    pip install fsspec[s3]
 
 or
+
+.. code-block:: sh
 
    conda install -c conda-forge fsspec
 
