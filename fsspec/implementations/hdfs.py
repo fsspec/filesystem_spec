@@ -1,7 +1,9 @@
 import weakref
+
+from pyarrow.hdfs import HadoopFileSystem
+
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
-from pyarrow.hdfs import HadoopFileSystem
 
 
 class PyArrowHDFS(AbstractFileSystem):
@@ -11,17 +13,17 @@ class PyArrowHDFS(AbstractFileSystem):
     passes on all calls to the underlying class.
     """
 
-    protocol = "hdfs"
+    protocol = 'hdfs'
 
     def __init__(
         self,
-        host="default",
+        host='default',
         port=0,
         user=None,
         kerb_ticket=None,
-        driver="libhdfs",
+        driver='libhdfs',
         extra_conf=None,
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -58,11 +60,11 @@ class PyArrowHDFS(AbstractFileSystem):
     def _open(
         self,
         path,
-        mode="rb",
+        mode='rb',
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -90,7 +92,7 @@ class PyArrowHDFS(AbstractFileSystem):
             block_size=block_size,
             autocommit=autocommit,
             cache_options=cache_options,
-            **kwargs
+            **kwargs,
         )
 
     def __reduce_ex__(self, protocol):
@@ -100,8 +102,8 @@ class PyArrowHDFS(AbstractFileSystem):
         out = self.pahdfs.ls(path, detail)
         if detail:
             for p in out:
-                p["type"] = p["kind"]
-                p["name"] = self._strip_protocol(p["name"])
+                p['type'] = p['kind']
+                p['name'] = self._strip_protocol(p['name'])
         else:
             out = [self._strip_protocol(p) for p in out]
         return out
@@ -110,12 +112,12 @@ class PyArrowHDFS(AbstractFileSystem):
     def _get_kwargs_from_urls(path):
         ops = infer_storage_options(path)
         out = {}
-        if ops.get("host", None):
-            out["host"] = ops["host"]
-        if ops.get("username", None):
-            out["user"] = ops["username"]
-        if ops.get("port", None):
-            out["port"] = ops["port"]
+        if ops.get('host', None):
+            out['host'] = ops['host']
+        if ops.get('username', None):
+            out['user'] = ops['username']
+        if ops.get('port', None):
+            out['port'] = ops['port']
         return out
 
     def close(self):
@@ -124,58 +126,58 @@ class PyArrowHDFS(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         ops = infer_storage_options(path)
-        return ops["path"]
+        return ops['path']
 
     def __getattribute__(self, item):
         if item in [
-            "_open",
-            "close",
-            "__init__",
-            "__getattribute__",
-            "__reduce_ex__",
-            "open",
-            "ls",
-            "makedirs",
+            '_open',
+            'close',
+            '__init__',
+            '__getattribute__',
+            '__reduce_ex__',
+            'open',
+            'ls',
+            'makedirs',
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(PyArrowHDFS, item)(self, *args, **kw)
-        if item == "__class__":
+        if item == '__class__':
             return PyArrowHDFS
-        d = object.__getattribute__(self, "__dict__")
-        pahdfs = d.get("pahdfs", None)  # fs is not immediately defined
+        d = object.__getattribute__(self, '__dict__')
+        pahdfs = d.get('pahdfs', None)  # fs is not immediately defined
         if pahdfs is not None and item in [
-            "chmod",
-            "chown",
-            "user",
-            "df",
-            "disk_usage",
-            "download",
-            "driver",
-            "exists",
-            "extra_conf",
-            "get_capacity",
-            "get_space_used",
-            "host",
-            "is_open",
-            "kerb_ticket",
-            "strip_protocol",
-            "mkdir",
-            "mv",
-            "port",
-            "get_capacity",
-            "get_space_used",
-            "df",
-            "chmod",
-            "chown",
-            "disk_usage",
-            "download",
-            "upload",
-            "_get_kwargs_from_urls",
-            "read_parquet",
-            "rm",
-            "stat",
-            "upload",
+            'chmod',
+            'chown',
+            'user',
+            'df',
+            'disk_usage',
+            'download',
+            'driver',
+            'exists',
+            'extra_conf',
+            'get_capacity',
+            'get_space_used',
+            'host',
+            'is_open',
+            'kerb_ticket',
+            'strip_protocol',
+            'mkdir',
+            'mv',
+            'port',
+            'get_capacity',
+            'get_space_used',
+            'df',
+            'chmod',
+            'chown',
+            'disk_usage',
+            'download',
+            'upload',
+            '_get_kwargs_from_urls',
+            'read_parquet',
+            'rm',
+            'stat',
+            'upload',
         ]:
             return getattr(pahdfs, item)
         else:
@@ -196,9 +198,9 @@ class HDFSFile(object):
         mode,
         block_size,
         autocommit=True,
-        cache_type="readahead",
+        cache_type='readahead',
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         # TODO: Inherit from AbstractBufferedFile?
         if not autocommit:

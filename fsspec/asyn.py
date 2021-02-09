@@ -1,26 +1,26 @@
 import asyncio
 import functools
 import inspect
-import re
 import os
+import re
 import sys
 import threading
 
-from .utils import other_paths, is_exception
 from .spec import AbstractFileSystem
+from .utils import is_exception, other_paths
 
 # this global variable holds whether this thread is running async or not
 thread_state = threading.local()
-private = re.compile("_[^_]")
+private = re.compile('_[^_]')
 
 
 def _run_until_done(coro):
     """execute coroutine, when already in the event loop"""
     if sys.version_info < (3, 7):  # pragma: no cover
         raise RuntimeError(
-            "async file systems do not work completely on py<37. "
-            "The nested call currently underway cannot be processed. "
-            "Please downgrade your fsspec or upgrade python."
+            'async file systems do not work completely on py<37. '
+            'The nested call currently underway cannot be processed. '
+            'Please downgrade your fsspec or upgrade python.'
         )
     loop = asyncio.get_event_loop()
     task = asyncio.current_task()
@@ -46,7 +46,7 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
     async def f():
         try:
             if main_tid == threading.get_ident():
-                raise RuntimeError("sync() called from thread of running loop")
+                raise RuntimeError('sync() called from thread of running loop')
             await asyncio.sleep(0)
             thread_state.asynchronous = True
             future = func(*args, **kwargs)
@@ -62,7 +62,7 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
     asyncio.run_coroutine_threadsafe(f(), loop=loop)
     if callback_timeout is not None:
         if not e.wait(callback_timeout):
-            raise TimeoutError("timed out after %s s." % (callback_timeout,))
+            raise TimeoutError('timed out after %s s.' % (callback_timeout,))
     else:
         while not e.is_set():
             e.wait(10)
@@ -85,8 +85,8 @@ def maybe_sync(func, self, *args, **kwargs):
     # second condition below triggers if this is running in the thread of the
     # event loop *during* the call to sync(), i.e., while running
     # asynchronously
-    if getattr(self, "asynchronous", False) or getattr(
-        thread_state, "asynchronous", False
+    if getattr(self, 'asynchronous', False) or getattr(
+        thread_state, 'asynchronous', False
     ):
         if inspect.iscoroutinefunction(func):
             # run coroutine while pausing this one (because we are within async)
@@ -144,27 +144,27 @@ def get_loop():
 
 # these methods should be implemented as async by any async-able backend
 async_methods = [
-    "_ls",
-    "_cat_file",
-    "_get_file",
-    "_put_file",
-    "_rm_file",
-    "_cp_file",
-    "_pipe_file",
+    '_ls',
+    '_cat_file',
+    '_get_file',
+    '_put_file',
+    '_rm_file',
+    '_cp_file',
+    '_pipe_file',
 ]
 # these methods could be overridden, but have default sync versions which rely on _ls
 # the sync methods below all call expand_path, which in turn may call walk or glob
 # (if passed paths with glob characters, or for recursive=True, respectively)
 default_async_methods = [
-    "_expand_path",
-    "_info",
-    "_isfile",
-    "_isdir",
-    "_exists",
-    "_walk",
-    "_glob",
-    "_find",
-    "_du",
+    '_expand_path',
+    '_info',
+    '_isfile',
+    '_isdir',
+    '_exists',
+    '_walk',
+    '_glob',
+    '_find',
+    '_du',
 ]
 
 
@@ -198,23 +198,23 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _copy(self, paths, path2, **kwargs):
         return await asyncio.gather(
             *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
     def copy(
         self, path1, path2, recursive=False, on_error=None, maxdepth=None, **kwargs
     ):
         if on_error is None and recursive:
-            on_error = "ignore"
+            on_error = 'ignore'
         elif on_error is None:
-            on_error = "raise"
+            on_error = 'raise'
 
         paths = self.expand_path(path1, maxdepth=maxdepth, recursive=recursive)
         path2 = other_paths(paths, path2)
         result = maybe_sync(self._copy, self, paths, path2, **kwargs)
 
         for ex in filter(is_exception, result):
-            if on_error == "ignore" and isinstance(ex, FileNotFoundError):
+            if on_error == 'ignore' and isinstance(ex, FileNotFoundError):
                 continue
             raise ex
 
@@ -231,13 +231,13 @@ class AsyncFileSystem(AbstractFileSystem):
                 asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop)
                 for path in paths
             ],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
-    def cat(self, path, recursive=False, on_error="raise", **kwargs):
+    def cat(self, path, recursive=False, on_error='raise', **kwargs):
         paths = self.expand_path(path, recursive=recursive)
         out = maybe_sync(self._cat, self, paths, **kwargs)
-        if on_error == "raise":
+        if on_error == 'raise':
             ex = next(filter(is_exception, out), False)
             if ex:
                 raise ex
@@ -249,7 +249,7 @@ class AsyncFileSystem(AbstractFileSystem):
             return {
                 k: v
                 for k, v in zip(paths, out)
-                if on_error != "omit" or not is_exception(v)
+                if on_error != 'omit' or not is_exception(v)
             }
         else:
             return out[0]
@@ -263,7 +263,7 @@ class AsyncFileSystem(AbstractFileSystem):
         )
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
-        from .implementations.local import make_path_posix, LocalFileSystem
+        from .implementations.local import LocalFileSystem, make_path_posix
 
         rpath = self._strip_protocol(rpath)
         if isinstance(lpath, str):
@@ -310,19 +310,19 @@ def mirror_sync_methods(obj):
     from fsspec import AbstractFileSystem
 
     for method in async_methods + default_async_methods + dir(AsyncFileSystem):
-        if not method.startswith("_"):
+        if not method.startswith('_'):
             continue
         smethod = method[1:]
         if private.match(method):
             isco = inspect.iscoroutinefunction(getattr(obj, method, None))
-            unsync = getattr(getattr(obj, smethod, False), "__func__", None)
-            is_default = unsync is getattr(AbstractFileSystem, smethod, "")
+            unsync = getattr(getattr(obj, smethod, False), '__func__', None)
+            is_default = unsync is getattr(AbstractFileSystem, smethod, '')
             if isco and is_default:
                 mth = sync_wrapper(getattr(obj, method), obj=obj)
                 setattr(obj, smethod, mth)
                 if not mth.__doc__:
                     mth.__doc__ = getattr(
-                        getattr(AbstractFileSystem, smethod, None), "__doc__", ""
+                        getattr(AbstractFileSystem, smethod, None), '__doc__', ''
                     )
             elif (
                 hasattr(obj, smethod)

@@ -1,5 +1,6 @@
 import array
 from collections.abc import MutableMapping
+
 from .core import url_to_fs
 
 
@@ -19,22 +20,22 @@ class FSMap(MutableMapping):
 
     Examples
     --------
-    >>> fs = FileSystem(**parameters) # doctest: +SKIP
-    >>> d = FSMap('my-data/path/', fs) # doctest: +SKIP
+    >>> fs = FileSystem(**parameters)  # doctest: +SKIP
+    >>> d = FSMap('my-data/path/', fs)  # doctest: +SKIP
     or, more likely
     >>> d = fs.get_mapper('my-data/path/')
 
-    >>> d['loc1'] = b'Hello World' # doctest: +SKIP
-    >>> list(d.keys()) # doctest: +SKIP
+    >>> d['loc1'] = b'Hello World'  # doctest: +SKIP
+    >>> list(d.keys())  # doctest: +SKIP
     ['loc1']
-    >>> d['loc1'] # doctest: +SKIP
+    >>> d['loc1']  # doctest: +SKIP
     b'Hello World'
     """
 
     def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
         self.fs = fs
         self.root = fs._strip_protocol(root).rstrip(
-            "/"
+            '/'
         )  # we join on '/' in _key_to_str
         if missing_exceptions is None:
             missing_exceptions = (
@@ -49,11 +50,11 @@ class FSMap(MutableMapping):
         if check:
             if not self.fs.exists(root):
                 raise ValueError(
-                    "Path %s does not exist. Create "
-                    " with the ``create=True`` keyword" % root
+                    'Path %s does not exist. Create '
+                    ' with the ``create=True`` keyword' % root
                 )
-            self.fs.touch(root + "/a")
-            self.fs.rm(root + "/a")
+            self.fs.touch(root + '/a')
+            self.fs.rm(root + '/a')
 
     def clear(self):
         """Remove all keys below root - empties out mapping"""
@@ -63,7 +64,7 @@ class FSMap(MutableMapping):
         except:  # noqa: E722
             pass
 
-    def getitems(self, keys, on_error="raise"):
+    def getitems(self, keys, on_error='raise'):
         """Fetch multiple items from the store
 
         If the backend is async-able, this might proceed concurrently
@@ -84,7 +85,7 @@ class FSMap(MutableMapping):
         dict(key, bytes|exception)
         """
         keys2 = [self._key_to_str(k) for k in keys]
-        oe = on_error if on_error == "raise" else "return"
+        oe = on_error if on_error == 'raise' else 'return'
         try:
             out = self.fs.cat(keys2, on_error=oe)
         except self.missing_exceptions as e:
@@ -96,7 +97,7 @@ class FSMap(MutableMapping):
         return {
             key: out[k2]
             for key, k2 in zip(keys, keys2)
-            if on_error == "return" or not isinstance(out[k2], BaseException)
+            if on_error == 'return' or not isinstance(out[k2], BaseException)
         }
 
     def setitems(self, values_dict):
@@ -119,11 +120,11 @@ class FSMap(MutableMapping):
             key = str(tuple(key))
         else:
             key = str(key)
-        return "/".join([self.root, key]) if self.root else key
+        return '/'.join([self.root, key]) if self.root else key
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
-        return s[len(self.root) :].lstrip("/")
+        return s[len(self.root) :].lstrip('/')
 
     def __getitem__(self, key, default=None):
         """Retrieve data"""
@@ -173,7 +174,7 @@ class FSMap(MutableMapping):
 
 
 def maybe_convert(value):
-    if isinstance(value, array.array) or hasattr(value, "__array__"):
+    if isinstance(value, array.array) or hasattr(value, '__array__'):
         # bytes-like things
         value = bytearray(memoryview(value))
     return value

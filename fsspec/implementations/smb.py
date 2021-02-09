@@ -4,9 +4,9 @@ This module contains SMBFileSystem class responsible for handling access to
 Windows Samba network shares by using package smbprotocol
 """
 
-from stat import S_ISDIR, S_ISLNK
 import datetime
 import uuid
+from stat import S_ISDIR, S_ISLNK
 
 import smbclient
 
@@ -25,8 +25,9 @@ class SMBFileSystem(AbstractFileSystem):
 
     Example::
         >>> import fsspec
-        >>> with fsspec.open('smb://myuser:mypassword@myserver.com/'
-        ...                  'share/folder/file.csv') as smbfile:
+        >>> with fsspec.open(
+        ...     'smb://myuser:mypassword@myserver.com/' 'share/folder/file.csv'
+        ... ) as smbfile:
         ...     df = pd.read_csv(smbfile, sep='|', header=None)
 
     Note that you need to pass in a valid hostname or IP address for the host
@@ -54,7 +55,7 @@ class SMBFileSystem(AbstractFileSystem):
     to be absolute.
     """
 
-    protocol = "smb"
+    protocol = 'smb'
 
     # pylint: disable=too-many-arguments
     def __init__(
@@ -65,7 +66,7 @@ class SMBFileSystem(AbstractFileSystem):
         password=None,
         timeout=60,
         encrypt=None,
-        **kwargs
+        **kwargs,
     ):
         """
         You can use _get_kwargs_from_urls to get some kwargs from
@@ -97,7 +98,7 @@ class SMBFileSystem(AbstractFileSystem):
         self.password = password
         self.timeout = timeout
         self.encrypt = encrypt
-        self.temppath = kwargs.pop("temppath", "")
+        self.temppath = kwargs.pop('temppath', '')
         self._connect()
 
     def _connect(self):
@@ -112,14 +113,14 @@ class SMBFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        return infer_storage_options(path)["path"]
+        return infer_storage_options(path)['path']
 
     @staticmethod
     def _get_kwargs_from_urls(path):
         # smb://workgroup;user:password@host:port/share/folder/file.csv
         out = infer_storage_options(path)
-        out.pop("path", None)
-        out.pop("protocol", None)
+        out.pop('path', None)
+        out.pop('protocol', None)
         return out
 
     def mkdir(self, path, create_parents=True, **kwargs):
@@ -143,19 +144,19 @@ class SMBFileSystem(AbstractFileSystem):
         wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath, **kwargs)
         if S_ISDIR(stats.st_mode):
-            stype = "directory"
+            stype = 'directory'
         elif S_ISLNK(stats.st_mode):
-            stype = "link"
+            stype = 'link'
         else:
-            stype = "file"
+            stype = 'file'
         res = {
-            "name": path + "/" if stype == "directory" else path,
-            "size": stats.st_size,
-            "type": stype,
-            "uid": stats.st_uid,
-            "gid": stats.st_gid,
-            "time": stats.st_atime,
-            "mtime": stats.st_mtime,
+            'name': path + '/' if stype == 'directory' else path,
+            'size': stats.st_size,
+            'type': stype,
+            'uid': stats.st_uid,
+            'gid': stats.st_gid,
+            'time': stats.st_atime,
+            'mtime': stats.st_mtime,
         }
         return res
 
@@ -174,7 +175,7 @@ class SMBFileSystem(AbstractFileSystem):
     def ls(self, path, detail=True, **kwargs):
         unc = _as_unc_path(self.host, path)
         listed = smbclient.listdir(unc, **kwargs)
-        dirs = ["/".join([path.rstrip("/"), p]) for p in listed]
+        dirs = ['/'.join([path.rstrip('/'), p]) for p in listed]
         if detail:
             dirs = [self.info(d) for d in dirs]
         return dirs
@@ -183,11 +184,11 @@ class SMBFileSystem(AbstractFileSystem):
     def _open(
         self,
         path,
-        mode="rb",
+        mode='rb',
         block_size=-1,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """
         block_size: int or None
@@ -195,7 +196,7 @@ class SMBFileSystem(AbstractFileSystem):
         """
         bls = block_size if block_size is not None and block_size >= 0 else -1
         wpath = _as_unc_path(self.host, path)
-        if "w" in mode and autocommit is False:
+        if 'w' in mode and autocommit is False:
             temp = _as_temp_path(self.host, path, self.temppath)
             return SMBFileOpener(wpath, temp, mode, block_size=bls, **kwargs)
         return smbclient.open_file(wpath, mode, buffering=bls, **kwargs)
@@ -222,21 +223,21 @@ class SMBFileSystem(AbstractFileSystem):
 
 
 def _as_unc_path(host, path):
-    rpath = path.replace("/", "\\")
-    unc = "\\\\{}{}".format(host, rpath)
+    rpath = path.replace('/', '\\')
+    unc = '\\\\{}{}'.format(host, rpath)
     return unc
 
 
 def _as_temp_path(host, path, temppath):
-    share = path.split("/")[1]
-    temp_file = "/{}{}/{}".format(share, temppath, uuid.uuid4())
+    share = path.split('/')[1]
+    temp_file = '/{}{}/{}'.format(share, temppath, uuid.uuid4())
     unc = _as_unc_path(host, temp_file)
     return unc
 
 
 def _share_has_path(path):
-    parts = path.count("/")
-    if path.endswith("/"):
+    parts = path.count('/')
+    if path.endswith('/'):
         return parts > 2
     return parts > 1
 

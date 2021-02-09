@@ -7,63 +7,63 @@ import pytest
 import fsspec
 from fsspec.implementations.ftp import FTPFileSystem
 from fsspec.implementations.http import HTTPFileSystem
-from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
+from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
 
 class DummyTestFS(AbstractFileSystem):
-    protocol = "mock"
+    protocol = 'mock'
     _fs_contents = (
-        {"name": "top_level", "type": "directory"},
-        {"name": "top_level/second_level", "type": "directory"},
-        {"name": "top_level/second_level/date=2019-10-01", "type": "directory"},
+        {'name': 'top_level', 'type': 'directory'},
+        {'name': 'top_level/second_level', 'type': 'directory'},
+        {'name': 'top_level/second_level/date=2019-10-01', 'type': 'directory'},
         {
-            "name": "top_level/second_level/date=2019-10-01/a.parquet",
-            "type": "file",
-            "size": 100,
+            'name': 'top_level/second_level/date=2019-10-01/a.parquet',
+            'type': 'file',
+            'size': 100,
         },
         {
-            "name": "top_level/second_level/date=2019-10-01/b.parquet",
-            "type": "file",
-            "size": 100,
+            'name': 'top_level/second_level/date=2019-10-01/b.parquet',
+            'type': 'file',
+            'size': 100,
         },
-        {"name": "top_level/second_level/date=2019-10-02", "type": "directory"},
+        {'name': 'top_level/second_level/date=2019-10-02', 'type': 'directory'},
         {
-            "name": "top_level/second_level/date=2019-10-02/a.parquet",
-            "type": "file",
-            "size": 100,
+            'name': 'top_level/second_level/date=2019-10-02/a.parquet',
+            'type': 'file',
+            'size': 100,
         },
-        {"name": "top_level/second_level/date=2019-10-04", "type": "directory"},
+        {'name': 'top_level/second_level/date=2019-10-04', 'type': 'directory'},
         {
-            "name": "top_level/second_level/date=2019-10-04/a.parquet",
-            "type": "file",
-            "size": 100,
+            'name': 'top_level/second_level/date=2019-10-04/a.parquet',
+            'type': 'file',
+            'size': 100,
         },
-        {"name": "misc", "type": "directory"},
-        {"name": "misc/foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test", "type": "directory", "size": 0},
-        {"name": "glob_test/hat", "type": "directory", "size": 0},
-        {"name": "glob_test/hat/^foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test/dollar", "type": "directory", "size": 0},
-        {"name": "glob_test/dollar/$foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test/lbrace", "type": "directory", "size": 0},
-        {"name": "glob_test/lbrace/{foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test/rbrace", "type": "directory", "size": 0},
-        {"name": "glob_test/rbrace/}foo.txt", "type": "file", "size": 100},
+        {'name': 'misc', 'type': 'directory'},
+        {'name': 'misc/foo.txt', 'type': 'file', 'size': 100},
+        {'name': 'glob_test', 'type': 'directory', 'size': 0},
+        {'name': 'glob_test/hat', 'type': 'directory', 'size': 0},
+        {'name': 'glob_test/hat/^foo.txt', 'type': 'file', 'size': 100},
+        {'name': 'glob_test/dollar', 'type': 'directory', 'size': 0},
+        {'name': 'glob_test/dollar/$foo.txt', 'type': 'file', 'size': 100},
+        {'name': 'glob_test/lbrace', 'type': 'directory', 'size': 0},
+        {'name': 'glob_test/lbrace/{foo.txt', 'type': 'file', 'size': 100},
+        {'name': 'glob_test/rbrace', 'type': 'directory', 'size': 0},
+        {'name': 'glob_test/rbrace/}foo.txt', 'type': 'file', 'size': 100},
     )
 
     def __getitem__(self, name):
         for item in self._fs_contents:
-            if item["name"] == name:
+            if item['name'] == name:
                 return item
-        raise IndexError("{name} not found!".format(name=name))
+        raise IndexError('{name} not found!'.format(name=name))
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
 
         files = {
-            file["name"]: file
+            file['name']: file
             for file in self._fs_contents
-            if path == self._parent(file["name"])
+            if path == self._parent(file['name'])
         }
 
         if detail:
@@ -72,60 +72,60 @@ class DummyTestFS(AbstractFileSystem):
         return list(sorted(files))
 
     @classmethod
-    def get_test_paths(cls, start_with=""):
+    def get_test_paths(cls, start_with=''):
         """Helper to return directory and file paths with no details"""
         all = [
-            file["name"]
+            file['name']
             for file in cls._fs_contents
-            if file["name"].startswith(start_with)
+            if file['name'].startswith(start_with)
         ]
         return all
 
 
 @pytest.mark.parametrize(
-    "test_path, expected",
+    'test_path, expected',
     [
         (
-            "mock://top_level/second_level/date=2019-10-01/a.parquet",
-            ["top_level/second_level/date=2019-10-01/a.parquet"],
+            'mock://top_level/second_level/date=2019-10-01/a.parquet',
+            ['top_level/second_level/date=2019-10-01/a.parquet'],
         ),
         (
-            "mock://top_level/second_level/date=2019-10-01/*",
+            'mock://top_level/second_level/date=2019-10-01/*',
             [
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-01/b.parquet",
+                'top_level/second_level/date=2019-10-01/a.parquet',
+                'top_level/second_level/date=2019-10-01/b.parquet',
             ],
         ),
-        ("mock://top_level/second_level/date=2019-10", []),
+        ('mock://top_level/second_level/date=2019-10', []),
         (
-            "mock://top_level/second_level/date=2019-10-0[1-4]",
+            'mock://top_level/second_level/date=2019-10-0[1-4]',
             [
-                "top_level/second_level/date=2019-10-01",
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-04",
-            ],
-        ),
-        (
-            "mock://top_level/second_level/date=2019-10-0[1-4]/*",
-            [
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-01/b.parquet",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-                "top_level/second_level/date=2019-10-04/a.parquet",
+                'top_level/second_level/date=2019-10-01',
+                'top_level/second_level/date=2019-10-02',
+                'top_level/second_level/date=2019-10-04',
             ],
         ),
         (
-            "mock://top_level/second_level/date=2019-10-0[1-4]/[a].*",
+            'mock://top_level/second_level/date=2019-10-0[1-4]/*',
             [
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-                "top_level/second_level/date=2019-10-04/a.parquet",
+                'top_level/second_level/date=2019-10-01/a.parquet',
+                'top_level/second_level/date=2019-10-01/b.parquet',
+                'top_level/second_level/date=2019-10-02/a.parquet',
+                'top_level/second_level/date=2019-10-04/a.parquet',
             ],
         ),
-        ("mock://glob_test/hat/^foo.*", ["glob_test/hat/^foo.txt"]),
-        ("mock://glob_test/dollar/$foo.*", ["glob_test/dollar/$foo.txt"]),
-        ("mock://glob_test/lbrace/{foo.*", ["glob_test/lbrace/{foo.txt"]),
-        ("mock://glob_test/rbrace/}foo.*", ["glob_test/rbrace/}foo.txt"]),
+        (
+            'mock://top_level/second_level/date=2019-10-0[1-4]/[a].*',
+            [
+                'top_level/second_level/date=2019-10-01/a.parquet',
+                'top_level/second_level/date=2019-10-02/a.parquet',
+                'top_level/second_level/date=2019-10-04/a.parquet',
+            ],
+        ),
+        ('mock://glob_test/hat/^foo.*', ['glob_test/hat/^foo.txt']),
+        ('mock://glob_test/dollar/$foo.*', ['glob_test/dollar/$foo.txt']),
+        ('mock://glob_test/lbrace/{foo.*', ['glob_test/lbrace/{foo.txt']),
+        ('mock://glob_test/rbrace/}foo.*', ['glob_test/rbrace/}foo.txt']),
     ],
 )
 def test_glob(test_path, expected):
@@ -141,24 +141,24 @@ def test_glob(test_path, expected):
 
 
 @pytest.mark.parametrize(
-    ["test_paths", "expected"],
+    ['test_paths', 'expected'],
     [
         (
-            ("top_level/second_level", "top_level/sec*", "top_level/*"),
+            ('top_level/second_level', 'top_level/sec*', 'top_level/*'),
             [
-                "top_level/second_level",
-                "top_level/second_level/date=2019-10-01",
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-01/b.parquet",
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-                "top_level/second_level/date=2019-10-04",
-                "top_level/second_level/date=2019-10-04/a.parquet",
+                'top_level/second_level',
+                'top_level/second_level/date=2019-10-01',
+                'top_level/second_level/date=2019-10-01/a.parquet',
+                'top_level/second_level/date=2019-10-01/b.parquet',
+                'top_level/second_level/date=2019-10-02',
+                'top_level/second_level/date=2019-10-02/a.parquet',
+                'top_level/second_level/date=2019-10-04',
+                'top_level/second_level/date=2019-10-04/a.parquet',
             ],
         ),
-        (("misc/foo.txt", "misc/*.txt"), ["misc/foo.txt"]),
+        (('misc/foo.txt', 'misc/*.txt'), ['misc/foo.txt']),
         (
-            ("",),
+            ('',),
             DummyTestFS.get_test_paths() + [DummyTestFS.root_marker],
         ),
     ],
@@ -180,49 +180,51 @@ def test_expand_path_recursive(test_paths, expected):
 
 
 @pytest.mark.parametrize(
-    ["filesystem", "host", "test_path", "expected"],
+    ['filesystem', 'host', 'test_path', 'expected'],
     [
         (
             FTPFileSystem,
-            "ftp.fau.de",
-            "ftp://ftp.fau.de/debian-cd/current/amd64/log/success",
+            'ftp.fau.de',
+            'ftp://ftp.fau.de/debian-cd/current/amd64/log/success',
             [
-                "/debian-cd/current/amd64/log/success/BD.log",
-                "/debian-cd/current/amd64/log/success/DLBD.log",
-                "/debian-cd/current/amd64/log/success/DVD.log",
-                "/debian-cd/current/amd64/log/success/EDUNI.log",
-                "/debian-cd/current/amd64/log/success/EDUUSB.log",
-                "/debian-cd/current/amd64/log/success/MACNI.log",
-                "/debian-cd/current/amd64/log/success/NI.log",
-                "/debian-cd/current/amd64/log/success/USB16G.log",
-                "/debian-cd/current/amd64/log/success/XFCECD.log",
+                '/debian-cd/current/amd64/log/success/BD.log',
+                '/debian-cd/current/amd64/log/success/DLBD.log',
+                '/debian-cd/current/amd64/log/success/DVD.log',
+                '/debian-cd/current/amd64/log/success/EDUNI.log',
+                '/debian-cd/current/amd64/log/success/EDUUSB.log',
+                '/debian-cd/current/amd64/log/success/MACNI.log',
+                '/debian-cd/current/amd64/log/success/NI.log',
+                '/debian-cd/current/amd64/log/success/USB16G.log',
+                '/debian-cd/current/amd64/log/success/XFCECD.log',
             ],
         ),
         (
             HTTPFileSystem,
-            "https://ftp.fau.de",
-            "https://ftp.fau.de/debian-cd/current/amd64/log/success",
+            'https://ftp.fau.de',
+            'https://ftp.fau.de/debian-cd/current/amd64/log/success',
             [
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=D;O=A",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=M;O=A",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=N;O=D",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=S;O=A",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/BD.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/DLBD.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/DVD.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/EDUNI.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/EDUUSB.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/MACNI.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/NI.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/USB16G.log",
-                "https://ftp.fau.de/debian-cd/current/amd64/log/success/XFCECD.log",
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=D;O=A',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=M;O=A',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=N;O=D',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/?C=S;O=A',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/BD.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/DLBD.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/DVD.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/EDUNI.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/EDUUSB.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/MACNI.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/NI.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/USB16G.log',
+                'https://ftp.fau.de/debian-cd/current/amd64/log/success/XFCECD.log',
             ],
         ),
     ],
 )
 def test_find(filesystem, host, test_path, expected):
-    """ Test .find() method on debian server (available as ftp and https) with constant folder """
+    """Test .find() method on debian server (available as ftp and https)
+    with constant folder
+    """
     test_fs = filesystem(host)
 
     filenames = test_fs.find(test_path)
@@ -232,8 +234,8 @@ def test_find(filesystem, host, test_path, expected):
 
 def test_find_details():
     test_fs = DummyTestFS()
-    filenames = test_fs.find("/")
-    details = test_fs.find("/", detail=True)
+    filenames = test_fs.find('/')
+    details = test_fs.find('/', detail=True)
     for filename in filenames:
         assert details[filename] == test_fs.info(filename)
 
@@ -254,34 +256,34 @@ def test_cache():
 
 
 def test_alias():
-    with pytest.warns(FutureWarning, match="add_aliases"):
+    with pytest.warns(FutureWarning, match='add_aliases'):
         DummyTestFS(add_aliases=True)
 
 
 def test_add_docs_warns():
-    with pytest.warns(FutureWarning, match="add_docs"):
+    with pytest.warns(FutureWarning, match='add_docs'):
         AbstractFileSystem(add_docs=True)
 
 
 def test_cache_options():
     fs = DummyTestFS()
-    f = AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes")
+    f = AbstractBufferedFile(fs, 'misc/foo.txt', cache_type='bytes')
     assert f.cache.trim
 
     # TODO: dummy buffered file
     f = AbstractBufferedFile(
-        fs, "misc/foo.txt", cache_type="bytes", cache_options=dict(trim=False)
+        fs, 'misc/foo.txt', cache_type='bytes', cache_options=dict(trim=False)
     )
     assert f.cache.trim is False
 
-    f = fs.open("misc/foo.txt", cache_type="bytes", cache_options=dict(trim=False))
+    f = fs.open('misc/foo.txt', cache_type='bytes', cache_options=dict(trim=False))
     assert f.cache.trim is False
 
 
 def test_trim_kwarg_warns():
     fs = DummyTestFS()
-    with pytest.warns(FutureWarning, match="cache_options"):
-        AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes", trim=False)
+    with pytest.warns(FutureWarning, match='cache_options'):
+        AbstractBufferedFile(fs, 'misc/foo.txt', cache_type='bytes', trim=False)
 
 
 def test_eq():
@@ -318,14 +320,14 @@ def test_json():
 
     assert json.loads(outb)  # is valid JSON
     assert a != b
-    assert "bar" in outb
+    assert 'bar' in outb
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
 
 
 @pytest.mark.parametrize(
-    "dt",
+    'dt',
     [
         np.int8,
         np.int16,
@@ -340,19 +342,19 @@ def test_json():
     ],
 )
 def test_readinto_with_numpy(tmpdir, dt):
-    store_path = str(tmpdir / "test_arr.npy")
+    store_path = str(tmpdir / 'test_arr.npy')
     arr = np.arange(10, dtype=dt)
     arr.tofile(store_path)
 
     arr2 = np.empty_like(arr)
-    with fsspec.open(store_path, "rb") as f:
+    with fsspec.open(store_path, 'rb') as f:
         f.readinto(arr2)
 
     assert np.array_equal(arr, arr2)
 
 
 @pytest.mark.parametrize(
-    "dt",
+    'dt',
     [
         np.int8,
         np.int16,
@@ -370,11 +372,11 @@ def test_readinto_with_multibyte(ftp_writable, tmpdir, dt):
     host, port, user, pw = ftp_writable
     ftp = FTPFileSystem(host=host, port=port, username=user, password=pw)
 
-    with ftp.open("/out", "wb") as fp:
+    with ftp.open('/out', 'wb') as fp:
         arr = np.arange(10, dtype=dt)
         fp.write(arr.tobytes())
 
-    with ftp.open("/out", "rb") as fp:
+    with ftp.open('/out', 'rb') as fp:
         arr2 = np.empty_like(arr)
         fp.readinto(arr2)
 

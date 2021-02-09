@@ -1,11 +1,10 @@
-from hashlib import sha256
 import math
 import os
 import pathlib
 import re
 import sys
+from hashlib import sha256
 from urllib.parse import urlsplit
-
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
@@ -31,59 +30,60 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
     {"protocol": "file", "path", "/mnt/datasets/test.csv"}
     >>> infer_storage_options(
-    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
-    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
+    ...     'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
+    ...     inherit_storage_options={'extra': 'value'},
+    ... )  # doctest: +SKIP
     {"protocol": "hdfs", "username": "username", "password": "pwd",
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
     """
     # Handle Windows paths including disk name in this special case
     if (
-        re.match(r"^[a-zA-Z]:[\\/]", urlpath)
-        or re.match(r"^[a-zA-Z0-9]+://", urlpath) is None
+        re.match(r'^[a-zA-Z]:[\\/]', urlpath)
+        or re.match(r'^[a-zA-Z0-9]+://', urlpath) is None
     ):
-        return {"protocol": "file", "path": urlpath}
+        return {'protocol': 'file', 'path': urlpath}
 
     parsed_path = urlsplit(urlpath)
-    protocol = parsed_path.scheme or "file"
+    protocol = parsed_path.scheme or 'file'
     if parsed_path.fragment:
-        path = "#".join([parsed_path.path, parsed_path.fragment])
+        path = '#'.join([parsed_path.path, parsed_path.fragment])
     else:
         path = parsed_path.path
-    if protocol == "file":
+    if protocol == 'file':
         # Special case parsing file protocol URL on Windows according to:
         # https://msdn.microsoft.com/en-us/library/jj710207.aspx
-        windows_path = re.match(r"^/([a-zA-Z])[:|]([\\/].*)$", path)
+        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
         if windows_path:
-            path = "%s:%s" % windows_path.groups()
+            path = '%s:%s' % windows_path.groups()
 
-    if protocol in ["http", "https"]:
+    if protocol in ['http', 'https']:
         # for HTTP, we don't want to parse, as requests will anyway
-        return {"protocol": protocol, "path": urlpath}
+        return {'protocol': protocol, 'path': urlpath}
 
-    options = {"protocol": protocol, "path": path}
+    options = {'protocol': protocol, 'path': path}
 
     if parsed_path.netloc:
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
+        options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
 
-        if protocol in ("s3", "gcs", "gs"):
-            options["path"] = options["host"] + options["path"]
+        if protocol in ('s3', 'gcs', 'gs'):
+            options['path'] = options['host'] + options['path']
         else:
-            options["host"] = options["host"]
+            options['host'] = options['host']
         if parsed_path.port:
-            options["port"] = parsed_path.port
+            options['port'] = parsed_path.port
         if parsed_path.username:
-            options["username"] = parsed_path.username
+            options['username'] = parsed_path.username
         if parsed_path.password:
-            options["password"] = parsed_path.password
+            options['password'] = parsed_path.password
 
     if parsed_path.query:
-        options["url_query"] = parsed_path.query
+        options['url_query'] = parsed_path.query
     if parsed_path.fragment:
-        options["url_fragment"] = parsed_path.fragment
+        options['url_fragment'] = parsed_path.fragment
 
     if inherit_storage_options:
         update_storage_options(options, inherit_storage_options)
@@ -96,10 +96,10 @@ def update_storage_options(options, inherited=None):
         inherited = {}
     collisions = set(options) & set(inherited)
     if collisions:
-        collisions = "\n".join("- %r" % k for k in collisions)
+        collisions = '\n'.join('- %r' % k for k in collisions)
         raise KeyError(
-            "Collision between inferred and specified storage "
-            "options:\n%s" % collisions
+            'Collision between inferred and specified storage '
+            'options:\n%s' % collisions
         )
     options.update(inherited)
 
@@ -115,7 +115,7 @@ def infer_compression(filename):
     extension. This includes builtin (gz, bz2, zip) compressions, as well as
     optional compressions. See fsspec.compression.register_compression.
     """
-    extension = os.path.splitext(filename)[-1].strip(".")
+    extension = os.path.splitext(filename)[-1].strip('.')
     if extension in compressions:
         return compressions[extension]
 
@@ -301,7 +301,7 @@ def stringify_path(filepath):
     Any other object is passed through unchanged, which includes bytes,
     strings, buffers, or anything else that's not even path-like.
     """
-    if hasattr(filepath, "__fspath__"):
+    if hasattr(filepath, '__fspath__'):
         return filepath.__fspath__()
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
@@ -316,7 +316,7 @@ def make_instance(cls, args, kwargs):
 
 def common_prefix(paths):
     """For a list of paths, find the shortest prefix common to all"""
-    parts = [p.split("/") for p in paths]
+    parts = [p.split('/') for p in paths]
     lmax = min(len(p) for p in parts)
     end = 0
     for i in range(lmax):
@@ -324,7 +324,7 @@ def common_prefix(paths):
         if not end:
             break
     i += end
-    return "/".join(parts[0][:i])
+    return '/'.join(parts[0][:i])
 
 
 def other_paths(paths, path2, is_dir=None):
@@ -347,14 +347,14 @@ def other_paths(paths, path2, is_dir=None):
     list of str
     """
     if isinstance(path2, str):
-        is_dir = is_dir or path2.endswith("/")
-        path2 = path2.rstrip("/")
+        is_dir = is_dir or path2.endswith('/')
+        path2 = path2.rstrip('/')
         if len(paths) > 1:
             cp = common_prefix(paths)
             path2 = [p.replace(cp, path2, 1) for p in paths]
         else:
             if is_dir:
-                path2 = [path2.rstrip("/") + "/" + paths[0].rsplit("/")[-1]]
+                path2 = [path2.rstrip('/') + '/' + paths[0].rsplit('/')[-1]]
             else:
                 path2 = [path2]
     else:
@@ -367,10 +367,10 @@ def is_exception(obj):
 
 
 def get_protocol(url):
-    parts = re.split(r"(\:\:|\://)", url, 1)
+    parts = re.split(r'(\:\:|\://)', url, 1)
     if len(parts) > 1:
         return parts[0]
-    return "file"
+    return 'file'
 
 
 def can_be_local(path):
@@ -378,13 +378,13 @@ def can_be_local(path):
     from fsspec import get_filesystem_class
 
     try:
-        return getattr(get_filesystem_class(get_protocol(path)), "local_file", False)
+        return getattr(get_filesystem_class(get_protocol(path)), 'local_file', False)
     except (ValueError, ImportError):
         # not in registry or import failed
         return False
 
 
-def setup_logger(logname, level="DEBUG", clear=True):
+def setup_logger(logname, level='DEBUG', clear=True):
     """Add standard logging handler to logger of given name"""
     import logging
 
@@ -393,7 +393,7 @@ def setup_logger(logname, level="DEBUG", clear=True):
         logger.handlers.clear()
     handle = logging.StreamHandler()
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s " "- %(message)s"
+        '%(asctime)s - %(name)s - %(levelname)s ' '- %(message)s'
     )
     handle.setFormatter(formatter)
     logger.addHandler(handle)
@@ -412,7 +412,7 @@ def get_package_version_without_import(name):
     """
     if name in sys.modules:
         mod = sys.modules[name]
-        if hasattr(mod, "__version__"):
+        if hasattr(mod, '__version__'):
             return mod.__version__
     if sys.version_info >= (3, 8):
         try:

@@ -1,6 +1,6 @@
-from functools import lru_cache
 import time
 from collections.abc import MutableMapping
+from functools import lru_cache
 
 
 class DirCache(MutableMapping):
@@ -29,7 +29,7 @@ class DirCache(MutableMapping):
         use_listings_cache=True,
         listings_expiry_time=None,
         max_paths=None,
-        **kwargs
+        **kwargs,
     ):
         """
 

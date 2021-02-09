@@ -1,11 +1,12 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import absolute_import, division, print_function
 
 from contextlib import contextmanager
 
 import libarchive
+
 from fsspec import AbstractFileSystem, open_files
-from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 from fsspec.implementations.memory import MemoryFile
+from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
 
 
 class LibArchiveFileSystem(AbstractFileSystem):
@@ -22,17 +23,17 @@ class LibArchiveFileSystem(AbstractFileSystem):
     This class is pickleable, but not necessarily thread-safe
     """
 
-    root_marker = ""
-    protocol = "libarchive"
+    root_marker = ''
+    protocol = 'libarchive'
 
     def __init__(
         self,
-        fo="",
-        mode="r",
+        fo='',
+        mode='r',
         target_protocol=None,
         target_options=None,
         block_size=DEFAULT_BLOCK_SIZE,
-        **kwargs
+        **kwargs,
     ):
         """
         Parameters
@@ -50,8 +51,8 @@ class LibArchiveFileSystem(AbstractFileSystem):
             a string.
         """
         super().__init__(self, **kwargs)
-        if mode != "r":
-            raise ValueError("Only read from archive files accepted")
+        if mode != 'r':
+            raise ValueError('Only read from archive files accepted')
         if isinstance(fo, str):
             files = open_files(fo, protocol=target_protocol, **(target_options or {}))
             if len(files) != 1:
@@ -74,17 +75,17 @@ class LibArchiveFileSystem(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         # file paths are always relative to the archive root
-        return super()._strip_protocol(path).lstrip("/")
+        return super()._strip_protocol(path).lstrip('/')
 
     def _get_dirs(self):
         fields = {
-            "name": "pathname",
-            "size": "size",
-            "created": "ctime",
-            "mode": "mode",
-            "uid": "uid",
-            "gid": "gid",
-            "mtime": "mtime",
+            'name': 'pathname',
+            'size': 'size',
+            'created': 'ctime',
+            'mode': 'mode',
+            'uid': 'uid',
+            'gid': 'gid',
+            'mtime': 'mtime',
         }
 
         if self.dir_cache is not None:
@@ -100,20 +101,20 @@ class LibArchiveFileSystem(AbstractFileSystem):
                 self.dir_cache.update(
                     {
                         dirname
-                        + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                        + '/': {'name': dirname + '/', 'size': 0, 'type': 'directory'}
                         for dirname in self._all_dirnames(set(entry.name))
                     }
                 )
                 f = {key: getattr(entry, fields[key]) for key in fields}
-                f["type"] = "directory" if entry.isdir else "file"
+                f['type'] = 'directory' if entry.isdir else 'file'
                 list_names.append(entry.name)
 
-                self.dir_cache[f["name"]] = f
+                self.dir_cache[f['name']] = f
         # libarchive does not seem to return an entry for the directories (at least
         # not in all formats), so get the directories names from the files names
         self.dir_cache.update(
             {
-                dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                dirname + '/': {'name': dirname + '/', 'size': 0, 'type': 'directory'}
                 for dirname in self._all_dirnames(list_names)
             }
         )
@@ -123,8 +124,8 @@ class LibArchiveFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         if path in self.dir_cache:
             return self.dir_cache[path]
-        elif path + "/" in self.dir_cache:
-            return self.dir_cache[path + "/"]
+        elif path + '/' in self.dir_cache:
+            return self.dir_cache[path + '/']
         else:
             raise FileNotFoundError(path)
 
@@ -133,39 +134,39 @@ class LibArchiveFileSystem(AbstractFileSystem):
         paths = {}
 
         for p, f in self.dir_cache.items():
-            p = p.rstrip("/")
-            if "/" in p:
-                root = p.rsplit("/", 1)[0]
+            p = p.rstrip('/')
+            if '/' in p:
+                root = p.rsplit('/', 1)[0]
             else:
-                root = ""
-            if root == path.rstrip("/"):
+                root = ''
+            if root == path.rstrip('/'):
                 paths[p] = f
             elif all(
                 (a == b)
-                for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
+                for a, b in zip(path.split('/'), [''] + p.strip('/').split('/'))
             ):
                 # root directory entry
-                ppath = p.rstrip("/").split("/", 1)[0]
+                ppath = p.rstrip('/').split('/', 1)[0]
                 if ppath not in paths:
-                    out = {"name": ppath + "/", "size": 0, "type": "directory"}
+                    out = {'name': ppath + '/', 'size': 0, 'type': 'directory'}
                     paths[ppath] = out
         out = list(paths.values())
         if detail:
             return out
         else:
-            return list(sorted(f["name"] for f in out))
+            return list(sorted(f['name'] for f in out))
 
     def _open(
         self,
         path,
-        mode="rb",
+        mode='rb',
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         path = self._strip_protocol(path)
-        if mode != "rb":
+        if mode != 'rb':
             raise NotImplementedError
 
         data = bytes()

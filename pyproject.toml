@@ -1,5 +1,23 @@
 [tool.black]
-# Revert to py34 target syntax to accomodate
-# errors in trailing commas.
-# https://github.com/psf/black/pull/763
-target_version = ['py36', 'py37', 'py38']
+target_version = ['py37', 'py38']
+line-length = 88
+skip-string-normalization = true
+exclude = '''
+
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+  | fsspec/_version.py
+  | versioneer.py
+)
+'''

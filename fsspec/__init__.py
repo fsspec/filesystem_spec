@@ -19,27 +19,27 @@ from .registry import (
 )
 from .spec import AbstractFileSystem
 
-__version__ = get_versions()["version"]
+__version__ = get_versions()['version']
 del get_versions
 
 
 __all__ = [
-    "AbstractFileSystem",
-    "FSMap",
-    "filesystem",
-    "register_implementation",
-    "get_filesystem_class",
-    "get_fs_token_paths",
-    "get_mapper",
-    "open",
-    "open_files",
-    "open_local",
-    "registry",
-    "caching",
+    'AbstractFileSystem',
+    'FSMap',
+    'filesystem',
+    'register_implementation',
+    'get_filesystem_class',
+    'get_fs_token_paths',
+    'get_mapper',
+    'open',
+    'open_files',
+    'open_local',
+    'registry',
+    'caching',
 ]
 
 if entry_points is not None:
     entry_points = entry_points()
-    for spec in entry_points.get("fsspec.specs", []):
-        err_msg = f"Unable to load filesystem from {spec}"
+    for spec in entry_points.get('fsspec.specs', []):
+        err_msg = f'Unable to load filesystem from {spec}'
         register_implementation(spec.name, spec.module, errtxt=err_msg)

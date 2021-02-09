@@ -1,5 +1,6 @@
-from ftplib import FTP, Error, error_perm
 import uuid
+from ftplib import FTP, Error, error_perm
+
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
 
@@ -7,9 +8,9 @@ from ..utils import infer_storage_options
 class FTPFileSystem(AbstractFileSystem):
     """A filesystem over classic """
 
-    root_marker = "/"
+    root_marker = '/'
     cachable = False
-    protocol = "ftp"
+    protocol = 'ftp'
 
     def __init__(
         self,
@@ -19,9 +20,9 @@ class FTPFileSystem(AbstractFileSystem):
         password=None,
         acct=None,
         block_size=None,
-        tempdir="/tmp",
+        tempdir='/tmp',
         timeout=30,
-        **kwargs
+        **kwargs,
     ):
         """
         You can use _get_kwargs_from_urls to get some kwargs from
@@ -68,13 +69,13 @@ class FTPFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        return "/" + infer_storage_options(path)["path"].lstrip("/").rstrip("/")
+        return '/' + infer_storage_options(path)['path'].lstrip('/').rstrip('/')
 
     @staticmethod
     def _get_kwargs_from_urls(urlpath):
         out = infer_storage_options(urlpath)
-        out.pop("path", None)
-        out.pop("protocol", None)
+        out.pop('path', None)
+        out.pop('protocol', None)
         return out
 
     def ls(self, path, detail=True, **kwargs):
@@ -86,26 +87,26 @@ class FTPFileSystem(AbstractFileSystem):
                     out = [
                         (fn, details)
                         for (fn, details) in self.ftp.mlsd(path)
-                        if fn not in [".", ".."]
-                        and details["type"] not in ["pdir", "cdir"]
+                        if fn not in ['.', '..']
+                        and details['type'] not in ['pdir', 'cdir']
                     ]
                 except error_perm:
                     out = _mlsd2(self.ftp, path)  # Not platform independent
                 for fn, details in out:
-                    if path == "/":
-                        path = ""  # just for forming the names, below
-                    details["name"] = "/".join([path, fn.lstrip("/")])
-                    if details["type"] == "file":
-                        details["size"] = int(details["size"])
+                    if path == '/':
+                        path = ''  # just for forming the names, below
+                    details['name'] = '/'.join([path, fn.lstrip('/')])
+                    if details['type'] == 'file':
+                        details['size'] = int(details['size'])
                     else:
-                        details["size"] = 0
-                    if details["type"] == "dir":
-                        details["type"] = "directory"
+                        details['size'] = 0
+                    if details['type'] == 'dir':
+                        details['type'] = 'directory'
                 self.dircache[path] = out
             except Error:
                 try:
                     info = self.info(path)
-                    if info["type"] == "file":
+                    if info['type'] == 'file':
                         out = [(path, info)]
                 except (Error, IndexError):
                     raise FileNotFoundError
@@ -117,9 +118,9 @@ class FTPFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         # implement with direct method
         path = self._strip_protocol(path)
-        files = self.ls(self._parent(path).lstrip("/"), True)
+        files = self.ls(self._parent(path).lstrip('/'), True)
         try:
-            out = [f for f in files if f["name"] == path][0]
+            out = [f for f in files if f['name'] == path][0]
         except IndexError:
             raise FileNotFoundError(path)
         return out
@@ -127,11 +128,11 @@ class FTPFileSystem(AbstractFileSystem):
     def _open(
         self,
         path,
-        mode="rb",
+        mode='rb',
         block_size=None,
         cache_options=None,
         autocommit=True,
-        **kwargs
+        **kwargs,
     ):
         path = self._strip_protocol(path)
         block_size = block_size or self.blocksize
@@ -191,12 +192,12 @@ class FTPFile(AbstractBufferedFile):
         self,
         fs,
         path,
-        mode="rb",
-        block_size="default",
+        mode='rb',
+        block_size='default',
         autocommit=True,
-        cache_type="readahead",
+        cache_type='readahead',
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             fs,
@@ -206,11 +207,11 @@ class FTPFile(AbstractBufferedFile):
             autocommit=autocommit,
             cache_type=cache_type,
             cache_options=cache_options,
-            **kwargs
+            **kwargs,
         )
         if not autocommit:
             self.target = self.path
-            self.path = "/".join([kwargs["tempdir"], str(uuid.uuid4())])
+            self.path = '/'.join([kwargs['tempdir'], str(uuid.uuid4())])
 
     def commit(self):
         self.fs.mv(self.path, self.target)
@@ -244,7 +245,7 @@ class FTPFile(AbstractBufferedFile):
 
         try:
             self.fs.ftp.retrbinary(
-                "RETR %s" % self.path,
+                'RETR %s' % self.path,
                 blocksize=self.blocksize,
                 rest=start,
                 callback=callback,
@@ -257,17 +258,17 @@ class FTPFile(AbstractBufferedFile):
             except Error:
                 self.fs.ftp._connect()
 
-        return b"".join(out)
+        return b''.join(out)
 
     def _upload_chunk(self, final=False):
         self.buffer.seek(0)
         self.fs.ftp.storbinary(
-            "STOR " + self.path, self.buffer, blocksize=self.blocksize, rest=self.offset
+            'STOR ' + self.path, self.buffer, blocksize=self.blocksize, rest=self.offset
         )
         return True
 
 
-def _mlsd2(ftp, path="."):
+def _mlsd2(ftp, path='.'):
     """
     Fall back to using `dir` instead of `mlsd` if not supported.
 
@@ -288,16 +289,16 @@ def _mlsd2(ftp, path="."):
         this = (
             line[-1],
             {
-                "modify": " ".join(line[5:8]),
-                "unix.owner": line[2],
-                "unix.group": line[3],
-                "unix.mode": line[0],
-                "size": line[4],
+                'modify': ' '.join(line[5:8]),
+                'unix.owner': line[2],
+                'unix.group': line[3],
+                'unix.mode': line[0],
+                'size': line[4],
             },
         )
-        if "d" == this[1]["unix.mode"][0]:
-            this[1]["type"] = "dir"
+        if 'd' == this[1]['unix.mode'][0]:
+            this[1]['type'] = 'dir'
         else:
-            this[1]["type"] = "file"
+            this[1]['type'] = 'file'
         minfo.append(this)
     return minfo

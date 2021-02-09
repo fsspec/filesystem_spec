@@ -1,7 +1,9 @@
 import os
-from fsspec.spec import AbstractFileSystem
-from fsspec.implementations.local import LocalFileSystem
+
 import dvc.repo
+
+from fsspec.implementations.local import LocalFileSystem
+from fsspec.spec import AbstractFileSystem
 
 lfs = LocalFileSystem()
 
@@ -16,7 +18,7 @@ class DVCFileSystem(AbstractFileSystem):
     This interface is incomplete and experimental.
     """
 
-    root_marker = ""
+    root_marker = ''
 
     def __init__(self, path=None, **kwargs):
         """
@@ -32,7 +34,7 @@ class DVCFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        return super()._strip_protocol(path).lstrip("/")
+        return super()._strip_protocol(path).lstrip('/')
 
     def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
@@ -52,22 +54,22 @@ class DVCFileSystem(AbstractFileSystem):
                 except dvc.exceptions.OutputNotFoundError:
                     continue
                 details.append(dict(**extra, **file_info))
-            details[-1]["name"] = f
+            details[-1]['name'] = f
         if detail:
             return details
-        return [d["name"] for d in details]
+        return [d['name'] for d in details]
 
     def ukey(self, path):
-        return self.info(path)["md5"]
+        return self.info(path)['md5']
 
     def _open(
         self,
         path,
-        mode="rb",
+        mode='rb',
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         # returns a context file object (i.e., needs to be used with ``with``
         path = self._strip_protocol(path)

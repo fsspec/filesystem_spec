@@ -1,8 +1,9 @@
-from distributed.worker import get_worker
-from distributed.client import _get_global_client, Client
 import dask
-from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
+from distributed.client import Client, _get_global_client
+from distributed.worker import get_worker
+
 from fsspec import filesystem
+from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 from fsspec.utils import infer_storage_options
 
 
@@ -31,8 +32,8 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
         if not (fs is None) ^ (target_protocol is None):
             raise ValueError(
-                "Please provide one of filesystem instance (fs) or"
-                " target_protocol, not both"
+                'Please provide one of filesystem instance (fs) or'
+                ' target_protocol, not both'
             )
         self.target_protocol = target_protocol
         self.target_options = target_options
@@ -44,8 +45,8 @@ class DaskWorkerFileSystem(AbstractFileSystem):
     @staticmethod
     def _get_kwargs_from_urls(path):
         so = infer_storage_options(path)
-        if "host" in so and "port" in so:
-            return {"client": f"{so['host']}:{so['port']}"}
+        if 'host' in so and 'port' in so:
+            return {'client': f"{so['host']}:{so['port']}"}
         else:
             return {}
 
@@ -95,11 +96,11 @@ class DaskWorkerFileSystem(AbstractFileSystem):
     def _open(
         self,
         path,
-        mode="rb",
+        mode='rb',
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         if self.worker:
             return self.fs._open(
@@ -108,7 +109,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
                 block_size=block_size,
                 autocommit=autocommit,
                 cache_options=cache_options,
-                **kwargs
+                **kwargs,
             )
         else:
             return DaskFile(
@@ -118,7 +119,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
                 block_size=block_size,
                 autocommit=autocommit,
                 cache_options=cache_options,
-                **kwargs
+                **kwargs,
             )
 
     def fetch_range(self, path, mode, start, end):
@@ -131,8 +132,8 @@ class DaskWorkerFileSystem(AbstractFileSystem):
 
 
 class DaskFile(AbstractBufferedFile):
-    def __init__(self, mode="rb", **kwargs):
-        if mode != "rb":
+    def __init__(self, mode='rb', **kwargs):
+        if mode != 'rb':
             raise ValueError('Remote dask files can only be opened in "rb" mode')
         super().__init__(**kwargs)
 

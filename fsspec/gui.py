@@ -1,14 +1,16 @@
-import contextlib
-import panel as pn
-import os
 import ast
+import contextlib
 import logging
+import os
 import re
+
+import panel as pn
+
+from .core import OpenFile, get_filesystem_class, split_protocol
 from .registry import known_implementations
-from .core import split_protocol, get_filesystem_class, OpenFile
 
 pn.extension()
-logger = logging.getLogger("fsspec.gui")
+logger = logging.getLogger('fsspec.gui')
 
 
 class SigSlot(object):
@@ -41,7 +43,7 @@ class SigSlot(object):
         # no signals to set up in the base class
 
     def _register(
-        self, widget, name, thing="value", log_level=logging.DEBUG, auto=False
+        self, widget, name, thing='value', log_level=logging.DEBUG, auto=False
     ):
         """Watch the given attribute of a widget and assign it a named event
 
@@ -65,16 +67,16 @@ class SigSlot(object):
             same name.
         """
         if name not in self.signals:
-            raise ValueError("Attempt to assign an undeclared signal: %s" % name)
+            raise ValueError('Attempt to assign an undeclared signal: %s' % name)
         self._sigs[name] = {
-            "widget": widget,
-            "callbacks": [],
-            "thing": thing,
-            "log": log_level,
+            'widget': widget,
+            'callbacks': [],
+            'thing': thing,
+            'log': log_level,
         }
-        wn = "-".join(
+        wn = '-'.join(
             [
-                getattr(widget, "name", str(widget)) if widget is not None else "none",
+                getattr(widget, 'name', str(widget)) if widget is not None else 'none',
                 thing,
             ]
         )
@@ -89,7 +91,7 @@ class SigSlot(object):
         try:
             return self.panel._repr_mimebundle_(*args, **kwargs)
         except (ValueError, AttributeError):
-            raise NotImplementedError("Panel does not seem to be set " "up properly")
+            raise NotImplementedError('Panel does not seem to be set ' 'up properly')
 
     def connect(self, signal, slot):
         """Associate call back with given event
@@ -101,7 +103,7 @@ class SigSlot(object):
         Alternatively, the callback can be a string, in which case it means
         emitting the correspondingly-named event (i.e., connect to self)
         """
-        self._sigs[signal]["callbacks"].append(slot)
+        self._sigs[signal]['callbacks'].append(slot)
 
     def _signal(self, event):
         """This is called by a an action on a widget
@@ -112,7 +114,7 @@ class SigSlot(object):
         widget components.
         """
         if not self._ignoring_events:
-            wn = "-".join([event.obj.name, event.name])
+            wn = '-'.join([event.obj.name, event.name])
             if wn in self._map and self._map[wn] in self._sigs:
                 self._emit(self._map[wn], event.new)
 
@@ -136,8 +138,8 @@ class SigSlot(object):
 
         Calling of callbacks will halt whenever one returns False.
         """
-        logger.log(self._sigs[sig]["log"], "{}: {}".format(sig, value))
-        for callback in self._sigs[sig]["callbacks"]:
+        logger.log(self._sigs[sig]['log'], '{}: {}'.format(sig, value))
+        for callback in self._sigs[sig]['callbacks']:
             if isinstance(callback, str):
                 self._emit(callback)
             else:
@@ -148,8 +150,8 @@ class SigSlot(object):
                         break
                 except Exception as e:
                     logger.exception(
-                        "Exception (%s) while executing callback for signal: %s"
-                        "" % (e, sig)
+                        'Exception (%s) while executing callback for signal: %s'
+                        '' % (e, sig)
                     )
 
     def show(self, threads=False):
@@ -161,8 +163,8 @@ class SigSlot(object):
 class SingleSelect(SigSlot):
     """A multiselect which only allows you to select one item for an event"""
 
-    signals = ["_selected", "selected"]  # the first is internal
-    slots = ["set_options", "set_selection", "add", "clear", "select"]
+    signals = ['_selected', 'selected']  # the first is internal
+    slots = ['set_options', 'set_selection', 'add', 'clear', 'select']
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -170,9 +172,9 @@ class SingleSelect(SigSlot):
 
     def _setup(self):
         self.panel = pn.widgets.MultiSelect(**self.kwargs)
-        self._register(self.panel, "_selected", "value")
-        self._register(None, "selected")
-        self.connect("_selected", self.select_one)
+        self._register(self.panel, '_selected', 'value')
+        self._register(None, 'selected')
+        self.connect('_selected', self.select_one)
 
     def _signal(self, *args, **kwargs):
         super()._signal(*args, **kwargs)
@@ -181,7 +183,7 @@ class SingleSelect(SigSlot):
         with self.ignore_events():
             val = [self.panel.value[-1]] if self.panel.value else []
             self.panel.value = val
-        self._emit("selected", self.panel.value)
+        self._emit('selected', self.panel.value)
 
     def set_options(self, options):
         self.panel.options = options
@@ -205,15 +207,15 @@ class FileSelector(SigSlot):
     """
 
     signals = [
-        "protocol_changed",
-        "selection_changed",
-        "directory_entered",
-        "home_clicked",
-        "up_clicked",
-        "go_clicked",
-        "filters_changed",
+        'protocol_changed',
+        'selection_changed',
+        'directory_entered',
+        'home_clicked',
+        'up_clicked',
+        'go_clicked',
+        'filters_changed',
     ]
-    slots = ["set_filters", "go_home"]
+    slots = ['set_filters', 'go_home']
 
     def __init__(self, url=None, filters=None, ignore=None, kwargs=None):
         """
@@ -235,9 +237,9 @@ class FileSelector(SigSlot):
         if url:
             self.init_protocol, url = split_protocol(url)
         else:
-            self.init_protocol, url = "file", os.getcwd()
+            self.init_protocol, url = 'file', os.getcwd()
         self.init_url = url
-        self.init_kwargs = kwargs or "{}"
+        self.init_kwargs = kwargs or '{}'
         self.filters = filters
         self.ignore = [re.compile(i) for i in ignore or []]
         self._fs = None
@@ -245,38 +247,38 @@ class FileSelector(SigSlot):
 
     def _setup(self):
         self.url = pn.widgets.TextInput(
-            name="url",
+            name='url',
             value=self.init_url,
-            align="end",
-            sizing_mode="stretch_width",
-            width_policy="max",
+            align='end',
+            sizing_mode='stretch_width',
+            width_policy='max',
         )
         self.protocol = pn.widgets.Select(
             options=list(sorted(known_implementations)),
             value=self.init_protocol,
-            name="protocol",
-            align="center",
+            name='protocol',
+            align='center',
         )
-        self.kwargs = pn.widgets.TextInput(name="kwargs", value="{}", align="center")
-        self.go = pn.widgets.Button(name="⇨", align="end", width=45)
+        self.kwargs = pn.widgets.TextInput(name='kwargs', value='{}', align='center')
+        self.go = pn.widgets.Button(name='⇨', align='end', width=45)
         self.main = SingleSelect(size=10)
-        self.home = pn.widgets.Button(name="🏠", width=40, height=30, align="end")
-        self.up = pn.widgets.Button(name="‹", width=30, height=30, align="end")
+        self.home = pn.widgets.Button(name='🏠', width=40, height=30, align='end')
+        self.up = pn.widgets.Button(name='‹', width=30, height=30, align='end')
 
-        self._register(self.protocol, "protocol_changed", auto=True)
-        self._register(self.go, "go_clicked", "clicks", auto=True)
-        self._register(self.up, "up_clicked", "clicks", auto=True)
-        self._register(self.home, "home_clicked", "clicks", auto=True)
-        self._register(None, "selection_changed")
-        self.main.connect("selected", self.selection_changed)
-        self._register(None, "directory_entered")
+        self._register(self.protocol, 'protocol_changed', auto=True)
+        self._register(self.go, 'go_clicked', 'clicks', auto=True)
+        self._register(self.up, 'up_clicked', 'clicks', auto=True)
+        self._register(self.home, 'home_clicked', 'clicks', auto=True)
+        self._register(None, 'selection_changed')
+        self.main.connect('selected', self.selection_changed)
+        self._register(None, 'directory_entered')
         self.prev_protocol = self.protocol.value
         self.prev_kwargs = self.storage_options
 
         self.filter_sel = pn.widgets.CheckBoxGroup(
-            value=[], options=[], inline=False, align="end", width_policy="min"
+            value=[], options=[], inline=False, align='end', width_policy='min'
         )
-        self._register(self.filter_sel, "filters_changed", auto=True)
+        self._register(self.filter_sel, 'filters_changed', auto=True)
 
         self.panel = pn.Column(
             pn.Row(self.protocol, self.kwargs),
@@ -312,12 +314,12 @@ class FileSelector(SigSlot):
     def urlpath(self):
         """URL of currently selected item"""
         return (
-            (self.protocol.value + "://" + self.main.value[0])
+            (self.protocol.value + '://' + self.main.value[0])
             if self.main.value
             else None
         )
 
-    def open_file(self, mode="rb", compression=None, encoding=None):
+    def open_file(self, mode='rb', compression=None, encoding=None):
         """Create OpenFile instance for the currently selected item
 
         For example, in a notebook you might do something like
@@ -342,7 +344,7 @@ class FileSelector(SigSlot):
             If using text mode, use this encoding; defaults to UTF8.
         """
         if self.urlpath is None:
-            raise ValueError("No file selected")
+            raise ValueError('No file selected')
         return OpenFile(self.fs, self.urlpath, mode, compression, encoding)
 
     def filters_changed(self, values):
@@ -365,22 +367,22 @@ class FileSelector(SigSlot):
             self.prev_protocol = self.protocol.value
             self.prev_kwargs = self.storage_options
         listing = sorted(
-            self.fs.ls(self.url.value, detail=True), key=lambda x: x["name"]
+            self.fs.ls(self.url.value, detail=True), key=lambda x: x['name']
         )
         listing = [
             l
             for l in listing
-            if not any(i.match(l["name"].rsplit("/", 1)[-1]) for i in self.ignore)
+            if not any(i.match(l['name'].rsplit('/', 1)[-1]) for i in self.ignore)
         ]
         folders = {
-            "📁 " + o["name"].rsplit("/", 1)[-1]: o["name"]
+            '📁 ' + o['name'].rsplit('/', 1)[-1]: o['name']
             for o in listing
-            if o["type"] == "directory"
+            if o['type'] == 'directory'
         }
         files = {
-            "📄 " + o["name"].rsplit("/", 1)[-1]: o["name"]
+            '📄 ' + o['name'].rsplit('/', 1)[-1]: o['name']
             for o in listing
-            if o["type"] == "file"
+            if o['type'] == 'file'
         }
         if self.filters:
             files = {
@@ -393,7 +395,7 @@ class FileSelector(SigSlot):
     def protocol_changed(self, *_):
         self._fs = None
         self.main.options = []
-        self.url.value = ""
+        self.url.value = ''
 
     def home_clicked(self, *_):
         self.protocol.value = self.init_protocol

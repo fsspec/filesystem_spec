@@ -1,10 +1,10 @@
-import os
-import io
 import functools
+import io
 import logging
 import math
+import os
 
-logger = logging.getLogger("fsspec")
+logger = logging.getLogger('fsspec')
 
 
 class BaseCache(object):
@@ -23,7 +23,7 @@ class BaseCache(object):
         How big this file is
     """
 
-    name = "none"
+    name = 'none'
 
     def __init__(self, blocksize, fetcher, size):
         self.blocksize = blocksize
@@ -36,7 +36,7 @@ class BaseCache(object):
         if stop is None:
             stop = self.size
         if start >= self.size or start >= stop:
-            return b""
+            return b''
         return self.fetcher(start, stop)
 
 
@@ -49,7 +49,7 @@ class MMapCache(BaseCache):
     This cache method might only work on posix
     """
 
-    name = "mmap"
+    name = 'mmap'
 
     def __init__(self, blocksize, fetcher, size, location=None, blocks=None):
         super().__init__(blocksize, fetcher, size)
@@ -58,8 +58,8 @@ class MMapCache(BaseCache):
         self.cache = self._makefile()
 
     def _makefile(self):
-        import tempfile
         import mmap
+        import tempfile
 
         if self.size == 0:
             return bytearray()
@@ -70,12 +70,12 @@ class MMapCache(BaseCache):
                 fd = tempfile.TemporaryFile()
                 self.blocks = set()
             else:
-                fd = io.open(self.location, "wb+")
+                fd = io.open(self.location, 'wb+')
             fd.seek(self.size - 1)
-            fd.write(b"1")
+            fd.write(b'1')
             fd.flush()
         else:
-            fd = io.open(self.location, "rb+")
+            fd = io.open(self.location, 'rb+')
 
         return mmap.mmap(fd.fileno(), self.size)
 
@@ -85,7 +85,7 @@ class MMapCache(BaseCache):
         if end is None:
             end = self.size
         if start >= self.size or start >= end:
-            return b""
+            return b''
         start_block = start // self.blocksize
         end_block = end // self.blocksize
         need = [i for i in range(start_block, end_block + 1) if i not in self.blocks]
@@ -103,7 +103,7 @@ class MMapCache(BaseCache):
     def __getstate__(self):
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
-        del state["cache"]
+        del state['cache']
         return state
 
     def __setstate__(self, state):
@@ -120,11 +120,11 @@ class ReadAheadCache(BaseCache):
     many small reads in a sequential order (e.g., reading lines from a file).
     """
 
-    name = "readahead"
+    name = 'readahead'
 
     def __init__(self, blocksize, fetcher, size):
         super().__init__(blocksize, fetcher, size)
-        self.cache = b""
+        self.cache = b''
         self.start = 0
         self.end = 0
 
@@ -134,7 +134,7 @@ class ReadAheadCache(BaseCache):
         if end is None or end > self.size:
             end = self.size
         if start >= self.size or start >= end:
-            return b""
+            return b''
         l = end - start
         if start >= self.start and end <= self.end:
             # cache hit
@@ -146,7 +146,7 @@ class ReadAheadCache(BaseCache):
             start = self.end
         else:
             # miss
-            part = b""
+            part = b''
         end = min(self.size, end + self.blocksize)
         self.cache = self.fetcher(start, end)  # new block replaces old
         self.start = start
@@ -177,7 +177,7 @@ class BlockCache(BaseCache):
         use for this cache is then ``blocksize * maxblocks``.
     """
 
-    name = "blockcache"
+    name = 'blockcache'
 
     def __init__(self, blocksize, fetcher, size, maxblocks=32):
         super().__init__(blocksize, fetcher, size)
@@ -186,7 +186,7 @@ class BlockCache(BaseCache):
         self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
 
     def __repr__(self):
-        return "<BlockCache blocksize={}, size={}, nblocks={}>".format(
+        return '<BlockCache blocksize={}, size={}, nblocks={}>'.format(
             self.blocksize, self.size, self.nblocks
         )
 
@@ -203,12 +203,12 @@ class BlockCache(BaseCache):
 
     def __getstate__(self):
         state = self.__dict__
-        del state["_fetch_block_cached"]
+        del state['_fetch_block_cached']
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self._fetch_block_cached = functools.lru_cache(state["maxblocks"])(
+        self._fetch_block_cached = functools.lru_cache(state['maxblocks'])(
             self._fetch_block
         )
 
@@ -218,7 +218,7 @@ class BlockCache(BaseCache):
         if end is None:
             end = self.size
         if start >= self.size or start >= end:
-            return b""
+            return b''
 
         # byte position -> block numbers
         start_block_number = start // self.blocksize
@@ -248,7 +248,7 @@ class BlockCache(BaseCache):
 
         start = block_number * self.blocksize
         end = start + self.blocksize
-        logger.info("BlockCache fetching block %d", block_number)
+        logger.info('BlockCache fetching block %d', block_number)
         block_contents = super()._fetch(start, end)
         return block_contents
 
@@ -284,7 +284,7 @@ class BlockCache(BaseCache):
             # final block
             out.append(self._fetch_block_cached(end_block_number)[:end_pos])
 
-            return b"".join(out)
+            return b''.join(out)
 
 
 class BytesCache(BaseCache):
@@ -300,11 +300,11 @@ class BytesCache(BaseCache):
         we are more than a blocksize ahead of it.
     """
 
-    name = "bytes"
+    name = 'bytes'
 
     def __init__(self, blocksize, fetcher, size, trim=True):
         super().__init__(blocksize, fetcher, size)
-        self.cache = b""
+        self.cache = b''
         self.start = None
         self.end = None
         self.trim = trim
@@ -317,7 +317,7 @@ class BytesCache(BaseCache):
         if end is None:
             end = self.size
         if start >= self.size or start >= end:
-            return b""
+            return b''
         if (
             self.start is not None
             and start >= self.start
@@ -334,7 +334,7 @@ class BytesCache(BaseCache):
             bend = end
 
         if bend == start or start > self.size:
-            return b""
+            return b''
 
         if (self.start is None or start < self.start) and (
             self.end is None or end > self.end
@@ -377,7 +377,7 @@ class BytesCache(BaseCache):
 class AllBytes(BaseCache):
     """Cache entire contents of the file"""
 
-    name = "all"
+    name = 'all'
 
     def __init__(self, blocksize=None, fetcher=None, size=None, data=None):
         super().__init__(blocksize, fetcher, size)
@@ -390,10 +390,10 @@ class AllBytes(BaseCache):
 
 
 caches = {
-    "none": BaseCache,
-    "mmap": MMapCache,
-    "bytes": BytesCache,
-    "readahead": ReadAheadCache,
-    "block": BlockCache,
-    "all": AllBytes,
+    'none': BaseCache,
+    'mmap': MMapCache,
+    'bytes': BytesCache,
+    'readahead': ReadAheadCache,
+    'block': BlockCache,
+    'all': AllBytes,
 }
