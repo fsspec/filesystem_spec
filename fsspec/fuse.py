@@ -1,11 +1,12 @@
 from __future__ import print_function
+
 import os
 import stat
-from errno import ENOENT, EIO
-from fuse import Operations, FuseOSError
 import threading
 import time
-from fuse import FUSE
+from errno import EIO, ENOENT
+
+from fuse import FUSE, FuseOSError, Operations
 
 
 class FUSEr(Operations):

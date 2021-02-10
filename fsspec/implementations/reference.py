@@ -1,6 +1,7 @@
 import json
+
 from ..asyn import AsyncFileSystem
-from ..core import open, filesystem
+from ..core import filesystem, open
 
 
 class ReferenceFileSystem(AsyncFileSystem):
@@ -34,7 +35,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         target_protocol=None,
         target_options=None,
         fs=None,
-        **kwargs
+        **kwargs,
     ):
         """
 

@@ -1,5 +1,6 @@
-from ftplib import FTP, Error, error_perm
 import uuid
+from ftplib import FTP, Error, error_perm
+
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
 
@@ -21,7 +22,7 @@ class FTPFileSystem(AbstractFileSystem):
         block_size=None,
         tempdir="/tmp",
         timeout=30,
-        **kwargs
+        **kwargs,
     ):
         """
         You can use _get_kwargs_from_urls to get some kwargs from
@@ -131,7 +132,7 @@ class FTPFileSystem(AbstractFileSystem):
         block_size=None,
         cache_options=None,
         autocommit=True,
-        **kwargs
+        **kwargs,
     ):
         path = self._strip_protocol(path)
         block_size = block_size or self.blocksize
@@ -196,7 +197,7 @@ class FTPFile(AbstractBufferedFile):
         autocommit=True,
         cache_type="readahead",
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             fs,
@@ -206,7 +207,7 @@ class FTPFile(AbstractBufferedFile):
             autocommit=autocommit,
             cache_type=cache_type,
             cache_options=cache_options,
-            **kwargs
+            **kwargs,
         )
         if not autocommit:
             self.target = self.path

@@ -1,21 +1,22 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import absolute_import, division, print_function
 
 import gzip
 import os
 import os.path
 import pickle
+import posixpath
 import sys
+import tempfile
 from contextlib import contextmanager
 from distutils.version import LooseVersion
-import posixpath
-import tempfile
+from unittest.mock import patch
 
 import pytest
+
 import fsspec
-from unittest.mock import patch
-from fsspec.core import open_files, get_fs_token_paths, OpenFile
-from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec import compression
+from fsspec.core import OpenFile, get_fs_token_paths, open_files
+from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.tests.test_utils import WIN
 
 files = {

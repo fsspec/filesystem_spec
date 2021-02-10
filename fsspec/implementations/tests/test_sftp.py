@@ -1,7 +1,9 @@
-import pytest
 import shlex
 import subprocess
 import time
+
+import pytest
+
 import fsspec
 
 pytest.importorskip("paramiko")

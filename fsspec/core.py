@@ -1,27 +1,27 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import absolute_import, division, print_function
 
 import io
-from glob import has_magic
 import logging
 import os
 import re
-from .compression import compr
-from .utils import (
-    infer_compression,
-    build_name_function,
-    update_storage_options,
-    stringify_path,
-)
-from .registry import get_filesystem_class, filesystem
+from glob import has_magic
 
 # for backwards compat, we export cache things from here too
 from .caching import (  # noqa: F401
     BaseCache,
+    BlockCache,
+    BytesCache,
     MMapCache,
     ReadAheadCache,
-    BytesCache,
-    BlockCache,
     caches,
+)
+from .compression import compr
+from .registry import filesystem, get_filesystem_class
+from .utils import (
+    build_name_function,
+    infer_compression,
+    stringify_path,
+    update_storage_options,
 )
 
 logger = logging.getLogger("fsspec")
@@ -222,7 +222,7 @@ def open_files(
     newline=None,
     auto_mkdir=True,
     expand=True,
-    **kwargs
+    **kwargs,
 ):
     """Given a path or paths, return a list of ``OpenFile`` objects.
 
@@ -386,7 +386,7 @@ def open(
     errors=None,
     protocol=None,
     newline=None,
-    **kwargs
+    **kwargs,
 ):
     """Given a path or paths, return one ``OpenFile`` object.
 
@@ -416,11 +416,11 @@ def open(
     --------
     >>> openfile = open('2015-01-01.csv')  # doctest: +SKIP
     >>> openfile = open(
-    ...     's3://bucket/2015-01-01.csv.gz',
-    ...     compression='gzip'
+    ...     's3://bucket/2015-01-01.csv.gz', compression='gzip'
     ... )  # doctest: +SKIP
     >>> with openfile as f:
     ...     df = pd.read_csv(f)  # doctest: +SKIP
+    ...
 
     Returns
     -------
@@ -435,7 +435,7 @@ def open(
         protocol,
         newline=newline,
         expand=False,
-        **kwargs
+        **kwargs,
     )[0]
 
 

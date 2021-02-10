@@ -58,6 +58,7 @@ The current list of known implementations can be found as follows
 .. code-block:: python
 
     from fsspec.registry import known_implementations
+
     known_implementations
 
 These are only imported on request, which may fail if a required dependency is missing. The dictionary

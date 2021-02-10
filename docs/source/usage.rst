@@ -18,23 +18,25 @@ Direct instantiation:
 
 .. code-block:: python
 
-   from fsspec.implementations.local import LocalFileSystem
-   fs = LocalFileSystem()
+    from fsspec.implementations.local import LocalFileSystem
+
+    fs = LocalFileSystem()
 
 Look-up via registry:
 
 .. code-block:: python
 
-   import fsspec
-   fs = fsspec.filesystem('file')
+    import fsspec
+
+    fs = fsspec.filesystem('file')
 
 Many filesystems also take extra parameters, some of which may be options - see :doc:`api`.
 
 .. code-block:: python
 
-   import fsspec
-   fs = fsspec.filesystem('ftp', host=host, port=port,
-                          username=user, password=pw)
+    import fsspec
+
+    fs = fsspec.filesystem('ftp', host=host, port=port, username=user, password=pw)
 
 Use a file-system
 -----------------
@@ -57,8 +59,11 @@ you have ``pandas`` installed, for example, you can do the following:
 
     import fsspec
     import pandas as pd
-    with fsspec.open('https://raw.githubusercontent.com/dask/'
-                 'fastparquet/master/test-data/nation.csv') as f:
+
+    with fsspec.open(
+        'https://raw.githubusercontent.com/dask/'
+        'fastparquet/master/test-data/nation.csv'
+    ) as f:
         df = pd.read_csv(f, sep='|', header=None)
 
 Higher-level
@@ -74,10 +79,12 @@ or write mode (create names). Critically, the file on the backend system is not 
 
 .. code-block:: python
 
-   of = fsspec.open('https://raw.githubusercontent.com/dask/'
-                    'fastparquet/master/test-data/nation.csv', mode='r')
-   # files is a not-yet-open OpenFile object. The "with" context actually opens it
-   with of as f:
-       # now f is a text-mode file
-       df = pd.read_csv(f, sep='|', header=None)
-
+    of = fsspec.open(
+        'https://raw.githubusercontent.com/dask/'
+        'fastparquet/master/test-data/nation.csv',
+        mode='r',
+    )
+    # files is a not-yet-open OpenFile object. The "with" context actually opens it
+    with of as f:
+        # now f is a text-mode file
+        df = pd.read_csv(f, sep='|', header=None)

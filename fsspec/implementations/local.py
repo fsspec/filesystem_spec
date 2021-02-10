@@ -1,10 +1,11 @@
 import datetime
 import io
 import os
-import shutil
 import posixpath
 import re
+import shutil
 import tempfile
+
 from fsspec import AbstractFileSystem
 from fsspec.utils import stringify_path
 

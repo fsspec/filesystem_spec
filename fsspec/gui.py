@@ -1,11 +1,13 @@
-import contextlib
-import panel as pn
-import os
 import ast
+import contextlib
 import logging
+import os
 import re
+
+import panel as pn
+
+from .core import OpenFile, get_filesystem_class, split_protocol
 from .registry import known_implementations
-from .core import split_protocol, get_filesystem_class, OpenFile
 
 pn.extension()
 logger = logging.getLogger("fsspec.gui")

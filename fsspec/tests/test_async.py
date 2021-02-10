@@ -1,6 +1,8 @@
-import pytest
 import asyncio
 import sys
+
+import pytest
+
 from fsspec.asyn import _run_until_done
 
 

@@ -1,5 +1,7 @@
 import os
+
 import pytest
+
 import fsspec
 from fsspec.config import conf, set_conf_env, set_conf_files
 

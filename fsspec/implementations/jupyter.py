@@ -1,8 +1,10 @@
 import base64
 import io
-import fsspec
 import re
+
 import requests
+
+import fsspec
 
 
 class JupyterFileSystem(fsspec.AbstractFileSystem):

@@ -1,5 +1,6 @@
 import array
 from collections.abc import MutableMapping
+
 from .core import url_to_fs
 
 
@@ -19,15 +20,15 @@ class FSMap(MutableMapping):
 
     Examples
     --------
-    >>> fs = FileSystem(**parameters) # doctest: +SKIP
-    >>> d = FSMap('my-data/path/', fs) # doctest: +SKIP
+    >>> fs = FileSystem(**parameters)  # doctest: +SKIP
+    >>> d = FSMap('my-data/path/', fs)  # doctest: +SKIP
     or, more likely
     >>> d = fs.get_mapper('my-data/path/')
 
-    >>> d['loc1'] = b'Hello World' # doctest: +SKIP
-    >>> list(d.keys()) # doctest: +SKIP
+    >>> d['loc1'] = b'Hello World'  # doctest: +SKIP
+    >>> list(d.keys())  # doctest: +SKIP
     ['loc1']
-    >>> d['loc1'] # doctest: +SKIP
+    >>> d['loc1']  # doctest: +SKIP
     b'Hello World'
     """
 

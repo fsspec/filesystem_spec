@@ -7,7 +7,7 @@ import pytest
 import fsspec
 from fsspec.implementations.ftp import FTPFileSystem
 from fsspec.implementations.http import HTTPFileSystem
-from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
+from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
 
 class DummyTestFS(AbstractFileSystem):

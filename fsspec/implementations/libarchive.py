@@ -1,11 +1,12 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import absolute_import, division, print_function
 
 from contextlib import contextmanager
 
 import libarchive
+
 from fsspec import AbstractFileSystem, open_files
-from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
 from fsspec.implementations.memory import MemoryFile
+from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
 
 
 class LibArchiveFileSystem(AbstractFileSystem):
@@ -32,7 +33,7 @@ class LibArchiveFileSystem(AbstractFileSystem):
         target_protocol=None,
         target_options=None,
         block_size=DEFAULT_BLOCK_SIZE,
-        **kwargs
+        **kwargs,
     ):
         """
         Parameters
@@ -162,7 +163,7 @@ class LibArchiveFileSystem(AbstractFileSystem):
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         path = self._strip_protocol(path)
         if mode != "rb":

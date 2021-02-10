@@ -1,8 +1,8 @@
-import os
-import io
 import functools
+import io
 import logging
 import math
+import os
 
 logger = logging.getLogger("fsspec")
 
@@ -58,8 +58,8 @@ class MMapCache(BaseCache):
         self.cache = self._makefile()
 
     def _makefile(self):
-        import tempfile
         import mmap
+        import tempfile
 
         if self.size == 0:
             return bytearray()

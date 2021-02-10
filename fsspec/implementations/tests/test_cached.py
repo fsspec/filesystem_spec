@@ -1,12 +1,14 @@
 import os
-import shutil
 import pickle
-import pytest
+import shutil
 import tempfile
 
+import pytest
+
 import fsspec
-from fsspec.implementations.cached import CachingFileSystem
 from fsspec.compression import compr
+from fsspec.implementations.cached import CachingFileSystem
+
 from .test_ftp import FTPFileSystem
 
 
@@ -549,7 +551,7 @@ def test_with_compression(impl, compression):
         "%s::%s" % (impl, fn),
         "rb",
         compression=compression,
-        **{impl: dict(same_names=True, cache_storage=cachedir)}
+        **{impl: dict(same_names=True, cache_storage=cachedir)},
     ) as f:
         # stores original compressed file, uncompress on read
         assert f.read() == data
@@ -561,7 +563,9 @@ def test_with_compression(impl, compression):
     with fsspec.open(
         "%s::%s" % (impl, fn),
         "rb",
-        **{impl: dict(same_names=True, compression=compression, cache_storage=cachedir)}
+        **{
+            impl: dict(same_names=True, compression=compression, cache_storage=cachedir)
+        },
     ) as f:
         # stores uncompressed data
         assert f.read() == data
@@ -599,7 +603,7 @@ def test_multi_cache(protocol):
     lurl = fsspec.open_local(
         f"{protocol}::memory://file*",
         mode="rb",
-        **{protocol: {"cache_storage": d2, "same_names": True}}
+        **{protocol: {"cache_storage": d2, "same_names": True}},
     )
     assert all(d2 in u for u in lurl)
     assert all(os.path.basename(f) in ["file0", "file1"] for f in lurl)
@@ -609,7 +613,7 @@ def test_multi_cache(protocol):
     lurl = fsspec.open_files(
         f"{protocol}::memory://file*",
         mode="rb",
-        **{protocol: {"cache_storage": d2, "same_names": True}}
+        **{protocol: {"cache_storage": d2, "same_names": True}},
     )
     with lurl as files:
         for f in files:

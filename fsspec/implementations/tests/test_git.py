@@ -1,9 +1,11 @@
-import fsspec
 import os
-import pytest
 import shutil
-import tempfile
 import subprocess
+import tempfile
+
+import pytest
+
+import fsspec
 
 pygit2 = pytest.importorskip("pygit2")
 

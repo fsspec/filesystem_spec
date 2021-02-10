@@ -1,9 +1,11 @@
 import json
+
 import pytest
 
 import fsspec
-from .test_http import data, realfile, server  # noqa: F401
 from fsspec.implementations.reference import _unmodel_hdf5
+
+from .test_http import data, realfile, server  # noqa: F401
 
 
 def test_simple(server):  # noqa: F811

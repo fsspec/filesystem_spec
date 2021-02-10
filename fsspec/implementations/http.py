@@ -1,15 +1,18 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import absolute_import, division, print_function
 
-import aiohttp
 import asyncio
 import logging
 import re
-import requests
 import weakref
 from urllib.parse import urlparse
+
+import aiohttp
+import requests
+
+from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
 from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import tokenize, DEFAULT_BLOCK_SIZE
-from fsspec.asyn import sync_wrapper, sync, AsyncFileSystem
+from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
+
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
@@ -45,7 +48,7 @@ class HTTPFileSystem(AsyncFileSystem):
         asynchronous=False,
         loop=None,
         client_kwargs=None,
-        **storage_options
+        **storage_options,
     ):
         """
         NB: if this is called async, you must await set_client
@@ -206,7 +209,7 @@ class HTTPFileSystem(AsyncFileSystem):
         cache_type=None,
         cache_options=None,
         size=None,
-        **kwargs
+        **kwargs,
     ):
         """Make a file-like object
 
@@ -240,7 +243,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 cache_type=cache_type or self.cache_type,
                 cache_options=cache_options or self.cache_options,
                 loop=self.loop,
-                **kw
+                **kw,
             )
         else:
             return HTTPStreamFile(
@@ -397,7 +400,7 @@ class HTTPFile(AbstractBufferedFile):
         size=None,
         loop=None,
         asynchronous=False,
-        **kwargs
+        **kwargs,
     ):
         if mode != "rb":
             raise NotImplementedError("File mode not supported")
@@ -412,7 +415,7 @@ class HTTPFile(AbstractBufferedFile):
             block_size=block_size,
             cache_type=cache_type,
             cache_options=cache_options,
-            **kwargs
+            **kwargs,
         )
         self.loop = loop
 

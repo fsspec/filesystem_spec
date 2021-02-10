@@ -1,17 +1,18 @@
 import os
 import pickle
-import pytest
 import tempfile
 
+import pytest
+
+import fsspec
 from fsspec.core import (
-    _expand_paths,
     OpenFile,
-    open_local,
+    OpenFiles,
+    _expand_paths,
     get_compression,
     open_files,
-    OpenFiles,
+    open_local,
 )
-import fsspec
 
 
 @pytest.mark.parametrize(

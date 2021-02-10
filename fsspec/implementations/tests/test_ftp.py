@@ -1,12 +1,13 @@
 import os
-import pytest
 import subprocess
 import sys
 import time
 
-from fsspec.implementations.ftp import FTPFileSystem
-from fsspec import open_files
+import pytest
+
 import fsspec
+from fsspec import open_files
+from fsspec.implementations.ftp import FTPFileSystem
 
 here = os.path.dirname(os.path.abspath(__file__))
 

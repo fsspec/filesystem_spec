@@ -2,18 +2,29 @@ exclude: >
     (?x)^(
         \.tox/.*
     )$
-default_language_version:
-  python: python3.7
 repos:
-  - repo: local
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-docstring-first
+      - id: check-json
+      - id: check-yaml
+  - repo: https://github.com/ambv/black
+    rev: 20.8b1
     hooks:
       - id: black
-        name: black
-        entry: black
-        language: python
-        require_serial: true
-        types: [python]
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.3.0
+  - repo: https://gitlab.com/pycqa/flake8
+    rev: 3.8.4
     hooks:
-    - id: flake8
+      - id: flake8
+  - repo: https://github.com/asottile/seed-isort-config
+    rev: v2.2.0
+    hooks:
+      - id: seed-isort-config
+  - repo: https://github.com/pre-commit/mirrors-isort
+    rev: v5.7.0
+    hooks:
+      - id: isort

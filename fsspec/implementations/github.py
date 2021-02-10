@@ -1,4 +1,5 @@
 import requests
+
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
 from .memory import MemoryFile
@@ -82,7 +83,7 @@ class GithubFileSystem(AbstractFileSystem):
         r = requests.get(
             "https://api.github.com/repos/{org}/{repo}/tags"
             "".format(org=self.org, repo=self.repo),
-            **self.kw
+            **self.kw,
         )
         r.raise_for_status()
         return [t["name"] for t in r.json()]
@@ -93,7 +94,7 @@ class GithubFileSystem(AbstractFileSystem):
         r = requests.get(
             "https://api.github.com/repos/{org}/{repo}/branches"
             "".format(org=self.org, repo=self.repo),
-            **self.kw
+            **self.kw,
         )
         r.raise_for_status()
         return [t["name"] for t in r.json()]
@@ -193,7 +194,7 @@ class GithubFileSystem(AbstractFileSystem):
         autocommit=True,
         cache_options=None,
         sha=None,
-        **kwargs
+        **kwargs,
     ):
         if mode != "rb":
             raise NotImplementedError

@@ -1,16 +1,17 @@
 import io
-import pytest
 import sys
+
+import pytest
+
 from fsspec.utils import (
     can_be_local,
-    infer_storage_options,
-    seek_delimiter,
-    read_block,
     common_prefix,
+    infer_storage_options,
     other_paths,
+    read_block,
+    seek_delimiter,
     setup_logger,
 )
-
 
 WIN = sys.platform.startswith("win")
 

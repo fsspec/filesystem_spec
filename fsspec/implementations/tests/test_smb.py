@@ -7,7 +7,9 @@ import logging
 import shlex
 import subprocess
 import time
+
 import pytest
+
 import fsspec
 
 pytest.importorskip("smbprotocol")

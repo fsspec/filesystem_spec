@@ -1,13 +1,13 @@
 import asyncio
 import functools
 import inspect
-import re
 import os
+import re
 import sys
 import threading
 
-from .utils import other_paths, is_exception
 from .spec import AbstractFileSystem
+from .utils import is_exception, other_paths
 
 # this global variable holds whether this thread is running async or not
 thread_state = threading.local()
@@ -198,7 +198,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _copy(self, paths, path2, **kwargs):
         return await asyncio.gather(
             *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
     def copy(
@@ -231,7 +231,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop)
                 for path in paths
             ],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
     def cat(self, path, recursive=False, on_error="raise", **kwargs):
@@ -263,7 +263,7 @@ class AsyncFileSystem(AbstractFileSystem):
         )
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
-        from .implementations.local import make_path_posix, LocalFileSystem
+        from .implementations.local import LocalFileSystem, make_path_posix
 
         rpath = self._strip_protocol(rpath)
         if isinstance(lpath, str):

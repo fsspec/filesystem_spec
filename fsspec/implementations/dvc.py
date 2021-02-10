@@ -1,7 +1,9 @@
 import os
-from fsspec.spec import AbstractFileSystem
-from fsspec.implementations.local import LocalFileSystem
+
 import dvc.repo
+
+from fsspec.implementations.local import LocalFileSystem
+from fsspec.spec import AbstractFileSystem
 
 lfs = LocalFileSystem()
 
@@ -67,7 +69,7 @@ class DVCFileSystem(AbstractFileSystem):
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         # returns a context file object (i.e., needs to be used with ``with``
         path = self._strip_protocol(path)

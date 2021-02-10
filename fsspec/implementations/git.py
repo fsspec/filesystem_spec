@@ -1,7 +1,10 @@
-import pygit2
-from fsspec.spec import AbstractFileSystem
-from .memory import MemoryFile
 import os
+
+import pygit2
+
+from fsspec.spec import AbstractFileSystem
+
+from .memory import MemoryFile
 
 
 class GitFileSystem(AbstractFileSystem):
@@ -94,7 +97,7 @@ class GitFileSystem(AbstractFileSystem):
         autocommit=True,
         cache_options=None,
         ref=None,
-        **kwargs
+        **kwargs,
     ):
         obj = self._path_to_object(path, ref or self.ref)
         return MemoryFile(data=obj.data)
