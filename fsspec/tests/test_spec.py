@@ -188,6 +188,7 @@ def test_find():
     )
     test_fs = filesystem(host)
     filenames_ftp = test_fs.find(test_path)
+    assert filenames_ftp
 
     filesystem, host, test_path = (
         HTTPFileSystem,
