@@ -1,10 +1,12 @@
-import contextlib
 import asyncio
+import contextlib
 import os
-import pytest
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import sys
 import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+import pytest
+
 import fsspec
 
 requests = pytest.importorskip("requests")

@@ -2,21 +2,21 @@ import io
 import logging
 import os
 import warnings
-from errno import ESPIPE
-from hashlib import sha256
 from distutils.version import LooseVersion
+from errno import ESPIPE
 from glob import has_magic
+from hashlib import sha256
 
+from .config import apply_config
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
-    read_block,
-    tokenize,
-    stringify_path,
-    other_paths,
     get_package_version_without_import,
+    other_paths,
+    read_block,
+    stringify_path,
+    tokenize,
 )
-from .config import apply_config
 
 logger = logging.getLogger("fsspec")
 
@@ -754,7 +754,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         Calls put_file for each source.
         """
-        from .implementations.local import make_path_posix, LocalFileSystem
+        from .implementations.local import LocalFileSystem, make_path_posix
 
         rpath = (
             self._strip_protocol(rpath)
@@ -886,7 +886,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """Return raw bytes-mode file-like from the file-system"""
         return AbstractBufferedFile(
@@ -896,7 +896,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             block_size,
             autocommit,
             cache_options=cache_options,
-            **kwargs
+            **kwargs,
         )
 
     def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
@@ -940,7 +940,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 block_size=block_size,
                 autocommit=ac,
                 cache_options=cache_options,
-                **kwargs
+                **kwargs,
             )
             if not ac and "r" not in mode:
                 self.transaction.files.append(f)
@@ -1035,7 +1035,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return json.dumps(
             dict(
                 **{"cls": cls, "protocol": proto, "args": self.storage_args},
-                **self.storage_options
+                **self.storage_options,
             )
         )
 
@@ -1054,8 +1054,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         -------
         file system instance, not necessarily of this particular class.
         """
-        from .registry import _import_class, get_filesystem_class
         import json
+
+        from .registry import _import_class, get_filesystem_class
 
         dic = json.loads(blob)
         protocol = dic.pop("protocol")
@@ -1204,7 +1205,7 @@ class AbstractBufferedFile(io.IOBase):
         autocommit=True,
         cache_type="readahead",
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Template for files with buffered reading and writing

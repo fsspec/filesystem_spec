@@ -1,7 +1,9 @@
 import weakref
+
+from pyarrow.hdfs import HadoopFileSystem
+
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
-from pyarrow.hdfs import HadoopFileSystem
 
 
 class PyArrowHDFS(AbstractFileSystem):
@@ -21,7 +23,7 @@ class PyArrowHDFS(AbstractFileSystem):
         kerb_ticket=None,
         driver="libhdfs",
         extra_conf=None,
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -62,7 +64,7 @@ class PyArrowHDFS(AbstractFileSystem):
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -90,7 +92,7 @@ class PyArrowHDFS(AbstractFileSystem):
             block_size=block_size,
             autocommit=autocommit,
             cache_options=cache_options,
-            **kwargs
+            **kwargs,
         )
 
     def __reduce_ex__(self, protocol):
@@ -198,7 +200,7 @@ class HDFSFile(object):
         autocommit=True,
         cache_type="readahead",
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         # TODO: Inherit from AbstractBufferedFile?
         if not autocommit:

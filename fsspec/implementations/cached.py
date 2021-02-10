@@ -1,17 +1,17 @@
-import pickle
+import hashlib
+import inspect
 import logging
 import os
-import hashlib
-from shutil import move, rmtree
+import pickle
 import tempfile
 import time
-import inspect
+from shutil import move, rmtree
 
 from fsspec import AbstractFileSystem, filesystem
-from fsspec.spec import AbstractBufferedFile
-from fsspec.core import MMapCache, BaseCache
-from fsspec.utils import infer_compression
 from fsspec.compression import compr
+from fsspec.core import BaseCache, MMapCache
+from fsspec.spec import AbstractBufferedFile
+from fsspec.utils import infer_compression
 
 logger = logging.getLogger("fsspec")
 
@@ -48,7 +48,7 @@ class CachingFileSystem(AbstractFileSystem):
         fs=None,
         same_names=False,
         compression=None,
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -247,7 +247,7 @@ class CachingFileSystem(AbstractFileSystem):
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """Wrap the target _open
 
@@ -271,7 +271,7 @@ class CachingFileSystem(AbstractFileSystem):
                 block_size=block_size,
                 autocommit=autocommit,
                 cache_options=cache_options,
-                **kwargs
+                **kwargs,
             )
         detail = self._check_file(path)
         if detail:
@@ -306,7 +306,7 @@ class CachingFileSystem(AbstractFileSystem):
             autocommit=autocommit,
             cache_options=cache_options,
             cache_type=None,
-            **kwargs
+            **kwargs,
         )
         if self.compression:
             comp = (

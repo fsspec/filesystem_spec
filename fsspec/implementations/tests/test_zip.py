@@ -1,11 +1,12 @@
+import os
+import pickle
+import sys
+import tempfile
 import zipfile
 from contextlib import contextmanager
 
-import os
-import pickle
 import pytest
-import sys
-import tempfile
+
 import fsspec
 
 

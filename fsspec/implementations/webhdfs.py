@@ -1,11 +1,13 @@
 # https://hadoop.apache.org/docs/r1.0.4/webhdfs.html
 
-import requests
-from urllib.parse import quote
-import uuid
-from ..spec import AbstractFileSystem, AbstractBufferedFile
-from ..utils import infer_storage_options
 import logging
+import uuid
+from urllib.parse import quote
+
+import requests
+
+from ..spec import AbstractBufferedFile, AbstractFileSystem
+from ..utils import infer_storage_options
 
 logger = logging.getLogger("webhdfs")
 
@@ -44,7 +46,7 @@ class WebHDFS(AbstractFileSystem):
         kerb_kwargs=None,
         data_proxy=None,
         use_https=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Parameters
@@ -155,7 +157,7 @@ class WebHDFS(AbstractFileSystem):
         autocommit=True,
         replication=None,
         permissions=None,
-        **kwargs
+        **kwargs,
     ):
         """
 

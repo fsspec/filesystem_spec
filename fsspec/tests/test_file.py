@@ -1,7 +1,9 @@
 """Tests abstract buffered file API, using FTP implementation"""
 import pickle
 import sys
+
 import pytest
+
 from fsspec.implementations.tests.test_ftp import FTPFileSystem
 
 data = b"hello" * 10000

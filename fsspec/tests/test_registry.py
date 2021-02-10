@@ -115,7 +115,7 @@ def test_entry_points_registered_on_import(clear_registry, clean_imports):
         import_location = "importlib.metadata.entry_points"
     with patch(import_location, return_value={"fsspec.specs": [mock_ep]}):
         assert "test" not in registry
-        import fsspec
+        import fsspec  # noqa
 
         get_filesystem_class("test")
         assert "test" in registry

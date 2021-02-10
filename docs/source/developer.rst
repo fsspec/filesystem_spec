@@ -16,8 +16,8 @@ entering a context, e.g.
 
 .. code-block:: python
 
-   with fsspec.open("protocol://path", 'rb', param=value) as f:
-       process_file(f)
+    with fsspec.open("protocol://path", 'rb', param=value) as f:
+        process_file(f)
 
 Note the backend-specific parameters that can be passed in this call.
 
@@ -29,22 +29,22 @@ manager, or the ``close()`` method must be called explicitly to release resource
 
 .. code-block:: python
 
-   # OpenFile route
-   of = fsspec.open("protocol://path", 'rb', param=value)
-   f = of.open()
-   process_file(f)
-   f.close()
+    # OpenFile route
+    of = fsspec.open("protocol://path", 'rb', param=value)
+    f = of.open()
+    process_file(f)
+    f.close()
 
-   # filesystem class route, context
-   fs = fsspec.filesystem("protocol", param=value)
-   with fs.open("path", "rb") as f:
-       process_file(f)
+    # filesystem class route, context
+    fs = fsspec.filesystem("protocol", param=value)
+    with fs.open("path", "rb") as f:
+        process_file(f)
 
-   # filesystem class route, explicit close
-   fs = fsspec.filesystem("protocol", param=value)
-   f = fs.open("path", "rb")
-   process_file(f)
-   f.close()
+    # filesystem class route, explicit close
+    fs = fsspec.filesystem("protocol", param=value)
+    f = fs.open("path", "rb")
+    process_file(f)
+    f.close()
 
 Implementing a backend
 ~~~~~~~~~~~~~~~~~~~~~~

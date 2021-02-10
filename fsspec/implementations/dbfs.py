@@ -381,7 +381,7 @@ class DatabricksFile(AbstractBufferedFile):
         autocommit=True,
         cache_type="readahead",
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Create a new instance of the DatabricksFile.
@@ -403,7 +403,7 @@ class DatabricksFile(AbstractBufferedFile):
             autocommit=autocommit,
             cache_type=cache_type,
             cache_options=cache_options or {},
-            **kwargs
+            **kwargs,
         )
 
     def _initiate_upload(self):

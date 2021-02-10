@@ -9,7 +9,7 @@ import tempfile
 import pytest
 
 import fsspec
-from fsspec.implementations.memory import MemoryFileSystem, MemoryFile
+from fsspec.implementations.memory import MemoryFile, MemoryFileSystem
 
 
 def test_idempotent():

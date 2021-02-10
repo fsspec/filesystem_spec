@@ -1,10 +1,11 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import absolute_import, division, print_function
 
-from io import BytesIO
+import logging
 from datetime import datetime
 from errno import ENOTEMPTY
+from io import BytesIO
+
 from fsspec import AbstractFileSystem
-import logging
 
 logger = logging.Logger("fsspec.memoryfs")
 
@@ -122,7 +123,7 @@ class MemoryFileSystem(AbstractFileSystem):
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         if mode in ["rb", "ab", "rb+"]:
             if path in self.store:

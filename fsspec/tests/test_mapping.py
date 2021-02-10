@@ -2,9 +2,10 @@ import os
 import pickle
 import sys
 
+import pytest
+
 import fsspec
 from fsspec.implementations.memory import MemoryFileSystem
-import pytest
 
 
 def test_mapping_prefix(tmpdir):

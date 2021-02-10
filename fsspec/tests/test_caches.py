@@ -2,6 +2,7 @@ import pickle
 import string
 
 import pytest
+
 from fsspec.caching import BlockCache, caches
 
 

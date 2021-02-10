@@ -1,9 +1,10 @@
-from contextlib import contextmanager
-
 import os
 import pickle
-import pytest
 import tempfile
+from contextlib import contextmanager
+
+import pytest
+
 import fsspec
 
 libarchive = pytest.importorskip("libarchive")

@@ -4,9 +4,9 @@ This module contains SMBFileSystem class responsible for handling access to
 Windows Samba network shares by using package smbprotocol
 """
 
-from stat import S_ISDIR, S_ISLNK
 import datetime
 import uuid
+from stat import S_ISDIR, S_ISLNK
 
 import smbclient
 
@@ -25,8 +25,9 @@ class SMBFileSystem(AbstractFileSystem):
 
     Example::
         >>> import fsspec
-        >>> with fsspec.open('smb://myuser:mypassword@myserver.com/'
-        ...                  'share/folder/file.csv') as smbfile:
+        >>> with fsspec.open(
+        ...     'smb://myuser:mypassword@myserver.com/' 'share/folder/file.csv'
+        ... ) as smbfile:
         ...     df = pd.read_csv(smbfile, sep='|', header=None)
 
     Note that you need to pass in a valid hostname or IP address for the host
@@ -65,7 +66,7 @@ class SMBFileSystem(AbstractFileSystem):
         password=None,
         timeout=60,
         encrypt=None,
-        **kwargs
+        **kwargs,
     ):
         """
         You can use _get_kwargs_from_urls to get some kwargs from
@@ -187,7 +188,7 @@ class SMBFileSystem(AbstractFileSystem):
         block_size=-1,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """
         block_size: int or None

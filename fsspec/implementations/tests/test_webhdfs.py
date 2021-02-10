@@ -1,8 +1,10 @@
 import pickle
-import pytest
 import shlex
 import subprocess
 import time
+
+import pytest
+
 import fsspec
 
 requests = pytest.importorskip("requests")

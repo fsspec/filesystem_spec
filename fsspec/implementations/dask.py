@@ -1,8 +1,9 @@
-from distributed.worker import get_worker
-from distributed.client import _get_global_client, Client
 import dask
-from fsspec.spec import AbstractFileSystem, AbstractBufferedFile
+from distributed.client import Client, _get_global_client
+from distributed.worker import get_worker
+
 from fsspec import filesystem
+from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 from fsspec.utils import infer_storage_options
 
 
@@ -99,7 +100,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         block_size=None,
         autocommit=True,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         if self.worker:
             return self.fs._open(
@@ -108,7 +109,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
                 block_size=block_size,
                 autocommit=autocommit,
                 cache_options=cache_options,
-                **kwargs
+                **kwargs,
             )
         else:
             return DaskFile(
@@ -118,7 +119,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
                 block_size=block_size,
                 autocommit=autocommit,
                 cache_options=cache_options,
-                **kwargs
+                **kwargs,
             )
 
     def fetch_range(self, path, mode, start, end):

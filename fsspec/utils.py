@@ -1,11 +1,10 @@
-from hashlib import sha256
 import math
 import os
 import pathlib
 import re
 import sys
+from hashlib import sha256
 from urllib.parse import urlsplit
-
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
@@ -31,8 +30,9 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
     {"protocol": "file", "path", "/mnt/datasets/test.csv"}
     >>> infer_storage_options(
-    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
-    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
+    ...     'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
+    ...     inherit_storage_options={'extra': 'value'},
+    ... )  # doctest: +SKIP
     {"protocol": "hdfs", "username": "username", "password": "pwd",
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
