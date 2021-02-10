@@ -595,3 +595,18 @@ def test_copy_errors(tmpdir):
             make_path_posix(os.path.join(dest2, "afile1")),
             make_path_posix(os.path.join(dest2, "afile2")),
         ]
+
+
+def test_transaction(tmpdir):
+    file = str(tmpdir / "test.txt")
+    fs = LocalFileSystem()
+
+    with fs.transaction:
+        content = "hello world"
+        with fs.open(file, "w") as fp:
+            fp.write(content)
+
+    with fs.open(file, "r") as fp:
+        read_content = fp.read()
+
+    assert content == read_content

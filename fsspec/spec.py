@@ -942,7 +942,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 cache_options=cache_options,
                 **kwargs,
             )
-            if not ac:
+            if not ac and "r" not in mode:
                 self.transaction.files.append(f)
             return f
 
