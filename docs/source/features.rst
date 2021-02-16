@@ -284,7 +284,7 @@ be the equivalent
 .. code-block:: python
 
     of = fsspec.open("filecache::s3://bucket/key",
-                     s3={'anon': True}, filecache={'cache_storage'='/tmp/files'})
+                     s3={'anon': True}, filecache={'cache_storage':'/tmp/files'})
 
 With the "blockcache" variant, data is downloaded block-wise: only the specific parts of the remote file
 which are accessed. This means that the local copy of the file might end up being much smaller than the
