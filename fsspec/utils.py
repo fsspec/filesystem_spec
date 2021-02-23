@@ -419,14 +419,14 @@ def get_package_version_without_import(name):
             import importlib.metadata
 
             return importlib.metadata.distribution(name).version
-        except ImportError:
+        except:  # noqa: E722
             pass
     else:
         try:
             import importlib_metadata
 
             return importlib_metadata.distribution(name).version
-        except ImportError:
+        except:  # noqa: E722
             pass
     try:
         import importlib
