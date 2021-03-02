@@ -450,6 +450,7 @@ class HTTPFile(AbstractBufferedFile):
         This is only called when position is still at zero,
         and read() is called without a byte-count.
         """
+        logger.debug(f"Fetch all for {self}")
         if not isinstance(self.cache, AllBytes):
             r = await self.session.get(self.url, **self.kwargs)
             async with r:
@@ -470,6 +471,7 @@ class HTTPFile(AbstractBufferedFile):
         and then stream the output - if the data size is bigger than we
         requested, an exception is raised.
         """
+        logger.debug(f"Fetch range for {self}: {start}-{end}")
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = "bytes=%i-%i" % (start, end - 1)
@@ -596,6 +598,7 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
     """
+    logger.debug("Retrieve file size for %s" % url)
     kwargs = kwargs.copy()
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
