@@ -57,19 +57,21 @@ class DummyTestFS(AbstractFileSystem):
                 return item
         raise IndexError("{name} not found!".format(name=name))
 
-    def ls(self, path, detail=True, **kwargs):
-        path = self._strip_protocol(path)
+    def ls(self, path, detail=True, refresh=True, **kwargs):
+        if kwargs.pop("strip_proto", True):
+            path = self._strip_protocol(path)
 
-        files = {
-            file["name"]: file
-            for file in self._fs_contents
-            if path == self._parent(file["name"])
-        }
+        files = not refresh and self._ls_from_cache(path)
+        if not files:
+            files = [
+                file for file in self._fs_contents if path == self._parent(file["name"])
+            ]
+            files.sort(key=lambda file: file["name"])
+            self.dircache[path.rstrip("/")] = files
 
         if detail:
-            return [files[name] for name in sorted(files)]
-
-        return list(sorted(files))
+            return files
+        return [file["name"] for file in files]
 
     @classmethod
     def get_test_paths(cls, start_with=""):
@@ -294,6 +296,23 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+def test_ls_from_cache():
+    fs = DummyTestFS()
+    uncached_results = fs.ls("top_level/second_level/", refresh=True)
+
+    assert fs.ls("top_level/second_level/", refresh=False) == uncached_results
+
+    # _strip_protocol removes everything by default though
+    # for the sake of testing the _ls_from_cache interface
+    # directly, we need run one time more without that call
+    # to actually verify that our stripping in the client
+    # function works.
+    assert (
+        fs.ls("top_level/second_level/", refresh=False, strip_proto=True)
+        == uncached_results
+    )
 
 
 @pytest.mark.parametrize(
