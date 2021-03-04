@@ -431,6 +431,8 @@ class HTTPFile(AbstractBufferedFile):
         """
         if (
             (length < 0 and self.loc == 0)  # explicit read all
+            # but not when the size is known and fits into a block anyways
+            and not (self.size is not None and self.size <= self.blocksize)
         ):
             self._fetch_all()
         if self.size is None:
