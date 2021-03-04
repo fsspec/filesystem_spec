@@ -118,6 +118,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 raise FileExistsError(e.message)
 
             raise e
+        self.invalidate_cache(self._parent(path))
 
     def mkdir(self, path, create_parents=True, **kwargs):
         """
@@ -163,6 +164,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 raise OSError(e.message)
 
             raise e
+        self.invalidate_cache(self._parent(path))
 
     def mv(self, source_path, destination_path, recursive=False, maxdepth=None):
         """
@@ -205,6 +207,8 @@ class DatabricksFileSystem(AbstractFileSystem):
                 raise FileExistsError(e.message)
 
             raise e
+        self.invalidate_cache(self._parent(source_path))
+        self.invalidate_cache(self._parent(destination_path))
 
     def _open(self, path, mode="rb", block_size="default", **kwargs):
         """
@@ -363,6 +367,13 @@ class DatabricksFileSystem(AbstractFileSystem):
                 raise ValueError(e.message)
 
             raise e
+
+    def invalidate_cache(self, path=None):
+        if path is None:
+            self.dircache.clear()
+        else:
+            self.dircache.pop(path, None)
+        super().invalidate_cache(path)
 
 
 class DatabricksFile(AbstractBufferedFile):
