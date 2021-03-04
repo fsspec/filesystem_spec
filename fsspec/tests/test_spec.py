@@ -310,7 +310,7 @@ def test_ls_from_cache():
     # to actually verify that our stripping in the client
     # function works.
     assert (
-        fs.ls("top_level/second_level/", refresh=False, strip_proto=True)
+        fs.ls("top_level/second_level/", refresh=False, strip_proto=False)
         == uncached_results
     )
 
