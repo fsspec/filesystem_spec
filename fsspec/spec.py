@@ -340,7 +340,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         parent = self._parent(path)
         if path.rstrip("/") in self.dircache:
-            return self.dircache[path]
+            return self.dircache[path.rstrip("/")]
         try:
             files = [
                 f

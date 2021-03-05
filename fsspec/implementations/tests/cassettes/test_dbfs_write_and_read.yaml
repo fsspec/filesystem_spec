@@ -670,4 +670,47 @@ interactions:
     status:
       code: 200
       message: OK
+- request:
+    body: '{"path": "/FileStore/"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '23'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.25.1
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEAxzLQQqAIBAF0Lv8tZFBRHqALtAyQqKUBjJDx0VFdy/aPng3HG02QQ83jolXaJTd
+        Jz2HaEt/FomzcxCgZBaK0ByzFX8yiS4LLQV8WMjRPDGF3TD5T6umqltVK9VKKZ/xeQEAAP//AwC1
+        7zK3aAAAAA==
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
 version: 1
