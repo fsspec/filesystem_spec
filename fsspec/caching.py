@@ -80,6 +80,7 @@ class MMapCache(BaseCache):
         return mmap.mmap(fd.fileno(), self.size)
 
     def _fetch(self, start, end):
+        logger.debug(f"MMap cache fetching {start}-{end}")
         if start is None:
             start = 0
         if end is None:
@@ -95,6 +96,7 @@ class MMapCache(BaseCache):
             i = need.pop(0)
             sstart = i * self.blocksize
             send = min(sstart + self.blocksize, self.size)
+            logger.debug(f"MMap get block #{i} ({sstart}-{send}")
             self.cache[sstart:send] = self.fetcher(sstart, send)
             self.blocks.add(i)
 
