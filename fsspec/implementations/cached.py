@@ -351,6 +351,7 @@ class CachingFileSystem(AbstractFileSystem):
         except NameError:
             logger.debug("Cache save failed due to interpreter shutdown")
         close()
+        f.closed = True
 
     def __getattribute__(self, item):
         if item in [
@@ -377,6 +378,7 @@ class CachingFileSystem(AbstractFileSystem):
             "_mkcache",
             "local_file",
             "_paths_from_path",
+            "get_mapper",
             "open_many",
             "commit_many",
             "hash_name",
