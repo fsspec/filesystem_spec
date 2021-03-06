@@ -106,6 +106,36 @@ def test_list(server):
     assert out == [server + "/index/realfile"]
 
 
+def test_list_invalid_args(server):
+    with pytest.raises(TypeError):
+        h = fsspec.filesystem("http", use_foobar=True)
+        h.glob(server + "/index/*")
+
+
+def test_list_cache(server):
+    h = fsspec.filesystem("http", use_listings_cache=True)
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
+def test_list_cache_with_expiry_time(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=30)
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
+def test_list_cache_with_max_paths(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, max_paths=5)
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
+def test_list_cache_with_skip_instance_cache(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, skip_instance_cache=True)
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
 def test_isdir(server):
     h = fsspec.filesystem("http")
     assert h.isdir(server + "/index/")
