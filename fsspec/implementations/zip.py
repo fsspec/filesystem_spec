@@ -2,11 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import zipfile
 
-from fsspec import AbstractFileSystem, open_files
-from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
+from fsspec import AbstractArchiveFileSystem, AbstractFileSystem, open_files
+from fsspec.utils import DEFAULT_BLOCK_SIZE
 
 
-class ZipFileSystem(AbstractFileSystem):
+class ZipFileSystem(AbstractFileSystem, AbstractArchiveFileSystem):
     """Read contents of ZIP archive as a file-system
 
     Keeps file object open while instance lives.
@@ -135,19 +135,3 @@ class ZipFileSystem(AbstractFileSystem):
         out.size = info["size"]
         out.name = info["name"]
         return out
-
-    def ukey(self, path):
-        return tokenize(path, self.fo, self.protocol)
-
-    def _all_dirnames(self, paths):
-        """Returns *all* directory names for each path in paths, including intermediate ones.
-
-        Parameters
-        ----------
-        paths: Iterable of path strings
-        """
-        if len(paths) == 0:
-            return set()
-
-        dirnames = {self._parent(path) for path in paths} - {self.root_marker}
-        return dirnames | self._all_dirnames(dirnames)

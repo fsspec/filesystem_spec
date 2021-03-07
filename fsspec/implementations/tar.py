@@ -1,23 +1,38 @@
 import copy
+import logging
 import tarfile
+
 import fsspec
 from fsspec.compression import compr
+from fsspec.spec import AbstractArchiveFileSystem
+from fsspec.utils import infer_compression
 
 typemap = {b"0": "file", b"5": "directory"}
 
+logger = logging.getLogger("tar")
 
-class TarFileSystem(fsspec.AbstractFileSystem):
+
+class TarFileSystem(fsspec.AbstractFileSystem, AbstractArchiveFileSystem):
     def __init__(
         self, fo, index_store=None, storage_options=None, compression=None, **kwargs
     ):
         super().__init__(**kwargs)
         if isinstance(fo, str):
             fo = fsspec.open(fo, **(storage_options or {})).open()
+
+        # Try to infer compression.
+        if compression is None:
+            try:
+                name = fo.info()["name"]
+                compression = infer_compression(name)
+            except Exception as ex:
+                logger.warning(f"Unable to infer compression: {ex}")
+
         if compression:
             # TODO: tarfile already implements compression with modes like "'r:gz'",
             #  but then would seek to offset in the file work?
-            # TODO: "infer" is not supported here
             fo = compr[compression](fo)
+
         self.fo = fo
         self.index_store = index_store
         self.index = None
@@ -35,9 +50,11 @@ class TarFileSystem(fsspec.AbstractFileSystem):
         self.index = out
         # TODO: save index to self.index_store here, if set
 
-    def ls(self, path, detail=True, **kwargs):
+    def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
         parts = path.rstrip("/").split("/")
+        if parts and parts[0] == "":
+            parts = []
         out = []
         for name, (details, _) in self.index.items():
             nparts = name.rstrip("/").split("/")
@@ -52,14 +69,17 @@ class TarFileSystem(fsspec.AbstractFileSystem):
             return [o["name"] for o in out]
 
     def info(self, path, **kwargs):
-        return self.index[path][0]
+        try:
+            return self.index[path][0]
+        except KeyError:
+            raise FileNotFoundError(path)
 
     def _open(self, path, mode="rb", **kwargs):
         if mode != "rb":
-            raise ValueError("Read Only filesystem implementation")
+            raise ValueError("Read-only filesystem implementation")
         details, offset = self.index[path]
         if details["type"] != "file":
-            raise ValueError("Can only regilar files")
+            raise ValueError("Can only handle regular files")
         newfo = copy.copy(self.fo)
         newfo.seek(offset)
         return TarContainedFile(newfo, self.info(path))
@@ -104,3 +124,9 @@ class TarContainedFile(object):
     def close(self):
         self.of.close()
         self.closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()

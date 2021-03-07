@@ -1566,3 +1566,21 @@ class AbstractBufferedFile(io.IOBase):
 
     def __exit__(self, *args):
         self.close()
+
+
+class AbstractArchiveFileSystem:
+    def ukey(self, path):
+        return tokenize(path, self.fo, self.protocol)
+
+    def _all_dirnames(self, paths):
+        """Returns *all* directory names for each path in paths, including intermediate ones.
+
+        Parameters
+        ----------
+        paths: Iterable of path strings
+        """
+        if len(paths) == 0:
+            return set()
+
+        dirnames = {self._parent(path) for path in paths} - {self.root_marker}
+        return dirnames | self._all_dirnames(dirnames)

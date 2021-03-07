@@ -14,9 +14,9 @@ from ctypes import (
 import libarchive
 import libarchive.ffi as ffi
 
-from fsspec import AbstractFileSystem, open_files
+from fsspec import AbstractArchiveFileSystem, AbstractFileSystem, open_files
 from fsspec.implementations.memory import MemoryFile
-from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
+from fsspec.utils import DEFAULT_BLOCK_SIZE
 
 # Libarchive requires seekable files or memory only for certain archive
 # types. However, since we read the directory first to cache the contents
@@ -65,7 +65,7 @@ def custom_reader(file, format_name="all", filter_name="all", block_size=ffi.pag
         yield libarchive.read.ArchiveRead(archive_p)
 
 
-class LibArchiveFileSystem(AbstractFileSystem):
+class LibArchiveFileSystem(AbstractFileSystem, AbstractArchiveFileSystem):
     """Compressed archives as a file-system (read-only)
 
     Supports the following formats:
@@ -239,19 +239,3 @@ class LibArchiveFileSystem(AbstractFileSystem):
                 else:
                     raise ValueError
         return MemoryFile(fs=self, path=path, data=data)
-
-    def ukey(self, path):
-        return tokenize(path, self.fo, self.protocol)
-
-    def _all_dirnames(self, paths):
-        """Returns *all* directory names for each path in paths, including intermediate ones.
-
-        Parameters
-        ----------
-        paths: Iterable of path strings
-        """
-        if len(paths) == 0:
-            return set()
-
-        dirnames = {self._parent(path) for path in paths} - {self.root_marker}
-        return dirnames | self._all_dirnames(dirnames)
