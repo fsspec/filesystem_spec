@@ -1,6 +1,7 @@
 import copy
 import logging
 import tarfile
+from io import BufferedReader
 
 import fsspec
 from fsspec.compression import compr
@@ -17,18 +18,34 @@ class TarFileSystem(AbstractArchiveFileSystem):
         self, fo, index_store=None, storage_options=None, compression=None, **kwargs
     ):
         super().__init__(**kwargs)
+
         if isinstance(fo, str):
             fo = fsspec.open(fo, **(storage_options or {})).open()
 
         # Try to infer compression.
         if compression is None:
-            try:
-                name = fo.info()["name"]
-                compression = infer_compression(name)
-            except Exception as ex:
-                logger.warning(f"Unable to infer compression: {ex}")
+            name = None
 
-        if compression:
+            # Try different ways to get hold of the filename. `fo` might either
+            # be a `fsspec.LocalFileOpener`, an `io.BufferedReader` or an
+            # `fsspec.AbstractFileSystem` instance.
+            try:
+                if hasattr(fo, "path"):
+                    name = fo.path
+                elif hasattr(fo, "name"):
+                    name = fo.name
+                elif hasattr(fo, "info"):
+                    name = fo.info()["name"]
+            except Exception as ex:
+                logger.warning(
+                    f"Unable to determine file name, not inferring compression: {ex}"
+                )
+
+            if name is not None:
+                compression = infer_compression(name)
+                logger.info(f"Inferred compression {compression} from file name {name}")
+
+        if compression is not None:
             # TODO: tarfile already implements compression with modes like "'r:gz'",
             #  but then would seek to offset in the file work?
             fo = compr[compression](fo)
@@ -70,8 +87,15 @@ class TarFileSystem(AbstractArchiveFileSystem):
         details, offset = self.index[path]
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
-        newfo = copy.copy(self.fo)
+
+        # `LocalFileSystem` offers its resources as `io.BufferedReader`
+        # objects, those can't be copied.
+        if isinstance(self.fo, BufferedReader):
+            newfo = self.fo
+        else:
+            newfo = copy.copy(self.fo)
         newfo.seek(offset)
+
         return TarContainedFile(newfo, self.info(path))
 
 

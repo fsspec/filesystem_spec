@@ -12,7 +12,7 @@ libarchive = pytest.importorskip("libarchive")
 
 @contextmanager
 def temparchive(data={}):
-    f = tempfile.mkstemp(suffix="7z")[1]
+    f = tempfile.mkstemp(suffix=".7z")[1]
     with libarchive.file_writer(f, "7zip") as archive:
         for k, v in data.items():
             archive.add_file_from_memory(entry_path=k, entry_size=len(v), entry_data=v)

@@ -1,6 +1,5 @@
 import os
 import pickle
-import sys
 import tarfile
 import tempfile
 from contextlib import contextmanager
@@ -9,23 +8,27 @@ from io import BytesIO
 import pytest
 
 import fsspec
+from fsspec.core import OpenFile
 
 
 @contextmanager
-def temptar(data={}):
-    f = tempfile.mkstemp(suffix="tar")[1]
-    with tarfile.TarFile(f, mode="w") as t:
+def temptar(data={}, mode="w", suffix=".tar"):
+    f = tempfile.mkstemp(suffix=suffix)[1]
+    with tarfile.TarFile.open(f, mode=mode) as t:
+        touched = {}
         for name, data in data.items():
 
             # Create directory hierarchy.
             # https://bugs.python.org/issue22208#msg225558
-            if "/" in name:
+            if "/" in name and name not in touched:
                 parts = os.path.dirname(name).split("/")
                 for index in range(1, len(parts) + 1):
                     info = tarfile.TarInfo("/".join(parts[:index]))
                     info.type = tarfile.DIRTYPE
                     t.addfile(info)
+                touched[name] = True
 
+            # Add file content.
             info = tarfile.TarInfo(name=name)
             info.size = len(data)
             t.addfile(info, BytesIO(data))
@@ -57,7 +60,6 @@ def test_glob():
         assert fs.glob("*/*/*th") == ["deeply/nested/path"]
 
 
-@pytest.mark.xfail(sys.version_info < (3, 6), reason="zip-info odd on py35")
 def test_mapping():
     with temptar(data) as t:
         fs = fsspec.filesystem("tar", fo=t)
@@ -66,7 +68,6 @@ def test_mapping():
         assert m["b"] == data["b"]
 
 
-@pytest.mark.xfail(sys.version_info < (3, 6), reason="zip not supported on py35")
 def test_pickle():
     with temptar(data) as t:
         fs = fsspec.filesystem("tar", fo=t)
@@ -139,7 +140,6 @@ def test_info():
             fs_cache.info("i-do-not-exist")
 
         # Iterate over all directories
-        # The ZipFile does not include additional information about the directories,
         for d in fs_cache._all_dirnames(data.keys()):
             lhs = fs_cache.info(d)
             del lhs["chksum"]
@@ -166,7 +166,7 @@ def test_info():
             assert lhs["size"] == len(v)
             assert lhs["type"] == "file"
 
-            # There are many flags specific to Zip Files.
+            # There are some flags specific to Tar files.
             # These are two we can use to check we are getting some of them
             assert "chksum" in lhs
 
@@ -191,3 +191,50 @@ def test_isdir_isfile(scale):
 
         assert lhs_dirs == {e for e in entries if fs.isdir(e)}
         assert lhs_files == {e for e in entries if fs.isfile(e)}
+
+
+@pytest.mark.parametrize(
+    "recipe",
+    [
+        {"mode": "w", "suffix": ".tar"},
+        {"mode": "w:gz", "suffix": ".tar.gz"},
+        {"mode": "w:bz2", "suffix": ".tar.bz2"},
+        {"mode": "w:xz", "suffix": ".tar.xz"},
+    ],
+)
+def test_compressions(recipe):
+    """
+    Run tests on all available tar file compression variants.
+    """
+    with temptar(data, mode=recipe["mode"], suffix=recipe["suffix"]) as t:
+        fs = fsspec.filesystem("tar", fo=t)
+        assert fs.cat("b") == b"hello"
+
+
+@pytest.mark.parametrize(
+    "recipe",
+    [
+        {"mode": "w", "suffix": ".tar"},
+        {"mode": "w:gz", "suffix": ".tar.gz"},
+        {"mode": "w:bz2", "suffix": ".tar.bz2"},
+        {"mode": "w:xz", "suffix": ".tar.xz"},
+    ],
+)
+def test_filesystem(recipe, tmpdir):
+    """
+    Run tests through a real fsspec filesystem implementation.
+    Here: ``LocalFileSystem``.
+    """
+
+    filename = os.path.join(tmpdir, f'temp{recipe["suffix"]}')
+
+    fs = fsspec.filesystem("file")
+    f = OpenFile(fs, filename, mode="wb")
+
+    with temptar(data, mode=recipe["mode"], suffix=recipe["suffix"]) as tf:
+        with f as fo:
+            fo.write(open(tf, "rb").read())
+
+    with fs.open(filename) as resource:
+        tarfs = fsspec.filesystem("tar", fo=resource)
+        assert tarfs.cat("b") == b"hello"

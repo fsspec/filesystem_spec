@@ -12,7 +12,7 @@ import fsspec
 
 @contextmanager
 def tempzip(data={}):
-    f = tempfile.mkstemp(suffix="zip")[1]
+    f = tempfile.mkstemp(suffix=".zip")[1]
     with zipfile.ZipFile(f, mode="w") as z:
         for k, v in data.items():
             z.writestr(k, v)
