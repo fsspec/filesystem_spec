@@ -16,15 +16,13 @@ def temptar(data={}):
     f = tempfile.mkstemp(suffix="tar")[1]
     with tarfile.TarFile(f, mode="w") as t:
         for name, data in data.items():
-            # t.add("empty", arcname=name)
 
             # Create directory hierarchy.
             # https://bugs.python.org/issue22208#msg225558
             if "/" in name:
-                current = []
-                for part in os.path.dirname(name).split("/"):
-                    current.append(part)
-                    info = tarfile.TarInfo("/".join(current))
+                parts = os.path.dirname(name).split("/")
+                for index in range(1, len(parts) + 1):
+                    info = tarfile.TarInfo("/".join(parts[:index]))
                     info.type = tarfile.DIRTYPE
                     t.addfile(info)
 
@@ -56,7 +54,6 @@ def test_empty():
 def test_glob():
     with temptar(data) as t:
         fs = fsspec.filesystem("tar", fo=t)
-        print("glob:", fs.glob("*"))
         assert fs.glob("*/*/*th") == ["deeply/nested/path"]
 
 
@@ -144,7 +141,7 @@ def test_info():
         # Iterate over all directories
         # The ZipFile does not include additional information about the directories,
         for d in fs_cache._all_dirnames(data.keys()):
-            lhs = fs_cache.info(f"{d}/")
+            lhs = fs_cache.info(d)
             del lhs["chksum"]
             expected = {
                 "name": f"{d}/",
@@ -174,7 +171,6 @@ def test_info():
             assert "chksum" in lhs
 
 
-"""
 @pytest.mark.parametrize("scale", [128, 512, 4096])
 def test_isdir_isfile(scale):
     def make_nested_dir(i):
@@ -195,4 +191,3 @@ def test_isdir_isfile(scale):
 
         assert lhs_dirs == {e for e in entries if fs.isdir(e)}
         assert lhs_files == {e for e in entries if fs.isfile(e)}
-"""

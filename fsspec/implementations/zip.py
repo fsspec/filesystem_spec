@@ -2,11 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import zipfile
 
-from fsspec import AbstractArchiveFileSystem, AbstractFileSystem, open_files
+from fsspec import AbstractArchiveFileSystem, open_files
 from fsspec.utils import DEFAULT_BLOCK_SIZE
 
 
-class ZipFileSystem(AbstractFileSystem, AbstractArchiveFileSystem):
+class ZipFileSystem(AbstractArchiveFileSystem):
     """Read contents of ZIP archive as a file-system
 
     Keeps file object open while instance lives.
@@ -78,42 +78,6 @@ class ZipFileSystem(AbstractFileSystem, AbstractArchiveFileSystem):
                     }
                 )
                 self.dir_cache[f["name"]] = f
-
-    def info(self, path, **kwargs):
-        self._get_dirs()
-        path = self._strip_protocol(path)
-        if path in self.dir_cache:
-            return self.dir_cache[path]
-        elif path + "/" in self.dir_cache:
-            return self.dir_cache[path + "/"]
-        else:
-            raise FileNotFoundError(path)
-
-    def ls(self, path, detail=False, **kwargs):
-        self._get_dirs()
-        paths = {}
-        for p, f in self.dir_cache.items():
-            p = p.rstrip("/")
-            if "/" in p:
-                root = p.rsplit("/", 1)[0]
-            else:
-                root = ""
-            if root == path.rstrip("/"):
-                paths[p] = f
-            elif all(
-                (a == b)
-                for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
-            ):
-                # root directory entry
-                ppath = p.rstrip("/").split("/", 1)[0]
-                if ppath not in paths:
-                    out = {"name": ppath + "/", "size": 0, "type": "directory"}
-                    paths[ppath] = out
-        out = list(paths.values())
-        if detail:
-            return out
-        else:
-            return list(sorted(f["name"] for f in out))
 
     def cat(self, path):
         return self.zip.read(path)
