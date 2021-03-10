@@ -46,4 +46,6 @@ if entry_points is not None:
     else:
         for spec in entry_points.get("fsspec.specs", []):
             err_msg = f"Unable to load filesystem from {spec}"
-            register_implementation(spec.name, spec.value.replace(":", "."), errtxt=err_msg)
+            register_implementation(
+                spec.name, spec.value.replace(":", "."), errtxt=err_msg
+            )
