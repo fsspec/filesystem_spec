@@ -2,15 +2,48 @@ Changelog
 =========
 
 Dev
+---
+
+Enhancements
+
+- logging in mmap cacher, explicitly close files (#559)
+
+Fixes:
+
+- get_mapper for caching filesystems (#559)
+- fix cross-device file move (#547)
+- store paths without trailing "/" for DBFS (#557)
+
+Version 0.8.7
+-------------
+
+Fixes:
+
+- fix error with pyarrow metadata for some pythons (#546)
+
+Version 0.8.6
 -------------
 
 Features:
 
-- Add dbfs:// support
+- Add dbfs:// support (#504, #514)
+
+Enhancements
+
+- don't import pyarrow (#503)
+- update entry points syntax (#515)
+- ci precommit hooks (#534)
 
 Fixes:
 
-- random appending of a directory within the filesystems ``find()`` method
+- random appending of a directory within the filesystems ``find()`` method (#507, 537)
+- fix git tests (#501)
+- fix recursive memfs operations (#502)
+- fix recorsive/maxdepth for cp (#508)
+- fix listings cache timeout (#513)
+- big endian bytes tests (#519)
+- docs syntax (#535, 524, 520, 542)
+- transactions and reads (#533)
 
 Version 0.8.5
 -------------

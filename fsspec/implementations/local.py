@@ -102,7 +102,7 @@ class LocalFileSystem(AbstractFileSystem):
     def mv_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
-        os.rename(path1, path2)
+        shutil.move(path1, path2)
 
     def rm(self, path, recursive=False, maxdepth=None):
         path = self._strip_protocol(path).rstrip("/")
@@ -244,7 +244,7 @@ class LocalFileOpener(object):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
-        os.replace(self.temp, self.path)
+        shutil.move(self.temp, self.path)
 
     def discard(self):
         if self.autocommit:

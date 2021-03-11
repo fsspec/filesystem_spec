@@ -312,6 +312,35 @@ def test_local_filecache_creates_dir_if_needed(impl):
     assert data_in_cache == data
 
 
+@pytest.mark.parametrize("toplevel", [True, False])
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+def test_get_mapper(impl, toplevel):
+    import tempfile
+
+    original_location = tempfile.mkdtemp()
+    cache_location = tempfile.mkdtemp()
+    os.rmdir(cache_location)
+    original_file = os.path.join(original_location, "afile")
+    data = b"test data"
+    with open(original_file, "wb") as f:
+        f.write(data)
+
+    if toplevel:
+        m = fsspec.get_mapper(
+            f"{impl}::file://{original_location}",
+            **{impl: {"cache_storage": cache_location}},
+        )
+    else:
+        fs = fsspec.filesystem(
+            impl, target_protocol="file", cache_storage=cache_location
+        )
+        m = fs.get_mapper(original_location)
+
+    assert m["afile"] == data
+    assert os.listdir(cache_location)
+    assert m["afile"] == data
+
+
 def test_local_filecache_basic(local_filecache):
     data, original_file, cache_location, fs = local_filecache
 
