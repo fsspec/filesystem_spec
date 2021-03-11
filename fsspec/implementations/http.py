@@ -430,11 +430,9 @@ class HTTPFile(AbstractBufferedFile):
             read only part of the data will raise a ValueError.
         """
         if (
-            (length < 0 and self.loc == 0)
-            or (length > (self.size or length))  # explicit read all
-            or (  # read more than there is
-                self.size and self.size < self.blocksize
-            )  # all fits in one block anyway
+            (length < 0 and self.loc == 0)  # explicit read all
+            # but not when the size is known and fits into a block anyways
+            and not (self.size is not None and self.size <= self.blocksize)
         ):
             self._fetch_all()
         if self.size is None:
