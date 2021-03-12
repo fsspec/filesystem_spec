@@ -70,8 +70,8 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
             if not asyncio.tasks.all_tasks(loop):
                 break
     if error[0]:
-        typ, exc, tb = error[0]
-        raise exc.with_traceback(tb)
+        err = error[0]
+        raise Exception(err)
     else:
         return result[0]
 
