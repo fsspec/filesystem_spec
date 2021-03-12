@@ -2,17 +2,18 @@ from __future__ import absolute_import, division, print_function
 
 from contextlib import contextmanager
 
-import libarchive
-import libarchive.ffi as ffi
 from ctypes import (
+    CFUNCTYPE,
+    POINTER,
     c_int,
     c_longlong,
     c_void_p,
-    CFUNCTYPE,
-    POINTER,
     cast,
     create_string_buffer,
 )
+
+import libarchive
+import libarchive.ffi as ffi
 
 from fsspec import AbstractFileSystem, open_files
 from fsspec.implementations.memory import MemoryFile
