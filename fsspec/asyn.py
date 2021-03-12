@@ -35,44 +35,14 @@ def _run_until_done(coro):
 
 def sync(loop, func, *args, callback_timeout=None, **kwargs):
     """
-    Run coroutine in loop running in separate thread.
+    Make loop run coroutine until it returns. Runs in this thread
     """
-
-    e = threading.Event()
-    main_tid = threading.get_ident()
-    result = [None]
-    error = [False]
-
-    async def f():
-        try:
-            if main_tid == threading.get_ident():
-                raise RuntimeError("sync() called from thread of running loop")
-            await asyncio.sleep(0)
-            thread_state.asynchronous = True
-            future = func(*args, **kwargs)
-            if callback_timeout is not None:
-                future = asyncio.wait_for(future, callback_timeout)
-            result[0] = await future
-        except Exception as e:
-            typ, exc, tb = error[0]
-            raise exc.with_traceback(tb)
-        finally:
-            thread_state.asynchronous = False
-            e.set()
-
-    asyncio.run_coroutine_threadsafe(f(), loop=loop)
-    if callback_timeout is not None:
-        if not e.wait(callback_timeout):
-            raise TimeoutError("timed out after %s s." % (callback_timeout,))
-    else:
-        while not e.is_set():
-            e.wait(0.01)
-            if not asyncio.tasks.all_tasks(loop):
-                break
-    if error[0]:
-        raise e
-    else:
-        return result[0]
+    try:
+        thread_state.asynchronous = True
+        result = loop.run_until_complete(func(*args, **kwargs))
+    finally:
+        thread_state.asynchronous = False
+    return result
 
 
 def maybe_sync(func, self, *args, **kwargs):
@@ -140,16 +110,13 @@ pid = [os.getpid()]
 
 
 def get_loop():
-    """Create a running loop in another thread"""
+    """Create a running loop in this thread"""
     if os.getpid() != pid:  # fork guard
         loops.clear()
         pid[0] = os.getpid()
     ident = threading.get_ident()
     if ident not in loops:
         loop = asyncio.new_event_loop()
-        t = threading.Thread(target=loop.run_forever)
-        t.daemon = True
-        t.start()
         loops[ident] = loop
     loop = loops[ident]
     return loop
@@ -241,7 +208,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _cat(self, paths, **kwargs):
         return await asyncio.gather(
             *[
-                asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop)
+                self._cat_file(path, **kwargs)
                 for path in paths
             ],
             return_exceptions=True,
