@@ -54,7 +54,8 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
                 future = asyncio.wait_for(future, callback_timeout)
             result[0] = await future
         except Exception as e:
-            error[0] = e
+            typ, exc, tb = error[0]
+            raise exc.with_traceback(tb)
         finally:
             thread_state.asynchronous = False
             e.set()
