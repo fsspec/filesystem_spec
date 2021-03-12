@@ -1,6 +1,6 @@
 import base64
-from itertools import product
 import json
+from itertools import product
 
 from ..asyn import AsyncFileSystem
 from ..core import filesystem, open
