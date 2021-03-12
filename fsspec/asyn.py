@@ -54,8 +54,7 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
                 future = asyncio.wait_for(future, callback_timeout)
             result[0] = await future
         except Exception as e:
-            typ, exc, tb = error[0]
-            raise exc.with_traceback(tb)
+            raise sys.exc_info()
         finally:
             thread_state.asynchronous = False
             e.set()
@@ -70,7 +69,8 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
             if not asyncio.tasks.all_tasks(loop):
                 break
     if error[0]:
-        raise e
+        typ, exc, tb = error[0]
+        raise exc.with_traceback(tb)
     else:
         return result[0]
 
