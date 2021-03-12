@@ -56,7 +56,9 @@ class _Cached(type):
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
-        token = tokenize(cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs)
+        token = tokenize(
+            cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs
+        )
         skip = kwargs.pop("skip_instance_cache", False)
         if os.getpid() != cls._pid:
             cls._cache.clear()
