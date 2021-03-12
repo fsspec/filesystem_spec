@@ -53,8 +53,9 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
             if callback_timeout is not None:
                 future = asyncio.wait_for(future, callback_timeout)
             result[0] = await future
-        except Exception:
-            error[0] = sys.exc_info()
+        except Exception as e:
+            error[0] = str(e)
+            del e
         finally:
             thread_state.asynchronous = False
             e.set()
@@ -65,7 +66,9 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
             raise TimeoutError("timed out after %s s." % (callback_timeout,))
     else:
         while not e.is_set():
-            e.wait(10)
+            e.wait(0.01)
+            if not asyncio.tasks.all_tasks(loop):
+                break
     if error[0]:
         typ, exc, tb = error[0]
         raise exc.with_traceback(tb)
@@ -133,12 +136,23 @@ def async_wrapper(func):
     return wrapper
 
 
+loops = {}
+pid = [os.getpid()]
+
+
 def get_loop():
     """Create a running loop in another thread"""
-    loop = asyncio.new_event_loop()
-    t = threading.Thread(target=loop.run_forever)
-    t.daemon = True
-    t.start()
+    if os.getpid() != pid:  # fork guard
+        loops.clear()
+        pid[0] = os.getpid()
+    ident = threading.get_ident()
+    if ident not in loops:
+        loop = asyncio.new_event_loop()
+        t = threading.Thread(target=loop.run_forever)
+        t.daemon = True
+        t.start()
+        loops[ident] = loop
+    loop = loops[ident]
     return loop
 
 
