@@ -1,3 +1,5 @@
+import base64
+from itertools import product
 import json
 
 from ..asyn import AsyncFileSystem
@@ -70,10 +72,11 @@ class ReferenceFileSystem(AsyncFileSystem):
             raise NotImplementedError("Only works with async targets")
         if isinstance(references, str):
             with open(references, "rb", **(ref_storage_args or {})) as f:
-                references = json.load(f)
-        self.references = references
+                text = f.read()
+        else:
+            text = references
         self.target = target
-        self._process_references()
+        self._process_references(text)
         self.fs = fs
 
     async def _cat_file(self, path):
@@ -89,9 +92,67 @@ class ReferenceFileSystem(AsyncFileSystem):
             url = self.target
         return await self.fs._cat_file(url, start=start, end=end)
 
-    def _process_references(self):
-        if "zarr_consolidated_format" in self.references:
-            self.references = _unmodel_hdf5(self.references)
+    def _process_references(self, references):
+        if isinstance(references, bytes):
+            references = json.load(references.decode())
+        vers = references.get("version", None)
+        if vers is None:
+            self._process_references0(references)
+        if vers == 1:
+            self._process_references1(references)
+        else:
+            raise ValueError(f"Unknown reference spec version: {vers}")
+        # TODO: we make dircache by iteraring over all entries, but for Spec >= 1,
+        # can replace with programmatic. Is it even needed for mapper interface?
+        self._dircache_from_items()
+
+    def _process_references0(self, references):
+        """Make reference dict for Spec Version 0"""
+        if "zarr_consolidated_format" in references:
+            # special case for Ike prototype
+            references = _unmodel_hdf5(references)
+        self.references = references
+
+    def _process_references1(self, references):
+        try:
+            import jinja2
+        except ImportError as e:
+            raise ValueError("Reference Spec Version 1 requires jinja2") from e
+        self.references = {}
+        templates = {}
+        for k, v in references.get("templates", {}).items():
+            if "{{" in v:
+                templates[k] = lambda temp=v, **kwargs: jinja2.Template(temp).render(**kwargs)
+            else:
+                templates[k] = v
+
+        for k, v in references['refs'].items():
+            if isinstance(v, str):
+                if v.startswith("base64:"):
+                    self.references[k] = base64.b64decode(v[7:])
+                self.references[k] = v
+            else:
+                u, off, l = v
+                if "{{" in u:
+                    u = jinja2.Template(u).render(**templates)
+                self.references[k] = [u, off, l]
+        for gen in references.get("gen", []):
+            dimension = {
+                k: v if isinstance(v, list) else range(v.get("start", 0), v['stop'],
+                                                       v.get('step', 1))
+                for k, v in gen['dimensions'].items()
+            }
+            products = (dict(zip(dimension.keys(), values))
+                        for values in product(*dimension.values()))
+            for pr in products:
+                key = jinja2.Template(gen['key']).render(**pr, **templates)
+                url = jinja2.Template(gen['url']).render(**pr, **templates)
+                offset = int(jinja2.Template(gen['offset']).render(**pr, **templates))
+                length = int(jinja2.Template(gen['length']).render(**pr, **templates))
+
+                self.references[key] = [url, offset, length]
+
+    def _dircache_from_items(self):
         self.dircache = {"": []}
         for path, part in self.references.items():
             if isinstance(part, (bytes, str)):
