@@ -98,7 +98,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         vers = references.get("version", None)
         if vers is None:
             self._process_references0(references)
-        if vers == 1:
+        elif vers == 1:
             self._process_references1(references)
         else:
             raise ValueError(f"Unknown reference spec version: {vers}")
