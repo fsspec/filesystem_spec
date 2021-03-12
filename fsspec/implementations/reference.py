@@ -122,11 +122,13 @@ class ReferenceFileSystem(AsyncFileSystem):
         templates = {}
         for k, v in references.get("templates", {}).items():
             if "{{" in v:
-                templates[k] = lambda temp=v, **kwargs: jinja2.Template(temp).render(**kwargs)
+                templates[k] = lambda temp=v, **kwargs: jinja2.Template(temp).render(
+                    **kwargs
+                )
             else:
                 templates[k] = v
 
-        for k, v in references['refs'].items():
+        for k, v in references["refs"].items():
             if isinstance(v, str):
                 if v.startswith("base64:"):
                     self.references[k] = base64.b64decode(v[7:])
@@ -138,17 +140,20 @@ class ReferenceFileSystem(AsyncFileSystem):
                 self.references[k] = [u, off, l]
         for gen in references.get("gen", []):
             dimension = {
-                k: v if isinstance(v, list) else range(v.get("start", 0), v['stop'],
-                                                       v.get('step', 1))
-                for k, v in gen['dimensions'].items()
+                k: v
+                if isinstance(v, list)
+                else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                for k, v in gen["dimensions"].items()
             }
-            products = (dict(zip(dimension.keys(), values))
-                        for values in product(*dimension.values()))
+            products = (
+                dict(zip(dimension.keys(), values))
+                for values in product(*dimension.values())
+            )
             for pr in products:
-                key = jinja2.Template(gen['key']).render(**pr, **templates)
-                url = jinja2.Template(gen['url']).render(**pr, **templates)
-                offset = int(jinja2.Template(gen['offset']).render(**pr, **templates))
-                length = int(jinja2.Template(gen['length']).render(**pr, **templates))
+                key = jinja2.Template(gen["key"]).render(**pr, **templates)
+                url = jinja2.Template(gen["url"]).render(**pr, **templates)
+                offset = int(jinja2.Template(gen["offset"]).render(**pr, **templates))
+                length = int(jinja2.Template(gen["length"]).render(**pr, **templates))
 
                 self.references[key] = [url, offset, length]
 
