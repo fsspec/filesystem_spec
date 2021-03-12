@@ -3,10 +3,66 @@ from __future__ import absolute_import, division, print_function
 from contextlib import contextmanager
 
 import libarchive
+import libarchive.ffi as ffi
+from ctypes import (
+    c_int,
+    c_longlong,
+    c_void_p,
+    CFUNCTYPE,
+    POINTER,
+    cast,
+    create_string_buffer,
+)
 
 from fsspec import AbstractFileSystem, open_files
 from fsspec.implementations.memory import MemoryFile
 from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
+
+# Libarchive requires seekable files or memory only for certain archive
+# types. However, since we read the directory first to cache the contents
+# and also allow random access to any file, the file-like object needs
+# to be seekable no matter what.
+
+# Seek call-backs (not provided in the libarchive python wrapper)
+SEEK_CALLBACK = CFUNCTYPE(c_longlong, c_int, c_void_p, c_longlong, c_int)
+read_set_seek_callback = ffi.ffi(
+    "read_set_seek_callback", [ffi.c_archive_p, SEEK_CALLBACK], c_int, ffi.check_int
+)
+
+
+@contextmanager
+def custom_reader(file, format_name="all", filter_name="all", block_size=ffi.page_size):
+    """Read an archive from a seekable file-like object.
+
+    The `file` object must support the standard `readinto` and 'seek' methods.
+    """
+    buf = create_string_buffer(block_size)
+    buf_p = cast(buf, c_void_p)
+
+    def read_func(archive_p, context, ptrptr):
+        # readinto the buffer, returns number of bytes read
+        length = file.readinto(buf)
+        # write the address of the buffer into the pointer
+        ptrptr = cast(ptrptr, POINTER(c_void_p))
+        ptrptr[0] = buf_p
+        # tell libarchive how much data was written into the buffer
+        return length
+
+    def seek_func(archive_p, context, offset, whence):
+        file.seek(offset, whence)
+        # tell libarchvie the current position
+        return file.tell()
+
+    read_cb = ffi.READ_CALLBACK(read_func)
+    seek_cb = SEEK_CALLBACK(seek_func)
+
+    open_cb = libarchive.read.OPEN_CALLBACK(ffi.VOID_CB)
+    close_cb = libarchive.read.CLOSE_CALLBACK(ffi.VOID_CB)
+
+    with libarchive.read.new_archive_read(format_name, filter_name) as archive_p:
+        read_set_seek_callback(archive_p, seek_cb)
+        ffi.read_open(archive_p, None, open_cb, read_cb, close_cb)
+        yield libarchive.read.ArchiveRead(archive_p)
 
 
 class LibArchiveFileSystem(AbstractFileSystem):
@@ -17,10 +73,14 @@ class LibArchiveFileSystem(AbstractFileSystem):
     Microsoft CAB, 7-Zip, WARC
 
     See the libarchive documentation for further restrictions.
+    https://www.libarchive.org/
 
-    Keeps file object open while instance lives.
+    Keeps file object open while instance lives. It only works in seekable
+    file-like objects. In case the filesystem does not support this kind of
+    file object, it is recommended to cache locally.
 
-    This class is pickleable, but not necessarily thread-safe
+    This class is pickleable, but not necessarily thread-safe (depends on the
+    platform). See libarchive documentation for details.
     """
 
     root_marker = ""
@@ -62,14 +122,13 @@ class LibArchiveFileSystem(AbstractFileSystem):
                 )
             fo = files[0]
         self.fo = fo.__enter__()  # the whole instance is a context
-        # self.arc_reader =
         self.block_size = block_size
         self.dir_cache = None
 
     @contextmanager
     def _open_archive(self):
         self.fo.seek(0)
-        with libarchive.fd_reader(self.fo.fileno(), block_size=self.block_size) as arc:
+        with custom_reader(self.fo, block_size=self.block_size) as arc:
             yield arc
 
     @classmethod
@@ -171,7 +230,6 @@ class LibArchiveFileSystem(AbstractFileSystem):
 
         data = bytes()
         with self._open_archive() as arc:
-            # FIXME? dropwhile would increase performance but less readable
             for entry in arc:
                 if entry.pathname != path:
                     continue
