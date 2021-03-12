@@ -1,6 +1,6 @@
 import base64
+import itertools
 import json
-from itertools import product
 
 from ..asyn import AsyncFileSystem
 from ..core import filesystem, open
@@ -147,7 +147,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             }
             products = (
                 dict(zip(dimension.keys(), values))
-                for values in product(*dimension.values())
+                for values in itertools.product(*dimension.values())
             )
             for pr in products:
                 key = jinja2.Template(gen["key"]).render(**pr, **templates)
