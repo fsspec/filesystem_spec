@@ -1,12 +1,12 @@
 import io
 import logging
 import os
+import threading
 import warnings
 from distutils.version import LooseVersion
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-import threading
 
 from .config import apply_config
 from .dircache import DirCache
