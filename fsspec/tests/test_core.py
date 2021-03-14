@@ -202,7 +202,7 @@ def test_target_protocol_options(ftp_writable):
         f.write(data)
 
     with fsspec.open(
-        "simplecache:///afile",
+        "simplecache://afile",
         "rb",
         target_protocol="ftp",
         target_options=options,
