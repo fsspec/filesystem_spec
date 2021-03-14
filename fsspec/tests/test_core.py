@@ -3,6 +3,7 @@ import pickle
 import tempfile
 import zipfile
 from contextlib import contextmanager
+
 import pytest
 
 import fsspec
@@ -237,7 +238,7 @@ def test_chained_url(ftp_writable):
         "zip://afile",
         "zip://afile::simplecache",
         "simplecache::zip://afile",
-        "simplecache::zip://afile",
+        "simplecache::zip://afile::simplecache",
     ]
     for url in urls:
         url += f"::ftp://{username}:{password}@{host}:{port}/archive.zip"
