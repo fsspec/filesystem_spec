@@ -94,6 +94,7 @@ def test_unmodel():
 
 
 def test_spec1_expand():
+    pytest.importorskip("jinja2")
     in_data = {
         "version": 1,
         "templates": {"u": "server.domain/path", "f": "{{c}}"},

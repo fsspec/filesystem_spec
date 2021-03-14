@@ -94,7 +94,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references(self, references):
         if isinstance(references, bytes):
-            references = json.load(references.decode())
+            references = json.loads(references.decode())
         vers = references.get("version", None)
         if vers is None:
             self._process_references0(references)
