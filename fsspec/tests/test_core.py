@@ -1,8 +1,9 @@
 import os
 import pickle
 import tempfile
-
+from contextlib import contextmanager
 import pytest
+import zipfile
 
 import fsspec
 from fsspec.core import (
@@ -155,7 +156,7 @@ def test_url_kwargs_chain(ftp_writable):
         f.write(data)
 
     with fsspec.open(
-        "simplecache::ftp://{}:{}@{}:{}/afile".format(username, password, host, port),
+        f"simplecache::ftp://{username}:{password}@{host}:{port}//afile",
         "rb",
     ) as f:
         assert f.read() == data
@@ -178,3 +179,66 @@ def test_multi_context(tmpdir):
 def test_not_local():
     with pytest.raises(ValueError, match="attribute local_file=True"):
         open_local("memory://afile")
+
+
+def test_url_to_fs(ftp_writable):
+    host, port, username, password = "localhost", 2121, "user", "pass"
+    data = b"hello"
+    with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "wb") as f:
+        f.write(data)
+    fs, url = fsspec.core.url_to_fs(
+        f"simplecache::ftp://{username}:{password}@{host}:{port}/afile"
+    )
+    fs, url = fsspec.core.url_to_fs(f"ftp://{username}:{password}@{host}:{port}/afile")
+    assert url == "/afile"
+
+
+def test_target_protocol_options(ftp_writable):
+    host, port, username, password = "localhost", 2121, "user", "pass"
+    data = b"hello"
+    options = {"host": host, "port": port, "username": username, "password": password}
+    with fsspec.open(f"ftp:///afile", "wb", **options) as f:
+        f.write(data)
+
+    with fsspec.open(
+        "simplecache:///afile",
+        "rb",
+        target_protocol="ftp",
+        target_options=options,
+    ) as f:
+        assert f.read() == data
+
+
+def test_chained_url(ftp_writable):
+    host, port, username, password = "localhost", 2121, "user", "pass"
+
+    @contextmanager
+    def tempzip(data={}):
+        f = tempfile.mkstemp(suffix="zip")[1]
+        with zipfile.ZipFile(f, mode="w") as z:
+            for k, v in data.items():
+                z.writestr(k, v)
+        try:
+            yield f
+        finally:
+            try:
+                os.remove(f)
+            except (IOError, OSError):
+                pass
+
+    data = {"afile": b"hello"}
+
+    cls = fsspec.get_filesystem_class("ftp")
+    fs = cls(host=host, port=port, username=username, password=password)
+    with tempzip(data) as lfile:
+        fs.put_file(lfile, "archive.zip")
+
+    urls = [
+        f"zip://afile::ftp://{username}:{password}@{host}:{port}/archive.zip",
+        f"zip://afile::simplecache::ftp://{username}:{password}@{host}:{port}/archive.zip",
+        f"simplecache::zip://afile::ftp://{username}:{password}@{host}:{port}/archive.zip",
+        f"simplecache::zip://afile::simplecache::ftp://{username}:{password}@{host}:{port}/archive.zip",
+    ]
+    for url in urls:
+        with fsspec.open(url, "rb") as f:
+            assert f.read() == data["afile"]
