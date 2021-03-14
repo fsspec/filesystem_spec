@@ -1,9 +1,9 @@
 import os
 import pickle
 import tempfile
+import zipfile
 from contextlib import contextmanager
 import pytest
-import zipfile
 
 import fsspec
 from fsspec.core import (
@@ -197,7 +197,7 @@ def test_target_protocol_options(ftp_writable):
     host, port, username, password = "localhost", 2121, "user", "pass"
     data = b"hello"
     options = {"host": host, "port": port, "username": username, "password": password}
-    with fsspec.open(f"ftp:///afile", "wb", **options) as f:
+    with fsspec.open("ftp:///afile", "wb", **options) as f:
         f.write(data)
 
     with fsspec.open(
@@ -234,11 +234,12 @@ def test_chained_url(ftp_writable):
         fs.put_file(lfile, "archive.zip")
 
     urls = [
-        f"zip://afile::ftp://{username}:{password}@{host}:{port}/archive.zip",
-        f"zip://afile::simplecache::ftp://{username}:{password}@{host}:{port}/archive.zip",
-        f"simplecache::zip://afile::ftp://{username}:{password}@{host}:{port}/archive.zip",
-        f"simplecache::zip://afile::simplecache::ftp://{username}:{password}@{host}:{port}/archive.zip",
+        "zip://afile",
+        "zip://afile::simplecache",
+        "simplecache::zip://afile",
+        "simplecache::zip://afile",
     ]
     for url in urls:
+        url += f"::ftp://{username}:{password}@{host}:{port}/archive.zip"
         with fsspec.open(url, "rb") as f:
             assert f.read() == data["afile"]
