@@ -332,25 +332,21 @@ def _un_chain(path, kwargs):
     # [[url, protocol, kwargs], ...]
     out = []
     previous_bit = None
-    previous_protocol = None
     for bit in reversed(bits):
         protocol = split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
         extra_kwargs = cls._get_kwargs_from_urls(bit)
-        kws = kwargs.get(split_protocol(bit)[0] or "file", {})
+        kws = kwargs.get(protocol, {})
         kw = dict(**extra_kwargs, **kws)
+        bit = cls._strip_protocol(bit)
         if (
             protocol in {"blockcache", "filecache", "simplecache"}
             and "target_protocol" not in kw
         ):
-            bit = previous_bit.replace(previous_protocol, protocol, 1)
+            bit = previous_bit
         out.append((bit, protocol, kw))
         previous_bit = bit
-        previous_protocol = protocol
     out = list(reversed(out))
-    # We should only do the url rewrite if the cache is in the middle of the chain
-    if out[0][1] in {"blockcache", "filecache", "simplecache"}:
-        out[0] = (f"{out[0][1]}://", out[0][1], out[0][2])
     return out
 
 
@@ -358,22 +354,26 @@ def url_to_fs(url, **kwargs):
     """Turn fully-qualified and potentially chained URL into filesystem instance"""
     chain = _un_chain(url, kwargs)
     if len(chain) > 1:
-        kwargs = chain[0][2]
-        inkwargs = kwargs
-        for i, ch in enumerate(chain):
+        inkwargs = {}
+        # Reverse iterate the chain, creating a nested target_* structure
+        for i, ch in enumerate(reversed(chain)):
             urls, protocol, kw = ch
-            if i == 0:
+            if i == len(chain) - 1:
+                inkwargs = dict(**kw, **inkwargs)
                 continue
+            inkwargs["target_options"] = dict(**kw, **inkwargs)
             inkwargs["target_protocol"] = protocol
-            inkwargs["target_options"] = kw.copy()
             inkwargs["fo"] = urls
-            inkwargs = inkwargs["target_options"]
-        protocol = chain[0][1]
-        urlpath = chain[-1][1] + "://" + split_protocol(urls)[1]
-        fs = filesystem(protocol, **kwargs)
+        urlpath, protocol, _ = chain[0]
+        fs = filesystem(protocol, **inkwargs)
     else:
-        protocol, urlpath = split_protocol(url)
-        fs = filesystem(protocol, **kwargs)
+        protocol = split_protocol(url)[0]
+        cls = get_filesystem_class(protocol)
+
+        options = cls._get_kwargs_from_urls(url)
+        urlpath = cls._strip_protocol(url)
+        update_storage_options(options, kwargs)
+        fs = cls(**options)
         urlpath = fs._strip_protocol(url)
     return fs, urlpath
 
@@ -563,72 +563,68 @@ def get_fs_token_paths(
         Expand string paths for writing, assuming the path is a directory
     """
     if isinstance(urlpath, (list, tuple, set)):
+        if not urlpath:
+            raise ValueError("empty urlpath sequence")
         urlpath = [stringify_path(u) for u in urlpath]
     else:
         urlpath = stringify_path(urlpath)
     chain = _un_chain(urlpath, storage_options or {})
     if len(chain) > 1:
-        storage_options = chain[0][2]
-        inkwargs = storage_options
-        urlpath = False
-        for i, ch in enumerate(chain):
-            urls, protocol, kw = ch
-            if isinstance(urls, str):
-                if not urlpath and split_protocol(urls)[1]:
-                    urlpath = protocol + "://" + split_protocol(urls)[1]
-            else:
-                if not urlpath and any(split_protocol(u)[1] for u in urls):
-                    urlpath = [protocol + "://" + split_protocol(u)[1] for u in urls]
-            if i == 0:
+        inkwargs = {}
+        # Reverse iterate the chain, creating a nested target_* structure
+        for i, ch in enumerate(reversed(chain)):
+            urls, nested_protocol, kw = ch
+            if i == len(chain) - 1:
+                inkwargs = dict(**kw, **inkwargs)
                 continue
-            inkwargs["target_protocol"] = protocol
-            inkwargs["target_options"] = kw.copy()
+            inkwargs["target_options"] = dict(**kw, **inkwargs)
+            inkwargs["target_protocol"] = nested_protocol
             inkwargs["fo"] = urls
-            inkwargs = inkwargs["target_options"]
-        protocol = chain[0][1]
-    if isinstance(urlpath, (list, tuple)):
-        if not urlpath:
-            raise ValueError("empty urlpath sequence")
-        protocols, paths = zip(*map(split_protocol, urlpath))
-        if protocol is None:
-            protocol = protocols[0]
-            if not all(p == protocol for p in protocols):
+        paths, protocol, _ = chain[0]
+        fs = filesystem(protocol, **inkwargs)
+        if isinstance(paths, (list, tuple, set)):
+            paths = [fs._strip_protocol(u) for u in paths]
+        else:
+            paths = fs._strip_protocol(paths)
+    else:
+        if isinstance(urlpath, (list, tuple, set)):
+            protocols, paths = zip(*map(split_protocol, urlpath))
+            if protocol is None:
+                protocol = protocols[0]
+                if not all(p == protocol for p in protocols):
+                    raise ValueError(
+                        "When specifying a list of paths, all paths must "
+                        "share the same protocol"
+                    )
+            cls = get_filesystem_class(protocol)
+            optionss = list(map(cls._get_kwargs_from_urls, urlpath))
+            paths = [cls._strip_protocol(u) for u in urlpath]
+            options = optionss[0]
+            if not all(o == options for o in optionss):
                 raise ValueError(
                     "When specifying a list of paths, all paths must "
-                    "share the same protocol"
+                    "share the same file-system options"
                 )
-        cls = get_filesystem_class(protocol)
-        optionss = list(map(cls._get_kwargs_from_urls, urlpath))
-        paths = [cls._strip_protocol(u) for u in urlpath]
-        options = optionss[0]
-        if not all(o == options for o in optionss):
-            raise ValueError(
-                "When specifying a list of paths, all paths must "
-                "share the same file-system options"
-            )
-        update_storage_options(options, storage_options)
-        fs = cls(**options)
-        paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
-
-    elif isinstance(urlpath, str) or hasattr(urlpath, "name"):
-        protocols, path = split_protocol(urlpath)
-        protocol = protocol or protocols
-        cls = get_filesystem_class(protocol)
-
-        options = cls._get_kwargs_from_urls(urlpath)
-        path = cls._strip_protocol(urlpath)
-        update_storage_options(options, storage_options)
-        fs = cls(**options)
-
-        if "w" in mode and expand:
-            paths = _expand_paths(path, name_function, num)
-        elif "*" in path:
-            paths = [f for f in sorted(fs.glob(path)) if not fs.isdir(f)]
+            update_storage_options(options, storage_options)
+            fs = cls(**options)
         else:
-            paths = [path]
+            protocols = split_protocol(urlpath)[0]
+            protocol = protocol or protocols
+            cls = get_filesystem_class(protocol)
+            options = cls._get_kwargs_from_urls(urlpath)
+            paths = cls._strip_protocol(urlpath)
+            update_storage_options(options, storage_options)
+            fs = cls(**options)
 
+    if isinstance(paths, (list, tuple, set)):
+        paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
     else:
-        raise TypeError("url type not understood: %s" % urlpath)
+        if "w" in mode and expand:
+            paths = _expand_paths(paths, name_function, num)
+        elif "*" in paths:
+            paths = [f for f in sorted(fs.glob(paths)) if not fs.isdir(f)]
+        else:
+            paths = [paths]
 
     return fs, fs._fs_token, paths
 
