@@ -198,9 +198,7 @@ def test_target_protocol_options(ftp_writable):
     host, port, username, password = ftp_writable
     data = b"hello"
     options = {"host": host, "port": port, "username": username, "password": password}
-    with fsspec.open(
-        "simplecache://afile", "wb", target_protocol="ftp", target_options=options
-    ) as f:
+    with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "wb") as f:
         f.write(data)
     with fsspec.open(
         "simplecache://afile",
