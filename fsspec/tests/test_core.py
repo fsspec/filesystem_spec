@@ -149,7 +149,7 @@ def test_mismatch():
 
 
 def test_url_kwargs_chain(ftp_writable):
-    host, port, username, password = "localhost", 2121, "user", "pass"
+    host, port, username, password = ftp_writable
     data = b"hello"
     with fsspec.open(
         "ftp:///afile", "wb", host=host, port=port, username=username, password=password
@@ -183,7 +183,7 @@ def test_not_local():
 
 
 def test_url_to_fs(ftp_writable):
-    host, port, username, password = "localhost", 2121, "user", "pass"
+    host, port, username, password = ftp_writable
     data = b"hello"
     with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "wb") as f:
         f.write(data)
@@ -195,10 +195,10 @@ def test_url_to_fs(ftp_writable):
 
 
 def test_target_protocol_options(ftp_writable):
-    host, port, username, password = "localhost", 2121, "user", "pass"
+    host, port, username, password = ftp_writable
     data = b"hello"
     options = {"host": host, "port": port, "username": username, "password": password}
-    with fsspec.open("ftp:///afile", "wb", **options) as f:
+    with fsspec.open("simplecache://afile", "wb", target_protocol="ftp", target_options=options) as f:
         f.write(data)
     with fsspec.open(
         "simplecache://afile",
@@ -210,7 +210,7 @@ def test_target_protocol_options(ftp_writable):
 
 
 def test_chained_url(ftp_writable):
-    host, port, username, password = "localhost", 2121, "user", "pass"
+    host, port, username, password = ftp_writable
 
     @contextmanager
     def tempzip(data={}):
