@@ -14,10 +14,6 @@ private = re.compile("_[^_]")
 lock = threading.Lock()
 
 
-class Nested(Exception):
-    ...
-
-
 def _run_until_done(loop, coro):
     """execute coroutine, when already in the event loop"""
     # raise Nested
