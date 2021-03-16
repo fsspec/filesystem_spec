@@ -1,9 +1,7 @@
+import paramiko
+from stat import S_ISDIR, S_ISLNK
 import types
 import uuid
-from stat import S_ISDIR, S_ISLNK
-
-import paramiko
-
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
 
@@ -78,34 +76,46 @@ class SFTPFileSystem(AbstractFileSystem):
         self.ftp.rmdir(path)
 
     def info(self, path):
-        s = self.ftp.stat(path)
-        if S_ISDIR(s.st_mode):
+        stat = self._decode_stat(self.ftp.stat(path))
+        stat["name"] = path + "/" if stat["type"] == "directory" else path
+        return stat
+
+    @staticmethod
+    def _decode_stat(stat, parent_path=None):
+        if S_ISDIR(stat.st_mode):
             t = "directory"
-        elif S_ISLNK(s.st_mode):
+        elif S_ISLNK(stat.st_mode):
             t = "link"
         else:
             t = "file"
-        return {
-            "name": path + "/" if t == "directory" else path,
-            "size": s.st_size,
+        out = {
+            "name": "",
+            "size": stat.st_size,
             "type": t,
-            "uid": s.st_uid,
-            "gid": s.st_gid,
-            "time": s.st_atime,
-            "mtime": s.st_mtime,
+            "uid": stat.st_uid,
+            "gid": stat.st_gid,
+            "time": stat.st_atime,
+            "mtime": stat.st_mtime,
         }
+        if parent_path:
+            out["name"] = "/".join([parent_path.rstrip("/"), stat.filename])
+            out["name"] += "/" if t == "directory" else ""
+        return out
 
     def ls(self, path, detail=False):
-        out = ["/".join([path.rstrip("/"), p]) for p in self.ftp.listdir(path)]
-        out = [self.info(o) for o in out]
+        stats = [self._decode_stat(stat, path) for stat in self.ftp.listdir_iter(path)]
         if detail:
-            return out
-        return sorted([p["name"] for p in out])
+            return stats
+        else:
+            paths = [stat["name"] for stat in stats]
+            return sorted(paths)
 
     def put(self, lpath, rpath):
         self.ftp.put(lpath, rpath)
 
     def get(self, rpath, lpath):
+        print(rpath)
+        print(lpath)
         self.ftp.get(rpath, lpath)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
