@@ -1,3 +1,4 @@
+import datetime
 import types
 import uuid
 from stat import S_ISDIR, S_ISLNK
@@ -6,6 +7,8 @@ import paramiko
 
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
+
+logger = logging.getLogger("fsspec.sftp")
 
 
 class SFTPFileSystem(AbstractFileSystem):
@@ -43,6 +46,7 @@ class SFTPFileSystem(AbstractFileSystem):
         self._connect()
 
     def _connect(self):
+        logger.debug("Connecting to SFTP server %s" % self.host)
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.client.connect(self.host, **self.ssh_kwargs)
@@ -60,6 +64,7 @@ class SFTPFileSystem(AbstractFileSystem):
         return out
 
     def mkdir(self, path, mode=511):
+        logger.debug("Creating folder %s" % path)
         self.ftp.mkdir(path, mode)
 
     def makedirs(self, path, exist_ok=False, mode=511):
@@ -75,11 +80,12 @@ class SFTPFileSystem(AbstractFileSystem):
                 self.mkdir(path, mode)
 
     def rmdir(self, path):
+        logger.debug("Removing folder %s" % path)
         self.ftp.rmdir(path)
 
     def info(self, path):
         stat = self._decode_stat(self.ftp.stat(path))
-        stat["name"] = path + "/" if stat["type"] == "directory" else path
+        stat["name"] = path
         return stat
 
     @staticmethod
@@ -96,15 +102,15 @@ class SFTPFileSystem(AbstractFileSystem):
             "type": t,
             "uid": stat.st_uid,
             "gid": stat.st_gid,
-            "time": stat.st_atime,
-            "mtime": stat.st_mtime,
+            "time": datetime.datetime.utcfromtimestamp(stat.st_atime),
+            "mtime": datetime.datetime.utcfromtimestamp(stat.st_mtime),
         }
         if parent_path:
             out["name"] = "/".join([parent_path.rstrip("/"), stat.filename])
-            out["name"] += "/" if t == "directory" else ""
         return out
 
     def ls(self, path, detail=False):
+        logger.debug("Listing folder %s" % path)
         stats = [self._decode_stat(stat, path) for stat in self.ftp.listdir_iter(path)]
         if detail:
             return stats
@@ -113,11 +119,11 @@ class SFTPFileSystem(AbstractFileSystem):
             return sorted(paths)
 
     def put(self, lpath, rpath):
+        logger.debug("Put file %s into %s" % (lpath, rpath))
         self.ftp.put(lpath, rpath)
 
     def get(self, rpath, lpath):
-        print(rpath)
-        print(lpath)
+        logger.debug("Get file %s into %s" % (rpath, lpath))
         self.ftp.get(rpath, lpath)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
@@ -126,6 +132,7 @@ class SFTPFileSystem(AbstractFileSystem):
             If 0, no buffering, if 1, line buffering, if >1, buffer that many
             bytes, if None use default from paramiko.
         """
+        logger.debug("Opening file %s" % path)
         if kwargs.get("autocommit", True) is False:
             # writes to temporary file, move on commit
             path2 = "{}/{}".format(self.temppath, uuid.uuid4())
@@ -146,6 +153,7 @@ class SFTPFileSystem(AbstractFileSystem):
             self.ftp.remove(path)
 
     def mv(self, old, new):
+        logger.debug("Renaming %s into %s" % (old, new))
         self.ftp.posix_rename(old, new)
 
 
