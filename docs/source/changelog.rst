@@ -4,7 +4,11 @@ Changelog
 Dev
 ---
 
-Enhancements
+Major Changes:
+
+- one event loop per thread
+
+Enhancements:
 
 - logging in mmap cacher, explicitly close files (#559)
 
