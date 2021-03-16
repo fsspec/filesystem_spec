@@ -439,7 +439,7 @@ def get_package_version_without_import(name):
 
 
 def setup_logging(logger=None, logger_name=None, level="DEBUG"):
-    if logger ^ logger_name:
+    if logger is None and logger_name is None:
         raise ValueError("Provide either logger object or logger name")
     logger = logger or logging.getLogger(logger_name)
     handle = logging.StreamHandler()

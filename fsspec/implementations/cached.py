@@ -385,7 +385,9 @@ class CachingFileSystem(AbstractFileSystem):
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
-            return lambda *args, **kw: getattr(type(self), item)(self, *args, **kw)
+            return lambda *args, **kw: getattr(type(self), item).__get__(self)(
+                *args, **kw
+            )
         if item in ["__reduce_ex__"]:
             raise AttributeError
         if item in ["_cache"]:
@@ -404,7 +406,7 @@ class CachingFileSystem(AbstractFileSystem):
             # attributed belonging to the target filesystem
             cls = type(fs)
             m = getattr(cls, item)
-            if inspect.isfunction(m) and (
+            if (inspect.isfunction(m) or inspect.isdatadescriptor(m)) and (
                 not hasattr(m, "__self__") or m.__self__ is None
             ):
                 # instance method

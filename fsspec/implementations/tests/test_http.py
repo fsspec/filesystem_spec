@@ -7,7 +7,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-import fsspec
+import fsspec.asyn
+import fsspec.utils
+
+fsspec.utils.setup_logging(logger_name="fsspec.http")
 
 requests = pytest.importorskip("requests")
 port = 9898
@@ -260,10 +263,21 @@ def test_async_other_thread(server):
 
     th.daemon = True
     th.start()
-    fs = fsspec.filesystem("http", asynchronous=False, loop=loop)
+    fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
+    session = asyncio.run_coroutine_threadsafe(fs.set_session(), loop=loop).result()
     cor = fs._cat([server + "/index/realfile"])
     fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
     assert fut.result() == [data]
+    asyncio.run_coroutine_threadsafe(session.close(), loop=loop).result()
+    loop.call_soon_threadsafe(loop.stop)
+
+
+def test_async_with_loop(server):
+    loop = asyncio.get_event_loop()
+    fs = fsspec.filesystem("http", asynchronous=False, loop=loop)
+    cor = fs._cat([server + "/index/realfile"])
+    fut = loop.run_until_complete(cor)
+    assert fut == [data]
 
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
@@ -272,16 +286,11 @@ def test_async_this_thread(server):
         loop = asyncio.get_event_loop()
         fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
 
-        # fails because client creation has not yet been awaited
-        assert isinstance(
-            (await fs._cat([server + "/index/realfile"]))[0], RuntimeError
-        )
-        with pytest.raises(RuntimeError):
-            fs.cat([server + "/index/realfile"])
-
-        await fs.set_session()  # creates client
+        # this is no longer required
+        session = await fs.set_session()  # creates client
 
         out = await fs._cat([server + "/index/realfile"])
+        await session.close()
         del fs
         assert out == [data]
 
@@ -291,8 +300,13 @@ def test_async_this_thread(server):
 def _inner_pass(fs, q, fn):
     # pass the s3 instance, but don't use it; in new process, the instance
     # cache should be skipped to make a new instance
-    fs = fsspec.filesystem("http")
-    q.put(fs.cat(fn))
+    import traceback
+
+    try:
+        fs = fsspec.filesystem("http")
+        q.put(fs.cat(fn))
+    except Exception:
+        q.put(traceback.format_exc())
 
 
 @pytest.mark.skipif(
@@ -311,5 +325,6 @@ def test_processes(server, method):
     q = ctx.Queue()
     p = ctx.Process(target=_inner_pass, args=(fs, q, fn))
     p.start()
-    assert q.get() == fs.cat(fn)
+    out = q.get()
+    assert out == fs.cat(fn)
     p.join()

@@ -3,7 +3,6 @@ import functools
 import inspect
 import os
 import re
-import sys
 import threading
 
 from .spec import AbstractFileSystem
@@ -12,24 +11,30 @@ from .utils import is_exception, other_paths
 # this global variable holds whether this thread is running async or not
 thread_state = threading.local()
 private = re.compile("_[^_]")
+lock = threading.Lock()
 
 
-def _run_until_done(coro):
+class Nested(Exception):
+    ...
+
+
+def _run_until_done(loop, coro):
     """execute coroutine, when already in the event loop"""
-    if sys.version_info < (3, 7):  # pragma: no cover
-        raise RuntimeError(
-            "async file systems do not work completely on py<37. "
-            "The nested call currently underway cannot be processed. "
-            "Please downgrade your fsspec or upgrade python."
-        )
-    loop = asyncio.get_event_loop()
-    task = asyncio.current_task()
-    asyncio.tasks._unregister_task(task)
-    del asyncio.tasks._current_tasks[loop]
+    # raise Nested
+    with lock:
+        task = asyncio.current_task(loop=loop)
+        if task:
+            asyncio.tasks._unregister_task(task)
+        asyncio.tasks._current_tasks.pop(loop, None)
     runner = loop.create_task(coro)
     while not runner.done():
-        loop._run_once()
-    asyncio.tasks._current_tasks[loop] = task
+        try:
+            loop._run_once()
+        except (IndexError, RuntimeError):
+            pass
+    if task:
+        with lock:
+            asyncio.tasks._current_tasks[loop] = task
     return runner.result()
 
 
@@ -39,7 +44,11 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
     """
     try:
         thread_state.asynchronous = True
-        result = loop.run_until_complete(func(*args, **kwargs))
+        coro = func(*args, **kwargs)
+        if loop.is_running():
+            result = _run_until_done(loop, coro)
+        else:
+            result = loop.run_until_complete(coro)
     finally:
         thread_state.asynchronous = False
     return result
@@ -62,7 +71,7 @@ def maybe_sync(func, self, *args, **kwargs):
     ):
         if inspect.iscoroutinefunction(func):
             # run coroutine while pausing this one (because we are within async)
-            return _run_until_done(func(*args, **kwargs))
+            return _run_until_done(loop, func(*args, **kwargs))
         else:
             # make awaitable which then calls the blocking function
             return _run_as_coroutine(func, *args, **kwargs)
@@ -105,20 +114,13 @@ def async_wrapper(func):
     return wrapper
 
 
-loops = {}
-pid = [os.getpid()]
-
-
 def get_loop():
-    """Create a running loop in this thread"""
-    if os.getpid() != pid:  # fork guard
-        loops.clear()
-        pid[0] = os.getpid()
-    ident = threading.get_ident()
-    if ident not in loops:
+    """Get/Create an event loop to run in this thread"""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
         loop = asyncio.new_event_loop()
-        loops[ident] = loop
-    loop = loops[ident]
+        asyncio.set_event_loop(loop)
     return loop
 
 
@@ -165,8 +167,19 @@ class AsyncFileSystem(AbstractFileSystem):
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
         self.asynchronous = asynchronous
-        self.loop = loop or get_loop()
+        self._loop = threading.local()
+        self._pid = os.getpid()
+        if loop is not None:
+            self._loop.loop = loop
         super().__init__(*args, **kwargs)
+
+    @property
+    def loop(self):
+        if os.getpid() != self._pid:
+            raise RuntimeError("This class is not fork-safe")
+        if not hasattr(self._loop, "loop"):
+            self._loop.loop = get_loop()
+        return self._loop.loop
 
     async def _rm(self, path, recursive=False, **kwargs):
         await asyncio.gather(*[self._rm_file(p, **kwargs) for p in path])
@@ -207,10 +220,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
     async def _cat(self, paths, **kwargs):
         return await asyncio.gather(
-            *[
-                self._cat_file(path, **kwargs)
-                for path in paths
-            ],
+            *[self._cat_file(path, **kwargs) for path in paths],
             return_exceptions=True,
         )
 
