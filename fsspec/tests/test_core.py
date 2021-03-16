@@ -196,10 +196,14 @@ def test_url_to_fs(ftp_writable):
 
 def test_target_protocol_options(ftp_writable):
     host, port, username, password = ftp_writable
-    data = b"hello"
+    data = b"hello_protocol"
     options = {"host": host, "port": port, "username": username, "password": password}
     with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "wb") as f:
         f.write(data)
+    with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "rb") as f:
+        assert f.read() == data
+    with fsspec.open("ftp:///afile", "rb", **options) as f:
+        assert f.read() == data    
     with fsspec.open(
         "simplecache://afile",
         "rb",
