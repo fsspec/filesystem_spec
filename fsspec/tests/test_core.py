@@ -200,11 +200,6 @@ def test_target_protocol_options(ftp_writable):
     options = {"host": host, "port": port, "username": username, "password": password}
     with fsspec.open("ftp:///afile", "wb", **options) as f:
         f.write(data)
-
-    # Remove the FTP FS instance
-    cls = fsspec.get_filesystem_class("ftp")
-    cls._cache.clear()        
-        
     with fsspec.open(
         "simplecache://afile",
         "rb",
