@@ -13,7 +13,7 @@ async def inner():
 
 async def outer():
     await asyncio.sleep(1)
-    return _run_until_done(inner())
+    return _run_until_done(asyncio.get_running_loop(), inner())
 
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="Async fails on py36")

@@ -3,7 +3,6 @@ import functools
 import inspect
 import os
 import re
-import sys
 import threading
 
 from .spec import AbstractFileSystem
@@ -12,65 +11,43 @@ from .utils import is_exception, other_paths
 # this global variable holds whether this thread is running async or not
 thread_state = threading.local()
 private = re.compile("_[^_]")
+lock = threading.Lock()
 
 
-def _run_until_done(coro):
+def _run_until_done(loop, coro):
     """execute coroutine, when already in the event loop"""
-    if sys.version_info < (3, 7):  # pragma: no cover
-        raise RuntimeError(
-            "async file systems do not work completely on py<37. "
-            "The nested call currently underway cannot be processed. "
-            "Please downgrade your fsspec or upgrade python."
-        )
-    loop = asyncio.get_event_loop()
-    task = asyncio.current_task()
-    asyncio.tasks._unregister_task(task)
-    del asyncio.tasks._current_tasks[loop]
+    # raise Nested
+    with lock:
+        task = asyncio.current_task(loop=loop)
+        if task:
+            asyncio.tasks._unregister_task(task)
+        asyncio.tasks._current_tasks.pop(loop, None)
     runner = loop.create_task(coro)
     while not runner.done():
-        loop._run_once()
-    asyncio.tasks._current_tasks[loop] = task
+        try:
+            loop._run_once()
+        except (IndexError, RuntimeError):
+            pass
+    if task:
+        with lock:
+            asyncio.tasks._current_tasks[loop] = task
     return runner.result()
 
 
 def sync(loop, func, *args, callback_timeout=None, **kwargs):
     """
-    Run coroutine in loop running in separate thread.
+    Make loop run coroutine until it returns. Runs in this thread
     """
-
-    e = threading.Event()
-    main_tid = threading.get_ident()
-    result = [None]
-    error = [False]
-
-    async def f():
-        try:
-            if main_tid == threading.get_ident():
-                raise RuntimeError("sync() called from thread of running loop")
-            await asyncio.sleep(0)
-            thread_state.asynchronous = True
-            future = func(*args, **kwargs)
-            if callback_timeout is not None:
-                future = asyncio.wait_for(future, callback_timeout)
-            result[0] = await future
-        except Exception:
-            error[0] = sys.exc_info()
-        finally:
-            thread_state.asynchronous = False
-            e.set()
-
-    asyncio.run_coroutine_threadsafe(f(), loop=loop)
-    if callback_timeout is not None:
-        if not e.wait(callback_timeout):
-            raise TimeoutError("timed out after %s s." % (callback_timeout,))
-    else:
-        while not e.is_set():
-            e.wait(10)
-    if error[0]:
-        typ, exc, tb = error[0]
-        raise exc.with_traceback(tb)
-    else:
-        return result[0]
+    try:
+        thread_state.asynchronous = True
+        coro = func(*args, **kwargs)
+        if loop.is_running():
+            result = _run_until_done(loop, coro)
+        else:
+            result = loop.run_until_complete(coro)
+    finally:
+        thread_state.asynchronous = False
+    return result
 
 
 def maybe_sync(func, self, *args, **kwargs):
@@ -90,7 +67,7 @@ def maybe_sync(func, self, *args, **kwargs):
     ):
         if inspect.iscoroutinefunction(func):
             # run coroutine while pausing this one (because we are within async)
-            return _run_until_done(func(*args, **kwargs))
+            return _run_until_done(loop, func(*args, **kwargs))
         else:
             # make awaitable which then calls the blocking function
             return _run_as_coroutine(func, *args, **kwargs)
@@ -134,11 +111,12 @@ def async_wrapper(func):
 
 
 def get_loop():
-    """Create a running loop in another thread"""
-    loop = asyncio.new_event_loop()
-    t = threading.Thread(target=loop.run_forever)
-    t.daemon = True
-    t.start()
+    """Get/Create an event loop to run in this thread"""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     return loop
 
 
@@ -185,8 +163,19 @@ class AsyncFileSystem(AbstractFileSystem):
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
         self.asynchronous = asynchronous
-        self.loop = loop or get_loop()
+        self._loop = threading.local()
+        self._pid = os.getpid()
+        if loop is not None:
+            self._loop.loop = loop
         super().__init__(*args, **kwargs)
+
+    @property
+    def loop(self):
+        if os.getpid() != self._pid:
+            raise RuntimeError("This class is not fork-safe")
+        if not hasattr(self._loop, "loop"):
+            self._loop.loop = get_loop()
+        return self._loop.loop
 
     async def _rm(self, path, recursive=False, **kwargs):
         await asyncio.gather(*[self._rm_file(p, **kwargs) for p in path])
@@ -227,10 +216,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
     async def _cat(self, paths, **kwargs):
         return await asyncio.gather(
-            *[
-                asyncio.ensure_future(self._cat_file(path, **kwargs), loop=self.loop)
-                for path in paths
-            ],
+            *[self._cat_file(path, **kwargs) for path in paths],
             return_exceptions=True,
         )
 

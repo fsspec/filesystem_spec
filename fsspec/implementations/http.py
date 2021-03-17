@@ -81,20 +81,19 @@ class HTTPFileSystem(AsyncFileSystem):
         self.cache_options = cache_options
         self.client_kwargs = client_kwargs or {}
         self.kwargs = storage_options
-        if not asynchronous:
-            self._session = sync(self.loop, get_client, **self.client_kwargs)
-            weakref.finalize(self, sync, self.loop, self.session.close)
-        else:
-            self._session = None
 
-    @property
-    def session(self):
-        if self._session is None:
-            raise RuntimeError("please await ``.set_session`` before anything else")
-        return self._session
+    @staticmethod
+    def _close_session(looplocal):
+        loop = getattr(looplocal, "loop", None)
+        session = getattr(looplocal, "_session", None)
+        if loop is not None and session is not None:
+            sync(loop, session.close)
 
     async def set_session(self):
-        self._session = await get_client(**self.client_kwargs)
+        if not hasattr(self._loop, "_session"):
+            self._loop._session = await get_client(**self.client_kwargs)
+            weakref.finalize(self, self._close_session, self._loop)
+        return self._loop._session
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -114,7 +113,8 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
-        async with self.session.get(url, **self.kwargs) as r:
+        session = await self.set_session()
+        async with session.get(url, **self.kwargs) as r:
             r.raise_for_status()
             text = await r.text()
         if self.simple_links:
@@ -165,7 +165,8 @@ class HTTPFileSystem(AsyncFileSystem):
             headers = kw.pop("headers", {}).copy()
             headers["Range"] = "bytes=%i-%i" % (start, end - 1)
             kw["headers"] = headers
-        async with self.session.get(url, **kw) as r:
+        session = await self.set_session()
+        async with session.get(url, **kw) as r:
             if r.status == 404:
                 raise FileNotFoundError(url)
             r.raise_for_status()
@@ -176,7 +177,8 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(rpath)
-        async with self.session.get(rpath, **self.kwargs) as r:
+        session = await self.set_session()
+        async with session.get(rpath, **self.kwargs) as r:
             if r.status == 404:
                 raise FileNotFoundError(rpath)
             r.raise_for_status()
@@ -191,7 +193,8 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         try:
             logger.debug(path)
-            r = await self.session.get(path, **kw)
+            session = await self.set_session()
+            r = await session.get(path, **kw)
             async with r:
                 return r.status < 400
         except (requests.HTTPError, aiohttp.client_exceptions.ClientError):
@@ -232,11 +235,12 @@ class HTTPFileSystem(AsyncFileSystem):
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
         size = size or self.size(path)
+        session = sync(self.loop, self.set_session)
         if block_size and size:
             return HTTPFile(
                 self,
                 path,
-                session=self.session,
+                session=session,
                 block_size=block_size,
                 mode=mode,
                 size=size,
@@ -247,7 +251,7 @@ class HTTPFileSystem(AsyncFileSystem):
             )
         else:
             return HTTPStreamFile(
-                self, path, mode=mode, loop=self.loop, session=self.session, **kw
+                self, path, mode=mode, loop=self.loop, session=session, **kw
             )
 
     def ukey(self, url):
@@ -267,8 +271,9 @@ class HTTPFileSystem(AsyncFileSystem):
         size = False
         for policy in ["head", "get"]:
             try:
+                session = await self.set_session()
                 size = await _file_size(
-                    url, size_policy=policy, session=self.session, **self.kwargs
+                    url, size_policy=policy, session=session, **self.kwargs
                 )
                 if size:
                     break
@@ -551,7 +556,12 @@ class HTTPStreamFile(AbstractBufferedFile):
             raise ValueError
         self.details = {"name": url, "size": None}
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none", **kwargs)
-        self.r = sync(self.loop, self.session.get, url, **kwargs)
+
+        async def cor():
+            r = await self.session.get(url, **kwargs).__aenter__()
+            return r
+
+        self.r = sync(self.loop, cor)
 
     def seek(self, *args, **kwargs):
         raise ValueError("Cannot seek streaming HTTP file")
@@ -613,6 +623,7 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
             return int(r.headers["Content-Length"])
         elif "Content-Range" in r.headers:
             return int(r.headers["Content-Range"].split("/")[1])
+        r.close()
 
 
 file_size = sync_wrapper(_file_size)
