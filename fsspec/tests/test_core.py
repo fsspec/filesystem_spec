@@ -17,6 +17,21 @@ from fsspec.core import (
 )
 
 
+@contextmanager
+def tempzip(data={}):
+    f = tempfile.mkstemp(suffix="zip")[1]
+    with zipfile.ZipFile(f, mode="w") as z:
+        for k, v in data.items():
+            z.writestr(k, v)
+    try:
+        yield f
+    finally:
+        try:
+            os.remove(f)
+        except (IOError, OSError):
+            pass
+
+
 @pytest.mark.parametrize(
     "path, name_function, num, out",
     [
@@ -196,42 +211,25 @@ def test_url_to_fs(ftp_writable):
 
 def test_target_protocol_options(ftp_writable):
     host, port, username, password = ftp_writable
-    data = b"hello_protocol"
+    data = {"afile": b"hello"}
     options = {"host": host, "port": port, "username": username, "password": password}
-    with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "wb") as f:
-        f.write(data)
-    with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "rb") as f:
-        assert f.read() == data
-    with fsspec.open("ftp:///afile", "rb", **options) as f:
-        assert f.read() == data    
+    with tempzip(data) as lfile, fsspec.open(
+        "ftp:///archive.zip", "wb", **options
+    ) as f:
+        f.write(open(lfile, "rb").read())
     with fsspec.open(
-        "simplecache://afile",
+        "zip://afile",
         "rb",
         target_protocol="ftp",
         target_options=options,
+        fo="archive.zip",
     ) as f:
-        assert f.read() == data
+        assert f.read() == data["afile"]
 
 
 def test_chained_url(ftp_writable):
     host, port, username, password = ftp_writable
-
-    @contextmanager
-    def tempzip(data={}):
-        f = tempfile.mkstemp(suffix="zip")[1]
-        with zipfile.ZipFile(f, mode="w") as z:
-            for k, v in data.items():
-                z.writestr(k, v)
-        try:
-            yield f
-        finally:
-            try:
-                os.remove(f)
-            except (IOError, OSError):
-                pass
-
     data = {"afile": b"hello"}
-
     cls = fsspec.get_filesystem_class("ftp")
     fs = cls(host=host, port=port, username=username, password=password)
     with tempzip(data) as lfile:
