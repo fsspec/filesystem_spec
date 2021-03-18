@@ -31,7 +31,7 @@ setup(
     license="BSD",
     keywords="file",
     packages=["fsspec", "fsspec.implementations"],
-    python_requires=">=3.7",
+    python_requires=">=3.6",
     install_requires=open("requirements.txt").read().strip().split("\n"),
     extras_require={
         ":python_version < '3.8'": ["importlib_metadata"],
@@ -43,7 +43,7 @@ setup(
         "git": ["pygit2"],
         "github": ["requests"],
         "gs": ["gcsfs"],
-        "hdfs": ["pyarrow"],
+        "hdfs": ["pyarrow >= 1"],
         "http": ["requests", "aiohttp"],
         "sftp": ["paramiko"],
         "s3": ["s3fs"],
