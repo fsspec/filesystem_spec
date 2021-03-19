@@ -168,3 +168,34 @@ def test_isdir_isfile(scale):
 
         assert lhs_dirs == {e for e in entries if fs.isdir(e)}
         assert lhs_files == {e for e in entries if fs.isfile(e)}
+
+
+# this test case checks that the libarchive can be used from a seekable source (any fs
+# with a block cache active)
+def test_cache(ftp_writable):
+    host, port, username, password = "localhost", 2121, "user", "pass"
+
+    with temparchive(data) as archive_file:
+        with fsspec.open(
+            "ftp:///archive.7z",
+            "wb",
+            host=host,
+            port=port,
+            username=username,
+            password=password,
+        ) as f:
+            f.write(open(archive_file, "rb").read())
+        of = fsspec.open(
+            "libarchive://deeply/nested/path::ftp:///archive.7z",
+            ftp={
+                "host": host,
+                "port": port,
+                "username": username,
+                "password": password,
+            },
+        )
+
+        with of as f:
+            readdata = f.read()
+
+        assert readdata == data["deeply/nested/path"]
