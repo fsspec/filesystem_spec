@@ -425,33 +425,38 @@ class CachingFileSystem(AbstractFileSystem):
             return True
         if not isinstance(other, type(self)):
             return False
-        return (self.storage == other.storage
-                and self.kwargs == other.kwargs
-                and self.cache_check == other.cache_check
-                and self.check_files == other.check_files
-                and self.expiry == other.expiry
-                and self.compression == other.compression
-                and self.same_names == other.same_names
-                and self.target_protocol == other.target_protocol)
+        return (
+            self.storage == other.storage
+            and self.kwargs == other.kwargs
+            and self.cache_check == other.cache_check
+            and self.check_files == other.check_files
+            and self.expiry == other.expiry
+            and self.compression == other.compression
+            and self.same_names == other.same_names
+            and self.target_protocol == other.target_protocol
+        )
 
     def __hash__(self):
         """Calculate hash."""
-        return (hash(tuple(self.storage))
-                ^ hash(str(self.kwargs))
-                ^ hash(self.cache_check)
-                ^ hash(self.check_files)
-                ^ hash(self.expiry)
-                ^ hash(self.compression)
-                ^ hash(self.same_names)
-                ^ hash(self.target_protocol))
+        return (
+            hash(tuple(self.storage))
+            ^ hash(str(self.kwargs))
+            ^ hash(self.cache_check)
+            ^ hash(self.check_files)
+            ^ hash(self.expiry)
+            ^ hash(self.compression)
+            ^ hash(self.same_names)
+            ^ hash(self.target_protocol)
+        )
 
     def to_json(self):
         """Calculate JSON representation.
 
         Not implemented yet for CachingFileSystem.
         """
-        raise NotImplementedError("CachingFileSystem JSON representation not "
-                                  "implemented")
+        raise NotImplementedError(
+            "CachingFileSystem JSON representation not " "implemented"
+        )
 
 
 class WholeFileCacheFileSystem(CachingFileSystem):
