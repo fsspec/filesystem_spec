@@ -791,6 +791,7 @@ def test_json():
     CachingFileSystem, not to the underlying filesystem.
     """
     import json
+
     from fsspec.implementations.local import LocalFileSystem
 
     lfs = LocalFileSystem()
