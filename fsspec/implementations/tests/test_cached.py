@@ -763,16 +763,11 @@ def test_equality():
     Related: GitHub#577, GitHub#578
     """
     from fsspec.implementations.local import LocalFileSystem
+
     lfs = LocalFileSystem()
-    cfs1 = CachingFileSystem(
-        fs=lfs,
-        cache_storage="raspberry")
-    cfs2 = CachingFileSystem(
-        fs=lfs,
-        cache_storage="banana")
-    cfs3 = CachingFileSystem(
-        fs=lfs,
-        cache_storage="banana")
+    cfs1 = CachingFileSystem(fs=lfs, cache_storage="raspberry")
+    cfs2 = CachingFileSystem(fs=lfs, cache_storage="banana")
+    cfs3 = CachingFileSystem(fs=lfs, cache_storage="banana")
     assert cfs1 == cfs1
     assert cfs1 != cfs2
     assert cfs1 != cfs3
@@ -797,9 +792,8 @@ def test_json():
     """
     import json
     from fsspec.implementations.local import LocalFileSystem
+
     lfs = LocalFileSystem()
-    cfs = CachingFileSystem(
-        fs=lfs,
-        cache_storage="raspberry")
+    cfs = CachingFileSystem(fs=lfs, cache_storage="raspberry")
     D = json.loads(cfs.to_json())
     assert D["cls"].endswith("CachingFileSystem")
