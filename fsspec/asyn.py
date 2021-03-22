@@ -23,14 +23,16 @@ def _run_until_done(loop, coro):
             asyncio.tasks._unregister_task(task)
         asyncio.tasks._current_tasks.pop(loop, None)
     runner = loop.create_task(coro)
-    while not runner.done():
-        try:
-            loop._run_once()
-        except (IndexError, RuntimeError):
-            pass
-    if task:
-        with lock:
-            asyncio.tasks._current_tasks[loop] = task
+    try:
+        while not runner.done():
+            try:
+                loop._run_once()
+            except (IndexError, RuntimeError):
+                pass
+    finally:
+        if task:
+            with lock:
+                asyncio.tasks._current_tasks[loop] = task
     return runner.result()
 
 
@@ -162,6 +164,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async_impl = True
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
+        print(f"\nLOOOP {loop}\n")
         self.asynchronous = asynchronous
         self._loop = threading.local()
         self._pid = os.getpid()
