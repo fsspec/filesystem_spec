@@ -382,6 +382,9 @@ class CachingFileSystem(AbstractFileSystem):
             "open_many",
             "commit_many",
             "hash_name",
+            "__hash__",
+            "__eq__",
+            "to_json",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -415,6 +418,40 @@ class CachingFileSystem(AbstractFileSystem):
         else:
             # attributes of the superclass, while target is being set up
             return super().__getattribute__(item)
+
+    def __eq__(self, other):
+        """Test for equality."""
+        if self is other:
+            return True
+        if not isinstance(other, type(self)):
+            return False
+        return (self.storage == other.storage
+                and self.kwargs == other.kwargs
+                and self.cache_check == other.cache_check
+                and self.check_files == other.check_files
+                and self.expiry == other.expiry
+                and self.compression == other.compression
+                and self.same_names == other.same_names
+                and self.target_protocol == other.target_protocol)
+
+    def __hash__(self):
+        """Calculate hash."""
+        return (hash(tuple(self.storage))
+                ^ hash(str(self.kwargs))
+                ^ hash(self.cache_check)
+                ^ hash(self.check_files)
+                ^ hash(self.expiry)
+                ^ hash(self.compression)
+                ^ hash(self.same_names)
+                ^ hash(self.target_protocol))
+
+    def to_json(self):
+        """Calculate JSON representation.
+
+        Not implemented yet for CachingFileSystem.
+        """
+        raise NotImplementedError("CachingFileSystem JSON representation not "
+                                  "implemented")
 
 
 class WholeFileCacheFileSystem(CachingFileSystem):
