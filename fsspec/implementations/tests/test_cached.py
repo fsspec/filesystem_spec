@@ -750,3 +750,55 @@ def test_expiry():
     assert fs.open(fn0, mode="rb").read() == data
     detail, _ = fs._check_file(fn0)
     assert detail["time"] - start_time > 0.09
+
+
+def test_equality():
+    """Test sane behaviour for equality and hashing.
+
+    Make sure that different CachingFileSystem only test equal to each other
+    when they should, and do not test equal to the filesystem they rely upon.
+    Similarly, make sure their hashes differ when they should and are equal
+    when they should not.
+
+    Related: GitHub#577, GitHub#578
+    """
+    from fsspec.implementations.local import LocalFileSystem
+    lfs = LocalFileSystem()
+    cfs1 = CachingFileSystem(
+        fs=lfs,
+        cache_storage="raspberry")
+    cfs2 = CachingFileSystem(
+        fs=lfs,
+        cache_storage="banana")
+    cfs3 = CachingFileSystem(
+        fs=lfs,
+        cache_storage="banana")
+    assert cfs1 == cfs1
+    assert cfs1 != cfs2
+    assert cfs1 != cfs3
+    assert cfs2 == cfs3
+    assert cfs1 != lfs
+    assert cfs2 != lfs
+    assert cfs3 != lfs
+    assert hash(lfs) != hash(cfs1)
+    assert hash(lfs) != hash(cfs2)
+    assert hash(lfs) != hash(cfs3)
+    assert hash(cfs1) != hash(cfs2)
+    assert hash(cfs1) != hash(cfs2)
+    assert hash(cfs2) == hash(cfs3)
+
+
+def test_json():
+    """Test that the JSON representation refers to correct class.
+
+    Make sure that the JSON representation of a CachingFileSystem refers to the
+    CachingFileSystem, not to the underlying filesystem.
+    """
+    import json
+    from fsspec.implementations.local import LocalFileSystem
+    lfs = LocalFileSystem()
+    cfs = CachingFileSystem(
+        fs=lfs,
+        cache_storage="raspberry")
+    D = json.loads(cfs.to_json())
+    assert D["cls"].endswith("CachingFileSystem")
