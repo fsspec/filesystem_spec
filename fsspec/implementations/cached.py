@@ -455,7 +455,7 @@ class CachingFileSystem(AbstractFileSystem):
         Not implemented yet for CachingFileSystem.
         """
         raise NotImplementedError(
-            "CachingFileSystem JSON representation not " "implemented"
+            "CachingFileSystem JSON representation not implemented"
         )
 
 
