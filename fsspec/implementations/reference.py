@@ -178,7 +178,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
 
-    def ls(self, path, detail=True, **kwargs):
+    async def _ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         out = self._ls_from_cache(path)
         if detail:
