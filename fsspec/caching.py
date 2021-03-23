@@ -170,6 +170,8 @@ class FirstChunkCache(BaseCache):
         self.cache = None
 
     def _fetch(self, start, end):
+        start = start or 0
+        end = end or self.size
         if start < self.blocksize:
             if self.cache is None:
                 if end > self.blocksize:

@@ -1499,16 +1499,6 @@ class AbstractBufferedFile(io.IOBase):
     def __iter__(self):
         return self
 
-    def __fspath__(self):
-        proto = (
-            self.fs.protocol
-            if isinstance(self.fs.protocol, (list, tuple))
-            else [self.fs.protocol]
-        )
-        if any(self.path.startswith(pr) for pr in proto):
-            return self.path
-        return proto[0] + "://" + self.path
-
     def readlines(self):
         """Return all data, split by the newline character"""
         data = self.read()
