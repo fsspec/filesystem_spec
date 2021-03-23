@@ -8,8 +8,6 @@ import threading
 from .spec import AbstractFileSystem
 from .utils import is_exception, other_paths
 
-# this global variable holds whether this thread is running async or not
-thread_state = threading.local()
 private = re.compile("_[^_]")
 lock = threading.Lock()
 
@@ -40,15 +38,11 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in this thread
     """
-    try:
-        thread_state.asynchronous = True
-        coro = func(*args, **kwargs)
-        if loop.is_running():
-            result = _run_until_done(loop, coro)
-        else:
-            result = loop.run_until_complete(coro)
-    finally:
-        thread_state.asynchronous = False
+    coro = func(*args, **kwargs)
+    if loop.is_running():
+        result = _run_until_done(loop, coro)
+    else:
+        result = loop.run_until_complete(coro)
     return result
 
 
@@ -64,15 +58,17 @@ def maybe_sync(func, self, *args, **kwargs):
     # second condition below triggers if this is running in the thread of the
     # event loop *during* the call to sync(), i.e., while running
     # asynchronously
-    if getattr(self, "asynchronous", False) or getattr(
-        thread_state, "asynchronous", False
-    ):
+    try:
+        loop0 = asyncio.get_running_loop()
+    except RuntimeError:
+        loop0 = None
+    if loop0 is not None:
         if inspect.iscoroutinefunction(func):
             # run coroutine while pausing this one (because we are within async)
             return _run_until_done(loop, func(*args, **kwargs))
         else:
             # make awaitable which then calls the blocking function
-            return _run_as_coroutine(func, *args, **kwargs)
+            raise NotImplementedError()
     else:
         if inspect.iscoroutinefunction(func):
             # run the awaitable on the loop
@@ -80,11 +76,6 @@ def maybe_sync(func, self, *args, **kwargs):
         else:
             # just call the blocking function
             return func(*args, **kwargs)
-
-
-async def _run_as_coroutine(func, *args, **kwargs):
-    # This is not currently used
-    return func(*args, **kwargs)
 
 
 def sync_wrapper(func, obj=None):
@@ -164,7 +155,6 @@ class AsyncFileSystem(AbstractFileSystem):
     async_impl = True
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
-        print(f"\nLOOOP {loop}\n")
         self.asynchronous = asynchronous
         self._loop = threading.local()
         self._pid = os.getpid()

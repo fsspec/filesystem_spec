@@ -3,7 +3,7 @@ import string
 
 import pytest
 
-from fsspec.caching import BlockCache, caches
+from fsspec.caching import BlockCache, FirstChunkCache, caches
 
 
 def test_cache_getitem(Cache_imp):
@@ -66,6 +66,17 @@ def test_cache_pickleable(Cache_imp):
     assert unpickled.blocksize == blocksize
     assert unpickled.size == size
     assert unpickled._fetch(0, 10) == b"0" * 10
+
+
+def test_first_cache():
+    c = FirstChunkCache(5, letters_fetcher, 52)
+    assert c.cache is None
+    assert c._fetch(12, 15) == letters_fetcher(12, 15)
+    assert c.cache is None
+    assert c._fetch(3, 10) == letters_fetcher(3, 10)
+    assert c.cache == letters_fetcher(0, 5)
+    c.fetcher = None
+    assert c._fetch(1, 4) == letters_fetcher(1, 4)
 
 
 @pytest.mark.parametrize(
