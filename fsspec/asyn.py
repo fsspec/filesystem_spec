@@ -55,14 +55,11 @@ def maybe_sync(func, self, *args, **kwargs):
     or thread_state does (this gets set in ``sync()`` itself, to avoid nesting loops).
     """
     loop = self.loop
-    # second condition below triggers if this is running in the thread of the
-    # event loop *during* the call to sync(), i.e., while running
-    # asynchronously
     try:
-        loop0 = asyncio.get_running_loop()
+        loop0 = asyncio.get_event_loop()
     except RuntimeError:
         loop0 = None
-    if loop0 is not None:
+    if loop0 is not None and loop0.is_running():
         if inspect.iscoroutinefunction(func):
             # run coroutine while pausing this one (because we are within async)
             return _run_until_done(loop, func(*args, **kwargs))
