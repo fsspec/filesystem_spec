@@ -156,6 +156,37 @@ class ReadAheadCache(BaseCache):
         return part + self.cache[:l]
 
 
+class FirstChunkCache(BaseCache):
+    """Caches the first block of a file only
+
+    This may be useful for file types where the metadata is stored in the header,
+    but is randomly accessed.
+    """
+
+    name = "first"
+
+    def __init__(self, blocksize, fetcher, size):
+        super().__init__(blocksize, fetcher, size)
+        self.cache = None
+
+    def _fetch(self, start, end):
+        start = start or 0
+        end = end or self.size
+        if start < self.blocksize:
+            if self.cache is None:
+                if end > self.blocksize:
+                    data = self.fetcher(0, end)
+                    self.cache = data[: self.blocksize]
+                    return data[start:]
+                self.cache = self.fetcher(0, self.blocksize)
+            part = self.cache[start:end]
+            if end > self.blocksize:
+                part += self.fetcher(self.blocksize, end)
+            return part
+        else:
+            return self.fetcher(start, end)
+
+
 class BlockCache(BaseCache):
     """
     Cache holding memory as a set of blocks.
@@ -397,5 +428,6 @@ caches = {
     "bytes": BytesCache,
     "readahead": ReadAheadCache,
     "block": BlockCache,
+    "first": FirstChunkCache,
     "all": AllBytes,
 }

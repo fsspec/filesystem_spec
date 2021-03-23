@@ -1518,6 +1518,8 @@ class AbstractBufferedFile(io.IOBase):
 
         Finalizes writes, discards cache
         """
+        if getattr(self, "_unclosable", False):
+            return
         if self.closed:
             return
         if self.mode == "rb":

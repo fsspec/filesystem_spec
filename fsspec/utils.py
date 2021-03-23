@@ -444,7 +444,7 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG"):
     logger = logger or logging.getLogger(logger_name)
     handle = logging.StreamHandler()
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s " "- %(message)s"
+        "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s -- %(message)s"
     )
     handle.setFormatter(formatter)
     logger.addHandler(handle)
