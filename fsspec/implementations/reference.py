@@ -88,7 +88,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part.encode()
 
         if len(part) == 1:
-            url, start, end = part[0], None, None
+            url = part[0]
+            start = None
+            end = None
         else:
             url, start, size = part
             end = start + size
