@@ -86,8 +86,14 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part
         elif isinstance(part, str):
             return part.encode()
-        url, start, size = part
-        end = start + size
+
+        if len(part) == 1:
+            url = part[0]
+            start = None
+            end = None
+        else:
+            url, start, size = part
+            end = start + size
         if url is None:
             url = self.target
         return await self.fs._cat_file(url, start=start, end=end)
@@ -134,10 +140,10 @@ class ReferenceFileSystem(AsyncFileSystem):
                     self.references[k] = base64.b64decode(v[7:])
                 self.references[k] = v
             else:
-                u, off, l = v
+                u = v[0]
                 if "{{" in u:
                     u = jinja2.Template(u).render(**templates)
-                self.references[k] = [u, off, l]
+                self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
         for gen in references.get("gen", []):
             dimension = {
                 k: v
@@ -162,6 +168,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         for path, part in self.references.items():
             if isinstance(part, (bytes, str)):
                 size = len(part)
+            elif len(part) == 1:
+                size = None
             else:
                 _, start, end = part
                 size = end - start
