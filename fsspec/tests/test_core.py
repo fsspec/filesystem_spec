@@ -205,8 +205,26 @@ def test_url_to_fs(ftp_writable):
     fs, url = fsspec.core.url_to_fs(
         f"simplecache::ftp://{username}:{password}@{host}:{port}/afile"
     )
+    assert url == "/afile"
     fs, url = fsspec.core.url_to_fs(f"ftp://{username}:{password}@{host}:{port}/afile")
     assert url == "/afile"
+
+    with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile.zip", "wb") as f:
+        import zipfile
+
+        with zipfile.ZipFile(f, "w") as z:
+            with z.open("inner", "w") as f2:
+                f2.write(b"hello")
+        f.write(data)
+
+    fs, url = fsspec.core.url_to_fs(
+        f"zip://inner::ftp://{username}:{password}@{host}:{port}/afile.zip"
+    )
+    assert url == "inner"
+    fs, url = fsspec.core.url_to_fs(
+        f"simplecache::zip::ftp://{username}:{password}@{host}:{port}/afile.zip"
+    )
+    assert url == ""
 
 
 def test_target_protocol_options(ftp_writable):

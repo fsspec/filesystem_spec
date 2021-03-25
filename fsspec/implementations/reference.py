@@ -71,14 +71,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         kwargs : passed to parent class
         """
         super().__init__(**kwargs)
-        if remote_protocol:
-            fs = filesystem(remote_protocol, loop=self.loop, **(remote_options or {}))
-        elif fs is None:
-            raise ValueError(
-                "Must provide either filesystem instance or remote_protocol"
-            )
-        if not fs.async_impl:
-            raise NotImplementedError("Only works with async targets")
         if isinstance(fo, str):
             if target_protocol:
                 extra = {"protocol": target_protocol}
@@ -90,6 +82,10 @@ class ReferenceFileSystem(AsyncFileSystem):
                 text = f.read()
         else:
             text = fo
+        if remote_protocol:
+            fs = filesystem(remote_protocol, loop=self.loop, **(remote_options or {}))
+        if not fs.async_impl:
+            raise NotImplementedError("Only works with async targets")
         self.target = target
         self._process_references(text)
         self.fs = fs
