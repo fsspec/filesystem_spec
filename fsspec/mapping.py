@@ -180,7 +180,14 @@ def maybe_convert(value):
     return value
 
 
-def get_mapper(url, check=False, create=False, missing_exceptions=None, **kwargs):
+def get_mapper(
+    url,
+    check=False,
+    create=False,
+    missing_exceptions=None,
+    alternate_root=None,
+    **kwargs,
+):
     """Create key-value interface for given URL and options
 
     The URL will be of the form "protocol://location" and point to the root
@@ -203,6 +210,9 @@ def get_mapper(url, check=False, create=False, missing_exceptions=None, **kwargs
         If given, these excpetion types will be regarded as missing keys and
         return KeyError when trying to read data. By default, you get
         (FileNotFoundError, IsADirectoryError, NotADirectoryError)
+    alternate_root: None or str
+        In cases of complex URLs, the parser may fail to pick the correct part
+        for the mapper root, so this arg can override
 
     Returns
     -------
@@ -210,4 +220,5 @@ def get_mapper(url, check=False, create=False, missing_exceptions=None, **kwargs
     """
     # Removing protocol here - could defer to each open() on the backend
     fs, urlpath = url_to_fs(url, **kwargs)
-    return FSMap(urlpath, fs, check, create, missing_exceptions=missing_exceptions)
+    root = alternate_root if alternate_root is not None else urlpath
+    return FSMap(root, fs, check, create, missing_exceptions=missing_exceptions)
