@@ -205,7 +205,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         data = self.cat(path)
         return io.BytesIO(data)
 
-    def ls(self, path, detail=True, **kwargs):
+    async def _ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         out = self._ls_from_cache(path)
         if detail:
