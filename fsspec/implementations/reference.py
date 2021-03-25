@@ -82,6 +82,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                 text = f.read()
         else:
             text = fo
+        if fs is None and remote_protocol is None:
+            remote_protocol = target_protocol
         if remote_protocol:
             fs = filesystem(remote_protocol, loop=self.loop, **(remote_options or {}))
         if not fs.async_impl:
