@@ -12,7 +12,7 @@ def test_simple(server):  # noqa: F811
 
     refs = {"a": b"data", "b": (realfile, 0, 5), "c": (realfile, 1, 5)}
     h = fsspec.filesystem("http")
-    fs = fsspec.filesystem("reference", references=refs, fs=h)
+    fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
     assert fs.cat("a") == b"data"
     assert fs.cat("b") == data[:5]
@@ -22,7 +22,7 @@ def test_simple(server):  # noqa: F811
 def test_ls(server):  # noqa: F811
     refs = {"a": b"data", "b": (realfile, 0, 5), "c/d": (realfile, 1, 6)}
     h = fsspec.filesystem("http")
-    fs = fsspec.filesystem("reference", references=refs, fs=h)
+    fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
     assert fs.ls("", detail=False) == ["a", "b", "c"]
     assert {"name": "c", "type": "directory", "size": 0} in fs.ls("", detail=True)
@@ -32,15 +32,15 @@ def test_ls(server):  # noqa: F811
 
 def test_err(m):
     with pytest.raises(NotImplementedError):
-        fsspec.filesystem("reference", references={}, fs=m)
+        fsspec.filesystem("reference", fo={}, fs=m)
     with pytest.raises(NotImplementedError):
-        fsspec.filesystem("reference", references={}, target_protocol="memory")
+        fsspec.filesystem("reference", fo={}, target_protocol="memory")
 
 
 def test_defaults(server):  # noqa: F811
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(
-        "reference", references=refs, target_protocol="http", target=realfile
+        "reference", fo=refs, target_protocol="http", target=realfile
     )
 
     assert fs.cat("a") == b"data"
@@ -115,7 +115,7 @@ def test_spec1_expand():
             "key4": ["http://target_url"],
         },
     }
-    fs = fsspec.filesystem("reference", references=in_data, target_protocol="http")
+    fs = fsspec.filesystem("reference", fo=in_data, target_protocol="http")
     assert fs.references == {
         "key0": "data",
         "key1": ["http://target_url", 10000, 100],
