@@ -447,5 +447,6 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG"):
         "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s -- %(message)s"
     )
     handle.setFormatter(formatter)
+    logger.handlers.clear()
     logger.addHandler(handle)
     logger.setLevel(level)

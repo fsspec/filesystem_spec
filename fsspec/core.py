@@ -371,7 +371,6 @@ def url_to_fs(url, **kwargs):
         cls = get_filesystem_class(protocol)
 
         options = cls._get_kwargs_from_urls(url)
-        urlpath = cls._strip_protocol(url)
         update_storage_options(options, kwargs)
         fs = cls(**options)
         urlpath = fs._strip_protocol(url)
@@ -427,12 +426,12 @@ def open(
     ``OpenFile`` object.
     """
     return open_files(
-        [urlpath],
-        mode,
-        compression,
-        encoding,
-        errors,
-        protocol,
+        urlpath=[urlpath],
+        mode=mode,
+        compression=compression,
+        encoding=encoding,
+        errors=errors,
+        protocol=protocol,
         newline=newline,
         expand=False,
         **kwargs,

@@ -1,4 +1,5 @@
 import base64
+import io
 import itertools
 import json
 
@@ -31,19 +32,22 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def __init__(
         self,
-        references,
+        fo,
         target=None,
         ref_storage_args=None,
         target_protocol=None,
         target_options=None,
+        remote_protocol=None,
+        remote_options=None,
         fs=None,
+        loop=None,
         **kwargs,
     ):
         """
 
         Parameters
         ----------
-        references : dict or str
+        fo : dict or str
             The set of references to use for this instance, with a structure as above.
             If str, will use fsspec.open, in conjunction with ref_storage_args to
             open and parse JSON at this location.
@@ -53,31 +57,45 @@ class ReferenceFileSystem(AsyncFileSystem):
         ref_storage_args : dict
             If references is a str, use these kwargs for loading the JSON file
         target_protocol : str
-            If fs is None, instantiate a file system using this protocol
+            Used for loading the reference file, if it is a path. If None, protocol
+            will be derived from the given path
         target_options : dict
-            If fs is None, instantiate a filesystem using these kwargs
+            Extra FS options for loading the reference file, if given as a path
+        remote_protocol : str
+            The protocol of the filesystem on which the references will be evaluated
+            (unless fs is provided)
+        remote_options : dict
+            kwargs to go with remote_protocol
         fs : file system instance
             Directly provide a file system, if you want to configure it beforehand. This
             takes precedence over target_protocol/target_options
         kwargs : passed to parent class
         """
-        if fs is not None:
-            if not fs.async_impl:
-                raise NotImplementedError("Only works with async targets")
-            kwargs["loop"] = fs.loop
-        super().__init__(**kwargs)
-        if fs is None:
-            fs = filesystem(target_protocol, loop=self.loop, **(target_options or {}))
-        if not fs.async_impl:
-            raise NotImplementedError("Only works with async targets")
-        if isinstance(references, str):
-            with open(references, "rb", **(ref_storage_args or {})) as f:
+        super().__init__(loop=loop, **kwargs)
+        if isinstance(fo, str):
+            if target_protocol:
+                extra = {"protocol": target_protocol}
+            else:
+                extra = {}
+            with open(
+                fo, "rb", **(ref_storage_args or target_options or {}), **extra
+            ) as f:
                 text = f.read()
         else:
-            text = references
+            text = fo
+        if fs is None and remote_protocol is None:
+            remote_protocol = target_protocol
+        if remote_protocol:
+            fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
+        if not fs.async_impl:
+            raise NotImplementedError("Only works with async targets")
         self.target = target
         self._process_references(text)
         self.fs = fs
+
+    @property
+    def loop(self):
+        return self.fs.loop
 
     async def _cat_file(self, path):
         path = self._strip_protocol(path)
@@ -185,6 +203,12 @@ class ReferenceFileSystem(AsyncFileSystem):
                 par0 = self._parent(par0)
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
+
+    def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
+        if mode != "rb":
+            raise NotImplementedError
+        data = self.cat(path)
+        return io.BytesIO(data)
 
     async def _ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
