@@ -40,6 +40,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         remote_protocol=None,
         remote_options=None,
         fs=None,
+        loop=None,
         **kwargs,
     ):
         """
@@ -70,7 +71,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             takes precedence over target_protocol/target_options
         kwargs : passed to parent class
         """
-        super().__init__(**kwargs)
+        super().__init__(loop=loop, **kwargs)
         if isinstance(fo, str):
             if target_protocol:
                 extra = {"protocol": target_protocol}
@@ -85,12 +86,16 @@ class ReferenceFileSystem(AsyncFileSystem):
         if fs is None and remote_protocol is None:
             remote_protocol = target_protocol
         if remote_protocol:
-            fs = filesystem(remote_protocol, loop=self.loop, **(remote_options or {}))
+            fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
         if not fs.async_impl:
             raise NotImplementedError("Only works with async targets")
         self.target = target
         self._process_references(text)
         self.fs = fs
+
+    @property
+    def loop(self):
+        return self.fs.loop
 
     async def _cat_file(self, path):
         path = self._strip_protocol(path)
