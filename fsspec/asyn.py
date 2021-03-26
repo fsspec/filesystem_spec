@@ -140,6 +140,8 @@ class AsyncFileSystem(AbstractFileSystem):
         if os.getpid() != self._pid:
             raise RuntimeError("This class is not fork-safe")
         if not hasattr(self._loop, "loop"):
+            # override and add here if you need to do any setup when instance is used
+            # from a new thread
             self._loop.loop = get_loop()
         return self._loop.loop
 
@@ -147,19 +149,10 @@ class AsyncFileSystem(AbstractFileSystem):
         raise NotImplementedError
 
     async def _rm(self, path, recursive=False, **kwargs):
+        path = await self._expand_path(path, recursive=recursive)
         await asyncio.gather(*[self._rm_file(p, **kwargs) for p in path])
 
-    def rm(self, path, recursive=False, **kwargs):
-        path = self.expand_path(path, recursive=recursive)
-        maybe_sync(self._rm, self, path, **kwargs)
-
-    async def _copy(self, paths, path2, **kwargs):
-        return await asyncio.gather(
-            *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)],
-            return_exceptions=True,
-        )
-
-    def copy(
+    async def _copy(
         self, path1, path2, recursive=False, on_error=None, maxdepth=None, **kwargs
     ):
         if on_error is None and recursive:
@@ -167,9 +160,12 @@ class AsyncFileSystem(AbstractFileSystem):
         elif on_error is None:
             on_error = "raise"
 
-        paths = self.expand_path(path1, maxdepth=maxdepth, recursive=recursive)
+        paths = await self._expand_path(path1, maxdepth=maxdepth, recursive=recursive)
         path2 = other_paths(paths, path2)
-        result = maybe_sync(self._copy, self, paths, path2, **kwargs)
+        result = await asyncio.gather(
+            *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)],
+            return_exceptions=True,
+        )
 
         for ex in filter(is_exception, result):
             if on_error == "ignore" and isinstance(ex, FileNotFoundError):
@@ -183,15 +179,12 @@ class AsyncFileSystem(AbstractFileSystem):
             *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
         )
 
-    async def _cat(self, paths, **kwargs):
-        return await asyncio.gather(
+    async def _cat(self, path, recursive=False, on_error="raise", **kwargs):
+        paths = await self._expand_path(path, recursive=recursive)
+        out = await asyncio.gather(
             *[self._cat_file(path, **kwargs) for path in paths],
             return_exceptions=True,
         )
-
-    def cat(self, path, recursive=False, on_error="raise", **kwargs):
-        paths = self.expand_path(path, recursive=recursive)
-        out = maybe_sync(self._cat, self, paths, **kwargs)
         if on_error == "raise":
             ex = next(filter(is_exception, out), False)
             if ex:
@@ -209,15 +202,7 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             return out[0]
 
-    async def _put(self, lpaths, rpaths, **kwargs):
-        return await asyncio.gather(
-            *[
-                self._put_file(lpath, rpath, **kwargs)
-                for lpath, rpath in zip(lpaths, rpaths)
-            ]
-        )
-
-    def put(self, lpath, rpath, recursive=False, **kwargs):
+    async def _put(self, lpath, rpath, recursive=False, **kwargs):
         from .implementations.local import LocalFileSystem, make_path_posix
 
         rpath = self._strip_protocol(rpath)
@@ -226,27 +211,30 @@ class AsyncFileSystem(AbstractFileSystem):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
-        maybe_sync(self._put, self, lpaths, rpaths, **kwargs)
+        return await asyncio.gather(
+            *[
+                self._put_file(lpath, rpath, **kwargs)
+                for lpath, rpath in zip(lpaths, rpaths)
+            ]
+        )
 
-    async def _get(self, rpaths, lpaths, **kwargs):
-        dirs = [os.path.dirname(lp) for lp in lpaths]
-        [os.makedirs(d, exist_ok=True) for d in dirs]
+    async def _get_file(self, lpath, rpath, **kwargs):
+        raise NotImplementedError
+
+    async def _get(self, rpath, lpath, recursive=False, **kwargs):
+        from fsspec.implementations.local import make_path_posix
+
+        rpath = self._strip_protocol(rpath)
+        lpath = make_path_posix(lpath)
+        rpaths = await self._expand_path(rpath, recursive=recursive)
+        lpaths = other_paths(rpaths, lpath)
+        [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
         return await asyncio.gather(
             *[
                 self._get_file(rpath, lpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
             ]
         )
-
-    def get(self, rpath, lpath, recursive=False, **kwargs):
-        from fsspec.implementations.local import make_path_posix
-
-        rpath = self._strip_protocol(rpath)
-        lpath = make_path_posix(lpath)
-        rpaths = self.expand_path(rpath, recursive=recursive)
-        lpaths = other_paths(rpaths, lpath)
-        [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
-        return sync(self.loop, self._get, rpaths, lpaths)
 
     async def _isfile(self, path):
         try:
