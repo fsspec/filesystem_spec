@@ -265,9 +265,10 @@ def test_async_other_thread(server):
     th.start()
     fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
     session = asyncio.run_coroutine_threadsafe(fs.set_session(), loop=loop).result()
-    cor = fs._cat([server + "/index/realfile"])
+    url = server + "/index/realfile"
+    cor = fs._cat([url])
     fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
-    assert fut.result() == [data]
+    assert fut.result() == {url: data}
     asyncio.run_coroutine_threadsafe(session.close(), loop=loop).result()
     loop.call_soon_threadsafe(loop.stop)
 
@@ -275,9 +276,10 @@ def test_async_other_thread(server):
 def test_async_with_loop(server):
     loop = asyncio.get_event_loop()
     fs = fsspec.filesystem("http", asynchronous=False, loop=loop)
-    cor = fs._cat([server + "/index/realfile"])
+    url = server + "/index/realfile"
+    cor = fs._cat([url])
     fut = loop.run_until_complete(cor)
-    assert fut == [data]
+    assert fut == {url: data}
 
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
@@ -289,10 +291,11 @@ def test_async_this_thread(server):
         # this is no longer required
         session = await fs.set_session()  # creates client
 
-        out = await fs._cat([server + "/index/realfile"])
+        url = server + "/index/realfile"
+        out = await fs._cat([url])
         await session.close()
         del fs
-        assert out == [data]
+        assert out == {url: data}
 
     asyncio.run(_())
 
@@ -309,10 +312,7 @@ def _inner_pass(fs, q, fn):
         q.put(traceback.format_exc())
 
 
-@pytest.mark.skipif(
-    bool(os.environ.get("CIRUN", "")), reason="CI runs are weird in many ways"
-)
-@pytest.mark.parametrize("method", ["spawn", "forkserver", "fork"])
+@pytest.mark.parametrize("method", ["spawn", "forkserver"])
 def test_processes(server, method):
     import multiprocessing as mp
 
