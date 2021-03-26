@@ -213,9 +213,14 @@ class ReferenceFileSystem(AsyncFileSystem):
     async def _ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         out = self._ls_from_cache(path)
+        if not out:
+            raise FileNotFoundError
         if detail:
             return out
         return [o["name"] for o in out]
+
+    async def _info(self, path):
+        return (await self._ls(path, True))[0]
 
 
 def _unmodel_hdf5(references):

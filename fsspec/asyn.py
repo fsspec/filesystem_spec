@@ -76,10 +76,15 @@ def async_wrapper(func):
 
 
 def get_loop():
-    """Get/Create an event loop to run in this thread"""
+    """Get/Create an event loop to run in this thread
+
+    If a loop was previously set, but has since closed, set a new one.
+    """
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
+        loop = None
+    if loop is None or loop.is_closed():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     return loop
@@ -242,9 +247,6 @@ class AsyncFileSystem(AbstractFileSystem):
         lpaths = other_paths(rpaths, lpath)
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
         return sync(self.loop, self._get, rpaths, lpaths)
-
-    async def _info(self, path):
-        raise NotImplementedError
 
     async def _isfile(self, path):
         try:
