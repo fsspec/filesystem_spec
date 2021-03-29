@@ -2,6 +2,7 @@ import asyncio
 import functools
 import inspect
 import os
+import queue
 import re
 import threading
 from glob import has_magic
@@ -19,28 +20,62 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
     """
     coro = func(*args, **kwargs)
     if loop.is_running():
-        raise NotImplementedError
+        raise NotImplementedError("Calling sync() from within an async function")
     else:
         result = loop.run_until_complete(coro)
     return result
 
 
-def maybe_sync(func, self, *args, **kwargs):
-    """Make function call into coroutine or maybe run
+iothread = [None]
 
-    If we are running async, run coroutine on current loop until done;
-    otherwise runs it on the loop (if is a coroutine already) or directly. Will guess
-    we are running async if either "self" has an attribute asynchronous which is True,
-    or thread_state does (this gets set in ``sync()`` itself, to avoid nesting loops).
-    """
+
+def thread_runner(loop, qin, qout):
+    while True:
+        coro = qin.get()
+        if coro is None:
+            loop.stop()
+            return
+        try:
+            out = loop.run_until_complete(coro)
+        except Exception as ex:
+            out = ex
+        qout.put(out)
+
+
+def close_it():
+    if iothread[0] is not None:
+        th, qin, qout = iothread[0]
+        qin.put(None)
+        th.join()
+    iothread[0] = None
+
+
+def maybe_sync(func, self, *args, **kwargs):
+    """Make function call into coroutine or maybe run"""
     loop = self.loop
     try:
         loop0 = asyncio.get_event_loop()
     except RuntimeError:
+        # the given loop is not the running loop
         loop0 = None
     if loop0 is not None and loop0.is_running():
-        # TEMPORARY - to be removed
-        raise NotImplementedError()
+        # loop is to run on another thread
+        if iothread[0] is None:
+            qin = queue.Queue()
+            qout = queue.Queue()
+            th = threading.Thread(
+                target=thread_runner, name="fsspecIOmain", args=(loop, qin, qout)
+            )
+            th.daemon = True
+            th.start()
+            iothread[0] = th, qin, qout
+
+        th, qin, qout = iothread[0]
+        qin.put(func(*args, **kwargs))
+        out = qout.get()
+        if isinstance(out, Exception):
+            raise out
+        return out
     else:
         if inspect.iscoroutinefunction(func):
             # run the awaitable on the loop
@@ -82,6 +117,8 @@ def get_loop():
     """
     try:
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.new_event_loop()
     except RuntimeError:
         loop = None
     if loop is None or loop.is_closed():
