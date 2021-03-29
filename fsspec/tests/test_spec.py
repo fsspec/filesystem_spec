@@ -12,6 +12,7 @@ from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
 class DummyTestFS(AbstractFileSystem):
     protocol = "mock"
+    _file_class = AbstractBufferedFile
     _fs_contents = (
         {"name": "top_level", "type": "directory"},
         {"name": "top_level/second_level", "type": "directory"},
@@ -82,6 +83,25 @@ class DummyTestFS(AbstractFileSystem):
             if file["name"].startswith(start_with)
         ]
         return all
+
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs,
+    ):
+        return self._file_class(
+            self,
+            path,
+            mode,
+            block_size,
+            autocommit,
+            cache_options=cache_options,
+            **kwargs,
+        )
 
 
 @pytest.mark.parametrize(
@@ -256,6 +276,37 @@ def test_trim_kwarg_warns():
     fs = DummyTestFS()
     with pytest.warns(FutureWarning, match="cache_options"):
         AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes", trim=False)
+
+
+def tests_file_open_error(monkeypatch):
+    class InitiateError(ValueError):
+        ...
+
+    class UploadError(ValueError):
+        ...
+
+    class DummyBufferedFile(AbstractBufferedFile):
+
+        can_initiate = False
+
+        def _initiate_upload(self):
+            if not self.can_initiate:
+                raise InitiateError
+
+        def _upload_chunk(self, final=False):
+            raise UploadError
+
+    monkeypatch.setattr(DummyTestFS, "_file_class", DummyBufferedFile)
+
+    fs = DummyTestFS()
+    with pytest.raises(InitiateError):
+        with fs.open("misc/foo.txt", "wb") as stream:
+            stream.write(b"hello" * stream.blocksize * 2)
+
+    with pytest.raises(UploadError):
+        with fs.open("misc/foo.txt", "wb") as stream:
+            stream.can_initiate = True
+            stream.write(b"hello" * stream.blocksize * 2)
 
 
 def test_eq():
