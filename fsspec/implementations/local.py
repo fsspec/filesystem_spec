@@ -189,7 +189,7 @@ def make_path_posix(path, sep=os.sep):
     return path
 
 
-class LocalFileOpener(object):
+class LocalFileOpener(io.IOBase):
     def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
         self.path = path
         self.mode = mode
@@ -250,6 +250,37 @@ class LocalFileOpener(object):
         if self.autocommit:
             raise RuntimeError("Cannot discard if set to autocommit")
         os.remove(self.temp)
+
+    def readable(self) -> bool:
+        return True
+
+    def writable(self) -> bool:
+        return "r" not in self.mode
+
+    def read(self, *args, **kwargs):
+        return self.f.read(*args, **kwargs)
+
+    def write(self, *args, **kwargs):
+        return self.f.write(*args, **kwargs)
+
+    def tell(self, *args, **kwargs):
+        return self.f.tell(*args, **kwargs)
+
+    def seek(self, *args, **kwargs):
+        return self.f.seek(*args, **kwargs)
+
+    def readline(self, *args, **kwargs):
+        return self.f.readline(*args, **kwargs)
+
+    def readlines(self, *args, **kwargs):
+        return self.f.readlines(*args, **kwargs)
+
+    def close(self):
+        return self.f.close()
+
+    @property
+    def closed(self):
+        return self.f.closed
 
     def __fspath__(self):
         # uniquely among fsspec implementations, this is a real, local path
