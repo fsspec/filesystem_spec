@@ -1395,7 +1395,11 @@ class AbstractBufferedFile(io.IOBase):
         if self.offset is None:
             # Initialize a multipart upload
             self.offset = 0
-            self._initiate_upload()
+            try:
+                self._initiate_upload()
+            except:  # noqa: E722
+                self.closed = True
+                raise
 
         if self._upload_chunk(final=force) is not False:
             self.offset += self.buffer.seek(0, 2)

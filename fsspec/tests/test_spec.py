@@ -303,9 +303,9 @@ def tests_file_open_error(monkeypatch):
         with fs.open("misc/foo.txt", "wb") as stream:
             stream.write(b"hello" * stream.blocksize * 2)
 
-    fs.can_initiate = True
     with pytest.raises(UploadError):
         with fs.open("misc/foo.txt", "wb") as stream:
+            stream.can_initiate = True
             stream.write(b"hello" * stream.blocksize * 2)
 
 
