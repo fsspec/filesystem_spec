@@ -17,6 +17,8 @@ Fixes:
 - get_mapper for caching filesystems (#559)
 - fix cross-device file move (#547)
 - store paths without trailing "/" for DBFS (#557)
+- errors that happen on ``_initatiate_upload`` when closing the
+  ``AbstractBufferedFile`` will now be propagated (#587)
 
 Version 0.8.7
 -------------
