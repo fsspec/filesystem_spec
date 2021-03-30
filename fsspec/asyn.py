@@ -245,6 +245,9 @@ class AsyncFileSystem(AbstractFileSystem):
         except FileNotFoundError:
             return False
 
+    async def _info(self, path, **kwargs):
+        raise NotImplementedError
+
     async def _ls(self, path, **kwargs):
         raise NotImplementedError
 
