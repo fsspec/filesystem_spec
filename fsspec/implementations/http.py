@@ -81,19 +81,24 @@ class HTTPFileSystem(AsyncFileSystem):
         self.cache_options = cache_options
         self.client_kwargs = client_kwargs or {}
         self.kwargs = storage_options
+        self._session = None
+        if not asynchronous:
+            sync(self.loop, self.set_session)
 
     @staticmethod
-    def _close_session(looplocal):
-        loop = getattr(looplocal, "loop", None)
-        session = getattr(looplocal, "_session", None)
-        if loop is not None and session is not None:
+    def close_session(loop, session):
+        if loop is not None and loop.is_running():
             sync(loop, session.close)
+        elif session._connector is not None:
+            # close after loop is dead
+            session._connector._close()
 
     async def set_session(self):
-        if not hasattr(self._loop, "_session"):
-            self._loop._session = await get_client(**self.client_kwargs)
-            weakref.finalize(self, self._close_session, self._loop)
-        return self._loop._session
+        if self._session is None:
+            self._session = await get_client(loop=self.loop, **self.client_kwargs)
+            if not self.asynchronous:
+                weakref.finalize(self, self.close_session, self.loop, self._session)
+        return self._session
 
     @classmethod
     def _strip_protocol(cls, path):
