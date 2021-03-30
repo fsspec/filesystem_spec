@@ -8,7 +8,7 @@ import threading
 from glob import has_magic
 
 from .spec import AbstractFileSystem
-from .utils import is_exception, other_paths
+from .utils import PY36, is_exception, other_paths
 
 private = re.compile("_[^_]")
 lock = threading.Lock()
@@ -25,6 +25,12 @@ async def _runner(event, coro, result, timeout=None):
         event.set()
 
 
+if PY36:
+    grl = asyncio.events._get_running_loop
+else:
+    grl = asyncio.events.get_running_loop
+
+
 def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
@@ -32,8 +38,9 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     if loop is None or not loop.is_running():
         raise RuntimeError("Loop is not running")
     try:
-        asyncio.events.get_running_loop()
-        raise NotImplementedError("Calling sync() from within a running loop")
+        loop0 = grl()
+        if loop0 is loop:
+            raise NotImplementedError("Calling sync() from within a running loop")
     except RuntimeError:
         pass
     coro = func(*args, **kwargs)

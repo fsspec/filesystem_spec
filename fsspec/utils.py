@@ -8,6 +8,7 @@ from hashlib import sha256
 from urllib.parse import urlsplit
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+PY36 = sys.version_info < (3, 7)
 
 
 def infer_storage_options(urlpath, inherit_storage_options=None):
