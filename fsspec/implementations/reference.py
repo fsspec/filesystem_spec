@@ -2,9 +2,12 @@ import base64
 import io
 import itertools
 import json
+import logging
 
 from ..asyn import AsyncFileSystem
 from ..core import filesystem, open
+
+logger = logging.getLogger("fsspec.reference")
 
 
 class ReferenceFileSystem(AsyncFileSystem):
@@ -80,6 +83,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             with open(
                 fo, "rb", **(ref_storage_args or target_options or {}), **extra
             ) as f:
+                logger.info("Read reference from URL %s", fo)
                 text = f.read()
         else:
             text = fo
@@ -100,21 +104,31 @@ class ReferenceFileSystem(AsyncFileSystem):
     async def _cat_file(self, path):
         path = self._strip_protocol(path)
         part = self.references[path]
+        if isinstance(part, str):
+            part = part.encode()
         if isinstance(part, bytes):
+            logger.debug(f"Reference: {path}, type bytes")
+            if part.startswith(b"base64:"):
+                part = base64.b64decode(part[7:])
             return part
-        elif isinstance(part, str):
-            return part.encode()
 
         if len(part) == 1:
+            logger.debug(f"Reference: {path}, whole file")
             url = part[0]
             start = None
             end = None
         else:
             url, start, size = part
+            logger.debug(f"Reference: {path}, offset {start}, size {size}")
             end = start + size
         if url is None:
             url = self.target
         return await self.fs._cat_file(url, start=start, end=end)
+
+    async def _get_file(self, rpath, lpath, **kwargs):
+        data = await self._cat_file(rpath)
+        with open(lpath, "wb") as f:
+            f.write(data)
 
     def _process_references(self, references):
         if isinstance(references, bytes):
@@ -228,7 +242,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
 
 def _unmodel_hdf5(references):
-    """Special JSON format from HDF5"""
+    """Special JSON format from HDF5 prototype"""
     # see https://gist.github.com/ajelenak/80354a95b449cedea5cca508004f97a9
     import re
 

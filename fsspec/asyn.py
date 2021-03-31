@@ -1,4 +1,5 @@
 import asyncio
+import asyncio.events
 import functools
 import inspect
 import os
@@ -7,47 +8,53 @@ import threading
 from glob import has_magic
 
 from .spec import AbstractFileSystem
-from .utils import is_exception, other_paths
+from .utils import PY36, is_exception, other_paths
 
 private = re.compile("_[^_]")
 lock = threading.Lock()
 
 
-def sync(loop, func, *args, callback_timeout=None, **kwargs):
-    """
-    Make loop run coroutine until it returns. Runs in this thread
-    """
-    coro = func(*args, **kwargs)
-    if loop.is_running():
-        raise NotImplementedError
-    else:
-        result = loop.run_until_complete(coro)
-    return result
-
-
-def maybe_sync(func, self, *args, **kwargs):
-    """Make function call into coroutine or maybe run
-
-    If we are running async, run coroutine on current loop until done;
-    otherwise runs it on the loop (if is a coroutine already) or directly. Will guess
-    we are running async if either "self" has an attribute asynchronous which is True,
-    or thread_state does (this gets set in ``sync()`` itself, to avoid nesting loops).
-    """
-    loop = self.loop
+async def _runner(event, coro, result, timeout=None):
+    if timeout is not None:
+        coro = asyncio.wait_for(coro, timeout=timeout)
     try:
-        loop0 = asyncio.get_event_loop()
+        result[0] = await coro
+    except Exception as ex:
+        result[0] = ex
+    finally:
+        event.set()
+
+
+if PY36:
+    grl = asyncio.events._get_running_loop
+else:
+    grl = asyncio.events.get_running_loop
+
+
+def sync(loop, func, *args, timeout=None, **kwargs):
+    """
+    Make loop run coroutine until it returns. Runs in other thread
+    """
+    if loop is None or not loop.is_running():
+        raise RuntimeError("Loop is not running")
+    try:
+        loop0 = grl()
+        if loop0 is loop:
+            raise NotImplementedError("Calling sync() from within a running loop")
     except RuntimeError:
-        loop0 = None
-    if loop0 is not None and loop0.is_running():
-        # TEMPORARY - to be removed
-        raise NotImplementedError()
-    else:
-        if inspect.iscoroutinefunction(func):
-            # run the awaitable on the loop
-            return sync(loop, func, *args, **kwargs)
-        else:
-            # just call the blocking function
-            return func(*args, **kwargs)
+        pass
+    coro = func(*args, **kwargs)
+    result = [None]
+    event = threading.Event()
+    asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
+    event.wait(timeout)
+    if isinstance(result[0], BaseException):
+        raise result[0]
+    return result[0]
+
+
+iothread = [None]  # dedicated fsspec IO thread
+loop = [None]  # global event loop for any non-async instance
 
 
 def sync_wrapper(func, obj=None):
@@ -60,34 +67,23 @@ def sync_wrapper(func, obj=None):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         self = obj or args[0]
-        return maybe_sync(func, self, *args, **kwargs)
-
-    return wrapper
-
-
-def async_wrapper(func):
-    """Run a sync function on the event loop"""
-
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
+        return sync(self.loop, func, *args, **kwargs)
 
     return wrapper
 
 
 def get_loop():
-    """Get/Create an event loop to run in this thread
-
-    If a loop was previously set, but has since closed, set a new one.
-    """
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = None
-    if loop is None or loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop
+    if loop[0] is None:
+        with lock:
+            # repeat the check just in case the loop got filled between the
+            # previous two calls from another thread
+            if loop[0] is None:
+                loop[0] = asyncio.new_event_loop()
+                th = threading.Thread(target=loop[0].run_forever, name="fsspecIO")
+                th.daemon = True
+                th.start()
+                iothread[0] = th
+    return loop[0]
 
 
 # these methods should be implemented as async by any async-able backend
@@ -129,26 +125,24 @@ class AsyncFileSystem(AbstractFileSystem):
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
         self.asynchronous = asynchronous
-        self._loop = threading.local()
         self._pid = os.getpid()
-        if loop is not None:
-            self._loop.loop = loop
+        if not asynchronous:
+            self._loop = loop or get_loop()
+        else:
+            self._loop = None
         super().__init__(*args, **kwargs)
 
     @property
     def loop(self):
-        if os.getpid() != self._pid:
+        if self._pid != os.getpid():
             raise RuntimeError("This class is not fork-safe")
-        if not hasattr(self._loop, "loop"):
-            # override and add here if you need to do any setup when instance is used
-            # from a new thread
-            self._loop.loop = get_loop()
-        return self._loop.loop
+        return self._loop
 
     async def _rm_file(self, path, **kwargs):
         raise NotImplementedError
 
     async def _rm(self, path, recursive=False, **kwargs):
+        # TODO: implement on_error
         path = await self._expand_path(path, recursive=recursive)
         await asyncio.gather(*[self._rm_file(p, **kwargs) for p in path])
 
@@ -218,7 +212,7 @@ class AsyncFileSystem(AbstractFileSystem):
             ]
         )
 
-    async def _get_file(self, lpath, rpath, **kwargs):
+    async def _get_file(self, rpath, lpath, **kwargs):
         raise NotImplementedError
 
     async def _get(self, rpath, lpath, recursive=False, **kwargs):
@@ -257,6 +251,9 @@ class AsyncFileSystem(AbstractFileSystem):
             return True
         except FileNotFoundError:
             return False
+
+    async def _info(self, path, **kwargs):
+        raise NotImplementedError
 
     async def _ls(self, path, **kwargs):
         raise NotImplementedError
@@ -468,9 +465,3 @@ def mirror_sync_methods(obj):
                     mth.__doc__ = getattr(
                         getattr(AbstractFileSystem, smethod, None), "__doc__", ""
                     )
-            elif (
-                hasattr(obj, smethod)
-                and inspect.ismethod(getattr(obj, smethod))
-                and not hasattr(obj, method)
-            ):
-                setattr(obj, method, async_wrapper(getattr(obj, smethod)))

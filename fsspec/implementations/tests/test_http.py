@@ -264,38 +264,30 @@ def test_async_other_thread(server):
     th.daemon = True
     th.start()
     fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
-    session = asyncio.run_coroutine_threadsafe(fs.set_session(), loop=loop).result()
+    asyncio.run_coroutine_threadsafe(fs.set_session(), loop=loop).result()
     url = server + "/index/realfile"
     cor = fs._cat([url])
     fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
     assert fut.result() == {url: data}
-    asyncio.run_coroutine_threadsafe(session.close(), loop=loop).result()
     loop.call_soon_threadsafe(loop.stop)
-
-
-def test_async_with_loop(server):
-    loop = asyncio.get_event_loop()
-    fs = fsspec.filesystem("http", asynchronous=False, loop=loop)
-    url = server + "/index/realfile"
-    cor = fs._cat([url])
-    fut = loop.run_until_complete(cor)
-    assert fut == {url: data}
 
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_async_this_thread(server):
+    loop = asyncio.get_event_loop()
+
     async def _():
-        loop = asyncio.get_event_loop()
         fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
 
-        # this is no longer required
         session = await fs.set_session()  # creates client
 
         url = server + "/index/realfile"
+        with pytest.raises((NotImplementedError, RuntimeError)):
+            fs.cat([url])
         out = await fs._cat([url])
-        await session.close()
         del fs
         assert out == {url: data}
+        await session.close()
 
     asyncio.run(_())
 

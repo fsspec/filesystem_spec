@@ -81,19 +81,24 @@ class HTTPFileSystem(AsyncFileSystem):
         self.cache_options = cache_options
         self.client_kwargs = client_kwargs or {}
         self.kwargs = storage_options
+        self._session = None
+        if not asynchronous:
+            sync(self.loop, self.set_session)
 
     @staticmethod
-    def _close_session(looplocal):
-        loop = getattr(looplocal, "loop", None)
-        session = getattr(looplocal, "_session", None)
-        if loop is not None and session is not None:
+    def close_session(loop, session):
+        if loop is not None and loop.is_running():
             sync(loop, session.close)
+        elif session._connector is not None:
+            # close after loop is dead
+            session._connector._close()
 
     async def set_session(self):
-        if not hasattr(self._loop, "_session"):
-            self._loop._session = await get_client(**self.client_kwargs)
-            weakref.finalize(self, self._close_session, self._loop)
-        return self._loop._session
+        if self._session is None:
+            self._session = await get_client(loop=self.loop, **self.client_kwargs)
+            if not self.asynchronous:
+                weakref.finalize(self, self.close_session, self.loop, self._session)
+        return self._session
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -285,7 +290,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 raise FileNotFoundError(url)
         return {"name": url, "size": size or None, "type": "file"}
 
-    def glob(self, path, **kwargs):
+    async def _glob(self, path, **kwargs):
         """
         Find files by glob-matching.
 
@@ -309,11 +314,11 @@ class HTTPFileSystem(AsyncFileSystem):
             depth = 1
             if ends:
                 path += "/*"
-            elif self.exists(path):
+            elif await self._exists(path):
                 if not detail:
                     return [path]
                 else:
-                    return {path: self.info(path)}
+                    return {path: await self._info(path)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
@@ -327,7 +332,9 @@ class HTTPFileSystem(AsyncFileSystem):
             root = ""
             depth = None if "**" in path else path[ind + 1 :].count("/") + 1
 
-        allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
+        allpaths = await self._find(
+            root, maxdepth=depth, withdirs=True, detail=True, **kwargs
+        )
         # Escape characters special to python regex, leaving our supported
         # special characters in place.
         # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
@@ -363,9 +370,9 @@ class HTTPFileSystem(AsyncFileSystem):
         else:
             return list(out)
 
-    def isdir(self, path):
+    async def _isdir(self, path):
         # override, since all URLs are (also) files
-        return bool(self.ls(path))
+        return bool(await self._ls(path))
 
 
 class HTTPFile(AbstractBufferedFile):

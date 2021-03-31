@@ -10,13 +10,19 @@ from .test_http import data, realfile, server  # noqa: F401
 
 def test_simple(server):  # noqa: F811
 
-    refs = {"a": b"data", "b": (realfile, 0, 5), "c": (realfile, 1, 5)}
+    refs = {
+        "a": b"data",
+        "b": (realfile, 0, 5),
+        "c": (realfile, 1, 5),
+        "d": b"base64:aGVsbG8=",
+    }
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
     assert fs.cat("a") == b"data"
     assert fs.cat("b") == data[:5]
     assert fs.cat("c") == data[1 : 1 + 5]
+    assert fs.cat("d") == b"hello"
 
 
 def test_ls(server):  # noqa: F811
