@@ -16,7 +16,7 @@ lock = threading.Lock()
 
 async def _runner(event, coro, result, timeout=None):
     if timeout is not None:
-        coro = asyncio.wait(coro, timeout=timeout)
+        coro = asyncio.wait_for(coro, timeout=timeout)
     try:
         result[0] = await coro
     except Exception as ex:
@@ -212,7 +212,7 @@ class AsyncFileSystem(AbstractFileSystem):
             ]
         )
 
-    async def _get_file(self, lpath, rpath, **kwargs):
+    async def _get_file(self, rpath, lpath, **kwargs):
         raise NotImplementedError
 
     async def _get(self, rpath, lpath, recursive=False, **kwargs):

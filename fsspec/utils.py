@@ -386,23 +386,6 @@ def can_be_local(path):
         return False
 
 
-def setup_logger(logname, level="DEBUG", clear=True):
-    """Add standard logging handler to logger of given name"""
-    import logging
-
-    logger = logging.getLogger(logname)
-    if clear:
-        logger.handlers.clear()
-    handle = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s " "- %(message)s"
-    )
-    handle.setFormatter(formatter)
-    logger.addHandler(handle)
-    logger.setLevel(level)
-    return logger
-
-
 def get_package_version_without_import(name):
     """For given package name, try to find the version without importing it
 
@@ -439,7 +422,7 @@ def get_package_version_without_import(name):
         return None
 
 
-def setup_logging(logger=None, logger_name=None, level="DEBUG"):
+def setup_logging(logger=None, logger_name=None, level="DEBUG", clear=True):
     if logger is None and logger_name is None:
         raise ValueError("Provide either logger object or logger name")
     logger = logger or logging.getLogger(logger_name)
@@ -448,6 +431,7 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG"):
         "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s -- %(message)s"
     )
     handle.setFormatter(formatter)
-    logger.handlers.clear()
+    if clear:
+        logger.handlers.clear()
     logger.addHandler(handle)
     logger.setLevel(level)

@@ -10,7 +10,7 @@ from fsspec.utils import (
     other_paths,
     read_block,
     seek_delimiter,
-    setup_logger,
+    setup_logging,
 )
 
 WIN = sys.platform.startswith("win")
@@ -292,7 +292,7 @@ def test_other_paths(paths, other, is_dir, expected):
 def test_log():
     import logging
 
-    logger = setup_logger("fsspec.test")
+    logger = setup_logging(logger_name="fsspec.test")
     assert logger.level == logging.DEBUG
 
 
