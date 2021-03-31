@@ -435,3 +435,4 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG", clear=True):
         logger.handlers.clear()
     logger.addHandler(handle)
     logger.setLevel(level)
+    return logger
