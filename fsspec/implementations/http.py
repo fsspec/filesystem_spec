@@ -290,7 +290,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 raise FileNotFoundError(url)
         return {"name": url, "size": size or None, "type": "file"}
 
-    def glob(self, path, **kwargs):
+    async def _glob(self, path, **kwargs):
         """
         Find files by glob-matching.
 
@@ -314,11 +314,11 @@ class HTTPFileSystem(AsyncFileSystem):
             depth = 1
             if ends:
                 path += "/*"
-            elif self.exists(path):
+            elif await self._exists(path):
                 if not detail:
                     return [path]
                 else:
-                    return {path: self.info(path)}
+                    return {path: await self._info(path)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
@@ -332,7 +332,9 @@ class HTTPFileSystem(AsyncFileSystem):
             root = ""
             depth = None if "**" in path else path[ind + 1 :].count("/") + 1
 
-        allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
+        allpaths = await self._find(
+            root, maxdepth=depth, withdirs=True, detail=True, **kwargs
+        )
         # Escape characters special to python regex, leaving our supported
         # special characters in place.
         # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
@@ -368,9 +370,9 @@ class HTTPFileSystem(AsyncFileSystem):
         else:
             return list(out)
 
-    def isdir(self, path):
+    async def _isdir(self, path):
         # override, since all URLs are (also) files
-        return bool(self.ls(path))
+        return bool(await self._ls(path))
 
 
 class HTTPFile(AbstractBufferedFile):
