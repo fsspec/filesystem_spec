@@ -274,10 +274,8 @@ def test_async_other_thread(server):
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_async_this_thread(server):
-    loop = asyncio.get_event_loop()
-
     async def _():
-        fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
+        fs = fsspec.filesystem("http", asynchronous=True)
 
         session = await fs.set_session()  # creates client
 
