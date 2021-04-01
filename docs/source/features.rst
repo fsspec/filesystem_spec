@@ -389,8 +389,8 @@ Configuration is determined in the following order, with later items winning:
   or directly instantiating the implementation class.
 
 
-Async
-=====
+Asynchronous
+============
 
 Some implementations, those deriving from ``fsspec.asyn.AsyncFileSystem``, have
 async/coroutine implementations of some file operations. The async methods have
@@ -398,6 +398,4 @@ names beginning with ``_``, and listed in the ``asyn`` module; synchronous or
 blocking functions are automatically generated, which will operate via an
 event loop in another thread, by default.
 
-Async methods allow for concurrent
-execution of certain batch operations such as ``get``, ``rm`` and ``cat`` even when
-called via the blocking API.
+See :doc:`async` for modes of operation and how to implement such file systems.

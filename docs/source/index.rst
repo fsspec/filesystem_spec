@@ -72,9 +72,10 @@ These are only imported on request, which may fail if a required dependency is m
    intro.rst
    usage.rst
    features.rst
+   developer.rst
+   async.rst
    api.rst
    changelog.rst
-   developer.rst
 
 
 Indices and tables

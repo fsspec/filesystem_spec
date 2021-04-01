@@ -11,7 +11,6 @@ from .spec import AbstractFileSystem
 from .utils import PY36, is_exception, other_paths
 
 private = re.compile("_[^_]")
-lock = threading.Lock()
 
 
 async def _runner(event, coro, result, timeout=None):
@@ -35,7 +34,9 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
     """
-    if loop is None or not loop.is_running():
+    # NB: if the loop is not running *yet*, it is OK to submit work
+    # and we will wait for it
+    if loop is None or loop.is_closed():
         raise RuntimeError("Loop is not running")
     try:
         loop0 = grl()
@@ -55,6 +56,7 @@ def sync(loop, func, *args, timeout=None, **kwargs):
 
 iothread = [None]  # dedicated fsspec IO thread
 loop = [None]  # global event loop for any non-async instance
+lock = threading.Lock()  # for setting exactly one thread
 
 
 def sync_wrapper(func, obj=None):
@@ -73,6 +75,10 @@ def sync_wrapper(func, obj=None):
 
 
 def get_loop():
+    """Create or return the default fsspec IO loop
+
+    The loop will be running on a separate thread.
+    """
     if loop[0] is None:
         with lock:
             # repeat the check just in case the loop got filled between the

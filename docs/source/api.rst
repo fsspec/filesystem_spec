@@ -52,8 +52,6 @@ Base Classes
 .. autoclass:: fsspec.spec.AbstractBufferedFile
    :members:
 
-.. autoclass:: fsspec.asyn.AsyncFileSystem
-
 .. autoclass:: fsspec.FSMap
    :members:
 
