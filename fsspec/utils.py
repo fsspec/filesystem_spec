@@ -117,7 +117,7 @@ def infer_compression(filename):
     extension. This includes builtin (gz, bz2, zip) compressions, as well as
     optional compressions. See fsspec.compression.register_compression.
     """
-    extension = os.path.splitext(filename)[-1].strip(".")
+    extension = os.path.splitext(filename)[-1].strip(".").lower()
     if extension in compressions:
         return compressions[extension]
 
