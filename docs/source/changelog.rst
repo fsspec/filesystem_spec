@@ -6,11 +6,18 @@ Dev
 
 Major Changes:
 
-- one event loop per thread
+- avoid nested sync calls by copying code (#581, #586, docs #593)
+- release again for py36 (#564, #575)
 
 Enhancements:
 
 - logging in mmap cacher, explicitly close files (#559)
+- make LocalFileOpener an IOBase (#589)
+- better reference file system (#568, #582, #584, #585)
+- first-chunk cache (#580)
+- sftp listdir (#571)
+- http logging and fetch all (#551, #558)
+- doc: entry points (#548)
 
 Fixes:
 
@@ -19,6 +26,10 @@ Fixes:
 - store paths without trailing "/" for DBFS (#557)
 - errors that happen on ``_initiate_upload`` when closing the
   ``AbstractBufferedFile`` will now be propagated (#587)
+- infer_compressions with upper case suffix ($595)
+- file initialiser errors (#587)
+- CI fix (#563)
+- local file commit cross-device (#547)
 
 Version 0.8.7
 -------------
