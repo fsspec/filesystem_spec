@@ -111,6 +111,11 @@ def test_spec1_expand():
                 "offset": "{{(i + 1) * 1000}}",
                 "length": "1000",
                 "dimensions": {"i": {"stop": 5}},
+            },
+            {
+                "key": "gen_key{{i}}",
+                "url": "http://{{u}}_{{i}}",
+                "dimensions": {"i": {"start": 5, "stop": 7}},
             }
         ],
         "refs": {
@@ -133,4 +138,6 @@ def test_spec1_expand():
         "gen_key2": ["http://server.domain/path_2", 3000, 1000],
         "gen_key3": ["http://server.domain/path_3", 4000, 1000],
         "gen_key4": ["http://server.domain/path_4", 5000, 1000],
+        "gen_key5": ["http://server.domain/path_5"],
+        "gen_key6": ["http://server.domain/path_6"],
     }
