@@ -4,6 +4,10 @@ Changelog
 Dev
 ---
 
+
+0.9.0
+-----
+
 Major Changes:
 
 - avoid nested sync calls by copying code (#581, #586, docs #593)

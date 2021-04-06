@@ -618,6 +618,7 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
     head["Accept-Encoding"] = "identity"
+    kwargs["headers"] = head
     session = session or await get_client()
     if size_policy == "head":
         r = await session.head(url, allow_redirects=ar, **kwargs)
