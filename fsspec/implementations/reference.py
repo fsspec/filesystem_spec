@@ -191,8 +191,12 @@ class ReferenceFileSystem(AsyncFileSystem):
                 key = jinja2.Template(gen["key"]).render(**pr, **templates)
                 url = jinja2.Template(gen["url"]).render(**pr, **templates)
                 if "offset" in gen and "length" in gen:
-                    offset = int(jinja2.Template(gen["offset"]).render(**pr, **templates))
-                    length = int(jinja2.Template(gen["length"]).render(**pr, **templates))
+                    offset = int(
+                        jinja2.Template(gen["offset"]).render(**pr, **templates)
+                    )
+                    length = int(
+                        jinja2.Template(gen["length"]).render(**pr, **templates)
+                    )
                     self.references[key] = [url, offset, length]
                 else:
                     self.references[key] = [url]

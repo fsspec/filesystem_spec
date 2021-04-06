@@ -116,7 +116,7 @@ def test_spec1_expand():
                 "key": "gen_key{{i}}",
                 "url": "http://{{u}}_{{i}}",
                 "dimensions": {"i": {"start": 5, "stop": 7}},
-            }
+            },
         ],
         "refs": {
             "key0": "data",
