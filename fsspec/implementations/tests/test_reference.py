@@ -36,13 +36,6 @@ def test_ls(server):  # noqa: F811
     assert fs.find("", withdirs=True) == ["a", "b", "c", "c/d"]
 
 
-def test_err(m):
-    with pytest.raises(NotImplementedError):
-        fsspec.filesystem("reference", fo={}, fs=m)
-    with pytest.raises(NotImplementedError):
-        fsspec.filesystem("reference", fo={}, target_protocol="memory")
-
-
 def test_defaults(server):  # noqa: F811
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(

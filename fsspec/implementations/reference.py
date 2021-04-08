@@ -4,8 +4,9 @@ import itertools
 import json
 import logging
 
-from ..asyn import AsyncFileSystem
+from ..asyn import AsyncFileSystem, sync
 from ..core import filesystem, open
+from ..spec import AbstractFileSystem
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -43,6 +44,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         remote_protocol=None,
         remote_options=None,
         fs=None,
+        template_overrides=None,
         loop=None,
         **kwargs,
     ):
@@ -72,6 +74,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         fs : file system instance
             Directly provide a file system, if you want to configure it beforehand. This
             takes precedence over target_protocol/target_options
+        template_overrides : dict
+            Swap out any templates in the references file with these - useful for
+            testing.
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)
@@ -91,17 +96,15 @@ class ReferenceFileSystem(AsyncFileSystem):
             remote_protocol = target_protocol
         if remote_protocol:
             fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
-        if not fs.async_impl:
-            raise NotImplementedError("Only works with async targets")
         self.target = target
-        self._process_references(text)
+        self._process_references(text, template_overrides)
         self.fs = fs
 
     @property
     def loop(self):
-        return self.fs.loop
+        return self.fs.loop if self.fs.async_impl else None
 
-    async def _cat_file(self, path):
+    def _cat_common(self, path):
         path = self._strip_protocol(path)
         part = self.references[path]
         if isinstance(part, str):
@@ -110,7 +113,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             logger.debug(f"Reference: {path}, type bytes")
             if part.startswith(b"base64:"):
                 part = base64.b64decode(part[7:])
-            return part
+            return part, None, None
 
         if len(part) == 1:
             logger.debug(f"Reference: {path}, whole file")
@@ -123,21 +126,53 @@ class ReferenceFileSystem(AsyncFileSystem):
             end = start + size
         if url is None:
             url = self.target
-        return await self.fs._cat_file(url, start=start, end=end)
+        return url, start, end
+
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        part_or_url, start0, end0 = self._cat_common(path)
+        if isinstance(part_or_url, bytes):
+            return part_or_url[start:end]
+        return (await self.fs._cat_file(part_or_url, start=start0, end=end0))[start:end]
+
+    def cat_file(self, path, start=None, end=None, **kwargs):
+        part_or_url, start0, end0 = self._cat_common(path)
+        if isinstance(part_or_url, bytes):
+            return part_or_url[start:end]
+        return self.fs.cat_file(part_or_url, start=start0, end=end0)[start:end]
 
     async def _get_file(self, rpath, lpath, **kwargs):
         data = await self._cat_file(rpath)
         with open(lpath, "wb") as f:
             f.write(data)
 
-    def _process_references(self, references):
+    def get_file(self, rpath, lpath, **kwargs):
+        data = self.cat_file(rpath, **kwargs)
+        with open(lpath, "wb") as f:
+            f.write(data)
+
+    def get(self, rpath, lpath, recursive=False, **kwargs):
+        if self.fs.async_impl:
+            return sync(self.loop, self._get, rpath, lpath, recursive, **kwargs)
+        return AbstractFileSystem.get(rpath, lpath, recursive=recursive, **kwargs)
+
+    def cat(self, path, recursive=False, **kwargs):
+        if self.fs.async_impl:
+            return sync(self.loop, self._cat, path, recursive, **kwargs)
+        elif isinstance(path, list):
+            if recursive or any("*" in p for p in path):
+                raise NotImplementedError
+            return {p: AbstractFileSystem.cat_file(self, p, **kwargs) for p in path}
+        else:
+            return AbstractFileSystem.cat_file(self, path)
+
+    def _process_references(self, references, template_overrides=None):
         if isinstance(references, bytes):
             references = json.loads(references.decode())
         vers = references.get("version", None)
         if vers is None:
             self._process_references0(references)
         elif vers == 1:
-            self._process_references1(references)
+            self._process_references1(references, template_overrides=template_overrides)
         else:
             raise ValueError(f"Unknown reference spec version: {vers}")
         # TODO: we make dircache by iteraring over all entries, but for Spec >= 1,
@@ -151,14 +186,17 @@ class ReferenceFileSystem(AsyncFileSystem):
             references = _unmodel_hdf5(references)
         self.references = references
 
-    def _process_references1(self, references):
+    def _process_references1(self, references, template_overrides=None):
         try:
             import jinja2
         except ImportError as e:
             raise ValueError("Reference Spec Version 1 requires jinja2") from e
         self.references = {}
         templates = {}
-        for k, v in references.get("templates", {}).items():
+        tmp = references.get("templates", {})
+        if template_overrides is not None:
+            tmp.update(template_overrides)
+        for k, v in tmp.items():
             if "{{" in v:
                 templates[k] = lambda temp=v, **kwargs: jinja2.Template(temp).render(
                     **kwargs
@@ -203,8 +241,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             elif len(part) == 1:
                 size = None
             else:
-                _, start, end = part
-                size = end - start
+                _, start, size = part
             par = self._parent(path)
             par0 = par
             while par0:
@@ -221,10 +258,10 @@ class ReferenceFileSystem(AsyncFileSystem):
     def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
         if mode != "rb":
             raise NotImplementedError
-        data = self.cat(path)
+        data = self.cat_file(path)  # load whole chunk into memory
         return io.BytesIO(data)
 
-    async def _ls(self, path, detail=True, **kwargs):
+    def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         out = self._ls_from_cache(path)
         if out is None:
@@ -233,12 +270,30 @@ class ReferenceFileSystem(AsyncFileSystem):
             return out
         return [o["name"] for o in out]
 
-    async def _info(self, path):
-        out = await self._ls(path, True)
+    def exists(self, path, **kwargs):  # overwrite auto-sync version
+        try:
+            return self._ls_from_cache(path) is not None
+        except FileNotFoundError:
+            return False
+
+    def isdir(self, path):  # overwrite auto-sync version
+        return self.exists(path) and self.info(path)["type"] == "directory"
+
+    def isfile(self, path):  # overwrite auto-sync version
+        return self.exists(path) and self.info(path)["type"] == "file"
+
+    async def _ls(self, path, detail=True, **kwargs):  # calls fast sync code
+        return self.ls(path, detail, **kwargs)
+
+    def info(self, path, **kwargs):
+        out = self.ls(path, True)
         out0 = [o for o in out if o["name"] == path]
         if not out0:
             return {"name": path, "type": "directory", "size": 0}
         return out0[0]
+
+    async def _info(self, path, **kwargs):  # calls fast sync code
+        return self.info(path)
 
 
 def _unmodel_hdf5(references):
