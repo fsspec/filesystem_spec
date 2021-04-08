@@ -385,7 +385,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         try:
             listing = self.ls(path, detail=True, **kwargs)
         except (FileNotFoundError, IOError):
-            return [], [], []
+            if detail:
+                return path, {}, {}
+            return path, [], []
 
         for info in listing:
             # each info name must be at least [path]/part , but here

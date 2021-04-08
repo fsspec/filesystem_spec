@@ -274,7 +274,10 @@ class AsyncFileSystem(AbstractFileSystem):
         try:
             listing = await self._ls(path, detail=True, **kwargs)
         except (FileNotFoundError, IOError):
-            yield [], [], []
+            if detail:
+                yield path, {}, {}
+            else:
+                yield path, [], []
             return
 
         for info in listing:
