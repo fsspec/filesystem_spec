@@ -204,7 +204,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             else:
                 templates[k] = v
 
-        for k, v in references["refs"].items():
+        for k, v in references.get("refs", {}).items():
             if isinstance(v, str):
                 if v.startswith("base64:"):
                     self.references[k] = base64.b64decode(v[7:])
