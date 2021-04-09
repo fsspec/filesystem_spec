@@ -200,7 +200,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                     self.references[key] = [url, offset, length]
                 elif ("offset" in gen) ^ ("length" in gen):
                     raise ValueError(
-                        "Both 'offset' and 'length' are required for a reference generator entry if either is provided."
+                        "Both 'offset' and 'length' are required for a "
+                        "reference generator entry if either is provided."
                     )
                 else:
                     self.references[key] = [url]
