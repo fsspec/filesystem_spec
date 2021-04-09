@@ -134,3 +134,60 @@ def test_spec1_expand():
         "gen_key5": ["http://server.domain/path_5"],
         "gen_key6": ["http://server.domain/path_6"],
     }
+
+
+def test_spec1_gen_variants():
+    pytest.importorskip("jinja2")
+    with pytest.raises(ValueError):
+        missing_length_spec = {
+            "version": 1,
+            "templates": {"u": "server.domain/path"},
+            "gen": [
+                {
+                    "key": "gen_key{{i}}",
+                    "url": "http://{{u}}_{{i}}",
+                    "offset": "{{(i + 1) * 1000}}",
+                    "dimensions": {"i": {"stop": 2}},
+                },
+            ],
+        }
+        fsspec.filesystem("reference", fo=missing_length_spec, target_protocol="http")
+
+    with pytest.raises(ValueError):
+        missing_offset_spec = {
+            "version": 1,
+            "templates": {"u": "server.domain/path"},
+            "gen": [
+                {
+                    "key": "gen_key{{i}}",
+                    "url": "http://{{u}}_{{i}}",
+                    "length": "1000",
+                    "dimensions": {"i": {"stop": 2}},
+                },
+            ],
+        }
+        fsspec.filesystem("reference", fo=missing_offset_spec, target_protocol="http")
+
+    url_only_gen_spec = {
+        "version": 1,
+        "templates": {"u": "server.domain/path"},
+        "gen": [
+            {
+                "key": "gen_key{{i}}",
+                "url": "http://{{u}}_{{i}}",
+                "dimensions": {"i": {"stop": 2}},
+            },
+        ],
+    }
+
+    fs = fsspec.filesystem("reference", fo=url_only_gen_spec, target_protocol="http")
+    assert fs.references == {
+        "gen_key0": ["http://server.domain/path_0"],
+        "gen_key1": ["http://server.domain/path_1"],
+    }
+
+
+def test_empty():
+    pytest.importorskip("jinja2")
+    fs = fsspec.filesystem("reference", fo={"version": 1}, target_protocol="http")
+    assert fs.references == {}
