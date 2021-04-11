@@ -59,21 +59,17 @@ class LocalFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
         out = os.stat(path, follow_symlinks=False)
-        dest = False
-        if os.path.islink(path):
-            t = "link"
-            dest = os.readlink(path)
-        elif os.path.isdir(path):
+        if os.path.isdir(path):
             t = "directory"
         elif os.path.isfile(path):
             t = "file"
         else:
             t = "other"
-        result = {"name": path, "size": out.st_size, "type": t, "created": out.st_ctime}
+        result = {"name": path, "size": out.st_size, "type": t, "created": out.st_ctime, "islink": os.path.islink(path)}
         for field in ["mode", "uid", "gid", "mtime"]:
             result[field] = getattr(out, "st_" + field)
-        if dest:
-            result["destination"] = dest
+        if result['islink']:
+            result["destination"] = os.readlink(path)
             try:
                 out2 = os.stat(path, follow_symlinks=True)
                 result["size"] = out2.st_size
