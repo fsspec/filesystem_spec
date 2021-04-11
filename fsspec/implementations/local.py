@@ -65,10 +65,16 @@ class LocalFileSystem(AbstractFileSystem):
             t = "file"
         else:
             t = "other"
-        result = {"name": path, "size": out.st_size, "type": t, "created": out.st_ctime, "islink": os.path.islink(path)}
+        result = {
+            "name": path,
+            "size": out.st_size,
+            "type": t,
+            "created": out.st_ctime,
+            "islink": os.path.islink(path),
+        }
         for field in ["mode", "uid", "gid", "mtime"]:
             result[field] = getattr(out, "st_" + field)
-        if result['islink']:
+        if result["islink"]:
             result["destination"] = os.readlink(path)
             try:
                 out2 = os.stat(path, follow_symlinks=True)
