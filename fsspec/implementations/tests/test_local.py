@@ -450,7 +450,7 @@ def test_make_path_posix():
     assert "/" in make_path_posix("rel\\path", sep="\\")
 
 
-def test_links(tmpdir):
+def test_linked_files(tmpdir):
     tmpdir = str(tmpdir)
     fn0 = os.path.join(tmpdir, "target")
     fn1 = os.path.join(tmpdir, "link1")
@@ -469,8 +469,12 @@ def test_links(tmpdir):
 
     fs = LocalFileSystem()
     assert fs.info(fn0)["type"] == "file"
-    assert fs.info(fn1)["type"] == "link"
-    assert fs.info(fn2)["type"] == "link"
+    assert fs.info(fn1)["type"] == "file"
+    assert fs.info(fn2)["type"] == "file"
+
+    assert not fs.info(fn0)["islink"]
+    assert fs.info(fn1)["islink"]
+    assert fs.info(fn2)["islink"]
 
     assert fs.info(fn0)["size"] == len(data)
     assert fs.info(fn1)["size"] == len(data)
@@ -483,6 +487,34 @@ def test_links(tmpdir):
     of = fsspec.open(fn2, "rb")
     with of as f:
         assert f.read() == data
+
+
+def test_linked_directories(tmpdir):
+    tmpdir = str(tmpdir)
+
+    subdir0 = os.path.join(tmpdir, "target")
+    subdir1 = os.path.join(tmpdir, "link1")
+    subdir2 = os.path.join(tmpdir, "link2")
+
+    os.makedirs(subdir0)
+
+    try:
+        os.symlink(subdir0, subdir1)
+        os.symlink(subdir0, subdir2)
+    except OSError:
+        if WIN:
+            pytest.xfail("Ran on win without admin permissions")
+        else:
+            raise
+
+    fs = LocalFileSystem()
+    assert fs.info(subdir0)["type"] == "directory"
+    assert fs.info(subdir1)["type"] == "directory"
+    assert fs.info(subdir2)["type"] == "directory"
+
+    assert not fs.info(subdir0)["islink"]
+    assert fs.info(subdir1)["islink"]
+    assert fs.info(subdir2)["islink"]
 
 
 def test_isfilestore():
