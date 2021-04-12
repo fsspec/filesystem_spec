@@ -102,7 +102,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     @property
     def loop(self):
-        return self.fs.loop if self.fs.async_impl else None
+        return self.fs.loop if self.fs.async_impl else self._loop
 
     def _cat_common(self, path):
         path = self._strip_protocol(path)

@@ -17,6 +17,9 @@ port = 9898
 data = b"\n".join([b"some test data"] * 1000)
 realfile = "http://localhost:%i/index/realfile" % port
 index = b'<a href="%s">Link</a>' % realfile.encode()
+listing = open(
+    os.path.join(os.path.dirname(__file__), "data", "listing.html"), "rb"
+).read()
 win = os.name == "nt"
 
 
@@ -36,11 +39,14 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             "/index/realfile",
             "/index/otherfile",
             "/index",
+            "/data/20020401",
         ]:
             self._respond(404)
             return
 
         d = data if self.path in ["/index/realfile", "/index/otherfile"] else index
+        if self.path == "/data/20020401":
+            d = listing
         if "Range" in self.headers:
             ran = self.headers["Range"]
             b, ran = ran.split("=")
@@ -224,6 +230,16 @@ def test_multi_download(server, tmpdir):
     assert open(fnb, "rb").read() == data
 
 
+def test_ls(server):
+    h = fsspec.filesystem("http")
+    l = h.ls(server + "/data/20020401/", detail=False)
+    nc = server + "/data/20020401/GRACEDADM_CLSM0125US_7D.A20020401.030.nc4"
+    assert nc in l
+    assert len(l) == 11
+    assert all(u["type"] == "file" for u in h.ls(server + "/data/20020401/"))
+    assert h.glob(server + "/data/20020401/*.nc4") == [nc]
+
+
 def test_mcat(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     urla = server + "/index/realfile"
@@ -291,7 +307,7 @@ def test_async_this_thread(server):
 
 
 def _inner_pass(fs, q, fn):
-    # pass the s3 instance, but don't use it; in new process, the instance
+    # pass the FS instance, but don't use it; in new process, the instance
     # cache should be skipped to make a new instance
     import traceback
 

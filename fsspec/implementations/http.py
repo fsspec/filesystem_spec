@@ -16,8 +16,8 @@ from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
-ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
-ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
+ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
+ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
 
 
@@ -123,9 +123,9 @@ class HTTPFileSystem(AsyncFileSystem):
             r.raise_for_status()
             text = await r.text()
         if self.simple_links:
-            links = ex2.findall(text) + ex.findall(text)
+            links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
         else:
-            links = ex.findall(text)
+            links = [u[2] for u in ex.findall(text)]
         out = set()
         parts = urlparse(url)
         for l in links:
@@ -147,7 +147,7 @@ class HTTPFileSystem(AsyncFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            return await self._ls(url.rstrip("/"), detail=True)
+            out = await self._ls(url.rstrip("/"), detail=False)
         if detail:
             return [
                 {
@@ -159,6 +159,8 @@ class HTTPFileSystem(AsyncFileSystem):
             ]
         else:
             return list(sorted(out))
+
+    ls = sync_wrapper(_ls)
 
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
