@@ -1,9 +1,12 @@
 import base64
 import io
 import itertools
-import json
 import logging
 
+try:
+    import ujson as json
+except ImportError:
+    import json
 from ..asyn import AsyncFileSystem, sync
 from ..core import filesystem, open
 from ..spec import AbstractFileSystem
@@ -45,6 +48,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         remote_options=None,
         fs=None,
         template_overrides=None,
+        simple_templates=True,
         loop=None,
         **kwargs,
     ):
@@ -77,6 +81,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         template_overrides : dict
             Swap out any templates in the references file with these - useful for
             testing.
+        simple_templates: bool
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)
@@ -96,6 +101,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             remote_protocol = target_protocol
         if remote_protocol:
             fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
+        self.simple_templates = simple_templates
         self.target = target
         self._process_references(text, template_overrides)
         self.fs = fs
@@ -212,7 +218,10 @@ class ReferenceFileSystem(AsyncFileSystem):
             else:
                 u = v[0]
                 if "{{" in u:
-                    u = jinja2.Template(u).render(**templates)
+                    if self.simple_templates:
+                        u = u.replace("{{", "{").replace("}}", "}").format(**templates)
+                    else:
+                        u = jinja2.Template(u).render(**templates)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
         for gen in references.get("gen", []):
             dimension = {
@@ -255,13 +264,12 @@ class ReferenceFileSystem(AsyncFileSystem):
                 _, start, size = part
             par = self._parent(path)
             par0 = par
-            while par0:
+            while par0 and par0 not in self.dircache:
                 # build parent directories
-                if par0 not in self.dircache:
-                    self.dircache[par0] = []
-                    self.dircache.setdefault(self._parent(par0), []).append(
-                        {"name": par0, "type": "directory", "size": 0}
-                    )
+                self.dircache[par0] = []
+                self.dircache.setdefault(self._parent(par0), []).append(
+                    {"name": par0, "type": "directory", "size": 0}
+                )
                 par0 = self._parent(par0)
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
