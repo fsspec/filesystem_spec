@@ -2,11 +2,13 @@ import base64
 import io
 import itertools
 import logging
+from functools import lru_cache
 
 try:
     import ujson as json
 except ImportError:
     import json
+
 from ..asyn import AsyncFileSystem, sync
 from ..core import filesystem, open
 from ..spec import AbstractFileSystem
@@ -48,7 +50,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         remote_options=None,
         fs=None,
         template_overrides=None,
-        simple_templates=True,
+        simple_templates=False,
         loop=None,
         **kwargs,
     ):
@@ -210,6 +212,12 @@ class ReferenceFileSystem(AsyncFileSystem):
             else:
                 templates[k] = v
 
+        @lru_cache(1000)
+        def _render_jinja(u):
+            import jinja2
+
+            return jinja2.Template(u).render(**templates)
+
         for k, v in references.get("refs", {}).items():
             if isinstance(v, str):
                 if v.startswith("base64:"):
@@ -221,7 +229,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     if self.simple_templates:
                         u = u.replace("{{", "{").replace("}}", "}").format(**templates)
                     else:
-                        u = jinja2.Template(u).render(**templates)
+                        u = _render_jinja(u)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
         for gen in references.get("gen", []):
             dimension = {
