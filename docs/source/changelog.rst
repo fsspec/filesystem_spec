@@ -1,8 +1,22 @@
 Changelog
 =========
 
-Dev
----
+2021.04.0
+---------
+
+Major changes
+
+- calendar versioning
+
+Enhancements
+
+- better link and size finding for HTTP (#610, %99)
+- link following in Local (#608)
+- ReferenceFileSystem dev (#606, #604, #602)
+
+Fixes
+
+- drop metadata dep (#605)
 
 
 0.9.0
