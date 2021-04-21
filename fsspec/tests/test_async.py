@@ -2,6 +2,8 @@ import asyncio
 import inspect
 import time
 
+import pytest
+
 import fsspec.asyn
 
 
@@ -12,6 +14,7 @@ def test_sync_methods():
     assert not inspect.iscoroutinefunction(inst.info)
 
 
+@pytest.mark.skipif(fsspec.asyn.PY36, reason="missing asyncio features o py36")
 def test_interrupt():
     loop = fsspec.asyn.get_loop()
 
