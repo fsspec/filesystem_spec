@@ -492,7 +492,12 @@ def _dump_running_tasks(
 ):
     import traceback
 
-    tasks = [t for t in asyncio.tasks.all_tasks(loop[0]) if not t.done()]
+    if PY36:
+        at = asyncio.tasks.Task.all_tasks
+    else:
+        at = asyncio.tasks.all_tasks
+
+    tasks = [t for t in at(loop[0]) if not t.done()]
     if printout:
         [task.print_stack() for task in tasks]
     out = [
