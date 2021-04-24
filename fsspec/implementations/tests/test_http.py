@@ -168,6 +168,35 @@ def test_list_cache_with_expiry_time_purged(server):
     assert len(cached_items) == 1
 
 
+def test_list_cache_reuse(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=5)
+
+    # First, the directory cache is not initialized.
+    assert not h.dircache
+
+    # By querying the filesystem with "use_listings_cache=True",
+    # the cache will automatically get populated.
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+    # Verify cache content.
+    assert len(h.dircache) == 1
+
+    # Verify another instance without caching enabled does not have cache content.
+    h = fsspec.filesystem("http", use_listings_cache=False)
+    assert not h.dircache
+
+    # Verify that yet another new instance, with caching enabled,
+    # will see the same cache content again.
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=5)
+    assert len(h.dircache) == 1
+
+    # However, yet another instance with a different expiry time will also not have
+    # any valid cache content.
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=666)
+    assert len(h.dircache) == 0
+
+
 def test_list_cache_with_max_paths(server):
     h = fsspec.filesystem("http", use_listings_cache=True, max_paths=5)
     out = h.glob(server + "/index/*")
