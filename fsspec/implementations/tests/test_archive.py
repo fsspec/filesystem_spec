@@ -140,6 +140,11 @@ class TestAnyArchive:
 
     scenarios = [scenario_zip, scenario_tar, scenario_libarchive]
 
+    def test_repr(self, scenario: ArchiveTestScenario):
+        with scenario.provider() as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            assert repr(fs).startswith("<Archive-like object")
+
     def test_empty(self, scenario: ArchiveTestScenario):
         with scenario.provider() as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
