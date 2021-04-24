@@ -1,7 +1,7 @@
 # this test case checks that the libarchive can be used from a seekable source (any fs
 # with a block cache active)
 import fsspec
-from fsspec.implementations.tests.test_archive import temparchive, archive_data
+from fsspec.implementations.tests.test_archive import archive_data, temparchive
 
 
 def test_cache(ftp_writable):

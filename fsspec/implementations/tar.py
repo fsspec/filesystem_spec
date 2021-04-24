@@ -20,6 +20,9 @@ class TarFileSystem(AbstractArchiveFileSystem):
     tar.gz, tar.bz2, tar.xz
     """
 
+    root_marker = ""
+    protocol = "tar"
+
     def __init__(
         self, fo, index_store=None, storage_options=None, compression=None, **kwargs
     ):

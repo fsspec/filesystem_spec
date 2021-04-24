@@ -47,10 +47,10 @@ def test_info():
 @pytest.mark.parametrize(
     "recipe",
     [
-        {"mode": "w", "suffix": ".tar"},
-        {"mode": "w:gz", "suffix": ".tar.gz"},
-        {"mode": "w:bz2", "suffix": ".tar.bz2"},
-        {"mode": "w:xz", "suffix": ".tar.xz"},
+        {"mode": "w", "suffix": ".tar", "magic": b"a\x00\x00\x00\x00"},
+        {"mode": "w:gz", "suffix": ".tar.gz", "magic": b"\x1f\x8b\x08\x08"},
+        {"mode": "w:bz2", "suffix": ".tar.bz2", "magic": b"BZh91AY"},
+        {"mode": "w:xz", "suffix": ".tar.xz", "magic": b"\xfd7zXZ\x00\x00"},
     ],
     ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
 )
@@ -60,16 +60,22 @@ def test_compressions(recipe):
     """
     with temptar(archive_data, mode=recipe["mode"], suffix=recipe["suffix"]) as t:
         fs = fsspec.filesystem("tar", fo=t)
+
+        # Verify that the tar archive has the correct compression.
+        with open(t, "rb") as raw:
+            assert raw.read()[:10].startswith(recipe["magic"])
+
+        # Verify content of a sample file.
         assert fs.cat("b") == b"hello"
 
 
 @pytest.mark.parametrize(
     "recipe",
     [
-        {"mode": "w", "suffix": ".tar"},
-        {"mode": "w:gz", "suffix": ".tar.gz"},
-        {"mode": "w:bz2", "suffix": ".tar.bz2"},
-        {"mode": "w:xz", "suffix": ".tar.xz"},
+        {"mode": "w", "suffix": ".tar", "magic": b"a\x00\x00\x00\x00"},
+        {"mode": "w:gz", "suffix": ".tar.gz", "magic": b"\x1f\x8b\x08\x08"},
+        {"mode": "w:bz2", "suffix": ".tar.bz2", "magic": b"BZh91AY"},
+        {"mode": "w:xz", "suffix": ".tar.xz", "magic": b"\xfd7zXZ\x00\x00"},
     ],
     ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
 )
@@ -88,6 +94,29 @@ def test_filesystem(recipe, tmpdir):
         with f as fo:
             fo.write(open(tf, "rb").read())
 
+    # Verify that the tar archive has the correct compression.
+    with open(filename, "rb") as raw:
+        assert raw.read()[:10].startswith(recipe["magic"])
+
+    # Verify content of a sample file.
     with fs.open(filename) as resource:
         tarfs = fsspec.filesystem("tar", fo=resource)
         assert tarfs.cat("b") == b"hello"
+@pytest.mark.parametrize(
+    "recipe",
+    [
+        {"mode": "w", "suffix": ".tar", "magic": b"a\x00\x00\x00\x00"},
+        {"mode": "w:gz", "suffix": ".tar.gz", "magic": b"\x1f\x8b\x08\x08"},
+        {"mode": "w:bz2", "suffix": ".tar.bz2", "magic": b"BZh91AY"},
+        {"mode": "w:xz", "suffix": ".tar.xz", "magic": b"\xfd7zXZ\x00\x00"},
+    ],
+    ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
+)
+def test_url_to_fs_direct(recipe, tmpdir):
+
+    with temptar(archive_data, mode=recipe["mode"], suffix=recipe["suffix"]) as tf:
+        url = f"tar://inner::file://{tf}"
+        fs, url = fsspec.core.url_to_fs(url=url)
+        assert fs.cat("b") == b"hello"
+
+

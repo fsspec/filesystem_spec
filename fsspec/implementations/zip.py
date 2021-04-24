@@ -16,6 +16,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
     """
 
     root_marker = ""
+    protocol = "zip"
 
     def __init__(
         self,

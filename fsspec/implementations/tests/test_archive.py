@@ -1,4 +1,7 @@
+import bz2
 import dataclasses
+import gzip
+import lzma
 import os
 import pickle
 import sys
@@ -59,11 +62,11 @@ def temparchive(data=None):
 @contextmanager
 def temptar(data=None, mode="w", suffix=".tar"):
     """
-    Provide test cases with temporary synthesized Tar archives.
+    Provide test cases with temporary synthesized .tar archives.
     """
     data = data or {}
-    f = tempfile.mkstemp(suffix=suffix)[1]
-    with tarfile.TarFile.open(f, mode=mode) as t:
+    fn = tempfile.mkstemp(suffix=suffix)[1]
+    with tarfile.TarFile.open(fn, mode=mode) as t:
         touched = {}
         for name, data in data.items():
 
@@ -81,13 +84,83 @@ def temptar(data=None, mode="w", suffix=".tar"):
             info = tarfile.TarInfo(name=name)
             info.size = len(data)
             t.addfile(info, BytesIO(data))
+
     try:
-        yield f
+        yield fn
     finally:
         try:
-            os.remove(f)
+            os.remove(fn)
         except (IOError, OSError):
             pass
+
+
+@contextmanager
+def temptargz(data=None, mode="w", suffix=".tar.gz"):
+    """
+    Provide test cases with temporary synthesized .tar.gz archives.
+    """
+
+    with temptar(data=data, mode=mode) as tarname:
+
+        fn = tempfile.mkstemp(suffix=suffix)[1]
+        with open(tarname, "rb") as tar:
+            cf = gzip.GzipFile(filename=fn, mode=mode)
+            cf.write(tar.read())
+            cf.close()
+
+        try:
+            yield fn
+        finally:
+            try:
+                os.remove(fn)
+            except (IOError, OSError):
+                pass
+
+
+@contextmanager
+def temptarbz2(data=None, mode="w", suffix=".tar.bz2"):
+    """
+    Provide test cases with temporary synthesized .tar.bz2 archives.
+    """
+
+    with temptar(data=data, mode=mode) as tarname:
+
+        fn = tempfile.mkstemp(suffix=suffix)[1]
+        with open(tarname, "rb") as tar:
+            cf = bz2.BZ2File(filename=fn, mode=mode)
+            cf.write(tar.read())
+            cf.close()
+
+        try:
+            yield fn
+        finally:
+            try:
+                os.remove(fn)
+            except (IOError, OSError):
+                pass
+
+
+@contextmanager
+def temptarxz(data=None, mode="w", suffix=".tar.xz"):
+    """
+    Provide test cases with temporary synthesized .tar.xz archives.
+    """
+
+    with temptar(data=data, mode=mode) as tarname:
+
+        fn = tempfile.mkstemp(suffix=suffix)[1]
+        with open(tarname, "rb") as tar:
+            cf = lzma.open(filename=fn, mode=mode, format=lzma.FORMAT_XZ)
+            cf.write(tar.read())
+            cf.close()
+
+        try:
+            yield fn
+        finally:
+            try:
+                os.remove(fn)
+            except (IOError, OSError):
+                pass
 
 
 @dataclasses.dataclass
@@ -101,6 +174,9 @@ class ArchiveTestScenario:
 
     # A contextmanager function to provide temporary synthesized archives.
     provider: Callable
+
+    # The filesystem protocol variant identifier. Any of "gz", "bz2" or "xz".
+    variant: str = None
 
 
 def pytest_generate_tests(metafunc):
@@ -121,7 +197,11 @@ def pytest_generate_tests(metafunc):
     argnames = ["scenario"]
     argvalues = []
     for scenario in metafunc.cls.scenarios:
-        idlist.append(scenario.protocol)
+        scenario: ArchiveTestScenario = scenario
+        label = scenario.protocol
+        if scenario.variant:
+            label += "-" + scenario.variant
+        idlist.append(label)
         argvalues.append([scenario])
     metafunc.parametrize(argnames, argvalues, ids=idlist, scope="class")
 
@@ -129,6 +209,11 @@ def pytest_generate_tests(metafunc):
 # Define test scenarios.
 scenario_zip = ArchiveTestScenario(protocol="zip", provider=tempzip)
 scenario_tar = ArchiveTestScenario(protocol="tar", provider=temptar)
+scenario_targz = ArchiveTestScenario(protocol="tar", provider=temptargz, variant="gz")
+scenario_tarbz2 = ArchiveTestScenario(
+    protocol="tar", provider=temptarbz2, variant="bz2"
+)
+scenario_tarxz = ArchiveTestScenario(protocol="tar", provider=temptarxz, variant="xz")
 scenario_libarchive = ArchiveTestScenario(protocol="libarchive", provider=temparchive)
 
 
@@ -138,7 +223,14 @@ class TestAnyArchive:
     will adhere to the same specification.
     """
 
-    scenarios = [scenario_zip, scenario_tar, scenario_libarchive]
+    scenarios = [
+        scenario_zip,
+        scenario_tar,
+        scenario_targz,
+        scenario_tarbz2,
+        scenario_tarxz,
+        scenario_libarchive,
+    ]
 
     def test_repr(self, scenario: ArchiveTestScenario):
         with scenario.provider() as archive:

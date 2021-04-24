@@ -5,11 +5,13 @@ from fsspec.utils import tokenize
 class AbstractArchiveFileSystem(AbstractFileSystem):
     """
     A generic superclass for implementing Archive-based filesystems.
-    Currently, it is shared amongst ZipFileSystem, LibArchiveFileSystem and TarFileSystem.
+
+    Currently, it is shared amongst `ZipFileSystem`, `LibArchiveFileSystem` and
+    `TarFileSystem`.
     """
 
     def __str__(self):
-        return "<Archive-like object %s>" % (type(self).__name__)
+        return "<Archive-like object %s at %s>" % (type(self).__name__, id(self))
 
     __repr__ = __str__
 
