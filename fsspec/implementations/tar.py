@@ -4,8 +4,8 @@ import tarfile
 from io import BufferedReader
 
 import fsspec
+from fsspec.archive import AbstractArchiveFileSystem
 from fsspec.compression import compr
-from fsspec.spec import AbstractArchiveFileSystem
 from fsspec.utils import infer_compression
 
 typemap = {b"0": "file", b"5": "directory"}

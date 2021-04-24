@@ -17,7 +17,7 @@ from .registry import (
     register_implementation,
     registry,
 )
-from .spec import AbstractArchiveFileSystem, AbstractFileSystem
+from .spec import AbstractFileSystem
 
 __version__ = get_versions()["version"]
 del get_versions
@@ -25,7 +25,6 @@ del get_versions
 
 __all__ = [
     "AbstractFileSystem",
-    "AbstractArchiveFileSystem",
     "FSMap",
     "filesystem",
     "register_implementation",

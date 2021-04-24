@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import zipfile
 
-from fsspec import AbstractArchiveFileSystem, open_files
+from fsspec import open_files
+from fsspec.archive import AbstractArchiveFileSystem
 from fsspec.utils import DEFAULT_BLOCK_SIZE
 
 
