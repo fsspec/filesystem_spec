@@ -14,6 +14,12 @@ logger = logging.getLogger("tar")
 
 
 class TarFileSystem(AbstractArchiveFileSystem):
+    """Compressed Tar archives as a file-system (read-only)
+
+    Supports the following formats:
+    tar.gz, tar.bz2, tar.xz
+    """
+
     def __init__(
         self, fo, index_store=None, storage_options=None, compression=None, **kwargs
     ):
@@ -100,6 +106,9 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
 
 class TarContainedFile(object):
+    """
+    Represent/wrap a TarFileSystem's file object.
+    """
     def __init__(self, of, info):
         self.info = info
         self.size = info["size"]
