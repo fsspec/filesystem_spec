@@ -24,7 +24,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
     protocol = "tar"
 
     def __init__(
-        self, fo, index_store=None, storage_options=None, compression=None, **kwargs
+        self, fo="", index_store=None, storage_options=None, compression=None, **kwargs
     ):
         super().__init__(**kwargs)
 
@@ -39,12 +39,25 @@ class TarFileSystem(AbstractArchiveFileSystem):
             # be a `fsspec.LocalFileOpener`, an `io.BufferedReader` or an
             # `fsspec.AbstractFileSystem` instance.
             try:
-                if hasattr(fo, "path"):
+                # Amended io.BufferedReader or similar.
+                # This uses a "protocol extension" where original filenames are
+                # propagated to archive-like filesystems in order to let them
+                # infer the right compression appropriately.
+                if hasattr(fo, "original"):
+                    name = fo.original
+
+                # fsspec.LocalFileOpener
+                elif hasattr(fo, "path"):
                     name = fo.path
+
+                # io.BufferedReader
                 elif hasattr(fo, "name"):
                     name = fo.name
+
+                # fsspec.AbstractFileSystem
                 elif hasattr(fo, "info"):
                     name = fo.info()["name"]
+
             except Exception as ex:
                 logger.warning(
                     f"Unable to determine file name, not inferring compression: {ex}"
@@ -59,7 +72,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
             #  but then would seek to offset in the file work?
             fo = compr[compression](fo)
 
-        self.fo = fo
+        self.fo = fo.__enter__()  # the whole instance is a context
         self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
@@ -112,6 +125,7 @@ class TarContainedFile(object):
     """
     Represent/wrap a TarFileSystem's file object.
     """
+
     def __init__(self, of, info):
         self.info = info
         self.size = info["size"]

@@ -1,9 +1,12 @@
 import os
+import shutil
+import tempfile
 
 import pytest
 
 import fsspec
 from fsspec.core import OpenFile
+from fsspec.implementations.cached import WholeFileCacheFileSystem
 from fsspec.implementations.tests.test_archive import archive_data, temptar
 
 
@@ -79,7 +82,7 @@ def test_compressions(recipe):
     ],
     ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
 )
-def test_filesystem(recipe, tmpdir):
+def test_filesystem_direct(recipe, tmpdir):
     """
     Run tests through a real fsspec filesystem implementation.
     Here: `LocalFileSystem`.
@@ -102,6 +105,61 @@ def test_filesystem(recipe, tmpdir):
     with fs.open(filename) as resource:
         tarfs = fsspec.filesystem("tar", fo=resource)
         assert tarfs.cat("b") == b"hello"
+
+
+@pytest.mark.parametrize(
+    "recipe",
+    [
+        {"mode": "w", "suffix": ".tar", "magic": b"a\x00\x00\x00\x00"},
+        {"mode": "w:gz", "suffix": ".tar.gz", "magic": b"\x1f\x8b\x08\x08"},
+        {"mode": "w:bz2", "suffix": ".tar.bz2", "magic": b"BZh91AY"},
+        {"mode": "w:xz", "suffix": ".tar.xz", "magic": b"\xfd7zXZ\x00\x00"},
+    ],
+    ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
+)
+def test_filesystem_cached(recipe, tmpdir):
+    """
+    Run tests through a real, cached, fsspec filesystem implementation.
+    Here: `TarFileSystem` over `WholeFileCacheFileSystem` over `LocalFileSystem`.
+    """
+
+    filename = os.path.join(tmpdir, f'temp{recipe["suffix"]}')
+
+    # Create a filesystem from test fixture.
+    fs = fsspec.filesystem("file")
+    f = OpenFile(fs, filename, mode="wb")
+
+    with temptar(archive_data, mode=recipe["mode"], suffix=recipe["suffix"]) as tf:
+        with f as fo:
+            fo.write(open(tf, "rb").read())
+
+    # Verify that the tar archive has the correct compression.
+    with open(filename, "rb") as raw:
+        assert raw.read()[:10].startswith(recipe["magic"])
+
+    # Access cached filesystem.
+    cachedir = tempfile.mkdtemp()
+    filesystem = WholeFileCacheFileSystem(fs=fs, cache_storage=cachedir)
+
+    # Verify the cache is empty beforehand.
+    assert os.listdir(cachedir) == []
+
+    # Verify content of a sample file.
+    with filesystem.open(filename) as resource:
+        tarfs = fsspec.filesystem("tar", fo=resource)
+        assert tarfs.cat("b") == b"hello"
+
+    # Verify the cache is populated afterwards.
+    assert len(os.listdir(cachedir)) == 2
+
+    # Verify that the cache is empty after clearing it.
+    filesystem.clear_cache()
+    assert os.listdir(cachedir) == []
+
+    filesystem.clear_cache()
+    shutil.rmtree(cachedir)
+
+
 @pytest.mark.parametrize(
     "recipe",
     [
@@ -120,3 +178,19 @@ def test_url_to_fs_direct(recipe, tmpdir):
         assert fs.cat("b") == b"hello"
 
 
+@pytest.mark.parametrize(
+    "recipe",
+    [
+        {"mode": "w", "suffix": ".tar"},
+        {"mode": "w:gz", "suffix": ".tar.gz"},
+        {"mode": "w:bz2", "suffix": ".tar.bz2"},
+        {"mode": "w:xz", "suffix": ".tar.xz"},
+    ],
+    ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
+)
+def test_url_to_fs_cached(recipe, tmpdir):
+
+    with temptar(archive_data, mode=recipe["mode"], suffix=recipe["suffix"]) as tf:
+        url = f"tar://inner::simplecache::file://{tf}"
+        fs, url = fsspec.core.url_to_fs(url=url)
+        assert fs.cat("b") == b"hello"
