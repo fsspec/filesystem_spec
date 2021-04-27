@@ -101,8 +101,12 @@ class HTTPFileSystem(AsyncFileSystem):
     @staticmethod
     def close_session(loop, session):
         if loop is not None and loop.is_running():
-            sync(loop, session.close)
-        elif session._connector is not None:
+            try:
+                sync(loop, session.close, timeout=0.1)
+                return
+            except TimeoutError:
+                pass
+        if session._connector is not None:
             # close after loop is dead
             session._connector._close()
 
