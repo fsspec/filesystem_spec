@@ -1,6 +1,11 @@
 Changelog
 =========
 
+Enhancements
+
+- Enable listings cache for HTTP filesystem (#560)
+
+
 2021.04.0
 ---------
 
@@ -13,7 +18,6 @@ Enhancements
 - better link and size finding for HTTP (#610, %99)
 - link following in Local (#608)
 - ReferenceFileSystem dev (#606, #604, #602)
-- Enable listings cache for HTTP filesystem (#560)
 
 Fixes
 
