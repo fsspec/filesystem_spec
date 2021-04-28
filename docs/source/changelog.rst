@@ -1,6 +1,11 @@
 Changelog
 =========
 
+Enhancements
+
+- Enable listings cache for HTTP filesystem (#560)
+
+
 2021.04.0
 ---------
 

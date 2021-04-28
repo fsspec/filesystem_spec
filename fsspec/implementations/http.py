@@ -4,6 +4,7 @@ import asyncio
 import logging
 import re
 import weakref
+from copy import copy
 from urllib.parse import urlparse
 
 import aiohttp
@@ -82,14 +83,30 @@ class HTTPFileSystem(AsyncFileSystem):
         self.client_kwargs = client_kwargs or {}
         self.kwargs = storage_options
         self._session = None
+
+        # Clean caching-related parameters from `storage_options`
+        # before propagating them as `request_options` through `self.kwargs`.
+        # TODO: Maybe rename `self.kwargs` to `self.request_options` to make
+        #       it clearer.
+        request_options = copy(storage_options)
+        self.use_listings_cache = request_options.pop("use_listings_cache", False)
+        request_options.pop("listings_expiry_time", None)
+        request_options.pop("max_paths", None)
+        request_options.pop("skip_instance_cache", None)
+        self.kwargs = request_options
+
         if not asynchronous:
             sync(self.loop, self.set_session)
 
     @staticmethod
     def close_session(loop, session):
         if loop is not None and loop.is_running():
-            sync(loop, session.close)
-        elif session._connector is not None:
+            try:
+                sync(loop, session.close, timeout=0.1)
+                return
+            except TimeoutError:
+                pass
+        if session._connector is not None:
             # close after loop is dead
             session._connector._close()
 
@@ -113,7 +130,7 @@ class HTTPFileSystem(AsyncFileSystem):
             return par
         return ""
 
-    async def _ls(self, url, detail=True, **kwargs):
+    async def _ls_real(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -147,7 +164,7 @@ class HTTPFileSystem(AsyncFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            out = await self._ls(url.rstrip("/"), detail=False)
+            out = await self._ls_real(url.rstrip("/"), detail=False)
         if detail:
             return [
                 {
@@ -159,6 +176,16 @@ class HTTPFileSystem(AsyncFileSystem):
             ]
         else:
             return list(sorted(out))
+        return out
+
+    async def _ls(self, url, detail=True, **kwargs):
+
+        if self.use_listings_cache and url in self.dircache:
+            out = self.dircache[url]
+        else:
+            out = await self._ls_real(url, detail=detail, **kwargs)
+            self.dircache[url] = out
+        return out
 
     ls = sync_wrapper(_ls)
 
