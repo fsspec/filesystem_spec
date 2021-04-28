@@ -1,6 +1,10 @@
 Changelog
 =========
 
+=======
+Enhancements
+
+- Enable listings cache for HTTP filesystem (#560)
 - Fold ZipFileSystem and LibArchiveFileSystem into a generic implementation and
   add new TarFileSystem (#561)
 

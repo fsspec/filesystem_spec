@@ -3,6 +3,7 @@ import contextlib
 import os
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -102,6 +103,108 @@ def server():
 
 def test_list(server):
     h = fsspec.filesystem("http")
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
+def test_list_invalid_args(server):
+    with pytest.raises(TypeError):
+        h = fsspec.filesystem("http", use_foobar=True)
+        h.glob(server + "/index/*")
+
+
+def test_list_cache(server):
+    h = fsspec.filesystem("http", use_listings_cache=True)
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
+def test_list_cache_with_expiry_time_cached(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=30)
+
+    # First, the directory cache is not initialized.
+    assert not h.dircache
+
+    # By querying the filesystem with "use_listings_cache=True",
+    # the cache will automatically get populated.
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+    # Verify cache content.
+    assert len(h.dircache) == 1
+
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
+def test_list_cache_with_expiry_time_purged(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=0.1)
+
+    # First, the directory cache is not initialized.
+    assert not h.dircache
+
+    # By querying the filesystem with "use_listings_cache=True",
+    # the cache will automatically get populated.
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+    assert len(h.dircache) == 1
+
+    # Verify cache content.
+    cached_items = h.dircache.get(server + "/index/")
+    assert len(cached_items) == 1
+
+    # Wait beyond the TTL / cache expiry time.
+    time.sleep(0.2)
+
+    # Verify that the cache item should have been purged.
+    cached_items = h.dircache.get(server + "/index/")
+    assert cached_items is None
+
+    # Verify that after clearing the item from the cache,
+    # it can get populated again.
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+    cached_items = h.dircache.get(server + "/index/")
+    assert len(cached_items) == 1
+
+
+def test_list_cache_reuse(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=5)
+
+    # First, the directory cache is not initialized.
+    assert not h.dircache
+
+    # By querying the filesystem with "use_listings_cache=True",
+    # the cache will automatically get populated.
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+    # Verify cache content.
+    assert len(h.dircache) == 1
+
+    # Verify another instance without caching enabled does not have cache content.
+    h = fsspec.filesystem("http", use_listings_cache=False)
+    assert not h.dircache
+
+    # Verify that yet another new instance, with caching enabled,
+    # will see the same cache content again.
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=5)
+    assert len(h.dircache) == 1
+
+    # However, yet another instance with a different expiry time will also not have
+    # any valid cache content.
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=666)
+    assert len(h.dircache) == 0
+
+
+def test_list_cache_with_max_paths(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, max_paths=5)
+    out = h.glob(server + "/index/*")
+    assert out == [server + "/index/realfile"]
+
+
+def test_list_cache_with_skip_instance_cache(server):
+    h = fsspec.filesystem("http", use_listings_cache=True, skip_instance_cache=True)
     out = h.glob(server + "/index/*")
     assert out == [server + "/index/realfile"]
 

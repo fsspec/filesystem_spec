@@ -274,7 +274,7 @@ def open_files(
 
     Returns
     -------
-    An ``OpenFiles`` instance, which is a ist of ``OpenFile`` objects that can
+    An ``OpenFiles`` instance, which is a list of ``OpenFile`` objects that can
     be used as a single context
     """
     fs, fs_token, paths = get_fs_token_paths(
