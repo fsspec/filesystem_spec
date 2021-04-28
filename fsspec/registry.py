@@ -104,6 +104,7 @@ known_implementations = {
         "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
     "zip": {"class": "fsspec.implementations.zip.ZipFileSystem"},
+    "tar": {"class": "fsspec.implementations.tar.TarFileSystem"},
     "gcs": {
         "class": "gcsfs.GCSFileSystem",
         "err": "Please install gcsfs to access Google Storage",

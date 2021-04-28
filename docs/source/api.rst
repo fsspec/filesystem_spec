@@ -33,6 +33,7 @@ Base Classes
    fsspec.spec.AbstractFileSystem
    fsspec.spec.Transaction
    fsspec.spec.AbstractBufferedFile
+   fsspec.archive.AbstractArchiveFileSystem
    fsspec.FSMap
    fsspec.asyn.AsyncFileSystem
    fsspec.core.OpenFile
@@ -50,6 +51,9 @@ Base Classes
    :members:
 
 .. autoclass:: fsspec.spec.AbstractBufferedFile
+   :members:
+
+.. autoclass:: fsspec.archive.AbstractArchiveFileSystem
    :members:
 
 .. autoclass:: fsspec.FSMap
