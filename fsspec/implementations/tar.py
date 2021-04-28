@@ -1,6 +1,7 @@
 import copy
 import logging
 import tarfile
+import weakref
 from io import BufferedReader
 
 import fsspec
@@ -72,6 +73,8 @@ class TarFileSystem(AbstractArchiveFileSystem):
             #  but then would seek to offset in the file work?
             fo = compr[compression](fo)
 
+        self._fo_ref = fo
+        weakref.finalize(self, fo.close)
         self.fo = fo.__enter__()  # the whole instance is a context
         self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None

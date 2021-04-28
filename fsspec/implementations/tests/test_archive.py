@@ -3,7 +3,6 @@ import gzip
 import lzma
 import os
 import pickle
-import sys
 import tarfile
 import tempfile
 import zipfile
@@ -248,8 +247,6 @@ class TestAnyArchive:
             assert fs.glob("*/*/*th") == ["deeply/nested/path"]
 
     def test_mapping(self, scenario: ArchiveTestScenario):
-        if scenario.protocol == "zip" and sys.version_info < (3, 6):
-            pytest.xfail(reason="zip-info odd on py35")
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             m = fs.get_mapper("")
@@ -257,8 +254,6 @@ class TestAnyArchive:
             assert m["b"] == archive_data["b"]
 
     def test_pickle(self, scenario: ArchiveTestScenario):
-        if scenario.protocol == "zip" and sys.version_info < (3, 6):
-            pytest.xfail(reason="zip not supported on py35")
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             fs2 = pickle.loads(pickle.dumps(fs))
