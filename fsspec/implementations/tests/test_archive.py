@@ -1,5 +1,4 @@
 import bz2
-import dataclasses
 import gzip
 import lzma
 import os
@@ -10,7 +9,6 @@ import tempfile
 import zipfile
 from contextlib import contextmanager
 from io import BytesIO
-from typing import Callable
 
 import pytest
 
@@ -163,20 +161,18 @@ def temptarxz(data=None, mode="w", suffix=".tar.xz"):
                 pass
 
 
-@dataclasses.dataclass
 class ArchiveTestScenario:
     """
     Describe a test scenario for any type of archive.
     """
 
-    # The filesystem protocol identifier. Any of "zip", "tar" or "libarchive".
-    protocol: str
-
-    # A contextmanager function to provide temporary synthesized archives.
-    provider: Callable
-
-    # The filesystem protocol variant identifier. Any of "gz", "bz2" or "xz".
-    variant: str = None
+    def __init__(self, protocol=None, provider=None, variant=None):
+        # The filesystem protocol identifier. Any of "zip", "tar" or "libarchive".
+        self.protocol = protocol
+        # A contextmanager function to provide temporary synthesized archives.
+        self.provider = provider
+        # The filesystem protocol variant identifier. Any of "gz", "bz2" or "xz".
+        self.variant = variant
 
 
 def pytest_generate_tests(metafunc):

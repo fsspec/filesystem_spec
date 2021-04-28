@@ -1,6 +1,10 @@
 Changelog
 =========
 
+- Fold ZipFileSystem and LibArchiveFileSystem into a generic implementation and
+  add new TarFileSystem (#561)
+
+
 2021.04.0
 ---------
 
@@ -13,8 +17,6 @@ Enhancements
 - better link and size finding for HTTP (#610, %99)
 - link following in Local (#608)
 - ReferenceFileSystem dev (#606, #604, #602)
-- Fold ZipFileSystem and LibArchiveFileSystem into a generic implementation and
-  add new TarFileSystem (#561)
 
 Fixes
 
