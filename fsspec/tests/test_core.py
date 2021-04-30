@@ -263,3 +263,17 @@ def test_chained_url(ftp_writable):
         url += f"::ftp://{username}:{password}@{host}:{port}/archive.zip"
         with fsspec.open(url, "rb") as f:
             assert f.read() == data["afile"]
+
+@pytest.mark.run
+def test_exists(m):
+    mpath = "/test_exists_file"
+
+    # Cycle through twice to catch all transitions
+    for _ in range(2):
+        m.touch(mpath)
+        assert fsspec.exists("memory://" + mpath) == True
+        m.rm(mpath)
+        assert fsspec.exists("memory://" + mpath) == False
+
+
+        

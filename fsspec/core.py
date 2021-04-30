@@ -437,6 +437,36 @@ def open(
         **kwargs,
     )[0]
 
+def exists(
+    urlpath,
+    protocol=None,
+    **kwargs,
+):
+    """Given a path or paths, return whether a file exists.
+
+    Parameters
+    ----------
+    urlpath: string or list
+        Absolute or relative filepath. Prefix with a protocol like ``s3://``
+        to read from alternative filesystems. Should not include glob
+        character(s).
+    protocol: str or None
+        If given, overrides the protocol found in the URL.
+    **kwargs: dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
+
+    Returns
+    -------
+    ``Boolean`` of whether the file exists.
+    """
+    fs, _, paths = get_fs_token_paths(
+        urlpath,
+        storage_options=kwargs,
+        protocol=protocol,
+    )
+    return fs.exists(paths[0])
+
 
 def open_local(url, mode="rb", **storage_options):
     """Open file(s) which can be resolved to local
