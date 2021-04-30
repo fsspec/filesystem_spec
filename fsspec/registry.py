@@ -135,6 +135,7 @@ known_implementations = {
         "err": 'webHDFS access requires "requests" to be installed',
     },
     "s3": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
+    "s3a": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
     "adl": {
         "class": "adlfs.AzureDatalakeFileSystem",
         "err": "Install adlfs to access Azure Datalake Gen1",
