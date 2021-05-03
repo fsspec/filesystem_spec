@@ -253,6 +253,18 @@ class AsyncFileSystem(AbstractFileSystem):
             return out[0]
 
     async def _put(self, lpath, rpath, recursive=False, batch_size=None, **kwargs):
+        """Copy file(s) from local.
+
+        Copies a specific file or tree of files (if recursive=True). If rpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within.
+
+        The put_file method will be called concurrently on a batch of files. The
+        batch_size option can configure the amount of futures that can be executed
+        at the same time. If it is -1, then all the files will be uploaded concurrently.
+        If it is None, then the 1/8th of the system limit will be used. If it any other
+        positive number, then it will be used as the batch size.
+        """
         from .implementations.local import LocalFileSystem, make_path_posix
 
         rpath = self._strip_protocol(rpath)
@@ -273,6 +285,19 @@ class AsyncFileSystem(AbstractFileSystem):
         raise NotImplementedError
 
     async def _get(self, rpath, lpath, recursive=False, batch_size=None, **kwargs):
+        """Copy file(s) to local.
+
+        Copies a specific file or tree of files (if recursive=True). If lpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within. Can submit a list of paths, which may be glob-patterns
+        and will be expanded.
+
+        The get_file method will be called concurrently on a batch of files. The
+        batch_size option can configure the amount of futures that can be executed
+        at the same time. If it is -1, then all the files will be uploaded concurrently.
+        If it is None, then the 1/8th of the system limit will be used. If it any other
+        positive number, then it will be used as the batch size.
+        """
         from fsspec.implementations.local import make_path_posix
 
         rpath = self._strip_protocol(rpath)
