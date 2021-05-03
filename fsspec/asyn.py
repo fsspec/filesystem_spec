@@ -116,7 +116,7 @@ async def _throttled_gather(coros, disable=False):
     results = []
     for start in range(0, len(coros), chunk_size):
         chunk = coros[start : start + chunk_size]
-        results.append(*await asyncio.gather(chunk))
+        results.extend(await asyncio.gather(*chunk))
     return results
 
 
