@@ -4,7 +4,6 @@ import functools
 import inspect
 import os
 import re
-import resource
 import threading
 from glob import has_magic
 
@@ -103,8 +102,10 @@ async def _throttled_gather(coros, disable=False):
         return await asyncio.gather(*coros)
 
     try:
+        import resource
+
         soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
-    except (ValueError, resource.error):
+    except (ImportError, ValueError, resource.error):
         soft_limit = _DEFAULT_SOFT_LIMIT
 
     if soft_limit == resource.RLIM_INFINITY:
