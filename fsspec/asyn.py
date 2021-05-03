@@ -4,6 +4,7 @@ import functools
 import inspect
 import os
 import re
+import resource
 import threading
 from glob import has_magic
 
