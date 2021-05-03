@@ -16,6 +16,11 @@ def test_sync_methods():
     assert not inspect.iscoroutinefunction(inst.info)
 
 
+# After the except is returned, the other coroutines gets automatically
+# ignored and they raise RuntimeWarnings. We could overcome this by cancelling
+# all the futures in gather, though that require return_exceptions to be
+# set True on gather. Since we don't need it that much, we simply ignore the
+# exceptions in this test case.
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 @pytest.mark.filterwarnings("ignore: coroutine")
 def test_throttled_gather(monkeypatch):
