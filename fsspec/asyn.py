@@ -92,6 +92,33 @@ def get_loop():
     return loop[0]
 
 
+_DEFAULT_SOFT_LIMIT = 1024
+
+
+async def _throttled_gather(coros, disable=False):
+    """Run the given coroutines in smaller chunks to
+    not crossing the file descriptor limit"""
+    if disable:
+        return await asyncio.gather(*coros)
+
+    try:
+        soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (ValueError, resource.error):
+        soft_limit = _DEFAULT_SOFT_LIMIT
+
+    if soft_limit == resource.RLIM_INFINITY:
+        return await asyncio.gather(*coros)
+
+    chunk_size = soft_limit // 8
+    assert chunk_size > 0
+
+    results = []
+    for start in range(0, len(coros), chunk_size):
+        chunk = coros[start : start + chunk_size]
+        results.append(*await asyncio.gather(chunk))
+    return results
+
+
 # these methods should be implemented as async by any async-able backend
 async_methods = [
     "_ls",
@@ -128,6 +155,7 @@ class AsyncFileSystem(AbstractFileSystem):
     # for _* methods and inferred for overridden methods.
 
     async_impl = True
+    disable_throttling = False
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
         self.asynchronous = asynchronous
@@ -211,11 +239,12 @@ class AsyncFileSystem(AbstractFileSystem):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
-        return await asyncio.gather(
-            *[
+        return await _throttled_gather(
+            [
                 self._put_file(lpath, rpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
-            ]
+            ],
+            disable=self.disable_throttling,
         )
 
     async def _get_file(self, rpath, lpath, **kwargs):
@@ -229,11 +258,12 @@ class AsyncFileSystem(AbstractFileSystem):
         rpaths = await self._expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
-        return await asyncio.gather(
-            *[
+        return await _throttled_gather(
+            [
                 self._get_file(rpath, lpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
-            ]
+            ],
+            disable=self.disable_throttling,
         )
 
     async def _isfile(self, path):
