@@ -7,11 +7,6 @@ import pytest
 import fsspec.asyn
 from fsspec.asyn import _throttled_gather
 
-try:
-    import resource
-except ImportError:
-    resource = None
-
 
 def test_sync_methods():
     inst = fsspec.asyn.AsyncFileSystem()
@@ -21,11 +16,8 @@ def test_sync_methods():
 
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
-@pytest.mark.skipif(
-    resource is None, reason="resource module is not available on this operating system"
-)
 def test_throttled_gather(monkeypatch):
-    monkeypatch.setattr(resource, "getrlimit", lambda something: (32, 64))
+    monkeypatch.setattr(fsspec.asyn, "_get_soft_limit", lambda: 32)
 
     total_running = 0
 
@@ -51,9 +43,13 @@ def test_throttled_gather(monkeypatch):
 
     assert sum(asyncio.run(main())) == 32
 
-    monkeypatch.setattr(resource, "getrlimit", lambda something: (64, 64))
+    monkeypatch.setattr(fsspec.asyn, "_get_soft_limit", lambda: 64)
     with pytest.raises(ValueError):
         asyncio.run(main())
+
+    monkeypatch.setattr(fsspec.asyn, "_get_soft_limit", lambda: None)
+    with pytest.raises(ValueError):
+        asyncio.run(main(disable=True))
 
     with pytest.raises(ValueError):
         asyncio.run(main(disable=True))

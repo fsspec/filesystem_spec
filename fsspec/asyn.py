@@ -92,23 +92,38 @@ def get_loop():
     return loop[0]
 
 
+try:
+    import resource
+except ImportError:
+    resource = None
+    ResourceError = OSError
+else:
+    ResourceEror = resource.error
+
 _DEFAULT_SOFT_LIMIT = 1024
+
+
+def _get_soft_limit():
+    if resource is None:
+        return _DEFAULT_SOFT_LIMIT
+
+    try:
+        soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (ImportError, ValueError, ResourceError):
+        return _DEFAULT_SOFT_LIMIT
+
+    if soft_limit == resource.RLIM_INFINITY:
+        return None
+    else:
+        return soft_limit
 
 
 async def _throttled_gather(coros, disable=False, **gather_kwargs):
     """Run the given coroutines in smaller chunks to
     not crossing the file descriptor limit"""
-    if disable:
-        return await asyncio.gather(*coros, **gather_kwargs)
+    soft_limit = _get_soft_limit()
 
-    try:
-        import resource
-
-        soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
-    except (ImportError, ValueError, resource.error):
-        soft_limit = _DEFAULT_SOFT_LIMIT
-
-    if soft_limit == resource.RLIM_INFINITY:
+    if disable or soft_limit is None:
         return await asyncio.gather(*coros, **gather_kwargs)
 
     chunk_size = soft_limit // 8
