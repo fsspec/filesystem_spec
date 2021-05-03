@@ -17,8 +17,6 @@ def test_sync_methods():
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_throttled_gather(monkeypatch):
-    monkeypatch.setattr(fsspec.asyn, "_get_soft_limit", lambda: 32)
-
     total_running = 0
 
     async def runner():
@@ -31,25 +29,18 @@ def test_throttled_gather(monkeypatch):
         total_running -= 1
         return 1
 
-    async def main(disable=False):
+    async def main(**kwargs):
         coros = [runner() for _ in range(32)]
-        results = await _throttled_gather(
-            coros, disable=disable, return_exceptions=True
-        )
+        results = await _throttled_gather(coros, **kwargs)
         for result in results:
             if isinstance(result, Exception):
                 raise result
         return results
 
-    assert sum(asyncio.run(main())) == 32
-
-    monkeypatch.setattr(fsspec.asyn, "_get_soft_limit", lambda: 64)
-    with pytest.raises(ValueError):
-        asyncio.run(main())
-
-    monkeypatch.setattr(fsspec.asyn, "_get_soft_limit", lambda: None)
-    with pytest.raises(ValueError):
-        asyncio.run(main(disable=True))
+    assert sum(asyncio.run(main(batch_size=4))) == 32
 
     with pytest.raises(ValueError):
-        asyncio.run(main(disable=True))
+        asyncio.run(main(batch_size=5, return_exceptions=True))
+
+    with pytest.raises(ValueError):
+        asyncio.run(main(batch_size=-1, return_exceptions=True))

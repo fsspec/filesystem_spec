@@ -100,38 +100,43 @@ except ImportError:
 else:
     ResourceEror = resource.error
 
-_DEFAULT_SOFT_LIMIT = 1024
+_DEFAULT_BATCH_SIZE = 128
 
 
-def _get_soft_limit():
+def _get_batch_size():
     if resource is None:
-        return _DEFAULT_SOFT_LIMIT
+        return _DEFAULT_BATCH_SIZE
 
     try:
         soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
     except (ImportError, ValueError, ResourceError):
-        return _DEFAULT_SOFT_LIMIT
+        return _DEFAULT_BATCH_SIZE
 
     if soft_limit == resource.RLIM_INFINITY:
-        return None
+        return -1
     else:
-        return soft_limit
+        return soft_limit // 8
 
 
-async def _throttled_gather(coros, disable=False, **gather_kwargs):
+async def _throttled_gather(coros, batch_size=None, **gather_kwargs):
     """Run the given coroutines in smaller chunks to
-    not crossing the file descriptor limit"""
-    soft_limit = _get_soft_limit()
+    not crossing the file descriptor limit.
 
-    if disable or soft_limit is None:
+    If batch_size parameter is -1, then it will not be any throttling. If
+    it is none, it will be inferred from the process resources (soft limit divided
+    by 8) and fallback to 128 if the system doesn't support it."""
+
+    if batch_size is None:
+        batch_size = _get_batch_size()
+
+    if batch_size == -1:
         return await asyncio.gather(*coros, **gather_kwargs)
 
-    chunk_size = soft_limit // 8
-    assert chunk_size > 0
+    assert batch_size > 0
 
     results = []
-    for start in range(0, len(coros), chunk_size):
-        chunk = coros[start : start + chunk_size]
+    for start in range(0, len(coros), batch_size):
+        chunk = coros[start : start + batch_size]
         results.extend(await asyncio.gather(*chunk, **gather_kwargs))
     return results
 
@@ -247,7 +252,7 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             return out[0]
 
-    async def _put(self, lpath, rpath, recursive=False, **kwargs):
+    async def _put(self, lpath, rpath, recursive=False, batch_size=None, **kwargs):
         from .implementations.local import LocalFileSystem, make_path_posix
 
         rpath = self._strip_protocol(rpath)
@@ -261,13 +266,13 @@ class AsyncFileSystem(AbstractFileSystem):
                 self._put_file(lpath, rpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
             ],
-            disable=self.disable_throttling,
+            batch_size=batch_size,
         )
 
     async def _get_file(self, rpath, lpath, **kwargs):
         raise NotImplementedError
 
-    async def _get(self, rpath, lpath, recursive=False, **kwargs):
+    async def _get(self, rpath, lpath, recursive=False, batch_size=None, **kwargs):
         from fsspec.implementations.local import make_path_posix
 
         rpath = self._strip_protocol(rpath)
@@ -280,7 +285,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 self._get_file(rpath, lpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
             ],
-            disable=self.disable_throttling,
+            batch_size=batch_size,
         )
 
     async def _isfile(self, path):
