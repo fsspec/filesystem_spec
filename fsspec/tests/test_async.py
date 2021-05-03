@@ -1,12 +1,16 @@
 import asyncio
 import inspect
-import resource
 import sys
 
 import pytest
 
 import fsspec.asyn
 from fsspec.asyn import _throttled_gather
+
+try:
+    import resource
+except ImportError:
+    resource = None
 
 
 def test_sync_methods():
@@ -22,6 +26,9 @@ def test_sync_methods():
 # set True on gather. Since we don't need it that much, we simply ignore the
 # exceptions in this test case.
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
+@pytest.mark.skipif(
+    resource is None, reason="resource module is not available on this operating system"
+)
 @pytest.mark.filterwarnings("ignore: coroutine")
 def test_throttled_gather(monkeypatch):
     monkeypatch.setattr(resource, "getrlimit", lambda something: (32, 64))
