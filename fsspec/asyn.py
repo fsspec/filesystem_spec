@@ -186,6 +186,7 @@ class AsyncFileSystem(AbstractFileSystem):
             self._loop = loop or get_loop()
         else:
             self._loop = None
+        self.batch_size = kwargs.pop("batch_size", None)
         super().__init__(*args, **kwargs)
 
     @property
@@ -252,7 +253,7 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             return out[0]
 
-    async def _put(self, lpath, rpath, recursive=False, batch_size=None, **kwargs):
+    async def _put(self, lpath, rpath, recursive=False, **kwargs):
         """Copy file(s) from local.
 
         Copies a specific file or tree of files (if recursive=True). If rpath
@@ -273,6 +274,7 @@ class AsyncFileSystem(AbstractFileSystem):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
+        batch_size = kwargs.pop("batch_size", self.batch_size)
         return await _throttled_gather(
             [
                 self._put_file(lpath, rpath, **kwargs)
@@ -284,7 +286,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _get_file(self, rpath, lpath, **kwargs):
         raise NotImplementedError
 
-    async def _get(self, rpath, lpath, recursive=False, batch_size=None, **kwargs):
+    async def _get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file(s) to local.
 
         Copies a specific file or tree of files (if recursive=True). If lpath
@@ -305,6 +307,7 @@ class AsyncFileSystem(AbstractFileSystem):
         rpaths = await self._expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
+        batch_size = kwargs.pop("batch_size", self.batch_size)
         return await _throttled_gather(
             [
                 self._get_file(rpath, lpath, **kwargs)
