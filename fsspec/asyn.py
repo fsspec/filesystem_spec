@@ -104,6 +104,10 @@ _DEFAULT_BATCH_SIZE = 128
 
 
 def _get_batch_size():
+    from fsspec.config import conf
+
+    if "gather_batch_size" in conf:
+        return conf["gather_batch_size"]
     if resource is None:
         return _DEFAULT_BATCH_SIZE
 
@@ -263,8 +267,9 @@ class AsyncFileSystem(AbstractFileSystem):
         The put_file method will be called concurrently on a batch of files. The
         batch_size option can configure the amount of futures that can be executed
         at the same time. If it is -1, then all the files will be uploaded concurrently.
-        If it is None, then the 1/8th of the system limit will be used. If it any other
-        positive number, then it will be used as the batch size.
+        The default can be set for this instance by passing "batch_size" in the
+        constructor, or for all instances by setting the "gather_batch_size" key
+        in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
         from .implementations.local import LocalFileSystem, make_path_posix
 
@@ -297,8 +302,9 @@ class AsyncFileSystem(AbstractFileSystem):
         The get_file method will be called concurrently on a batch of files. The
         batch_size option can configure the amount of futures that can be executed
         at the same time. If it is -1, then all the files will be uploaded concurrently.
-        If it is None, then the 1/8th of the system limit will be used. If it any other
-        positive number, then it will be used as the batch size.
+        The default can be set for this instance by passing "batch_size" in the
+        constructor, or for all instances by setting the "gather_batch_size" key
+        in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
         from fsspec.implementations.local import make_path_posix
 

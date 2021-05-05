@@ -4,6 +4,7 @@ import sys
 
 import pytest
 
+import fsspec
 import fsspec.asyn
 from fsspec.asyn import _throttled_gather
 
@@ -30,6 +31,9 @@ def test_throttled_gather(monkeypatch):
         return 1
 
     async def main(**kwargs):
+        nonlocal total_running
+
+        total_running = 0
         coros = [runner() for _ in range(32)]
         results = await _throttled_gather(coros, **kwargs)
         for result in results:
@@ -44,3 +48,13 @@ def test_throttled_gather(monkeypatch):
 
     with pytest.raises(ValueError):
         asyncio.run(main(batch_size=-1, return_exceptions=True))
+
+    assert sum(asyncio.run(main(batch_size=4))) == 32
+
+    monkeypatch.setitem(fsspec.config.conf, "gather_batch_size", 5)
+    with pytest.raises(ValueError):
+        asyncio.run(main(return_exceptions=True))
+    assert sum(asyncio.run(main(batch_size=4))) == 32  # override
+
+    monkeypatch.setitem(fsspec.config.conf, "gather_batch_size", 4)
+    assert sum(asyncio.run(main())) == 32  # override
