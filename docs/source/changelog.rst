@@ -7,6 +7,7 @@ Enhancements
 - Enable listings cache for HTTP filesystem (#560)
 - Fold ZipFileSystem and LibArchiveFileSystem into a generic implementation and
   add new TarFileSystem (#561)
+- Use throttling for the ``get``/``put`` methods of ``AsyncFileSystem``.
 
 
 2021.04.0
