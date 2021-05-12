@@ -94,9 +94,16 @@ object.
 PyArrow integration
 -------------------
 
+.. warning::
+    ``fsspec`` is only compatible with PyArrow's classic ``FileSystem``. Starting with version
+    2.0 (released in October 2020), `pyarrow`_ switched to a C++ filesystem implementation that
+    is no longer compatible with ``fsspec``. Please refer to 
+    `this GitHub issue https://github.com/intake/filesystem_spec/issues/295`_ for additional details.
+
+
 `pyarrow`_ has its own internal idea of what a file-system is (``pyarrow.filesystem.FileSystem``),
 and some functions, particularly the loading of parquet, require that the target be compatible.
-As it happens, the design of the file-system interface in ``pyarrow`` *is* compatible with `fsspec`
+As it happens, the design of the file-system interface in ``pyarrow`` *is* compatible with ``fsspec``
 (this is not by accident). Therefore at import time, ``fsspec`` checks for the existence of
 ``pyarrow``, and, if found, adds it to the superclasses of the spec base-class. In this manner,
 all ``fsspec``-derived file-systems are also pyarrow file-systems, and can be used by pyarrow
@@ -377,7 +384,7 @@ Obviously, you should only define default values that are appropriate for
 a given file system implementation. INI files only support string values.
 
 Alternatively, you can provide overrides with environment variables of
-the style "FSSPEC_{protocol}_{kwargname}=value".
+the style ``FSSPEC_{protocol}_{kwargname}=value``.
 
 Configuration is determined in the following order, with later items winning:
 
