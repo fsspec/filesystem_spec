@@ -98,7 +98,7 @@ PyArrow integration
     ``fsspec`` is only compatible with PyArrow's classic ``FileSystem``. Starting with version
     2.0 (released in October 2020), `pyarrow`_ switched to a C++ filesystem implementation that
     is no longer compatible with ``fsspec``. Please refer to 
-    `this GitHub issue https://github.com/intake/filesystem_spec/issues/295`_ for additional details.
+    `this GitHub issue <https://github.com/intake/filesystem_spec/issues/295>`_ for additional details.
 
 
 `pyarrow`_ has its own internal idea of what a file-system is (``pyarrow.filesystem.FileSystem``),
