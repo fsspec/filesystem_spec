@@ -307,7 +307,10 @@ def stringify_path(filepath):
         return filepath.__fspath__()
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
-    return filepath
+    elif hasattr(filepath, "path"):
+        return filepath.path
+    else:
+        return filepath
 
 
 def make_instance(cls, args, kwargs):
