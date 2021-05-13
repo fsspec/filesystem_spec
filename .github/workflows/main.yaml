@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        TOXENV: [py36, py37, py38, py39, s3fs, gcsfs]
+        TOXENV: [py36, py37, py38, py39, s3fs]
 
     env:
       TOXENV: ${{ matrix.TOXENV }}
