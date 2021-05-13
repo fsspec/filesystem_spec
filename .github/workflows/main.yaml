@@ -36,6 +36,34 @@ jobs:
         run: |
           tox -v
 
+  gcsfs:
+    name: gcsfs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          auto-activate-base: false
+          activate-environment: test_env
+          environment-file: ci/environment-gcsfs.yml
+
+      - name: pip
+        shell: bash -l {0}
+        run: |
+          pip install .
+          git clone https://github.com/dask/gcsfs
+          pip install gcsfs/
+          conda list
+          conda --version
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: GCSFS_RECORD_MODE=none py.test -vv gcsfs/gcsfs
+
   win:
     name: ${{ matrix.TOXENV }}-pytest-win
     runs-on: windows-2019
