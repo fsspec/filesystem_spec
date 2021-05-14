@@ -1,13 +1,30 @@
 Changelog
 =========
 
-=======
+Dev
+---
+
+2021.05.0
+---------
+
+
 Enhancements
 
 - Enable listings cache for HTTP filesystem (#560)
 - Fold ZipFileSystem and LibArchiveFileSystem into a generic implementation and
   add new TarFileSystem (#561)
-- Use throttling for the ``get``/``put`` methods of ``AsyncFileSystem``.
+- Use throttling for the ``get``/``put`` methods of ``AsyncFileSystem`` (#629)
+- rewrite for archive filesystems (#624)
+- HTTP listings caching (#623)
+
+Fixes
+
+- gcsfs tests (#638)
+- stringify_path for arrow (#630)
+
+Other
+
+- s3a:// alias
 
 
 2021.04.0
