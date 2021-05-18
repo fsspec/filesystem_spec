@@ -1,8 +1,13 @@
 import base64
 import io
 import itertools
-import json
 import logging
+from functools import lru_cache
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from ..asyn import AsyncFileSystem, sync
 from ..core import filesystem, open
@@ -46,6 +51,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         remote_options=None,
         fs=None,
         template_overrides=None,
+        simple_templates=False,
         loop=None,
         ref_type=None,
         **kwargs,
@@ -82,12 +88,14 @@ class ReferenceFileSystem(AsyncFileSystem):
         ref_type : "json" | "parquet" | "zarr"
             If None, guessed from URL suffix, defaulting to JSON. Ignored if fo
             is not a string.
+        simple_templates: bool
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)
         self.target = target
         self.dataframe = False
         self.template_overrides = template_overrides
+        self.simple_templates = simple_templates
         if isinstance(fo, str):
             if target_protocol:
                 extra = {"protocol": target_protocol}
@@ -208,17 +216,27 @@ class ReferenceFileSystem(AsyncFileSystem):
         else:
             return AbstractFileSystem.cat_file(self, path)
 
-    def _apply_template(self, url):
-        import jinja2
-
-        if "{{" in url:
-            return jinja2.Template(url).render(**self.templates)
-        return url
-
     def _process_dataframe(self):
         self._process_templates(self.templates)
+
+        @lru_cache(1000)
+        def _render_jinja(url):
+            import jinja2
+
+            if "{{" in url:
+                if self.simple_templates:
+                    return (
+                        url.replace("{{", "{")
+                        .replace("}}", "}")
+                        .format(**self.templates)
+                    )
+
+                return jinja2.Template(url).render(**self.templates)
+
+            return url
+
         if self.templates:
-            self.df["url"] = self.df["url"].map(self._apply_template)
+            self.df["url"] = self.df["url"].map(_render_jinja)
         self._dircache_from_items()
 
     def _process_references(self, references, template_overrides=None):
@@ -250,6 +268,12 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references = {}
         self._process_templates(references.get("templates", {}))
 
+        @lru_cache(1000)
+        def _render_jinja(u):
+            import jinja2
+
+            return jinja2.Template(u).render(**self.templates)
+
         for k, v in references.get("refs", {}).items():
             if isinstance(v, str):
                 if v.startswith("base64:"):
@@ -259,6 +283,14 @@ class ReferenceFileSystem(AsyncFileSystem):
                 u = v[0]
                 if "{{" in u:
                     u = jinja2.Template(u).render(**self.templates)
+                    if self.simple_templates:
+                        u = (
+                            u.replace("{{", "{")
+                            .replace("}}", "}")
+                            .format(**self.templates)
+                        )
+                    else:
+                        u = _render_jinja(u)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
         self.references.update(self._process_gen(references.get("gen", [])))
 
@@ -332,13 +364,12 @@ class ReferenceFileSystem(AsyncFileSystem):
                     _, start, size = part
             par = self._parent(path)
             par0 = par
-            while par0:
+            while par0 and par0 not in self.dircache:
                 # build parent directories
-                if par0 not in self.dircache:
-                    self.dircache[par0] = []
-                    self.dircache.setdefault(self._parent(par0), []).append(
-                        {"name": par0, "type": "directory", "size": 0}
-                    )
+                self.dircache[par0] = []
+                self.dircache.setdefault(self._parent(par0), []).append(
+                    {"name": par0, "type": "directory", "size": 0}
+                )
                 par0 = self._parent(par0)
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
