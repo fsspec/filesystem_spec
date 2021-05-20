@@ -97,11 +97,11 @@ PyArrow integration
 `pyarrow`_ has its own internal idea of what a file-system is (``pyarrow.fs.FileSystem``),
 and some functions, particularly the loading of parquet, require that the target be compatible.
 As it happens, the design of the file-system interface in ``pyarrow`` *is* compatible with ``fsspec``
-(this is not by accident). 
+(this is not by accident).
 
-At import time, ``fsspec`` checks for the existence of ``pyarrow``, and, if ``pyarrow < 2.0`` is 
+At import time, ``fsspec`` checks for the existence of ``pyarrow``, and, if ``pyarrow < 2.0`` is
 found, adds its base filesystem to the superclasses of the spec base-class.
-For ``pyarrow >= 2.0``, ``fsspec`` file systems can simply be passed to ``pyarrow`` functions 
+For ``pyarrow >= 2.0``, ``fsspec`` file systems can simply be passed to ``pyarrow`` functions
 that expect ``pyarrow`` filesystems, and ``pyarrow`` `will automatically wrap them
 <https://arrow.apache.org/docs/python/filesystems.html#using-fsspec-compatible-filesystems>`_.
 

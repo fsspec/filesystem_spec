@@ -16,6 +16,52 @@ def test_sync_methods():
     assert not inspect.iscoroutinefunction(inst.info)
 
 
+class _DummyAsyncKlass:
+    def __init__(self):
+        self.loop = fsspec.asyn.get_loop()
+
+    async def _dummy_async_func(self):
+        # Sleep 1 second function to test timeout
+        await asyncio.sleep(1)
+        return True
+
+    dummy_func = fsspec.asyn.sync_wrapper(_dummy_async_func)
+
+
+@pytest.mark.skip(
+    reason="no way of handle the inconsistent behavior of the race condition on timeout"
+)
+def test_sync_wrapper_timeout_on_less_than_expected_wait_time_not_finish_function():
+    """
+    This test case is not able to execute because of the timeout race condition:
+     - It can timeout on asyncio.wait_for, which will raise exception TimeoutError
+     - It can timeout on threading.Event.wait, which will finish gracefully without
+       exception
+    Need a consistent result on timeout situation before complete the test case.
+    """
+    test_obj = _DummyAsyncKlass()
+    with pytest.raises(asyncio.exceptions.TimeoutError):
+        test_obj.dummy_func(timeout=0.1)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
+def test_sync_wrapper_timeout_on_more_than_expected_wait_time_will_finish_function():
+    test_obj = _DummyAsyncKlass()
+    assert test_obj.dummy_func(timeout=5)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
+def test_sync_wrapper_timeout_none_will_wait_func_finished():
+    test_obj = _DummyAsyncKlass()
+    assert test_obj.dummy_func(timeout=None)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
+def test_sync_wrapper_treat_timeout_0_as_none():
+    test_obj = _DummyAsyncKlass()
+    assert test_obj.dummy_func(timeout=0)
+
+
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_throttled_gather(monkeypatch):
     total_running = 0
