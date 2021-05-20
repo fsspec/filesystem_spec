@@ -6,7 +6,6 @@ import pytest
 
 import fsspec
 import fsspec.asyn
-import fsspec.exceptions
 from fsspec.asyn import _throttled_gather
 
 
@@ -32,7 +31,7 @@ class _DummyAsyncKlass:
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_sync_wrapper_timeout_on_less_than_expected_wait_time_not_finish_function():
     test_obj = _DummyAsyncKlass()
-    with pytest.raises(fsspec.exceptions.FSTimeoutError):
+    with pytest.raises(fsspec.FSTimeoutError):
         test_obj.dummy_func(timeout=0.1)
 
 
