@@ -1,17 +1,10 @@
 """
 fsspec user-defined exception classes
 """
+import asyncio
 
 
-class FSBaseException(Exception):
-    """
-    Base exception for fsspec user-defined exceptions
-    """
-
-    ...
-
-
-class FSTimeoutError(FSBaseException):
+class FSTimeoutError(asyncio.TimeoutError):
     """
     Raised when a fsspec function timed out occurs
     """
