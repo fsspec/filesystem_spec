@@ -6,6 +6,7 @@ import pytest
 
 import fsspec
 import fsspec.asyn
+import fsspec.exceptions
 from fsspec.asyn import _throttled_gather
 
 
@@ -28,19 +29,10 @@ class _DummyAsyncKlass:
     dummy_func = fsspec.asyn.sync_wrapper(_dummy_async_func)
 
 
-@pytest.mark.skip(
-    reason="no way of handle the inconsistent behavior of the race condition on timeout"
-)
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_sync_wrapper_timeout_on_less_than_expected_wait_time_not_finish_function():
-    """
-    This test case is not able to execute because of the timeout race condition:
-     - It can timeout on asyncio.wait_for, which will raise exception TimeoutError
-     - It can timeout on threading.Event.wait, which will finish gracefully without
-       exception
-    Need a consistent result on timeout situation before complete the test case.
-    """
     test_obj = _DummyAsyncKlass()
-    with pytest.raises(asyncio.exceptions.TimeoutError):
+    with pytest.raises(fsspec.exceptions.FSTimeoutError):
         test_obj.dummy_func(timeout=0.1)
 
 

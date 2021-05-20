@@ -7,6 +7,7 @@ import re
 import threading
 from glob import has_magic
 
+from .exceptions import FSTimeoutError
 from .spec import AbstractFileSystem
 from .utils import PY36, is_exception, other_paths
 
@@ -50,7 +51,13 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     result = [None]
     event = threading.Event()
     asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
-    event.wait(timeout)
+    # Raise FSTimeoutError on event.wait() returns None (timeout) or
+    # asyncio.TimeoutError to make the timeout behaviors consistency.
+    if not event.wait(timeout):
+        raise FSTimeoutError
+    if isinstance(result[0], asyncio.TimeoutError):
+        # suppress asyncio.TimeoutError, raise FSTimeoutError
+        raise FSTimeoutError
     if isinstance(result[0], BaseException):
         raise result[0]
     return result[0]
