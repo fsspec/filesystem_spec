@@ -5,6 +5,7 @@ import posixpath
 import re
 import shutil
 import tempfile
+from functools import lru_cache
 
 from fsspec import AbstractFileSystem
 from fsspec.utils import stringify_path
@@ -145,6 +146,7 @@ class LocalFileSystem(AbstractFileSystem):
             return cls.root_marker
 
     @classmethod
+    @lru_cache(100000)
     def _strip_protocol(cls, path):
         path = stringify_path(path)
         if path.startswith("file://"):

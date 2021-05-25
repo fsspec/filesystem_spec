@@ -1,5 +1,4 @@
-from __future__ import print_function
-
+import logging
 import os
 import stat
 import threading
@@ -7,6 +6,8 @@ import time
 from errno import EIO, ENOENT
 
 from fuse import FUSE, FuseOSError, Operations
+
+logger = logging.getLogger("fsspec.fuse")
 
 
 class FUSEr(Operations):
@@ -17,6 +18,7 @@ class FUSEr(Operations):
         self.counter = 0
 
     def getattr(self, path, fh=None):
+        logger.debug("getattr %s", path)
         path = "".join([self.root, path.lstrip("/")]).rstrip("/")
         try:
             info = self.fs.info(path)
@@ -40,6 +42,7 @@ class FUSEr(Operations):
         return data
 
     def readdir(self, path, fh):
+        logger.debug("readdir %s", path)
         path = "".join([self.root, path.lstrip("/")])
         files = self.fs.ls(path, False)
         files = [os.path.basename(f.rstrip("/")) for f in files]
@@ -56,17 +59,20 @@ class FUSEr(Operations):
         return 0
 
     def read(self, path, size, offset, fh):
+        logger.debug("read %s", (path, size, offset))
         f = self.cache[fh]
         f.seek(offset)
         out = f.read(size)
         return out
 
     def write(self, path, data, offset, fh):
+        logger.debug("read %s", (path, offset))
         f = self.cache[fh]
         f.write(data)
         return len(data)
 
     def create(self, path, flags, fi=None):
+        logger.debug("create %s", (path, flags))
         fn = "".join([self.root, path.lstrip("/")])
         f = self.fs.open(fn, "wb")
         self.cache[self.counter] = f
@@ -74,6 +80,7 @@ class FUSEr(Operations):
         return self.counter - 1
 
     def open(self, path, flags):
+        logger.debug("open %s", (path, flags))
         fn = "".join([self.root, path.lstrip("/")])
         if flags % 2 == 0:
             # read
