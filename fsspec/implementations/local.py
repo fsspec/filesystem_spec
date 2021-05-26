@@ -180,7 +180,7 @@ def make_path_posix(path, sep=os.sep):
     if (
         sep not in path
         and "/" not in path
-        or (sep == "/" and not path.startswith("/"))
+        or (not path.startswith("/"))
         or (sep == "\\" and ":" not in path)
     ):
         # relative path like "path" or "rel\\path" (win) or rel/path"
