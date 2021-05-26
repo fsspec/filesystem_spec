@@ -184,10 +184,11 @@ def make_path_posix(path, sep=os.sep):
         or (sep == "\\" and ":" not in path)
     ):
         # relative path like "path" or "rel\\path" (win) or rel/path"
-        path = os.getcwd() + "/" + path
         if os.sep == "\\":
             # abspath made some more '\\' separators
-            return make_path_posix(path, sep)
+            return make_path_posix(os.path.abspath(path), sep)
+        else:
+            return os.getcwd() + "/" + path
     return path
 
 

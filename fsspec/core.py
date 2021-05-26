@@ -121,7 +121,8 @@ class OpenFile(object):
         self.close()
 
     def __del__(self):
-        self.fobjects.clear()  # may cause cleanup of objects and close files
+        if hasattr(self, "fobjects"):
+            self.fobjects.clear()  # may cause cleanup of objects and close files
 
     def open(self):
         """Materialise this as a real open file without context

@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import warnings
+import weakref
 from distutils.version import LooseVersion
 from errno import ESPIPE
 from glob import has_magic
@@ -48,7 +49,7 @@ class _Cached(type):
         # Note: we intentionally create a reference here, to avoid garbage
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
-        cls._cache = {}
+        cls._cache = weakref.WeakValueDictionary()
         cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):

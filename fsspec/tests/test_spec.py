@@ -241,7 +241,9 @@ def test_cache():
     del fs2
     assert len(fs._cache) == 1
     del fs
-    assert len(DummyTestFS._cache) == 1
+
+    # NEW: final del releases cached instance
+    assert len(DummyTestFS._cache) == 0
 
     DummyTestFS.clear_instance_cache()
     assert len(DummyTestFS._cache) == 0
