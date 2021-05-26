@@ -11,6 +11,7 @@ import aiohttp
 import requests
 
 from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
+from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
 
@@ -104,7 +105,7 @@ class HTTPFileSystem(AsyncFileSystem):
             try:
                 sync(loop, session.close, timeout=0.1)
                 return
-            except TimeoutError:
+            except (TimeoutError, FSTimeoutError):
                 pass
         if session._connector is not None:
             # close after loop is dead
