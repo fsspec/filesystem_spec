@@ -138,7 +138,7 @@ def test_list_cache_with_expiry_time_cached(server):
 
 
 def test_list_cache_with_expiry_time_purged(server):
-    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=0.1)
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=0.3)
 
     # First, the directory cache is not initialized.
     assert not h.dircache
@@ -150,11 +150,10 @@ def test_list_cache_with_expiry_time_purged(server):
     assert len(h.dircache) == 1
 
     # Verify cache content.
-    cached_items = h.dircache.get(server + "/index/")
-    assert len(cached_items) == 1
+    assert len(h.dircache.get(server + "/index/")) == 1
 
     # Wait beyond the TTL / cache expiry time.
-    time.sleep(0.2)
+    time.sleep(0.31)
 
     # Verify that the cache item should have been purged.
     cached_items = h.dircache.get(server + "/index/")
