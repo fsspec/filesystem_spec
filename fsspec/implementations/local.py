@@ -76,7 +76,7 @@ class LocalFileSystem(AbstractFileSystem):
                 t = "file"
             else:
                 t = "other"
-            path = path.path
+            path = self._strip_protocol(path.path)
         result = {
             "name": path,
             "size": out.st_size,
@@ -183,13 +183,13 @@ def make_path_posix(path, sep=os.sep):
         return os.getcwd() + "/" + path
     if (
         (sep not in path and "/" not in path)
-        or (not path.startswith("/"))
+        or (sep == "/" and not path.startswith("/"))
         or (sep == "\\" and ":" not in path and not path.startswith("\\\\"))
     ):
         # relative path like "path" or "rel\\path" (win) or rel/path"
         if os.sep == "\\":
             # abspath made some more '\\' separators
-            return make_path_posix(os.path.abspath(path), sep)
+            return make_path_posix(os.path.abspath(path))
         else:
             return os.getcwd() + "/" + path
     if re.match("/[A-Za-z]:", path):

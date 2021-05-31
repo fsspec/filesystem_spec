@@ -150,6 +150,7 @@ def test_list_cache_with_expiry_time_purged(server):
     assert len(h.dircache) == 1
 
     # Verify cache content.
+    assert server + "/index/" in h.dircache
     assert len(h.dircache.get(server + "/index/")) == 1
 
     # Wait beyond the TTL / cache expiry time.

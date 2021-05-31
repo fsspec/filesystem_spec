@@ -448,14 +448,14 @@ def test_make_path_posix():
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
-    assert make_path_posix("relpath", sep="/") == posixpath.join(
+    assert make_path_posix("relpath") == posixpath.join(
         make_path_posix(cwd), "relpath"
     )
-    assert make_path_posix("rel/path", sep="/") == posixpath.join(
+    assert make_path_posix("rel/path") == posixpath.join(
         make_path_posix(cwd), "rel/path"
     )
     if WIN:
-        assert make_path_posix("C:\\path", sep="\\") == "C:/path"
+        assert make_path_posix("C:\\path") == "C:/path"
     if WIN:
         assert (
             make_path_posix(
@@ -469,7 +469,7 @@ def test_make_path_posix():
             )
             == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
         )
-    assert "/" in make_path_posix("rel\\path", sep="\\")
+    assert "/" in make_path_posix("rel\\path")
 
 
 def test_linked_files(tmpdir):
