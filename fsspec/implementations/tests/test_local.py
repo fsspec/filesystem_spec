@@ -448,9 +448,7 @@ def test_make_path_posix():
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
-    assert make_path_posix("relpath") == posixpath.join(
-        make_path_posix(cwd), "relpath"
-    )
+    assert make_path_posix("relpath") == posixpath.join(make_path_posix(cwd), "relpath")
     assert make_path_posix("rel/path") == posixpath.join(
         make_path_posix(cwd), "rel/path"
     )
