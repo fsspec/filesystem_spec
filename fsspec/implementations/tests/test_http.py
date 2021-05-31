@@ -52,7 +52,11 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")
-            d = d[int(start) : int(end) + 1]
+            if start:
+                d = d[int(start) : (int(end) + 1) if end else None]
+            else:
+                # suffix only
+                d = d[-int(end) :]
         if "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
             self._respond(200, response_headers, d)
@@ -349,6 +353,18 @@ def test_mcat(server):
     urlb = server + "/index/otherfile"
     out = h.cat([urla, urlb])
     assert out == {urla: data, urlb: data}
+
+
+def test_cat_file_range(server):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    urla = server + "/index/realfile"
+    assert h.cat(urla, start=1, end=10) == data[1:10]
+    assert h.cat(urla, start=1) == data[1:]
+
+    assert h.cat(urla, start=-10) == data[-10:]
+    assert h.cat(urla, start=-10, end=-2) == data[-10:-2]
+
+    assert h.cat(urla, end=-10) == data[:-10]
 
 
 def test_mcat_cache(server):

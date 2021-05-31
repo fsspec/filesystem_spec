@@ -194,11 +194,34 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
-        if (start is None) ^ (end is None):
-            raise ValueError("Give start and end or neither")
-        if start is not None:
+
+        # TODO: extract into testable utility function?
+        if start is not None or end is not None:
             headers = kw.pop("headers", {}).copy()
-            headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+            size = None
+            suff = False
+            if start is not None and start < 0:
+                # if start is negative and end None, end is the "suffix length"
+                if end is None:
+                    end = -start
+                    start = ""
+                    suff = True
+                else:
+                    size = size or (await self._info(url))["size"]
+                    start = size + start
+            elif start is None:
+                start = 0
+            if not suff:
+                if end is not None and end < 0:
+                    if start is not None:
+                        size = size or (await self._info(url))["size"]
+                        end = size + end
+                elif end is None:
+                    end = ""
+                if isinstance(end, int):
+                    end -= 1  # bytes range is inclusive
+
+            headers["Range"] = "bytes=%s-%s" % (start, end)
             kw["headers"] = headers
         session = await self.set_session()
         async with session.get(url, **kw) as r:
