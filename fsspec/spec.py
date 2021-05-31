@@ -9,7 +9,7 @@ from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
 
-from .config import apply_config
+from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
@@ -49,7 +49,11 @@ class _Cached(type):
         # Note: we intentionally create a reference here, to avoid garbage
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
-        cls._cache = weakref.WeakValueDictionary()
+        if conf.get("weakref_instance_cache"):  # pragma: no cover
+            # debug option for analysing fork/spawn conditions
+            cls._cache = weakref.WeakValueDictionary()
+        else:
+            cls._cache = {}
         cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):
