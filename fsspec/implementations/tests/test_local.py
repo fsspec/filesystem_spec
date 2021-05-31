@@ -119,6 +119,26 @@ def test_urlpath_expand_read():
         assert len(paths) == 2
 
 
+def test_cats():
+    with filetexts(csv_files, mode="b"):
+        fs = fsspec.filesystem("file")
+        assert fs.cat(".test.fakedata.1.csv") == b"a,b\n" b"1,2\n"
+        out = set(fs.cat([".test.fakedata.1.csv", ".test.fakedata.2.csv"]).values())
+        assert out == {b"a,b\n" b"1,2\n", b"a,b\n" b"3,4\n"}
+        assert fs.cat(".test.fakedata.1.csv", None, None) == b"a,b\n" b"1,2\n"
+        assert fs.cat(".test.fakedata.1.csv", start=1, end=6) == b"a,b\n" b"1,2\n"[1:6]
+        assert fs.cat(".test.fakedata.1.csv", start=-1) == b"a,b\n" b"1,2\n"[-1:]
+        assert (
+            fs.cat(".test.fakedata.1.csv", start=1, end=-2) == b"a,b\n" b"1,2\n"[1:-2]
+        )
+        out = set(
+            fs.cat(
+                [".test.fakedata.1.csv", ".test.fakedata.2.csv"], start=1, end=-1
+            ).values()
+        )
+        assert out == {b"a,b\n" b"1,2\n"[1:-1], b"a,b\n" b"3,4\n"[1:-1]}
+
+
 def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
     _, _, paths = get_fs_token_paths("prefix-*.csv", mode="wb", num=2)
@@ -310,7 +330,7 @@ def test_globfind_dirs(tmpdir):
 def test_touch(tmpdir):
     import time
 
-    fn = tmpdir + "/in/file"
+    fn = str(tmpdir + "/in/file")
     fs = fsspec.filesystem("file", auto_mkdir=False)
     with pytest.raises(OSError):
         fs.touch(fn)
@@ -434,19 +454,21 @@ def test_make_path_posix():
     assert make_path_posix("rel/path", sep="/") == posixpath.join(
         make_path_posix(cwd), "rel/path"
     )
-    assert make_path_posix("C:\\path", sep="\\") == "C:/path"
-    assert (
-        make_path_posix(
-            "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet"
+    if WIN:
+        assert make_path_posix("C:\\path", sep="\\") == "C:/path"
+    if WIN:
+        assert (
+            make_path_posix(
+                "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet"
+            )
+            == "//windows-server/someshare/path/more/path/dir/foo.parquet"
         )
-        == "//windows-server/someshare/path/more/path/dir/foo.parquet"
-    )
-    assert (
-        make_path_posix(
-            r"\\SERVER\UserHomeFolder$\me\My Documents\project1\data\filen.csv"
+        assert (
+            make_path_posix(
+                r"\\SERVER\UserHomeFolder$\me\My Documents\project1\data\filen.csv"
+            )
+            == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
         )
-        == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
-    )
     assert "/" in make_path_posix("rel\\path", sep="\\")
 
 

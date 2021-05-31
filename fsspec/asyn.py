@@ -243,6 +243,9 @@ class AsyncFileSystem(AbstractFileSystem):
             *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
         )
 
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        raise NotImplementedError
+
     async def _cat(self, path, recursive=False, on_error="raise", **kwargs):
         paths = await self._expand_path(path, recursive=recursive)
         out = await asyncio.gather(

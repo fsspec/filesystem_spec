@@ -46,31 +46,43 @@ class LocalFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
-        paths = [posixpath.join(path, f) for f in os.listdir(path)]
         if detail:
-            return [self.info(f) for f in paths]
+            return [self.info(f) for f in os.scandir(path)]
         else:
-            return paths
+            return [posixpath.join(path, f) for f in os.listdir(path)]
 
     def glob(self, path, **kwargs):
         path = self._strip_protocol(path)
         return super().glob(path, **kwargs)
 
     def info(self, path, **kwargs):
-        path = self._strip_protocol(path)
-        out = os.stat(path, follow_symlinks=False)
-        if os.path.isdir(path):
-            t = "directory"
-        elif os.path.isfile(path):
-            t = "file"
+        if isinstance(path, str):
+            path = self._strip_protocol(path)
+            out = os.stat(path, follow_symlinks=False)
+            link = os.path.islink(path)
+            if os.path.isdir(path):
+                t = "directory"
+            elif os.path.isfile(path):
+                t = "file"
+            else:
+                t = "other"
         else:
-            t = "other"
+            # scandir DirEntry
+            out = path.stat(follow_symlinks=False)
+            link = path.is_symlink()
+            if path.is_dir(follow_symlinks=False):
+                t = "directory"
+            elif path.is_file(follow_symlinks=False):
+                t = "file"
+            else:
+                t = "other"
+            path = path.path
         result = {
             "name": path,
             "size": out.st_size,
             "type": t,
             "created": out.st_ctime,
-            "islink": os.path.islink(path),
+            "islink": link,
         }
         for field in ["mode", "uid", "gid", "mtime"]:
             result[field] = getattr(out, "st_" + field)
@@ -149,7 +161,6 @@ class LocalFileSystem(AbstractFileSystem):
         path = stringify_path(path)
         if path.startswith("file://"):
             path = path[7:]
-        path = os.path.expanduser(path)
         return make_path_posix(path)
 
     def _isfilestore(self):
@@ -163,6 +174,25 @@ def make_path_posix(path, sep=os.sep):
     """ Make path generic """
     if isinstance(path, (list, set, tuple)):
         return type(path)(make_path_posix(p) for p in path)
+    if sep == "/":
+        # most common fast case for posix
+        if path.startswith("/"):
+            return path
+        elif "~" in path:
+            return os.path.expanduser(path)
+        return os.getcwd() + "/" + path
+    if (
+        sep not in path
+        and "/" not in path
+        or (not path.startswith("/"))
+        or (sep == "\\" and ":" not in path)
+    ):
+        # relative path like "path" or "rel\\path" (win) or rel/path"
+        if os.sep == "\\":
+            # abspath made some more '\\' separators
+            return make_path_posix(os.path.abspath(path), sep)
+        else:
+            return os.getcwd() + "/" + path
     if re.match("/[A-Za-z]:", path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"
@@ -177,18 +207,6 @@ def make_path_posix(path, sep=os.sep):
     if path.startswith("\\"):
         # windows network path like "\\server\\path"
         return "/" + path.lstrip("\\").replace("\\", "/").replace("//", "/")
-    if (
-        sep not in path
-        and "/" not in path
-        or (not path.startswith("/"))
-        or (sep == "\\" and ":" not in path)
-    ):
-        # relative path like "path" or "rel\\path" (win) or rel/path"
-        if os.sep == "\\":
-            # abspath made some more '\\' separators
-            return make_path_posix(os.path.abspath(path), sep)
-        else:
-            return os.getcwd() + "/" + path
     return path
 
 
@@ -213,8 +231,8 @@ class LocalFileOpener(io.IOBase):
                 self.temp = name
                 self.f = open(name, mode=self.mode)
             if "w" not in self.mode:
-                self.details = self.fs.info(self.path)
-                self.size = self.details["size"]
+                self.size = self.f.seek(0, 2)
+                self.f.seek(0)
                 self.f.size = self.size
 
     def _fetch_range(self, start, end):
