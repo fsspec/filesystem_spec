@@ -174,12 +174,12 @@ def make_path_posix(path, sep=os.sep):
     """ Make path generic """
     if isinstance(path, (list, set, tuple)):
         return type(path)(make_path_posix(p) for p in path)
+    if "~" in path:
+        path = os.path.expanduser(path)
     if sep == "/":
         # most common fast case for posix
         if path.startswith("/"):
             return path
-        elif "~" in path:
-            return os.path.expanduser(path)
         return os.getcwd() + "/" + path
     if (
         (sep not in path and "/" not in path)

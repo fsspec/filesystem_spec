@@ -563,7 +563,7 @@ def test_pickle(tmpdir):
 
 
 def test_strip_protocol_expanduser():
-    path = "file://~\\foo\\bar" if sys.platform == "win32" else "file://~/foo/bar"
+    path = "file://~\\foo\\bar" if WIN else "file://~/foo/bar"
     stripped = LocalFileSystem._strip_protocol(path)
     assert path != stripped
     assert "file://" not in stripped

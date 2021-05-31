@@ -233,6 +233,7 @@ def test_find_details():
 
 
 def test_cache():
+    import time
     fs = DummyTestFS()
     fs2 = DummyTestFS()
     assert fs is fs2
@@ -243,7 +244,11 @@ def test_cache():
     del fs
 
     # NEW: final del releases cached instance
-    assert len(DummyTestFS._cache) == 0
+    timeout = 3
+    while len(DummyTestFS._cache):
+        time.sleep(0.02)
+        timeout -= 0.02
+        assert timeout > 0
 
     DummyTestFS.clear_instance_cache()
     assert len(DummyTestFS._cache) == 0
