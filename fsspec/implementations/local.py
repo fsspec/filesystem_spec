@@ -182,10 +182,9 @@ def make_path_posix(path, sep=os.sep):
             return os.path.expanduser(path)
         return os.getcwd() + "/" + path
     if (
-        sep not in path
-        and "/" not in path
+        (sep not in path and "/" not in path)
         or (not path.startswith("/"))
-        or (sep == "\\" and ":" not in path)
+        or (sep == "\\" and ":" not in path and not path.startswith("\\\\"))
     ):
         # relative path like "path" or "rel\\path" (win) or rel/path"
         if os.sep == "\\":
