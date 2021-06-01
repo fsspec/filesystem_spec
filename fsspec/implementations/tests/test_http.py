@@ -52,7 +52,11 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")
-            d = d[int(start) : int(end) + 1]
+            if start:
+                d = d[int(start) : (int(end) + 1) if end else None]
+            else:
+                # suffix only
+                d = d[-int(end) :]
         if "give_length" in self.headers:
             response_headers = {"Content-Length": len(d)}
             self._respond(200, response_headers, d)
@@ -138,7 +142,7 @@ def test_list_cache_with_expiry_time_cached(server):
 
 
 def test_list_cache_with_expiry_time_purged(server):
-    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=0.1)
+    h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=0.3)
 
     # First, the directory cache is not initialized.
     assert not h.dircache
@@ -150,11 +154,11 @@ def test_list_cache_with_expiry_time_purged(server):
     assert len(h.dircache) == 1
 
     # Verify cache content.
-    cached_items = h.dircache.get(server + "/index/")
-    assert len(cached_items) == 1
+    assert server + "/index/" in h.dircache
+    assert len(h.dircache.get(server + "/index/")) == 1
 
     # Wait beyond the TTL / cache expiry time.
-    time.sleep(0.2)
+    time.sleep(0.31)
 
     # Verify that the cache item should have been purged.
     cached_items = h.dircache.get(server + "/index/")
@@ -349,6 +353,18 @@ def test_mcat(server):
     urlb = server + "/index/otherfile"
     out = h.cat([urla, urlb])
     assert out == {urla: data, urlb: data}
+
+
+def test_cat_file_range(server):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    urla = server + "/index/realfile"
+    assert h.cat(urla, start=1, end=10) == data[1:10]
+    assert h.cat(urla, start=1) == data[1:]
+
+    assert h.cat(urla, start=-10) == data[-10:]
+    assert h.cat(urla, start=-10, end=-2) == data[-10:-2]
+
+    assert h.cat(urla, end=-10) == data[:-10]
 
 
 def test_mcat_cache(server):

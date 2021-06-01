@@ -241,6 +241,8 @@ def test_cache():
     del fs2
     assert len(fs._cache) == 1
     del fs
+
+    # keeps and internal reference, doesn't get collected
     assert len(DummyTestFS._cache) == 1
 
     DummyTestFS.clear_instance_cache()

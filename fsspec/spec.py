@@ -3,12 +3,13 @@ import logging
 import os
 import threading
 import warnings
+import weakref
 from distutils.version import LooseVersion
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
 
-from .config import apply_config
+from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
@@ -48,7 +49,11 @@ class _Cached(type):
         # Note: we intentionally create a reference here, to avoid garbage
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
-        cls._cache = {}
+        if conf.get("weakref_instance_cache"):  # pragma: no cover
+            # debug option for analysing fork/spawn conditions
+            cls._cache = weakref.WeakValueDictionary()
+        else:
+            cls._cache = {}
         cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):
@@ -639,12 +644,27 @@ class AbstractFileSystem(up, metaclass=_Cached):
             return False
 
     def cat_file(self, path, start=None, end=None, **kwargs):
-        """ Get the content of a file """
+        """Get the content of a file
+
+        Parameters
+        ----------
+        path: URL of file on this filesystems
+        start, end: int
+            Bytes limits of the read. If negative, backwards from end,
+            like usual python slices. Either can be None for start or
+            end of file, respectively
+        kwargs: passed to ``open()``.
+        """
         # explicitly set buffering off?
         with self.open(path, "rb", **kwargs) as f:
             if start is not None:
-                f.seek(start)
+                if start >= 0:
+                    f.seek(start)
+                else:
+                    f.seek(start, 2)
             if end is not None:
+                if end < 0:
+                    end = f.size + end
                 return f.read(end - f.tell())
             return f.read()
 
@@ -704,7 +724,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                         out[path] = e
             return out
         else:
-            return self.cat_file(paths[0])
+            return self.cat_file(paths[0], **kwargs)
 
     def get_file(self, rpath, lpath, **kwargs):
         """Copy single remote file to local"""
