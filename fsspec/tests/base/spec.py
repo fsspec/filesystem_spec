@@ -12,6 +12,7 @@ class BaseFSTests(BaseSpecTests):
 
     def test_files_exist(self, fs, prefix):
         assert fs.exists(f"{prefix}/exists")
+        assert fs.cat(f"{prefix}/exists") == b"data from /exists"
 
 
 class BaseReadTests(BaseSpecTests):
