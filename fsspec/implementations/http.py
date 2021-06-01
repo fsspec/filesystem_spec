@@ -138,7 +138,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(url)
         session = await self.set_session()
         async with session.get(url, **self.kwargs) as r:
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, url)
             text = await r.text()
         if self.simple_links:
             links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
@@ -190,6 +190,14 @@ class HTTPFileSystem(AsyncFileSystem):
 
     ls = sync_wrapper(_ls)
 
+    def _raise_not_found_for_status(self, response, url):
+        """
+        Raises FileNotFoundError for 404s, otherwise uses raise_for_status.
+        """
+        if response.status == 404:
+            raise FileNotFoundError(url)
+        response.raise_for_status()
+
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -225,9 +233,7 @@ class HTTPFileSystem(AsyncFileSystem):
             kw["headers"] = headers
         session = await self.set_session()
         async with session.get(url, **kw) as r:
-            if r.status == 404:
-                raise FileNotFoundError(url)
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, url)
             out = await r.read()
         return out
 
@@ -237,9 +243,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(rpath, **self.kwargs) as r:
-            if r.status == 404:
-                raise FileNotFoundError(rpath)
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, rpath)
             with open(lpath, "wb") as fd:
                 chunk = True
                 while chunk:

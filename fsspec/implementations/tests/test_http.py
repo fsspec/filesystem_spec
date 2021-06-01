@@ -201,6 +201,13 @@ def test_list_cache_reuse(server):
     assert len(h.dircache) == 0
 
 
+def test_ls_raises_filenotfound(server):
+    h = fsspec.filesystem("http")
+
+    with pytest.raises(FileNotFoundError):
+        h.ls(server + "/not-a-key")
+
+
 def test_list_cache_with_max_paths(server):
     h = fsspec.filesystem("http", use_listings_cache=True, max_paths=5)
     out = h.glob(server + "/index/*")
