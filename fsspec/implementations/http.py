@@ -192,7 +192,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
     def _raise_not_found_for_status(self, response, url):
         """
-        Raises FileNotFoundError if the status code is a 404, otherwise uses raise_for_status.
+        Raises FileNotFoundError for 404s, otherwise uses raise_for_status.
         """
         if response.status == 404:
             raise FileNotFoundError(url)
@@ -243,7 +243,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(rpath, **self.kwargs) as r:
-            self._raise_not_found_for_status(r, url)
+            self._raise_not_found_for_status(r, rpath)
             with open(lpath, "wb") as fd:
                 chunk = True
                 while chunk:
