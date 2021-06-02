@@ -661,7 +661,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 if start >= 0:
                     f.seek(start)
                 else:
-                    f.seek(start, 2)
+                    f.seek(max(0, f.size + start))
             if end is not None:
                 if end < 0:
                     end = f.size + end
