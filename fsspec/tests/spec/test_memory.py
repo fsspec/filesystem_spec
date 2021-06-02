@@ -23,4 +23,6 @@ class TestFS(BaseFSTests):
 
 
 class TestRead(BaseReadTests):
-    pass
+    @pytest.mark.xfail(strict=True, reason="Bug in MemoryFileSystem")
+    def test_ls_raises_filenotfound(self, fs, prefix):
+        return super().test_ls_raises_filenotfound(fs, prefix)
