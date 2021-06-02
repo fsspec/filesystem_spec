@@ -46,6 +46,22 @@ def test_defaults(server):  # noqa: F811
     assert fs.cat("b") == data[:5]
 
 
+def test_inputs():  # noqa: F811
+    import io
+
+    refs = io.StringIO("""{"a": "data", "b": [null, 0, 5]}""")
+    fs = fsspec.filesystem(
+        "reference", fo=refs, target_protocol="http", target=realfile
+    )
+    assert fs.cat("a") == b"data"
+
+    refs = io.BytesIO(b"""{"a": "data", "b": [null, 0, 5]}""")
+    fs = fsspec.filesystem(
+        "reference", fo=refs, target_protocol="http", target=realfile
+    )
+    assert fs.cat("a") == b"data"
+
+
 jdata = """{
     "metadata": {
         ".zattrs": {
