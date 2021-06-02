@@ -23,6 +23,8 @@ class TestFS(BaseFSTests):
 
 
 class TestRead(BaseReadTests):
-    @pytest.mark.xfail(strict=True, reason="Bug in MemoryFileSystem")
+    @pytest.mark.xfail(
+        strict=True, reason="https://github.com/intake/filesystem_spec/issues/652"
+    )
     def test_ls_raises_filenotfound(self, fs, prefix):
         return super().test_ls_raises_filenotfound(fs, prefix)
