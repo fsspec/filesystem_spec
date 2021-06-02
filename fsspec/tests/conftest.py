@@ -12,8 +12,8 @@ def fs():
     """
     An fsspec-compatible subclass of AbstractFileSystem with the following properties:
 
-    **These files**
+    **These files exist with these contents**
 
-    * /root/a
+    * /<prefix>/exists: data from /exists
     """
     raise NotImplementedError("Downstream implementations should define 'fs'.")
