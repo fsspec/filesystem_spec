@@ -29,7 +29,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(404)
             return
 
-        self._respond(200, data=b"data in /exists")
+        self._respond(200, data=b"data from /exists")
 
     def do_HEAD(self):
         if "head_ok" not in self.headers:
