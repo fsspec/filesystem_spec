@@ -29,6 +29,7 @@ SEEK_CALLBACK = CFUNCTYPE(c_longlong, c_int, c_void_p, c_longlong, c_int)
 read_set_seek_callback = ffi.ffi(
     "read_set_seek_callback", [ffi.c_archive_p, SEEK_CALLBACK], c_int, ffi.check_int
 )
+new_api = hasattr(ffi, "NO_OPEN_CB")
 
 
 @contextmanager
@@ -57,8 +58,12 @@ def custom_reader(file, format_name="all", filter_name="all", block_size=ffi.pag
     read_cb = ffi.READ_CALLBACK(read_func)
     seek_cb = SEEK_CALLBACK(seek_func)
 
-    open_cb = libarchive.read.OPEN_CALLBACK(ffi.VOID_CB)
-    close_cb = libarchive.read.CLOSE_CALLBACK(ffi.VOID_CB)
+    if new_api:
+        open_cb = ffi.NO_OPEN_CB
+        close_cb = ffi.NO_CLOSE_CB
+    else:
+        open_cb = libarchive.read.OPEN_CALLBACK(ffi.VOID_CB)
+        close_cb = libarchive.read.CLOSE_CALLBACK(ffi.VOID_CB)
 
     with libarchive.read.new_archive_read(format_name, filter_name) as archive_p:
         read_set_seek_callback(archive_p, seek_cb)
