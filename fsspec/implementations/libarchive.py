@@ -59,8 +59,8 @@ def custom_reader(file, format_name="all", filter_name="all", block_size=ffi.pag
     seek_cb = SEEK_CALLBACK(seek_func)
 
     if new_api:
-        open_cb = None
-        close_cb = None
+        open_cb = ffi.NO_OPEN_CB
+        close_cb = ffi.NO_CLOSE_CB
     else:
         open_cb = libarchive.read.OPEN_CALLBACK(ffi.VOID_CB)
         close_cb = libarchive.read.CLOSE_CALLBACK(ffi.VOID_CB)
