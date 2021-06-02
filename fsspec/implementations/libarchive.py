@@ -29,6 +29,8 @@ SEEK_CALLBACK = CFUNCTYPE(c_longlong, c_int, c_void_p, c_longlong, c_int)
 read_set_seek_callback = ffi.ffi(
     "read_set_seek_callback", [ffi.c_archive_p, SEEK_CALLBACK], c_int, ffi.check_int
 )
+if not hasattr(ffi, "VOID_CB"):
+    ffi.VOID_CB = ffi.NO_OPEN_CB
 
 
 @contextmanager
