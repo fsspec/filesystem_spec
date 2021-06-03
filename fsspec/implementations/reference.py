@@ -1,11 +1,17 @@
 import base64
 import io
 import itertools
-import json
 import logging
+from functools import lru_cache
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from ..asyn import AsyncFileSystem, sync
 from ..core import filesystem, open
+from ..mapping import get_mapper
 from ..spec import AbstractFileSystem
 
 logger = logging.getLogger("fsspec.reference")
@@ -45,7 +51,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         remote_options=None,
         fs=None,
         template_overrides=None,
+        simple_templates=False,
         loop=None,
+        ref_type=None,
         **kwargs,
     ):
         """
@@ -77,9 +85,17 @@ class ReferenceFileSystem(AsyncFileSystem):
         template_overrides : dict
             Swap out any templates in the references file with these - useful for
             testing.
+        ref_type : "json" | "parquet" | "zarr"
+            If None, guessed from URL suffix, defaulting to JSON. Ignored if fo
+            is not a string.
+        simple_templates: bool
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)
+        self.target = target
+        self.dataframe = False
+        self.template_overrides = template_overrides
+        self.simple_templates = simple_templates
         if hasattr(fo, "read"):
             text = fo.read()
         elif isinstance(fo, str):
@@ -87,19 +103,46 @@ class ReferenceFileSystem(AsyncFileSystem):
                 extra = {"protocol": target_protocol}
             else:
                 extra = {}
-            with open(
-                fo, "rb", **(ref_storage_args or target_options or {}), **extra
-            ) as f:
-                logger.info("Read reference from URL %s", fo)
-                text = f.read()
+            dic = dict(**(ref_storage_args or target_options or {}), **extra)
+            if ref_type == "zarr" or fo.endswith("zarr"):
+                import pandas as pd
+                import zarr
+
+                self.dataframe = True
+                m = get_mapper(fo, **dic)
+                z = zarr.open_group(m)
+                assert z.attrs["version"] == 1
+                self.templates = z.attrs["templates"]
+                self.gen = z.attrs.get("gen", None)
+                self.df = pd.DataFrame(
+                    {k: z[k][:] for k in ["key", "data", "url", "offset", "size"]}
+                ).set_index("key")
+            elif ref_type == "parquet" or fo.endswith("parquet"):
+                import fastparquet as fp
+
+                self.dataframe = True
+                with open(fo, "rb", **dic) as f:
+                    pf = fp.ParquetFile(f)
+                    assert pf.key_value_metadata["version"] == 1
+                    self.templates = json.loads(pf.key_value_metadata["templates"])
+                    self.gen = json.loads(pf.key_value_metadata.get("gen", "[]"))
+                    self.df = pf.to_pandas(index="key")
+            else:
+                # text JSON
+                with open(fo, "rb", **dic) as f:
+                    logger.info("Read reference from URL %s", fo)
+                    text = f.read()
         else:
+            # dictionaries; TODO: allow dataframe here?
             text = fo
+        if self.dataframe:
+            self._process_dataframe()
+        else:
+            self._process_references(text, template_overrides)
         if fs is None and remote_protocol is None:
             remote_protocol = target_protocol
         if remote_protocol:
             fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
-        self.target = target
-        self._process_references(text, template_overrides)
         self.fs = fs
 
     @property
@@ -108,7 +151,15 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _cat_common(self, path):
         path = self._strip_protocol(path)
-        part = self.references[path]
+        # TODO: can extract and cache templating here
+        if self.dataframe:
+            part = self.df.loc[path]
+            if part["data"]:
+                part = part["data"]
+            else:
+                part = part[["url", "offset", "size"]]
+        else:
+            part = self.references[path]
         if isinstance(part, str):
             part = part.encode()
         if isinstance(part, bytes):
@@ -167,6 +218,29 @@ class ReferenceFileSystem(AsyncFileSystem):
         else:
             return AbstractFileSystem.cat_file(self, path)
 
+    def _process_dataframe(self):
+        self._process_templates(self.templates)
+
+        @lru_cache(1000)
+        def _render_jinja(url):
+            import jinja2
+
+            if "{{" in url:
+                if self.simple_templates:
+                    return (
+                        url.replace("{{", "{")
+                        .replace("}}", "}")
+                        .format(**self.templates)
+                    )
+
+                return jinja2.Template(url).render(**self.templates)
+
+            return url
+
+        if self.templates:
+            self.df["url"] = self.df["url"].map(_render_jinja)
+        self._dircache_from_items()
+
     def _process_references(self, references, template_overrides=None):
         if isinstance(references, (str, bytes)):
             references = json.loads(references)
@@ -177,8 +251,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             self._process_references1(references, template_overrides=template_overrides)
         else:
             raise ValueError(f"Unknown reference spec version: {vers}")
-        # TODO: we make dircache by iteraring over all entries, but for Spec >= 1,
-        # can replace with programmatic. Is it even needed for mapper interface?
+        # TODO: we make dircache by iterating over all entries, but for Spec >= 1,
+        #  can replace with programmatic. Is it even needed for mapper interface?
         self._dircache_from_items()
 
     def _process_references0(self, references):
@@ -194,17 +268,13 @@ class ReferenceFileSystem(AsyncFileSystem):
         except ImportError as e:
             raise ValueError("Reference Spec Version 1 requires jinja2") from e
         self.references = {}
-        templates = {}
-        tmp = references.get("templates", {})
-        if template_overrides is not None:
-            tmp.update(template_overrides)
-        for k, v in tmp.items():
-            if "{{" in v:
-                templates[k] = lambda temp=v, **kwargs: jinja2.Template(temp).render(
-                    **kwargs
-                )
-            else:
-                templates[k] = v
+        self._process_templates(references.get("templates", {}))
+
+        @lru_cache(1000)
+        def _render_jinja(u):
+            import jinja2
+
+            return jinja2.Template(u).render(**self.templates)
 
         for k, v in references.get("refs", {}).items():
             if isinstance(v, str):
@@ -214,9 +284,37 @@ class ReferenceFileSystem(AsyncFileSystem):
             else:
                 u = v[0]
                 if "{{" in u:
-                    u = jinja2.Template(u).render(**templates)
+                    u = jinja2.Template(u).render(**self.templates)
+                    if self.simple_templates:
+                        u = (
+                            u.replace("{{", "{")
+                            .replace("}}", "}")
+                            .format(**self.templates)
+                        )
+                    else:
+                        u = _render_jinja(u)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
-        for gen in references.get("gen", []):
+        self.references.update(self._process_gen(references.get("gen", [])))
+
+    def _process_templates(self, tmp):
+        import jinja2
+
+        self.templates = {}
+        if self.template_overrides is not None:
+            tmp.update(self.template_overrides)
+        for k, v in tmp.items():
+            if "{{" in v:
+                self.templates[k] = lambda temp=v, **kwargs: jinja2.Template(
+                    temp
+                ).render(**kwargs)
+            else:
+                self.templates[k] = v
+
+    def _process_gen(self, gens):
+        import jinja2
+
+        out = {}
+        for gen in gens:
             dimension = {
                 k: v
                 if isinstance(v, list)
@@ -228,42 +326,52 @@ class ReferenceFileSystem(AsyncFileSystem):
                 for values in itertools.product(*dimension.values())
             )
             for pr in products:
-                key = jinja2.Template(gen["key"]).render(**pr, **templates)
-                url = jinja2.Template(gen["url"]).render(**pr, **templates)
+                key = jinja2.Template(gen["key"]).render(**pr, **self.templates)
+                url = jinja2.Template(gen["url"]).render(**pr, **self.templates)
                 if ("offset" in gen) and ("length" in gen):
                     offset = int(
-                        jinja2.Template(gen["offset"]).render(**pr, **templates)
+                        jinja2.Template(gen["offset"]).render(**pr, **self.templates)
                     )
                     length = int(
-                        jinja2.Template(gen["length"]).render(**pr, **templates)
+                        jinja2.Template(gen["length"]).render(**pr, **self.templates)
                     )
-                    self.references[key] = [url, offset, length]
+                    out[key] = [url, offset, length]
                 elif ("offset" in gen) ^ ("length" in gen):
                     raise ValueError(
                         "Both 'offset' and 'length' are required for a "
                         "reference generator entry if either is provided."
                     )
                 else:
-                    self.references[key] = [url]
+                    out[key] = [url]
+        return out
 
     def _dircache_from_items(self):
         self.dircache = {"": []}
-        for path, part in self.references.items():
-            if isinstance(part, (bytes, str)):
-                size = len(part)
-            elif len(part) == 1:
-                size = None
+        if self.dataframe:
+            it = self.df.iterrows()
+        else:
+            it = self.references.items()
+        for path, part in it:
+            if self.dataframe:
+                if part["data"]:
+                    size = len(part["data"])
+                else:
+                    size = part["size"]
             else:
-                _, start, size = part
+                if isinstance(part, (bytes, str)):
+                    size = len(part)
+                elif len(part) == 1:
+                    size = None
+                else:
+                    _, start, size = part
             par = self._parent(path)
             par0 = par
-            while par0:
+            while par0 and par0 not in self.dircache:
                 # build parent directories
-                if par0 not in self.dircache:
-                    self.dircache[par0] = []
-                    self.dircache.setdefault(self._parent(par0), []).append(
-                        {"name": par0, "type": "directory", "size": 0}
-                    )
+                self.dircache[par0] = []
+                self.dircache.setdefault(self._parent(par0), []).append(
+                    {"name": par0, "type": "directory", "size": 0}
+                )
                 par0 = self._parent(par0)
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
