@@ -51,10 +51,14 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     result = [None]
     event = threading.Event()
     asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
-    # Raise FSTimeoutError on event.wait() returns None (timeout) or
-    # asyncio.TimeoutError to make the timeout behaviors consistency.
-    if not event.wait(timeout):
-        raise FSTimeoutError
+    while True:
+        # this loops allows thread to get interrupted
+        if event.wait(1):
+            break
+        if timeout is not None:
+            timeout -= 1
+            if timeout < 0:
+                raise FSTimeoutError
     if isinstance(result[0], asyncio.TimeoutError):
         # suppress asyncio.TimeoutError, raise FSTimeoutError
         raise FSTimeoutError
@@ -572,3 +576,43 @@ def mirror_sync_methods(obj):
                     mth.__doc__ = getattr(
                         getattr(AbstractFileSystem, smethod, None), "__doc__", ""
                     )
+
+
+class FSSpecCoroutineCancel(Exception):
+    pass
+
+
+def _dump_running_tasks(
+    printout=True, cancel=True, exc=FSSpecCoroutineCancel, with_task=False
+):
+    import traceback
+
+    if PY36:
+        raise NotImplementedError("Do not call this on Py 3.6")
+
+    tasks = [t for t in asyncio.tasks.all_tasks(loop[0]) if not t.done()]
+    if printout:
+        [task.print_stack() for task in tasks]
+    out = [
+        {
+            "locals": task._coro.cr_frame.f_locals,
+            "file": task._coro.cr_frame.f_code.co_filename,
+            "firstline": task._coro.cr_frame.f_code.co_firstlineno,
+            "linelo": task._coro.cr_frame.f_lineno,
+            "stack": traceback.format_stack(task._coro.cr_frame),
+            "task": task if with_task else None,
+        }
+        for task in tasks
+    ]
+    if cancel:
+        for t in tasks:
+            cbs = t._callbacks
+            t.cancel()
+            asyncio.futures.Future.set_exception(t, exc)
+            asyncio.futures.Future.cancel(t)
+            [cb[0](t) for cb in cbs]  # cancels any dependent concurrent.futures
+            try:
+                t._coro.throw(exc)  # exits coro, unless explicitly handled
+            except exc:
+                pass
+    return out
