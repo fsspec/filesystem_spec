@@ -80,7 +80,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)
-        if isinstance(fo, str):
+        if hasattr(fo, "read"):
+            text = fo.read()
+        elif isinstance(fo, str):
             if target_protocol:
                 extra = {"protocol": target_protocol}
             else:
@@ -166,8 +168,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             return AbstractFileSystem.cat_file(self, path)
 
     def _process_references(self, references, template_overrides=None):
-        if isinstance(references, bytes):
-            references = json.loads(references.decode())
+        if isinstance(references, (str, bytes)):
+            references = json.loads(references)
         vers = references.get("version", None)
         if vers is None:
             self._process_references0(references)
