@@ -303,7 +303,9 @@ def stringify_path(filepath):
     Any other object is passed through unchanged, which includes bytes,
     strings, buffers, or anything else that's not even path-like.
     """
-    if hasattr(filepath, "__fspath__"):
+    if isinstance(filepath, str):
+        return filepath
+    elif hasattr(filepath, "__fspath__"):
         return filepath.__fspath__()
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
