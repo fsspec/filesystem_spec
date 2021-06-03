@@ -31,6 +31,7 @@ class BlockSizeError(ValueError):
     """
     Helper class for exceptions raised in this module.
     """
+
     pass
 
 
