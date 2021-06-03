@@ -104,6 +104,7 @@ known_implementations = {
         "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
     "zip": {"class": "fsspec.implementations.zip.ZipFileSystem"},
+    "tar": {"class": "fsspec.implementations.tar.TarFileSystem"},
     "gcs": {
         "class": "gcsfs.GCSFileSystem",
         "err": "Please install gcsfs to access Google Storage",
@@ -134,6 +135,7 @@ known_implementations = {
         "err": 'webHDFS access requires "requests" to be installed',
     },
     "s3": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
+    "s3a": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
     "adl": {
         "class": "adlfs.AzureDatalakeFileSystem",
         "err": "Install adlfs to access Azure Datalake Gen1",

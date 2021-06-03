@@ -201,7 +201,7 @@ def test_infer_options():
     # include it in the path. Test that:
     # - Parsing doesn't lowercase the bucket
     # - The bucket is included in path
-    for protocol in ["s3", "gcs", "gs"]:
+    for protocol in ["s3", "s3a", "gcs", "gs"]:
         options = infer_storage_options("%s://Bucket-name.com/test.csv" % protocol)
         assert options["path"] == "Bucket-name.com/test.csv"
 

@@ -289,6 +289,7 @@ class CachingFileSystem(AbstractFileSystem):
             fn = os.path.join(self.storage[-1], hash)
             blocks = set()
             detail = {
+                "original": path,
                 "fn": hash,
                 "blocks": blocks,
                 "time": time.time(),
@@ -502,6 +503,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # update metadata - only happens when downloads are successful
             newdetail = [
                 {
+                    "original": path,
                     "fn": self.hash_name(path, self.same_names),
                     "blocks": True,
                     "time": time.time(),
@@ -530,6 +532,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         hash = self.hash_name(path, self.same_names)
         fn = os.path.join(self.storage[-1], hash)
         detail = {
+            "original": path,
             "fn": hash,
             "blocks": True,
             "time": time.time(),
@@ -573,7 +576,15 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             _, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 logger.debug("Opening local copy of %s" % path)
-                return open(fn, mode)
+
+                # In order to support downstream filesystems to be able to
+                # infer the compression from the original filename, like
+                # the `TarFileSystem`, let's extend the `io.BufferedReader`
+                # fileobject protocol by adding a dedicated attribute
+                # `original`.
+                f = open(fn, mode)
+                f.original = detail.get("original")
+                return f
             else:
                 raise ValueError(
                     "Attempt to open partially cached file %s"

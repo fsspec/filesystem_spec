@@ -7,6 +7,7 @@ import re
 import threading
 from glob import has_magic
 
+from .exceptions import FSTimeoutError
 from .spec import AbstractFileSystem
 from .utils import PY36, is_exception, other_paths
 
@@ -14,6 +15,7 @@ private = re.compile("_[^_]")
 
 
 async def _runner(event, coro, result, timeout=None):
+    timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     if timeout is not None:
         coro = asyncio.wait_for(coro, timeout=timeout)
     try:
@@ -34,6 +36,7 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
     """
+    timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     # NB: if the loop is not running *yet*, it is OK to submit work
     # and we will wait for it
     if loop is None or loop.is_closed():
@@ -55,7 +58,10 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         if timeout is not None:
             timeout -= 1
             if timeout < 0:
-                raise TimeoutError
+                raise FSTimeoutError
+    if isinstance(result[0], asyncio.TimeoutError):
+        # suppress asyncio.TimeoutError, raise FSTimeoutError
+        raise FSTimeoutError
     if isinstance(result[0], BaseException):
         raise result[0]
     return result[0]
@@ -99,6 +105,59 @@ def get_loop():
     return loop[0]
 
 
+try:
+    import resource
+except ImportError:
+    resource = None
+    ResourceError = OSError
+else:
+    ResourceEror = resource.error
+
+_DEFAULT_BATCH_SIZE = 128
+
+
+def _get_batch_size():
+    from fsspec.config import conf
+
+    if "gather_batch_size" in conf:
+        return conf["gather_batch_size"]
+    if resource is None:
+        return _DEFAULT_BATCH_SIZE
+
+    try:
+        soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (ImportError, ValueError, ResourceError):
+        return _DEFAULT_BATCH_SIZE
+
+    if soft_limit == resource.RLIM_INFINITY:
+        return -1
+    else:
+        return soft_limit // 8
+
+
+async def _throttled_gather(coros, batch_size=None, **gather_kwargs):
+    """Run the given coroutines in smaller chunks to
+    not crossing the file descriptor limit.
+
+    If batch_size parameter is -1, then it will not be any throttling. If
+    it is none, it will be inferred from the process resources (soft limit divided
+    by 8) and fallback to 128 if the system doesn't support it."""
+
+    if batch_size is None:
+        batch_size = _get_batch_size()
+
+    if batch_size == -1:
+        return await asyncio.gather(*coros, **gather_kwargs)
+
+    assert batch_size > 0
+
+    results = []
+    for start in range(0, len(coros), batch_size):
+        chunk = coros[start : start + batch_size]
+        results.extend(await asyncio.gather(*chunk, **gather_kwargs))
+    return results
+
+
 # these methods should be implemented as async by any async-able backend
 async_methods = [
     "_ls",
@@ -135,6 +194,7 @@ class AsyncFileSystem(AbstractFileSystem):
     # for _* methods and inferred for overridden methods.
 
     async_impl = True
+    disable_throttling = False
 
     def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
         self.asynchronous = asynchronous
@@ -143,6 +203,7 @@ class AsyncFileSystem(AbstractFileSystem):
             self._loop = loop or get_loop()
         else:
             self._loop = None
+        self.batch_size = kwargs.pop("batch_size", None)
         super().__init__(*args, **kwargs)
 
     @property
@@ -186,6 +247,9 @@ class AsyncFileSystem(AbstractFileSystem):
             *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
         )
 
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        raise NotImplementedError
+
     async def _cat(self, path, recursive=False, on_error="raise", **kwargs):
         paths = await self._expand_path(path, recursive=recursive)
         out = await asyncio.gather(
@@ -210,6 +274,19 @@ class AsyncFileSystem(AbstractFileSystem):
             return out[0]
 
     async def _put(self, lpath, rpath, recursive=False, **kwargs):
+        """Copy file(s) from local.
+
+        Copies a specific file or tree of files (if recursive=True). If rpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within.
+
+        The put_file method will be called concurrently on a batch of files. The
+        batch_size option can configure the amount of futures that can be executed
+        at the same time. If it is -1, then all the files will be uploaded concurrently.
+        The default can be set for this instance by passing "batch_size" in the
+        constructor, or for all instances by setting the "gather_batch_size" key
+        in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
+        """
         from .implementations.local import LocalFileSystem, make_path_posix
 
         rpath = self._strip_protocol(rpath)
@@ -218,17 +295,33 @@ class AsyncFileSystem(AbstractFileSystem):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
-        return await asyncio.gather(
-            *[
+        batch_size = kwargs.pop("batch_size", self.batch_size)
+        return await _throttled_gather(
+            [
                 self._put_file(lpath, rpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
-            ]
+            ],
+            batch_size=batch_size,
         )
 
     async def _get_file(self, rpath, lpath, **kwargs):
         raise NotImplementedError
 
     async def _get(self, rpath, lpath, recursive=False, **kwargs):
+        """Copy file(s) to local.
+
+        Copies a specific file or tree of files (if recursive=True). If lpath
+        ends with a "/", it will be assumed to be a directory, and target files
+        will go within. Can submit a list of paths, which may be glob-patterns
+        and will be expanded.
+
+        The get_file method will be called concurrently on a batch of files. The
+        batch_size option can configure the amount of futures that can be executed
+        at the same time. If it is -1, then all the files will be uploaded concurrently.
+        The default can be set for this instance by passing "batch_size" in the
+        constructor, or for all instances by setting the "gather_batch_size" key
+        in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
+        """
         from fsspec.implementations.local import make_path_posix
 
         rpath = self._strip_protocol(rpath)
@@ -236,11 +329,13 @@ class AsyncFileSystem(AbstractFileSystem):
         rpaths = await self._expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
-        return await asyncio.gather(
-            *[
+        batch_size = kwargs.pop("batch_size", self.batch_size)
+        return await _throttled_gather(
+            [
                 self._get_file(rpath, lpath, **kwargs)
                 for lpath, rpath in zip(lpaths, rpaths)
-            ]
+            ],
+            batch_size=batch_size,
         )
 
     async def _isfile(self, path):

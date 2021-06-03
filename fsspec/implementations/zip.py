@@ -2,11 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import zipfile
 
-from fsspec import AbstractFileSystem, open_files
-from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
+from fsspec import open_files
+from fsspec.archive import AbstractArchiveFileSystem
+from fsspec.utils import DEFAULT_BLOCK_SIZE
 
 
-class ZipFileSystem(AbstractFileSystem):
+class ZipFileSystem(AbstractArchiveFileSystem):
     """Read contents of ZIP archive as a file-system
 
     Keeps file object open while instance lives.
@@ -15,6 +16,7 @@ class ZipFileSystem(AbstractFileSystem):
     """
 
     root_marker = ""
+    protocol = "zip"
 
     def __init__(
         self,
@@ -79,42 +81,6 @@ class ZipFileSystem(AbstractFileSystem):
                 )
                 self.dir_cache[f["name"]] = f
 
-    def info(self, path, **kwargs):
-        self._get_dirs()
-        path = self._strip_protocol(path)
-        if path in self.dir_cache:
-            return self.dir_cache[path]
-        elif path + "/" in self.dir_cache:
-            return self.dir_cache[path + "/"]
-        else:
-            raise FileNotFoundError(path)
-
-    def ls(self, path, detail=False, **kwargs):
-        self._get_dirs()
-        paths = {}
-        for p, f in self.dir_cache.items():
-            p = p.rstrip("/")
-            if "/" in p:
-                root = p.rsplit("/", 1)[0]
-            else:
-                root = ""
-            if root == path.rstrip("/"):
-                paths[p] = f
-            elif all(
-                (a == b)
-                for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
-            ):
-                # root directory entry
-                ppath = p.rstrip("/").split("/", 1)[0]
-                if ppath not in paths:
-                    out = {"name": ppath + "/", "size": 0, "type": "directory"}
-                    paths[ppath] = out
-        out = list(paths.values())
-        if detail:
-            return out
-        else:
-            return list(sorted(f["name"] for f in out))
-
     def cat(self, path):
         return self.zip.read(path)
 
@@ -135,19 +101,3 @@ class ZipFileSystem(AbstractFileSystem):
         out.size = info["size"]
         out.name = info["name"]
         return out
-
-    def ukey(self, path):
-        return tokenize(path, self.fo, self.protocol)
-
-    def _all_dirnames(self, paths):
-        """Returns *all* directory names for each path in paths, including intermediate ones.
-
-        Parameters
-        ----------
-        paths: Iterable of path strings
-        """
-        if len(paths) == 0:
-            return set()
-
-        dirnames = {self._parent(path) for path in paths} - {self.root_marker}
-        return dirnames | self._all_dirnames(dirnames)

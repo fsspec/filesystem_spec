@@ -4,12 +4,14 @@ import asyncio
 import logging
 import re
 import weakref
+from copy import copy
 from urllib.parse import urlparse
 
 import aiohttp
 import requests
 
 from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
+from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
 
@@ -23,6 +25,14 @@ logger = logging.getLogger("fsspec.http")
 
 async def get_client(**kwargs):
     return aiohttp.ClientSession(**kwargs)
+
+
+class BlockSizeError(ValueError):
+    """
+    Helper class for exceptions raised in this module.
+    """
+
+    pass
 
 
 class HTTPFileSystem(AsyncFileSystem):
@@ -82,14 +92,30 @@ class HTTPFileSystem(AsyncFileSystem):
         self.client_kwargs = client_kwargs or {}
         self.kwargs = storage_options
         self._session = None
+
+        # Clean caching-related parameters from `storage_options`
+        # before propagating them as `request_options` through `self.kwargs`.
+        # TODO: Maybe rename `self.kwargs` to `self.request_options` to make
+        #       it clearer.
+        request_options = copy(storage_options)
+        self.use_listings_cache = request_options.pop("use_listings_cache", False)
+        request_options.pop("listings_expiry_time", None)
+        request_options.pop("max_paths", None)
+        request_options.pop("skip_instance_cache", None)
+        self.kwargs = request_options
+
         if not asynchronous:
             sync(self.loop, self.set_session)
 
     @staticmethod
     def close_session(loop, session):
         if loop is not None and loop.is_running():
-            sync(loop, session.close)
-        elif session._connector is not None:
+            try:
+                sync(loop, session.close, timeout=0.1)
+                return
+            except (TimeoutError, FSTimeoutError):
+                pass
+        if session._connector is not None:
             # close after loop is dead
             session._connector._close()
 
@@ -113,14 +139,14 @@ class HTTPFileSystem(AsyncFileSystem):
             return par
         return ""
 
-    async def _ls(self, url, detail=True, **kwargs):
+    async def _ls_real(self, url, detail=True, **kwargs):
         # ignoring URL-encoded arguments
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
         session = await self.set_session()
         async with session.get(url, **self.kwargs) as r:
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, url)
             text = await r.text()
         if self.simple_links:
             links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
@@ -147,7 +173,7 @@ class HTTPFileSystem(AsyncFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            out = await self._ls(url.rstrip("/"), detail=False)
+            out = await self._ls_real(url.rstrip("/"), detail=False)
         if detail:
             return [
                 {
@@ -159,24 +185,63 @@ class HTTPFileSystem(AsyncFileSystem):
             ]
         else:
             return list(sorted(out))
+        return out
+
+    async def _ls(self, url, detail=True, **kwargs):
+
+        if self.use_listings_cache and url in self.dircache:
+            out = self.dircache[url]
+        else:
+            out = await self._ls_real(url, detail=detail, **kwargs)
+            self.dircache[url] = out
+        return out
 
     ls = sync_wrapper(_ls)
+
+    def _raise_not_found_for_status(self, response, url):
+        """
+        Raises FileNotFoundError for 404s, otherwise uses raise_for_status.
+        """
+        if response.status == 404:
+            raise FileNotFoundError(url)
+        response.raise_for_status()
 
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
-        if (start is None) ^ (end is None):
-            raise ValueError("Give start and end or neither")
-        if start is not None:
+
+        # TODO: extract into testable utility function?
+        if start is not None or end is not None:
             headers = kw.pop("headers", {}).copy()
-            headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+            size = None
+            suff = False
+            if start is not None and start < 0:
+                # if start is negative and end None, end is the "suffix length"
+                if end is None:
+                    end = -start
+                    start = ""
+                    suff = True
+                else:
+                    size = size or (await self._info(url))["size"]
+                    start = size + start
+            elif start is None:
+                start = 0
+            if not suff:
+                if end is not None and end < 0:
+                    if start is not None:
+                        size = size or (await self._info(url))["size"]
+                        end = size + end
+                elif end is None:
+                    end = ""
+                if isinstance(end, int):
+                    end -= 1  # bytes range is inclusive
+
+            headers["Range"] = "bytes=%s-%s" % (start, end)
             kw["headers"] = headers
         session = await self.set_session()
         async with session.get(url, **kw) as r:
-            if r.status == 404:
-                raise FileNotFoundError(url)
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, url)
             out = await r.read()
         return out
 
@@ -186,9 +251,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(rpath, **self.kwargs) as r:
-            if r.status == 404:
-                raise FileNotFoundError(rpath)
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, rpath)
             with open(lpath, "wb") as fd:
                 chunk = True
                 while chunk:
@@ -503,8 +566,9 @@ class HTTPFile(AbstractBufferedFile):
                     # data size OK
                     out = await r.read()
                 else:
-                    raise ValueError(
-                        "Got more bytes (%i) than requested (%i)" % (cl, end - start)
+                    raise BlockSizeError(
+                        "Got more bytes so far (>%i) than requested (%i)"
+                        % (cl, end - start)
                     )
             else:
                 cl = 0
@@ -516,7 +580,7 @@ class HTTPFile(AbstractBufferedFile):
                         out.append(chunk)
                         cl += len(chunk)
                         if cl > end - start:
-                            raise ValueError(
+                            raise BlockSizeError(
                                 "Got more bytes so far (>%i) than requested (%i)"
                                 % (cl, end - start)
                             )
@@ -629,6 +693,9 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
     async with r:
+        # TODO:
+        #  recognise lack of 'Accept-Ranges', or  'Accept-Ranges': 'none' (not 'bytes')
+        #  to mean streaming only, no random access => return None
         if "Content-Length" in r.headers:
             return int(r.headers["Content-Length"])
         elif "Content-Range" in r.headers:
