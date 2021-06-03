@@ -96,7 +96,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.dataframe = False
         self.template_overrides = template_overrides
         self.simple_templates = simple_templates
-        if isinstance(fo, str):
+        if hasattr(fo, "read"):
+            text = fo.read()
+        elif isinstance(fo, str):
             if target_protocol:
                 extra = {"protocol": target_protocol}
             else:
@@ -240,8 +242,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         self._dircache_from_items()
 
     def _process_references(self, references, template_overrides=None):
-        if isinstance(references, bytes):
-            references = json.loads(references.decode())
+        if isinstance(references, (str, bytes)):
+            references = json.loads(references)
         vers = references.get("version", None)
         if vers is None:
             self._process_references0(references)

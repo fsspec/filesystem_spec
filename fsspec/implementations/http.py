@@ -11,6 +11,7 @@ import aiohttp
 import requests
 
 from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
+from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
 
@@ -104,7 +105,7 @@ class HTTPFileSystem(AsyncFileSystem):
             try:
                 sync(loop, session.close, timeout=0.1)
                 return
-            except TimeoutError:
+            except (TimeoutError, FSTimeoutError):
                 pass
         if session._connector is not None:
             # close after loop is dead
@@ -137,7 +138,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(url)
         session = await self.set_session()
         async with session.get(url, **self.kwargs) as r:
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, url)
             text = await r.text()
         if self.simple_links:
             links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
@@ -189,21 +190,50 @@ class HTTPFileSystem(AsyncFileSystem):
 
     ls = sync_wrapper(_ls)
 
+    def _raise_not_found_for_status(self, response, url):
+        """
+        Raises FileNotFoundError for 404s, otherwise uses raise_for_status.
+        """
+        if response.status == 404:
+            raise FileNotFoundError(url)
+        response.raise_for_status()
+
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
-        if (start is None) ^ (end is None):
-            raise ValueError("Give start and end or neither")
-        if start is not None:
+
+        # TODO: extract into testable utility function?
+        if start is not None or end is not None:
             headers = kw.pop("headers", {}).copy()
-            headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+            size = None
+            suff = False
+            if start is not None and start < 0:
+                # if start is negative and end None, end is the "suffix length"
+                if end is None:
+                    end = -start
+                    start = ""
+                    suff = True
+                else:
+                    size = size or (await self._info(url))["size"]
+                    start = size + start
+            elif start is None:
+                start = 0
+            if not suff:
+                if end is not None and end < 0:
+                    if start is not None:
+                        size = size or (await self._info(url))["size"]
+                        end = size + end
+                elif end is None:
+                    end = ""
+                if isinstance(end, int):
+                    end -= 1  # bytes range is inclusive
+
+            headers["Range"] = "bytes=%s-%s" % (start, end)
             kw["headers"] = headers
         session = await self.set_session()
         async with session.get(url, **kw) as r:
-            if r.status == 404:
-                raise FileNotFoundError(url)
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, url)
             out = await r.read()
         return out
 
@@ -213,9 +243,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(rpath, **self.kwargs) as r:
-            if r.status == 404:
-                raise FileNotFoundError(rpath)
-            r.raise_for_status()
+            self._raise_not_found_for_status(r, rpath)
             with open(lpath, "wb") as fd:
                 chunk = True
                 while chunk:
@@ -656,6 +684,9 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
     async with r:
+        # TODO:
+        #  recognise lack of 'Accept-Ranges', or  'Accept-Ranges': 'none' (not 'bytes')
+        #  to mean streaming only, no random access => return None
         if "Content-Length" in r.headers:
             return int(r.headers["Content-Length"])
         elif "Content-Range" in r.headers:

@@ -59,7 +59,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             return out
         return [o["name"] for o in out]
 
-    def cat_file(self, path):
+    def cat_file(self, path, start=None, end=None, **kwargs):
         path = self._strip_protocol(path)
         r = self.session.get(self.url + "/" + path)
         if r.status_code == 404:
@@ -68,9 +68,10 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         out = r.json()
         if out["format"] == "text":
             # data should be binary
-            return out["content"].encode()
+            b = out["content"].encode()
         else:
-            return base64.b64decode(out["content"])
+            b = base64.b64decode(out["content"])
+        return b[start:end]
 
     def pipe_file(self, path, value, **_):
         path = self._strip_protocol(path)

@@ -7,6 +7,7 @@ import re
 import threading
 from glob import has_magic
 
+from .exceptions import FSTimeoutError
 from .spec import AbstractFileSystem
 from .utils import PY36, is_exception, other_paths
 
@@ -14,6 +15,7 @@ private = re.compile("_[^_]")
 
 
 async def _runner(event, coro, result, timeout=None):
+    timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     if timeout is not None:
         coro = asyncio.wait_for(coro, timeout=timeout)
     try:
@@ -34,6 +36,7 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
     """
+    timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     # NB: if the loop is not running *yet*, it is OK to submit work
     # and we will wait for it
     if loop is None or loop.is_closed():
@@ -48,7 +51,13 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     result = [None]
     event = threading.Event()
     asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
-    event.wait(timeout)
+    # Raise FSTimeoutError on event.wait() returns None (timeout) or
+    # asyncio.TimeoutError to make the timeout behaviors consistency.
+    if not event.wait(timeout):
+        raise FSTimeoutError
+    if isinstance(result[0], asyncio.TimeoutError):
+        # suppress asyncio.TimeoutError, raise FSTimeoutError
+        raise FSTimeoutError
     if isinstance(result[0], BaseException):
         raise result[0]
     return result[0]
@@ -233,6 +242,9 @@ class AsyncFileSystem(AbstractFileSystem):
         await asyncio.gather(
             *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
         )
+
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        raise NotImplementedError
 
     async def _cat(self, path, recursive=False, on_error="raise", **kwargs):
         paths = await self._expand_path(path, recursive=recursive)
