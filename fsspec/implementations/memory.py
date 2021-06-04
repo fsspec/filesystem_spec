@@ -26,6 +26,8 @@ class MemoryFileSystem(AbstractFileSystem):
     def _strip_protocol(cls, path):
         if path.startswith("memory://"):
             path = path[len("memory://") :]
+        if "::" in path or "://" in path:
+            return path.rstrip("/")
         path = path.lstrip("/").rstrip("/")
         return "/" + path if path else ""
 
