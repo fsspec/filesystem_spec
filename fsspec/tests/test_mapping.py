@@ -84,7 +84,7 @@ def test_keys_view():
 
 
 def test_multi():
-    m = fsspec.get_mapper("memory://")
+    m = fsspec.get_mapper("memory:///")
     data = {"a": b"data1", "b": b"data2"}
     m.setitems(data)
 

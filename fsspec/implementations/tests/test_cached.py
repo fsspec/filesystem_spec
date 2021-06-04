@@ -693,9 +693,9 @@ def test_multi_cache_chain(protocol):
 def test_strip(protocol):
     fs = fsspec.filesystem(protocol, target_protocol="memory")
     url1 = "memory://afile"
-    assert fs._strip_protocol(url1) == "afile"
-    assert fs._strip_protocol(protocol + "://afile") == "afile"
-    assert fs._strip_protocol(protocol + "::memory://afile") == "afile"
+    assert fs._strip_protocol(url1) == "/afile"
+    assert fs._strip_protocol(protocol + "://afile") == "/afile"
+    assert fs._strip_protocol(protocol + "::memory://afile") == "/afile"
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
@@ -713,7 +713,7 @@ def test_expiry():
 
     d = tempfile.mkdtemp()
     fs = fsspec.filesystem("memory")
-    fn = "afile"
+    fn = "/afile"
     fn0 = "memory://afile"
     data = b"hello"
     with fs.open(fn0, "wb") as f:
