@@ -214,30 +214,8 @@ class HTTPFileSystem(AsyncFileSystem):
         # TODO: extract into testable utility function?
         if start is not None or end is not None:
             headers = kw.pop("headers", {}).copy()
-            size = None
-            suff = False
-            if start is not None and start < 0:
-                # if start is negative and end None, end is the "suffix length"
-                if end is None:
-                    end = -start
-                    start = ""
-                    suff = True
-                else:
-                    size = size or (await self._info(url))["size"]
-                    start = size + start
-            elif start is None:
-                start = 0
-            if not suff:
-                if end is not None and end < 0:
-                    if start is not None:
-                        size = size or (await self._info(url))["size"]
-                        end = size + end
-                elif end is None:
-                    end = ""
-                if isinstance(end, int):
-                    end -= 1  # bytes range is inclusive
 
-            headers["Range"] = "bytes=%s-%s" % (start, end)
+            headers["Range"] = await self._process_limits(url, start, end)
             kw["headers"] = headers
         session = await self.set_session()
         async with session.get(url, **kw) as r:

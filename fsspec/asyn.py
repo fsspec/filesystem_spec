@@ -247,6 +247,32 @@ class AsyncFileSystem(AbstractFileSystem):
             *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
         )
 
+    async def _process_limits(self, url, start, end):
+        """Helper for "Range"-based _cat_file"""
+        size = None
+        suff = False
+        if start is not None and start < 0:
+            # if start is negative and end None, end is the "suffix length"
+            if end is None:
+                end = -start
+                start = ""
+                suff = True
+            else:
+                size = size or (await self._info(url))["size"]
+                start = size + start
+        elif start is None:
+            start = 0
+        if not suff:
+            if end is not None and end < 0:
+                if start is not None:
+                    size = size or (await self._info(url))["size"]
+                    end = size + end
+            elif end is None:
+                end = ""
+            if isinstance(end, int):
+                end -= 1  # bytes range is inclusive
+        return "bytes=%s-%s" % (start, end)
+
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         raise NotImplementedError
 
