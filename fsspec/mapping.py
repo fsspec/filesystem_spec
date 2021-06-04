@@ -120,7 +120,7 @@ class FSMap(MutableMapping):
             key = str(tuple(key))
         else:
             key = str(key)
-        return "/".join([self.root, key]) if self.root else key
+        return self.fs._strip_protocol("/".join([self.root, key]) if self.root else key)
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
