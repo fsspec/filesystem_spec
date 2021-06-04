@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 
 
@@ -7,22 +5,20 @@ def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
     m.touch("afiles/and/anothers")
     files = m.find("")
-    if "somefile" in files:
-        assert files == ["afiles/and/anothers", "somefile"]
-    else:
-        assert files == ["/somefile", "afiles/and/anothers"]
+    assert files == ["/afiles/and/anothers", "/somefile"]
 
-    files = sorted(m.get_mapper(""))
-    if "somefile" in files:
-        assert files == ["afiles/and/anothers", "somefile"]
-    else:
-        assert files == ["/somefile", "afiles/and/anothers"]
+    files = sorted(m.get_mapper("/"))
+    assert files == ["afiles/and/anothers", "somefile"]
 
 
-@pytest.mark.xfail(
-    sys.version_info < (3, 6),
-    reason="py35 error, see https://github.com/intake/filesystem_spec/issues/148",
-)
+def test_strip(m):
+    assert m._strip_protocol("") == ""
+    assert m._strip_protocol("memory://") == ""
+    assert m._strip_protocol("afile") == "/afile"
+    assert m._strip_protocol("/b/c") == "/b/c"
+    assert m._strip_protocol("/b/c/") == "/b/c"
+
+
 def test_ls(m):
     m.mkdir("/dir")
     m.mkdir("/dir/dir1")
@@ -31,8 +27,8 @@ def test_ls(m):
     m.touch("/dir/dir1/bfile")
     m.touch("/dir/dir1/cfile")
 
-    assert m.ls("/", False) == ["/dir/"]
-    assert m.ls("/dir", False) == ["/dir/afile", "/dir/dir1/"]
+    assert m.ls("/", False) == ["/dir"]
+    assert m.ls("/dir", False) == ["/dir/afile", "/dir/dir1"]
     assert m.ls("/dir", True)[0]["type"] == "file"
     assert m.ls("/dir", True)[1]["type"] == "directory"
 
@@ -40,8 +36,6 @@ def test_ls(m):
 
 
 def test_directories(m):
-    with pytest.raises(NotADirectoryError):
-        m.mkdir("outer/inner", create_parents=False)
     m.mkdir("outer/inner")
 
     assert m.ls("outer")
@@ -83,6 +77,30 @@ def test_rewind(m):
         assert f.tell() == 0
 
 
+def test_empty_raises(m):
+    with pytest.raises(FileNotFoundError):
+        m.ls("nonexistent")
+
+    with pytest.raises(FileNotFoundError):
+        m.info("nonexistent")
+
+
+def test_dir_errors(m):
+    m.mkdir("/first")
+
+    with pytest.raises(FileExistsError):
+        m.mkdir("/first")
+    with pytest.raises(FileExistsError):
+        m.makedirs("/first", exist_ok=False)
+    m.makedirs("/first", exist_ok=True)
+    m.makedirs("/first/second/third")
+    assert "/first/second" in m.pseudo_dirs
+
+    m.touch("/afile")
+    with pytest.raises(NotADirectoryError):
+        m.mkdir("/afile/nodir")
+
+
 def test_no_rewind_append_mode(m):
     # https://github.com/intake/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:
@@ -97,7 +115,7 @@ def test_moves(m):
 
     m.touch("source2.txt")
     m.mv("source2.txt", "target2.txt", recursive=True)
-    assert m.find("") == ["target.txt", "target2.txt"]
+    assert m.find("") == ["/target.txt", "/target2.txt"]
 
 
 def test_rm_reursive_empty_subdir(m):

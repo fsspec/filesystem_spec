@@ -18,14 +18,22 @@ class MemoryFileSystem(AbstractFileSystem):
     """
 
     store = {}  # global
-    pseudo_dirs = []
+    pseudo_dirs = [""]
     protocol = "memory"
-    root_marker = ""
+    root_marker = "/"
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        if path.startswith("memory://"):
+            path = path[len("memory://") :]
+        path = path.lstrip("/").rstrip("/")
+        return "/" + path if path else ""
 
     def ls(self, path, detail=False, **kwargs):
+        path = self._strip_protocol(path)
         if path in self.store:
-            # there is a key with this exact name, but could also be directory
-            out = [
+            # there is a key with this exact name
+            return [
                 {
                     "name": path,
                     "size": self.store[path].getbuffer().nbytes,
@@ -33,77 +41,79 @@ class MemoryFileSystem(AbstractFileSystem):
                     "created": self.store[path].created,
                 }
             ]
-        else:
-            out = []
-        path = path.strip("/").lstrip("/")
         paths = set()
+        starter = path + "/"
+        out = []
         for p2 in self.store:
-            has_slash = "/" if p2.startswith("/") else ""
-            p = p2.lstrip("/")
-            if "/" in p:
-                root = p.rsplit("/", 1)[0]
-            else:
-                root = ""
-            if root == path:
-                out.append(
-                    {
-                        "name": has_slash + p,
-                        "size": self.store[p2].getbuffer().nbytes,
-                        "type": "file",
-                        "created": self.store[p2].created,
-                    }
-                )
-            elif (
-                path
-                and len(path) < len(p.strip("/"))
-                and all(
-                    (a == b) for a, b in zip(path.split("/"), p.strip("/").split("/"))
-                )
-            ):
-                # implicit directory
-                ppath = "/".join(p.split("/")[: len(path.split("/")) + 1])
-                if ppath not in paths:
+            if p2.startswith(starter):
+                if "/" not in p2[len(starter) :]:
+                    # exact child
                     out.append(
                         {
-                            "name": has_slash + ppath + "/",
-                            "size": 0,
-                            "type": "directory",
+                            "name": p2,
+                            "size": self.store[p2].getbuffer().nbytes,
+                            "type": "file",
+                            "created": self.store[p2].created,
                         }
                     )
-                    paths.add(ppath)
-            elif all(
-                (a == b)
-                for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
-            ):
-                # root directory entry
-                ppath = p.rstrip("/").split("/", 1)[0]
-                if ppath not in paths:
-                    out.append(
-                        {
-                            "name": has_slash + ppath + "/",
-                            "size": 0,
-                            "type": "directory",
-                        }
-                    )
-                    paths.add(ppath)
+                elif len(p2) > len(starter):
+                    # implied child directory
+                    ppath = starter + p2[len(starter) :].split("/", 1)[0]
+                    if ppath not in paths:
+                        out = out or []
+                        out.append(
+                            {
+                                "name": ppath,
+                                "size": 0,
+                                "type": "directory",
+                            }
+                        )
+                        paths.add(ppath)
         for p2 in self.pseudo_dirs:
-            if self._parent(p2).strip("/") == path and p2.strip("/") not in paths:
-                out.append({"name": p2 + "/", "size": 0, "type": "directory"})
+            if p2.startswith(starter):
+                if "/" not in p2[len(starter) :]:
+                    # exact child pdir
+                    if p2 not in paths:
+                        out.append({"name": p2, "size": 0, "type": "directory"})
+                        paths.add(p2)
+                else:
+                    # directory implied by deeper pdir
+                    ppath = starter + p2[len(starter) :].split("/", 1)[0]
+                    if ppath not in paths:
+                        out.append({"name": ppath, "size": 0, "type": "directory"})
+                        paths.add(ppath)
+        if not out:
+            if path in self.pseudo_dirs:
+                # empty dir
+                return []
+            raise FileNotFoundError(path)
         if detail:
             return out
         return sorted([f["name"] for f in out])
 
     def mkdir(self, path, create_parents=True, **kwargs):
-        path = path.rstrip("/")
-        if create_parents and self._parent(path):
-            self.mkdir(self._parent(path), create_parents, **kwargs)
-        if self._parent(path) and not self.isdir(self._parent(path)):
+        path = self._strip_protocol(path)
+        if path in self.store or path in self.pseudo_dirs:
+            raise FileExistsError
+        if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
+        if create_parents and self._parent(path).strip("/"):
+            try:
+                self.mkdir(self._parent(path), create_parents, **kwargs)
+            except FileExistsError:
+                pass
         if path and path not in self.pseudo_dirs:
             self.pseudo_dirs.append(path)
 
+    def makedirs(self, path, exist_ok=False):
+        try:
+            self.mkdir(path, create_parents=True)
+        except FileExistsError:
+            if not exist_ok:
+                raise
+
     def rmdir(self, path):
-        path = path.rstrip("/")
+        path = self._strip_protocol(path)
         if path in self.pseudo_dirs:
             if not self.ls(path):
                 self.pseudo_dirs.remove(path)
@@ -116,6 +126,24 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         return path in self.store or path in self.pseudo_dirs
 
+    def info(self, path, **kwargs):
+        path = self._strip_protocol(path)
+        if path in self.pseudo_dirs:
+            return {
+                "name": path,
+                "size": 0,
+                "type": "directory",
+            }
+        elif path in self.store:
+            return {
+                "name": path,
+                "size": self.store[path].getbuffer().nbytes,
+                "type": "file",
+                "created": self.store[path].created,
+            }
+        else:
+            raise FileNotFoundError(path)
+
     def _open(
         self,
         path,
@@ -125,6 +153,14 @@ class MemoryFileSystem(AbstractFileSystem):
         cache_options=None,
         **kwargs,
     ):
+        path = self._strip_protocol(path)
+        if path in self.pseudo_dirs:
+            raise IsADirectoryError
+        parent = path
+        while len(parent) > 1:
+            parent = self._parent(parent)
+            if self.isfile(parent):
+                raise FileExistsError(parent)
         if mode in ["rb", "ab", "rb+"]:
             if path in self.store:
                 f = self.store[path]
@@ -144,6 +180,8 @@ class MemoryFileSystem(AbstractFileSystem):
             return m
 
     def cp_file(self, path1, path2, **kwargs):
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         if self.isfile(path1):
             self.store[path2] = MemoryFile(self, path2, self.store[path1].getbuffer())
         elif self.isdir(path1):
@@ -153,18 +191,18 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError
 
     def cat_file(self, path, start=None, end=None, **kwargs):
+        path = self._strip_protocol(path)
         try:
             return self.store[path].getvalue()[start:end]
         except KeyError:
             raise FileNotFoundError(path)
 
     def _rm(self, path):
-        if self.isfile(path):
+        path = self._strip_protocol(path)
+        try:
             del self.store[path]
-        elif self.isdir(path):
-            self.rmdir(path)
-        else:
-            raise FileNotFoundError
+        except KeyError as e:
+            raise FileNotFoundError from e
 
     def rm(self, path, recursive=False, maxdepth=None):
         paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
@@ -175,13 +213,10 @@ class MemoryFileSystem(AbstractFileSystem):
             # directories first.
             if not self.exists(p):
                 continue
-            self.rm_file(p)
-
-    def size(self, path):
-        """Size in bytes of the file at path"""
-        if path not in self.store:
-            raise FileNotFoundError(path)
-        return self.store[path].getbuffer().nbytes
+            if self.isfile(p):
+                self.rm_file(p)
+            else:
+                self.rmdir(p)
 
 
 class MemoryFile(BytesIO):
