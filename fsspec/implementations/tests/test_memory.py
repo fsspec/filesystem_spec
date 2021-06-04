@@ -37,6 +37,7 @@ def test_ls(m):
 
 def test_directories(m):
     m.mkdir("outer/inner")
+    assert m.info("outer/inner")["type"] == "directory"
 
     assert m.ls("outer")
     assert m.ls("outer/inner") == []

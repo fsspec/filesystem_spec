@@ -16,6 +16,7 @@ class FUSEr(Operations):
         self.cache = {}
         self.root = path.rstrip("/") + "/"
         self.counter = 0
+        logger.info("Starting FUSE at %s", path)
 
     def getattr(self, path, fh=None):
         logger.debug("getattr %s", path)

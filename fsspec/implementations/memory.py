@@ -128,7 +128,9 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
-        if path in self.pseudo_dirs:
+        if path in self.pseudo_dirs or any(
+            p.startswith(path + "/") for p in list(self.store) + self.pseudo_dirs
+        ):
             return {
                 "name": path,
                 "size": 0,

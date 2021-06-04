@@ -33,7 +33,6 @@ def test_pickle():
 
 
 def test_class_methods():
-    assert MemoryFileSystem._strip_protocol("memory::stuff") == "/stuff"
     assert MemoryFileSystem._strip_protocol("memory://stuff") == "/stuff"
     assert MemoryFileSystem._strip_protocol("stuff") == "/stuff"
     assert MemoryFileSystem._strip_protocol("other://stuff") == "other://stuff"
@@ -146,7 +145,7 @@ def test_pipe_cat():
     fs.pipe("afile", b"contents")
     assert fs.cat("afile") == b"contents"
 
-    data = {"bfile": b"more", "cfile": b"stuff"}
+    data = {"/bfile": b"more", "/cfile": b"stuff"}
     fs.pipe(data)
     assert fs.cat(list(data)) == data
 
