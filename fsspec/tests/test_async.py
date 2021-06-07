@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import os
 import sys
 import time
 
@@ -112,3 +113,13 @@ def test_throttled_gather(monkeypatch):
 
     monkeypatch.setitem(fsspec.config.conf, "gather_batch_size", 4)
     assert sum(asyncio.run(main())) == 32  # override
+
+
+@pytest.mark.skipif(os.name != "nt", reason="only for windows")
+def test_windows_policy():
+    from asyncio.windows_events import SelectorEventLoop
+
+    loop = fsspec.asyn.get_loop()
+
+    # Ensure that the created loop always uses selector policy
+    assert isinstance(loop, SelectorEventLoop)
