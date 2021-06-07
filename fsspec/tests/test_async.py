@@ -120,6 +120,15 @@ def test_windows_policy():
     from asyncio.windows_events import SelectorEventLoop
 
     loop = fsspec.asyn.get_loop()
+    policy = asyncio.get_event_loop_policy()
 
     # Ensure that the created loop always uses selector policy
     assert isinstance(loop, SelectorEventLoop)
+
+    # Ensure that the global policy is not changed and it is
+    # set to the default one. This is important since the
+    # get_loop() method will temporarily override the policy
+    # with the one which uses selectors on windows, so this
+    # check ensures that we are restoring the old policy back
+    # after our change.
+    assert isinstance(policy, asyncio.DefaultEventLoopPolicy)
