@@ -4,9 +4,29 @@ Changelog
 Dev
 ---
 
+
+
+
+2021.06.0
+---------
+
+Enhancements
+
+- Better testing and folder handling for Memory (#654)
+- Negative indexes for cat_file (#653)
+- optimize local file listing (#647)
+
+Fixes
+
+- FileNoteFound in http and range exception subclass (#649, 646)
+- async timeouts (#643, 645)
+- stringify path for pyarrow legacy (#630)
+
+
 Other
 
-- The ``fsspec.asyn.get_loop()`` will always return a loop of a selector policy.
+- The ``fsspec.asyn.get_loop()`` will always return a loop of a selector policy (#658)
+- add helper to construct Range headers for cat_file (#655)
 
 
 2021.05.0
