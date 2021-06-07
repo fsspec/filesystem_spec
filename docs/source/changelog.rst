@@ -4,6 +4,11 @@ Changelog
 Dev
 ---
 
+Other
+
+- The ``fsspec.asyn.get_loop()`` will always return a loop of a selector policy.
+
+
 2021.05.0
 ---------
 
