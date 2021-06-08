@@ -7,6 +7,8 @@ import shutil
 import tempfile
 
 from fsspec import AbstractFileSystem
+from fsspec.compression import compr
+from fsspec.core import get_compression
 from fsspec.utils import stringify_path
 
 
@@ -214,12 +216,15 @@ def make_path_posix(path, sep=os.sep):
 
 
 class LocalFileOpener(io.IOBase):
-    def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
+    def __init__(
+        self, path, mode, autocommit=True, fs=None, compression=None, **kwargs
+    ):
         self.path = path
         self.mode = mode
         self.fs = fs
         self.f = None
         self.autocommit = autocommit
+        self.compression = get_compression(path, compression)
         self.blocksize = io.DEFAULT_BUFFER_SIZE
         self._open()
 
@@ -227,6 +232,9 @@ class LocalFileOpener(io.IOBase):
         if self.f is None or self.f.closed:
             if self.autocommit or "w" not in self.mode:
                 self.f = open(self.path, mode=self.mode)
+                if self.compression:
+                    compress = compr[self.compression]
+                    self.f = compress(self.f, mode=self.mode)
             else:
                 # TODO: check if path is writable?
                 i, name = tempfile.mkstemp()

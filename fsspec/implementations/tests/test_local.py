@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import bz2
 import gzip
 import os
 import os.path
@@ -673,3 +674,19 @@ def test_delete_cwd(tmpdir):
             fs.rm(".", recursive=True)
     finally:
         os.chdir(cwd)
+
+
+@pytest.mark.parametrize(
+    "opener, ext", [(bz2.open, ".bz2"), (gzip.open, ".gz"), (open, "")]
+)
+def test_infer_compression(tmpdir, opener, ext):
+    filename = str(tmpdir / f"test{ext}")
+    content = b"hello world"
+    with opener(filename, "wb") as fp:
+        fp.write(content)
+
+    fs = LocalFileSystem()
+    with fs.open(f"file://{filename}", "rb", compression="infer") as fp:
+        read_content = fp.read()
+
+    assert content == read_content
