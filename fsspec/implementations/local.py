@@ -212,7 +212,9 @@ def make_path_posix(path, sep=os.sep):
 
 
 class LocalFileOpener(io.IOBase):
-    def __init__(self, path, mode, autocommit=True, fs=None, compression=None, **kwargs):
+    def __init__(
+        self, path, mode, autocommit=True, fs=None, compression=None, **kwargs
+    ):
         self.path = path
         self.mode = mode
         self.fs = fs

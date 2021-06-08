@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-import gzip
 import bz2
+import gzip
 import os
 import os.path
 import pickle
@@ -665,7 +665,9 @@ def test_transaction(tmpdir):
     assert content == read_content
 
 
-@pytest.mark.parametrize("opener, ext", [(bz2.open, ".bz2"), (gzip.open, ".gz"), (open, "")])
+@pytest.mark.parametrize(
+    "opener, ext", [(bz2.open, ".bz2"), (gzip.open, ".gz"), (open, "")]
+)
 def test_infer_compression(tmpdir, opener, ext):
     filename = str(tmpdir / f"test{ext}")
     content = b"hello world"
