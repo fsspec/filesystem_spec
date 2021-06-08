@@ -662,3 +662,14 @@ def test_transaction(tmpdir):
         read_content = fp.read()
 
     assert content == read_content
+
+
+def test_delete_cwd(tmpdir):
+    cwd = os.getcwd()
+    fs = LocalFileSystem()
+    try:
+        os.chdir(tmpdir)
+        with pytest.raises(ValueError):
+            fs.rm(".", recursive=True)
+    finally:
+        os.chdir(cwd)

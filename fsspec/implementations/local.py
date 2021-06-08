@@ -56,17 +56,7 @@ class LocalFileSystem(AbstractFileSystem):
         return super().glob(path, **kwargs)
 
     def info(self, path, **kwargs):
-        if isinstance(path, str):
-            path = self._strip_protocol(path)
-            out = os.stat(path, follow_symlinks=False)
-            link = os.path.islink(path)
-            if os.path.isdir(path):
-                t = "directory"
-            elif os.path.isfile(path):
-                t = "file"
-            else:
-                t = "other"
-        else:
+        if hasattr(path, "stat"):
             # scandir DirEntry
             out = path.stat(follow_symlinks=False)
             link = path.is_symlink()
@@ -77,6 +67,17 @@ class LocalFileSystem(AbstractFileSystem):
             else:
                 t = "other"
             path = self._strip_protocol(path.path)
+        else:
+            # str or path-like
+            path = self._strip_protocol(path)
+            out = os.stat(path, follow_symlinks=False)
+            link = os.path.islink(path)
+            if os.path.isdir(path):
+                t = "directory"
+            elif os.path.isfile(path):
+                t = "file"
+            else:
+                t = "other"
         result = {
             "name": path,
             "size": out.st_size,
@@ -121,6 +122,9 @@ class LocalFileSystem(AbstractFileSystem):
     def rm(self, path, recursive=False, maxdepth=None):
         path = self._strip_protocol(path).rstrip("/")
         if recursive and self.isdir(path):
+
+            if os.path.abspath(path) == os.getcwd():
+                raise ValueError("Cannot delete current working directory")
             shutil.rmtree(path)
         else:
             os.remove(path)
@@ -161,7 +165,7 @@ class LocalFileSystem(AbstractFileSystem):
         path = stringify_path(path)
         if path.startswith("file://"):
             path = path[7:]
-        return make_path_posix(path)
+        return make_path_posix(path).rstrip("/")
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)
