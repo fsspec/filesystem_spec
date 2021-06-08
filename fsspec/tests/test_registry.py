@@ -38,22 +38,6 @@ def clean_imports():
         sys.modules["fsspec"] = real_module
 
 
-@pytest.mark.parametrize(
-    "protocol,module,minversion,oldversion",
-    [("s3", "s3fs", "0.3.0", "0.1.0"), ("gs", "gcsfs", "0.3.0", "0.1.0")],
-)
-def test_minversion_s3fs(protocol, module, minversion, oldversion, monkeypatch):
-    _registry.clear()
-    mod = pytest.importorskip(module, minversion)
-
-    assert get_filesystem_class("s3") is not None
-    _registry.clear()
-
-    monkeypatch.setattr(mod, "__version__", oldversion)
-    with pytest.raises(RuntimeError, match=minversion):
-        get_filesystem_class(protocol)
-
-
 def test_registry_readonly():
     get_filesystem_class("file")
     assert "file" in registry

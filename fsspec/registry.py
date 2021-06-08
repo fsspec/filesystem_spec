@@ -1,5 +1,4 @@
 import importlib
-from distutils.version import LooseVersion
 
 __all__ = ["registry", "get_filesystem_class", "default"]
 
@@ -187,8 +186,6 @@ known_implementations = {
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
 }
 
-minversions = {"s3fs": LooseVersion("0.3.0"), "gcsfs": LooseVersion("0.3.0")}
-
 
 def get_filesystem_class(protocol):
     """Fetch named protocol implementation from the registry
@@ -221,19 +218,20 @@ def get_filesystem_class(protocol):
 
 
 def _import_class(cls, minv=None):
-    mod, name = cls.rsplit(".", 1)
-    minv = minv or minversions
-    minversion = minv.get(mod, None)
+    """Take a string FQP and return the imported class or identifier
 
-    mod = importlib.import_module(mod)
-    if minversion:
-        version = getattr(mod, "__version__", None)
-        if version and LooseVersion(version) < minversion:
-            raise RuntimeError(
-                "'{}={}' is installed, but version '{}' or "
-                "higher is required".format(mod.__name__, version, minversion)
-            )
-    return getattr(mod, name)
+    clas is of the form "package.module.klass" or "package.module:subobject.klass"
+    """
+    if ":" in cls:
+        mod, name = cls.rsplit(":", 1)
+        mod = importlib.import_module(mod)
+        for part in name.split("."):
+            mod = getattr(mod, part)
+        return mod
+    else:
+        mod, name = cls.rsplit(".", 1)
+        mod = importlib.import_module(mod)
+        return getattr(mod, name)
 
 
 def filesystem(protocol, **storage_options):

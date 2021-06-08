@@ -567,6 +567,7 @@ def test_strip_protocol_expanduser():
     assert path != stripped
     assert "file://" not in stripped
     assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
+    assert not LocalFileSystem._strip_protocol("./").endswith("/")
 
 
 def test_iterable(tmpdir):
@@ -663,6 +664,17 @@ def test_transaction(tmpdir):
         read_content = fp.read()
 
     assert content == read_content
+
+
+def test_delete_cwd(tmpdir):
+    cwd = os.getcwd()
+    fs = LocalFileSystem()
+    try:
+        os.chdir(tmpdir)
+        with pytest.raises(ValueError):
+            fs.rm(".", recursive=True)
+    finally:
+        os.chdir(cwd)
 
 
 @pytest.mark.parametrize(
