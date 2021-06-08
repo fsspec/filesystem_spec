@@ -135,6 +135,7 @@ known_implementations = {
     },
     "s3": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
     "s3a": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
+    "wandb": {"class": "wandbfs.WandbFS", "err": "Install wandbfs to access wandb"},
     "adl": {
         "class": "adlfs.AzureDatalakeFileSystem",
         "err": "Install adlfs to access Azure Datalake Gen1",
