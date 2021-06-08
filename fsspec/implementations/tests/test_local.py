@@ -665,9 +665,9 @@ def test_transaction(tmpdir):
     assert content == read_content
 
 
-@pytest.mark.parametrize("opener, ext", [(bz2.open, "bz2"), (gzip.open, "gz")])
+@pytest.mark.parametrize("opener, ext", [(bz2.open, ".bz2"), (gzip.open, ".gz"), (open, "")])
 def test_infer_compression(tmpdir, opener, ext):
-    filename = str(tmpdir / f"test.{ext}")
+    filename = str(tmpdir / f"test{ext}")
     content = b"hello world"
     with opener(filename, "wb") as fp:
         fp.write(content)
