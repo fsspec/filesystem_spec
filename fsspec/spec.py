@@ -755,11 +755,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import make_path_posix
 
+        callback = as_callback(kwargs.pop("callback", None))
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
+
+        callback.call_func("set_size", len, lpaths)
         for lpath, rpath in zip(lpaths, rpaths):
+            callback.call_func("relative_update", 1)
             self.get_file(rpath, lpath, **kwargs)
 
     def put_file(self, lpath, rpath, **kwargs):
@@ -792,6 +796,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import LocalFileSystem, make_path_posix
 
+        callback = as_callback(kwargs.pop("callback", None))
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
@@ -803,7 +808,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
 
+        callback.call_func("set_size", len, rpaths)
         for lpath, rpath in zip(lpaths, rpaths):
+            callback.call_func("relative_update", 1)
             self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):
