@@ -9,7 +9,7 @@ from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
 
-from .callbacks import as_callback
+from .callbacks import as_callback, branch
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
@@ -735,13 +735,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback = as_callback(kwargs.pop("callback", None))
         with self.open(rpath, "rb", **kwargs) as f1:
-            callback.call_func("set_size", getattr, f1, "size", None)
+            callback.lazy_call("set_size", getattr, f1, "size", None)
             with open(lpath, "wb") as f2:
                 data = True
                 while data:
                     data = f1.read(self.blocksize)
                     f2.write(data)
-                    callback.call_func("relative_update", len, data)
+                    callback.lazy_call("relative_update", len, data)
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file(s) to local.
@@ -761,9 +761,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
 
-        callback.call_func("set_size", len, lpaths)
+        callback.lazy_call("set_size", len, lpaths)
         for lpath, rpath in zip(lpaths, rpaths):
-            callback.call_func("relative_update", 1)
+            callback.lazy_call("relative_update", 1)
+            branch(callback, lpath, rpath, kwargs)
             self.get_file(rpath, lpath, **kwargs)
 
     def put_file(self, lpath, rpath, **kwargs):
@@ -774,7 +775,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback = as_callback(kwargs.pop("callback", None))
         with open(lpath, "rb") as f1:
-            callback.call_func(
+            callback.lazy_call(
                 "set_size", lambda: os.stat(lpath, follow_symlinks=False).st_size
             )
             self.mkdirs(os.path.dirname(rpath), exist_ok=True)
@@ -783,7 +784,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 while data:
                     data = f1.read(self.blocksize)
                     f2.write(data)
-                    callback.call_func("relative_update", len, data)
+                    callback.lazy_call("relative_update", len, data)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """Copy file(s) from local.
@@ -808,9 +809,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
 
-        callback.call_func("set_size", len, rpaths)
+        callback.lazy_call("set_size", len, rpaths)
         for lpath, rpath in zip(lpaths, rpaths):
-            callback.call_func("relative_update", 1)
+            callback.lazy_call("relative_update", 1)
+            branch(callback, lpath, rpath, kwargs)
             self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):

@@ -23,7 +23,7 @@ def test_callbacks_as_callback():
     assert real_callback.call("something", 2) == 4
 
 
-def test_callbacks_call_function():
+def test_callbacks_lazy_call():
     empty_callback = callbacks.as_callback(None)
     simple_callback = callbacks.callback(something=lambda arg: arg + 2)
 
@@ -34,9 +34,9 @@ def test_callbacks_call_function():
         total_called += 1
         return n
 
-    assert empty_callback.call_func("something", expensive_func, 8) is None
-    assert simple_callback.call_func("nonexistent callback", expensive_func, 8) is None
+    assert empty_callback.lazy_call("something", expensive_func, 8) is None
+    assert simple_callback.lazy_call("nonexistent callback", expensive_func, 8) is None
     assert total_called == 0
 
-    assert simple_callback.call_func("something", expensive_func, 8) == 10
+    assert simple_callback.lazy_call("something", expensive_func, 8) == 10
     assert total_called == 1

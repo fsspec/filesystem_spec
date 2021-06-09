@@ -1,8 +1,9 @@
 class Callback:
     __slots__ = ["hooks"]
 
-    def __init__(self, **hooks):
+    def __init__(self, properties=None, **hooks):
         self.hooks = hooks
+        self.properties = properties or {}
 
     def call(self, hook, *args, **kwargs):
         """Make a callback to a hook named ``hook``. If it can't
@@ -70,6 +71,7 @@ def callback(
     set_size=None,
     relative_update=None,
     absolute_update=None,
+    branch=None,
     properties=None,
     **hooks,
 ):
@@ -93,17 +95,27 @@ def callback(
         the current cursor should now point at the Q. If another one happens
         it will override the current value.
 
+    branch: Callable[[os.PathLike, os.PathLike], Optional[fsspec.callbacks.Callback]] (optional)
+        When some operations need branching (e.g each ``put()``/``get()`
+        operation have their own callbacks, but they will also need to
+        branch out for ``put_file()``/``get_file()`` since those might
+        require additional child callbacks) the branch hook will be called
+        with the paths that are being transffered and it is expected to
+        either return a new fsspec.callbacks.Callback instance or None.
+
     properties: Dict[str, Any] (optional)
         A mapping of config option (callback related) to their values.
 
     hooks: Callable[..., Any]
         Optional hooks that are not generally available.
-    """
+    """  # noqa: E501
 
     return Callback(
+        properties=properties,
         set_size=set_size,
         relative_update=relative_update,
         absolute_update=absolute_update,
+        branch=branch,
         **hooks,
     )
 
@@ -123,3 +135,32 @@ def as_callback(maybe_callback):
         return _DEFAULT_CALLBACK
     else:
         return maybe_callback
+
+
+def branch(callback, path_1, path_2, kwargs=None):
+    """Branch out from an existing callback.
+
+    Parameters
+    ----------
+    callback: fsspec.callback.Callback
+        Parent callback
+    path_1: os.PathLike
+        Left path
+    path_2: os.PathLike
+        Right path
+    kwargs: Dict[str, Any] (optional)
+        Update the ``callback`` key on the given ``kwargs``
+        if there is a brancher attached to the ``callback``.
+
+
+    Returns
+    -------
+    fsspec.callback.Callback or None
+    """
+    branched = callback.call("branch", path_1, path_2)
+    if branched is None or branched is _DEFAULT_CALLBACK:
+        return None
+
+    if kwargs is not None:
+        kwargs["callback"] = branched
+    return branched
