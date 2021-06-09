@@ -58,7 +58,7 @@ class LocalFileSystem(AbstractFileSystem):
         return super().glob(path, **kwargs)
 
     def info(self, path, **kwargs):
-        if hasattr(path, "stat"):
+        if isinstance(path, os.DirEntry):
             # scandir DirEntry
             out = path.stat(follow_symlinks=False)
             link = path.is_symlink()
