@@ -700,4 +700,3 @@ def test_info_path_like(tmpdir):
 
     fs = LocalFileSystem()
     assert fs.exists(path)
-    assert fs.info(path)["name"] == os.fspath(path)
