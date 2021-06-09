@@ -9,6 +9,7 @@ from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
 
+from .callbacks import as_callback
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
@@ -730,13 +731,17 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Copy single remote file to local"""
         if self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
-        else:
-            with self.open(rpath, "rb", **kwargs) as f1:
-                with open(lpath, "wb") as f2:
-                    data = True
-                    while data:
-                        data = f1.read(self.blocksize)
-                        f2.write(data)
+            return None
+
+        callback = as_callback(kwargs.pop("callback", None))
+        with self.open(rpath, "rb", **kwargs) as f1:
+            callback.call_func("set_size", getattr, f1, "size", None)
+            with open(lpath, "wb") as f2:
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    f2.write(data)
+                    callback.call_func("relative_update", len, data)
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file(s) to local.
@@ -761,14 +766,18 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Copy single file to remote"""
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
-        else:
-            with open(lpath, "rb") as f1:
-                self.mkdirs(os.path.dirname(rpath), exist_ok=True)
-                with self.open(rpath, "wb", **kwargs) as f2:
-                    data = True
-                    while data:
-                        data = f1.read(self.blocksize)
-                        f2.write(data)
+            return None
+
+        callback = as_callback(kwargs.pop("callback", None))
+        with open(lpath, "rb") as f1:
+            callback.call_func("set_size", os.stat, lpath, follow_symlinks=False)
+            self.mkdirs(os.path.dirname(rpath), exist_ok=True)
+            with self.open(rpath, "wb", **kwargs) as f2:
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    f2.write(data)
+                    callback.call_func("relative_update", len, data)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """Copy file(s) from local.
