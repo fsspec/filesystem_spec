@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+from collections import defaultdict
 from functools import partial
 
 import numpy as np
@@ -506,3 +507,73 @@ def test_dummy_callbacks(tmpdir, monkeypatch):
     events.clear()
 
     assert destination.read_text("utf-8") == "x" * 100
+
+
+def test_dummy_callbacks_with_branches(tmpdir, monkeypatch):
+    def open_with_size(self, path, mode, *args, **kwargs):
+        stream = open(path, mode)
+        stream.size = os.stat(path).st_size
+        return stream
+
+    monkeypatch.setattr(DummyTestFS, "_open", open_with_size)
+    monkeypatch.setattr(DummyTestFS, "blocksize", 12)
+
+    fs = DummyTestFS()
+
+    events = defaultdict(list)
+
+    def make_event(origin, event_type, *event_args):
+        events[origin].append((event_type, *event_args))
+
+    def make_callback(*args, **kwargs):
+        return fsspec.callback(
+            set_size=partial(make_event, args, "set_size"),
+            relative_update=partial(make_event, args, "relative_update"),
+            **kwargs,
+        )
+
+    def rel_update(size, by):
+        return [("relative_update", by)] * size
+
+    files, source_files, dest_files = [], [], []
+    for index in range(10):
+        src_path = tmpdir / f"src_{index}.txt"
+        source_files.append(src_path)
+        src_path.write_text("x" * 24, "utf-8")
+        files.append(tmpdir / f"file_{index}.txt")
+        dest_files.append(tmpdir / f"dst_{index}.txt")
+
+    callback = make_callback("top-level")
+    callback_with_branching = make_callback("top-level", branch=make_callback)
+
+    fs.put(source_files, files, callback=callback)
+    assert events == {("top-level",): [("set_size", 10), *rel_update(10, 1)]}
+    events.clear()
+
+    fs.get(files, dest_files, callback=callback)
+    assert events == {("top-level",): [("set_size", 10), *rel_update(10, 1)]}
+    events.clear()
+
+    def check_events(lpaths, rpaths):
+        base_keys = [(str(lpath), str(rpath)) for lpath, rpath in zip(lpaths, rpaths)]
+        assert set(events.keys()) == {("top-level",), *base_keys}
+        assert (
+            events[
+                "top-level",
+            ]
+            == [("set_size", 10), *rel_update(10, 1)]
+        )
+
+        for key in base_keys:
+            assert events[key] == [
+                ("set_size", 24),
+                *rel_update(2, 12),
+                *rel_update(1, 0),
+            ]
+        events.clear()
+
+    fs.put(source_files, files, callback=callback_with_branching)
+    check_events(source_files, files)
+
+    fs.get(files, dest_files, callback=callback_with_branching)
+    check_events(files, dest_files)

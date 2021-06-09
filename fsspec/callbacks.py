@@ -1,5 +1,8 @@
+from .utils import stringify_path
+
+
 class Callback:
-    __slots__ = ["hooks"]
+    __slots__ = ["properties", "hooks"]
 
     def __init__(self, properties=None, **hooks):
         self.hooks = hooks
@@ -157,7 +160,7 @@ def branch(callback, path_1, path_2, kwargs=None):
     -------
     fsspec.callback.Callback or None
     """
-    branched = callback.call("branch", path_1, path_2)
+    branched = callback.call("branch", stringify_path(path_1), stringify_path(path_2))
     if branched is None or branched is _DEFAULT_CALLBACK:
         return None
 

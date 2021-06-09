@@ -763,8 +763,8 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback.lazy_call("set_size", len, lpaths)
         for lpath, rpath in zip(lpaths, rpaths):
-            callback.lazy_call("relative_update", 1)
-            branch(callback, lpath, rpath, kwargs)
+            callback.call("relative_update", 1)
+            branch(callback, rpath, lpath, kwargs)
             self.get_file(rpath, lpath, **kwargs)
 
     def put_file(self, lpath, rpath, **kwargs):
@@ -811,7 +811,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback.lazy_call("set_size", len, rpaths)
         for lpath, rpath in zip(lpaths, rpaths):
-            callback.lazy_call("relative_update", 1)
+            callback.call("relative_update", 1)
             branch(callback, lpath, rpath, kwargs)
             self.put_file(lpath, rpath, **kwargs)
 
