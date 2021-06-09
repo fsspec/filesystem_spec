@@ -25,6 +25,30 @@ class Callback:
             return callback(*args, **kwargs)
 
     def call_func(self, hook, func, *args, **kwargs):
+        """Make a callback to a hook named ``hook`` with a
+        single value that will be lazily obtained from a call
+        to the ``func`` with ``*args`` and ``**kwargs``.
+
+        This method should be used for expensive operations,
+        e.g ``len(data)`` since if there is no hook for the
+        given ``hook`` parameter, that operation will be wasted.
+        With this method, it will only evaluate function, if there
+        is a hook attached to the given ``hook`` parameter.
+
+        Parameters
+        ----------
+        hook: str
+            The name of the hook
+        func: Callable[..., Any]
+            Function that will be called and passed as the argument
+            to the hook, if found.
+        *args: Any
+            All the positional arguments that will be passed
+            to the ``func``, if ``hook`` is found.
+        **kwargs: Any
+            All the keyword arguments that will be passed
+            tot the ``func``, if ``hook` is found.
+        """
         callback = self.hooks.get(hook)
         if callback is not None:
             return callback(func(*args, **kwargs))
