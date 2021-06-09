@@ -43,6 +43,9 @@ Base Classes
    fsspec.dircache.DirCache
    fsspec.registry.ReadOnlyRegistry
    fsspec.registry.register_implementation
+   fsspec.callbacks.Callback
+   fsspec.callbacks.callback
+   fsspec.callbacks.as_callback
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
    :members:
@@ -76,6 +79,13 @@ Base Classes
    :members: __init__
 
 .. autofunction:: fsspec.registry.register_implementation
+
+.. autoclass:: fsspec.callbacks.Callback
+   :members:
+
+.. autofunction:: fsspec.callbacks.callback
+
+.. autofunction:: fsspec.callbacks.as_callback
 
 .. _implementations:
 
