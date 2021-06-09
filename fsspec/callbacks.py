@@ -24,7 +24,7 @@ class Callback:
         if callback is not None:
             return callback(*args, **kwargs)
 
-    def call_func(self, hook, func, *args, **kwargs):
+    def lazy_call(self, hook, func, *args, **kwargs):
         """Make a callback to a hook named ``hook`` with a
         single value that will be lazily obtained from a call
         to the ``func`` with ``*args`` and ``**kwargs``.
@@ -58,7 +58,7 @@ class NoOpCallback(Callback):
     def call(self, hook, *args, **kwargs):
         return None
 
-    def call_func(self, hook, *args, **kwargs):
+    def lazy_call(self, hook, *args, **kwargs):
         return None
 
 
