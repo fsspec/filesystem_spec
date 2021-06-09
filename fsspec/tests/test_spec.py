@@ -531,7 +531,9 @@ def test_dummy_callbacks_files_branched(tmpdir):
     callback = make_callback("top-level", branch=make_callback)
 
     def check_events(lpaths, rpaths):
-        base_keys = tuple(zip(lpaths, rpaths))
+        from fsspec.implementations.local import make_path_posix
+
+        base_keys = zip(make_path_posix(lpaths), make_path_posix(rpaths))
         assert set(events.keys()) == {("top-level",), *base_keys}
         assert (
             events[
