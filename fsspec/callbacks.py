@@ -5,6 +5,21 @@ class Callback:
         self.hooks = hooks
 
     def call(self, hook, *args, **kwargs):
+        """Make a callback to a hook named ``hook``. If it can't
+        find the hook, then this function will return None. Otherwise
+        the return value of the hook will be used.
+
+        Parameters
+        ----------
+        hook: str
+            The name of the hook
+        *args: Any
+            All the positional arguments that will be passed
+            to the ``hook``, if found.
+        **kwargs: Any
+            All the keyword arguments that will be passed
+            tot the ``hook``, if found.
+        """
         callback = self.hooks.get(hook)
         if callback is not None:
             return callback(*args, **kwargs)
@@ -17,6 +32,9 @@ class Callback:
 
 class NoOpCallback(Callback):
     def call(self, hook, *args, **kwargs):
+        return None
+
+    def call_func(self, hook, *args, **kwargs):
         return None
 
 
