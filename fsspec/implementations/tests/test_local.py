@@ -10,6 +10,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from distutils.version import LooseVersion
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -691,3 +692,11 @@ def test_infer_compression(tmpdir, opener, ext):
         read_content = fp.read()
 
     assert content == read_content
+
+
+def test_info_path_like(tmpdir):
+    path = Path(tmpdir / "test_info")
+    path.write_text("fsspec")
+
+    fs = LocalFileSystem()
+    assert fs.exists(path)
