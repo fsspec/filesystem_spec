@@ -770,7 +770,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback = as_callback(kwargs.pop("callback", None))
         with open(lpath, "rb") as f1:
-            callback.call_func("set_size", os.stat, lpath, follow_symlinks=False)
+            callback.call_func(
+                "set_size", lambda: os.stat(lpath, follow_symlinks=False).st_size
+            )
             self.mkdirs(os.path.dirname(rpath), exist_ok=True)
             with self.open(rpath, "wb", **kwargs) as f2:
                 data = True

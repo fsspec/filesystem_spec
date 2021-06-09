@@ -1,5 +1,7 @@
 import json
+import os
 import pickle
+from functools import partial
 
 import numpy as np
 import pytest
@@ -423,3 +425,84 @@ def test_readinto_with_multibyte(ftp_writable, tmpdir, dt):
         fp.readinto(arr2)
 
     assert np.array_equal(arr, arr2)
+
+
+def test_dummy_callbacks(tmpdir, monkeypatch):
+    def regular_open(self, path, mode="rb", **kwargs):
+        return open(path, mode)
+
+    def open_with_size(self, path, *args, **kwargs):
+        stream = regular_open(self, path, *args, **kwargs)
+        stream.size = os.stat(path).st_size
+        return stream
+
+    monkeypatch.setattr(DummyTestFS, "_open", regular_open)
+    monkeypatch.setattr(DummyTestFS, "blocksize", 25)
+
+    fs = DummyTestFS()
+
+    events = []
+
+    def make_event(event_type, *event_args):
+        events.append((event_type, *event_args))
+
+    callback = fsspec.callback(
+        set_size=partial(make_event, "set_size"),
+        relative_update=partial(make_event, "relative_update"),
+        absolute_update=partial(make_event, "absolute_update"),
+    )
+
+    file = tmpdir / "file.txt"
+    source = tmpdir / "tmp.txt"
+    destination = tmpdir / "tmp2.txt"
+    source.write_text("x" * 100, "utf-8")
+
+    # The reason that there is a relative_update(0) at the
+    # end is that, we don't have an early exit on the
+    # impleementations of get_file/put_file so it needs to
+    # go through the callback to get catch by the while's
+    # condition and then it will stop the transfer.
+
+    fs.put_file(source, file, callback=callback, block_size=25)
+    assert events == [
+        ("set_size", 100),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 0),
+    ]
+    events.clear()
+
+    # We don't want to waste an `info()` call to figure
+    # out the size every time get_file is called, so we
+    # will check whether the file already has (Abstract
+    # BufferedFile for example gets the total size in
+    # the initializer if the mode is "rb") size, and if
+    # so, we will use it.
+
+    fs.get_file(file, destination, callback=callback)
+    assert events == [
+        ("set_size", None),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 0),
+    ]
+    events.clear()
+
+    os.unlink(destination)
+    monkeypatch.setattr(DummyTestFS, "_open", open_with_size)
+    fs.get_file(file, destination, callback=callback)
+    assert events == [
+        ("set_size", 100),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 25),
+        ("relative_update", 0),
+    ]
+    events.clear()
+
+    assert destination.read_text("utf-8") == "x" * 100
