@@ -46,6 +46,7 @@ Base Classes
    fsspec.callbacks.Callback
    fsspec.callbacks.callback
    fsspec.callbacks.as_callback
+   fsspec.callbacks.branch
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
    :members:
@@ -86,6 +87,8 @@ Base Classes
 .. autofunction:: fsspec.callbacks.callback
 
 .. autofunction:: fsspec.callbacks.as_callback
+
+.. autofunction:: fsspec.callbacks.branch
 
 .. _implementations:
 
