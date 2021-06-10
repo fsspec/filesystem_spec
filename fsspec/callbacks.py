@@ -57,6 +57,19 @@ class Callback:
         if callback is not None:
             return callback(func(*args, **kwargs))
 
+    def wrap(self, iterable):
+        """Wrap an iterable to send ``relative_update`` hook
+        on each iterations.
+
+        Parameters
+        ----------
+        iterable: Iterable
+            The iterable that is being wrapped
+        """
+        for item in iterable:
+            self.call("relative_update", 1)
+            yield item
+
 
 class NoOpCallback(Callback):
     def call(self, hook, *args, **kwargs):
@@ -112,6 +125,10 @@ def callback(
 
     hooks: Callable[..., Any]
         Optional hooks that are not generally available.
+
+    Returns
+    -------
+    fsspec.callback.Callback
     """  # noqa: E501
 
     return Callback(

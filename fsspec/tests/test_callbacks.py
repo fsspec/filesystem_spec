@@ -40,3 +40,13 @@ def test_callbacks_lazy_call():
 
     assert simple_callback.lazy_call("something", expensive_func, 8) == 10
     assert total_called == 1
+
+
+def test_callbacks_wrap():
+    events = []
+    callback = callbacks.callback(relative_update=events.append)
+    for _ in callback.wrap(range(10)):
+        ...
+
+    assert len(events) == 10
+    assert sum(events) == 10
