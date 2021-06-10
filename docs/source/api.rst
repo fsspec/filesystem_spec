@@ -169,6 +169,7 @@ Other Known Implementations
 - `abfs`_ for Azure Blob service
 - `dropbox`_ for access to dropbox shares
 - `gdrive`_ to access Google Drive and shares (experimental)
+- `wandbfs`_ to access Wandb run data (experimental)
 
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
@@ -176,6 +177,7 @@ Other Known Implementations
 .. _abfs: https://github.com/dask/adlfs
 .. _dropbox: https://github.com/MarineChap/intake_dropbox
 .. _gdrive: https://github.com/intake/gdrivefs
+.. _wandbfs: https://github.com/jkulhanek/wandbfs
 
 .. _readbuffering:
 
