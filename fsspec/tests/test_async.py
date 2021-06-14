@@ -8,7 +8,7 @@ import pytest
 
 import fsspec
 import fsspec.asyn
-from fsspec.asyn import _throttled_gather
+from fsspec.asyn import _throttled_gather, get_running_loop
 
 
 def test_sync_methods():
@@ -135,20 +135,20 @@ def test_windows_policy():
 
 
 def test_fsspec_loop():
-    asyncio.set_event_loop(None)
+    asyncio._set_running_loop(None)
 
     with fsspec.asyn.fsspec_loop() as loop:
-        assert asyncio.get_event_loop() is loop
-        assert asyncio.get_event_loop() is fsspec.asyn.get_loop()
+        assert get_running_loop() is loop
+        assert get_running_loop() is fsspec.asyn.get_loop()
 
     with pytest.raises(RuntimeError):
-        asyncio.get_event_loop()
+        get_running_loop()
 
     original_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(original_loop)
+    asyncio._set_running_loop(original_loop)
 
     with fsspec.asyn.fsspec_loop() as loop:
-        assert asyncio.get_event_loop() is loop
-        assert asyncio.get_event_loop() is fsspec.asyn.get_loop()
+        assert get_running_loop() is loop
+        assert get_running_loop() is fsspec.asyn.get_loop()
 
-    assert asyncio.get_event_loop() is original_loop
+    assert get_running_loop() is original_loop

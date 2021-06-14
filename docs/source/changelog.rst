@@ -4,7 +4,9 @@ Changelog
 Dev
 ---
 
+Enhancements
 
+- Introduce ``fsspec.asyn.fsspec_loop`` to temporarily switch to the fsspec loop.
 
 
 2021.06.0
