@@ -135,9 +135,10 @@ def fsspec_loop():
     except RuntimeError:
         original_loop = None
 
+    fsspec_loop = get_loop()
     try:
-        asyncio.set_event_loop(get_loop())
-        yield
+        asyncio.set_event_loop(fsspec_loop)
+        yield fsspec_loop
     finally:
         asyncio.set_event_loop(original_loop)
 

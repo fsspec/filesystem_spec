@@ -132,3 +132,23 @@ def test_windows_policy():
     # check ensures that we are restoring the old policy back
     # after our change.
     assert isinstance(policy, asyncio.DefaultEventLoopPolicy)
+
+
+def test_fsspec_loop():
+    asyncio.set_event_loop(None)
+
+    with fsspec.asyn.fsspec_loop() as loop:
+        assert asyncio.get_event_loop() is loop
+        assert asyncio.get_event_loop() is fsspec.asyn.get_loop()
+
+    with pytest.raises(RuntimeError):
+        asyncio.get_event_loop()
+
+    original_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(original_loop)
+
+    with fsspec.asyn.fsspec_loop() as loop:
+        assert asyncio.get_event_loop() is loop
+        assert asyncio.get_event_loop() is fsspec.asyn.get_loop()
+
+    assert asyncio.get_event_loop() is original_loop
