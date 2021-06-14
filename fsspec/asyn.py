@@ -124,6 +124,24 @@ def get_loop():
     return loop[0]
 
 
+@contextmanager
+def fsspec_loop():
+    """Temporarily switch the current event loop to the fsspec's
+    own loop, and then revert it back after the context gets
+    terinated.
+    """
+    try:
+        original_loop = asyncio.get_event_loop()
+    except RuntimeError:
+        original_loop = None
+
+    try:
+        asyncio.set_event_loop(get_loop())
+        yield
+    finally:
+        asyncio.set_event_loop(original_loop)
+
+
 try:
     import resource
 except ImportError:
