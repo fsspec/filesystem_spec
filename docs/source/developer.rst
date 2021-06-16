@@ -53,7 +53,7 @@ The class ``AbstractFileSystem`` provides a template of the methods
 that a potential implementation should supply, as well as default
 implementation of functionality that depends on these. Methods that
 *could* be implemented are marked with ``NotImplementedError`` or
-``pass`` (the patter specifically for directory operations that might
+``pass`` (the latter specifically for directory operations that might
 not be required for some backends where directories are emulated.
 
 Note that not all of the methods need to be implemented: for example,
