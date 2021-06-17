@@ -93,3 +93,17 @@ The current list of known implementations can be found as follows
     from fsspec.registry import known_implementations
 
     known_implementations
+
+
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Contents:
+
+   intro.rst
+   usage.rst
+   features.rst
+   developer.rst
+   async.rst
+   api.rst
+   changelog.rst
