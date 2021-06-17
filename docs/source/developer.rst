@@ -99,7 +99,7 @@ optional. Special considerations are required for async
 development, see :doc:`async`.
 
 Developing the library
-----------------------
+~~~~~~~~~~~~~~~~~~~~~~
 
 The following can be used to install ``fsspec`` in development mode
 
