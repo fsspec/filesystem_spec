@@ -94,7 +94,28 @@ Implementing async
 ~~~~~~~~~~~~~~~~~~
 
 Starting in version 0.7.5, we provide async operations for some methods
-of some implementations.
+of some implementations. Async support in storage implementations is
+optional. Special considerations are required for async
+development, see :doc:`async`.
 
-This section will contain details on how to implement backends offering
-async, once the details are ironed out on our end.
+Developing the library
+----------------------
+
+The following can be used to install ``fsspec`` in development mode
+
+.. code-block::
+
+   git clone https://github.com/intake/filesystem_spec
+   cd filesystem_spec
+   pip install -e .
+
+A number of additional dependencies are required to run tests, see "ci/environment*.yml", as
+well as Docker. Most implementation-specific tests should skip if their requirements are
+not met.
+
+Development happens by submitting pull requests (PRs) on github.
+This repo adheres for flake8 and black coding conventions. You may wish to install
+commit hooks if you intend to make PRs, as linting is done as part of the CI.
+
+Docs use sphinx and the numpy docstring style. Please add an entry to the changelog
+along with any PR.
