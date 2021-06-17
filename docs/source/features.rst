@@ -1,18 +1,6 @@
 Features of fsspec
 ==================
 
-Consistent API to many different storage backends. The general API and functionality were
-proven with the projects `s3fs`_ and `gcsfs`_ (along with `hdfs3`_ and `adlfs`_), within the
-context of Dask and independently. These have been tried and tested by many users and shown their
-usefulness over some years. ``fsspec`` aims to build on these and unify their models, as well
-as extract out file-system handling code from Dask which does not so comfortably fit within a
-library designed for task-graph creation and their scheduling.
-
-.. _s3fs: https://s3fs.readthedocs.io/en/latest/
-.. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
-.. _hdfs3: https://hdfs3.readthedocs.io/en/latest/
-.. _adlfs: https://docs.microsoft.com/en-us/azure/data-lake-store/
-
 Here follows a brief description of some features of note of ``fsspec`` that provides to make
 it an interesting project beyond some other file-system abstractions.
 
@@ -50,19 +38,30 @@ the initiation of the context which actually does the work of creating file-like
         # f is now a real file-like object holding resources
         f.read(...)
 
-Random Access and Buffering
----------------------------
+File Buffering and random access
+--------------------------------
 
-The :func:`fsspec.spec.AbstractBufferedFile` class is provided as an easy way to build file-like
-interfaces to some service which is capable of providing blocks of bytes. This class is derived
-from in a number of the existing implementations. A subclass of ``AbstractBufferedFile`` provides
-random access for the underlying file-like data (without downloading the whole thing) and
-configurable read-ahead buffers to minimise the number of the read operations that need to be
-performed on the back-end storage.
-
-This is also a critical feature in the big-data access model, where each sub-task of an operation
+Most implementations create file objects which derive from ``fsspec.spec.AbstractBufferedFile``, and
+have many behaviours in common. A subclass of ``AbstractBufferedFile`` provides
+random access for the underlying file-like data (without downloading the whole thing).
+This is a critical feature in the big-data access model, where each sub-task of an operation
 may need on a small part of a file, and does not, therefore want to be forced into downloading the
 whole thing.
+
+These files offer buffering of both read and write operations, so that
+communication with the remote resource is limited. The size of the buffer is generally configured
+with the ``blocksize=`` kwarg at open time, although the implementation may have some minimum or
+maximum sizes that need to be respected.
+
+For reading, a number of buffering schemes are available, listed in ``fsspec.caching.caches``
+(see :ref:`readbuffering`), or "none" for no buffering at all, e.g., for a simple read-ahead
+buffer, you can do
+
+.. code-block:: python
+
+   fs = fsspec.filesystem(...)
+   with fs.open(path, mode='rb', cache_type='readahead') as f:
+       use_for_something(f)
 
 Transparent text-mode and compression
 -------------------------------------
@@ -195,25 +194,6 @@ is called, so that subsequent listing of the given paths will force a refresh. I
 addition, some methods like ``ls`` have a ``refresh`` parameter to force fetching
 the listing again.
 
-File Buffering
---------------
-
-Most implementations create file objects which derive from ``fsspec.spec.AbstractBufferedFile``, and
-have many behaviours in common. These files offer buffering of both read and write operations, so that
-communication with the remote resource is limited. The size of the buffer is generally configured
-with the ``blocksize=`` kwargs at open time, although the implementation may have some minimum or
-maximum sizes that need to be respected.
-
-For reading, a number of buffering schemes are available, listed in ``fsspec.caching.caches``
-(see :ref:`readbuffering`), or "none" for no buffering at all, e.g., for a simple read-ahead
-buffer, you can do
-
-.. code-block:: python
-
-   fs = fsspec.filesystem(...)
-   with fs.open(path, mode='rb', cache_type='readahead') as f:
-       use_for_something(f)
-
 URL chaining
 ------------
 
@@ -344,10 +324,10 @@ shown (or if none are selected, all files are shown).
 
 The interface provides the following outputs:
 
-- ``.urlpath``: the currently selected item (if any)
-- ``.storage_options``: the value of the kwargs box
-- ``.fs``: the current filesystem instance
-- ``.open_file()``: produces an ``OpenFile`` instance for the current selection
+#. ``.urlpath``: the currently selected item (if any)
+#. ``.storage_options``: the value of the kwargs box
+#. ``.fs``: the current filesystem instance
+#. ``.open_file()``: produces an ``OpenFile`` instance for the current selection
 
 Configuration
 -------------
@@ -388,16 +368,16 @@ the style ``FSSPEC_{protocol}_{kwargname}=value``.
 
 Configuration is determined in the following order, with later items winning:
 
-- the contents of ini files, and json files in the config directory, sorted
-  alphabetically
-- environment variables
-- the contents of ``fsspec.config.conf``, which can be edited at runtime
-- kwargs explicitly passed, whether with ``fsspec.open``, ``fsspec.filesystem``
-  or directly instantiating the implementation class.
+#. the contents of ini files, and json files in the config directory, sorted
+   alphabetically
+#. environment variables
+#. the contents of ``fsspec.config.conf``, which can be edited at runtime
+#. kwargs explicitly passed, whether with ``fsspec.open``, ``fsspec.filesystem``
+   or directly instantiating the implementation class.
 
 
 Asynchronous
-============
+------------
 
 Some implementations, those deriving from ``fsspec.asyn.AsyncFileSystem``, have
 async/coroutine implementations of some file operations. The async methods have

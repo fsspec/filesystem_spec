@@ -1,11 +1,5 @@
-Introduction
-============
-
-To get stuck into using the package, rather than reading about its philosophy and history, you can
-skip to :doc:`usage`.
-
 Background
-----------
+==========
 
 Python provides a standard interface for open files, so that alternate implementations of file-like object can
 work seamlessly with many function which rely only on the methods of that standard interface. A number of libraries
@@ -21,7 +15,7 @@ other file-system implementations simpler.
 History
 -------
 
-I (Martin Durant) have been involved in building a number of remote-data file-system implementations, principally
+We have been involved in building a number of remote-data file-system implementations, principally
 in the context of the `Dask`_ project. In particular, several are listed
 in `docs`_ with links to the specific repositories.
 With common authorship, there is much that is similar between the implementations, for example posix-like naming
@@ -57,21 +51,21 @@ Influences
 The following places to consider, when choosing the definitions of how we would like the file-system specification
 to look:
 
-- python's `os`_ module and its `path` namespace; also other file-connected
-  functionality in the standard library
-- posix/bash method naming conventions that linux/unix/osx users are familiar with; or perhaps their Windows variants
-- the existing implementations for the various backends (e.g.,
-  `gcsfs`_ or Arrow's
-  `hdfs`_)
-- `pyfilesystems`_, an attempt to do something similar, with a
-  plugin architecture. This conception has several types of local file-system, and a lot of well-thought-out
-  validation code.
+#. python's `os`_ module and its `path` namespace; also other file-connected
+   functionality in the standard library
+#. posix/bash method naming conventions that linux/unix/osx users are familiar with; or perhaps their Windows variants
+#. the existing implementations for the various backends (e.g.,
+   `gcsfs`_ or Arrow's
+   `hdfs`_)
+#. `pyfilesystems`_, an attempt to do something similar, with a
+   plugin architecture. This conception has several types of local file-system, and a lot of well-thought-out
+   validation code.
 
 .. _os: https://docs.python.org/3/library/os.html
 .. _gcsfs: http://gcsfs.readthedocs.io/en/latest/api.html#gcsfs.core.GCSFileSystem
 .. _pyfilesystems: https://docs.pyfilesystem.org/en/latest/index.html
 
-Not pyfilesystems?
+Other similar work
 ------------------
 
 It might have been conceivable to reuse code in ``pyfilesystems``, which has an established interface and several
@@ -82,6 +76,11 @@ have an interface as close to those as possible. See a
 `discussion`_ on the topic.
 
 .. _discussion: https://github.com/intake/filesystem_spec/issues/5
+
+Other newer technologies such as `smart_open`_ and ``pyarrow``'s newer file-system rewrite also have some
+parts of the functionality presented here, that might suit some use cases better.
+
+.. _smart_open: https://github.com/RaRe-Technologies/smart_open
 
 Structure of the package
 ------------------------

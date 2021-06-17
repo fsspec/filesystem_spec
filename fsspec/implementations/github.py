@@ -37,15 +37,22 @@ class GithubFileSystem(AbstractFileSystem):
     rurl = "https://raw.githubusercontent.com/{org}/{repo}/{sha}/{path}"
     protocol = "github"
 
-    def __init__(self, org, repo, sha="master", username=None, token=None, **kwargs):
+    def __init__(self, org, repo, sha=None, username=None, token=None, **kwargs):
         super().__init__(**kwargs)
         self.org = org
         self.repo = repo
-        self.root = sha
         if (username is None) ^ (token is None):
             raise ValueError("Auth required both username and token")
         self.username = username
         self.token = token
+        if sha is None:
+            # look up default branch (not necessarily "master")
+            u = "https://api.github.com/repos/{org}/{repo}"
+            r = requests.get(u.format(org=org, repo=repo), **self.kw)
+            r.raise_for_status()
+            sha = r.json()["default_branch"]
+
+        self.root = sha
         self.ls("")
 
     @property
