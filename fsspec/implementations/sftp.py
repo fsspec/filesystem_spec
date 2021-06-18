@@ -7,6 +7,7 @@ from stat import S_ISDIR, S_ISLNK
 import paramiko
 
 from .. import AbstractFileSystem
+from ..callbacks import as_callback
 from ..utils import infer_storage_options
 
 logger = logging.getLogger("fsspec.sftp")
@@ -119,12 +120,14 @@ class SFTPFileSystem(AbstractFileSystem):
             paths = [stat["name"] for stat in stats]
             return sorted(paths)
 
-    def put(self, lpath, rpath):
+    def put(self, lpath, rpath, **kwargs):
         logger.debug("Put file %s into %s" % (lpath, rpath))
+        callback = as_callback(kwargs.pop("callback", None))  # noqa: F841
         self.ftp.put(lpath, rpath)
 
-    def get(self, rpath, lpath):
+    def get(self, rpath, lpath, **kwargs):
         logger.debug("Get file %s into %s" % (rpath, lpath))
+        callback = as_callback(kwargs.pop("callback", None))  # noqa: F841
         self.ftp.get(rpath, lpath)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
