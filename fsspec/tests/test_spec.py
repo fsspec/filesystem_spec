@@ -528,7 +528,11 @@ def test_dummy_callbacks_files_branched(tmpdir):
             **kwargs,
         )
 
-    callback = make_callback("top-level", branch=make_callback)
+    callback = make_callback(
+        "top-level",
+        branch=make_callback,
+        properties={"stringify_paths": True, "posixify_paths": True},
+    )
 
     def check_events(lpaths, rpaths):
         from fsspec.implementations.local import make_path_posix

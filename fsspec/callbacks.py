@@ -117,8 +117,10 @@ def callback(
         branch out for ``put_file()``/``get_file()`` since those might
         require additional child callbacks) the branch hook will be called
         with the paths that are being transffered and it is expected to
-        either return a new fsspec.callbacks.Callback instance or None. The
-        arguments will be sanitized and will always use the posix convention.
+        either return a new fsspec.callbacks.Callback instance or None. If
+        ``stringify_paths`` property is set, the paths will be casted to
+        string, and if ``posixify_paths`` property is set both arguments
+        will be sanitized to the posix convention.
 
     properties: Dict[str, Any] (optional)
         A mapping of config option (callback related) to their values.
@@ -180,8 +182,14 @@ def branch(callback, path_1, path_2, kwargs=None):
     """
     from .implementations.local import make_path_posix
 
-    path_1 = make_path_posix(stringify_path(path_1))
-    path_2 = make_path_posix(stringify_path(path_2))
+    if callback.properties.get("stringify_paths"):
+        path_1 = stringify_path(path_1)
+        path_2 = stringify_path(path_2)
+
+    if callback.properties.get("posixify_paths"):
+        path_1 = make_path_posix(path_1)
+        path_2 = make_path_posix(path_2)
+
     branched = callback.call("branch", path_1, path_2)
     if branched is None or branched is _DEFAULT_CALLBACK:
         return None
