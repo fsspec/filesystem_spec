@@ -122,14 +122,18 @@ class LocalFileSystem(AbstractFileSystem):
         shutil.move(path1, path2)
 
     def rm(self, path, recursive=False, maxdepth=None):
-        path = self._strip_protocol(path).rstrip("/")
-        if recursive and self.isdir(path):
+        if isinstance(path, str):
+            path = [path]
 
-            if os.path.abspath(path) == os.getcwd():
-                raise ValueError("Cannot delete current working directory")
-            shutil.rmtree(path)
-        else:
-            os.remove(path)
+        for p in path:
+            p = self._strip_protocol(p).rstrip("/")
+            if recursive and self.isdir(p):
+
+                if os.path.abspath(p) == os.getcwd():
+                    raise ValueError("Cannot delete current working directory")
+                shutil.rmtree(p)
+            else:
+                os.remove(p)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
@@ -177,7 +181,7 @@ class LocalFileSystem(AbstractFileSystem):
 
 
 def make_path_posix(path, sep=os.sep):
-    """ Make path generic """
+    """Make path generic"""
     if isinstance(path, (list, set, tuple)):
         return type(path)(make_path_posix(p) for p in path)
     if "~" in path:
