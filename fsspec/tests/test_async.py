@@ -8,7 +8,7 @@ import pytest
 
 import fsspec
 import fsspec.asyn
-from fsspec.asyn import _throttled_gather, get_running_loop
+from fsspec.asyn import _run_coros_in_chunks, get_running_loop
 
 
 def test_sync_methods():
@@ -72,7 +72,7 @@ def test_sync_wrapper_treat_timeout_0_as_none():
 
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
-def test_throttled_gather(monkeypatch):
+def test_run_coros_in_chunks(monkeypatch):
     total_running = 0
 
     async def runner():
@@ -90,7 +90,7 @@ def test_throttled_gather(monkeypatch):
 
         total_running = 0
         coros = [runner() for _ in range(32)]
-        results = await _throttled_gather(coros, **kwargs)
+        results = await _run_coros_in_chunks(coros, **kwargs)
         for result in results:
             if isinstance(result, Exception):
                 raise result
@@ -99,16 +99,16 @@ def test_throttled_gather(monkeypatch):
     assert sum(asyncio.run(main(batch_size=4))) == 32
 
     with pytest.raises(ValueError):
-        asyncio.run(main(batch_size=5, return_exceptions=True))
+        asyncio.run(main(batch_size=5))
 
     with pytest.raises(ValueError):
-        asyncio.run(main(batch_size=-1, return_exceptions=True))
+        asyncio.run(main(batch_size=-1))
 
     assert sum(asyncio.run(main(batch_size=4))) == 32
 
     monkeypatch.setitem(fsspec.config.conf, "gather_batch_size", 5)
     with pytest.raises(ValueError):
-        asyncio.run(main(return_exceptions=True))
+        asyncio.run(main())
     assert sum(asyncio.run(main(batch_size=4))) == 32  # override
 
     monkeypatch.setitem(fsspec.config.conf, "gather_batch_size", 4)
