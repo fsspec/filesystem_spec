@@ -581,7 +581,7 @@ class AsyncFileSystem(AbstractFileSystem):
             if withdirs:
                 files.update(dirs)
             out.update({info["name"]: info for name, info in files.items()})
-        if (await self._isfile(path)) and path not in out:
+        if not out and (await self._isfile(path)):
             # walk works on directories, but find should also return [path]
             # when path happens to be a file
             out[path] = {}
