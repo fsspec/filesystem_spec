@@ -399,6 +399,11 @@ def test_file_ops(tmpdir):
     fs.rm(tmpdir + "/afile3", recursive=True)
     assert not fs.exists(tmpdir + "/afile3")
 
+    files = [tmpdir + "/afile4", tmpdir + "/afile5"]
+    [fs.touch(f) for f in files]
+    fs.rm(files)
+    assert all(not fs.exists(f) for f in files)
+
     fs.rm(tmpdir, recursive=True)
     assert not fs.exists(tmpdir)
 
