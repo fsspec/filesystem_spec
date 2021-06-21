@@ -571,6 +571,14 @@ def test_strip_protocol_expanduser():
     assert not LocalFileSystem._strip_protocol("./").endswith("/")
 
 
+def test_mkdir_twice_faile(tmpdir):
+    fn = os.path.join(tmpdir, "test")
+    fs = fsspec.filesystem("file")
+    fs.mkdir(fn)
+    with pytest.raises(FileExistsError):
+        fs.mkdir(fn)
+
+
 def test_iterable(tmpdir):
     data = b"a\nhello\noi"
     fn = os.path.join(tmpdir, "test")
