@@ -33,6 +33,8 @@ class LocalFileSystem(AbstractFileSystem):
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
+        if self.exists(path):
+            raise FileExistsError(path)
         if create_parents:
             self.makedirs(path, exist_ok=True)
         else:
