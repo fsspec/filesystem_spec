@@ -104,7 +104,8 @@ jdata = """{
 
 def test_unmodel():
     refs = _unmodel_hdf5(json.loads(jdata))
-    assert b'"Conventions": "UGRID-0.9.0"' in refs[".zattrs"]
+    # apparently the output may or may not contain a space after ":"
+    assert b'"Conventions":"UGRID-0.9.0"' in refs[".zattrs"].replace(b" ", b"")
     assert refs["adcirc_mesh/0"] == ("https://url", 8928, 8932)
 
 
