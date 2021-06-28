@@ -272,8 +272,6 @@ class ReferenceFileSystem(AsyncFileSystem):
 
         @lru_cache(1000)
         def _render_jinja(u):
-            import jinja2
-
             return jinja2.Template(u).render(**self.templates)
 
         for k, v in references.get("refs", {}).items():
