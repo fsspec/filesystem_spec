@@ -369,7 +369,11 @@ class AsyncFileSystem(AbstractFileSystem):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
-        rpaths = other_paths(lpaths, rpath)
+        dirs = [l for l in lpaths if os.path.isdir(l)]
+        rdirs = other_paths(dirs, rpath)
+        await _throttled_gather([self._makedirs(d, exist_ok=True) for d in rdirs])
+        files = sorted(set(lpaths) - set(dirs))
+        rpaths = other_paths(files, rpath)
         batch_size = kwargs.pop("batch_size", self.batch_size)
         return await _throttled_gather(
             [
