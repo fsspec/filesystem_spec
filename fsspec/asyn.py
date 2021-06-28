@@ -378,7 +378,7 @@ class AsyncFileSystem(AbstractFileSystem):
         return await _throttled_gather(
             [
                 self._put_file(lpath, rpath, **kwargs)
-                for lpath, rpath in zip(lpaths, rpaths)
+                for lpath, rpath in zip(files, rpaths)
             ],
             batch_size=batch_size,
         )
