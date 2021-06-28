@@ -735,13 +735,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback = as_callback(kwargs.pop("callback", None))
         with self.open(rpath, "rb", **kwargs) as f1:
-            callback.lazy_call("set_size", getattr, f1, "size", None)
+            callback.call("set_size", getattr(f1, "size", None))
             with open(lpath, "wb") as f2:
                 data = True
                 while data:
                     data = f1.read(self.blocksize)
-                    f2.write(data)
-                    callback.lazy_call("relative_update", len, data)
+                    segment_len = f2.write(data)
+                    callback.call("relative_update", segment_len)
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file(s) to local.
@@ -774,16 +774,16 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback = as_callback(kwargs.pop("callback", None))
         with open(lpath, "rb") as f1:
-            callback.lazy_call(
-                "set_size", lambda: os.stat(lpath, follow_symlinks=False).st_size
-            )
+            callback.call("set_size", f1.seek(0, 2))
+            f1.seek(0)
+
             self.mkdirs(os.path.dirname(rpath), exist_ok=True)
             with self.open(rpath, "wb", **kwargs) as f2:
                 data = True
                 while data:
                     data = f1.read(self.blocksize)
-                    f2.write(data)
-                    callback.lazy_call("relative_update", len, data)
+                    segment_len = f2.write(data)
+                    callback.call("relative_update", segment_len)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """Copy file(s) from local.

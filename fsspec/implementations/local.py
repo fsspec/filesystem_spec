@@ -7,7 +7,6 @@ import shutil
 import tempfile
 
 from fsspec import AbstractFileSystem
-from fsspec.callbacks import as_callback
 from fsspec.compression import compr
 from fsspec.core import get_compression
 from fsspec.utils import stringify_path
@@ -111,12 +110,10 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError
 
-    def get_file(self, path1, path2, **kwargs):
-        callback = as_callback(kwargs.pop("callback", None))  # noqa: F841
+    def get_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
 
-    def put_file(self, path1, path2, **kwargs):
-        callback = as_callback(kwargs.pop("callback", None))  # noqa: F841
+    def put_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
 
     def mv_file(self, path1, path2, **kwargs):
