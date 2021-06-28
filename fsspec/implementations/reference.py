@@ -284,7 +284,6 @@ class ReferenceFileSystem(AsyncFileSystem):
             else:
                 u = v[0]
                 if "{{" in u:
-                    u = jinja2.Template(u).render(**self.templates)
                     if self.simple_templates:
                         u = (
                             u.replace("{{", "{")
