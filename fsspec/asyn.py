@@ -226,6 +226,8 @@ async_methods = [
     "_find",
     "_du",
     "_size",
+    "_mkdir",
+    "_makedirs",
 ]
 
 
@@ -623,6 +625,12 @@ class AsyncFileSystem(AbstractFileSystem):
         if not out:
             raise FileNotFoundError(path)
         return list(sorted(out))
+
+    async def _mkdir(self, path, create_parents=True, **kwargs):
+        pass  # not necessary to implement, may not have directories
+
+    async def _makedirs(self, path, exist_ok=False):
+        pass  # not necessary to implement, may not have directories
 
 
 def mirror_sync_methods(obj):
