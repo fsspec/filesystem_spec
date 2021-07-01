@@ -399,6 +399,11 @@ def test_file_ops(tmpdir):
     fs.rm(tmpdir + "/afile3", recursive=True)
     assert not fs.exists(tmpdir + "/afile3")
 
+    files = [tmpdir + "/afile4", tmpdir + "/afile5"]
+    [fs.touch(f) for f in files]
+    fs.rm(files)
+    assert all(not fs.exists(f) for f in files)
+
     fs.rm(tmpdir, recursive=True)
     assert not fs.exists(tmpdir)
 
@@ -569,6 +574,14 @@ def test_strip_protocol_expanduser():
     assert "file://" not in stripped
     assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
     assert not LocalFileSystem._strip_protocol("./").endswith("/")
+
+
+def test_mkdir_twice_faile(tmpdir):
+    fn = os.path.join(tmpdir, "test")
+    fs = fsspec.filesystem("file")
+    fs.mkdir(fn)
+    with pytest.raises(FileExistsError):
+        fs.mkdir(fn)
 
 
 def test_iterable(tmpdir):

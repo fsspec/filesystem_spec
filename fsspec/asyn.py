@@ -230,6 +230,8 @@ async_methods = [
     "_find",
     "_du",
     "_size",
+    "_mkdir",
+    "_makedirs",
 ]
 
 
@@ -373,15 +375,20 @@ class AsyncFileSystem(AbstractFileSystem):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
-        rpaths = other_paths(lpaths, rpath)
+        dirs = [l for l in lpaths if os.path.isdir(l)]
+        rdirs = other_paths(dirs, rpath)
+        await asyncio.gather(*[self._makedirs(d, exist_ok=True) for d in rdirs])
+        files = sorted(set(lpaths) - set(dirs))
+        rpaths = other_paths(files, rpath)
         callback = as_callback(kwargs.pop("callback", None))
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []
-        callback.lazy_call("set_size", len, lpaths)
-        for lpath, rpath in zip(lpaths, rpaths):
+        callback.call("set_size", len(files))
+        for lpath, rpath in zip(files, rpaths):
             branch(callback, lpath, rpath, kwargs)
             coros.append(self._put_file(lpath, rpath, **kwargs))
+
         return await _run_coros_in_chunks(
             coros, batch_size=batch_size, callback=callback
         )
@@ -591,7 +598,7 @@ class AsyncFileSystem(AbstractFileSystem):
             if withdirs:
                 files.update(dirs)
             out.update({info["name"]: info for name, info in files.items()})
-        if (await self._isfile(path)) and path not in out:
+        if not out and (await self._isfile(path)):
             # walk works on directories, but find should also return [path]
             # when path happens to be a file
             out[path] = {}
@@ -629,6 +636,12 @@ class AsyncFileSystem(AbstractFileSystem):
         if not out:
             raise FileNotFoundError(path)
         return list(sorted(out))
+
+    async def _mkdir(self, path, create_parents=True, **kwargs):
+        pass  # not necessary to implement, may not have directories
+
+    async def _makedirs(self, path, exist_ok=False):
+        pass  # not necessary to implement, may not have directories
 
 
 def mirror_sync_methods(obj):

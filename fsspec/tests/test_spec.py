@@ -235,6 +235,14 @@ def test_find_details():
         assert details[filename] == test_fs.info(filename)
 
 
+def test_find_file():
+    test_fs = DummyTestFS()
+
+    filename = "misc/foo.txt"
+    assert test_fs.find(filename) == [filename]
+    assert test_fs.find(filename, detail=True) == {filename: {}}
+
+
 def test_cache():
     fs = DummyTestFS()
     fs2 = DummyTestFS()

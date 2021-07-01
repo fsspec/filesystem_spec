@@ -4,10 +4,22 @@ Changelog
 Dev
 ---
 
+2021.06.1
+---------
+
 Enhancements
 
 - Introduce ``fsspec.asyn.fsspec_loop`` to temporarily switch to the fsspec loop. (#671)
+- support list for local rm (#678)
 
+Fixes
+
+- error when local mkdir twice (#679)
+- fix local info regression for pathlike (#667)
+
+Other
+
+- link to wandbfs (#664)
 
 2021.06.0
 ---------

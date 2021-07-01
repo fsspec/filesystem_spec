@@ -44,11 +44,15 @@ __all__ = [
 
 if entry_points is not None:
     try:
-        entry_points = entry_points()
+        eps = entry_points()
     except TypeError:
         pass  # importlib-metadata < 0.8
     else:
-        for spec in entry_points.get("fsspec.specs", []):
+        if hasattr(eps, "select"):  # Python 3.10+ / importlib_metadata >= 3.9.0
+            specs = eps.select(group="fsspec.specs")
+        else:
+            specs = eps.get("fsspec.specs", [])
+        for spec in specs:
             err_msg = f"Unable to load filesystem from {spec}"
             register_implementation(
                 spec.name, spec.value.replace(":", "."), errtxt=err_msg
