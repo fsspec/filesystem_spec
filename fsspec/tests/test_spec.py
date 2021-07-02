@@ -445,17 +445,16 @@ class DummyOpenFS(DummyTestFS):
         return stream
 
 
-def get_basic_callback():
-    events = []
+class BasicCallback(fsspec.Callback):
+    def __init__(self, **kwargs):
+        self.events = []
+        super(BasicCallback, self).__init__(**kwargs)
 
-    def make_event(event_type, *event_args):
-        events.append((event_type, *event_args))
+    def set_size(self, size):
+        self.events.append(("set_size", size))
 
-    callback = fsspec.callback(
-        set_size=partial(make_event, "set_size"),
-        relative_update=partial(make_event, "relative_update"),
-    )
-    return events, callback
+    def relative_update(self, inc=1):
+        self.events.append(("relative_update", inc))
 
 
 def imitate_transfer(size, chunk, *, file=True):
@@ -486,7 +485,7 @@ def get_files(tmpdir, amount=10):
 
 def test_dummy_callbacks_file(tmpdir):
     fs = DummyOpenFS()
-    events, callback = get_basic_callback()
+    events, callback = BasicCallback()
 
     file = tmpdir / "file.txt"
     source = tmpdir / "tmp.txt"
@@ -508,16 +507,15 @@ def test_dummy_callbacks_file(tmpdir):
 
 def test_dummy_callbacks_files(tmpdir):
     fs = DummyOpenFS()
-    events, callback = get_basic_callback()
+    callback = BasicCallback()
     src, dest, base = get_files(tmpdir)
 
     fs.put(src, base, callback=callback)
-    assert events == imitate_transfer(10, 10, file=False)
-    events.clear()
+    assert callback.events == imitate_transfer(10, 10, file=False)
+    callback.events.clear()
 
     fs.get(base, dest, callback=callback)
-    assert events == imitate_transfer(10, 10, file=False)
-    events.clear()
+    assert callback.events == imitate_transfer(10, 10, file=False)
 
 
 def test_dummy_callbacks_files_branched(tmpdir):
@@ -530,7 +528,7 @@ def test_dummy_callbacks_files_branched(tmpdir):
         events[origin].append((event_type, *event_args))
 
     def make_callback(*args, **kwargs):
-        return fsspec.callback(
+        return fsspec.Callback(
             set_size=partial(make_event, args, "set_size"),
             relative_update=partial(make_event, args, "relative_update"),
             **kwargs,

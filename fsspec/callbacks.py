@@ -7,15 +7,15 @@ class Callback:
         properties=None,
         size=None,
         value=0,
-        stringify_path=False,
-        posixify_path=False,
+        stringify_paths=False,
+        posixify_paths=False,
         **hooks,
     ):
         self.properties = properties
         self.size = size
         self.value = value
-        self.stringify_path = stringify_path
-        self.posixify_path = posixify_path
+        self.stringify_paths = stringify_paths
+        self.posixify_paths = posixify_paths
         self.hooks = hooks
 
     def set_size(self, size):

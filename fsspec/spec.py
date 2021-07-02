@@ -761,7 +761,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
 
-        callback.set_size(len, lpaths)
+        callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
             callback.branch(rpath, lpath, kwargs)
             self.get_file(rpath, lpath, **kwargs)
