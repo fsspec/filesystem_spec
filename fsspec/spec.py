@@ -735,13 +735,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback = Callback.as_callback(kwargs.pop("callback", None))
         with self.open(rpath, "rb", **kwargs) as f1:
-            callback.call("set_size", getattr(f1, "size", None))
+            callback.set_size(getattr(f1, "size", None))
             with open(lpath, "wb") as f2:
                 data = True
                 while data:
                     data = f1.read(self.blocksize)
                     segment_len = f2.write(data)
-                    callback.call("relative_update", segment_len)
+                    callback.relative_update(segment_len)
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         """Copy file(s) to local.
@@ -761,7 +761,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
 
-        callback.lazy_call("set_size", len, lpaths)
+        callback.set_size(len, lpaths)
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
             callback.branch(rpath, lpath, kwargs)
             self.get_file(rpath, lpath, **kwargs)
@@ -774,7 +774,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback = Callback.as_callback(kwargs.pop("callback", None))
         with open(lpath, "rb") as f1:
-            callback.call("set_size", f1.seek(0, 2))
+            callback.set_size(f1.seek(0, 2))
             f1.seek(0)
 
             self.mkdirs(os.path.dirname(rpath), exist_ok=True)
@@ -783,7 +783,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 while data:
                     data = f1.read(self.blocksize)
                     segment_len = f2.write(data)
-                    callback.call("relative_update", segment_len)
+                    callback.relative_update(segment_len)
 
     def put(self, lpath, rpath, recursive=False, **kwargs):
         """Copy file(s) from local.
@@ -808,7 +808,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
 
-        callback.lazy_call("set_size", len, rpaths)
+        callback.set_size(len(rpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
             callback.branch(lpath, rpath, kwargs)
             self.put_file(lpath, rpath, **kwargs)
