@@ -9,7 +9,7 @@ from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
 
-from .callbacks import as_callback, branch
+from .callbacks import Callback
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
@@ -733,7 +733,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             os.makedirs(lpath, exist_ok=True)
             return None
 
-        callback = as_callback(kwargs.pop("callback", None))
+        callback = Callback.as_callback(kwargs.pop("callback", None))
         with self.open(rpath, "rb", **kwargs) as f1:
             callback.call("set_size", getattr(f1, "size", None))
             with open(lpath, "wb") as f2:
@@ -755,7 +755,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import make_path_posix
 
-        callback = as_callback(kwargs.pop("callback", None))
+        callback = Callback.as_callback(kwargs.pop("callback", None))
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
@@ -763,7 +763,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback.lazy_call("set_size", len, lpaths)
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            branch(callback, rpath, lpath, kwargs)
+            callback.branch(rpath, lpath, kwargs)
             self.get_file(rpath, lpath, **kwargs)
 
     def put_file(self, lpath, rpath, **kwargs):
@@ -772,7 +772,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             self.makedirs(rpath, exist_ok=True)
             return None
 
-        callback = as_callback(kwargs.pop("callback", None))
+        callback = Callback.as_callback(kwargs.pop("callback", None))
         with open(lpath, "rb") as f1:
             callback.call("set_size", f1.seek(0, 2))
             f1.seek(0)
@@ -796,7 +796,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import LocalFileSystem, make_path_posix
 
-        callback = as_callback(kwargs.pop("callback", None))
+        callback = Callback.as_callback(kwargs.pop("callback", None))
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
@@ -810,7 +810,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         callback.lazy_call("set_size", len, rpaths)
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            branch(callback, lpath, rpath, kwargs)
+            callback.branch(lpath, rpath, kwargs)
             self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):

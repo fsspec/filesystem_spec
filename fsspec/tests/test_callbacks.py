@@ -1,31 +1,33 @@
-from fsspec import callbacks
+from fsspec.callbacks import Callback
 
 
 def test_callbacks():
-    empty_callback = callbacks.callback()
-    assert empty_callback.call("something", "somearg") is None
+    empty_callback = Callback()
+    assert empty_callback.call("something", somearg=None) is None
 
-    simple_callback = callbacks.callback(something=lambda arg: arg + 2)
-    assert simple_callback.call("something", 2) == 4
+    simple_callback = Callback(something=lambda *_, arg=None: arg + 2)
+    assert simple_callback.call("something", arg=2) == 4
 
-    multi_arg_callback = callbacks.callback(something=lambda arg1, arg2: arg1 + arg2)
-    assert multi_arg_callback.call("something", 2, 2) == 4
+    multi_arg_callback = Callback(
+        something=lambda *_, arg1=None, arg2=None: arg1 + arg2
+    )
+    assert multi_arg_callback.call("something", arg1=2, arg2=2) == 4
 
 
 def test_callbacks_as_callback():
-    empty_callback = callbacks.as_callback(None)
-    assert empty_callback.call("something", "somearg") is None
-    assert callbacks.as_callback(None) is callbacks.as_callback(None)
+    empty_callback = Callback.as_callback(None)
+    assert empty_callback.call("something", arg="somearg") is None
+    assert Callback.as_callback(None) is Callback.as_callback(None)
 
-    real_callback = callbacks.as_callback(
-        callbacks.callback(something=lambda arg: arg + 2)
+    real_callback = Callback.as_callback(
+        Callback(something=lambda *_, arg=None: arg + 2)
     )
-    assert real_callback.call("something", 2) == 4
+    assert real_callback.call("something", arg=2) == 4
 
 
 def test_callbacks_lazy_call():
-    empty_callback = callbacks.as_callback(None)
-    simple_callback = callbacks.callback(something=lambda arg: arg + 2)
+    empty_callback = Callback.as_callback(None)
+    simple_callback = Callback(something=lambda *_, arg=None: arg + 2)
 
     total_called = 0
 
@@ -44,9 +46,9 @@ def test_callbacks_lazy_call():
 
 def test_callbacks_wrap():
     events = []
-    callback = callbacks.callback(relative_update=events.append)
+    callback = Callback(relative_update=lambda _1, _2: events.append(_2))
     for _ in callback.wrap(range(10)):
         ...
 
     assert len(events) == 10
-    assert sum(events) == 10
+    assert sum(events) == sum(range(1, 11))

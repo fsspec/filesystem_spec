@@ -8,7 +8,7 @@ import time
 from shutil import move, rmtree
 
 from fsspec import AbstractFileSystem, filesystem
-from fsspec.callbacks import as_callback
+from fsspec.callbacks import NoOpCallback
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
 from fsspec.spec import AbstractBufferedFile
@@ -543,8 +543,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         logger.debug("Copying %s to local cache" % path)
         return fn
 
-    def cat(self, path, recursive=False, on_error="raise", **kwargs):
-        callback = as_callback(kwargs.pop("callback", None))
+    def cat(
+        self, path, recursive=False, on_error="raise", callback=NoOpCallback, **kwargs
+    ):
         paths = self.expand_path(
             path, recursive=recursive, maxdepth=kwargs.get("maxdepth", None)
         )
@@ -565,10 +566,10 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             self.save_cache()
 
         out = {}
-        callback.lazy_call("set_size", len, paths)
+        callback.set_size(len(paths))
         for path, fn in zip(paths, fns):
             out[path] = open(fn, "rb").read()
-            callback.call("relative_update", 1)
+            callback.relative_update(1)
         if isinstance(path, str) and len(paths) == 1 and recursive is False:
             out = out[paths[0]]
         return out
