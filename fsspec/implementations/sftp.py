@@ -119,11 +119,11 @@ class SFTPFileSystem(AbstractFileSystem):
             paths = [stat["name"] for stat in stats]
             return sorted(paths)
 
-    def put(self, lpath, rpath):
+    def put(self, lpath, rpath, callback=None, **kwargs):
         logger.debug("Put file %s into %s" % (lpath, rpath))
         self.ftp.put(lpath, rpath)
 
-    def get(self, rpath, lpath):
+    def get(self, rpath, lpath, callback=None, **kwargs):
         logger.debug("Get file %s into %s" % (rpath, lpath))
         self.ftp.get(rpath, lpath)
 

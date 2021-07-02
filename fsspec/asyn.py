@@ -9,6 +9,7 @@ import threading
 from contextlib import contextmanager
 from glob import has_magic
 
+from .callbacks import as_callback, branch
 from .exceptions import FSTimeoutError
 from .spec import AbstractFileSystem
 from .utils import PY36, is_exception, other_paths
@@ -184,7 +185,7 @@ def _get_batch_size():
         return soft_limit // 8
 
 
-async def _throttled_gather(coros, batch_size=None, **gather_kwargs):
+async def _run_coros_in_chunks(coros, batch_size=None, callback=None, timeout=None):
     """Run the given coroutines in smaller chunks to
     not crossing the file descriptor limit.
 
@@ -192,18 +193,21 @@ async def _throttled_gather(coros, batch_size=None, **gather_kwargs):
     it is none, it will be inferred from the process resources (soft limit divided
     by 8) and fallback to 128 if the system doesn't support it."""
 
+    callback = as_callback(callback)
     if batch_size is None:
         batch_size = _get_batch_size()
 
     if batch_size == -1:
-        return await asyncio.gather(*coros, **gather_kwargs)
+        batch_size = len(coros)
 
     assert batch_size > 0
 
     results = []
     for start in range(0, len(coros), batch_size):
         chunk = coros[start : start + batch_size]
-        results.extend(await asyncio.gather(*chunk, **gather_kwargs))
+        for coro in asyncio.as_completed(chunk, timeout=timeout):
+            results.append(await coro)
+            callback.call("relative_update", 1)
     return results
 
 
@@ -376,13 +380,17 @@ class AsyncFileSystem(AbstractFileSystem):
         await asyncio.gather(*[self._makedirs(d, exist_ok=True) for d in rdirs])
         files = sorted(set(lpaths) - set(dirs))
         rpaths = other_paths(files, rpath)
+        callback = as_callback(kwargs.pop("callback", None))
         batch_size = kwargs.pop("batch_size", self.batch_size)
-        return await _throttled_gather(
-            [
-                self._put_file(lpath, rpath, **kwargs)
-                for lpath, rpath in zip(files, rpaths)
-            ],
-            batch_size=batch_size,
+
+        coros = []
+        callback.call("set_size", len(files))
+        for lpath, rpath in zip(files, rpaths):
+            branch(callback, lpath, rpath, kwargs)
+            coros.append(self._put_file(lpath, rpath, **kwargs))
+
+        return await _run_coros_in_chunks(
+            coros, batch_size=batch_size, callback=callback
         )
 
     async def _get_file(self, rpath, lpath, **kwargs):
@@ -410,13 +418,16 @@ class AsyncFileSystem(AbstractFileSystem):
         rpaths = await self._expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
+        callback = as_callback(kwargs.pop("callback", None))
         batch_size = kwargs.pop("batch_size", self.batch_size)
-        return await _throttled_gather(
-            [
-                self._get_file(rpath, lpath, **kwargs)
-                for lpath, rpath in zip(lpaths, rpaths)
-            ],
-            batch_size=batch_size,
+
+        coros = []
+        callback.lazy_call("set_size", len, lpaths)
+        for lpath, rpath in zip(lpaths, rpaths):
+            branch(callback, rpath, lpath, kwargs)
+            coros.append(self._get_file(rpath, lpath, **kwargs))
+        return await _run_coros_in_chunks(
+            coros, batch_size=batch_size, callback=callback
         )
 
     async def _isfile(self, path):

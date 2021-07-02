@@ -81,7 +81,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 )
                 self.dir_cache[f["name"]] = f
 
-    def cat(self, path):
+    def cat(self, path, callback=None, **kwargs):
         return self.zip.read(path)
 
     def _open(

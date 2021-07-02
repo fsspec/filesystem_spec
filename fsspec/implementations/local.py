@@ -112,10 +112,10 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError
 
-    def get_file(self, path1, path2, **kwargs):
+    def get_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
 
-    def put_file(self, path1, path2, **kwargs):
+    def put_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
 
     def mv_file(self, path1, path2, **kwargs):

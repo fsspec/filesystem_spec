@@ -1,5 +1,8 @@
 import json
+import os
 import pickle
+from collections import defaultdict
+from functools import partial
 
 import numpy as np
 import pytest
@@ -431,3 +434,133 @@ def test_readinto_with_multibyte(ftp_writable, tmpdir, dt):
         fp.readinto(arr2)
 
     assert np.array_equal(arr, arr2)
+
+
+class DummyOpenFS(DummyTestFS):
+    blocksize = 10
+
+    def _open(self, path, mode="rb", **kwargs):
+        stream = open(path, mode)
+        stream.size = os.stat(path).st_size
+        return stream
+
+
+def get_basic_callback():
+    events = []
+
+    def make_event(event_type, *event_args):
+        events.append((event_type, *event_args))
+
+    callback = fsspec.callback(
+        set_size=partial(make_event, "set_size"),
+        relative_update=partial(make_event, "relative_update"),
+    )
+    return events, callback
+
+
+def imitate_transfer(size, chunk, *, file=True):
+    events = [("set_size", size)]
+    events.extend(("relative_update", size // chunk) for _ in range(chunk))
+    if file:
+        # The reason that there is a relative_update(0) at the
+        # end is that, we don't have an early exit on the
+        # impleementations of get_file/put_file so it needs to
+        # go through the callback to get catch by the while's
+        # condition and then it will stop the transfer.
+        events.append(("relative_update", 0))
+
+    return events
+
+
+def get_files(tmpdir, amount=10):
+    src, dest, base = [], [], []
+    for index in range(amount):
+        src_path = tmpdir / f"src_{index}.txt"
+        src_path.write_text("x" * 50, "utf-8")
+
+        src.append(str(src_path))
+        dest.append(str(tmpdir / f"dst_{index}.txt"))
+        base.append(str(tmpdir / f"file_{index}.txt"))
+    return src, dest, base
+
+
+def test_dummy_callbacks_file(tmpdir):
+    fs = DummyOpenFS()
+    events, callback = get_basic_callback()
+
+    file = tmpdir / "file.txt"
+    source = tmpdir / "tmp.txt"
+    destination = tmpdir / "tmp2.txt"
+
+    size = 100
+    source.write_text("x" * 100, "utf-8")
+
+    fs.put_file(source, file, callback=callback)
+    assert events == imitate_transfer(size, 10)
+    events.clear()
+
+    fs.get_file(file, destination, callback=callback)
+    assert events == imitate_transfer(size, 10)
+    events.clear()
+
+    assert destination.read_text("utf-8") == "x" * 100
+
+
+def test_dummy_callbacks_files(tmpdir):
+    fs = DummyOpenFS()
+    events, callback = get_basic_callback()
+    src, dest, base = get_files(tmpdir)
+
+    fs.put(src, base, callback=callback)
+    assert events == imitate_transfer(10, 10, file=False)
+    events.clear()
+
+    fs.get(base, dest, callback=callback)
+    assert events == imitate_transfer(10, 10, file=False)
+    events.clear()
+
+
+def test_dummy_callbacks_files_branched(tmpdir):
+    fs = DummyOpenFS()
+    src, dest, base = get_files(tmpdir)
+
+    events = defaultdict(list)
+
+    def make_event(origin, event_type, *event_args):
+        events[origin].append((event_type, *event_args))
+
+    def make_callback(*args, **kwargs):
+        return fsspec.callback(
+            set_size=partial(make_event, args, "set_size"),
+            relative_update=partial(make_event, args, "relative_update"),
+            **kwargs,
+        )
+
+    callback = make_callback(
+        "top-level",
+        branch=make_callback,
+        properties={"stringify_paths": True, "posixify_paths": True},
+    )
+
+    def check_events(lpaths, rpaths):
+        from fsspec.implementations.local import make_path_posix
+
+        base_keys = zip(make_path_posix(lpaths), make_path_posix(rpaths))
+        assert set(events.keys()) == {("top-level",), *base_keys}
+        assert (
+            events[
+                "top-level",
+            ]
+            == imitate_transfer(10, 10, file=False)
+        )
+
+        for key in base_keys:
+            assert events[key] == imitate_transfer(50, 5)
+
+    fs.put(src, base, callback=callback)
+    check_events(src, base)
+    events.clear()
+
+    fs.get(base, dest, callback=callback)
+    check_events(base, dest)
+    events.clear()
