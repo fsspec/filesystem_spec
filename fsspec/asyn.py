@@ -14,6 +14,11 @@ from .exceptions import FSTimeoutError
 from .spec import AbstractFileSystem
 from .utils import PY36, is_exception, other_paths
 
+try:
+    import distributed
+except ImportError:
+    distributed = False
+
 private = re.compile("_[^_]")
 
 
@@ -53,6 +58,12 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     coro = func(*args, **kwargs)
     result = [None]
     event = threading.Event()
+    if distributed:
+        try:
+            w = distributed.get_worker()
+            w._throttled_gc.collect()
+        except ValueError:
+            pass
     asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
     while True:
         # this loops allows thread to get interrupted
