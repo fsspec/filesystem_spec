@@ -51,7 +51,8 @@ class LocalFileSystem(AbstractFileSystem):
     def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
         if detail:
-            return [self.info(f) for f in os.scandir(path)]
+            with os.scandir(path) as it:
+                return [self.info(f) for f in it]
         else:
             return [posixpath.join(path, f) for f in os.listdir(path)]
 
