@@ -76,7 +76,7 @@ try:
     register_compression("gzip", igzip.IGzipFile, "gz")
 except ImportError:
     from gzip import GzipFile
-    
+
     register_compression(
         "gzip", lambda f, **kwargs: GzipFile(fileobj=f, **kwargs), "gz"
     )
