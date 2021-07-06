@@ -73,6 +73,11 @@ register_compression("bz2", BZ2File, "bz2")
 try:
     from isal import igzip
 
+    # igzip is meant to be used as a faster drop in replacement to gzip
+    # so its api and functions are the same as the stdlib’s module. Except
+    # where ISA-L does not support the same calls as zlib
+    # (See https://python-isal.readthedocs.io/).
+
     register_compression("gzip", igzip.IGzipFile, "gz")
 except ImportError:
     from gzip import GzipFile
