@@ -9,7 +9,7 @@ from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
 
-from .callbacks import Callback
+from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
@@ -727,13 +727,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(self, rpath, lpath, **kwargs):
+    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy single remote file to local"""
         if self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
             return None
 
-        callback = Callback.as_callback(kwargs.pop("callback", None))
         with self.open(rpath, "rb", **kwargs) as f1:
             callback.set_size(getattr(f1, "size", None))
             with open(lpath, "wb") as f2:
@@ -743,7 +742,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     segment_len = f2.write(data)
                     callback.relative_update(segment_len)
 
-    def get(self, rpath, lpath, recursive=False, **kwargs):
+    def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy file(s) to local.
 
         Copies a specific file or tree of files (if recursive=True). If lpath
@@ -755,7 +754,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import make_path_posix
 
-        callback = Callback.as_callback(kwargs.pop("callback", None))
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
@@ -766,13 +764,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
             callback.branch(rpath, lpath, kwargs)
             self.get_file(rpath, lpath, **kwargs)
 
-    def put_file(self, lpath, rpath, **kwargs):
+    def put_file(self, lpath, rpath, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy single file to remote"""
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
             return None
 
-        callback = Callback.as_callback(kwargs.pop("callback", None))
         with open(lpath, "rb") as f1:
             callback.set_size(f1.seek(0, 2))
             f1.seek(0)
@@ -785,7 +782,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
                     segment_len = f2.write(data)
                     callback.relative_update(segment_len)
 
-    def put(self, lpath, rpath, recursive=False, **kwargs):
+    def put(self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy file(s) from local.
 
         Copies a specific file or tree of files (if recursive=True). If rpath
@@ -796,7 +793,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import LocalFileSystem, make_path_posix
 
-        callback = Callback.as_callback(kwargs.pop("callback", None))
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)

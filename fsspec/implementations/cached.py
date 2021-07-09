@@ -8,7 +8,7 @@ import time
 from shutil import move, rmtree
 
 from fsspec import AbstractFileSystem, filesystem
-from fsspec.callbacks import NoOpCallback
+from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
 from fsspec.spec import AbstractBufferedFile
@@ -544,7 +544,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         return fn
 
     def cat(
-        self, path, recursive=False, on_error="raise", callback=NoOpCallback, **kwargs
+        self,
+        path,
+        recursive=False,
+        on_error="raise",
+        callback=_DEFAULT_CALLBACK,
+        **kwargs,
     ):
         paths = self.expand_path(
             path, recursive=recursive, maxdepth=kwargs.get("maxdepth", None)

@@ -1,22 +1,9 @@
-from .utils import stringify_path
-
-
 class Callback:
-    def __init__(
-        self,
-        properties=None,
-        size=None,
-        value=0,
-        stringify_paths=False,
-        posixify_paths=False,
-        **hooks,
-    ):
-        self.properties = properties
+    def __init__(self, size=None, value=0, hooks=None, **kwargs):
         self.size = size
         self.value = value
-        self.stringify_paths = stringify_paths
-        self.posixify_paths = posixify_paths
-        self.hooks = hooks
+        self.hooks = hooks or {}
+        self.kw = kwargs
 
     def set_size(self, size):
         self.size = size
@@ -31,12 +18,16 @@ class Callback:
         self.call()
 
     def call(self, hook_name=None, **kwargs):
+        if not self.hooks:
+            return
+        kw = self.kw.copy()
+        kw.update(kwargs)
         if hook_name:
             if hook_name not in self.hooks:
                 return
-            return self.hooks[hook_name](self.size, self.value, **kwargs)
+            return self.hooks[hook_name](self.size, self.value, **kw)
         for hook in self.hooks.values() or []:
-            hook(self.size, self.value, **kwargs)
+            hook(self.size, self.value, **kw)
 
     def wrap(self, iterable):
         """Wrap an iterable to send ``relative_update`` hook
@@ -53,17 +44,13 @@ class Callback:
 
     def branch(self, path_1, path_2, kwargs):
         # TODO: mutating kwargs is an odd thing to do
-        from .implementations.local import make_path_posix
-
-        if self.stringify_paths:
-            path_1 = stringify_path(path_1)
-            path_2 = stringify_path(path_2)
-
-        if self.posixify_paths:
-            path_1 = make_path_posix(path_1)
-            path_2 = make_path_posix(path_2)
-
         return None
+
+    def no_op(self, *_, **__):
+        pass
+
+    def __getattr__(self, item):
+        return self.no_op
 
     @classmethod
     def as_callback(cls, maybe_callback=None):
@@ -78,7 +65,7 @@ class NoOpCallback(Callback):
 
 
 class DotPrinterCallback(Callback):
-    # Almost identical to Callback with a hookthat prints a char; here we
+    # Almost identical to Callback with a hook that prints a char; here we
     # demonstrate how the outer layer may print "#" and the inner layer "."
 
     def __init__(self, chr_to_print="#", **kwargs):
