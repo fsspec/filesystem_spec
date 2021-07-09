@@ -70,7 +70,7 @@ def unzip(infile, mode="rb", filename=None, **kwargs):
 register_compression("zip", unzip, "zip")
 register_compression("bz2", BZ2File, "bz2")
 
-try:
+try:  # pragma: no cover
     from isal import igzip
 
     # igzip is meant to be used as a faster drop in replacement to gzip
