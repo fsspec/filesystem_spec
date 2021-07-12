@@ -44,9 +44,8 @@ Base Classes
    fsspec.registry.ReadOnlyRegistry
    fsspec.registry.register_implementation
    fsspec.callbacks.Callback
-   fsspec.callbacks.callback
-   fsspec.callbacks.as_callback
-   fsspec.callbacks.branch
+   fsspec.callbacks.NoOpCallback
+   fsspec.callbacks.DotPrinterCallback
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
    :members:
@@ -84,11 +83,11 @@ Base Classes
 .. autoclass:: fsspec.callbacks.Callback
    :members:
 
-.. autofunction:: fsspec.callbacks.callback
+.. autoclass:: fsspec.callbacks.NoOpCallback
+   :members:
 
-.. autofunction:: fsspec.callbacks.as_callback
-
-.. autofunction:: fsspec.callbacks.branch
+.. autoclass:: fsspec.callbacks.DotPrinterCallback
+   :members:
 
 .. _implementations:
 

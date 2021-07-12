@@ -4,6 +4,8 @@ Changelog
 Dev
 ---
 
+- callbacks (#697)
+
 2021.06.1
 ---------
 

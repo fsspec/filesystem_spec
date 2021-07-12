@@ -386,3 +386,14 @@ blocking functions are automatically generated, which will operate via an
 event loop in another thread, by default.
 
 See :doc:`async` for modes of operation and how to implement such file systems.
+
+
+Callbacks
+---------
+
+Some methods support a ``callback=`` argument, which is the entry point to
+providing feedback on transfers to the user or any other logging service. This
+feature is new and experimental and supported by varying amounts in the
+backends.
+
+See the docstrings in the callbacks module for further details.
