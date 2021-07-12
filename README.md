@@ -49,7 +49,7 @@ Tests can be run directly in the activated dev environment via `pytest fsspec`.
 
 The full fsspec test suite can be run via `tox`, which will setup and execute
 tests against multiple dependency versions in isolated environment. Run `tox
--av` to list available test environments, select environments via `tox -e <env>`.
+-av` to list available test environments, select environments via `tox -e {env}`.
 
 The full fsspec suite requires a system-level docker, docker-compose, and fuse
 installation. See `ci/install.sh` for a detailed installation example.
@@ -58,7 +58,7 @@ installation. See `ci/install.sh` for a detailed installation example.
 
 fsspec uses [Black](https://black.readthedocs.io/en/stable) to ensure
 a consistent code format throughout the project. ``black`` is automatically
-installed in the tox dev env, activated via `conda activate .tox/dev`.
+installed in the tox dev env, activated via `conda activate .tox/{env}`.
 
 Then, run `black fsspec` from the root of the filesystem_spec repository to
 auto-format your code. Additionally, many editors have plugins that will apply
@@ -66,7 +66,7 @@ auto-format your code. Additionally, many editors have plugins that will apply
 
 Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com) to
 automatically run `black` when you make a git commit. ``black`` is automatically
-installed in the tox dev env, activated via `conda activate .tox/dev`.
+installed in the tox dev env, activated via `conda activate .tox/{env}`.
 
 Then, run `pre-commit install --install-hooks` from the root of the
 filesystem_spec repository to setup pre-commit hooks. `black` will now be run
