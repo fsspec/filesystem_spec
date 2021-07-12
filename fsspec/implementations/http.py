@@ -282,7 +282,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
-        size = size or self.size(path)
+        size = size or self.info(path, **kwargs)["size"]
         session = sync(self.loop, self.set_session)
         if block_size and size:
             return HTTPFile(
@@ -317,16 +317,19 @@ class HTTPFileSystem(AsyncFileSystem):
         corresponding file will not work).
         """
         size = False
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
         for policy in ["head", "get"]:
             try:
                 session = await self.set_session()
-                size = await _file_size(
-                    url, size_policy=policy, session=session, **self.kwargs
-                )
+                size = await _file_size(url, size_policy=policy, session=session, **kw)
                 if size:
                     break
-            except Exception:
-                pass
+            except Exception as e:
+                import pdb
+
+                pdb.set_trace()
+                logger.debug((str(e)))
         else:
             # get failed, so conclude URL does not exist
             if size is False:
