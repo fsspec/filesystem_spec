@@ -130,3 +130,16 @@ def test_transaction_with_cache(ftp_writable):
 
     assert "dir" not in fs.ls("/tmp", detail=False)
     assert not fs.exists("/tmp/dir")
+
+
+def test_cat_get(ftp_writable, tmpdir):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw, block_size=500)
+    fs.mkdir("/tmp")
+    data = b"hello" * 500
+    fs.pipe("/tmp/myfile", data)
+    assert fs.cat_file("/tmp/myfile") == data
+
+    fn = os.path.join(tmpdir, "lfile")
+    fs.get_file("/tmp/myfile", fn)
+    assert open(fn, "rb").read() == data
