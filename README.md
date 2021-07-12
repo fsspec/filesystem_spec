@@ -39,9 +39,9 @@ environments. First, install conda with tox and tox-conda in a base environment
 (eg. `conda install -c conda-forge tox tox-conda`). Calls to `tox` can then be
 used to configure a development environment and run tests.
 
-First, setup a development conda environment via `tox -e dev`. This will
-install fspec dependencies, test & dev tools, and install fsspec in develop
-mode. Then, activate the dev environment under `.tox/dev` via `conda activate .tox/dev`.
+First, setup a development conda environment via `tox -e {env}` where `env` is one of `{py36,py37,py38,py39}`.
+This will install fspec dependencies, test & dev tools, and install fsspec in develop
+mode. Then, activate the dev environment under `.tox/{env}` via `conda activate .tox/{env}`.
 
 ### Testing
 
