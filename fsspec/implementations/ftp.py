@@ -1,5 +1,6 @@
 import uuid
 from ftplib import FTP, Error, error_perm
+from typing import Any
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
@@ -179,10 +180,19 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp.delete(path)
         self.invalidate_cache(self._parent(path))
 
-    def mkdir(self, path, **kwargs):
+    def mkdir(self, path: str, create_parents: bool = True, **kwargs: Any) -> None:
         path = self._strip_protocol(path)
+        parent = self._parent(path)
+        if parent != self.root_marker and not self.exists(parent) and create_parents:
+            self.mkdir(parent, create_parents=create_parents)
+
         self.ftp.mkd(path)
         self.invalidate_cache(self._parent(path))
+
+    def makedirs(self, path: str, exist_ok: bool = False) -> None:
+        if self.exists(path) and not exist_ok:
+            raise FileExistsError(f"{path} exists and {exist_ok=}")
+        self.mkdir(path, create_parents=True)
 
     def rmdir(self, path):
         path = self._strip_protocol(path)
