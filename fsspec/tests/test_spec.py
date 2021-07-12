@@ -2,7 +2,6 @@ import json
 import os
 import pickle
 from collections import defaultdict
-from functools import partial
 
 import numpy as np
 import pytest
@@ -445,17 +444,16 @@ class DummyOpenFS(DummyTestFS):
         return stream
 
 
-def get_basic_callback():
-    events = []
+class BasicCallback(fsspec.Callback):
+    def __init__(self, **kwargs):
+        self.events = []
+        super(BasicCallback, self).__init__(**kwargs)
 
-    def make_event(event_type, *event_args):
-        events.append((event_type, *event_args))
+    def set_size(self, size):
+        self.events.append(("set_size", size))
 
-    callback = fsspec.callback(
-        set_size=partial(make_event, "set_size"),
-        relative_update=partial(make_event, "relative_update"),
-    )
-    return events, callback
+    def relative_update(self, inc=1):
+        self.events.append(("relative_update", inc))
 
 
 def imitate_transfer(size, chunk, *, file=True):
@@ -486,7 +484,7 @@ def get_files(tmpdir, amount=10):
 
 def test_dummy_callbacks_file(tmpdir):
     fs = DummyOpenFS()
-    events, callback = get_basic_callback()
+    callback = BasicCallback()
 
     file = tmpdir / "file.txt"
     source = tmpdir / "tmp.txt"
@@ -496,71 +494,77 @@ def test_dummy_callbacks_file(tmpdir):
     source.write_text("x" * 100, "utf-8")
 
     fs.put_file(source, file, callback=callback)
-    assert events == imitate_transfer(size, 10)
-    events.clear()
+    assert callback.events == imitate_transfer(size, 10)
+    callback.events.clear()
 
     fs.get_file(file, destination, callback=callback)
-    assert events == imitate_transfer(size, 10)
-    events.clear()
+    assert callback.events == imitate_transfer(size, 10)
+    callback.events.clear()
 
     assert destination.read_text("utf-8") == "x" * 100
 
 
 def test_dummy_callbacks_files(tmpdir):
     fs = DummyOpenFS()
-    events, callback = get_basic_callback()
+    callback = BasicCallback()
     src, dest, base = get_files(tmpdir)
 
     fs.put(src, base, callback=callback)
-    assert events == imitate_transfer(10, 10, file=False)
-    events.clear()
+    assert callback.events == imitate_transfer(10, 10, file=False)
+    callback.events.clear()
 
     fs.get(base, dest, callback=callback)
-    assert events == imitate_transfer(10, 10, file=False)
-    events.clear()
+    assert callback.events == imitate_transfer(10, 10, file=False)
+
+
+class BranchableCallback(BasicCallback):
+    def __init__(self, source, dest=None, events=None, **kwargs):
+        super(BranchableCallback, self).__init__(**kwargs)
+        if dest:
+            self.key = source, dest
+        else:
+            self.key = (source,)
+        self.events = events or defaultdict(list)
+
+    def branch(self, path_1, path_2, kwargs):
+        from fsspec.implementations.local import make_path_posix
+
+        path_1 = make_path_posix(path_1)
+        path_2 = make_path_posix(path_2)
+        kwargs["callback"] = BranchableCallback(path_1, path_2, events=self.events)
+
+    def set_size(self, size):
+        self.events[self.key].append(("set_size", size))
+
+    def relative_update(self, inc=1):
+        self.events[self.key].append(("relative_update", inc))
 
 
 def test_dummy_callbacks_files_branched(tmpdir):
     fs = DummyOpenFS()
     src, dest, base = get_files(tmpdir)
 
-    events = defaultdict(list)
-
-    def make_event(origin, event_type, *event_args):
-        events[origin].append((event_type, *event_args))
-
-    def make_callback(*args, **kwargs):
-        return fsspec.callback(
-            set_size=partial(make_event, args, "set_size"),
-            relative_update=partial(make_event, args, "relative_update"),
-            **kwargs,
-        )
-
-    callback = make_callback(
-        "top-level",
-        branch=make_callback,
-        properties={"stringify_paths": True, "posixify_paths": True},
-    )
+    callback = BranchableCallback("top-level")
 
     def check_events(lpaths, rpaths):
         from fsspec.implementations.local import make_path_posix
 
         base_keys = zip(make_path_posix(lpaths), make_path_posix(rpaths))
-        assert set(events.keys()) == {("top-level",), *base_keys}
+        assert set(callback.events.keys()) == {("top-level",), *base_keys}
         assert (
-            events[
+            callback.events[
                 "top-level",
             ]
             == imitate_transfer(10, 10, file=False)
         )
 
         for key in base_keys:
-            assert events[key] == imitate_transfer(50, 5)
+            assert callback.events[key] == imitate_transfer(50, 5)
 
     fs.put(src, base, callback=callback)
     check_events(src, base)
-    events.clear()
+    callback.events.clear()
 
     fs.get(base, dest, callback=callback)
     check_events(base, dest)
-    events.clear()
+    callback.events.clear()

@@ -10,7 +10,7 @@ except ImportError:
     import json
 
 from ..asyn import AsyncFileSystem, sync
-from ..callbacks import as_callback
+from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open
 from ..mapping import get_mapper
 from ..spec import AbstractFileSystem
@@ -199,8 +199,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         with open(lpath, "wb") as f:
             f.write(data)
 
-    def get_file(self, rpath, lpath, **kwargs):
-        callback = as_callback(kwargs.pop("callback", None))
+    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
         data = self.cat_file(rpath, **kwargs)
         callback.lazy_call("set_size", len, data)
         with open(lpath, "wb") as f:

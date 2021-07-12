@@ -1,65 +1,95 @@
-from .utils import stringify_path
-
-
 class Callback:
-    __slots__ = ["properties", "hooks"]
+    """
+    Base class and interface for callback mechanism
 
-    def __init__(self, properties=None, **hooks):
-        self.hooks = hooks
-        self.properties = properties or {}
+    This class can be used directly for monitoring file transfers by
+    providing ``callback=Callback(hooks=...)`` (see the ``hooks`` argument,
+    below), or subclassed for more specialised behaviour.
 
-    def call(self, hook, *args, **kwargs):
-        """Make a callback to a hook named ``hook``. If it can't
-        find the hook, then this function will return None. Otherwise
-        the return value of the hook will be used.
+    Parameters
+    ----------
+    size: int (optional)
+        Nominal quantity for the value that corresponds to a complete
+        transfer, e.g., total number of tiles or total number of
+        bytes
+    value: int (0)
+        Starting internal counter value
+    hooks: dict or None
+        A dict of named functions to be called on each update. The signature
+        of these must be f(size, value, **kwargs)
+    """
+
+    def __init__(self, size=None, value=0, hooks=None, **kwargs):
+        self.size = size
+        self.value = value
+        self.hooks = hooks or {}
+        self.kw = kwargs
+
+    def set_size(self, size):
+        """
+        Set the internal maximum size attribute
+
+        Usually called if not initially set at instantiation. Note that this
+        triggers a ``call()``.
 
         Parameters
         ----------
-        hook: str
-            The name of the hook
-        *args: Any
-            All the positional arguments that will be passed
-            to the ``hook``, if found.
-        **kwargs: Any
-            All the keyword arguments that will be passed
-            tot the ``hook``, if found.
+        size: int
         """
-        callback = self.hooks.get(hook)
-        if callback is not None:
-            return callback(*args, **kwargs)
+        self.size = size
+        self.call()
 
-    def lazy_call(self, hook, func, *args, **kwargs):
-        """Make a callback to a hook named ``hook`` with a
-        single value that will be lazily obtained from a call
-        to the ``func`` with ``*args`` and ``**kwargs``.
+    def absolute_update(self, value):
+        """
+        Set the internal value state
 
-        This method should be used for expensive operations,
-        e.g ``len(data)`` since if there is no hook for the
-        given ``hook`` parameter, that operation will be wasted.
-        With this method, it will only evaluate function, if there
-        is a hook attached to the given ``hook`` parameter.
+        Triggers ``call()``
 
         Parameters
         ----------
-        hook: str
-            The name of the hook
-        func: Callable[..., Any]
-            Function that will be called and passed as the argument
-            to the hook, if found.
-        *args: Any
-            All the positional arguments that will be passed
-            to the ``func``, if ``hook`` is found.
-        **kwargs: Any
-            All the keyword arguments that will be passed
-            tot the ``func``, if ``hook` is found.
+        value: int
         """
-        callback = self.hooks.get(hook)
-        if callback is not None:
-            return callback(func(*args, **kwargs))
+        self.value = value
+        self.call()
+
+    def relative_update(self, inc=1):
+        """
+        Delta increment the internal cuonter
+
+        Triggers ``call()``
+
+        Parameters
+        ----------
+        inc: int
+        """
+        self.value += inc
+        self.call()
+
+    def call(self, hook_name=None, **kwargs):
+        """
+        Execute hook(s) with current state
+
+        Each funcion is passed the internal size and current value
+
+        Parameters
+        ----------
+        hook_name: str or None
+            If given, execute on this hook
+        kwargs: passed on to (all) hoook(s)
+        """
+        if not self.hooks:
+            return
+        kw = self.kw.copy()
+        kw.update(kwargs)
+        if hook_name:
+            if hook_name not in self.hooks:
+                return
+            return self.hooks[hook_name](self.size, self.value, **kw)
+        for hook in self.hooks.values() or []:
+            hook(self.size, self.value, **kw)
 
     def wrap(self, iterable):
-        """Wrap an iterable to send ``relative_update`` hook
-        on each iterations.
+        """Wrap an iterable to call ``relative_update`` on each iterations
 
         Parameters
         ----------
@@ -67,133 +97,83 @@ class Callback:
             The iterable that is being wrapped
         """
         for item in iterable:
-            self.call("relative_update", 1)
+            self.relative_update()
             yield item
 
+    def branch(self, path_1, path_2, kwargs):
+        """
+        Set callbacks for child transfers
 
-class NoOpCallback(Callback):
-    def call(self, hook, *args, **kwargs):
+        If this callback is operating at a higher level, e.g., put, which may
+        trigger transfers that can also be monitored. The passed kwargs are
+        to be *mutated* to add ``callback=``, if this class supports branching
+        to children.
+
+        Parameters
+        ----------
+        path_1: str
+            Child's source path
+        path_2: str
+            Child's destination path
+        kwargs: dict
+            arguments passed to child method, e.g., put_file.
+
+        Returns
+        -------
+
+        """
         return None
 
-    def lazy_call(self, hook, *args, **kwargs):
-        return None
+    def no_op(self, *_, **__):
+        pass
 
+    def __getattr__(self, item):
+        """
+        If undefined methods are called on this class, nothing happens
+        """
+        return self.no_op
 
-_DEFAULT_CALLBACK = NoOpCallback()
+    @classmethod
+    def as_callback(cls, maybe_callback=None):
+        """Transform callback=... into Callback instance
 
-
-def callback(
-    *,
-    set_size=None,
-    relative_update=None,
-    absolute_update=None,
-    branch=None,
-    properties=None,
-    **hooks,
-):
-    """Create a new callback for filesystem APIs.
-
-    Parameters
-    ----------
-    set_size: Callable[[Optional[int]], None] (optional)
-        When transferring something quantifiable (e.g bytes in a file, or
-        number of files), this hook will be called with the total number of
-        items. Might set something to None, in that case it should be ignored.
-
-    relative_update: Callable[[int], None] (optional)
-        Update the total transferred items relative to the previous position.
-        If the current cursor is at N, and a relative_update(Q) happens then
-        the current cursor should now point at the N+Q.
-
-    absolute_update: Callable[[int], None] (optional)
-        Update the total transferred items to an absolute position. If
-        the current cursor is at N, and a absolute_update(Q) happens then
-        the current cursor should now point at the Q. If another one happens
-        it will override the current value.
-
-    branch: Callable[[os.PathLike, os.PathLike], Optional[fsspec.callbacks.Callback]] (optional)
-        When some operations need branching (e.g each ``put()``/``get()`
-        operation have their own callbacks, but they will also need to
-        branch out for ``put_file()``/``get_file()`` since those might
-        require additional child callbacks) the branch hook will be called
-        with the paths that are being transffered and it is expected to
-        either return a new fsspec.callbacks.Callback instance or None. If
-        ``stringify_paths`` property is set, the paths will be casted to
-        string, and if ``posixify_paths`` property is set both arguments
-        will be sanitized to the posix convention.
-
-    properties: Dict[str, Any] (optional)
-        A mapping of config option (callback related) to their values.
-
-    hooks: Callable[..., Any]
-        Optional hooks that are not generally available.
-
-    Returns
-    -------
-    fsspec.callback.Callback
-    """  # noqa: E501
-
-    return Callback(
-        properties=properties,
-        set_size=set_size,
-        relative_update=relative_update,
-        absolute_update=absolute_update,
-        branch=branch,
-        **hooks,
-    )
-
-
-def as_callback(maybe_callback):
-    """Return the no-op callback if the maybe_callback parameter is None
-
-    Parameters
-    ----------
-    maybe_callback: fsspec.callback.Callback or None
-
-    Returns
-    -------
-    fsspec.callback.Callback
-    """
-    if maybe_callback is None:
-        return _DEFAULT_CALLBACK
-    else:
+        For the special value of ``None``, return the global instance of
+        ``NoOpCallback``. This is an alternative to including
+        ``callback=_DEFAULT_CALLBACK`` directly in a method signature.
+        """
+        if maybe_callback is None:
+            return _DEFAULT_CALLBACK
         return maybe_callback
 
 
-def branch(callback, path_1, path_2, kwargs=None):
-    """Branch out from an existing callback.
-
-    Parameters
-    ----------
-    callback: fsspec.callback.Callback
-        Parent callback
-    path_1: os.PathLike
-        Left path
-    path_2: os.PathLike
-        Right path
-    kwargs: Dict[str, Any] (optional)
-        Update the ``callback`` key on the given ``kwargs``
-        if there is a brancher attached to the ``callback``.
-
-
-    Returns
-    -------
-    fsspec.callback.Callback or None
+class NoOpCallback(Callback):
     """
-    from .implementations.local import make_path_posix
+    This implementation of Callback does exactly nothing
+    """
 
-    if callback.properties.get("stringify_paths"):
-        path_1 = stringify_path(path_1)
-        path_2 = stringify_path(path_2)
-
-    if callback.properties.get("posixify_paths"):
-        path_1 = make_path_posix(path_1)
-        path_2 = make_path_posix(path_2)
-
-    branched = callback.call("branch", path_1, path_2)
-    if branched is None or branched is _DEFAULT_CALLBACK:
+    def call(self, *args, **kwargs):
         return None
 
-    if kwargs is not None:
-        kwargs["callback"] = branched
-    return branched
+
+class DotPrinterCallback(Callback):
+    """
+    Simple example Callback implementation
+
+    Almost identical to Callback with a hook that prints a char; here we
+    demonstrate how the outer layer may print "#" and the inner layer "."
+    """
+
+    def __init__(self, chr_to_print="#", **kwargs):
+        self.chr = chr_to_print
+        super().__init__(**kwargs)
+
+    def branch(self, path_1, path_2, kwargs):
+        """Mutate kwargs to add new instance with different print char"""
+        kwargs["callback"] = DotPrinterCallback(".")
+
+    def call(self, **kwargs):
+        """Just outputs a character"""
+        print(self.chr, end="")
+
+
+_DEFAULT_CALLBACK = NoOpCallback()

@@ -9,7 +9,7 @@ from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
 
-from .callbacks import as_callback, branch
+from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
@@ -727,23 +727,22 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(self, rpath, lpath, **kwargs):
+    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy single remote file to local"""
         if self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
             return None
 
-        callback = as_callback(kwargs.pop("callback", None))
         with self.open(rpath, "rb", **kwargs) as f1:
-            callback.call("set_size", getattr(f1, "size", None))
+            callback.set_size(getattr(f1, "size", None))
             with open(lpath, "wb") as f2:
                 data = True
                 while data:
                     data = f1.read(self.blocksize)
                     segment_len = f2.write(data)
-                    callback.call("relative_update", segment_len)
+                    callback.relative_update(segment_len)
 
-    def get(self, rpath, lpath, recursive=False, **kwargs):
+    def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy file(s) to local.
 
         Copies a specific file or tree of files (if recursive=True). If lpath
@@ -755,26 +754,24 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import make_path_posix
 
-        callback = as_callback(kwargs.pop("callback", None))
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
         lpaths = other_paths(rpaths, lpath)
 
-        callback.lazy_call("set_size", len, lpaths)
+        callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            branch(callback, rpath, lpath, kwargs)
+            callback.branch(rpath, lpath, kwargs)
             self.get_file(rpath, lpath, **kwargs)
 
-    def put_file(self, lpath, rpath, **kwargs):
+    def put_file(self, lpath, rpath, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy single file to remote"""
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
             return None
 
-        callback = as_callback(kwargs.pop("callback", None))
         with open(lpath, "rb") as f1:
-            callback.call("set_size", f1.seek(0, 2))
+            callback.set_size(f1.seek(0, 2))
             f1.seek(0)
 
             self.mkdirs(os.path.dirname(rpath), exist_ok=True)
@@ -783,9 +780,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 while data:
                     data = f1.read(self.blocksize)
                     segment_len = f2.write(data)
-                    callback.call("relative_update", segment_len)
+                    callback.relative_update(segment_len)
 
-    def put(self, lpath, rpath, recursive=False, **kwargs):
+    def put(self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy file(s) from local.
 
         Copies a specific file or tree of files (if recursive=True). If rpath
@@ -796,7 +793,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """
         from .implementations.local import LocalFileSystem, make_path_posix
 
-        callback = as_callback(kwargs.pop("callback", None))
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
@@ -808,9 +804,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
         lpaths = fs.expand_path(lpath, recursive=recursive)
         rpaths = other_paths(lpaths, rpath)
 
-        callback.lazy_call("set_size", len, rpaths)
+        callback.set_size(len(rpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            branch(callback, lpath, rpath, kwargs)
+            callback.branch(lpath, rpath, kwargs)
             self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):
