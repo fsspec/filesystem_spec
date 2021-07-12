@@ -326,9 +326,6 @@ class HTTPFileSystem(AsyncFileSystem):
                 if size:
                     break
             except Exception as e:
-                import pdb
-
-                pdb.set_trace()
                 logger.debug((str(e)))
         else:
             # get failed, so conclude URL does not exist
