@@ -190,9 +190,12 @@ class FTPFileSystem(AbstractFileSystem):
         self.invalidate_cache(self._parent(path))
 
     def makedirs(self, path: str, exist_ok: bool = False) -> None:
-        if self.exists(path) and not exist_ok:
-            raise FileExistsError(f"{path} exists and {exist_ok=}")
-        self.mkdir(path, create_parents=True)
+        if self.exists(path):
+            if not exist_ok:
+                raise FileExistsError(f"{path} exists without `exist_ok`")
+            # exists_ok=True -> no-op
+        else:
+            self.mkdir(path, create_parents=True)
 
     def rmdir(self, path):
         path = self._strip_protocol(path)
