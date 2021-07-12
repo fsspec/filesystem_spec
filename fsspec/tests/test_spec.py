@@ -527,6 +527,10 @@ class BranchableCallback(BasicCallback):
         self.events = events or defaultdict(list)
 
     def branch(self, path_1, path_2, kwargs):
+        from fsspec.implementations.local import make_path_posix
+
+        path_1 = make_path_posix(path_1)
+        path_2 = make_path_posix(path_2)
         kwargs["callback"] = BranchableCallback(path_1, path_2, events=self.events)
 
     def set_size(self, size):
@@ -543,8 +547,9 @@ def test_dummy_callbacks_files_branched(tmpdir):
     callback = BranchableCallback("top-level")
 
     def check_events(lpaths, rpaths):
+        from fsspec.implementations.local import make_path_posix
 
-        base_keys = zip(lpaths, rpaths)
+        base_keys = zip(make_path_posix(lpaths), make_path_posix(rpaths))
         assert set(callback.events.keys()) == {("top-level",), *base_keys}
         assert (
             callback.events[
