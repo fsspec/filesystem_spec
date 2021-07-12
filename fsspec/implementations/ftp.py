@@ -125,6 +125,34 @@ class FTPFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
         return out
 
+    def get_file(self, rpath, lpath, **kwargs):
+        with open(lpath, "wb") as outfile:
+
+            def cb(x):
+                outfile.write(x)
+
+            self.ftp.retrbinary(
+                "RETR %s" % rpath,
+                blocksize=self.blocksize,
+                callback=cb,
+            )
+
+    def cat_file(self, path, start=None, end=None, **kwargs):
+        if end is not None:
+            return super().cat_file(path, start, end, **kwargs)
+        out = []
+
+        def cb(x):
+            out.append(x)
+
+        self.ftp.retrbinary(
+            "RETR %s" % path,
+            blocksize=self.blocksize,
+            rest=start,
+            callback=cb,
+        )
+        return b"".join(out)
+
     def _open(
         self,
         path,
