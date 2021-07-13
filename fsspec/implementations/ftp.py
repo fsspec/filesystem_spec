@@ -119,6 +119,9 @@ class FTPFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         # implement with direct method
         path = self._strip_protocol(path)
+        if path == "/":
+            # special case, since this dir has no real entry
+            return {"name": "/", "size": 0, "type": "directory"}
         files = self.ls(self._parent(path).lstrip("/"), True)
         try:
             out = [f for f in files if f["name"] == path][0]
@@ -190,7 +193,9 @@ class FTPFileSystem(AbstractFileSystem):
         self.invalidate_cache(self._parent(path))
 
     def makedirs(self, path: str, exist_ok: bool = False) -> None:
+        path = self._strip_protocol(path)
         if self.exists(path):
+            # NB: "/" does not "exist" as it has no directory entry
             if not exist_ok:
                 raise FileExistsError(f"{path} exists without `exist_ok`")
             # exists_ok=True -> no-op
