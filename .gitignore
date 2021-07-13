@@ -113,3 +113,6 @@ ENV/
 *.code-workspace
 .history
 .vscode
+
+# docker artifacts
+.docker

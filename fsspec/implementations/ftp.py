@@ -1,5 +1,6 @@
 import uuid
 from ftplib import FTP, Error, error_perm
+from typing import Any
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options
@@ -118,6 +119,9 @@ class FTPFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         # implement with direct method
         path = self._strip_protocol(path)
+        if path == "/":
+            # special case, since this dir has no real entry
+            return {"name": "/", "size": 0, "type": "directory"}
         files = self.ls(self._parent(path).lstrip("/"), True)
         try:
             out = [f for f in files if f["name"] == path][0]
@@ -179,10 +183,24 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp.delete(path)
         self.invalidate_cache(self._parent(path))
 
-    def mkdir(self, path, **kwargs):
+    def mkdir(self, path: str, create_parents: bool = True, **kwargs: Any) -> None:
         path = self._strip_protocol(path)
+        parent = self._parent(path)
+        if parent != self.root_marker and not self.exists(parent) and create_parents:
+            self.mkdir(parent, create_parents=create_parents)
+
         self.ftp.mkd(path)
         self.invalidate_cache(self._parent(path))
+
+    def makedirs(self, path: str, exist_ok: bool = False) -> None:
+        path = self._strip_protocol(path)
+        if self.exists(path):
+            # NB: "/" does not "exist" as it has no directory entry
+            if not exist_ok:
+                raise FileExistsError(f"{path} exists without `exist_ok`")
+            # exists_ok=True -> no-op
+        else:
+            self.mkdir(path, create_parents=True)
 
     def rmdir(self, path):
         path = self._strip_protocol(path)
