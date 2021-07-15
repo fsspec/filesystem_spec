@@ -88,6 +88,8 @@ class FSMap(MutableMapping):
         oe = on_error if on_error == "raise" else "return"
         try:
             out = self.fs.cat(keys2, on_error=oe)
+            if isinstance(out, bytes):
+                out = {keys2[0]: out}
         except self.missing_exceptions as e:
             raise KeyError from e
         out = {
