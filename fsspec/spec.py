@@ -1219,7 +1219,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def _isfilestore(self):
         # Originally inherited from pyarrow DaskFileSystem. Keeping this
         # here for backwards compatibility as long as pyarrow uses its
-        # legacy ffspec-compatible filesystems and thus accepts fsspec
+        # legacy fsspec-compatible filesystems and thus accepts fsspec
         # filesystems as well
         return False
 
@@ -1230,7 +1230,7 @@ class AbstractBufferedFile(io.IOBase):
     In the case that the backend does not provide a pythonic file-like object
     already, this class contains much of the logic to build one. The only
     methods that need to be overridden are ``_upload_chunk``,
-    ``_initate_upload`` and ``_fetch_range``.
+    ``_initiate_upload`` and ``_fetch_range``.
     """
 
     DEFAULT_BLOCK_SIZE = 5 * 2 ** 20

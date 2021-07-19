@@ -1,9 +1,11 @@
 import datetime
 import io
 import os
+import os.path as osp
 import posixpath
 import re
 import shutil
+import stat
 import tempfile
 
 from fsspec import AbstractFileSystem
@@ -76,10 +78,12 @@ class LocalFileSystem(AbstractFileSystem):
             # str or path-like
             path = self._strip_protocol(path)
             out = os.stat(path, follow_symlinks=False)
-            link = os.path.islink(path)
-            if os.path.isdir(path):
+            link = stat.S_ISLNK(out.st_mode)
+            if link:
+                out = os.stat(path, follow_symlinks=True)
+            if stat.S_ISDIR(out.st_mode):
                 t = "directory"
-            elif os.path.isfile(path):
+            elif stat.S_ISREG(out.st_mode):
                 t = "file"
             else:
                 t = "other"
@@ -132,7 +136,7 @@ class LocalFileSystem(AbstractFileSystem):
             p = self._strip_protocol(p).rstrip("/")
             if recursive and self.isdir(p):
 
-                if os.path.abspath(p) == os.getcwd():
+                if osp.abspath(p) == os.getcwd():
                     raise ValueError("Cannot delete current working directory")
                 shutil.rmtree(p)
             else:
@@ -188,7 +192,7 @@ def make_path_posix(path, sep=os.sep):
     if isinstance(path, (list, set, tuple)):
         return type(path)(make_path_posix(p) for p in path)
     if "~" in path:
-        path = os.path.expanduser(path)
+        path = osp.expanduser(path)
     if sep == "/":
         # most common fast case for posix
         if path.startswith("/"):
@@ -202,7 +206,7 @@ def make_path_posix(path, sep=os.sep):
         # relative path like "path" or "rel\\path" (win) or rel/path"
         if os.sep == "\\":
             # abspath made some more '\\' separators
-            return make_path_posix(os.path.abspath(path))
+            return make_path_posix(osp.abspath(path))
         else:
             return os.getcwd() + "/" + path
     if re.match("/[A-Za-z]:", path):
