@@ -4,7 +4,7 @@ import os
 import pathlib
 import re
 import sys
-from hashlib import sha256
+from hashlib import md5
 from urllib.parse import urlsplit
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
@@ -278,7 +278,7 @@ def tokenize(*args, **kwargs):
     """
     if kwargs:
         args += (kwargs,)
-    return sha256(str(args).encode()).hexdigest()
+    return md5(str(args).encode()).hexdigest()
 
 
 def stringify_path(filepath):
