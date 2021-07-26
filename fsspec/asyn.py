@@ -378,18 +378,20 @@ class AsyncFileSystem(AbstractFileSystem):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
-        dirs = [l for l in lpaths if os.path.isdir(l)]
-        rdirs = other_paths(dirs, rpath)
+        rpaths = other_paths(lpaths, rpath)
+
+        is_dir = {l: os.path.isdir(l) for l in lpaths}
+        rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
+        file_pairs = [(l, r) for l, r in zip(lpaths, rpaths) if not is_dir[l]]
+
         await asyncio.gather(*[self._makedirs(d, exist_ok=True) for d in rdirs])
-        files = sorted(set(lpaths) - set(dirs))
-        rpaths = other_paths(files, rpath)
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []
-        callback.call("set_size", len(files))
-        for lpath, rpath in zip(files, rpaths):
-            callback.branch(lpath, rpath, kwargs)
-            coros.append(self._put_file(lpath, rpath, **kwargs))
+        callback.call("set_size", len(file_pairs))
+        for lfile, rfile in file_pairs:
+            callback.branch(lfile, rfile, kwargs)
+            coros.append(self._put_file(lfile, rfile, **kwargs))
 
         return await _run_coros_in_chunks(
             coros, batch_size=batch_size, callback=callback
