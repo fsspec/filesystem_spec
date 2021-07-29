@@ -183,6 +183,14 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp.delete(path)
         self.invalidate_cache(self._parent(path))
 
+    def rm(self, path, recursive=False, maxdepth=None):
+        paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        for p in reversed(paths):
+            if self.isfile(p):
+                self.rm_file(p)
+            else:
+                self.rmdir(p)
+
     def mkdir(self, path: str, create_parents: bool = True, **kwargs: Any) -> None:
         path = self._strip_protocol(path)
         parent = self._parent(path)
