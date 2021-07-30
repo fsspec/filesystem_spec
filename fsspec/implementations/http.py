@@ -685,7 +685,7 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
                 return int(r.headers["Content-Length"])
             elif "Content-Range" in r.headers:
                 return int(r.headers["Content-Range"].split("/")[1])
-        except requests.HTTPError:
+        except aiohttp.ClientResponseError:
             logger.debug("Error retrieving file size")
             return None
         r.close()
