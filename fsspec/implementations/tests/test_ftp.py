@@ -9,6 +9,7 @@ import fsspec
 from fsspec import open_files
 from fsspec.implementations.ftp import FTPFileSystem
 
+ftplib = pytest.importorskip("ftplib")
 here = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -146,8 +147,6 @@ def test_cat_get(ftp_writable, tmpdir):
 
 
 def test_mkdir(ftp_writable):
-    import ftplib
-
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with pytest.raises(ftplib.error_perm):
@@ -159,3 +158,18 @@ def test_mkdir(ftp_writable):
         fs.makedirs("/tmp/not/exist", exist_ok=False)
     fs.makedirs("/tmp/not/exist/inner/inner")
     assert fs.isdir("/tmp/not/exist/inner/inner")
+
+
+def test_rm_recursive(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    fs.mkdir("/tmp/topdir")
+    fs.mkdir("/tmp/topdir/underdir")
+    fs.touch("/tmp/topdir/afile")
+    fs.touch("/tmp/topdir/underdir/afile")
+
+    with pytest.raises(ftplib.error_perm):
+        fs.rmdir("/tmp/topdir")
+
+    fs.rm("/tmp/topdir", recursive=True)
+    assert not fs.exists("/tmp/topdir")
