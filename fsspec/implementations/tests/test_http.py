@@ -66,10 +66,15 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(200, data=d)
 
     def do_HEAD(self):
+        d = data if self.path == "/index/realfile" else index
+        if "head_not_auth" in self.headers:
+            self._respond(
+                403, {"Content-Length": 123}, b"not authorized for HEAD request"
+            )
+            return
         if "head_ok" not in self.headers:
             self._respond(405)
             return
-        d = data if self.path == "/index/realfile" else index
         if self.path.rstrip("/") not in ["/index/realfile", "/index"]:
             self._respond(404)
         elif "give_length" in self.headers:
@@ -286,6 +291,8 @@ def test_methods(server):
         {"give_length": "true"},
         {"give_length": "true", "head_ok": "true"},
         {"give_range": "true"},
+        {"give_length": "true", "head_not_auth": "true"},
+        {"give_range": "true", "head_not_auth": "true"},
     ],
 )
 def test_random_access(server, headers):

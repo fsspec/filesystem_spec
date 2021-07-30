@@ -573,13 +573,16 @@ class HTTPFile(AbstractBufferedFile):
         pass
 
     def __reduce__(self):
-        return reopen, (
-            self.fs,
-            self.url,
-            self.mode,
-            self.blocksize,
-            self.cache.name,
-            self.size,
+        return (
+            reopen,
+            (
+                self.fs,
+                self.url,
+                self.mode,
+                self.blocksize,
+                self.cache.name,
+                self.size,
+            ),
         )
 
 
@@ -671,13 +674,20 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
     async with r:
-        # TODO:
-        #  recognise lack of 'Accept-Ranges', or  'Accept-Ranges': 'none' (not 'bytes')
-        #  to mean streaming only, no random access => return None
-        if "Content-Length" in r.headers:
-            return int(r.headers["Content-Length"])
-        elif "Content-Range" in r.headers:
-            return int(r.headers["Content-Range"].split("/")[1])
+        try:
+            r.raise_for_status()
+
+            # TODO:
+            #  recognise lack of 'Accept-Ranges',
+            #                 or 'Accept-Ranges': 'none' (not 'bytes')
+            #  to mean streaming only, no random access => return None
+            if "Content-Length" in r.headers:
+                return int(r.headers["Content-Length"])
+            elif "Content-Range" in r.headers:
+                return int(r.headers["Content-Range"].split("/")[1])
+        except aiohttp.ClientResponseError:
+            logger.debug("Error retrieving file size")
+            return None
         r.close()
 
 
