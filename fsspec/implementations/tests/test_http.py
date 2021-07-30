@@ -10,8 +10,11 @@ import pytest
 
 import fsspec.asyn
 import fsspec.utils
+import logging
+
 
 fsspec.utils.setup_logging(logger_name="fsspec.http")
+logging.basicConfig(level=logging.DEBUG)
 
 requests = pytest.importorskip("requests")
 port = 9898
@@ -68,7 +71,9 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         d = data if self.path == "/index/realfile" else index
         if "head_not_auth" in self.headers:
-            self._respond(403, {"Content-Length": 123}, b"not authorized for HEAD request")
+            self._respond(
+                403, {"Content-Length": 123}, b"not authorized for HEAD request"
+            )
             return
         if "head_ok" not in self.headers:
             self._respond(405)
