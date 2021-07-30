@@ -10,11 +10,8 @@ import pytest
 
 import fsspec.asyn
 import fsspec.utils
-import logging
-
 
 fsspec.utils.setup_logging(logger_name="fsspec.http")
-logging.basicConfig(level=logging.DEBUG)
 
 requests = pytest.importorskip("requests")
 port = 9898
