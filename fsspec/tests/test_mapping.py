@@ -119,3 +119,27 @@ def test_setitem_numpy():
     assert m["c"] == b"\x01\x00\x00\x00"
     m["c"] = np.array([1, 2], dtype="<i4")  # array
     assert m["c"] == b"\x01\x00\x00\x00\x02\x00\x00\x00"
+    m["c"] = np.array(
+        np.datetime64("2000-01-01T23:59:59.999999999"), dtype="<M8[ns]"
+    )  # datetime64 scalar
+    assert m["c"] == b"\xff\xff\x91\xe3c\x9b#\r"
+    m["c"] = np.array(
+        [
+            np.datetime64("1900-01-01T23:59:59.999999999"),
+            np.datetime64("2000-01-01T23:59:59.999999999"),
+        ],
+        dtype="<M8[ns]",
+    )  # datetime64 array
+    assert m["c"] == b"\xff\xff}p\xf8fX\xe1\xff\xff\x91\xe3c\x9b#\r"
+    m["c"] = np.array(
+        np.timedelta64(3155673612345678901, "ns"), dtype="<m8[ns]"
+    )  # timedelta64 scalar
+    assert m["c"] == b"5\x1c\xf0Rn4\xcb+"
+    m["c"] = np.array(
+        [
+            np.timedelta64(450810516049382700, "ns"),
+            np.timedelta64(3155673612345678901, "ns"),
+        ],
+        dtype="<m8[ns]",
+    )  # timedelta64 scalar
+    assert m["c"] == b',M"\x9e\xc6\x99A\x065\x1c\xf0Rn4\xcb+'
