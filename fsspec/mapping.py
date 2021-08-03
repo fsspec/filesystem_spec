@@ -178,9 +178,10 @@ class FSMap(MutableMapping):
 def maybe_convert(value):
     if isinstance(value, array.array) or hasattr(value, "__array__"):
         # bytes-like things
-        if hasattr(value, "dtype") and value.dtype.kind in ["M", "m"]:
-            # numpy datetime64/timedelta64
-            value = value.view("i8")
+        if hasattr(value, "dtype") and value.dtype.kind in "Mm":
+            # The buffer interface doesn't support datetime64/timdelta64 numpy
+            # arrays
+            value = value.view("int64")
         value = bytearray(memoryview(value))
     return value
 
