@@ -310,7 +310,7 @@ class FTPFile(AbstractBufferedFile):
                 self.fs.ftp.abort()
                 self.fs.ftp.getmultiline()
             except Error:
-                self.fs.ftp._connect()
+                self.fs._connect()
 
         return b"".join(out)
 
