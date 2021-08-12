@@ -1,8 +1,10 @@
 Changelog
 =========
 
-Dev
----
+2021.07.0
+---------
+
+Enhancements
 
 - callbacks (#697)
 
