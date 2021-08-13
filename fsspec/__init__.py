@@ -10,7 +10,7 @@ except ImportError:  # python < 3.8
 from . import caching
 from ._version import get_versions
 from .callbacks import Callback
-from .core import get_fs_token_paths, open, open_files, open_local, copy, cp
+from .core import copy, cp, get_fs_token_paths, open, open_files, open_local
 from .exceptions import FSTimeoutError
 from .mapping import FSMap, get_mapper
 from .registry import (
