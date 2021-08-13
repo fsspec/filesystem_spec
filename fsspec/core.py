@@ -468,6 +468,35 @@ def open_local(url, mode="rb", **storage_options):
     return paths
 
 
+def cp(filea, fileb: OpenFile, callback=None, **open_kwargs):
+    """Copy ``filea`` to ``fileb``.
+
+    Parameters
+    ----------
+    filea: str
+        The path to a local or remote file.
+    fileb: OpenFile
+        The target to write to. Must be in write mode.
+    callback:
+
+    open_kwargs: dict
+        Additional arguments passed to ``fsspec.open``
+        when opening ``filea``.
+    """
+    with open(filea, **open_kwargs) as a:
+        with fileb as b:
+            while True:
+                data = a.read(a.fs.blocksize)
+                if not data:
+                    break
+                b.write(data)
+
+
+def copy():
+    """Alias for `cp`"""
+    pass
+
+
 def get_compression(urlpath, compression):
     if compression == "infer":
         compression = infer_compression(urlpath)
