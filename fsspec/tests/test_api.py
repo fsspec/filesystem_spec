@@ -187,6 +187,21 @@ def test_chained_fs():
     assert os.listdir(d2) == ["f1"]
 
 
+def test_cp():
+    d = tempfile.mkdtemp()
+    f1 = os.path.join(d, "f1")
+    f2 = os.path.join(d, "f2")
+    with open(f1, "wb") as f:
+        f.write(b"test")
+
+    target = fsspec.open(f2, mode="wb")
+    fsspec.cp(f1, target)
+    target.close()
+
+    with fsspec.open(f2) as f:
+        assert f.read() == b"test"
+
+
 @pytest.mark.xfail(reason="see issue #334", strict=True)
 def test_multilevel_chained_fs():
     """This test reproduces intake/filesystem_spec#334"""
