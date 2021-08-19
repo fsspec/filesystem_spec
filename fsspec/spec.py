@@ -100,6 +100,131 @@ else:  # pragma: no cover
     up = object
 
 
+def _entry_is_directory(fs, entry):
+    if "type" in entry:
+        return entry["type"] == "directory"
+    return fs.isdir(entry["name"])
+
+
+def _make_selector(pattern_parts, fs):
+    pat = pattern_parts[0]
+    child_parts = pattern_parts[1:]
+    if pat == "**":
+        cls = _RecursiveWildcardSelector
+    elif "**" in pat:
+        raise ValueError("Invalid pattern: '**' can only be an entire path component")
+    elif "*" in pat or "?" in pat or "[" in pat:
+        cls = _WildcardSelector
+    else:
+        cls = _PreciseSelector
+    return cls(pat, child_parts, fs)
+
+
+class _Selector:
+    """A selector matches a specific glob pattern part against the children
+    of a given path."""
+
+    def __init__(self, child_parts, fs):
+        self.fs = fs
+        self.child_parts = child_parts
+        if child_parts:
+            self.successor = _make_selector(child_parts, fs)
+            self.dironly = True
+        else:
+            self.successor = _TerminatingSelector()
+            self.dironly = False
+
+    def select_from(self, parent_path, kwargs):
+        """Iterate over all child paths of `parent_path` matched by this
+        selector.  This can contain parent_path itself."""
+        if parent_path != self.fs.root_marker and not self.fs.isdir(parent_path):
+            return iter([])
+        kwargs = dict(kwargs)
+        kwargs.pop("detail", None)
+        return self._select_from(parent_path, kwargs)
+
+
+class _TerminatingSelector:
+    def _select_from(self, parent_path, kwargs):
+        yield parent_path
+
+
+class _PreciseSelector(_Selector):
+    def __init__(self, name, child_parts, fs):
+        self.name = name
+        _Selector.__init__(self, child_parts, fs)
+
+        # Coalesce precise selectors in order to remove
+        # permissions pessimization.
+        while isinstance(self.successor, _PreciseSelector):
+            self.name = os.path.join(self.name, self.successor.name)
+            self.dironly = self.dironly and self.successor.dironly
+            self.child_parts = self.successor.child_parts
+            self.successor = self.successor.successor
+
+    def _select_from(self, parent_path, kwargs):
+        try:
+            path = os.path.join(parent_path, self.name)
+            if (self.fs.isdir if self.dironly else self.fs.exists)(path):
+                for p in self.successor._select_from(path, kwargs):
+                    yield p
+        except PermissionError:
+            return
+
+
+class _WildcardSelector(_Selector):
+    def __init__(self, pat, child_parts, fs):
+        import re, fnmatch
+
+        self.match = re.compile(fnmatch.translate(pat)).fullmatch
+        _Selector.__init__(self, child_parts, fs)
+
+    def _select_from(self, parent_path, kwargs):
+        try:
+            entries = self.fs.ls(parent_path, detail=True, **kwargs)
+            for entry in entries:
+                path = entry["name"]
+                if self.dironly and not _entry_is_directory(self.fs, entry):
+                    continue
+                if self.match(os.path.basename(path)):
+                    for p in self.successor._select_from(path, kwargs):
+                        yield p
+        except PermissionError:
+            return
+
+
+class _RecursiveWildcardSelector(_Selector):
+    def __init__(self, pat, child_parts, fs):
+        _Selector.__init__(self, child_parts, fs)
+
+    def _iterate_directories(self, parent_path, kwargs):
+        yield parent_path
+        try:
+            entries = self.fs.ls(parent_path, detail=True, **kwargs)
+            for entry in entries:
+                path = entry["name"]
+                if _entry_is_directory(self.fs, entry):
+                    for p in self._iterate_directories(entry, kwargs):
+                        yield p
+        except PermissionError:
+            return
+
+    def _select_from(self, parent_path, kwargs):
+        try:
+            yielded = set()
+            try:
+                successor_select = self.successor._select_from
+                for starting_point in self._iterate_directories(parent_path, kwargs):
+                    for p in successor_select(starting_point, kwargs):
+                        if p not in yielded:
+                            yield p
+                            yielded.add(p)
+            finally:
+                yielded.clear()
+        except PermissionError:
+            return
+
+
 class AbstractFileSystem(up, metaclass=_Cached):
     """
     An abstract super-class for pythonic file-systems
@@ -498,77 +623,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         kwargs are passed to ``ls``.
         """
-        import re
-
-        ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
-
-        ind = min(indstar, indques, indbrace)
-
-        detail = kwargs.pop("detail", False)
-
-        if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif self.exists(path):
-                if not detail:
-                    return [path]
-                else:
-                    return {path: self.info(path)}
-            else:
-                if not detail:
-                    return []  # glob of non-existent returns empty
-                else:
-                    return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
-        else:
-            root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
-
-        allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
-        # Escape characters special to python regex, leaving our supported
-        # special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
-        # for shell globbing details.
-        pattern = (
-            "^"
-            + (
-                path.replace("\\", r"\\")
-                .replace(".", r"\.")
-                .replace("+", r"\+")
-                .replace("//", "/")
-                .replace("(", r"\(")
-                .replace(")", r"\)")
-                .replace("|", r"\|")
-                .replace("^", r"\^")
-                .replace("$", r"\$")
-                .replace("{", r"\{")
-                .replace("}", r"\}")
-                .rstrip("/")
-                .replace("?", ".")
-            )
-            + "$"
-        )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
-        out = {
-            p: allpaths[p]
-            for p in sorted(allpaths)
-            if pattern.match(p.replace("//", "/").rstrip("/"))
-        }
-        if detail:
-            return out
-        else:
-            return list(out)
+        if path.startswith(self.root_marker):
+            path = path[len(self.root_marker) :]
+        parts = path.split(self.sep)
+        selector = _make_selector(parts, self)
+        res = [p for p in selector.select_from(self.root_marker, kwargs)]
+        if kwargs.get("detail", False):
+            res = {f: self.info(f) for f in res}
+        return res
 
     def exists(self, path, **kwargs):
         """Is there a file at the given path"""
@@ -810,12 +873,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
             self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):
-        """ Get the first ``size`` bytes from file """
+        """Get the first ``size`` bytes from file"""
         with self.open(path, "rb") as f:
             return f.read(size)
 
     def tail(self, path, size=1024):
-        """ Get the last ``size`` bytes from file """
+        """Get the last ``size`` bytes from file"""
         with self.open(path, "rb") as f:
             f.seek(max(-size, -f.size), 2)
             return f.read()
@@ -877,7 +940,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return list(sorted(out))
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
-        """ Move file(s) from one location to another """
+        """Move file(s) from one location to another"""
         self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
         self.rm(path1, recursive=recursive)
 
@@ -1339,14 +1402,14 @@ class AbstractBufferedFile(io.IOBase):
         """Throw away temporary file"""
 
     def info(self):
-        """ File information about this path """
+        """File information about this path"""
         if "r" in self.mode:
             return self.details
         else:
             raise ValueError("Info not available while writing")
 
     def tell(self):
-        """ Current file location """
+        """Current file location"""
         return self.loc
 
     def seek(self, loc, whence=0):
@@ -1453,7 +1516,7 @@ class AbstractBufferedFile(io.IOBase):
         # may not yet have been initialized, may need to call _initialize_upload
 
     def _initiate_upload(self):
-        """ Create remote file/upload """
+        """Create remote file/upload"""
         pass
 
     def _fetch_range(self, start, end):

@@ -212,6 +212,126 @@ async def _run_coros_in_chunks(
     return results
 
 
+def _make_selector(pattern_parts, fs):
+    pat = pattern_parts[0]
+    child_parts = pattern_parts[1:]
+    if pat == "**":
+        cls = _RecursiveWildcardSelector
+    elif "**" in pat:
+        raise ValueError("Invalid pattern: '**' can only be an entire path component")
+    elif "*" in pat or "?" in pat or "[" in pat:
+        cls = _WildcardSelector
+    else:
+        cls = _PreciseSelector
+    return cls(pat, child_parts, fs)
+
+
+class _Selector:
+    """A selector matches a specific glob pattern part against the children
+    of a given path."""
+
+    def __init__(self, child_parts, fs):
+        self.fs = fs
+        self.child_parts = child_parts
+        if child_parts:
+            self.successor = _make_selector(child_parts, fs)
+            self.dironly = True
+        else:
+            self.successor = _TerminatingSelector()
+            self.dironly = False
+
+    async def select_from(self, parent_path, kwargs):
+        """Iterate over all child paths of `parent_path` matched by this
+        selector.  This can contain parent_path itself."""
+        if parent_path != self.fs.root_marker and not await self.fs._isdir(parent_path):
+            return
+        kwargs = dict(kwargs)
+        kwargs.pop("detail", None)
+        async for path in self._select_from(parent_path, kwargs):
+            yield path
+
+
+class _TerminatingSelector:
+    async def _select_from(self, parent_path, kwargs):
+        yield parent_path
+
+
+class _PreciseSelector(_Selector):
+    def __init__(self, name, child_parts, fs):
+        self.name = name
+        _Selector.__init__(self, child_parts, fs)
+
+        # Coalesce precise selectors in order to remove
+        # permissions pessimization.
+        while isinstance(self.successor, _PreciseSelector):
+            self.name = os.path.join(self.name, self.successor.name)
+            self.dironly = self.dironly and self.successor.dironly
+            self.child_parts = self.successor.child_parts
+            self.successor = self.successor.successor
+
+    async def _select_from(self, parent_path, kwargs):
+        try:
+            path = os.path.join(parent_path, self.name)
+            if await (self.fs._isdir if self.dironly else self.fs._exists)(path):
+                async for p in self.successor._select_from(path, kwargs):
+                    yield p
+        except PermissionError:
+            return
+
+
+class _WildcardSelector(_Selector):
+    def __init__(self, pat, child_parts, fs):
+        import re, fnmatch
+
+        self.match = re.compile(fnmatch.translate(pat)).fullmatch
+        _Selector.__init__(self, child_parts, fs)
+
+    async def _select_from(self, parent_path, kwargs):
+        try:
+            entries = await self.fs._ls(parent_path, detail=False, **kwargs)
+            for entry in entries:
+                if self.dironly and not await self.fs._isdir(entry):
+                    continue
+                if self.match(os.path.basename(entry)):
+                    async for p in self.successor._select_from(entry, kwargs):
+                        yield p
+        except PermissionError:
+            return
+
+
+class _RecursiveWildcardSelector(_Selector):
+    def __init__(self, pat, child_parts, fs):
+        _Selector.__init__(self, child_parts, fs)
+
+    async def _iterate_directories(self, parent_path, kwargs):
+        yield parent_path
+        try:
+            entries = await self.fs._ls(parent_path, detail=False, **kwargs)
+            for entry in entries:
+                if await self.fs._isdir(entry):
+                    async for p in self._iterate_directories(entry, kwargs):
+                        yield p
+        except PermissionError:
+            return
+
+    async def _select_from(self, parent_path, kwargs):
+        try:
+            yielded = set()
+            try:
+                successor_select = self.successor._select_from
+                async for starting_point in self._iterate_directories(
+                    parent_path, kwargs
+                ):
+                    async for p in successor_select(starting_point, kwargs):
+                        if p not in yielded:
+                            yield p
+                            yielded.add(p)
+            finally:
+                yielded.clear()
+        except PermissionError:
+            return
+
+
 # these methods should be implemented as async by any async-able backend
 async_methods = [
     "_ls",
@@ -509,79 +629,15 @@ class AsyncFileSystem(AbstractFileSystem):
                 yield _
 
     async def _glob(self, path, **kwargs):
-        import re
-
-        ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
-
-        ind = min(indstar, indques, indbrace)
-
-        detail = kwargs.pop("detail", False)
-
-        if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif await self._exists(path):
-                if not detail:
-                    return [path]
-                else:
-                    return {path: await self._info(path)}
-            else:
-                if not detail:
-                    return []  # glob of non-existent returns empty
-                else:
-                    return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
-        else:
-            root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
-
-        allpaths = await self._find(
-            root, maxdepth=depth, withdirs=True, detail=True, **kwargs
-        )
-        # Escape characters special to python regex, leaving our supported
-        # special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
-        # for shell globbing details.
-        pattern = (
-            "^"
-            + (
-                path.replace("\\", r"\\")
-                .replace(".", r"\.")
-                .replace("+", r"\+")
-                .replace("//", "/")
-                .replace("(", r"\(")
-                .replace(")", r"\)")
-                .replace("|", r"\|")
-                .replace("^", r"\^")
-                .replace("$", r"\$")
-                .replace("{", r"\{")
-                .replace("}", r"\}")
-                .rstrip("/")
-                .replace("?", ".")
-            )
-            + "$"
-        )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
-        out = {
-            p: allpaths[p]
-            for p in sorted(allpaths)
-            if pattern.match(p.replace("//", "/").rstrip("/"))
-        }
-        if detail:
-            return out
-        else:
-            return list(out)
+        if path.startswith(self.root_marker):
+            path = path[len(self.root_marker) :]
+        parts = path.split(self.sep)
+        selector = _make_selector(parts, self)
+        res = [p async for p in selector.select_from(self.root_marker, kwargs)]
+        if kwargs.get("detail", False):
+            res = {f: self.info(f) for f in res}
+        return res
 
     async def _du(self, path, total=True, maxdepth=None, **kwargs):
         sizes = {}
