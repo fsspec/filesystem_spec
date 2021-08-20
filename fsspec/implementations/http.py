@@ -219,8 +219,8 @@ class HTTPFileSystem(AsyncFileSystem):
             kw["headers"] = headers
         session = await self.set_session()
         async with session.get(url, **kw) as r:
-            self._raise_not_found_for_status(r, url)
             out = await r.read()
+            self._raise_not_found_for_status(r, url)
         return out
 
     async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, **kwargs):
