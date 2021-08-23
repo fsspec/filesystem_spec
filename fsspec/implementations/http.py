@@ -246,6 +246,27 @@ class HTTPFileSystem(AsyncFileSystem):
                     fd.write(chunk)
                     callback.relative_update(len(chunk))
 
+    async def _put_file(
+        self, rpath, lpath, chunk_size=5 * 2 ** 20, callback=_DEFAULT_CALLBACK, **kwargs
+    ):
+        async def gen_chunks():
+            with open(rpath, "rb") as f:
+                callback.set_size(f.seek(0, 2))
+                f.seek(0)
+
+                chunk = f.read(64 * 1024)
+                while chunk:
+                    yield chunk
+                    callback.relative_update(len(chunk))
+                    chunk = f.read(64 * 1024)
+
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        session = await self.set_session()
+
+        async with session.post(lpath, data=gen_chunks(), **kw) as resp:
+            self._raise_not_found_for_status(resp, lpath)
+
     async def _exists(self, path, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
