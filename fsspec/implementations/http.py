@@ -11,6 +11,7 @@ import aiohttp
 import requests
 
 from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
+from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
