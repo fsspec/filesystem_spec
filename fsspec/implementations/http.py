@@ -347,22 +347,20 @@ class HTTPFileSystem(AsyncFileSystem):
         which case size will be given as None (and certain operations on the
         corresponding file will not work).
         """
-        size = False
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        info = {}
         for policy in ["head", "get"]:
             try:
                 session = await self.set_session()
-                size = await _file_size(url, size_policy=policy, session=session, **kw)
-                if size:
+                info = await _file_info(url, size_policy=policy, session=session, **kw)
+                if info.get("size") is not None:
                     break
             except Exception as e:
                 logger.debug((str(e)))
         else:
-            # get failed, so conclude URL does not exist
-            if size is False:
-                raise FileNotFoundError(url)
-        return {"name": url, "size": size or None, "type": "file"}
+            raise FileNotFoundError(url)
+        return {"name": url, **info, "type": "file"}
 
     async def _glob(self, path, **kwargs):
         """
@@ -685,8 +683,8 @@ async def get_range(session, url, start, end, file=None, **kwargs):
         return out
 
 
-async def _file_size(url, session=None, size_policy="head", **kwargs):
-    """Call HEAD on the server to get file size
+async def _file_info(url, session=None, size_policy="head", **kwargs):
+    """Call HEAD on the server to get details about the file (size/checksum etc.)
 
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
@@ -698,6 +696,8 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     head["Accept-Encoding"] = "identity"
     kwargs["headers"] = head
     session = session or await get_client()
+
+    info = {}
     if size_policy == "head":
         r = await session.head(url, allow_redirects=ar, **kwargs)
     elif size_policy == "get":
@@ -713,13 +713,23 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
             #                 or 'Accept-Ranges': 'none' (not 'bytes')
             #  to mean streaming only, no random access => return None
             if "Content-Length" in r.headers:
-                return int(r.headers["Content-Length"])
+                info["size"] = int(r.headers["Content-Length"])
             elif "Content-Range" in r.headers:
-                return int(r.headers["Content-Range"].split("/")[1])
+                info["size"] = int(r.headers["Content-Range"].split("/")[1])
+
+            checksum = r.headers.get("ETag") or r.headers.get("Content-MD5")
+            if checksum is not None:
+                info["checksum"] = checksum
         except aiohttp.ClientResponseError:
             logger.debug("Error retrieving file size")
-            return None
         r.close()
+
+    return info
+
+
+async def _file_size(*args, **kwargs):
+    info = _file_info(*args, **kwargs)
+    return info.get("size")
 
 
 file_size = sync_wrapper(_file_size)
