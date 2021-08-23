@@ -244,6 +244,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 while chunk:
                     chunk = await r.content.read(chunk_size)
                     fd.write(chunk)
+                    callback.relative_update(len(chunk))
 
     async def _exists(self, path, **kwargs):
         kw = self.kwargs.copy()
