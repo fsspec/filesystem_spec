@@ -642,6 +642,7 @@ class HTTPStreamFile(AbstractBufferedFile):
 
         async def cor():
             r = await self.session.get(url, **kwargs).__aenter__()
+            self.fs._raise_not_found_for_status(r, url)
             return r
 
         self.r = sync(self.loop, cor)
