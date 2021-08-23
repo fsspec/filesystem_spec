@@ -224,12 +224,20 @@ class HTTPFileSystem(AsyncFileSystem):
             out = await r.read()
         return out
 
-    async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, **kwargs):
+    async def _get_file(
+        self, rpath, lpath, chunk_size=5 * 2 ** 20, callback=_DEFAULT_CALLBACK, **kwargs
+    ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(rpath, **self.kwargs) as r:
+            try:
+                size = int(r.headers["content-length"])
+            except (ValueError, KeyError):
+                size = None
+
+            callback.set_size(size)
             self._raise_not_found_for_status(r, rpath)
             with open(lpath, "wb") as fd:
                 chunk = True
