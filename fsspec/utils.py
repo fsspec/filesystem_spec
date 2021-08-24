@@ -98,11 +98,12 @@ def update_storage_options(options, inherited=None):
         inherited = {}
     collisions = set(options) & set(inherited)
     if collisions:
-        collisions = "\n".join("- %r" % k for k in collisions)
-        raise KeyError(
-            "Collision between inferred and specified storage "
-            "options:\n%s" % collisions
-        )
+        for collision in collisions:
+            if options.get(collision) != inherited.get(collision):
+                raise KeyError(
+                    "Collision between inferred and specified storage "
+                    "option:\n%s" % collision
+                )
     options.update(inherited)
 
 
