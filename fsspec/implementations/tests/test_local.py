@@ -401,8 +401,19 @@ def test_file_ops(tmpdir):
 
     files = [tmpdir + "/afile4", tmpdir + "/afile5"]
     [fs.touch(f) for f in files]
+
+    with pytest.raises(TypeError):
+        fs.rm_file(files)
     fs.rm(files)
     assert all(not fs.exists(f) for f in files)
+
+    fs.touch(tmpdir + "/afile6")
+    fs.rm_file(tmpdir + "/afile6")
+    assert not fs.exists(tmpdir + "/afile6")
+
+    # IsADirectoryError raised on Linux, PermissionError on Windows
+    with pytest.raises((IsADirectoryError, PermissionError)):
+        fs.rm_file(tmpdir)
 
     fs.rm(tmpdir, recursive=True)
     assert not fs.exists(tmpdir)

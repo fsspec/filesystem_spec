@@ -128,6 +128,9 @@ class LocalFileSystem(AbstractFileSystem):
         path2 = self._strip_protocol(path2).rstrip("/")
         shutil.move(path1, path2)
 
+    def rm_file(self, path):
+        os.remove(path)
+
     def rm(self, path, recursive=False, maxdepth=None):
         if isinstance(path, str):
             path = [path]
