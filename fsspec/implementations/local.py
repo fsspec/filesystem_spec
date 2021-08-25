@@ -129,7 +129,7 @@ class LocalFileSystem(AbstractFileSystem):
         shutil.move(path1, path2)
 
     def rm_file(self, path):
-        self.rm(path)
+        os.remove(path)
 
     def rm(self, path, recursive=False, maxdepth=None):
         if isinstance(path, str):
