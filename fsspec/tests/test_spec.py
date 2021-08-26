@@ -462,7 +462,7 @@ def imitate_transfer(size, chunk, *, file=True):
     if file:
         # The reason that there is a relative_update(0) at the
         # end is that, we don't have an early exit on the
-        # impleementations of get_file/put_file so it needs to
+        # implementations of get_file/put_file so it needs to
         # go through the callback to get catch by the while's
         # condition and then it will stop the transfer.
         events.append(("relative_update", 0))

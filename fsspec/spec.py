@@ -802,7 +802,9 @@ class AbstractFileSystem(up, metaclass=_Cached):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
-        rpaths = other_paths(lpaths, rpath)
+        rpaths = other_paths(
+            lpaths, rpath, exists=isinstance(rpath, str) and self.isdir(rpath)
+        )
 
         callback.set_size(len(rpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):

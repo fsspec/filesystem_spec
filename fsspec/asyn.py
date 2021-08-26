@@ -378,7 +378,9 @@ class AsyncFileSystem(AbstractFileSystem):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
-        rpaths = other_paths(lpaths, rpath)
+        rpaths = other_paths(
+            lpaths, rpath, exists=isinstance(rpath, str) and await self._isdir(rpath)
+        )
 
         is_dir = {l: os.path.isdir(l) for l in lpaths}
         rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
