@@ -247,7 +247,13 @@ class HTTPFileSystem(AsyncFileSystem):
                     callback.relative_update(len(chunk))
 
     async def _put_file(
-        self, rpath, lpath, chunk_size=5 * 2 ** 20, callback=_DEFAULT_CALLBACK, **kwargs
+        self,
+        rpath,
+        lpath,
+        chunk_size=5 * 2 ** 20,
+        callback=_DEFAULT_CALLBACK,
+        method="post",
+        **kwargs,
     ):
         async def gen_chunks():
             with open(rpath, "rb") as f:
@@ -263,8 +269,9 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         session = await self.set_session()
+        meth = getattr(session, method)
 
-        async with session.post(lpath, data=gen_chunks(), **kw) as resp:
+        async with meth(lpath, data=gen_chunks(), **kw) as resp:
             self._raise_not_found_for_status(resp, lpath)
 
     async def _exists(self, path, **kwargs):
