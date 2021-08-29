@@ -361,7 +361,7 @@ class HTTPFileSystem(AsyncFileSystem):
         corresponding file will not work).
         """
         info = {}
-        failed = None
+        failed = exc = None
         session = await self.set_session()
 
         for policy in ["head", "get"]:
@@ -379,10 +379,12 @@ class HTTPFileSystem(AsyncFileSystem):
                     break
             except Exception as e:
                 failed = policy
+                exc = e
                 logger.debug((str(e)))
 
-        if failed and info.get("size") is None:
-            raise FileNotFoundError(url)
+        if failed == "get":
+            # If get failed, then raise a FileNotFoundError
+            raise FileNotFoundError(url) from exc
         else:
             return {"name": url, "size": None, **info, "type": "file"}
 
@@ -729,23 +731,20 @@ async def _file_info(url, session, size_policy="head", **kwargs):
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
     async with r:
-        try:
-            r.raise_for_status()
+        r.raise_for_status()
 
-            # TODO:
-            #  recognise lack of 'Accept-Ranges',
-            #                 or 'Accept-Ranges': 'none' (not 'bytes')
-            #  to mean streaming only, no random access => return None
-            if "Content-Length" in r.headers:
-                info["size"] = int(r.headers["Content-Length"])
-            elif "Content-Range" in r.headers:
-                info["size"] = int(r.headers["Content-Range"].split("/")[1])
+        # TODO:
+        #  recognise lack of 'Accept-Ranges',
+        #                 or 'Accept-Ranges': 'none' (not 'bytes')
+        #  to mean streaming only, no random access => return None
+        if "Content-Length" in r.headers:
+            info["size"] = int(r.headers["Content-Length"])
+        elif "Content-Range" in r.headers:
+            info["size"] = int(r.headers["Content-Range"].split("/")[1])
 
-            checksum = r.headers.get("ETag") or r.headers.get("Content-MD5")
-            if checksum is not None:
-                info["checksum"] = checksum
-        except aiohttp.ClientResponseError:
-            logger.debug("Error retrieving file size")
+        checksum = r.headers.get("ETag") or r.headers.get("Content-MD5")
+        if checksum is not None:
+            info["checksum"] = checksum
 
     return info
 
