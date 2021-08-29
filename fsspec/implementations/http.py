@@ -59,6 +59,7 @@ class HTTPFileSystem(AsyncFileSystem):
         asynchronous=False,
         loop=None,
         client_kwargs=None,
+        get_client=get_client,
         **storage_options,
     ):
         """
@@ -80,6 +81,10 @@ class HTTPFileSystem(AsyncFileSystem):
             Passed to aiohttp.ClientSession, see
             https://docs.aiohttp.org/en/stable/client_reference.html
             For example, ``{'auth': aiohttp.BasicAuth('user', 'pass')}``
+        get_client: Callable[..., aiohttp.ClientSession]
+            A callable which takes keyword arguments and constructs
+            an aiohttp.ClientSession. It's state will be managed by
+            the HTTPFileSystem class.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open
@@ -91,6 +96,7 @@ class HTTPFileSystem(AsyncFileSystem):
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.client_kwargs = client_kwargs or {}
+        self.get_client = get_client
         self.kwargs = storage_options
         self._session = None
 
@@ -122,7 +128,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def set_session(self):
         if self._session is None:
-            self._session = await get_client(loop=self.loop, **self.client_kwargs)
+            self._session = await self.get_client(loop=self.loop, **self.client_kwargs)
             if not self.asynchronous:
                 weakref.finalize(self, self.close_session, self.loop, self._session)
         return self._session
@@ -360,7 +366,13 @@ class HTTPFileSystem(AsyncFileSystem):
         for policy in ["head", "get"]:
             try:
                 session = await self.set_session()
-                info = await _file_info(url, size_policy=policy, session=session, **kw)
+                info = await _file_info(
+                    url,
+                    size_policy=policy,
+                    session=session,
+                    get_session=self.set_session,
+                    **kw,
+                )
                 if info.get("size") is not None:
                     break
             except Exception as e:
