@@ -1,6 +1,18 @@
 Changelog
 =========
 
+2021.08.0
+---------
+
+Enhancements
+
+    HTTTP
+
+    - get_file/put_file APIs now support callbacks
+    - New put_file API for transferring data to the remote server (chunked)
+    - Customizable client initializers (through passing ``get_client`` argument)
+    - Support for ``checksum`` (either ``ETag`` or ``MD5-Checksum``) on ``info()`` calls
+
 2021.07.0
 ---------
 
