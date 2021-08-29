@@ -360,26 +360,31 @@ class HTTPFileSystem(AsyncFileSystem):
         which case size will be given as None (and certain operations on the
         corresponding file will not work).
         """
-        kw = self.kwargs.copy()
-        kw.update(kwargs)
         info = {}
+        failed = None
+        session = await self.set_session()
+
         for policy in ["head", "get"]:
             try:
-                session = await self.set_session()
-                info = await _file_info(
-                    url,
-                    size_policy=policy,
-                    session=session,
-                    get_session=self.set_session,
-                    **kw,
+                info.update(
+                    await _file_info(
+                        url,
+                        size_policy=policy,
+                        session=session,
+                        **self.kwargs,
+                        **kwargs,
+                    )
                 )
                 if info.get("size") is not None:
                     break
             except Exception as e:
+                failed = policy
                 logger.debug((str(e)))
-        else:
+
+        if failed and info.get("size") is None:
             raise FileNotFoundError(url)
-        return {"name": url, **info, "type": "file"}
+        else:
+            return {"name": url, "size": None, **info, "type": "file"}
 
     async def _glob(self, path, **kwargs):
         """
@@ -703,7 +708,7 @@ async def get_range(session, url, start, end, file=None, **kwargs):
         return out
 
 
-async def _file_info(url, session=None, size_policy="head", **kwargs):
+async def _file_info(url, session, size_policy="head", **kwargs):
     """Call HEAD on the server to get details about the file (size/checksum etc.)
 
     Default operation is to explicitly allow redirects and use encoding
@@ -715,7 +720,6 @@ async def _file_info(url, session=None, size_policy="head", **kwargs):
     head = kwargs.get("headers", {}).copy()
     head["Accept-Encoding"] = "identity"
     kwargs["headers"] = head
-    session = session or await get_client()
 
     info = {}
     if size_policy == "head":
@@ -742,13 +746,14 @@ async def _file_info(url, session=None, size_policy="head", **kwargs):
                 info["checksum"] = checksum
         except aiohttp.ClientResponseError:
             logger.debug("Error retrieving file size")
-        r.close()
 
     return info
 
 
-async def _file_size(*args, **kwargs):
-    info = _file_info(*args, **kwargs)
+async def _file_size(url, session=None, *args, **kwargs):
+    if session is None:
+        session = await get_client()
+    info = _file_info(url, session=session, *args, **kwargs)
     return info.get("size")
 
 
