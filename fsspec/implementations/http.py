@@ -742,9 +742,9 @@ async def _file_info(url, session, size_policy="head", **kwargs):
         elif "Content-Range" in r.headers:
             info["size"] = int(r.headers["Content-Range"].split("/")[1])
 
-        checksum = r.headers.get("ETag") or r.headers.get("Content-MD5")
-        if checksum is not None:
-            info["checksum"] = checksum
+        for checksum_field in ["ETag", "Content-MD5", "Digest"]:
+            if r.headers.get(checksum_field):
+                info[checksum_field] = r.headers[checksum_field]
 
     return info
 
@@ -752,7 +752,7 @@ async def _file_info(url, session, size_policy="head", **kwargs):
 async def _file_size(url, session=None, *args, **kwargs):
     if session is None:
         session = await get_client()
-    info = _file_info(url, session=session, *args, **kwargs)
+    info = await _file_info(url, session=session, *args, **kwargs)
     return info.get("size")
 
 

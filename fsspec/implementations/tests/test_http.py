@@ -429,7 +429,7 @@ def test_mcat_expand(server):
 def test_info(server):
     fs = fsspec.filesystem("http", headers={"give_etag": "true", "head_ok": "true"})
     info = fs.info(server + "/index/realfile")
-    assert info["checksum"] == "xxx"
+    assert info["ETag"] == "xxx"
 
 
 def test_put_file(server, tmp_path):
