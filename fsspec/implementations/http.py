@@ -367,7 +367,6 @@ class HTTPFileSystem(AsyncFileSystem):
         corresponding file will not work).
         """
         info = {}
-        failed = exc = None
         session = await self.set_session()
 
         for policy in ["head", "get"]:
@@ -383,16 +382,13 @@ class HTTPFileSystem(AsyncFileSystem):
                 )
                 if info.get("size") is not None:
                     break
-            except Exception as e:
-                failed = policy
-                exc = e
-                logger.debug((str(e)))
+            except Exception as exc:
+                if policy == "get":
+                    # If get failed, then raise a FileNotFoundError
+                    raise FileNotFoundError(url) from exc
+                logger.debug(str(exc))
 
-        if failed == "get":
-            # If get failed, then raise a FileNotFoundError
-            raise FileNotFoundError(url) from exc
-        else:
-            return {"name": url, "size": None, **info, "type": "file"}
+        return {"name": url, "size": None, **info, "type": "file"}
 
     async def _glob(self, path, **kwargs):
         """
