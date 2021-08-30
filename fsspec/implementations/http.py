@@ -275,8 +275,14 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         session = await self.set_session()
-        meth = getattr(session, method)
 
+        method = method.lower()
+        if method not in ("post", "put"):
+            raise ValueError(
+                f"method has to be either 'post' or 'put', not: {method!r}"
+            )
+
+        meth = getattr(session, method)
         async with meth(lpath, data=gen_chunks(), **kw) as resp:
             self._raise_not_found_for_status(resp, lpath)
 

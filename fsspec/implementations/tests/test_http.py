@@ -4,6 +4,7 @@ import os
 import sys
 import threading
 import time
+from collections import ChainMap
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -25,12 +26,15 @@ win = os.name == "nt"
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):
-    files = {
+    static_files = {
         "/index/realfile": data,
         "/index/otherfile": data,
         "/index": index,
         "/data/20020401": listing,
     }
+    dynamic_files = {}
+
+    files = ChainMap(dynamic_files, static_files)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -80,6 +84,8 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         else:
             self.files[file_path] = self.rfile.read(length)
         self._respond(200)
+
+    do_PUT = do_POST
 
     def read_chunks(self):
         length = -1
@@ -140,6 +146,15 @@ def serve():
 def server():
     with serve() as s:
         yield s
+
+
+@pytest.fixture
+def reset_files():
+    yield
+
+    # Reset the newly added files after the
+    # test is completed.
+    HTTPTestHandler.dynamic_files.clear()
 
 
 def test_list(server):
@@ -432,7 +447,8 @@ def test_info(server):
     assert info["ETag"] == "xxx"
 
 
-def test_put_file(server, tmp_path):
+@pytest.mark.parametrize("method", ["POST", "PUT"])
+def test_put_file(server, tmp_path, method, reset_files):
     src_file = tmp_path / "file_1"
     src_file.write_bytes(data)
 
@@ -442,7 +458,7 @@ def test_put_file(server, tmp_path):
     with pytest.raises(FileNotFoundError):
         fs.info(server + "/hey")
 
-    fs.put_file(src_file, server + "/hey")
+    fs.put_file(src_file, server + "/hey", method=method)
     assert fs.info(server + "/hey")["size"] == len(data)
 
     fs.get_file(server + "/hey", dwl_file)
