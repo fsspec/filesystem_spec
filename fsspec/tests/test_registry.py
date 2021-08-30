@@ -93,6 +93,7 @@ def test_register_fail(clear_registry):
 def test_entry_points_registered_on_import(clear_registry, clean_imports):
     mock_ep = create_autospec(EntryPoint, module="fsspec.spec.AbstractFileSystem")
     mock_ep.name = "test"  # this can't be set in the constructor...
+    mock_ep.value = "fsspec.spec.AbstractFileSystem"
     if sys.version_info < (3, 8):
         import_location = "importlib_metadata.entry_points"
     else:
