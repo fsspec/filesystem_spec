@@ -11,6 +11,7 @@ import aiohttp
 import requests
 
 from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
+from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
@@ -58,6 +59,7 @@ class HTTPFileSystem(AsyncFileSystem):
         asynchronous=False,
         loop=None,
         client_kwargs=None,
+        get_client=get_client,
         **storage_options,
     ):
         """
@@ -79,6 +81,10 @@ class HTTPFileSystem(AsyncFileSystem):
             Passed to aiohttp.ClientSession, see
             https://docs.aiohttp.org/en/stable/client_reference.html
             For example, ``{'auth': aiohttp.BasicAuth('user', 'pass')}``
+        get_client: Callable[..., aiohttp.ClientSession]
+            A callable which takes keyword arguments and constructs
+            an aiohttp.ClientSession. It's state will be managed by
+            the HTTPFileSystem class.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open
@@ -90,6 +96,7 @@ class HTTPFileSystem(AsyncFileSystem):
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.client_kwargs = client_kwargs or {}
+        self.get_client = get_client
         self.kwargs = storage_options
         self._session = None
 
@@ -121,7 +128,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def set_session(self):
         if self._session is None:
-            self._session = await get_client(loop=self.loop, **self.client_kwargs)
+            self._session = await self.get_client(loop=self.loop, **self.client_kwargs)
             if not self.asynchronous:
                 weakref.finalize(self, self.close_session, self.loop, self._session)
         return self._session
@@ -223,18 +230,61 @@ class HTTPFileSystem(AsyncFileSystem):
             self._raise_not_found_for_status(r, url)
         return out
 
-    async def _get_file(self, rpath, lpath, chunk_size=5 * 2 ** 20, **kwargs):
+    async def _get_file(
+        self, rpath, lpath, chunk_size=5 * 2 ** 20, callback=_DEFAULT_CALLBACK, **kwargs
+    ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(rpath, **self.kwargs) as r:
+            try:
+                size = int(r.headers["content-length"])
+            except (ValueError, KeyError):
+                size = None
+
+            callback.set_size(size)
             self._raise_not_found_for_status(r, rpath)
             with open(lpath, "wb") as fd:
                 chunk = True
                 while chunk:
                     chunk = await r.content.read(chunk_size)
                     fd.write(chunk)
+                    callback.relative_update(len(chunk))
+
+    async def _put_file(
+        self,
+        rpath,
+        lpath,
+        chunk_size=5 * 2 ** 20,
+        callback=_DEFAULT_CALLBACK,
+        method="post",
+        **kwargs,
+    ):
+        async def gen_chunks():
+            with open(rpath, "rb") as f:
+                callback.set_size(f.seek(0, 2))
+                f.seek(0)
+
+                chunk = f.read(64 * 1024)
+                while chunk:
+                    yield chunk
+                    callback.relative_update(len(chunk))
+                    chunk = f.read(64 * 1024)
+
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        session = await self.set_session()
+
+        method = method.lower()
+        if method not in ("post", "put"):
+            raise ValueError(
+                f"method has to be either 'post' or 'put', not: {method!r}"
+            )
+
+        meth = getattr(session, method)
+        async with meth(lpath, data=gen_chunks(), **kw) as resp:
+            self._raise_not_found_for_status(resp, lpath)
 
     async def _exists(self, path, **kwargs):
         kw = self.kwargs.copy()
@@ -316,22 +366,29 @@ class HTTPFileSystem(AsyncFileSystem):
         which case size will be given as None (and certain operations on the
         corresponding file will not work).
         """
-        size = False
-        kw = self.kwargs.copy()
-        kw.update(kwargs)
+        info = {}
+        session = await self.set_session()
+
         for policy in ["head", "get"]:
             try:
-                session = await self.set_session()
-                size = await _file_size(url, size_policy=policy, session=session, **kw)
-                if size:
+                info.update(
+                    await _file_info(
+                        url,
+                        size_policy=policy,
+                        session=session,
+                        **self.kwargs,
+                        **kwargs,
+                    )
+                )
+                if info.get("size") is not None:
                     break
-            except Exception as e:
-                logger.debug((str(e)))
-        else:
-            # get failed, so conclude URL does not exist
-            if size is False:
-                raise FileNotFoundError(url)
-        return {"name": url, "size": size or None, "type": "file"}
+            except Exception as exc:
+                if policy == "get":
+                    # If get failed, then raise a FileNotFoundError
+                    raise FileNotFoundError(url) from exc
+                logger.debug(str(exc))
+
+        return {"name": url, "size": None, **info, "type": "file"}
 
     async def _glob(self, path, **kwargs):
         """
@@ -613,6 +670,7 @@ class HTTPStreamFile(AbstractBufferedFile):
 
         async def cor():
             r = await self.session.get(url, **kwargs).__aenter__()
+            self.fs._raise_not_found_for_status(r, url)
             return r
 
         self.r = sync(self.loop, cor)
@@ -654,8 +712,8 @@ async def get_range(session, url, start, end, file=None, **kwargs):
         return out
 
 
-async def _file_size(url, session=None, size_policy="head", **kwargs):
-    """Call HEAD on the server to get file size
+async def _file_info(url, session, size_policy="head", **kwargs):
+    """Call HEAD on the server to get details about the file (size/checksum etc.)
 
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
@@ -666,7 +724,8 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     head = kwargs.get("headers", {}).copy()
     head["Accept-Encoding"] = "identity"
     kwargs["headers"] = head
-    session = session or await get_client()
+
+    info = {}
     if size_policy == "head":
         r = await session.head(url, allow_redirects=ar, **kwargs)
     elif size_policy == "get":
@@ -674,21 +733,29 @@ async def _file_size(url, session=None, size_policy="head", **kwargs):
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
     async with r:
-        try:
-            r.raise_for_status()
+        r.raise_for_status()
 
-            # TODO:
-            #  recognise lack of 'Accept-Ranges',
-            #                 or 'Accept-Ranges': 'none' (not 'bytes')
-            #  to mean streaming only, no random access => return None
-            if "Content-Length" in r.headers:
-                return int(r.headers["Content-Length"])
-            elif "Content-Range" in r.headers:
-                return int(r.headers["Content-Range"].split("/")[1])
-        except aiohttp.ClientResponseError:
-            logger.debug("Error retrieving file size")
-            return None
-        r.close()
+        # TODO:
+        #  recognise lack of 'Accept-Ranges',
+        #                 or 'Accept-Ranges': 'none' (not 'bytes')
+        #  to mean streaming only, no random access => return None
+        if "Content-Length" in r.headers:
+            info["size"] = int(r.headers["Content-Length"])
+        elif "Content-Range" in r.headers:
+            info["size"] = int(r.headers["Content-Range"].split("/")[1])
+
+        for checksum_field in ["ETag", "Content-MD5", "Digest"]:
+            if r.headers.get(checksum_field):
+                info[checksum_field] = r.headers[checksum_field]
+
+    return info
+
+
+async def _file_size(url, session=None, *args, **kwargs):
+    if session is None:
+        session = await get_client()
+    info = await _file_info(url, session=session, *args, **kwargs)
+    return info.get("size")
 
 
 file_size = sync_wrapper(_file_size)

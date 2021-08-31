@@ -4,6 +4,7 @@ import os
 import sys
 import threading
 import time
+from collections import ChainMap
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -25,6 +26,19 @@ win = os.name == "nt"
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):
+    static_files = {
+        "/index/realfile": data,
+        "/index/otherfile": data,
+        "/index": index,
+        "/data/20020401": listing,
+    }
+    dynamic_files = {}
+
+    files = ChainMap(dynamic_files, static_files)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def _respond(self, code=200, headers=None, data=b""):
         headers = headers or {}
         headers.update({"User-Agent": "test"})
@@ -36,55 +50,79 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
-        if self.path.rstrip("/") not in [
-            "/index/realfile",
-            "/index/otherfile",
-            "/index",
-            "/data/20020401",
-        ]:
-            self._respond(404)
-            return
-
-        d = data if self.path in ["/index/realfile", "/index/otherfile"] else index
-        if self.path == "/data/20020401":
-            d = listing
+        file_path = self.path.rstrip("/")
+        file_data = self.files.get(file_path)
+        if file_data is None:
+            return self._respond(404)
         if "Range" in self.headers:
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")
             if start:
-                d = d[int(start) : (int(end) + 1) if end else None]
+                file_data = file_data[int(start) : (int(end) + 1) if end else None]
             else:
                 # suffix only
-                d = d[-int(end) :]
+                file_data = file_data[-int(end) :]
         if "give_length" in self.headers:
-            response_headers = {"Content-Length": len(d)}
-            self._respond(200, response_headers, d)
+            response_headers = {"Content-Length": len(file_data)}
+            self._respond(200, response_headers, file_data)
         elif "give_range" in self.headers:
-            self._respond(200, {"Content-Range": "0-%i/%i" % (len(d) - 1, len(d))}, d)
+            self._respond(
+                200,
+                {"Content-Range": "0-%i/%i" % (len(file_data) - 1, len(file_data))},
+                file_data,
+            )
         else:
-            self._respond(200, data=d)
+            self._respond(200, data=file_data)
+
+    def do_POST(self):
+        length = self.headers.get("Content-Length")
+        file_path = self.path.rstrip("/")
+        if length is None:
+            assert self.headers.get("Transfer-Encoding") == "chunked"
+            self.files[file_path] = b"".join(self.read_chunks())
+        else:
+            self.files[file_path] = self.rfile.read(length)
+        self._respond(200)
+
+    do_PUT = do_POST
+
+    def read_chunks(self):
+        length = -1
+        while length != 0:
+            line = self.rfile.readline().strip()
+            if len(line) == 0:
+                length = 0
+            else:
+                length = int(line, 16)
+            yield self.rfile.read(length)
+            self.rfile.readline()
 
     def do_HEAD(self):
-        d = data if self.path == "/index/realfile" else index
         if "head_not_auth" in self.headers:
-            self._respond(
+            return self._respond(
                 403, {"Content-Length": 123}, b"not authorized for HEAD request"
             )
-            return
-        if "head_ok" not in self.headers:
-            self._respond(405)
-            return
-        if self.path.rstrip("/") not in ["/index/realfile", "/index"]:
-            self._respond(404)
-        elif "give_length" in self.headers:
-            response_headers = {"Content-Length": len(d)}
+        elif "head_ok" not in self.headers:
+            return self._respond(405)
+
+        file_path = self.path.rstrip("/")
+        file_data = self.files.get(file_path)
+        if file_data is None:
+            return self._respond(404)
+
+        if "give_length" in self.headers:
+            response_headers = {"Content-Length": len(file_data)}
             if "zero_length" in self.headers:
                 response_headers["Content-Length"] = 0
 
             self._respond(200, response_headers)
         elif "give_range" in self.headers:
-            self._respond(200, {"Content-Range": "0-%i/%i" % (len(d) - 1, len(d))})
+            self._respond(
+                200, {"Content-Range": "0-%i/%i" % (len(file_data) - 1, len(file_data))}
+            )
+        elif "give_etag" in self.headers:
+            self._respond(200, {"ETag": "xxx"})
         else:
             self._respond(200)  # OK response, but no useful info
 
@@ -108,6 +146,15 @@ def serve():
 def server():
     with serve() as s:
         yield s
+
+
+@pytest.fixture
+def reset_files():
+    yield
+
+    # Reset the newly added files after the
+    # test is completed.
+    HTTPTestHandler.dynamic_files.clear()
 
 
 def test_list(server):
@@ -392,6 +439,30 @@ def test_mcat_expand(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     out = h.cat(server + "/index/*")
     assert out == {server + "/index/realfile": data}
+
+
+def test_info(server):
+    fs = fsspec.filesystem("http", headers={"give_etag": "true", "head_ok": "true"})
+    info = fs.info(server + "/index/realfile")
+    assert info["ETag"] == "xxx"
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT"])
+def test_put_file(server, tmp_path, method, reset_files):
+    src_file = tmp_path / "file_1"
+    src_file.write_bytes(data)
+
+    dwl_file = tmp_path / "down_1"
+
+    fs = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    with pytest.raises(FileNotFoundError):
+        fs.info(server + "/hey")
+
+    fs.put_file(src_file, server + "/hey", method=method)
+    assert fs.info(server + "/hey")["size"] == len(data)
+
+    fs.get_file(server + "/hey", dwl_file)
+    assert dwl_file.read_bytes() == data
 
 
 @pytest.mark.xfail(
