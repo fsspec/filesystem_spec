@@ -6,12 +6,28 @@ Changelog
 
 Enhancements
 
-    HTTTP
+- HTTP get_file/put_file APIs now support callbacks (#731)
+- New HTTP put_file method for transferring data to the remote server (chunked) (#731)
+- Customizable HTTP client initializers (through passing ``get_client`` argument) (#731, #701)
+- Support for various checksum / fingerprint headers in HTTP ``info()`` (#731)
+- local implementation of rm_file (#736)
+- local speed improvements (#711)
+- sharing options in SMB (#706)
+- streaming cat/get for ftp (#700)
 
-    - get_file/put_file APIs now support callbacks
-    - New put_file API for transferring data to the remote server (chunked)
-    - Customizable client initializers (through passing ``get_client`` argument)
-    - Support for various checksum / fingerprint headers in ``info()`` (``ETag``, ``MD5-Checksum``, ``Digest``)
+Fixes
+
+- check for remote directory when putting (#737)
+- storage_option update handling (#734(
+- await HTTP call before checking status (#726)
+- ftp connect (#722)
+- bytes conversion of times in mapper (#721)
+- variable overwrite in WholeFileCache cat (#719)
+- http file size again (#718)
+- rm and create directories in ftp (#716, #703)
+- list of files in async put (#713)
+- bytes to dict in cat (#710)
+
 
 2021.07.0
 ---------
