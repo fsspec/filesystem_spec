@@ -276,6 +276,7 @@ def test_isdir(server):
     h = fsspec.filesystem("http")
     assert h.isdir(server + "/index/")
     assert not h.isdir(server + "/index/realfile")
+    assert not h.isdir(server + "doesnotevenexist")
 
 
 def test_policy_arg(server):
