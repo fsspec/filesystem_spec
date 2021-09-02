@@ -472,7 +472,10 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def _isdir(self, path):
         # override, since all URLs are (also) files
-        return bool(await self._ls(path))
+        try:
+            return bool(await self._ls(path))
+        except (FileNotFoundError, ValueError):
+            return False
 
 
 class HTTPFile(AbstractBufferedFile):
