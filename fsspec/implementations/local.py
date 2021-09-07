@@ -315,6 +315,9 @@ class LocalFileOpener(io.IOBase):
     def seek(self, *args, **kwargs):
         return self.f.seek(*args, **kwargs)
 
+    def seekable(self, *args, **kwargs):
+        return self.f.seekable(*args, **kwargs)
+
     def readline(self, *args, **kwargs):
         return self.f.readline(*args, **kwargs)
 
