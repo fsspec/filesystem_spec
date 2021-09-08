@@ -724,3 +724,18 @@ def test_info_path_like(tmpdir):
 
     fs = LocalFileSystem()
     assert fs.exists(path)
+
+
+def test_seekable(tmpdir):
+    fs = LocalFileSystem()
+    tmpdir = str(tmpdir)
+    fn0 = os.path.join(tmpdir, "target")
+
+    with open(fn0, "wb") as f:
+        f.write(b"data")
+
+    f = fs.open(fn0, "rt")
+    assert f.seekable(), "file is not seekable"
+    f.seek(1)
+    assert f.read(1) == "a"
+    assert f.tell() == 2

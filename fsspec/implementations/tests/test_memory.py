@@ -138,3 +138,15 @@ def test_rm_reursive_empty_subdir(m):
     m.mkdir("recdir/subdir2")
     m.rm("recdir/", recursive=True)
     assert not m.exists("dir")
+
+
+def test_seekable(m):
+    fn0 = "foo.txt"
+    with m.open(fn0, "wb") as f:
+        f.write(b"data")
+
+    f = m.open(fn0, "rt")
+    assert f.seekable(), "file is not seekable"
+    f.seek(1)
+    assert f.read(1) == "a"
+    assert f.tell() == 2
