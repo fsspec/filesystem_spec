@@ -447,3 +447,14 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG", clear=True):
     logger.addHandler(handle)
     logger.setLevel(level)
     return logger
+
+
+def _unstrip_protocol(name, fs):
+    if isinstance(fs.protocol, str):
+        if name.startswith(fs.protocol):
+            return name
+        return fs.protocol + "://" + name
+    else:
+        if name.startswith(tuple(fs.protocol)):
+            return name
+        return fs.protocol[0] + "://" + name

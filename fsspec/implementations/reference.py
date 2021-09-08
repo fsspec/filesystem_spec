@@ -194,6 +194,10 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part_or_url[start:end]
         return self.fs.cat_file(part_or_url, start=start0, end=end0)[start:end]
 
+    def pipe_file(self, path, value, **_):
+        """Temporarily add binary data or reference as a file"""
+        self.references[path] = value
+
     async def _get_file(self, rpath, lpath, **kwargs):
         data = await self._cat_file(rpath)
         with open(lpath, "wb") as f:

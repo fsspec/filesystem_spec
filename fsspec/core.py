@@ -18,6 +18,7 @@ from .caching import (  # noqa: F401
 from .compression import compr
 from .registry import filesystem, get_filesystem_class
 from .utils import (
+    _unstrip_protocol,
     build_name_function,
     infer_compression,
     stringify_path,
@@ -123,6 +124,10 @@ class OpenFile(object):
     def __del__(self):
         if hasattr(self, "fobjects"):
             self.fobjects.clear()  # may cause cleanup of objects and close files
+
+    @property
+    def full_name(self):
+        return _unstrip_protocol(self.path, self.fs)
 
     def open(self):
         """Materialise this as a real open file without context
