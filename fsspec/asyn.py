@@ -369,7 +369,10 @@ class AsyncFileSystem(AbstractFileSystem):
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
         return await asyncio.gather(
-            *[self._cat_file(p, s, e, **kwargs) for p, s, e in zip(paths, starts, ends)]
+            *[
+                self._cat_file(p, start=s, end=e, **kwargs)
+                for p, s, e in zip(paths, starts, ends)
+            ]
         )
 
     async def _put(
