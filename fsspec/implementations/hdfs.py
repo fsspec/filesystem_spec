@@ -1,4 +1,5 @@
 import weakref
+from functools import partialmethod
 
 from pyarrow.hdfs import HadoopFileSystem
 
@@ -6,6 +7,52 @@ from fsspec.spec import AbstractFileSystem
 from fsspec.utils import infer_storage_options
 
 
+def inherits(*methods):
+    def client_method(self, method, *args, **kwargs):
+        return getattr(self.client, method)(*args, **kwargs)
+
+    def wrapper(cls):
+        for method in methods:
+            wrapped_method = partialmethod(client_method, method)
+            setattr(cls, method, wrapped_method)
+        return cls
+
+    return wrapper
+
+
+@inherits(
+    "chmod",
+    "chown",
+    "user",
+    "df",
+    "disk_usage",
+    "download",
+    "driver",
+    "exists",
+    "extra_conf",
+    "get_capacity",
+    "get_space_used",
+    "host",
+    "is_open",
+    "kerb_ticket",
+    "strip_protocol",
+    "mkdir",
+    "mv",
+    "port",
+    "get_capacity",
+    "get_space_used",
+    "df",
+    "chmod",
+    "chown",
+    "disk_usage",
+    "download",
+    "upload",
+    "_get_kwargs_from_urls",
+    "read_parquet",
+    "rm",
+    "stat",
+    "upload",
+)
 class PyArrowHDFS(AbstractFileSystem):
     """Adapted version of Arrow's HadoopFileSystem
 
@@ -129,62 +176,6 @@ class PyArrowHDFS(AbstractFileSystem):
             cache_options=cache_options,
             **kwargs,
         )
-
-    def __getattribute__(self, item):
-        if item in [
-            "_open",
-            "close",
-            "__init__",
-            "__getattribute__",
-            "__reduce_ex__",
-            "open",
-            "ls",
-            "makedirs",
-        ]:
-            # all the methods defined in this class. Note `open` here, since
-            # it calls `_open`, but is actually in superclass
-            return lambda *args, **kw: getattr(PyArrowHDFS, item)(self, *args, **kw)
-        if item == "__class__":
-            return PyArrowHDFS
-        d = object.__getattribute__(self, "__dict__")
-        pahdfs = d.get("pahdfs", None)  # fs is not immediately defined
-        if pahdfs is not None and item in [
-            "chmod",
-            "chown",
-            "user",
-            "df",
-            "disk_usage",
-            "download",
-            "driver",
-            "exists",
-            "extra_conf",
-            "get_capacity",
-            "get_space_used",
-            "host",
-            "is_open",
-            "kerb_ticket",
-            "strip_protocol",
-            "mkdir",
-            "mv",
-            "port",
-            "get_capacity",
-            "get_space_used",
-            "df",
-            "chmod",
-            "chown",
-            "disk_usage",
-            "download",
-            "upload",
-            "_get_kwargs_from_urls",
-            "read_parquet",
-            "rm",
-            "stat",
-            "upload",
-        ]:
-            return getattr(pahdfs, item)
-        else:
-            # attributes of the superclass, while target is being set up
-            return super().__getattribute__(item)
 
 
 class HDFSFile(object):
