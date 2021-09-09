@@ -62,12 +62,15 @@ def sync(loop, func, *args, timeout=None, **kwargs):
             timeout -= 1
             if timeout < 0:
                 raise FSTimeoutError
-    if isinstance(result[0], asyncio.TimeoutError):
+
+    return_result = result[0]
+    if isinstance(return_result, asyncio.TimeoutError):
         # suppress asyncio.TimeoutError, raise FSTimeoutError
-        raise FSTimeoutError
-    if isinstance(result[0], BaseException):
-        raise result[0]
-    return result[0]
+        raise FSTimeoutError from return_result
+    elif isinstance(return_result, BaseException):
+        raise return_result
+    else:
+        return return_result
 
 
 iothread = [None]  # dedicated fsspec IO thread
