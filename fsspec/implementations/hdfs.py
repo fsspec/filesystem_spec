@@ -2,16 +2,15 @@ import weakref
 
 from pyarrow.hdfs import HadoopFileSystem
 
-from ..spec import AbstractFileSystem
-from ..utils import infer_storage_options
+from fsspec.spec import AbstractFileSystem
+from fsspec.utils import infer_storage_options
 
 
 class PyArrowHDFS(AbstractFileSystem):
     """Adapted version of Arrow's HadoopFileSystem
 
-    This is a very simple wrapper over pa.hdfs.HadoopFileSystem, which
-    passes on all calls to the underlying class.
-    """
+    This is a very simple wrapper over the pyarrow.hdfs.HadoopFileSystem, which
+    passes on all calls to the underlying class."""
 
     protocol = "hdfs"
 
@@ -42,11 +41,9 @@ class PyArrowHDFS(AbstractFileSystem):
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
-        if self._cached:
-            return
-        AbstractFileSystem.__init__(self, **kwargs)
-        self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
-        pahdfs = HadoopFileSystem(
+        super().__init__(**kwargs)
+
+        self.client = HadoopFileSystem(
             host=host,
             port=port,
             user=user,
@@ -54,8 +51,46 @@ class PyArrowHDFS(AbstractFileSystem):
             driver=driver,
             extra_conf=extra_conf,
         )
-        weakref.finalize(self, lambda: pahdfs.close())
-        self.pahdfs = pahdfs
+        weakref.finalize(self, lambda: self.client.close())
+
+        self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
+
+    @staticmethod
+    def _get_kwargs_from_urls(path):
+        ops = infer_storage_options(path)
+        out = {}
+        if ops.get("host", None):
+            out["host"] = ops["host"]
+        if ops.get("username", None):
+            out["user"] = ops["username"]
+        if ops.get("port", None):
+            out["port"] = ops["port"]
+        return out
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        ops = infer_storage_options(path)
+        return ops["path"]
+
+    def __reduce_ex__(self, protocol):
+        return PyArrowHDFS, self.pars
+
+    def close(self):
+        self.client.close()
+
+    def ls(self, path, detail=True):
+        out = self.client.ls(path, detail=True)
+
+        listing = []
+        for original_entry in out:
+            entry = original_entry.copy()
+            entry["type"] = entry["kind"]
+            entry["name"] = self._strip_protocol(entry["name"])
+
+        if detail:
+            return listing
+        else:
+            return [entry["name"] for entry in listing]
 
     def _open(
         self,
@@ -94,39 +129,6 @@ class PyArrowHDFS(AbstractFileSystem):
             cache_options=cache_options,
             **kwargs,
         )
-
-    def __reduce_ex__(self, protocol):
-        return PyArrowHDFS, self.pars
-
-    def ls(self, path, detail=True):
-        out = self.pahdfs.ls(path, detail)
-        if detail:
-            for p in out:
-                p["type"] = p["kind"]
-                p["name"] = self._strip_protocol(p["name"])
-        else:
-            out = [self._strip_protocol(p) for p in out]
-        return out
-
-    @staticmethod
-    def _get_kwargs_from_urls(path):
-        ops = infer_storage_options(path)
-        out = {}
-        if ops.get("host", None):
-            out["host"] = ops["host"]
-        if ops.get("username", None):
-            out["user"] = ops["username"]
-        if ops.get("port", None):
-            out["port"] = ops["port"]
-        return out
-
-    def close(self):
-        self.pahdfs.close()
-
-    @classmethod
-    def _strip_protocol(cls, path):
-        ops = infer_storage_options(path)
-        return ops["path"]
 
     def __getattribute__(self, item):
         if item in [
@@ -212,7 +214,7 @@ class HDFSFile(object):
         self.path = path
         self.mode = mode
         self.block_size = block_size
-        self.fh = fs.pahdfs.open(path, mode, block_size, **kwargs)
+        self.fh = fs.client.open(path, mode, block_size, **kwargs)
         if self.fh.readable():
             self.seek_size = self.size()
 
