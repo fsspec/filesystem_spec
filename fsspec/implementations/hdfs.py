@@ -1,3 +1,4 @@
+import errno
 import os
 import re
 import secrets
@@ -5,15 +6,37 @@ import shutil
 import subprocess
 import weakref
 from contextlib import suppress
-from functools import partial
+from functools import partial, wraps
 
 from pyarrow.hdfs import HadoopFileSystem
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import infer_storage_options
 
+_NOT_FOUND = os.strerror(errno.ENOENT)
+
+
+def wrap_exceptions(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except OSError as exception:
+            if not exception.args:
+                raise
+
+            message, *args = exception.args
+            if "file does not exist" in message:
+                _, _, path = message.partition(": ")
+                raise FileNotFoundError(errno.ENOENT, _NOT_FOUND, path) from exception
+            else:
+                raise
+
+    return wrapper
+
 
 def inherits(*methods):
+    @wrap_exceptions
     def client_getter(name, self):
         return getattr(self.client, name)
 
@@ -132,6 +155,7 @@ class PyArrowHDFS(AbstractFileSystem):
     def close(self):
         self.client.close()
 
+    @wrap_exceptions
     def ls(self, path, detail=True):
         listing = [
             self._adjust_entry(entry) for entry in self.client.ls(path, detail=True)
@@ -142,6 +166,7 @@ class PyArrowHDFS(AbstractFileSystem):
         else:
             return [entry["name"] for entry in listing]
 
+    @wrap_exceptions
     def info(self, path):
         return self._adjust_entry(self.client.info(path))
 
@@ -153,6 +178,7 @@ class PyArrowHDFS(AbstractFileSystem):
             entry["name"] = self._strip_protocol(entry["path"])
         return entry
 
+    @wrap_exceptions
     def cp_file(self, lpath, rpath, **kwargs):
         with self.open(lpath) as lstream:
             tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
@@ -165,15 +191,18 @@ class PyArrowHDFS(AbstractFileSystem):
                     self.client.rm(tmp_fname)
                 raise
 
+    @wrap_exceptions
     def rm_file(self, path):
         return self.client.rm(path)
 
+    @wrap_exceptions
     def makedirs(self, path, exist_ok=False):
         if not exist_ok and self.exists(path):
             raise FileExistsError(path)
 
         return self.client.mkdir(path, create_parents=True)
 
+    @wrap_exceptions
     def _open(
         self,
         path,
