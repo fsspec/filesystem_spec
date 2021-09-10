@@ -52,6 +52,7 @@ def inherits(*methods):
     "rm",
     "stat",
     "upload",
+    "info",
 )
 class PyArrowHDFS(AbstractFileSystem):
     """Adapted version of Arrow's HadoopFileSystem
