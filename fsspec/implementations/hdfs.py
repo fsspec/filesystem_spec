@@ -43,7 +43,6 @@ CHECKSUM_REGEX = re.compile(r".*\t.*\t(?P<checksum>.*)")
     "kerb_ticket",
     "strip_protocol",
     "mkdir",
-    "mv",
     "port",
     "get_capacity",
     "get_space_used",
@@ -53,12 +52,10 @@ CHECKSUM_REGEX = re.compile(r".*\t.*\t(?P<checksum>.*)")
     "disk_usage",
     "download",
     "upload",
-    "_get_kwargs_from_urls",
     "read_parquet",
     "rm",
     "stat",
     "upload",
-    "info",
 )
 class PyArrowHDFS(AbstractFileSystem):
     """Adapted version of Arrow's HadoopFileSystem
@@ -133,19 +130,27 @@ class PyArrowHDFS(AbstractFileSystem):
         self.client.close()
 
     def ls(self, path, detail=True):
-        out = self.client.ls(path, detail=True)
-
-        listing = []
-        for original_entry in out:
-            entry = original_entry.copy()
-            entry["type"] = entry["kind"]
-            entry["name"] = self._strip_protocol(entry["name"])
-            listing.append(entry)
+        listing = [
+            self._adjust_entry(entry) for entry in self.client.ls(path, detail=True)
+        ]
 
         if detail:
             return listing
         else:
             return [entry["name"] for entry in listing]
+
+    def info(self, path):
+        return self._adjust_entry(self.client.info(path))
+
+    def _adjust_entry(self, original_entry):
+        entry = original_entry.copy()
+        entry["type"] = entry["kind"]
+        entry["name"] = self._strip_protocol(entry["path"])
+        return entry
+
+    def mv(self, l_path, r_path):
+        breakpoint()
+        return self.client.mv(l_path, r_path)
 
     def _open(
         self,
