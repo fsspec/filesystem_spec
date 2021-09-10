@@ -147,8 +147,10 @@ class PyArrowHDFS(AbstractFileSystem):
 
     def _adjust_entry(self, original_entry):
         entry = original_entry.copy()
-        entry["type"] = entry["kind"]
-        entry["name"] = self._strip_protocol(entry["path"])
+        if "type" not in entry:
+            entry["type"] = entry["kind"]
+        if "name" not in entry:
+            entry["name"] = self._strip_protocol(entry["path"])
         return entry
 
     def cp_file(self, lpath, rpath, **kwargs):
