@@ -1,5 +1,8 @@
+import os
+import re
+import subprocess
 import weakref
-from functools import partialmethod
+from functools import partial
 
 from pyarrow.hdfs import HadoopFileSystem
 
@@ -8,16 +11,19 @@ from fsspec.utils import infer_storage_options
 
 
 def inherits(*methods):
-    def client_method(self, method, *args, **kwargs):
-        return getattr(self.client, method)(*args, **kwargs)
+    def client_getter(name, self):
+        return getattr(self.client, name)
 
     def wrapper(cls):
         for method in methods:
-            wrapped_method = partialmethod(client_method, method)
-            setattr(cls, method, wrapped_method)
+            wrapped_method = partial(client_getter, method)
+            setattr(cls, method, property(wrapped_method))
         return cls
 
     return wrapper
+
+
+CHECKSUM_REGEX = re.compile(r".*\t.*\t(?P<checksum>.*)")
 
 
 @inherits(
@@ -178,6 +184,53 @@ class PyArrowHDFS(AbstractFileSystem):
             cache_options=cache_options,
             **kwargs,
         )
+
+    def checksum(self, path, env=None, **kwargs):
+        # PyArrow doesn't natively support retrieving the
+        # checksum, so we have to use hadoop fs
+
+        result = self._run_command(f"checksum {self._as_url(path)}", env=env)
+        if result is None:
+            return None
+
+        match = CHECKSUM_REGEX.match(result)
+        if match is None:
+            return None
+
+        return match.group("checksum")
+
+    def _run_command(self, cmd, env=None):
+        cmd = "hadoop fs -" + cmd
+        if self.user:
+            cmd = f"HADOOP_USER_NAME={self.user} " + cmd
+
+        # NOTE: close_fds doesn't work with redirected stdin/stdout/stderr.
+        # See https://github.com/iterative/dvc/issues/1197.
+        close_fds = os.name != "nt"
+
+        executable = os.getenv("SHELL") if os.name != "nt" else None
+        p = subprocess.Popen(
+            cmd,
+            shell=True,
+            close_fds=close_fds,
+            executable=executable,
+            env=env or os.environ,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        out, err = p.communicate()
+
+        if p.returncode != 0:
+            raise subprocess.CalledProcessError(p.returncode, cmd, out, err)
+        else:
+            return out.decode("utf-8")
+
+    def _as_url(self, path):
+        netloc = f"{self.host}:{self.port}"
+        if self.user:
+            netloc = f"{self.user}@{netloc}"
+        return f"hdfs://{netloc}/{path.lstrip('/')}"
 
 
 class HDFSFile(object):
