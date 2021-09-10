@@ -1268,6 +1268,7 @@ class AbstractBufferedFile(io.IOBase):
         autocommit=True,
         cache_type="readahead",
         cache_options=None,
+        size=None,
         **kwargs,
     ):
         """
@@ -1291,6 +1292,8 @@ class AbstractBufferedFile(io.IOBase):
         cache_options : dict
             Additional options passed to the constructor for the cache specified
             by `cache_type`.
+        size: int
+            If given and in read mode, suppressed having to look up the file size
         kwargs:
             Gets stored as self.kwargs
         """
@@ -1307,6 +1310,7 @@ class AbstractBufferedFile(io.IOBase):
         self.end = None
         self.start = None
         self.closed = False
+        self._details = None
 
         if cache_options is None:
             cache_options = {}
@@ -1324,9 +1328,10 @@ class AbstractBufferedFile(io.IOBase):
         if mode not in {"ab", "rb", "wb"}:
             raise NotImplementedError("File mode not supported")
         if mode == "rb":
-            if not hasattr(self, "details"):
-                self.details = fs.info(path)
-            self.size = self.details["size"]
+            if size is not None:
+                self.size = size
+            else:
+                self.size = self.details["size"]
             self.cache = caches[cache_type](
                 self.blocksize, self._fetch_range, self.size, **cache_options
             )
@@ -1335,6 +1340,16 @@ class AbstractBufferedFile(io.IOBase):
             self.offset = None
             self.forced = False
             self.location = None
+
+    @property
+    def details(self):
+        if self._details is None:
+            self._details = self.fs.info(self.path)
+        return self._info
+
+    @details.setter
+    def details(self, value):
+        self._details = value
 
     @property
     def full_name(self):

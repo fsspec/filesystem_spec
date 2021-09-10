@@ -139,11 +139,14 @@ class MemoryFileSystem(AbstractFileSystem):
                 "type": "directory",
             }
         elif path in self.store:
+            filelike = self.store[path]
             return {
                 "name": path,
-                "size": self.store[path].getbuffer().nbytes,
+                "size": filelike.size
+                if hasattr(filelike, "size")
+                else filelike.getbuffer().nbytes,
                 "type": "file",
-                "created": self.store[path].created,
+                "created": getattr(filelike, "created", None),
             }
         else:
             raise FileNotFoundError(path)

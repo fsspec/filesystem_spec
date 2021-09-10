@@ -422,6 +422,21 @@ class AllBytes(BaseCache):
         return self.data[start:end]
 
 
+class KnownPartsOfAFile(BaseCache):
+    name = "parts"
+
+    def __init__(self, _0, _1, size, data={}, **_):
+        super(KnownPartsOfAFile, self).__init__(None, None, size)
+        self.data = data
+
+    def _fetch(self, start, stop):
+        for (loc0, loc1), data in self.data.items():
+            if loc0 <= start < loc1:
+                off = start - loc0
+                return data[off : off + stop - start + 1]
+        raise ValueError("Read outside of any known block")
+
+
 caches = {
     "none": BaseCache,
     "mmap": MMapCache,
@@ -430,4 +445,5 @@ caches = {
     "block": BlockCache,
     "first": FirstChunkCache,
     "all": AllBytes,
+    "parts": KnownPartsOfAFile,
 }
