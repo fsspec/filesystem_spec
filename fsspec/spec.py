@@ -1345,7 +1345,7 @@ class AbstractBufferedFile(io.IOBase):
     def details(self):
         if self._details is None:
             self._details = self.fs.info(self.path)
-        return self._info
+        return self._details
 
     @details.setter
     def details(self, value):
