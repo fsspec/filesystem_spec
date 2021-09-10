@@ -133,6 +133,7 @@ class PyArrowHDFS(AbstractFileSystem):
             entry = original_entry.copy()
             entry["type"] = entry["kind"]
             entry["name"] = self._strip_protocol(entry["name"])
+            listing.append(entry)
 
         if detail:
             return listing
