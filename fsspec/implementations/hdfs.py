@@ -158,6 +158,9 @@ class PyArrowHDFS(AbstractFileSystem):
             self.move(tmp_fname, rpath)
             self.rm(tmp_fname)
 
+    def makedirs(self, path):
+        self.client.create_dir(path)
+
     def _open(
         self,
         path,
