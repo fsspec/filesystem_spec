@@ -105,7 +105,6 @@ class PyArrowHDFS(AbstractFileSystem):
             driver=driver,
             extra_conf=extra_conf,
         )
-        breakpoint()
         weakref.finalize(self, lambda: self.client.close())
 
         self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
@@ -159,10 +158,13 @@ class PyArrowHDFS(AbstractFileSystem):
                 with self.open(tmp_fname, "wb") as rstream:
                     shutil.copyfileobj(lstream, rstream)
                 self.client.mv(tmp_fname, rpath)
-            except:
+            except BaseException:  # noqa
                 with suppress(FileNotFoundError):
                     self.client.rm(tmp_fname)
                 raise
+
+    def rm_file(self, path):
+        return self.client.rm(path)
 
     def makedirs(self, path, exist_ok=False):
         if not exist_ok and self.exists(path):
@@ -282,7 +284,7 @@ class HDFSFile(object):
         self.fs = fs
         self.path = path
         self.mode = mode
-        self.block_size = block_size
+        self.blocksize = self.block_size = block_size
         self.fh = fs.client.open(path, mode, block_size, **kwargs)
         if self.fh.readable():
             self.seek_size = self.size()
