@@ -150,12 +150,12 @@ class PyArrowHDFS(AbstractFileSystem):
         entry["name"] = self._strip_protocol(entry["path"])
         return entry
 
-    def cp_file(self, lpath, rpath):
+    def cp_file(self, lpath, rpath, **kwargs):
         with self.open(lpath) as lstream:
             tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
-            with open(tmp_fname, "w") as rstream:
+            with self.open(tmp_fname, "wb") as rstream:
                 shutil.copyfileobj(lstream, rstream)
-            self.move(tmp_fname, rpath)
+            self.client.move(tmp_fname, rpath)
             self.rm(tmp_fname)
 
     def makedirs(self, path, exist_ok=False):
