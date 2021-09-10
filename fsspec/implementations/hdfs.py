@@ -1,5 +1,7 @@
 import os
 import re
+import secrets
+import shutil
 import subprocess
 import weakref
 from functools import partial
@@ -148,9 +150,13 @@ class PyArrowHDFS(AbstractFileSystem):
         entry["name"] = self._strip_protocol(entry["path"])
         return entry
 
-    def mv(self, l_path, r_path):
-        breakpoint()
-        return self.client.mv(l_path, r_path)
+    def cp_file(self, lpath, rpath):
+        with self.open(lpath) as lstream:
+            tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
+            with open(tmp_fname, "w") as rstream:
+                shutil.copyfileobj(lstream, rstream)
+            self.move(tmp_fname, rpath)
+            self.rm(tmp_fname)
 
     def _open(
         self,
