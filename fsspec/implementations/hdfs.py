@@ -4,6 +4,7 @@ import secrets
 import shutil
 import subprocess
 import weakref
+from contextlib import suppress
 from functools import partial
 
 from pyarrow.hdfs import HadoopFileSystem
@@ -104,6 +105,7 @@ class PyArrowHDFS(AbstractFileSystem):
             driver=driver,
             extra_conf=extra_conf,
         )
+        breakpoint()
         weakref.finalize(self, lambda: self.client.close())
 
         self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
@@ -153,10 +155,14 @@ class PyArrowHDFS(AbstractFileSystem):
     def cp_file(self, lpath, rpath, **kwargs):
         with self.open(lpath) as lstream:
             tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
-            with self.open(tmp_fname, "wb") as rstream:
-                shutil.copyfileobj(lstream, rstream)
-            self.client.move(tmp_fname, rpath)
-            self.rm(tmp_fname)
+            try:
+                with self.open(tmp_fname, "wb") as rstream:
+                    shutil.copyfileobj(lstream, rstream)
+                self.client.mv(tmp_fname, rpath)
+            except:
+                with suppress(FileNotFoundError):
+                    self.client.rm(tmp_fname)
+                raise
 
     def makedirs(self, path, exist_ok=False):
         if not exist_ok and self.exists(path):
