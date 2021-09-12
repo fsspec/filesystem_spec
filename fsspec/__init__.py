@@ -7,8 +7,7 @@ except ImportError:  # python < 3.8
         entry_points = None
 
 
-from . import caching
-from . import _version
+from . import _version, caching
 from .callbacks import Callback
 from .core import get_fs_token_paths, open, open_files, open_local
 from .exceptions import FSTimeoutError
@@ -21,7 +20,7 @@ from .registry import (
 )
 from .spec import AbstractFileSystem
 
-__version__ = _version.get_versions()['version']
+__version__ = _version.get_versions()["version"]
 
 __all__ = [
     "AbstractFileSystem",
