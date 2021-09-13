@@ -100,7 +100,7 @@ class ArrowFSWrapper(AbstractFileSystem):
     def mv_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
-        os.rename(path1, path2)
+        self.fs.move(path1, path2)
 
     def rm_file(self, path):
         path = self._strip_protocol(path)
