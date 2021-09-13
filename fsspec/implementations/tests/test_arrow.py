@@ -1,9 +1,11 @@
 import secrets
 
 import pytest
-from pyarrow.fs import FileSystem
 
-from fsspec.implementations.arrow import ArrowFSWrapper
+pyarrow_fs = pytest.importorskip("pyarrow.fs")
+FileSystem = pyarrow_fs.FileSystem
+
+from fsspec.implementations.arrow import ArrowFSWrapper  # noqa
 
 
 @pytest.fixture(scope="function")
