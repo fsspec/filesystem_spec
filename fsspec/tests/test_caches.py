@@ -91,3 +91,12 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
         result = cache._fetch(start, end)
         expected = string.ascii_letters[start:end].encode()
         assert result == expected
+
+
+def test_known():
+    c = caches["parts"](None, None, 100, {(10, 20): b"1" * 10, (0, 10): b"0" * 10})
+    assert (0, 20) in c.data  # got consolidated
+    assert c._fetch(5, 15) == b"0" * 5 + b"1" * 5
+    with pytest.raises(TypeError):
+        # tries to call None fetcher
+        c._fetch(25, 35)
