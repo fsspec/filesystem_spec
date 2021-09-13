@@ -1,4 +1,3 @@
-import datetime
 import os
 import posixpath
 import shutil
@@ -35,20 +34,21 @@ class ArrowFSWrapper(AbstractFileSystem):
             )
         self.fs = fs
 
-    def mkdir(self, path, create_parents=True, **kwargs):
-        path = self._strip_protocol(path)
-        if create_parents:
-            self.makedirs(path, exist_ok=True)
+    @classmethod
+    def _parent(cls, path):
+        path = cls._strip_protocol(path).rstrip("/")
+        if "/" in path:
+            return path.rsplit("/", 1)[0]
         else:
-            self.fs.create_dir(path, recursive=False)
+            return cls.root_marker
 
-    def makedirs(self, path, exist_ok=False):
-        path = self._strip_protocol(path)
-        self.fs.create_dir(path, recursive=True)
-
-    def rmdir(self, path):
-        path = self._strip_protocol(path)
-        self.fs.delete_dir(path)
+    @classmethod
+    def _strip_protocol(cls, path):
+        path = stringify_path(path)
+        if path.startswith("file://"):
+            path = path[7:]
+        path = os.path.expanduser(path)
+        return make_path_posix(path)
 
     def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
@@ -85,6 +85,7 @@ class ArrowFSWrapper(AbstractFileSystem):
         path2 = self._strip_protocol(path2).rstrip("/")
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
+
         if self.isfile(path1):
             shutil.copyfile(path1, path2)
         else:
@@ -100,6 +101,10 @@ class ArrowFSWrapper(AbstractFileSystem):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
         os.rename(path1, path2)
+
+    def rm_file(self, path):
+        path = self._strip_protocol(path)
+        self.fs.delete_file(path)
 
     def rm(self, path, recursive=False, maxdepth=None):
         path = self._strip_protocol(path).rstrip("/")
@@ -118,41 +123,17 @@ class ArrowFSWrapper(AbstractFileSystem):
 
         return closing(stream)
 
-    def touch(self, path, **kwargs):
+    def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
-        # if self.auto_mkdir:
-        #     self.makedirs(self._parent(path), exist_ok=True)
-        if self.exists(path):
-            pass  # os.utime(path, None)
+        if create_parents:
+            self.makedirs(path, exist_ok=True)
         else:
-            self.fs.open_input_file(path).close()
+            self.fs.create_dir(path, recursive=False)
 
-    def created(self, path):
-        info = self.info(path=path)
-        return datetime.datetime.utcfromtimestamp(info["created"])
+    def makedirs(self, path, exist_ok=False):
+        path = self._strip_protocol(path)
+        self.fs.create_dir(path, recursive=True)
 
-    def modified(self, path):
-        info = self.info(path=path)
-        return datetime.datetime.utcfromtimestamp(info["mtime"])
-
-    @classmethod
-    def _parent(cls, path):
-        path = cls._strip_protocol(path).rstrip("/")
-        if "/" in path:
-            return path.rsplit("/", 1)[0]
-        else:
-            return cls.root_marker
-
-    @classmethod
-    def _strip_protocol(cls, path):
-        path = stringify_path(path)
-        if path.startswith("file://"):
-            path = path[7:]
-        path = os.path.expanduser(path)
-        return make_path_posix(path)
-
-    def _isfilestore(self):
-        # Inheriting from DaskFileSystem makes this False (S3, etc. were)
-        # the original motivation. But we are a posix-like file system.
-        # See https://github.com/dask/dask/issues/5526
-        return True
+    def rmdir(self, path):
+        path = self._strip_protocol(path)
+        self.fs.delete_dir(path)
