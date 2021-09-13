@@ -61,31 +61,29 @@ class ArrowFSWrapper(AbstractFileSystem):
         else:
             return paths
 
-    def glob(self, path, **kwargs):
-        path = self._strip_protocol(path)
-        return super().glob(path, **kwargs)
-
     def info(self, path, **kwargs):
-        path = self._strip_protocol(path)
-        info = self.fs.get_file_info([path])[0]
-        dest = False
-
         from pyarrow.fs import FileType
 
-        if info.type == FileType.Directory:
-            t = "directory"
-        elif info.is_file:
-            t = "file"
+        path = self._strip_protocol(path)
+        [info] = self.fs.get_file_info([path])
+        return self._make_entry(info)
+
+    def _make_entry(self, info):
+        from pyarrow.fs import FileType
+
+        if info.type is FileType.Directory:
+            kind = "directory"
+        elif info.type is FileType.File:
+            kind = "file"
         else:
-            t = "other"
-        result = {
-            "name": path,
+            kind = "other"
+
+        return {
+            "name": info.path,
             "size": info.size,
-            "type": t,
-            "created": None,
+            "type": kind,
             "mtime": info.mtime,
         }
-        return result
 
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
