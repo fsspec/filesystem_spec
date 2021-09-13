@@ -6,7 +6,7 @@ import shutil
 from contextlib import suppress
 from functools import wraps
 
-from fsspec import AbstractFileSystem
+from fsspec.spec import AbstractFileSystem
 from fsspec.utils import mirror_from, stringify_path
 
 
@@ -20,7 +20,7 @@ def wrap_exceptions(func):
                 raise
 
             message, *args = exception.args
-            if "file does not exist" in message:
+            if isinstance(message, str) and "file does not exist" in message:
                 _, _, path = message.partition(": ")
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
             else:
@@ -41,17 +41,8 @@ class ArrowFSWrapper(AbstractFileSystem):
     root_marker = "/"
 
     def __init__(self, fs, **kwargs):
-        super().__init__(**kwargs)
-        try:
-            import pyarrow.fs
-        except ImportError:
-            raise ImportError("pyarrow required to use the ArrowFSWrapper")
-
-        if not isinstance(fs, pyarrow.fs.FileSystem):
-            raise TypeError(
-                "'fs' should be an instance of a pyarrow.fs.FileSystem subclass"
-            )
         self.fs = fs
+        super().__init__(**kwargs)
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -77,6 +68,15 @@ class ArrowFSWrapper(AbstractFileSystem):
         path = self._strip_protocol(path)
         [info] = self.fs.get_file_info([path])
         return self._make_entry(info)
+
+    def exists(self, path):
+        path = self._strip_protocol(path)
+        try:
+            self.info(path)
+        except FileNotFoundError:
+            return False
+        else:
+            return True
 
     def _make_entry(self, info):
         from pyarrow.fs import FileType
