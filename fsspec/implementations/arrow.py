@@ -20,9 +20,8 @@ def wrap_exceptions(func):
                 raise
 
             message, *args = exception.args
-            if isinstance(message, str) and "file does not exist" in message:
-                _, _, path = message.partition(": ")
-                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+            if isinstance(message, str) and "does not exist" in message:
+                raise FileNotFoundError(errno.ENOENT, message) from exception
             else:
                 raise
 
@@ -114,10 +113,12 @@ class ArrowFSWrapper(AbstractFileSystem):
                 raise
 
     @wrap_exceptions
-    def mv_file(self, path1, path2, **kwargs):
+    def mv(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
         self.fs.move(path1, path2)
+
+    mv_file = mv
 
     @wrap_exceptions
     def rm_file(self, path):
@@ -127,8 +128,11 @@ class ArrowFSWrapper(AbstractFileSystem):
     @wrap_exceptions
     def rm(self, path, recursive=False, maxdepth=None):
         path = self._strip_protocol(path).rstrip("/")
-        if recursive and self.isdir(path):
-            self.fs.delete_dir(path)
+        if self.isdir(path):
+            if recursive:
+                self.fs.delete_dir(path)
+            else:
+                raise ValueError("Can't delete directories without recursive=False")
         else:
             self.fs.delete_file(path)
 
