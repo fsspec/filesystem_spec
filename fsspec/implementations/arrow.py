@@ -5,7 +5,6 @@ import posixpath
 import re
 import shutil
 import tempfile
-
 from contextlib import closing
 
 from fsspec import AbstractFileSystem
@@ -67,7 +66,6 @@ class ArrowFSWrapper(AbstractFileSystem):
         return super().glob(path, **kwargs)
 
     def info(self, path, **kwargs):
-        print("getting info for ", path)
         path = self._strip_protocol(path)
         info = self.fs.get_file_info([path])[0]
         dest = False
