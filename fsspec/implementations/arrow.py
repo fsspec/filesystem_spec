@@ -6,6 +6,8 @@ import re
 import shutil
 import tempfile
 
+from contextlib import closing
+
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import make_path_posix
 from fsspec.utils import stringify_path
@@ -116,10 +118,14 @@ class ArrowFSWrapper(AbstractFileSystem):
             self.fs.delete_file(path)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
-        path = self._strip_protocol(path)
-        if self.auto_mkdir and "w" in mode:
-            self.makedirs(self._parent(path), exist_ok=True)
-        return LocalFileOpener(path, mode, fs=self, **kwargs)
+        if mode == "rb":
+            stream = self.fs.open_input_stream(path)
+        elif mode == "wb":
+            stream = self.fs.open_output_stream(path)
+        else:
+            raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
+
+        return closing(stream)
 
     def touch(self, path, **kwargs):
         path = self._strip_protocol(path)
@@ -159,84 +165,3 @@ class ArrowFSWrapper(AbstractFileSystem):
         # the original motivation. But we are a posix-like file system.
         # See https://github.com/dask/dask/issues/5526
         return True
-
-
-class LocalFileOpener(object):
-    def __init__(self, path, mode, autocommit=True, fs=None, **kwargs):
-        self.path = path
-        self.mode = mode
-        self.fs = fs
-        self.f = None
-        self.autocommit = autocommit
-        self.blocksize = io.DEFAULT_BUFFER_SIZE
-        self._open()
-
-    def _open(self):
-        if self.f is None or self.f.closed:
-            if self.autocommit or "w" not in self.mode:
-                self.f = open(self.path, mode=self.mode)
-            else:
-                # TODO: check if path is writable?
-                i, name = tempfile.mkstemp()
-                os.close(i)  # we want normal open and normal buffered file
-                self.temp = name
-                self.f = open(name, mode=self.mode)
-            if "w" not in self.mode:
-                self.details = self.fs.info(self.path)
-                self.size = self.details["size"]
-                self.f.size = self.size
-
-    def _fetch_range(self, start, end):
-        # probably only used by cached FS
-        if "r" not in self.mode:
-            raise ValueError
-        self._open()
-        self.f.seek(start)
-        return self.f.read(end - start)
-
-    def __setstate__(self, state):
-        self.f = None
-        loc = state.pop("loc", None)
-        self.__dict__.update(state)
-        if "r" in state["mode"]:
-            self.f = None
-            self._open()
-            self.f.seek(loc)
-
-    def __getstate__(self):
-        d = self.__dict__.copy()
-        d.pop("f")
-        if "r" in self.mode:
-            d["loc"] = self.f.tell()
-        else:
-            if not self.f.closed:
-                raise ValueError("Cannot serialise open write-mode local file")
-        return d
-
-    def commit(self):
-        if self.autocommit:
-            raise RuntimeError("Can only commit if not already set to autocommit")
-        os.replace(self.temp, self.path)
-
-    def discard(self):
-        if self.autocommit:
-            raise RuntimeError("Cannot discard if set to autocommit")
-        os.remove(self.temp)
-
-    def __fspath__(self):
-        # uniquely among fsspec implementations, this is a real, local path
-        return self.path
-
-    def __iter__(self):
-        return self.f.__iter__()
-
-    def __getattr__(self, item):
-        return getattr(self.f, item)
-
-    def __enter__(self):
-        self._incontext = True
-        return self.f.__enter__()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self._incontext = False
-        self.f.__exit__(exc_type, exc_value, traceback)
