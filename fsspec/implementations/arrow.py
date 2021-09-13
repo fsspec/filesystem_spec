@@ -7,6 +7,7 @@ import shutil
 import tempfile
 
 from fsspec import AbstractFileSystem
+from fsspec.implementations.local import make_path_posix
 from fsspec.utils import stringify_path
 
 
@@ -158,38 +159,6 @@ class ArrowFSWrapper(AbstractFileSystem):
         # the original motivation. But we are a posix-like file system.
         # See https://github.com/dask/dask/issues/5526
         return True
-
-
-def make_path_posix(path, sep=os.sep):
-    """ Make path generic """
-    if isinstance(path, (list, set, tuple)):
-        return type(path)(make_path_posix(p) for p in path)
-    if re.match("/[A-Za-z]:", path):
-        # for windows file URI like "file:///C:/folder/file"
-        # or "file:///C:\\dir\\file"
-        path = path[1:]
-    if path.startswith("\\\\"):
-        # special case for windows UNC/DFS-style paths, do nothing,
-        # just flip the slashes around (case below does not work!)
-        return path.replace("\\", "/")
-    if re.match("[A-Za-z]:", path):
-        # windows full path like "C:\\local\\path"
-        return path.lstrip("\\").replace("\\", "/").replace("//", "/")
-    if path.startswith("\\"):
-        # windows network path like "\\server\\path"
-        return "/" + path.lstrip("\\").replace("\\", "/").replace("//", "/")
-    if (
-        sep not in path
-        and "/" not in path
-        or (sep == "/" and not path.startswith("/"))
-        or (sep == "\\" and ":" not in path)
-    ):
-        # relative path like "path" or "rel\\path" (win) or rel/path"
-        path = os.path.abspath(path)
-        if os.sep == "\\":
-            # abspath made some more '\\' separators
-            return make_path_posix(path, sep)
-    return path
 
 
 class LocalFileOpener(object):
