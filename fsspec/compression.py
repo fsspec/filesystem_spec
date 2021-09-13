@@ -107,8 +107,9 @@ class SnappyFile(AbstractBufferedFile):
     def __init__(self, infile, mode, **kwargs):
         import snappy
 
-        self.details = {"size": 999999999}  # not true, but OK if we don't seek
-        super().__init__(fs=None, path="snappy", mode=mode.strip("b") + "b", **kwargs)
+        super().__init__(
+            fs=None, path="snappy", mode=mode.strip("b") + "b", size=999999999, **kwargs
+        )
         self.infile = infile
         if "r" in mode:
             self.codec = snappy.StreamDecompressor()

@@ -425,16 +425,25 @@ class AllBytes(BaseCache):
 class KnownPartsOfAFile(BaseCache):
     name = "parts"
 
-    def __init__(self, _0, _1, size, data={}, **_):
-        super(KnownPartsOfAFile, self).__init__(None, None, size)
+    def __init__(self, blocksize, fetcher, size, data={}, **_):
+        super(KnownPartsOfAFile, self).__init__(blocksize, fetcher, size)
+
+        # simple consolidation of contiguous blocks
+        for start0, stop in data.copy():
+            for start, stop1 in data.copy():
+                if stop == start:
+                    data[(start0, stop1)] = data.pop((start0, stop)) + data.pop(
+                        (start, stop1)
+                    )
         self.data = data
 
     def _fetch(self, start, stop):
         for (loc0, loc1), data in self.data.items():
-            if loc0 <= start < loc1:
+            if loc0 <= start < loc1 and loc0 <= stop <= loc1:
                 off = start - loc0
                 return data[off : off + stop - start + 1]
-        raise ValueError("Read outside of any known block")
+        # Safety valve if we miss cache - but this should never happen
+        return self.fetcher(start, stop)
 
 
 caches = {
