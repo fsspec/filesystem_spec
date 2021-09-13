@@ -45,6 +45,7 @@ setup(
         "github": ["requests"],
         "gs": ["gcsfs"],
         "hdfs": ["pyarrow >= 1"],
+        "arrow": ["pyarrow >= 1"],
         "http": ["requests", "aiohttp"],
         "sftp": ["paramiko"],
         "s3": ["s3fs"],
