@@ -13,9 +13,7 @@ class ArrowFSWrapper(AbstractFileSystem):
 
     """
 
-    # root_marker = "/"
-    # protocol = "file"
-    # local_file = True
+    root_marker = "/"
 
     def __init__(self, fs, **kwargs):
         super().__init__(**kwargs)
@@ -29,14 +27,6 @@ class ArrowFSWrapper(AbstractFileSystem):
                 "'fs' should be an instance of a pyarrow.fs.FileSystem subclass"
             )
         self.fs = fs
-
-    @classmethod
-    def _parent(cls, path):
-        path = cls._strip_protocol(path).rstrip("/")
-        if "/" in path:
-            return path.rsplit("/", 1)[0]
-        else:
-            return cls.root_marker
 
     @classmethod
     def _strip_protocol(cls, path):
