@@ -1,6 +1,5 @@
 import os
 import posixpath
-import shutil
 from contextlib import closing
 
 from fsspec import AbstractFileSystem
@@ -86,10 +85,7 @@ class ArrowFSWrapper(AbstractFileSystem):
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
 
-        if self.isfile(path1):
-            shutil.copyfile(path1, path2)
-        else:
-            self.mkdirs(path2, exist_ok=True)
+        self.fs.copy_file(path1, path2)
 
     def get_file(self, path1, path2, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
