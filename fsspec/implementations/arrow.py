@@ -1,9 +1,6 @@
-import os
-import posixpath
 from contextlib import closing
 
 from fsspec import AbstractFileSystem
-from fsspec.implementations.local import make_path_posix
 from fsspec.utils import stringify_path
 
 
@@ -44,18 +41,19 @@ class ArrowFSWrapper(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         path = stringify_path(path)
-        if path.startswith("file://"):
-            path = path[7:]
-        path = os.path.expanduser(path)
-        return make_path_posix(path)
+        _, _, path = path.partition("://")
+        return path
 
     def ls(self, path, detail=False, **kwargs):
-        path = self._strip_protocol(path)
-        paths = [posixpath.join(path, f) for f in os.listdir(path)]
+        from pyarrow.fs import FileSelector
+
+        entries = [
+            self._make_entry(entry) for entry in self.get_file_info(FileSelector(path))
+        ]
         if detail:
-            return [self.info(f) for f in paths]
+            return entries
         else:
-            return paths
+            return [entry["name"] for entry in entries]
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
