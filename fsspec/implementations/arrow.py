@@ -7,7 +7,7 @@ from contextlib import suppress
 from functools import wraps
 
 from fsspec.spec import AbstractFileSystem
-from fsspec.utils import mirror_from, stringify_path
+from fsspec.utils import infer_storage_options, mirror_from, stringify_path
 
 
 def wrap_exceptions(func):
@@ -206,3 +206,15 @@ class HadoopFileSystemWrapper(ArrowFSWrapper):
             extra_conf=extra_conf,
         )
         super().__init__(fs=fs, **kwargs)
+
+    @staticmethod
+    def _get_kwargs_from_urls(path):
+        ops = infer_storage_options(path)
+        out = {}
+        if ops.get("host", None):
+            out["host"] = ops["host"]
+        if ops.get("username", None):
+            out["user"] = ops["username"]
+        if ops.get("port", None):
+            out["port"] = ops["port"]
+        return out
