@@ -82,9 +82,6 @@ class ArrowFSWrapper(AbstractFileSystem):
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
-        if self.auto_mkdir:
-            self.makedirs(self._parent(path2), exist_ok=True)
-
         self.fs.copy_file(path1, path2)
 
     def get_file(self, path1, path2, **kwargs):
