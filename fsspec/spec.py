@@ -1258,6 +1258,7 @@ class AbstractBufferedFile(io.IOBase):
     """
 
     DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+    _details = None
 
     def __init__(
         self,
@@ -1310,7 +1311,6 @@ class AbstractBufferedFile(io.IOBase):
         self.end = None
         self.start = None
         self.closed = False
-        self._details = None
 
         if cache_options is None:
             cache_options = {}
@@ -1350,6 +1350,7 @@ class AbstractBufferedFile(io.IOBase):
     @details.setter
     def details(self, value):
         self._details = value
+        self.size = value["size"]
 
     @property
     def full_name(self):
