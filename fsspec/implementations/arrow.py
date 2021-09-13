@@ -1,10 +1,7 @@
 import datetime
-import io
 import os
 import posixpath
-import re
 import shutil
-import tempfile
 from contextlib import closing
 
 from fsspec import AbstractFileSystem
@@ -62,8 +59,6 @@ class ArrowFSWrapper(AbstractFileSystem):
             return paths
 
     def info(self, path, **kwargs):
-        from pyarrow.fs import FileType
-
         path = self._strip_protocol(path)
         [info] = self.fs.get_file_info([path])
         return self._make_entry(info)
