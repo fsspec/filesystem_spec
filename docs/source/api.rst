@@ -123,6 +123,12 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.hdfs.PyArrowHDFS
    :members: __init__
 
+.. autoclass:: fsspec.implementations.hdfs.ArrowFSWrapper
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.hdfs.HadoopFileSystem
+   :members: __init__
+
 .. autoclass:: fsspec.implementations.dask.DaskWorkerFileSystem
    :members: __init__
 
