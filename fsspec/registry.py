@@ -130,7 +130,7 @@ known_implementations = {
         "err": "pyarrow and local java libraries required for HDFS",
     },
     "arrow_hdfs": {
-        "class": "fsspec.implementations.arrow.HadoopFileSystemWrapper",
+        "class": "fsspec.implementations.arrow.HadoopFileSystem",
         "err": "pyarrow and local java libraries required for HDFS",
     },
     "webhdfs": {

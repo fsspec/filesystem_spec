@@ -187,7 +187,7 @@ class ArrowFile(io.IOBase):
         return self.close()
 
 
-class HadoopFileSystemWrapper(ArrowFSWrapper):
+class HadoopFileSystem(ArrowFSWrapper):
     """A wrapper on top of the pyarrow.fs.HadoopFileSystem
     to connect it's interface with fsspec"""
 

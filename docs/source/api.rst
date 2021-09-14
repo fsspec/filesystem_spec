@@ -98,7 +98,7 @@ Built-in Implementations
    fsspec.implementations.ftp.FTPFileSystem
    fsspec.implementations.hdfs.PyArrowHDFS
    fsspec.implementations.arrow.ArrowFSWrapper
-   fsspec.implementations.arrow.HadoopFileSystemWrapper
+   fsspec.implementations.arrow.HadoopFileSystem
    fsspec.implementations.dask.DaskWorkerFileSystem
    fsspec.implementations.http.HTTPFileSystem
    fsspec.implementations.local.LocalFileSystem
