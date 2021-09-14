@@ -59,6 +59,27 @@ def test_move(fs, remote_dir):
     assert initial_info == secondary_info
 
 
+def test_move_recursive(fs, remote_dir):
+    src = remote_dir + "/src"
+    dest = remote_dir + "/dest"
+
+    assert fs.isdir(src) is False
+    fs.mkdir(src)
+    assert fs.isdir(src)
+
+    fs.touch(src + "/a.txt")
+    fs.mkdir(src + "/b")
+    fs.touch(src + "/b/c.txt")
+    fs.move(src, dest, recursive=True)
+
+    assert fs.isdir(src) is False
+    assert not fs.exists(src)
+
+    assert fs.isdir(dest)
+    assert fs.exists(dest)
+    assert fs.cat(dest + "/b/c.txt") == fs.cat(dest + "/a.txt") == b""
+
+
 def test_copy(fs, remote_dir):
     fs.touch(remote_dir + "/a.txt")
     initial_info = fs.info(remote_dir + "/a.txt")
