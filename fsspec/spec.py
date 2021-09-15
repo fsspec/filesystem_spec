@@ -579,6 +579,11 @@ class AbstractFileSystem(up, metaclass=_Cached):
             # any exception allowed bar FileNotFoundError?
             return False
 
+    def lexists(self, path, **kwargs):
+        """If there is a file at the given path (including
+        broken links)"""
+        return self.exists(path)
+
     def info(self, path, **kwargs):
         """Give details of entry at path
 
