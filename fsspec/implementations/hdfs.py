@@ -3,7 +3,6 @@ import os
 import re
 import secrets
 import shutil
-import subprocess
 import weakref
 from contextlib import suppress
 from functools import partial, wraps
@@ -12,8 +11,6 @@ from pyarrow.hdfs import HadoopFileSystem
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import infer_storage_options
-
-_NOT_FOUND = os.strerror(errno.ENOENT)
 
 
 def wrap_exceptions(func):
@@ -26,9 +23,10 @@ def wrap_exceptions(func):
                 raise
 
             message, *args = exception.args
-            if "file does not exist" in message:
-                _, _, path = message.partition(": ")
-                raise FileNotFoundError(errno.ENOENT, _NOT_FOUND, path) from exception
+            if "does not exist" in message:
+                raise FileNotFoundError(
+                    errno.ENOENT, os.strerror(errno.ENOENT)
+                ) from exception
             else:
                 raise
 
@@ -77,7 +75,6 @@ CHECKSUM_REGEX = re.compile(r".*\t.*\t(?P<checksum>.*)")
     "chown",
     "disk_usage",
     "download",
-    "upload",
     "read_parquet",
     "rm",
     "stat",
@@ -182,6 +179,8 @@ class PyArrowHDFS(AbstractFileSystem):
     def cp_file(self, lpath, rpath, **kwargs):
         with self.open(lpath) as lstream:
             tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
+            # Perform an atomic copy (stream to a temporory file and
+            # move it to the actual destination).
             try:
                 with self.open(tmp_fname, "wb") as rstream:
                     shutil.copyfileobj(lstream, rstream)
@@ -240,53 +239,6 @@ class PyArrowHDFS(AbstractFileSystem):
             cache_options=cache_options,
             **kwargs,
         )
-
-    def checksum(self, path, env=None, **kwargs):
-        # PyArrow doesn't natively support retrieving the
-        # checksum, so we have to use hadoop fs
-
-        result = self._run_command(f"checksum {self._as_url(path)}", env=env)
-        if result is None:
-            return None
-
-        match = CHECKSUM_REGEX.match(result)
-        if match is None:
-            return None
-
-        return match.group("checksum")
-
-    def _run_command(self, cmd, env=None):
-        cmd = "hadoop fs -" + cmd
-        if self.user:
-            cmd = f"HADOOP_USER_NAME={self.user} " + cmd
-
-        # NOTE: close_fds doesn't work with redirected stdin/stdout/stderr.
-        # See https://github.com/iterative/dvc/issues/1197.
-        close_fds = os.name != "nt"
-
-        executable = os.getenv("SHELL") if os.name != "nt" else None
-        p = subprocess.Popen(
-            cmd,
-            shell=True,
-            close_fds=close_fds,
-            executable=executable,
-            env=env or os.environ,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        out, err = p.communicate()
-
-        if p.returncode != 0:
-            raise subprocess.CalledProcessError(p.returncode, cmd, out, err)
-        else:
-            return out.decode("utf-8")
-
-    def _as_url(self, path):
-        netloc = f"{self.host}:{self.port}"
-        if self.user:
-            netloc = f"{self.user}@{netloc}"
-        return f"hdfs://{netloc}/{path.lstrip('/')}"
 
 
 class HDFSFile(object):
