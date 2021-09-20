@@ -568,3 +568,18 @@ def test_dummy_callbacks_files_branched(tmpdir):
     fs.get(base, dest, callback=callback)
     check_events(base, dest)
     callback.events.clear()
+
+
+def test_sftp(sftp_server):
+    from fsspec.implementations.sftp import SFTPFileSystem
+    from mocksftp import keys
+
+    fs = SFTPFileSystem(
+        sftp_server.host,
+        username="sample-user",
+        port=sftp_server.port,
+        key_filename=keys.SAMPLE_USER_PRIVATE_KEY,
+    )
+    assert fs.ls(fs.root_marker) == []
+    fs.touch("a.txt")
+    assert fs.ls(fs.root_marker) == ["a.txt"]

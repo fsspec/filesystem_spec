@@ -108,6 +108,8 @@ class SFTPFileSystem(AbstractFileSystem):
         }
         if parent_path:
             out["name"] = "/".join([parent_path.rstrip("/"), stat.filename])
+        else:
+            out["name"] = stat.filename
         return out
 
     def ls(self, path, detail=False):
