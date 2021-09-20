@@ -129,6 +129,10 @@ known_implementations = {
         "class": "fsspec.implementations.hdfs.PyArrowHDFS",
         "err": "pyarrow and local java libraries required for HDFS",
     },
+    "arrow_hdfs": {
+        "class": "fsspec.implementations.arrow.HadoopFileSystem",
+        "err": "pyarrow and local java libraries required for HDFS",
+    },
     "webhdfs": {
         "class": "fsspec.implementations.webhdfs.WebHDFS",
         "err": 'webHDFS access requires "requests" to be installed',

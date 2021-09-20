@@ -1,5 +1,6 @@
 import io
 import sys
+from unittest.mock import Mock
 
 import pytest
 
@@ -7,6 +8,7 @@ from fsspec.utils import (
     can_be_local,
     common_prefix,
     infer_storage_options,
+    mirror_from,
     other_paths,
     read_block,
     seek_delimiter,
@@ -310,3 +312,33 @@ def test_log():
 def test_can_local(par):
     url, outcome = par
     assert can_be_local(url) == outcome
+
+
+def test_mirror_from():
+
+    mock = Mock()
+    mock.attr = 1
+
+    @mirror_from("client", ["attr", "func_1", "func_2"])
+    class Real:
+        @property
+        def client(self):
+            return mock
+
+        def func_2(self):
+            assert False, "have to overwrite this"
+
+        def func_3(self):
+            return "should succeed"
+
+    obj = Real()
+    assert obj.attr == mock.attr
+
+    obj.func_1()
+    mock.func_1.assert_called()
+
+    obj.func_2(1, 2)
+    mock.func_2.assert_called_with(1, 2)
+
+    assert obj.func_3() == "should succeed"
+    mock.func_3.assert_not_called()

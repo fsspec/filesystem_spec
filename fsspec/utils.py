@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import sys
+from functools import partial
 from hashlib import md5
 from urllib.parse import urlsplit
 
@@ -447,3 +448,21 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG", clear=True):
     logger.addHandler(handle)
     logger.setLevel(level)
     return logger
+
+
+def mirror_from(origin_name, methods):
+    """Mirror attributes and methods from the given
+    origin_name attribute of the instance to the
+    decorated class"""
+
+    def origin_getter(method, self):
+        origin = getattr(self, origin_name)
+        return getattr(origin, method)
+
+    def wrapper(cls):
+        for method in methods:
+            wrapped_method = partial(origin_getter, method)
+            setattr(cls, method, property(wrapped_method))
+        return cls
+
+    return wrapper
