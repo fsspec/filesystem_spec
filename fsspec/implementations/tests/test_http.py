@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import io
 import os
 import sys
 import threading
@@ -469,6 +470,9 @@ def test_put_file(server, tmp_path, method, reset_files):
     with open(src_file, "rb") as stream:
         fs.put_file(stream, server + "/hey_2", method=method)
     assert fs.cat(server + "/hey_2") == b"xxx"
+
+    fs.put_file(io.BytesIO(b"yyy"), server + "/hey_3", method=method)
+    assert fs.cat(server + "/hey_3") == b"xxx"
 
 
 @pytest.mark.xfail(
