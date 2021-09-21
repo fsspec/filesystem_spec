@@ -255,8 +255,8 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def _put_file(
         self,
-        rpath,
         lpath,
+        rpath,
         chunk_size=5 * 2 ** 20,
         callback=_DEFAULT_CALLBACK,
         method="post",
@@ -265,11 +265,11 @@ class HTTPFileSystem(AsyncFileSystem):
         async def gen_chunks():
             # Support passing arbitrary file-like objects
             # and use them instead of streams.
-            if isinstance(rpath, io.IOBase):
-                context = nullcontext(rpath)
+            if isinstance(lpath, io.IOBase):
+                context = nullcontext(lpath)
                 use_seek = False  # might not support seeking
             else:
-                context = open(rpath, "rb")
+                context = open(lpath, "rb")
                 use_seek = True
 
             with context as f:
@@ -294,8 +294,8 @@ class HTTPFileSystem(AsyncFileSystem):
             )
 
         meth = getattr(session, method)
-        async with meth(lpath, data=gen_chunks(), **kw) as resp:
-            self._raise_not_found_for_status(resp, lpath)
+        async with meth(rpath, data=gen_chunks(), **kw) as resp:
+            self._raise_not_found_for_status(resp, rpath)
 
     async def _exists(self, path, **kwargs):
         kw = self.kwargs.copy()
