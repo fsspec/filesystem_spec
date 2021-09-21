@@ -465,6 +465,11 @@ def test_put_file(server, tmp_path, method, reset_files):
     fs.get_file(server + "/hey", dwl_file)
     assert dwl_file.read_bytes() == data
 
+    src_file.write_bytes(b"xxx")
+    with open(src_file, "rb") as stream:
+        fs.put_file(stream, server + "/hey_2", method=method)
+    assert fs.cat(server + "/hey_2") == b"xxx"
+
 
 @pytest.mark.xfail(
     condition=sys.flags.optimize > 1, reason="no docstrings when optimised"

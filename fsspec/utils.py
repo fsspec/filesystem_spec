@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import sys
+from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
 from urllib.parse import urlsplit
@@ -466,3 +467,12 @@ def mirror_from(origin_name, methods):
         return cls
 
     return wrapper
+
+
+try:
+    from contextlib import nullcontext
+except ImportError:
+
+    @contextmanager
+    def nullcontext(obj=None):
+        yield obj

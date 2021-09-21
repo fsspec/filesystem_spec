@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import asyncio
+import io
 import logging
 import re
 import weakref
@@ -14,7 +15,7 @@ from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
+from fsspec.utils import DEFAULT_BLOCK_SIZE, nullcontext, tokenize
 
 from ..caching import AllBytes
 
@@ -262,9 +263,19 @@ class HTTPFileSystem(AsyncFileSystem):
         **kwargs,
     ):
         async def gen_chunks():
-            with open(rpath, "rb") as f:
-                callback.set_size(f.seek(0, 2))
-                f.seek(0)
+            # Support passing arbitrary file-like objects
+            # and use them instead of streams.
+            if isinstance(rpath, io.IOBase):
+                context = nullcontext(rpath)
+                use_seek = False  # might not support seeking
+            else:
+                context = open(rpath, "rb")
+                use_seek = True
+
+            with context as f:
+                if use_seek:
+                    callback.set_size(f.seek(0, 2))
+                    f.seek(0)
 
                 chunk = f.read(64 * 1024)
                 while chunk:
