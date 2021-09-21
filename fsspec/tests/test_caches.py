@@ -100,6 +100,6 @@ def test_known():
     c = caches["parts"](None, None, 100, {(10, 20): b"1" * 10, (0, 10): b"0" * 10})
     assert (0, 20) in c.data  # got consolidated
     assert c._fetch(5, 15) == b"0" * 5 + b"1" * 5
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         # tries to call None fetcher
         c._fetch(25, 35)
