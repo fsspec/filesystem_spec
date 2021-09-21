@@ -441,9 +441,11 @@ class KnownPartsOfAFile(BaseCache):
         for (loc0, loc1), data in self.data.items():
             if loc0 <= start < loc1 and loc0 <= stop <= loc1:
                 off = start - loc0
-                return data[off : off + stop - start]
-        # Safety valve if we miss cache - but this should never happen
-        return self.fetcher(start, stop)
+                out = data[off : off + stop - start]
+                # reads beyond buffer are padded with zero
+                out += b"\x00" * (stop - start - len(out))
+                return out
+        raise ValueError("Read outside of know parts of file")
 
 
 caches = {
