@@ -141,8 +141,8 @@ known_implementations = {
     "s3a": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
     "wandb": {"class": "wandbfs.WandbFS", "err": "Install wandbfs to access wandb"},
     "oci": {
-        "class": "ocifs.OCIFileSystem", 
-        "err": "Install ocifs to access OCI Object Storage"
+        "class": "ocifs.OCIFileSystem",
+        "err": "Install ocifs to access OCI Object Storage",
     },
     "adl": {
         "class": "adlfs.AzureDatalakeFileSystem",
