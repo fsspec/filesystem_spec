@@ -1,7 +1,10 @@
 # https://hadoop.apache.org/docs/r1.0.4/webhdfs.html
 
 import logging
+import secrets
+import shutil
 import uuid
+from contextlib import suppress
 from urllib.parse import quote
 
 import requests
@@ -122,7 +125,7 @@ class WebHDFS(AbstractFileSystem):
         args = kwargs.copy()
         args.update(self.pars)
         args["op"] = op.upper()
-        logger.debug(url, method, args)
+        logger.debug("sending %s with %s", url, method)
         out = self.session.request(
             method=method.upper(),
             url=url,
@@ -332,6 +335,23 @@ class WebHDFS(AbstractFileSystem):
             path=path,
             recursive="true" if recursive else "false",
         )
+
+    def rm_file(self, path, **kwargs):
+        self.rm(path)
+
+    def cp_file(self, lpath, rpath, **kwargs):
+        with self.open(lpath) as lstream:
+            tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
+            # Perform an atomic copy (stream to a temporory file and
+            # move it to the actual destination).
+            try:
+                with self.open(tmp_fname, "wb") as rstream:
+                    shutil.copyfileobj(lstream, rstream)
+                self.mv(tmp_fname, rpath)
+            except BaseException:  # noqa
+                with suppress(FileNotFoundError):
+                    self.rm(tmp_fname)
+                raise
 
     def _apply_proxy(self, location):
         if self.proxy and callable(self.proxy):
