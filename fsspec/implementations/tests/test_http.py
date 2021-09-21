@@ -472,7 +472,7 @@ def test_put_file(server, tmp_path, method, reset_files):
     assert fs.cat(server + "/hey_2") == b"xxx"
 
     fs.put_file(io.BytesIO(b"yyy"), server + "/hey_3", method=method)
-    assert fs.cat(server + "/hey_3") == b"xxx"
+    assert fs.cat(server + "/hey_3") == b"yyy"
 
 
 @pytest.mark.xfail(
