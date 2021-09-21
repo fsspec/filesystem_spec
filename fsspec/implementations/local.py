@@ -105,6 +105,9 @@ class LocalFileSystem(AbstractFileSystem):
                 result["size"] = 0
         return result
 
+    def lexists(self, path, **kwargs):
+        return osp.lexists(path)
+
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
@@ -314,6 +317,9 @@ class LocalFileOpener(io.IOBase):
 
     def seek(self, *args, **kwargs):
         return self.f.seek(*args, **kwargs)
+
+    def seekable(self, *args, **kwargs):
+        return self.f.seekable(*args, **kwargs)
 
     def readline(self, *args, **kwargs):
         return self.f.readline(*args, **kwargs)

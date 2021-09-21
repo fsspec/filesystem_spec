@@ -357,7 +357,25 @@ def _un_chain(path, kwargs):
 
 
 def url_to_fs(url, **kwargs):
-    """Turn fully-qualified and potentially chained URL into filesystem instance"""
+    """
+    Turn fully-qualified and potentially chained URL into filesystem instance
+
+    Parameters
+    ----------
+    url : str
+        The fsspec-compatible URL
+    **kwargs: dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
+
+    Returns
+    -------
+    filesystem : FileSystem
+        The new filesystem discovered from ``url`` and created with
+        ``**kwargs``.
+    urlpath : str
+        The file-systems-specific URL for ``url``.
+    """
     chain = _un_chain(url, kwargs)
     if len(chain) > 1:
         inkwargs = {}

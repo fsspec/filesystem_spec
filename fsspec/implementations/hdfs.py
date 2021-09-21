@@ -1,17 +1,90 @@
+import errno
+import os
+import re
+import secrets
+import shutil
 import weakref
+from contextlib import suppress
+from functools import partial, wraps
 
 from pyarrow.hdfs import HadoopFileSystem
 
-from ..spec import AbstractFileSystem
-from ..utils import infer_storage_options
+from fsspec.spec import AbstractFileSystem
+from fsspec.utils import infer_storage_options
 
 
+def wrap_exceptions(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except OSError as exception:
+            if not exception.args:
+                raise
+
+            message, *args = exception.args
+            if "does not exist" in message:
+                raise FileNotFoundError(
+                    errno.ENOENT, os.strerror(errno.ENOENT)
+                ) from exception
+            else:
+                raise
+
+    return wrapper
+
+
+def inherits(*methods):
+    @wrap_exceptions
+    def client_getter(name, self):
+        return getattr(self.client, name)
+
+    def wrapper(cls):
+        for method in methods:
+            wrapped_method = partial(client_getter, method)
+            setattr(cls, method, property(wrapped_method))
+        return cls
+
+    return wrapper
+
+
+CHECKSUM_REGEX = re.compile(r".*\t.*\t(?P<checksum>.*)")
+
+
+@inherits(
+    "chmod",
+    "chown",
+    "user",
+    "df",
+    "disk_usage",
+    "download",
+    "driver",
+    "exists",
+    "extra_conf",
+    "get_capacity",
+    "get_space_used",
+    "host",
+    "is_open",
+    "kerb_ticket",
+    "strip_protocol",
+    "mkdir",
+    "port",
+    "get_capacity",
+    "get_space_used",
+    "df",
+    "chmod",
+    "chown",
+    "disk_usage",
+    "download",
+    "read_parquet",
+    "rm",
+    "stat",
+    "upload",
+)
 class PyArrowHDFS(AbstractFileSystem):
     """Adapted version of Arrow's HadoopFileSystem
 
-    This is a very simple wrapper over pa.hdfs.HadoopFileSystem, which
-    passes on all calls to the underlying class.
-    """
+    This is a very simple wrapper over the pyarrow.hdfs.HadoopFileSystem, which
+    passes on all calls to the underlying class."""
 
     protocol = "hdfs"
 
@@ -42,11 +115,9 @@ class PyArrowHDFS(AbstractFileSystem):
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
-        if self._cached:
-            return
-        AbstractFileSystem.__init__(self, **kwargs)
-        self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
-        pahdfs = HadoopFileSystem(
+        super().__init__(**kwargs)
+
+        self.client = HadoopFileSystem(
             host=host,
             port=port,
             user=user,
@@ -54,9 +125,83 @@ class PyArrowHDFS(AbstractFileSystem):
             driver=driver,
             extra_conf=extra_conf,
         )
-        weakref.finalize(self, lambda: pahdfs.close())
-        self.pahdfs = pahdfs
+        weakref.finalize(self, lambda: self.client.close())
 
+        self.pars = (host, port, user, kerb_ticket, driver, extra_conf)
+
+    @staticmethod
+    def _get_kwargs_from_urls(path):
+        ops = infer_storage_options(path)
+        out = {}
+        if ops.get("host", None):
+            out["host"] = ops["host"]
+        if ops.get("username", None):
+            out["user"] = ops["username"]
+        if ops.get("port", None):
+            out["port"] = ops["port"]
+        return out
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        ops = infer_storage_options(path)
+        return ops["path"]
+
+    def __reduce_ex__(self, protocol):
+        return PyArrowHDFS, self.pars
+
+    def close(self):
+        self.client.close()
+
+    @wrap_exceptions
+    def ls(self, path, detail=True):
+        listing = [
+            self._adjust_entry(entry) for entry in self.client.ls(path, detail=True)
+        ]
+
+        if detail:
+            return listing
+        else:
+            return [entry["name"] for entry in listing]
+
+    @wrap_exceptions
+    def info(self, path):
+        return self._adjust_entry(self.client.info(path))
+
+    def _adjust_entry(self, original_entry):
+        entry = original_entry.copy()
+        if "type" not in entry:
+            entry["type"] = entry["kind"]
+        if "name" not in entry:
+            entry["name"] = self._strip_protocol(entry["path"])
+        return entry
+
+    @wrap_exceptions
+    def cp_file(self, lpath, rpath, **kwargs):
+        with self.open(lpath) as lstream:
+            tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
+            # Perform an atomic copy (stream to a temporory file and
+            # move it to the actual destination).
+            try:
+                with self.open(tmp_fname, "wb") as rstream:
+                    shutil.copyfileobj(lstream, rstream)
+                self.client.mv(tmp_fname, rpath)
+            except BaseException:  # noqa
+                with suppress(FileNotFoundError):
+                    self.client.rm(tmp_fname)
+                raise
+
+    @wrap_exceptions
+    def rm_file(self, path):
+        return self.client.rm(path)
+
+    @wrap_exceptions
+    def makedirs(self, path, exist_ok=False):
+        if not exist_ok and self.exists(path):
+            raise FileExistsError(path)
+
+        return self.client.mkdir(path, create_parents=True)
+
+    @wrap_exceptions
     def _open(
         self,
         path,
@@ -95,95 +240,6 @@ class PyArrowHDFS(AbstractFileSystem):
             **kwargs,
         )
 
-    def __reduce_ex__(self, protocol):
-        return PyArrowHDFS, self.pars
-
-    def ls(self, path, detail=True):
-        out = self.pahdfs.ls(path, detail)
-        if detail:
-            for p in out:
-                p["type"] = p["kind"]
-                p["name"] = self._strip_protocol(p["name"])
-        else:
-            out = [self._strip_protocol(p) for p in out]
-        return out
-
-    @staticmethod
-    def _get_kwargs_from_urls(path):
-        ops = infer_storage_options(path)
-        out = {}
-        if ops.get("host", None):
-            out["host"] = ops["host"]
-        if ops.get("username", None):
-            out["user"] = ops["username"]
-        if ops.get("port", None):
-            out["port"] = ops["port"]
-        return out
-
-    def close(self):
-        self.pahdfs.close()
-
-    @classmethod
-    def _strip_protocol(cls, path):
-        ops = infer_storage_options(path)
-        return ops["path"]
-
-    def __getattribute__(self, item):
-        if item in [
-            "_open",
-            "close",
-            "__init__",
-            "__getattribute__",
-            "__reduce_ex__",
-            "open",
-            "ls",
-            "makedirs",
-        ]:
-            # all the methods defined in this class. Note `open` here, since
-            # it calls `_open`, but is actually in superclass
-            return lambda *args, **kw: getattr(PyArrowHDFS, item)(self, *args, **kw)
-        if item == "__class__":
-            return PyArrowHDFS
-        d = object.__getattribute__(self, "__dict__")
-        pahdfs = d.get("pahdfs", None)  # fs is not immediately defined
-        if pahdfs is not None and item in [
-            "chmod",
-            "chown",
-            "user",
-            "df",
-            "disk_usage",
-            "download",
-            "driver",
-            "exists",
-            "extra_conf",
-            "get_capacity",
-            "get_space_used",
-            "host",
-            "is_open",
-            "kerb_ticket",
-            "strip_protocol",
-            "mkdir",
-            "mv",
-            "port",
-            "get_capacity",
-            "get_space_used",
-            "df",
-            "chmod",
-            "chown",
-            "disk_usage",
-            "download",
-            "upload",
-            "_get_kwargs_from_urls",
-            "read_parquet",
-            "rm",
-            "stat",
-            "upload",
-        ]:
-            return getattr(pahdfs, item)
-        else:
-            # attributes of the superclass, while target is being set up
-            return super().__getattribute__(item)
-
 
 class HDFSFile(object):
     """Wrapper around arrow's HdfsFile
@@ -211,8 +267,8 @@ class HDFSFile(object):
         self.fs = fs
         self.path = path
         self.mode = mode
-        self.block_size = block_size
-        self.fh = fs.pahdfs.open(path, mode, block_size, **kwargs)
+        self.blocksize = self.block_size = block_size
+        self.fh = fs.client.open(path, mode, block_size, **kwargs)
         if self.fh.readable():
             self.seek_size = self.size()
 

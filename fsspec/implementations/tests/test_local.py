@@ -527,6 +527,35 @@ def test_linked_files(tmpdir):
         assert f.read() == data
 
 
+def test_linked_files_exists(tmpdir):
+    origin = tmpdir / "original"
+    copy_file = tmpdir / "copy"
+
+    fs = LocalFileSystem()
+    fs.touch(origin)
+
+    try:
+        os.symlink(origin, copy_file)
+    except OSError:
+        if WIN:
+            pytest.xfail("Ran on win without admin permissions")
+        else:
+            raise
+
+    assert fs.exists(copy_file)
+    assert fs.lexists(copy_file)
+
+    os.unlink(origin)
+
+    assert not fs.exists(copy_file)
+    assert fs.lexists(copy_file)
+
+    os.unlink(copy_file)
+
+    assert not fs.exists(copy_file)
+    assert not fs.lexists(copy_file)
+
+
 def test_linked_directories(tmpdir):
     tmpdir = str(tmpdir)
 
@@ -724,3 +753,18 @@ def test_info_path_like(tmpdir):
 
     fs = LocalFileSystem()
     assert fs.exists(path)
+
+
+def test_seekable(tmpdir):
+    fs = LocalFileSystem()
+    tmpdir = str(tmpdir)
+    fn0 = os.path.join(tmpdir, "target")
+
+    with open(fn0, "wb") as f:
+        f.write(b"data")
+
+    f = fs.open(fn0, "rt")
+    assert f.seekable(), "file is not seekable"
+    f.seek(1)
+    assert f.read(1) == "a"
+    assert f.tell() == 2

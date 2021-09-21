@@ -323,3 +323,11 @@ def test_chained_fo():
     with of[0] as f:
         assert f.read() == b"test"
     assert "afile" in os.listdir(d3)
+
+
+def test_url_to_fs():
+    url = "memory://a.txt"
+    fs, url2 = fsspec.core.url_to_fs(url)
+
+    assert isinstance(fs, MemoryFileSystem)
+    assert url2 == "/a.txt"
