@@ -44,7 +44,7 @@ def letters_fetcher(start, end):
     return string.ascii_letters[start:end].encode()
 
 
-@pytest.fixture(params=caches.values(), ids=list(caches.keys()))
+@pytest.fixture(params=caches.values(), ids=[c for c in caches if c != "parts"])
 def Cache_imp(request):
     return request.param
 
