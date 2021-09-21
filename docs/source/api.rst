@@ -191,6 +191,7 @@ Other Known Implementations
 - `adl`_ for Azure DataLake storage
 - `abfs`_ for Azure Blob service
 - `dropbox`_ for access to dropbox shares
+- `ocifs`_ for access to Oracle Cloud Object Storage
 - `gdrive`_ to access Google Drive and shares (experimental)
 - `wandbfs`_ to access Wandb run data (experimental)
 
@@ -199,6 +200,7 @@ Other Known Implementations
 .. _adl: https://github.com/dask/adlfs
 .. _abfs: https://github.com/dask/adlfs
 .. _dropbox: https://github.com/MarineChap/intake_dropbox
+.. _ocifs: https://pypi.org/project/ocifs
 .. _gdrive: https://github.com/intake/gdrivefs
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 

@@ -49,6 +49,7 @@ setup(
         "http": ["requests", "aiohttp"],
         "sftp": ["paramiko"],
         "s3": ["s3fs"],
+        "oci": ["ocifs"],
         "smb": ["smbprotocol"],
         "ssh": ["paramiko"],
     },
