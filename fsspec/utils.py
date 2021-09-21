@@ -450,6 +450,17 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG", clear=True):
     return logger
 
 
+def _unstrip_protocol(name, fs):
+    if isinstance(fs.protocol, str):
+        if name.startswith(fs.protocol):
+            return name
+        return fs.protocol + "://" + name
+    else:
+        if name.startswith(tuple(fs.protocol)):
+            return name
+        return fs.protocol[0] + "://" + name
+
+
 def mirror_from(origin_name, methods):
     """Mirror attributes and methods from the given
     origin_name attribute of the instance to the

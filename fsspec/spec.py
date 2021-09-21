@@ -14,6 +14,7 @@ from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
+    _unstrip_protocol,
     get_package_version_without_import,
     other_paths,
     read_block,
@@ -700,18 +701,39 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             raise ValueError("path must be str or dict")
 
+    def cat_ranges(self, paths, starts, ends, max_gap=None, **kwargs):
+        if max_gap is not None:
+            raise NotImplementedError
+        if not isinstance(paths, list):
+            raise TypeError
+        if not isinstance(starts, list):
+            starts = [starts] * len(paths)
+        if not isinstance(ends, list):
+            ends = [starts] * len(paths)
+        if len(starts) != len(paths) or len(ends) != len(paths):
+            raise ValueError
+        return [self.cat_file(p, s, e) for p, s, e in zip(paths, starts, ends)]
+
     def cat(self, path, recursive=False, on_error="raise", **kwargs):
         """Fetch (potentially multiple) paths' contents
 
-        Returns a dict of {path: contents} if there are multiple paths
-        or the path has been otherwise expanded
-
+        Parameters
+        ----------
+        recursive: bool
+            If True, assume the path(s) are directories, and get all the
+            contained files
         on_error : "raise", "omit", "return"
             If raise, an underlying exception will be raised (converted to KeyError
             if the type is in self.missing_exceptions); if omit, keys with exception
             will simply not be included in the output; if "return", all keys are
             included in the output, but the value will be bytes or an exception
             instance.
+        kwargs: passed to cat_file
+
+        Returns
+        -------
+        dict of {path: contents} if there are multiple paths
+        or the path has been otherwise expanded
         """
         paths = self.expand_path(path, recursive=recursive)
         if (
@@ -1241,6 +1263,7 @@ class AbstractBufferedFile(io.IOBase):
     """
 
     DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+    _details = None
 
     def __init__(
         self,
@@ -1251,6 +1274,7 @@ class AbstractBufferedFile(io.IOBase):
         autocommit=True,
         cache_type="readahead",
         cache_options=None,
+        size=None,
         **kwargs,
     ):
         """
@@ -1274,6 +1298,8 @@ class AbstractBufferedFile(io.IOBase):
         cache_options : dict
             Additional options passed to the constructor for the cache specified
             by `cache_type`.
+        size: int
+            If given and in read mode, suppressed having to look up the file size
         kwargs:
             Gets stored as self.kwargs
         """
@@ -1307,9 +1333,10 @@ class AbstractBufferedFile(io.IOBase):
         if mode not in {"ab", "rb", "wb"}:
             raise NotImplementedError("File mode not supported")
         if mode == "rb":
-            if not hasattr(self, "details"):
-                self.details = fs.info(path)
-            self.size = self.details["size"]
+            if size is not None:
+                self.size = size
+            else:
+                self.size = self.details["size"]
             self.cache = caches[cache_type](
                 self.blocksize, self._fetch_range, self.size, **cache_options
             )
@@ -1318,6 +1345,21 @@ class AbstractBufferedFile(io.IOBase):
             self.offset = None
             self.forced = False
             self.location = None
+
+    @property
+    def details(self):
+        if self._details is None:
+            self._details = self.fs.info(self.path)
+        return self._details
+
+    @details.setter
+    def details(self, value):
+        self._details = value
+        self.size = value["size"]
+
+    @property
+    def full_name(self):
+        return _unstrip_protocol(self.path, self.fs)
 
     @property
     def closed(self):

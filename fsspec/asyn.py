@@ -358,6 +358,26 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             return out[0]
 
+    async def _cat_ranges(self, paths, starts, ends, max_gap=None, **kwargs):
+        # TODO: on_error
+        if max_gap is not None:
+            # to be implemented in utils
+            raise NotImplementedError
+        if not isinstance(paths, list):
+            raise TypeError
+        if not isinstance(starts, list):
+            starts = [starts] * len(paths)
+        if not isinstance(ends, list):
+            ends = [starts] * len(paths)
+        if len(starts) != len(paths) or len(ends) != len(paths):
+            raise ValueError
+        return await asyncio.gather(
+            *[
+                self._cat_file(p, start=s, end=e, **kwargs)
+                for p, s, e in zip(paths, starts, ends)
+            ]
+        )
+
     async def _put(
         self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs
     ):
