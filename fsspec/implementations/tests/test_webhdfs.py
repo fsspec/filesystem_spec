@@ -116,3 +116,22 @@ def test_workflow_transaction(hdfs_cluster):
 
     w.rm("/user/testuser/testrun", recursive=True)
     assert not w.exists(fn)
+
+
+def test_webhdfs_cp_file(hdfs_cluster):
+    fs = WebHDFS(
+        hdfs_cluster, user="testuser", data_proxy={"worker.example.com": "localhost"}
+    )
+
+    src, dst = "/user/testuser/testrun/f1", "/user/testuser/testrun/f2"
+
+    fs.mkdir("/user/testuser/testrun")
+
+    with fs.open(src, "wb") as f:
+        f.write(b"hello")
+
+    fs.cp_file(src, dst)
+
+    assert fs.exists(src)
+    assert fs.exists(dst)
+    assert fs.cat(src) == fs.cat(dst)
