@@ -276,6 +276,8 @@ class HTTPFileSystem(AsyncFileSystem):
                 if use_seek:
                     callback.set_size(f.seek(0, 2))
                     f.seek(0)
+                else:
+                    callback.set_size(getattr(f, "size"))
 
                 chunk = f.read(64 * 1024)
                 while chunk:

@@ -469,10 +469,6 @@ def mirror_from(origin_name, methods):
     return wrapper
 
 
-try:
-    from contextlib import nullcontext
-except ImportError:
-
-    @contextmanager
-    def nullcontext(obj=None):
-        yield obj
+@contextmanager
+def nullcontext(obj):
+    yield obj
