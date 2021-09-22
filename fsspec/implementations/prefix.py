@@ -29,7 +29,7 @@ class PrefixFileSystem(AbstractFileSystem):
             return path[len(self.sep) :]
         return path
 
-    def _add_fs_prefix(self, path: Union[str, Path]) -> Union[str, Sequence[str]]:
+    def _add_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
         if isinstance(path, (str, Path)):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
@@ -46,7 +46,7 @@ class PrefixFileSystem(AbstractFileSystem):
             return [self._add_fs_prefix(x) for x in path]
         assert False
 
-    def _remove_fs_prefix(self, path: Union[str, Path]) -> Union[str, Sequence[str]]:
+    def _remove_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
         if isinstance(path, (str, Path)):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
