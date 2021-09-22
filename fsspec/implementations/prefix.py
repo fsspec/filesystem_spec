@@ -17,7 +17,11 @@ class PrefixFileSystem(AbstractFileSystem):
         **storage_options,
     ) -> None:
         super().__init__(*args, **storage_options)
-        self.prefix = prefix
+        self.prefix = stringify_path(prefix)
+
+        if not self.prefix:
+            self.prefix = self.sep
+
         self.filesystem = filesystem
 
     def _add_fs_prefix(self, path: Union[str, Path]) -> Union[str, Sequence[str]]:
