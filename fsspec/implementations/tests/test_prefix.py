@@ -113,7 +113,7 @@ def test_isdir():
     fs = PrefixFileSystem(prefix=".", filesystem=fsspec.filesystem("file"))
     with filetexts(files, mode="b"):
         for f in files.keys():
-            assert fs.isdir(os.path.dirname(os.path.abspath(f)))
+            assert fs.isfile(f)
             assert not fs.isdir(f)
         assert not fs.isdir("not-a-dir")
 
