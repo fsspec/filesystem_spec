@@ -118,18 +118,21 @@ def test_isdir():
         assert not fs.isdir("not-a-dir")
 
 
-@pytest.mark.parametrize("prefix", ["/", "/tmp"])
-def test_directories(tmpdir, prefix):
+@pytest.mark.parametrize("dirname", ["/dir", "dir"])
+@pytest.mark.parametrize("prefix", ["a/b/c/d/e", "a/b/c/d/e/"])
+def test_directories(tmpdir, prefix, dirname):
     tmpdir = make_path_posix(str(tmpdir))
-    rel_tmpdir = os.path.relpath(tmpdir, prefix)
+    prefix = os.path.join(tmpdir, prefix)
 
     fs = PrefixFileSystem(prefix=prefix, filesystem=fsspec.filesystem("file"))
+    fs.mkdir(dirname)
+    assert not os.path.exists(os.path.join(tmpdir, "dir"))
+    assert os.path.exists(os.path.join(prefix, "dir"))
+    assert fs.ls(".") == ["./dir"]
+    fs.rmdir(dirname)
+    assert not os.path.exists(os.path.join(prefix, "dir"))
 
-    fs.mkdir(rel_tmpdir + "/dir")
-
-    assert not fs.ls(tmpdir + "/dir")
-
-    assert rel_tmpdir + "/dir" in fs.ls(rel_tmpdir)
-    assert fs.ls(rel_tmpdir, True)[0]["type"] == "directory"
-    fs.rmdir(rel_tmpdir + "/dir")
-    assert not fs.ls(rel_tmpdir)
+    fs = PrefixFileSystem(prefix=f"{tmpdir}/a", filesystem=fsspec.filesystem("file"))
+    assert fs.ls(".") == ["./b"]
+    fs.rm("b", recursive=True)
+    assert fs.ls(".") == []
