@@ -232,21 +232,21 @@ class HTTPFileSystem(AsyncFileSystem):
         return out
 
     async def _get_file(
-        self, lpath, rpath, chunk_size=5 * 2 ** 20, callback=_DEFAULT_CALLBACK, **kwargs
+        self, rpath, lpath, chunk_size=5 * 2 ** 20, callback=_DEFAULT_CALLBACK, **kwargs
     ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
-        logger.debug(lpath)
+        logger.debug(rpath)
         session = await self.set_session()
-        async with session.get(lpath, **self.kwargs) as r:
+        async with session.get(rpath, **self.kwargs) as r:
             try:
                 size = int(r.headers["content-length"])
             except (ValueError, KeyError):
                 size = None
 
             callback.set_size(size)
-            self._raise_not_found_for_status(r, lpath)
-            with open(rpath, "wb") as fd:
+            self._raise_not_found_for_status(r, rpath)
+            with open(lpath, "wb") as fd:
                 chunk = True
                 while chunk:
                     chunk = await r.content.read(chunk_size)
