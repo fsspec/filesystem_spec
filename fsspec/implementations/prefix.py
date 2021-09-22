@@ -50,7 +50,7 @@ class PrefixFileSystem(AbstractFileSystem):
         if isinstance(path, (str, Path)):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
-            path = os.path.relpath(path, start=self.prefix)
+            path = path[len(self.prefix) + 1 :]
             return protocol + "://" + path if protocol is not None else path
         elif isinstance(path, Iterable):
             return [self._remove_fs_prefix(x) for x in path]
