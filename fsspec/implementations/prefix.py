@@ -24,11 +24,23 @@ class PrefixFileSystem(AbstractFileSystem):
 
         self.filesystem = filesystem
 
+    def _get_relative_path(self, path: str) -> str:
+        if path[: len(self.sep)] == self.sep:
+            return path[len(self.sep) :]
+        return path
+
     def _add_fs_prefix(self, path: Union[str, Path]) -> Union[str, Sequence[str]]:
         if isinstance(path, (str, Path)):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
-            path = os.path.join(self.prefix, path)
+
+            path = self._get_relative_path(path)
+
+            if self.prefix == self.sep:
+                path = f"{self.sep}{path}"  # don't add twice the same sep
+            else:
+                path = f"{self.prefix}{self.sep}{path}"
+
             return protocol + "://" + path if protocol is not None else path
         elif isinstance(path, Iterable):
             return [self._add_fs_prefix(x) for x in path]
