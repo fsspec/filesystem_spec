@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import asyncio
+import io
 import logging
 import re
 import weakref
@@ -14,7 +15,7 @@ from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import DEFAULT_BLOCK_SIZE, tokenize
+from fsspec.utils import DEFAULT_BLOCK_SIZE, nullcontext, tokenize
 
 from ..caching import AllBytes
 
@@ -254,17 +255,29 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def _put_file(
         self,
-        rpath,
         lpath,
+        rpath,
         chunk_size=5 * 2 ** 20,
         callback=_DEFAULT_CALLBACK,
         method="post",
         **kwargs,
     ):
         async def gen_chunks():
-            with open(rpath, "rb") as f:
-                callback.set_size(f.seek(0, 2))
-                f.seek(0)
+            # Support passing arbitrary file-like objects
+            # and use them instead of streams.
+            if isinstance(lpath, io.IOBase):
+                context = nullcontext(lpath)
+                use_seek = False  # might not support seeking
+            else:
+                context = open(lpath, "rb")
+                use_seek = True
+
+            with context as f:
+                if use_seek:
+                    callback.set_size(f.seek(0, 2))
+                    f.seek(0)
+                else:
+                    callback.set_size(getattr(f, "size", None))
 
                 chunk = f.read(64 * 1024)
                 while chunk:
@@ -283,8 +296,8 @@ class HTTPFileSystem(AsyncFileSystem):
             )
 
         meth = getattr(session, method)
-        async with meth(lpath, data=gen_chunks(), **kw) as resp:
-            self._raise_not_found_for_status(resp, lpath)
+        async with meth(rpath, data=gen_chunks(), **kw) as resp:
+            self._raise_not_found_for_status(resp, rpath)
 
     async def _exists(self, path, **kwargs):
         kw = self.kwargs.copy()
