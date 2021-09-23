@@ -152,6 +152,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _cat_common(self, path):
         path = self._strip_protocol(path)
+        logger.debug(f"cat: {path}")
         # TODO: can extract and cache templating here
         if self.dataframe:
             part = self.df.loc[path]
