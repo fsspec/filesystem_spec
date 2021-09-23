@@ -52,6 +52,7 @@ setup(
         "oci": ["ocifs"],
         "smb": ["smbprotocol"],
         "ssh": ["paramiko"],
+        "fuse": ["fusepy"],
     },
     zip_safe=False,
 )
