@@ -802,7 +802,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
             callback.set_size(f1.seek(0, 2))
             f1.seek(0)
 
-            self.mkdirs(os.path.dirname(rpath), exist_ok=True)
+            self.mkdirs(self._parent(os.fspath(rpath)), exist_ok=True)
             with self.open(rpath, "wb", **kwargs) as f2:
                 data = True
                 while data:
