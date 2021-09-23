@@ -168,8 +168,8 @@ is currently a simple dict, but could in the future be LRU, or something more co
 to fine-tune instance lifetimes.
 
 Since files can hold on to write caches and read buffers,
-the instance cache may cause excessive memory usage in some situations; but normally, files
-will get ``close``\d, and the data discarded. Only when there is also an unfinalised transaction or
+the instance cache may cause excessive memory usage in some situations; but normally, files'
+``close`` methods will be called, discarding the data. Only when there is also an unfinalised transaction or
 captured traceback might this be anticipated becoming a problem.
 
 To disable instance caching, i.e., get a fresh instance which is not in the cache
