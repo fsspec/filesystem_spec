@@ -52,6 +52,9 @@ setup(
         "oci": ["ocifs"],
         "smb": ["smbprotocol"],
         "ssh": ["paramiko"],
+        "fuse": ["fusepy"],
+        "libarchive": ["libarchive-c"],
+        "gui": ["panel"],
     },
     zip_safe=False,
 )

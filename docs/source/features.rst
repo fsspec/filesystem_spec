@@ -143,7 +143,7 @@ is a harder problem to solve, and the implementation described here is only part
 Mount anything with FUSE
 ------------------------
 
-Any path of any file-system can be mapped to a local directory using pyfuse and
+Any path of any file-system can be mapped to a local directory using `fusepy <https://pypi.org/project/fusepy/>`_ and
 :func:`fsspec.fuse.run`. This feature is experimental, but basic file listing with
 details, and read/write should generally be available to the extent that the
 remote file-system provides enough information. Naturally, if a file-system is read-only,
@@ -168,8 +168,8 @@ is currently a simple dict, but could in the future be LRU, or something more co
 to fine-tune instance lifetimes.
 
 Since files can hold on to write caches and read buffers,
-the instance cache may cause excessive memory usage in some situations; but normally, files
-will get ``close``d, and the data discarded. Only when there is also an unfinalised transaction or
+the instance cache may cause excessive memory usage in some situations; but normally, files'
+``close`` methods will be called, discarding the data. Only when there is also an unfinalised transaction or
 captured traceback might this be anticipated becoming a problem.
 
 To disable instance caching, i.e., get a fresh instance which is not in the cache
@@ -337,7 +337,7 @@ config files, providing environment variables, or editing the contents of
 the dictionary ``fsspec.config.conf``.
 
 Files are stored in the directory pointed to by ``FSSPEC_CONFIG_DIR``,
-``"~/.config/fsspec/`` by default. All *.ini and *.json files will be
+``"~/.config/fsspec/`` by default. All \*.ini and \*.json files will be
 loaded and parsed from their respective formats and fed into the config dict
 at import time. For example, if there is a file "~/.config/fsspec/conf.json"
 containing

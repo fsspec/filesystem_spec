@@ -1,5 +1,5 @@
 ``fsspec``: Filesystem interfaces for Python
-======================================
+============================================
 
 Filesystem Spec (``fsspec``) is a project to provide a unified pythonic interface to
 local, remote and embedded file systems and bytes storage.
@@ -25,7 +25,7 @@ storage systems; and top-level convenience functions like :func:`fsspec.open`, t
 you to quickly get from a URL to a file-like object that you can use with a third-party
 library or your own code.
 
-The section :doc:`background` gives motivation and history of this project, but
+The section :doc:`intro` gives motivation and history of this project, but
 most users will want to skip straight to :doc:`usage` to find out how to use
 the package and :doc:`features` to see the long list of added functionality
 included along with the basic file-system interface.

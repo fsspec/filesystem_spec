@@ -126,7 +126,7 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.hdfs.PyArrowHDFS
    :members: __init__
 
-.. autoclass:: fsspec.implementations.hdfs.ArrowFSWrapper
+.. autoclass:: fsspec.implementations.arrow.ArrowFSWrapper
    :members: __init__
 
 .. autoclass:: fsspec.implementations.hdfs.HadoopFileSystem
