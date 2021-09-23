@@ -169,7 +169,7 @@ to fine-tune instance lifetimes.
 
 Since files can hold on to write caches and read buffers,
 the instance cache may cause excessive memory usage in some situations; but normally, files
-will get ``close``d, and the data discarded. Only when there is also an unfinalised transaction or
+will get ``close``\d, and the data discarded. Only when there is also an unfinalised transaction or
 captured traceback might this be anticipated becoming a problem.
 
 To disable instance caching, i.e., get a fresh instance which is not in the cache
@@ -337,7 +337,7 @@ config files, providing environment variables, or editing the contents of
 the dictionary ``fsspec.config.conf``.
 
 Files are stored in the directory pointed to by ``FSSPEC_CONFIG_DIR``,
-``"~/.config/fsspec/`` by default. All *.ini and *.json files will be
+``"~/.config/fsspec/`` by default. All \*.ini and \*.json files will be
 loaded and parsed from their respective formats and fed into the config dict
 at import time. For example, if there is a file "~/.config/fsspec/conf.json"
 containing

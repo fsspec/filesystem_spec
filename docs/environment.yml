@@ -13,3 +13,5 @@ dependencies:
   - pyarrow=1
   - libarchive
   - smbprotocol
+  - python-libarchive-c
+  - panel

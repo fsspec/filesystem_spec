@@ -5,20 +5,20 @@ from functools import lru_cache
 
 class DirCache(MutableMapping):
     """
-    Caching of directory listings, in a structure like
+    Caching of directory listings, in a structure like::
 
-    {"path0": [
-        {"name": "path0/file0",
-         "size": 123,
-         "type": "file",
-         ...
-        },
-        {"name": "path0/file1",
-        },
-        ...
-        ],
-     "path1": [...]
-    }
+        {"path0": [
+            {"name": "path0/file0",
+             "size": 123,
+             "type": "file",
+             ...
+            },
+            {"name": "path0/file1",
+            },
+            ...
+            ],
+         "path1": [...]
+        }
 
     Parameters to this class control listing expiry or indeed turn
     caching off

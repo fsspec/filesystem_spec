@@ -684,6 +684,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Put value into path
 
         (counterpart to ``cat``)
+
         Parameters
         ----------
         path: string or dict(str, bytes)
@@ -1178,47 +1179,47 @@ class AbstractFileSystem(up, metaclass=_Cached):
     # Aliases
 
     def makedir(self, path, create_parents=True, **kwargs):
-        """Alias of :ref:`FilesystemSpec.mkdir`."""
+        """Alias of `AbstractFileSystem.mkdir`."""
         return self.mkdir(path, create_parents=create_parents, **kwargs)
 
     def mkdirs(self, path, exist_ok=False):
-        """Alias of :ref:`FilesystemSpec.makedirs`."""
+        """Alias of `AbstractFileSystem.makedirs`."""
         return self.makedirs(path, exist_ok=exist_ok)
 
     def listdir(self, path, detail=True, **kwargs):
-        """Alias of :ref:`FilesystemSpec.ls`."""
+        """Alias of `AbstractFileSystem.ls`."""
         return self.ls(path, detail=detail, **kwargs)
 
     def cp(self, path1, path2, **kwargs):
-        """Alias of :ref:`FilesystemSpec.copy`."""
+        """Alias of `AbstractFileSystem.copy`."""
         return self.copy(path1, path2, **kwargs)
 
     def move(self, path1, path2, **kwargs):
-        """Alias of :ref:`FilesystemSpec.mv`."""
+        """Alias of `AbstractFileSystem.mv`."""
         return self.mv(path1, path2, **kwargs)
 
     def stat(self, path, **kwargs):
-        """Alias of :ref:`FilesystemSpec.info`."""
+        """Alias of `AbstractFileSystem.info`."""
         return self.info(path, **kwargs)
 
     def disk_usage(self, path, total=True, maxdepth=None, **kwargs):
-        """Alias of :ref:`FilesystemSpec.du`."""
+        """Alias of `AbstractFileSystem.du`."""
         return self.du(path, total=total, maxdepth=maxdepth, **kwargs)
 
     def rename(self, path1, path2, **kwargs):
-        """Alias of :ref:`FilesystemSpec.mv`."""
+        """Alias of `AbstractFileSystem.mv`."""
         return self.mv(path1, path2, **kwargs)
 
     def delete(self, path, recursive=False, maxdepth=None):
-        """Alias of :ref:`FilesystemSpec.rm`."""
+        """Alias of `AbstractFileSystem.rm`."""
         return self.rm(path, recursive=recursive, maxdepth=maxdepth)
 
     def upload(self, lpath, rpath, recursive=False, **kwargs):
-        """Alias of :ref:`FilesystemSpec.put`."""
+        """Alias of `AbstractFileSystem.put`."""
         return self.put(lpath, rpath, recursive=recursive, **kwargs)
 
     def download(self, rpath, lpath, recursive=False, **kwargs):
-        """Alias of :ref:`FilesystemSpec.get`."""
+        """Alias of `AbstractFileSystem.get`."""
         return self.get(rpath, lpath, recursive=recursive, **kwargs)
 
     def sign(self, path, expiration=100, **kwargs):

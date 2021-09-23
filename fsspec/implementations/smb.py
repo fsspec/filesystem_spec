@@ -21,9 +21,10 @@ class SMBFileSystem(AbstractFileSystem):
 
     When using `fsspec.open()` for getting a file-like object the URI
     should be specified as this format:
-    `smb://workgroup;user:password@server:port/share/folder/file.csv`.
+    ``smb://workgroup;user:password@server:port/share/folder/file.csv``.
 
     Example::
+
         >>> import fsspec
         >>> with fsspec.open(
         ...     'smb://myuser:mypassword@myserver.com/' 'share/folder/file.csv'
@@ -37,7 +38,7 @@ class SMBFileSystem(AbstractFileSystem):
     The first component of the path in the URL points to the name of the shared
     folder. Subsequent path components will point to the directory/folder/file.
 
-    The URL components `workgroup` , `user`, `password` and `port` may be
+    The URL components ``workgroup`` , ``user``, ``password`` and ``port`` may be
     optional.
 
     .. note::
@@ -96,10 +97,11 @@ class SMBFileSystem(AbstractFileSystem):
             performed with this file system object.
             This affects whether other processes can concurrently open a handle
             to the same file.
-              None (the default): exclusively locks the file until closed.
-              'r': Allow other handles to be opened with read access.
-              'w': Allow other handles to be opened with write access.
-              'd': Allow other handles to be opened with delete access.
+
+            - None (the default): exclusively locks the file until closed.
+            - 'r': Allow other handles to be opened with read access.
+            - 'w': Allow other handles to be opened with write access.
+            - 'd': Allow other handles to be opened with delete access.
         """
         super(SMBFileSystem, self).__init__(**kwargs)
         self.host = host

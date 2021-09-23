@@ -71,7 +71,7 @@ class WebHDFS(AbstractFileSystem):
             the user in who's name actions are taken
         kerb_kwargs: dict
             Any extra arguments for HTTPKerberosAuth, see
-            https://github.com/requests/requests-kerberos/blob/master/requests_kerberos/kerberos_.py
+            `<https://github.com/requests/requests-kerberos/blob/master/requests_kerberos/kerberos_.py>`_
         data_proxy: dict, callable or None
             If given, map data-node addresses. This can be necessary if the
             HDFS cluster is behind a proxy, running on Docker or otherwise has

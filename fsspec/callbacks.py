@@ -16,7 +16,7 @@ class Callback:
         Starting internal counter value
     hooks: dict or None
         A dict of named functions to be called on each update. The signature
-        of these must be f(size, value, **kwargs)
+        of these must be ``f(size, value, **kwargs)``
     """
 
     def __init__(self, size=None, value=0, hooks=None, **kwargs):
@@ -89,7 +89,8 @@ class Callback:
             hook(self.size, self.value, **kw)
 
     def wrap(self, iterable):
-        """Wrap an iterable to call ``relative_update`` on each iterations
+        """
+        Wrap an iterable to call ``relative_update`` on each iterations
 
         Parameters
         ----------
