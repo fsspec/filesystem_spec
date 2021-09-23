@@ -143,7 +143,7 @@ is a harder problem to solve, and the implementation described here is only part
 Mount anything with FUSE
 ------------------------
 
-Any path of any file-system can be mapped to a local directory using pyfuse and
+Any path of any file-system can be mapped to a local directory using `fusepy <https://pypi.org/project/fusepy/>`_ and
 :func:`fsspec.fuse.run`. This feature is experimental, but basic file listing with
 details, and read/write should generally be available to the extent that the
 remote file-system provides enough information. Naturally, if a file-system is read-only,
