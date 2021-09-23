@@ -1,6 +1,30 @@
 Changelog
 =========
 
+2021.09.0
+---------
+
+Enhancement
+
+- http put from file-like (#764)
+- implement webhdfs cp/rm_file (#762)
+- multiple (and concurrent) cat_ranges (#744)
+
+Fixes
+
+- sphinx warnings (#769)
+- lexists for links (#757)
+- update versioneer (#750)
+- hdfs updates (#749)
+- propagate async timeout error (#746)
+- fix local file seekable (#743)
+- fix http isdir when does not exist (#741)
+
+Other
+
+- ocifs, arrow added (#754, #765)
+- promote url_to_fs to top level (#753)
+
 2021.08.1
 ---------
 
