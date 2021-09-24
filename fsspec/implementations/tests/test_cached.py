@@ -529,7 +529,7 @@ def test_filecache_with_checks():
     assert fs.cat(f1) == data  # does not change
     assert fs2.cat(f1) == data * 2  # changed, since origin changed
     with fs2.open(f1) as f:
-        assert f.read() == data * 2 # read also sees new data
+        assert f.read() == data * 2  # read also sees new data
     time.sleep(0.11)  # allow cache details to expire
     assert fs.cat(f1) == data * 2  # changed, since origin changed
 
