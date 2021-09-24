@@ -4,6 +4,7 @@ import os
 import os.path
 import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -29,8 +30,9 @@ files = {
 
 
 csv_files = {
-    ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
-    ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
+    ".test.fakedata.1.csv": b"a,b\n1,2\n",
+    ".test.fakedata.2.csv": b"a,b\n3,4\n",
+    "a/b/c/.test.fakedata.3.csv": b"a,b\n3,4,5\n",
 }
 odir = os.getcwd()
 
@@ -50,6 +52,11 @@ def filetexts(d, open=open, mode="t"):
     try:
         os.chdir(dirname)
         for filename, text in d.items():
+            filename = Path(filename)
+
+            if not filename.parent.exists():
+                filename.parent.mkdir(parents=True, exist_ok=True)
+
             f = open(filename, "w" + mode)
             try:
                 f.write(text)
@@ -69,6 +76,13 @@ def filetexts(d, open=open, mode="t"):
                     pass
     finally:
         os.chdir(odir)
+
+
+def test_open():
+    with filetexts(csv_files, mode="b"):
+        fs = PrefixFileSystem(prefix="a", filesystem=fsspec.filesystem("file"))
+        with fs.open("b/c/.test.fakedata.3.csv") as f:
+            assert f.read() == b"a,b\n3,4,5\n"
 
 
 def test_cats():

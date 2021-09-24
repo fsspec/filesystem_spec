@@ -4,7 +4,13 @@ from typing import Any, Iterable, Sequence, Union
 import fsspec
 from fsspec import AbstractFileSystem
 from fsspec.core import split_protocol
+from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import stringify_path
+
+
+class PrefixBufferedFile(AbstractBufferedFile):
+    def _fetch_range(self, start, end):
+        pass
 
 
 class PrefixFileSystem(AbstractFileSystem):
@@ -148,3 +154,10 @@ class PrefixFileSystem(AbstractFileSystem):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__qualname__}(prefix='{self.prefix}', filesystem={self.filesystem})"
+
+    def open(
+        self,
+        path,
+        **kwargs,
+    ):
+        return self.filesystem.open(self._add_fs_prefix(path), **kwargs)
