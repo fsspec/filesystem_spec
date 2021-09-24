@@ -1,13 +1,14 @@
 from __future__ import print_function
 
+import argparse
 import logging
 import os
+import pathlib
 import stat
 import threading
 import time
 from errno import EIO, ENOENT
 
-import click
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
 
 from fsspec._version import get_versions
@@ -214,53 +215,6 @@ def run(
             pass
 
 
-@click.command()
-@click.version_option(
-    version=get_versions()["version"], message="fsspec mount %(version)s"
-)
-@click.help_option("-h", "--help")
-@click.argument("url", type=click.STRING, nargs=1)
-@click.argument("source_path", type=click.STRING, nargs=1)
-@click.argument(
-    "mount_point",
-    type=click.Path(exists=True, file_okay=False, resolve_path=True),
-    nargs=1,
-)
-@click.option(
-    "-l",
-    "--log-file",
-    type=click.Path(),
-    default="",
-    show_default=True,
-    help="Enable FUSE debug logging.",
-)
-@click.option(
-    "-f",
-    "--foreground",
-    default=True,
-    show_default=True,
-    help="Running in foreground or not.",
-)
-@click.option(
-    "-t",
-    "--threads",
-    default=False,
-    show_default=True,
-    help="Running with threads support.",
-)
-@click.option(
-    "-o",
-    "--option",
-    multiple=True,
-    help="Any options of protocol included in the chained URL.",
-)
-@click.option(
-    "--ready-file/--no-ready-file",
-    "-r",
-    default=False,
-    show_default=True,
-    help="The `.fuse_ready` file will exist after FUSE is ready.",
-)
 def mount(
     url,
     source_path,
@@ -271,36 +225,6 @@ def mount(
     threads=False,
     ready_file=False,
 ):
-    """Mount filesystem from chained URL to MOUNT_POINT.
-
-    Examples:
-
-    \b
-    python3 -m fsspec.fuse memory /usr/share /tmp/mem
-
-    \b
-    python3 -m fsspec.fuse local /tmp/source /tmp/local \\
-            -l /tmp/fsspecfuse.log
-
-    You can also mount chained-URLs and use special settings:
-
-    \b
-    python3 -m fsspec.fuse 'filecache::zip::file://data.zip' \\
-            / /tmp/zip \\
-            -o 'filecache-cache_storage=/tmp/simplecache'
-
-    You can specify the type of the setting by using `[int]` or `[bool]`:
-
-    \b
-    python3 -m fsspec.fuse 'simplecache::ftp://ftp1.at.proftpd.org' \\
-            /historic/packages/RPMS /tmp/ftp \\
-            -o 'simplecache-cache_storage=/tmp/simplecache' \\
-            -o 'simplecache-check_files=false[bool]' \\
-            -o 'ftp-listings_expiry_time=60[int]' \\
-            -o 'ftp-username=anonymous' \\
-            -o 'ftp-password=xieyanbo'
-
-    """
     kwargs = {}
     for item in option:
         key, value = item.split("=", 1)
@@ -323,5 +247,88 @@ def mount(
     run(fs, source_path, mount_point, log_filename=log_file, ready_file=ready_file)
 
 
+def main(args):
+    """Mount filesystem from chained URL to MOUNT_POINT.
+
+    Examples:
+
+    python3 -m fsspec.fuse memory /usr/share /tmp/mem
+
+    python3 -m fsspec.fuse local /tmp/source /tmp/local \\
+            -l /tmp/fsspecfuse.log
+
+    You can also mount chained-URLs and use special settings:
+
+    python3 -m fsspec.fuse 'filecache::zip::file://data.zip' \\
+            / /tmp/zip \\
+            -o 'filecache-cache_storage=/tmp/simplecache'
+
+    You can specify the type of the setting by using `[int]` or `[bool]`:
+
+    python3 -m fsspec.fuse 'simplecache::ftp://ftp1.at.proftpd.org' \\
+            /historic/packages/RPMS /tmp/ftp \\
+            -o 'simplecache-cache_storage=/tmp/simplecache' \\
+            -o 'simplecache-check_files=false[bool]' \\
+            -o 'ftp-listings_expiry_time=60[int]' \\
+            -o 'ftp-username=anonymous' \\
+            -o 'ftp-password=xieyanbo'
+    """
+
+    class RawDescriptionArgumentParser(argparse.ArgumentParser):
+        def format_help(self):
+            usage = super(RawDescriptionArgumentParser, self).format_help()
+            parts = usage.split("\n\n")
+            parts[1] = self.description.rstrip()
+            return "\n\n".join(parts)
+
+    parser = RawDescriptionArgumentParser(prog="fsspec.fuse", description=main.__doc__)
+    parser.add_argument(
+        "--version", action="version", version=get_versions()["version"]
+    )
+    parser.add_argument("url", type=str, help="fs url")
+    parser.add_argument("source_path", type=str, help="source directory in fs")
+    parser.add_argument("mount_point", type=pathlib.Path, help="local directory")
+    parser.add_argument(
+        "-o",
+        "--option",
+        action="append",
+        help="Any options of protocol included in the chained URL",
+    )
+    parser.add_argument(
+        "-l", "--log-file", type=pathlib.Path, help="Enable FUSE debug logging"
+    )
+    parser.add_argument(
+        "-f",
+        "--foreground",
+        default=True,
+        help="Running in foreground or not (Default: False)",
+    )
+    parser.add_argument(
+        "-t",
+        "--threads",
+        action="store_true",
+        help="Running with threads support (Default: False)",
+    )
+    parser.add_argument(
+        "-r",
+        "--ready-file",
+        action="store_true",
+        help="The `.fuse_ready` file will exist after FUSE is ready.",
+    )
+    args = parser.parse_args(args)
+    mount(
+        args.url,
+        args.source_path,
+        str(args.mount_point),
+        str(args.log_file),
+        args.option or [],
+        args.foreground,
+        args.threads,
+        args.ready_file,
+    )
+
+
 if __name__ == "__main__":
-    mount()
+    import sys
+
+    main(sys.argv[1:])

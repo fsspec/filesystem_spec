@@ -5,7 +5,6 @@ import time
 from multiprocessing import Process
 
 import pytest
-from click.testing import CliRunner
 
 try:
     pytest.importorskip("fuse")  # noqa: E402
@@ -13,7 +12,7 @@ except OSError:
     # can succeed in importing fuse, but fail to load so
     pytest.importorskip("nonexistent")  # noqa: E402
 
-from fsspec.fuse import mount, run
+from fsspec.fuse import main, run
 from fsspec.implementations.memory import MemoryFileSystem
 
 
@@ -75,8 +74,7 @@ def test_basic(tmpdir, capfd):
 
 
 def host_mount_local(source_dir, mount_dir, debug_log):
-    runner = CliRunner()
-    runner.invoke(mount, ["local", source_dir, mount_dir, "-l", debug_log, "-r"])
+    main(["local", source_dir, mount_dir, "-l", debug_log, "--ready-file"])
 
 
 @pytest.fixture()
