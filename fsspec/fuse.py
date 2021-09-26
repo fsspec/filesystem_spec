@@ -1,9 +1,6 @@
-from __future__ import print_function
-
 import argparse
 import logging
 import os
-import pathlib
 import stat
 import threading
 import time
@@ -11,7 +8,7 @@ from errno import EIO, ENOENT
 
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
 
-from fsspec._version import get_versions
+from fsspec import __version__
 from fsspec.core import url_to_fs
 
 logger = logging.getLogger("fsspec.fuse")
@@ -145,8 +142,8 @@ def run(
     mount_point,
     foreground=True,
     threads=False,
-    log_filename="",
     ready_file=False,
+    ops_class=FUSEr,
 ):
     """Mount stuff in a local directory
 
@@ -175,30 +172,16 @@ def run(
         Whether or not to create threads when responding to file operations
         within the mounter directory. Operation will typically be more
         stable if False.
-    log_filename: str
-        The FUSE log file name. If not provided, the logging feature is
-        disabled.
     ready_file: bool
         Whether the FUSE process is ready. The `.fuse_ready` file will
         exist in the `mount_point` directory if True. Debugging purpose.
+    ops_class: FUSEr or Subclass of FUSEr
+        To override the default behavior of FUSEr. For Example, logging
+        to file.
 
     """
-    if log_filename:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            filename=log_filename,
-            format="%(asctime)s %(message)s",
-        )
-
-        class LoggingFUSEr(FUSEr, LoggingMixIn):
-            pass
-
-        fuser = LoggingFUSEr
-    else:
-        fuser = FUSEr
-
     func = lambda: FUSE(
-        fuser(fs, path, ready_file=ready_file),
+        ops_class(fs, path, ready_file=ready_file),
         mount_point,
         nothreads=not threads,
         foreground=foreground,
@@ -213,38 +196,6 @@ def run(
             func()
         except KeyboardInterrupt:
             pass
-
-
-def mount(
-    url,
-    source_path,
-    mount_point,
-    log_file,
-    option,
-    foreground=True,
-    threads=False,
-    ready_file=False,
-):
-    kwargs = {}
-    for item in option:
-        key, value = item.split("=", 1)
-        if value.lower().endswith("[int]"):
-            value = int(value[: -len("[int]")])
-        elif value.lower().endswith("[bool]"):
-            value = value[: -len("[bool]")].lower() in ["1", "yes", "true"]
-
-        if "-" in key:
-            fs_name, setting_name = key.split("-", 1)
-            if fs_name in kwargs:
-                kwargs[fs_name][setting_name] = value
-            else:
-                kwargs[fs_name] = {setting_name: value}
-        else:
-            kwargs[key] = value
-
-    fs, url_path = url_to_fs(url, **kwargs)
-    logger.debug("Mounting %s to %s", url_path, mount_point)
-    run(fs, source_path, mount_point, log_filename=log_file, ready_file=ready_file)
 
 
 def main(args):
@@ -263,7 +214,8 @@ def main(args):
             / /tmp/zip \\
             -o 'filecache-cache_storage=/tmp/simplecache'
 
-    You can specify the type of the setting by using `[int]` or `[bool]`:
+    You can specify the type of the setting by using `[int]` or `[bool]`,
+    (`true`, `yes`, `1` represents the Boolean value `True`):
 
     python3 -m fsspec.fuse 'simplecache::ftp://ftp1.at.proftpd.org' \\
             /historic/packages/RPMS /tmp/ftp \\
@@ -282,12 +234,10 @@ def main(args):
             return "\n\n".join(parts)
 
     parser = RawDescriptionArgumentParser(prog="fsspec.fuse", description=main.__doc__)
-    parser.add_argument(
-        "--version", action="version", version=get_versions()["version"]
-    )
+    parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("url", type=str, help="fs url")
     parser.add_argument("source_path", type=str, help="source directory in fs")
-    parser.add_argument("mount_point", type=pathlib.Path, help="local directory")
+    parser.add_argument("mount_point", type=str, help="local directory")
     parser.add_argument(
         "-o",
         "--option",
@@ -295,36 +245,73 @@ def main(args):
         help="Any options of protocol included in the chained URL",
     )
     parser.add_argument(
-        "-l", "--log-file", type=pathlib.Path, help="Enable FUSE debug logging"
+        "-l", "--log-file", type=str, help="Logging FUSE debug info (Default: '')"
     )
     parser.add_argument(
         "-f",
         "--foreground",
-        default=True,
+        action="store_false",
         help="Running in foreground or not (Default: False)",
     )
     parser.add_argument(
         "-t",
         "--threads",
-        action="store_true",
+        action="store_false",
         help="Running with threads support (Default: False)",
     )
     parser.add_argument(
         "-r",
         "--ready-file",
-        action="store_true",
-        help="The `.fuse_ready` file will exist after FUSE is ready.",
+        action="store_false",
+        help="The `.fuse_ready` file will exist after FUSE is ready. "
+        "(Debugging purpose, Default: False)",
     )
     args = parser.parse_args(args)
-    mount(
-        args.url,
+
+    kwargs = {}
+    for item in args.option or []:
+        key, sep, value = item.partition("=")
+        if not sep:
+            parser.error(message="Wrong option: {!r}".format(item))
+        val = value.lower()
+        if val.endswith("[int]"):
+            value = int(value[: -len("[int]")])
+        elif val.endswith("[bool]"):
+            value = val[: -len("[bool]")] in ["1", "yes", "true"]
+
+        if "-" in key:
+            fs_name, setting_name = key.split("-", 1)
+            if fs_name in kwargs:
+                kwargs[fs_name][setting_name] = value
+            else:
+                kwargs[fs_name] = {setting_name: value}
+        else:
+            kwargs[key] = value
+
+    if args.log_file:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            filename=args.log_file,
+            format="%(asctime)s %(message)s",
+        )
+
+        class LoggingFUSEr(FUSEr, LoggingMixIn):
+            pass
+
+        fuser = LoggingFUSEr
+    else:
+        fuser = FUSEr
+
+    fs, url_path = url_to_fs(args.url, **kwargs)
+    logger.debug("Mounting %s to %s", url_path, str(args.mount_point))
+    run(
+        fs,
         args.source_path,
-        str(args.mount_point),
-        str(args.log_file),
-        args.option or [],
-        args.foreground,
-        args.threads,
-        args.ready_file,
+        args.mount_point,
+        foreground=args.foreground,
+        threads=args.threads,
+        ready_file=args.ready_file,
+        ops_class=fuser,
     )
 
 
