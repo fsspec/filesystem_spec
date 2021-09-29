@@ -483,3 +483,39 @@ def mirror_from(origin_name, methods):
 @contextmanager
 def nullcontext(obj):
     yield obj
+
+
+def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, **kwargs):
+    """Merge adjacent byte-offset ranges when the inter-range
+    gap is <= `max_gap`, and when the merged byte range does not
+    exceed `max_block` (if specified). This utility assumes that
+    the byte-offset ranges are ordered."""
+
+    if len(starts) != len(paths) or len(ends) != len(paths):
+        raise ValueError
+
+    if paths:
+        # Loop through the coupled `paths`, `starts`, and
+        # `ends`, and merge adjacent blocks when appropriate
+        new_paths = paths[:1]
+        new_starts = starts[:1]
+        new_ends = ends[:1]
+        for i in range(1, len(paths)):
+            if paths[i] != paths[i-1] or (
+                (starts[i] - new_ends[-1]) > max_gap
+            ) or (
+                (max_block is not None and (ends[i] - new_starts[-1]) > max_block)
+            ):
+                # Cannot merge with previous block.
+                # Add new `paths`, `starts`, and `ends` elements
+                new_paths.append(paths[i])
+                new_starts.append(starts[i])
+                new_ends.append(ends[i])
+            else:
+                # Merge with previous block by updating the
+                # last element of `ends`
+                new_ends[-1] = ends[i]
+        return new_paths, new_starts, new_ends
+    
+    # `paths` is empty. Just return input lists
+    return paths, starts, ends
