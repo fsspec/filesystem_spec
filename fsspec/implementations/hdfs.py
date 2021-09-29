@@ -1,84 +1,47 @@
-import errno
-import os
-import re
 import secrets
 import shutil
 import weakref
 from contextlib import suppress
-from functools import partial, wraps
 
 from pyarrow.hdfs import HadoopFileSystem
 
+from fsspec.implementations.arrow import wrap_exceptions
 from fsspec.spec import AbstractFileSystem
-from fsspec.utils import infer_storage_options
+from fsspec.utils import infer_storage_options, mirror_from
 
 
-def wrap_exceptions(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except OSError as exception:
-            if not exception.args:
-                raise
-
-            message, *args = exception.args
-            if "does not exist" in message:
-                raise FileNotFoundError(
-                    errno.ENOENT, os.strerror(errno.ENOENT)
-                ) from exception
-            else:
-                raise
-
-    return wrapper
-
-
-def inherits(*methods):
-    @wrap_exceptions
-    def client_getter(name, self):
-        return getattr(self.client, name)
-
-    def wrapper(cls):
-        for method in methods:
-            wrapped_method = partial(client_getter, method)
-            setattr(cls, method, property(wrapped_method))
-        return cls
-
-    return wrapper
-
-
-CHECKSUM_REGEX = re.compile(r".*\t.*\t(?P<checksum>.*)")
-
-
-@inherits(
-    "chmod",
-    "chown",
-    "user",
-    "df",
-    "disk_usage",
-    "download",
-    "driver",
-    "exists",
-    "extra_conf",
-    "get_capacity",
-    "get_space_used",
-    "host",
-    "is_open",
-    "kerb_ticket",
-    "strip_protocol",
-    "mkdir",
-    "port",
-    "get_capacity",
-    "get_space_used",
-    "df",
-    "chmod",
-    "chown",
-    "disk_usage",
-    "download",
-    "read_parquet",
-    "rm",
-    "stat",
-    "upload",
+@mirror_from(
+    "client",
+    [
+        "chmod",
+        "chown",
+        "user",
+        "df",
+        "disk_usage",
+        "download",
+        "driver",
+        "exists",
+        "extra_conf",
+        "get_capacity",
+        "get_space_used",
+        "host",
+        "is_open",
+        "kerb_ticket",
+        "strip_protocol",
+        "mkdir",
+        "port",
+        "get_capacity",
+        "get_space_used",
+        "df",
+        "chmod",
+        "chown",
+        "disk_usage",
+        "download",
+        "read_parquet",
+        "rm",
+        "stat",
+        "upload",
+    ],
 )
 class PyArrowHDFS(AbstractFileSystem):
     """Adapted version of Arrow's HadoopFileSystem
@@ -86,7 +49,7 @@ class PyArrowHDFS(AbstractFileSystem):
     This is a very simple wrapper over the pyarrow.hdfs.HadoopFileSystem, which
     passes on all calls to the underlying class."""
 
-    protocol = "hdfs"
+    protocol = "hdfs", "file"
 
     def __init__(
         self,
@@ -144,7 +107,12 @@ class PyArrowHDFS(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         ops = infer_storage_options(path)
-        return ops["path"]
+        path = ops["path"]
+        # infer_store_options leaves file:/ prefixes alone
+        # for local hdfs instances
+        if path.startswith("file:"):
+            path = path[5:]
+        return path
 
     def __reduce_ex__(self, protocol):
         return PyArrowHDFS, self.pars
@@ -170,13 +138,22 @@ class PyArrowHDFS(AbstractFileSystem):
     def _adjust_entry(self, original_entry):
         entry = original_entry.copy()
         if "type" not in entry:
-            entry["type"] = entry["kind"]
+            if "kind" in entry:
+                entry["type"] = entry["kind"]
         if "name" not in entry:
-            entry["name"] = self._strip_protocol(entry["path"])
+            if "path" in entry:
+                entry["name"] = entry["path"]
+
+        if "name" in entry:
+            entry["name"] = self._strip_protocol(entry["name"])
         return entry
 
     @wrap_exceptions
     def cp_file(self, lpath, rpath, **kwargs):
+        if self.isdir(lpath):
+            self.makedirs(rpath)
+            return
+
         with self.open(lpath) as lstream:
             tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
             # Perform an atomic copy (stream to a temporory file and
