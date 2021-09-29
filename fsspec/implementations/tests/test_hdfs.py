@@ -75,7 +75,7 @@ def test_read(hdfs):
         assert f.read(100) + f.read() == data
 
 
-def test_copying(hdfs):
+def test_copy(hdfs):
     fs = fsspec.filesystem("hdfs")
 
     fs.mkdir(basedir + "/test_dir")
@@ -92,7 +92,7 @@ def test_copying(hdfs):
     ]
 
 
-def test_getting(hdfs, tmpdir):
+def test_put_get(hdfs, tmpdir):
     fs = fsspec.filesystem("hdfs")
 
     src_dir = Path(tmpdir / "source")
@@ -123,3 +123,17 @@ def test_getting(hdfs, tmpdir):
     assert {
         (dst_dir / file).read_text() for file in files if (dst_dir / file).is_file()
     } == {"file_1", "file_2", "file_3", "file_4"}
+
+
+def test_put_file_get_file(hdfs, tmpdir):
+    fs = fsspec.filesystem("hdfs")
+
+    src_file = Path(tmpdir / "src_file")
+    dst_file = Path(tmpdir / "dst_file")
+
+    src_file.write_bytes(b"heyhey")
+
+    fs.put_file(src_file, basedir + "/src_file")
+    fs.get_file(basedir + "/src_file", dst_file)
+
+    assert dst_file.read_bytes() == b"heyhey"
