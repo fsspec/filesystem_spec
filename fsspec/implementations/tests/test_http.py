@@ -475,6 +475,19 @@ def test_put_file(server, tmp_path, method, reset_files):
     assert fs.cat(server + "/hey_3") == b"yyy"
 
 
+async def get_aiohttp():
+    from aiohttp import ClientSession
+
+    return ClientSession()
+
+
+async def get_proxy():
+    class ProxyClient:
+        pass
+
+    return ProxyClient()
+
+
 @pytest.mark.xfail(
     condition=sys.flags.optimize > 1, reason="no docstrings when optimised"
 )
@@ -548,3 +561,10 @@ def test_processes(server, method):
     out = q.get()
     assert out == fs.cat(fn)
     p.join()
+
+
+@pytest.mark.parametrize("get_client", [get_aiohttp, get_proxy])
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
+def test_close(get_client):
+    fs = fsspec.filesystem("http", skip_instance_cache=True)
+    fs.close_session(None, asyncio.run(get_client()))

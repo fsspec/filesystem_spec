@@ -123,9 +123,10 @@ class HTTPFileSystem(AsyncFileSystem):
                 return
             except (TimeoutError, FSTimeoutError):
                 pass
-        if session._connector is not None:
+        connector = getattr(session, "_connector", None)
+        if connector is not None:
             # close after loop is dead
-            session._connector._close()
+            connector._close()
 
     async def set_session(self):
         if self._session is None:
