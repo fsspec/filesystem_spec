@@ -8,12 +8,12 @@ from fsspec.utils import (
     can_be_local,
     common_prefix,
     infer_storage_options,
+    merge_offset_ranges,
     mirror_from,
     other_paths,
     read_block,
     seek_delimiter,
     setup_logging,
-    merge_offset_ranges,
 )
 
 WIN = sys.platform.startswith("win")
@@ -344,21 +344,19 @@ def test_mirror_from():
     assert obj.func_3() == "should succeed"
     mock.func_3.assert_not_called()
 
+
 @pytest.mark.parametrize("max_gap", [0, 32])
 @pytest.mark.parametrize("max_block", [None, 128])
 def test_merge_offset_ranges(max_gap, max_block):
 
     # Input ranges
-    paths = ["foo", "foo", "bar", "bar", "bar"]
-    starts = [0, 32, 0, 64, 512]
-    ends = [32, 64, 32, 256, 1024]
+    # (Using out-of-order ranges for full coverage)
+    paths = ["foo", "bar", "bar", "bar", "foo"]
+    starts = [0, 0, 512, 64, 32]
+    ends = [32, 32, 1024, 256, 64]
 
     # Call merge_offset_ranges
-    (
-        result_paths,
-        result_starts,
-        result_ends,
-    ) = merge_offset_ranges(
+    (result_paths, result_starts, result_ends,) = merge_offset_ranges(
         paths,
         starts,
         ends,
@@ -368,13 +366,13 @@ def test_merge_offset_ranges(max_gap, max_block):
 
     # Check result
     if max_block is None and max_gap == 32:
-        expect_paths = ["foo", "bar", "bar"]
-        expect_starts = [0, 0, 512]
-        expect_ends = [64, 256, 1024]
+        expect_paths = ["bar", "bar", "foo"]
+        expect_starts = [0, 512, 0]
+        expect_ends = [256, 1024, 64]
     else:
-        expect_paths = ["foo", "bar", "bar", "bar"]
-        expect_starts = [0, 0, 64, 512]
-        expect_ends = [64, 32, 256, 1024]
+        expect_paths = ["bar", "bar", "bar", "foo"]
+        expect_starts = [0, 64, 512, 0]
+        expect_ends = [32, 256, 1024, 64]
 
     assert expect_paths == result_paths
     assert expect_starts == result_starts

@@ -485,15 +485,28 @@ def nullcontext(obj):
     yield obj
 
 
-def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, **kwargs):
+def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=True):
     """Merge adjacent byte-offset ranges when the inter-range
     gap is <= `max_gap`, and when the merged byte range does not
-    exceed `max_block` (if specified). This utility assumes that
-    the byte-offset ranges are ordered.
+    exceed `max_block` (if specified). By defaut, this function
+    will re-order the input paths and byte ranges to ensure sorted
+    order. If the user can guarantee that the inputs are already
+    sorted, passing `sort=False` will skip the re-ordering.
     """
 
+    # Check input
+    if not isinstance(paths, list):
+        raise TypeError
+    if not isinstance(starts, list):
+        starts = [starts] * len(paths)
+    if not isinstance(ends, list):
+        ends = [starts] * len(paths)
     if len(starts) != len(paths) or len(ends) != len(paths):
         raise ValueError
+
+    # Sort by paths and then ranges if `sort=True`
+    if sort:
+        paths, starts, ends = [list(v) for v in zip(*sorted(zip(paths, starts, ends)))]
 
     if paths:
         # Loop through the coupled `paths`, `starts`, and
