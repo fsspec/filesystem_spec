@@ -12,7 +12,7 @@ from glob import has_magic
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
 from .spec import AbstractFileSystem
-from .utils import PY36, is_exception, other_paths, merge_offset_ranges
+from .utils import PY36, is_exception, other_paths
 
 private = re.compile("_[^_]")
 
@@ -360,16 +360,15 @@ class AsyncFileSystem(AbstractFileSystem):
 
     async def _cat_ranges(self, paths, starts, ends, max_gap=None, **kwargs):
         # TODO: on_error
+        if max_gap is not None:
+            # to be implemented in utils
+            raise NotImplementedError
         if not isinstance(paths, list):
             raise TypeError
         if not isinstance(starts, list):
             starts = [starts] * len(paths)
         if not isinstance(ends, list):
             ends = [starts] * len(paths)
-        if max_gap is not None:
-            paths, starts, ends = merge_offset_ranges(
-                paths, starts, ends, max_gap=max_gap, **kwargs
-            )
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
         return await asyncio.gather(
