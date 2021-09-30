@@ -488,13 +488,6 @@ async def get_proxy():
     return ProxyClient()
 
 
-@pytest.mark.parametrize("get_client", [get_aiohttp, get_proxy])
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
-def test_close(get_client):
-    fs = fsspec.filesystem("http", skip_instance_cache=True)
-    fs.close_session(None, asyncio.run(get_client()))
-
-
 @pytest.mark.xfail(
     condition=sys.flags.optimize > 1, reason="no docstrings when optimised"
 )
@@ -568,3 +561,10 @@ def test_processes(server, method):
     out = q.get()
     assert out == fs.cat(fn)
     p.join()
+
+
+@pytest.mark.parametrize("get_client", [get_aiohttp, get_proxy])
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
+def test_close(get_client):
+    fs = fsspec.filesystem("http", skip_instance_cache=True)
+    fs.close_session(None, asyncio.run(get_client()))
