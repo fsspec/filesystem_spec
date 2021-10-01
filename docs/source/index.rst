@@ -49,6 +49,8 @@ The following libraries use ``fsspec`` internally for path and file handling:
    storage and labelled operations
 #. `DVC`_, version control system
    for machine learning projects
+#. `Kedro`_, a Python framework for reproducible,
+   maintainable and modular data science code
 
 ``fsspec`` filesystems are also supported by:
 
@@ -62,6 +64,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
 .. _xarray: http://xarray.pydata.org/
 .. _zarr: https://zarr.readthedocs.io/
 .. _DVC: https://dvc.org/
+.. _kedro: https://kedro.readthedocs.io/en/stable/01_introduction/01_introduction.html
 .. _pyarrow: https://arrow.apache.org/docs/python/
 
 
