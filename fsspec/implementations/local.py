@@ -192,6 +192,10 @@ class LocalFileSystem(AbstractFileSystem):
         # See https://github.com/dask/dask/issues/5526
         return True
 
+    def chmod(self, path, mode):
+        path = stringify_path(path)
+        return os.chmod(path, mode)
+
 
 def make_path_posix(path, sep=os.sep):
     """Make path generic"""
