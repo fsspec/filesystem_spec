@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2021.10.0
+---------
+
+Fixes
+
+- only close http connector if present (#779)
+- hdfs strip protocol (#778)
+- fix filecache with check_files (#772)
+- put_file to use _parent (#771)
+
+Other
+
+- add kedro link (#781)
+
 2021.09.0
 ---------
 
