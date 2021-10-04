@@ -61,6 +61,19 @@ author = "Martin Durant"
 # built documents.
 #
 # The short X.Y version.
+autodoc_mock_imports = [
+    "paramiko",
+    "requests",
+    "aiohttp",
+    "pygit2",
+    "distributed",
+    "dask",
+    "pyarrow",
+    "libarchive",
+    "smbprotocol",
+    "panel",
+]
+
 import fsspec
 
 version = fsspec.__version__

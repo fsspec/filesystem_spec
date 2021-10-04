@@ -1,17 +1,7 @@
 name: fsspec
 channels:
   - defaults
-  - conda-forge
 dependencies:
-  - python=3.7
-  - paramiko
-  - requests
+  - python=3.9
   - numpydoc
-  - aiohttp
-  - pygit2
-  - distributed
-  - pyarrow=1
-  - libarchive
   - smbprotocol
-  - python-libarchive-c
-  - panel
