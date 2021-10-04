@@ -39,18 +39,23 @@ __all__ = [
     "Callback",
 ]
 
-if entry_points is not None:
-    try:
-        eps = entry_points()
-    except TypeError:
-        pass  # importlib-metadata < 0.8
-    else:
-        if hasattr(eps, "select"):  # Python 3.10+ / importlib_metadata >= 3.9.0
-            specs = eps.select(group="fsspec.specs")
+
+def process_entries():
+    if entry_points is not None:
+        try:
+            eps = entry_points()
+        except TypeError:
+            pass  # importlib-metadata < 0.8
         else:
-            specs = eps.get("fsspec.specs", [])
-        for spec in specs:
-            err_msg = f"Unable to load filesystem from {spec}"
-            register_implementation(
-                spec.name, spec.value.replace(":", "."), errtxt=err_msg
-            )
+            if hasattr(eps, "select"):  # Python 3.10+ / importlib_metadata >= 3.9.0
+                specs = eps.select(group="fsspec.specs")
+            else:
+                specs = eps.get("fsspec.specs", [])
+            for spec in specs:
+                err_msg = f"Unable to load filesystem from {spec}"
+                register_implementation(
+                    spec.name, spec.value.replace(":", "."), errtxt=err_msg
+                )
+
+
+process_entries()
