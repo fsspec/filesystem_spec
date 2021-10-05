@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any, Iterable, Sequence, Union
 
 import fsspec
@@ -35,7 +34,7 @@ class PrefixFileSystem(AbstractFileSystem):
         return path
 
     def _add_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
-        if isinstance(path, (str, Path)):
+        if isinstance(path, str):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
 
@@ -52,7 +51,7 @@ class PrefixFileSystem(AbstractFileSystem):
         assert False
 
     def _remove_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
-        if isinstance(path, (str, Path)):
+        if isinstance(path, str):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
             path = path[len(self.prefix) + 1 :]
