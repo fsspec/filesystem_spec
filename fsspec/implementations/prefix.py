@@ -18,7 +18,7 @@ class PrefixFileSystem(AbstractFileSystem):
     def __init__(
         self,
         prefix: str,
-        filesystem: fsspec.AbstractFileSystem,
+        fs: fsspec.AbstractFileSystem,
         *args,
         **storage_options,
     ) -> None:
@@ -38,7 +38,7 @@ class PrefixFileSystem(AbstractFileSystem):
         if not self.prefix:
             self.prefix = self.root_marker
 
-        self.filesystem = filesystem
+        self.fs = fs
 
     def _get_relative_path(self, path: str) -> str:
         if path[: len(self.sep)] == self.sep:
@@ -74,15 +74,15 @@ class PrefixFileSystem(AbstractFileSystem):
 
     def mkdir(self, path: str, create_parents: bool = True, **kwargs) -> None:
         path = self._add_fs_prefix(path)
-        return self.filesystem.mkdir(path=path, create_parents=create_parents, **kwargs)
+        return self.fs.mkdir(path=path, create_parents=create_parents, **kwargs)
 
     def makedirs(self, path: str, exist_ok: bool = False):
         path = self._add_fs_prefix(path)
-        return self.filesystem.mkdirs(path=path, exist_ok=exist_ok)
+        return self.fs.mkdirs(path=path, exist_ok=exist_ok)
 
     def rmdir(self, path: str):
         path = self._add_fs_prefix(path)
-        return self.filesystem.rmdir(path=path)
+        return self.fs.rmdir(path=path)
 
     def ls(
         self,
@@ -91,7 +91,7 @@ class PrefixFileSystem(AbstractFileSystem):
         **kwargs,
     ) -> Sequence[str]:
         path = self._add_fs_prefix(path)
-        ls_out = self.filesystem.ls(path=path, detail=detail, **kwargs)
+        ls_out = self.fs.ls(path=path, detail=detail, **kwargs)
         if detail:
             for out in ls_out:
                 out["name"] = self._remove_fs_prefix(out["name"])
@@ -100,56 +100,56 @@ class PrefixFileSystem(AbstractFileSystem):
 
     def glob(self, path: str, **kwargs):
         path = self._add_fs_prefix(path)
-        glob_out = self.filesystem.glob(path=path, **kwargs)
+        glob_out = self.fs.glob(path=path, **kwargs)
         return [self._remove_fs_prefix(x) for x in glob_out]
 
     def info(self, path: str, **kwargs):
         path = self._add_fs_prefix(path)
-        return self.filesystem.info(path=path, **kwargs)
+        return self.fs.info(path=path, **kwargs)
 
     def cp_file(self, path1: str, path2: str, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
-        return self.filesystem.cp_file(path1, path2, **kwargs)
+        return self.fs.cp_file(path1, path2, **kwargs)
 
     def get_file(self, path1: str, path2: str, callback=None, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
-        return self.filesystem.get_file(path1, path2, callback, **kwargs)
+        return self.fs.get_file(path1, path2, callback, **kwargs)
 
     def put_file(self, path1: str, path2: str, callback=None, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
-        return self.filesystem.put_file(path1, path2, callback, **kwargs)
+        return self.fs.put_file(path1, path2, callback, **kwargs)
 
     def mv_file(self, path1: str, path2: str, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
-        return self.filesystem.mv_file(path1, path2, **kwargs)
+        return self.fs.mv_file(path1, path2, **kwargs)
 
     def rm_file(self, path: str):
         path = self._add_fs_prefix(path)
-        return self.filesystem.rm_file(path)
+        return self.fs.rm_file(path)
 
     def rm(self, path: str, recursive=False, maxdepth=None):
         path = self._add_fs_prefix(path)
-        return self.filesystem.rm(path, recursive=recursive, maxdepth=maxdepth)
+        return self.fs.rm(path, recursive=recursive, maxdepth=maxdepth)
 
     def touch(self, path: str, **kwargs):
         path = self._add_fs_prefix(path)
-        return self.filesystem.touch(path, **kwargs)
+        return self.fs.touch(path, **kwargs)
 
     def created(self, path: str):
         path = self._add_fs_prefix(path)
-        return self.filesystem.created(path)
+        return self.fs.created(path)
 
     def modified(self, path: str):
         path = self._add_fs_prefix(path)
-        return self.filesystem.modified(path)
+        return self.fs.modified(path)
 
     def sign(self, path: str, expiration=100, **kwargs):
         path = self._add_fs_prefix(path)
-        return self.filesystem.sign(path, expiration=100, **kwargs)
+        return self.fs.sign(path, expiration=100, **kwargs)
 
     def cat(
         self,
@@ -159,12 +159,10 @@ class PrefixFileSystem(AbstractFileSystem):
         **kwargs: Any,
     ):
         path = self._add_fs_prefix(path)
-        return self.filesystem.cat(
-            path, recursive=recursive, on_error=on_error, **kwargs
-        )
+        return self.fs.cat(path, recursive=recursive, on_error=on_error, **kwargs)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__qualname__}(prefix='{self.prefix}', filesystem={self.filesystem})"
+        return f"{self.__class__.__qualname__}(prefix='{self.prefix}', fs={self.fs})"
 
     def open(
         self,
@@ -172,7 +170,7 @@ class PrefixFileSystem(AbstractFileSystem):
         **kwargs,
     ):
         """
-        Return a file-like object from the filesystem
+        Return a file-like object from the fs
 
         The file-like object returned ignores an eventual PrefixFileSystem:
             - the ``.path`` attribute is always an absolute path
@@ -193,4 +191,4 @@ class PrefixFileSystem(AbstractFileSystem):
             Extra arguments to pass through to the cache.
         encoding, errors, newline: passed on to TextIOWrapper for text mode
         """
-        return self.filesystem.open(self._add_fs_prefix(path), **kwargs)
+        return self.fs.open(self._add_fs_prefix(path), **kwargs)

@@ -80,14 +80,14 @@ def filetexts(d, open=open, mode="t"):
 
 def test_open():
     with filetexts(csv_files, mode="b"):
-        fs = PrefixFileSystem(prefix="a", filesystem=fsspec.filesystem("file"))
+        fs = PrefixFileSystem(prefix="a", fs=fsspec.filesystem("file"))
         with fs.open("b/c/.test.fakedata.3.csv") as f:
             assert f.read() == b"a,b\n3,4,5\n"
 
 
 def test_cats():
     with filetexts(csv_files, mode="b"):
-        fs = PrefixFileSystem(prefix=".", filesystem=fsspec.filesystem("file"))
+        fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
         assert fs.cat(".test.fakedata.1.csv") == b"a,b\n" b"1,2\n"
         out = set(fs.cat([".test.fakedata.1.csv", ".test.fakedata.2.csv"]).values())
         assert out == {b"a,b\n" b"1,2\n", b"a,b\n" b"3,4\n"}
@@ -107,14 +107,14 @@ def test_cats():
 
 def test_not_found():
     fn = "not-a-file"
-    fs = PrefixFileSystem(prefix=".", filesystem=fsspec.filesystem("file"))
+    fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
     with pytest.raises((FileNotFoundError, OSError)):
         with OpenFile(fs, fn, mode="rb"):
             pass
 
 
 def test_isfile():
-    fs = PrefixFileSystem(prefix=".", filesystem=fsspec.filesystem("file"))
+    fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
@@ -124,7 +124,7 @@ def test_isfile():
 
 
 def test_isdir():
-    fs = PrefixFileSystem(prefix=".", filesystem=fsspec.filesystem("file"))
+    fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
@@ -138,7 +138,7 @@ def test_directories(tmpdir, prefix, dirname):
     tmpdir = make_path_posix(str(tmpdir))
     prefix = os.path.join(tmpdir, prefix)
 
-    fs = PrefixFileSystem(prefix=prefix, filesystem=fsspec.filesystem("file"))
+    fs = PrefixFileSystem(prefix=prefix, fs=fsspec.filesystem("file"))
     fs.mkdir(dirname)
     assert not os.path.exists(os.path.join(tmpdir, "dir"))
     assert os.path.exists(os.path.join(prefix, "dir"))
@@ -146,7 +146,7 @@ def test_directories(tmpdir, prefix, dirname):
     fs.rmdir(dirname)
     assert not os.path.exists(os.path.join(prefix, "dir"))
 
-    fs = PrefixFileSystem(prefix=f"{tmpdir}/a", filesystem=fsspec.filesystem("file"))
+    fs = PrefixFileSystem(prefix=f"{tmpdir}/a", fs=fsspec.filesystem("file"))
     assert fs.ls(".") == ["./b"]
     fs.rm("b", recursive=True)
     assert fs.ls(".") == []
