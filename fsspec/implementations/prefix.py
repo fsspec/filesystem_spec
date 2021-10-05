@@ -18,7 +18,7 @@ class PrefixFileSystem(AbstractFileSystem):
     def __init__(
         self,
         prefix: str,
-        fs: fsspec.AbstractFileSystem,
+        fs: AbstractFileSystem,
         *args,
         **storage_options,
     ) -> None:
