@@ -36,7 +36,7 @@ class PrefixFileSystem(AbstractFileSystem):
         self.prefix = stringify_path(prefix)
 
         if not self.prefix:
-            self.prefix = self.sep
+            self.prefix = self.root_marker
 
         self.filesystem = filesystem
 
