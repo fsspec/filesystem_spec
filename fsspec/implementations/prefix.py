@@ -164,11 +164,7 @@ class PrefixFileSystem(AbstractFileSystem):
     def __repr__(self) -> str:
         return f"{self.__class__.__qualname__}(prefix='{self.prefix}', fs={self.fs})"
 
-    def open(
-        self,
-        path,
-        **kwargs,
-    ):
+    def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
         """
         Return a file-like object from the fs
 
@@ -191,4 +187,10 @@ class PrefixFileSystem(AbstractFileSystem):
             Extra arguments to pass through to the cache.
         encoding, errors, newline: passed on to TextIOWrapper for text mode
         """
-        return self.fs.open(self._add_fs_prefix(path), **kwargs)
+        return self.fs.open(
+            self._add_fs_prefix(path),
+            mode=mode,
+            block_size=block_size,
+            cache_options=cache_options,
+            **kwargs,
+        )
