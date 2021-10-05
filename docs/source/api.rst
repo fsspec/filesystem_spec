@@ -119,6 +119,7 @@ Built-in Implementations
    fsspec.implementations.libarchive.LibArchiveFileSystem
    fsspec.implementations.dbfs.DatabricksFileSystem
    fsspec.implementations.reference.ReferenceFileSystem
+   fsspec.implementations.prefix.PrefixFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -182,6 +183,9 @@ Built-in Implementations
 
 .. autoclass:: fsspec.implementations.reference.ReferenceFileSystem
    :members: __init__
+
+.. autoclass:: fsspec.implementations.prefix.PrefixFileSystem
+   :members: __init__, open
 
 Other Known Implementations
 ---------------------------

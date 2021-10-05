@@ -13,6 +13,8 @@ class PrefixBufferedFile(AbstractBufferedFile):
 
 
 class PrefixFileSystem(AbstractFileSystem):
+    """A meta-filesystem to add a prefix and delegate to another filesystem"""
+
     def __init__(
         self,
         prefix: str,
@@ -20,6 +22,16 @@ class PrefixFileSystem(AbstractFileSystem):
         *args,
         **storage_options,
     ) -> None:
+        """
+        Parameters
+        ----------
+        prefix: str
+            The prefix to append to all paths
+
+        fs: fsspec.AbstractFileSystem
+            An instantiated filesystem to wrap. All operations are delegated to
+            this filesystem after appending the specified prefix
+        """
         super().__init__(*args, **storage_options)
         self.prefix = stringify_path(prefix)
 
