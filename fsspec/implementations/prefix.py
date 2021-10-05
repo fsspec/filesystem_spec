@@ -78,7 +78,7 @@ class PrefixFileSystem(AbstractFileSystem):
 
     def makedirs(self, path: str, exist_ok: bool = False):
         path = self._add_fs_prefix(path)
-        return self.fs.mkdirs(path=path, exist_ok=exist_ok)
+        return self.fs.makedirs(path=path, exist_ok=exist_ok)
 
     def rmdir(self, path: str):
         path = self._add_fs_prefix(path)
