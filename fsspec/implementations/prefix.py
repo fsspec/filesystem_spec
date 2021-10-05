@@ -149,7 +149,7 @@ class PrefixFileSystem(AbstractFileSystem):
 
     def sign(self, path: str, expiration=100, **kwargs):
         path = self._add_fs_prefix(path)
-        return self.fs.sign(path, expiration=100, **kwargs)
+        return self.fs.sign(path, expiration=expiration, **kwargs)
 
     def cat(
         self,
