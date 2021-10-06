@@ -179,7 +179,7 @@ def test_emtpy_prefix():
 
 
 @pytest.mark.parametrize(
-    "prefix",
+    "prefix, normalized_prefix",
     [
         ("/", "/"),
         ("a", "a"),
@@ -189,9 +189,8 @@ def test_emtpy_prefix():
         ("/a/b/c/", "/a/b/c"),
     ],
 )
-def test_remove_trailing_sep(prefix):
+def test_remove_trailing_sep(prefix, normalized_prefix):
     fs = fsspec.filesystem("file")
-    prefix, normalized_prefix = prefix
     assert (
         remove_trailing_sep(prefix, sep=fs.sep, root_marker=fs.root_marker)
         == normalized_prefix
@@ -199,7 +198,7 @@ def test_remove_trailing_sep(prefix):
 
 
 @pytest.mark.parametrize(
-    "prefix",
+    "prefix,normalized_prefix",
     [
         ("/", ""),
         ("a", "a"),
@@ -209,7 +208,6 @@ def test_remove_trailing_sep(prefix):
         ("/a/b/c/", "a/b/c/"),
     ],
 )
-def test_remove_root_marker(prefix):
+def test_remove_root_marker(prefix, normalized_prefix):
     fs = fsspec.filesystem("file")
-    prefix, normalized_prefix = prefix
     assert remove_root_marker(prefix, root_marker=fs.root_marker) == normalized_prefix
