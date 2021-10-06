@@ -63,7 +63,7 @@ class PrefixFileSystem(AbstractFileSystem):
             path = remove_root_marker(path, root_marker=self.fs.root_marker)
 
             if self.prefix == self.fs.root_marker:
-                path = f"{self.fs.root_marker}{path}"  # don't add twice the same sep
+                path = f"{self.fs.root_marker}{path}"  # don't add twice the root marker
             else:
                 path = f"{self.prefix}{self.fs.sep}{path}"
 
