@@ -36,7 +36,7 @@ class PrefixFileSystem(AbstractFileSystem):
         self.prefix = stringify_path(prefix)
 
         if not self.prefix:
-            self.prefix = self.root_marker
+            raise ValueError(f"empty prefix is not a valid prefix")
 
         self.fs = fs
 
@@ -52,8 +52,8 @@ class PrefixFileSystem(AbstractFileSystem):
 
             path = self._get_relative_path(path)
 
-            if self.prefix == self.sep:
-                path = f"{self.sep}{path}"  # don't add twice the same sep
+            if self.prefix == self.root_marker:
+                path = f"{self.root_marker}{path}"  # don't add twice the same sep
             else:
                 path = f"{self.prefix}{self.sep}{path}"
 
