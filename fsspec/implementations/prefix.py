@@ -40,7 +40,7 @@ class PrefixFileSystem(AbstractFileSystem):
         prefix: str
             The prefix to append to all paths
 
-        fs: fsspec.AbstractFileSystem
+        fs: AbstractFileSystem
             An instantiated filesystem to wrap. All operations are delegated to
             this filesystem after appending the specified prefix
         """
