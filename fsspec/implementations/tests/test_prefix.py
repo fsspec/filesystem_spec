@@ -211,3 +211,26 @@ def test_remove_trailing_sep(prefix, normalized_prefix):
 def test_remove_root_marker(prefix, normalized_prefix):
     fs = fsspec.filesystem("file")
     assert remove_root_marker(prefix, root_marker=fs.root_marker) == normalized_prefix
+
+
+@pytest.mark.parametrize(
+    "ls_arg, expected_out",
+    [
+        (".", ["./b"]),
+        ("./", ["./b"]),
+        ("./b", ["./b/c"]),
+        ("./b/", ["./b/c"]),
+        ("b", ["b/c"]),
+        ("b/", ["b/c"]),
+        ("./b/c/d", ["./b/c/d/e"]),
+        ("./b/c/d/", ["./b/c/d/e"]),
+        ("b/c/d", ["b/c/d/e"]),
+        ("b/c/d/", ["b/c/d/e"]),
+        ("b/c/d/e", []),
+        ("b/c/d/e/", []),
+    ],
+)
+def test_ls(tmpdir, ls_arg, expected_out):
+    os.makedirs(os.path.join(make_path_posix(str(tmpdir)), "a/b/c/d/e/"))
+    fs = PrefixFileSystem(prefix=f"{tmpdir}/a", fs=fsspec.filesystem("file"))
+    assert fs.ls(ls_arg) == expected_out
