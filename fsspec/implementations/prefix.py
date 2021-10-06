@@ -41,8 +41,8 @@ class PrefixFileSystem(AbstractFileSystem):
         self.fs = fs
 
     def _get_relative_path(self, path: str) -> str:
-        if path[: len(self.sep)] == self.sep:
-            return path[len(self.sep) :]
+        if path[: len(self.root_marker)] == self.root_marker:
+            return path[len(self.root_marker) :]
         return path
 
     def _add_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
