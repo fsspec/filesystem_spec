@@ -89,6 +89,20 @@ def test_open():
             assert f.read() == b"a,b\n3,4,5\n"
 
 
+def test_prefix_root():
+    with filetexts(csv_files, mode="b"):
+        fs = PrefixFileSystem(prefix="/", fs=fsspec.filesystem("file"))
+        abs_path_file = os.path.abspath("a/b/c/.test.fakedata.3.csv")
+
+        # Risk double root marker (in path and in prefix)
+        with fs.open(abs_path_file) as f:
+            assert f.read() == b"a,b\n3,4,5\n"
+
+        # Without root marker
+        with fs.open(abs_path_file[1:]) as f:
+            assert f.read() == b"a,b\n3,4,5\n"
+
+
 def test_cats():
     with filetexts(csv_files, mode="b"):
         fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
