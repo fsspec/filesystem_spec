@@ -42,13 +42,13 @@ class PrefixFileSystem(AbstractFileSystem):
         self.prefix = self._remove_trailing_sep(prefix)
 
     def _remove_trailing_sep(self, prefix: str) -> str:
-        if prefix[-len(self.fs.sep) :] == self.fs.sep:
+        if prefix[-len(self.fs.sep) :] == self.fs.sep and prefix != self.root_marker:
             return prefix[: -len(self.fs.sep)]
         return prefix
 
     def _remove_root_marker(self, path: str) -> str:
-        if path[: len(self.root_marker)] == self.root_marker:
-            return path[len(self.root_marker) :]
+        if path[: len(self.fs.root_marker)] == self.fs.root_marker:
+            return path[len(self.fs.root_marker) :]
         return path
 
     def _add_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
@@ -58,10 +58,10 @@ class PrefixFileSystem(AbstractFileSystem):
 
             path = self._remove_root_marker(path)
 
-            if self.prefix == self.root_marker:
-                path = f"{self.root_marker}{path}"  # don't add twice the same sep
+            if self.prefix == self.fs.root_marker:
+                path = f"{self.fs.root_marker}{path}"  # don't add twice the same sep
             else:
-                path = f"{self.prefix}{self.sep}{path}"
+                path = f"{self.prefix}{self.fs.sep}{path}"
 
             return protocol + "://" + path if protocol is not None else path
         elif isinstance(path, Iterable):
