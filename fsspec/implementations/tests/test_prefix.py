@@ -11,7 +11,11 @@ import pytest
 import fsspec
 from fsspec.core import OpenFile
 from fsspec.implementations.local import make_path_posix
-from fsspec.implementations.prefix import PrefixFileSystem
+from fsspec.implementations.prefix import (
+    PrefixFileSystem,
+    remove_root_marker,
+    remove_trailing_sep,
+)
 
 files = {
     ".test.accounts.1.json": (
@@ -150,3 +154,48 @@ def test_directories(tmpdir, prefix, dirname):
     assert fs.ls(".") == ["./b"]
     fs.rm("b", recursive=True)
     assert fs.ls(".") == []
+
+
+def test_emtpy_prefix():
+    with pytest.raises(ValueError):
+        PrefixFileSystem(prefix="", fs=fsspec.filesystem("file"))
+
+    with pytest.raises(ValueError):
+        PrefixFileSystem(prefix=None, fs=fsspec.filesystem("file"))
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        ("/", "/"),
+        ("a", "a"),
+        ("/a", "/a"),
+        ("a/", "a"),
+        ("/a/", "/a"),
+        ("/a/b/c/", "/a/b/c"),
+    ],
+)
+def test_remove_trailing_sep(prefix):
+    fs = fsspec.filesystem("file")
+    prefix, normalized_prefix = prefix
+    assert (
+        remove_trailing_sep(prefix, sep=fs.sep, root_marker=fs.root_marker)
+        == normalized_prefix
+    )
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        ("/", ""),
+        ("a", "a"),
+        ("/a", "a"),
+        ("a/", "a/"),
+        ("/a/", "a/"),
+        ("/a/b/c/", "a/b/c/"),
+    ],
+)
+def test_remove_root_marker(prefix):
+    fs = fsspec.filesystem("file")
+    prefix, normalized_prefix = prefix
+    assert remove_root_marker(prefix, root_marker=fs.root_marker) == normalized_prefix

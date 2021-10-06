@@ -12,6 +12,18 @@ class PrefixBufferedFile(AbstractBufferedFile):
         pass
 
 
+def remove_trailing_sep(prefix: str, sep: str, root_marker: str) -> str:
+    if prefix[-len(sep) :] == sep and prefix != root_marker:
+        return prefix[: -len(sep)]
+    return prefix
+
+
+def remove_root_marker(path: str, root_marker: str) -> str:
+    if path[: len(root_marker)] == root_marker:
+        return path[len(root_marker) :]
+    return path
+
+
 class PrefixFileSystem(AbstractFileSystem):
     """A meta-filesystem to add a prefix and delegate to another filesystem"""
 
@@ -39,24 +51,16 @@ class PrefixFileSystem(AbstractFileSystem):
             raise ValueError(f"empty prefix is not a valid prefix")
 
         prefix = stringify_path(prefix)
-        self.prefix = self._remove_trailing_sep(prefix)
-
-    def _remove_trailing_sep(self, prefix: str) -> str:
-        if prefix[-len(self.fs.sep) :] == self.fs.sep and prefix != self.root_marker:
-            return prefix[: -len(self.fs.sep)]
-        return prefix
-
-    def _remove_root_marker(self, path: str) -> str:
-        if path[: len(self.fs.root_marker)] == self.fs.root_marker:
-            return path[len(self.fs.root_marker) :]
-        return path
+        self.prefix = remove_trailing_sep(
+            prefix, sep=self.fs.sep, root_marker=self.fs.root_marker
+        )
 
     def _add_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
         if isinstance(path, str):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
 
-            path = self._remove_root_marker(path)
+            path = remove_root_marker(path, root_marker=self.fs.root_marker)
 
             if self.prefix == self.fs.root_marker:
                 path = f"{self.fs.root_marker}{path}"  # don't add twice the same sep
