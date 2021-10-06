@@ -33,14 +33,20 @@ class PrefixFileSystem(AbstractFileSystem):
             this filesystem after appending the specified prefix
         """
         super().__init__(*args, **storage_options)
-        self.prefix = stringify_path(prefix)
-
-        if not self.prefix:
-            raise ValueError(f"empty prefix is not a valid prefix")
-
         self.fs = fs
 
-    def _get_relative_path(self, path: str) -> str:
+        if not prefix:
+            raise ValueError(f"empty prefix is not a valid prefix")
+
+        prefix = stringify_path(prefix)
+        self.prefix = self._remove_trailing_sep(prefix)
+
+    def _remove_trailing_sep(self, prefix: str) -> str:
+        if prefix[-len(self.fs.sep) :] == self.fs.sep:
+            return prefix[: -len(self.fs.sep)]
+        return prefix
+
+    def _remove_root_marker(self, path: str) -> str:
         if path[: len(self.root_marker)] == self.root_marker:
             return path[len(self.root_marker) :]
         return path
@@ -50,7 +56,7 @@ class PrefixFileSystem(AbstractFileSystem):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
 
-            path = self._get_relative_path(path)
+            path = self._remove_root_marker(path)
 
             if self.prefix == self.root_marker:
                 path = f"{self.root_marker}{path}"  # don't add twice the same sep
