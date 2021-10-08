@@ -25,14 +25,10 @@ def test_fsspec_get_mapper():
 
         assert isinstance(mapping, collections.abc.Mapping)
         keys = sorted(list(mapping.keys()))
-        assert keys == ['a', 'b', 'deeply/nested/path']
+        assert keys == ["a", "b", "deeply/nested/path"]
 
         # mapping.getitems() will call FSMap.fs.cat()
         # which was not accurately implemented for zip.
         assert isinstance(mapping, fsspec.mapping.FSMap)
         items = dict(mapping.getitems(keys))
-        assert items == {
-            'a': b'',
-            'b': b'hello',
-            'deeply/nested/path': b'stuff'
-        }
+        assert items == {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
