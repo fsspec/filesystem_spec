@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2021.10.1 (in development)
+--------------------------
+
+Fixes
+
+- Removed inaccurate `ZipFileSystem.cat()` override so that the base
+  class' version is used (#788)
+
+
 2021.10.0
 ---------
 
