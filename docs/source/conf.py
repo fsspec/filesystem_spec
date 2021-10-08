@@ -61,18 +61,6 @@ author = "Martin Durant"
 # built documents.
 #
 # The short X.Y version.
-autodoc_mock_imports = [
-    "paramiko",
-    "requests",
-    "aiohttp",
-    "pygit2",
-    "distributed",
-    "dask",
-    "pyarrow",
-    "libarchive",
-    "smbprotocol",
-    "panel",
-]
 
 import fsspec
 
@@ -99,7 +87,19 @@ pygments_style = "sphinx"
 todo_include_todos = False
 
 default_role = "py:obj"
-autodoc_mock_imports = ["fuse"]
+autodoc_mock_imports = [
+    "aiohttp",
+    "dask",
+    "distributed",
+    "fuse",
+    "libarchive",
+    "panel",
+    "paramiko",
+    "pyarrow",
+    "pygit2",
+    "requests",
+    "smbprotocol",
+]
 
 
 # -- Options for HTML output ----------------------------------------------
