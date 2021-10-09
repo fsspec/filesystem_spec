@@ -445,7 +445,7 @@ def test_filecache_multicache():
     assert fs.cat(f1) == data
 
     assert len(os.listdir(cache1)) == 2  # cache and hashed afile
-    assert len(os.listdir(cache2)) == 0  # hasn't been intialized yet
+    assert len(os.listdir(cache2)) == 0  # hasn't been initialized yet
 
     # populates last cache if file not found in first cache
     fs = fsspec.filesystem(

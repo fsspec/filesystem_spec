@@ -102,7 +102,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         if not exist_ok:
             try:
-                # If the folowing succeeds, the path is already present
+                # If the following succeeds, the path is already present
                 self._send_to_api(
                     method="get", endpoint="get-status", json={"path": path}
                 )

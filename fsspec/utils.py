@@ -389,7 +389,7 @@ def get_protocol(url):
 
 
 def can_be_local(path):
-    """Can the given URL be used wih open_local?"""
+    """Can the given URL be used with open_local?"""
     from fsspec import get_filesystem_class
 
     try:
@@ -488,7 +488,7 @@ def nullcontext(obj):
 def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=True):
     """Merge adjacent byte-offset ranges when the inter-range
     gap is <= `max_gap`, and when the merged byte range does not
-    exceed `max_block` (if specified). By defaut, this function
+    exceed `max_block` (if specified). By default, this function
     will re-order the input paths and byte ranges to ensure sorted
     order. If the user can guarantee that the inputs are already
     sorted, passing `sort=False` will skip the re-ordering.

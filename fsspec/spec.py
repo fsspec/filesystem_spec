@@ -259,7 +259,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         # Not necessary to implement invalidation mechanism, may have no cache.
         # But if have, you should call this method of parent class from your
         # subclass to ensure expiring caches after transacations correctly.
-        # See the implementaion of FTPFileSystem in ftp.py
+        # See the implementation of FTPFileSystem in ftp.py
         if self._intrans:
             self._invalidated_caches_in_transaction.append(path)
 
@@ -1145,7 +1145,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     def get_mapper(self, root, check=False, create=False):
         """Create key/value store based on this file-system
 
-        Makes a MutibleMapping interface to the FS at the given root path.
+        Makes a MutableMapping interface to the FS at the given root path.
         See ``fsspec.mapping.FSMap`` for further details.
         """
         from .mapping import FSMap
@@ -1242,7 +1242,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
 
         Raises
         ------
-        NotImplementedError : if method is not implemented for a fileystem
+        NotImplementedError : if method is not implemented for a filesystem
         """
         raise NotImplementedError("Sign is not implemented for this filesystem")
 
