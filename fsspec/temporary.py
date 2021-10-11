@@ -1,4 +1,4 @@
-from .core import OpenFile, OpenFiles
+from .core import OpenFile, OpenFiles, get_fs_token_paths
 
 
 __all__ = (
