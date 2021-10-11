@@ -2,7 +2,7 @@ from .core import OpenFile, OpenFiles
 
 
 __all__ = (
-  'TemporaryFile',
+  'TemporaryOpenFile',
   'open_temporary', 'open_temporary_files'
 )
 
