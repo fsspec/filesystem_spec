@@ -286,7 +286,7 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    return hasher(''.join(str(args), str(kwargs)).encode() if kwargs else str(args).encode()).hexdigest()
+    return hasher(''.join((str(args), str(kwargs))).encode() if kwargs else str(args).encode()).hexdigest()
 
 
 def stringify_path(filepath):
