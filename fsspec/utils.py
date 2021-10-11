@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import sys
+import uuid
 from importlib import import_module
 from contextlib import contextmanager
 from functools import partial
@@ -135,20 +136,22 @@ def infer_compression(filename):
 def build_name_function(max_int):
     """Returns a function that receives a single integer
     and returns it as a string padded by enough zero characters
-    to align with maximum possible integer
-
+    to align with maximum possible integer and random uuid
     >>> name_f = build_name_function(57)
-
     >>> name_f(7)
-    '07'
+    '07-{UUID1}'
     >>> name_f(31)
-    '31'
+    '31-{UUID1}'
     >>> build_name_function(1000)(42)
-    '0042'
+    '0042-{UUID1}'
     >>> build_name_function(999)(42)
-    '042'
+    '042-{UUID1}'
     >>> build_name_function(0)(0)
-    '0'
+    '0-{UUID1}'
+    Recover time with
+    >>> import uuid
+    >>> from datetime import datetime, timedelta
+    >>> datetime(1582, 10, 15) + timedelta(microseconds=uuid.UUID(token.split('-', 1)[-1]).time//10)
     """
     # handle corner cases max_int is 0 or exact power of 10
     max_int += 1e-8
@@ -156,7 +159,7 @@ def build_name_function(max_int):
     pad_length = int(math.ceil(math.log10(max_int)))
 
     def name_function(i):
-        return str(i).zfill(pad_length)
+        return '-'.join((str(i).zfill(pad_length), str(uuid.uuid1())))
 
     return name_function
 
