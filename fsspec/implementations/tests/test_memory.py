@@ -5,12 +5,12 @@ import pytest
 
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
-    m.touch("afiles/and/anothers")
+    m.touch("afiles/and/another")
     files = m.find("")
-    assert files == ["/afiles/and/anothers", "/somefile"]
+    assert files == ["/afiles/and/another", "/somefile"]
 
     files = sorted(m.get_mapper("/"))
-    assert files == ["afiles/and/anothers", "somefile"]
+    assert files == ["afiles/and/another", "somefile"]
 
 
 def test_strip(m):

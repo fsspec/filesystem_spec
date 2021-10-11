@@ -70,7 +70,7 @@ class GithubFileSystem(AbstractFileSystem):
         Parameters
         ----------
         org_or_user: str
-            Nmae of the github org or user to query
+            Name of the github org or user to query
         is_org: bool (default True)
             Whether the name is an organisation (True) or user (False)
 

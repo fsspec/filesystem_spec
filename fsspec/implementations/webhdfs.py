@@ -342,7 +342,7 @@ class WebHDFS(AbstractFileSystem):
     def cp_file(self, lpath, rpath, **kwargs):
         with self.open(lpath) as lstream:
             tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
-            # Perform an atomic copy (stream to a temporory file and
+            # Perform an atomic copy (stream to a temporary file and
             # move it to the actual destination).
             try:
                 with self.open(tmp_fname, "wb") as rstream:

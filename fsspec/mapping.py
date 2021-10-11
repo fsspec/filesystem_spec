@@ -213,7 +213,7 @@ def get_mapper(
         Whether to make the directory corresponding to the root before
         instantiating
     missing_exceptions: None or tuple
-        If given, these excpetion types will be regarded as missing keys and
+        If given, these exception types will be regarded as missing keys and
         return KeyError when trying to read data. By default, you get
         (FileNotFoundError, IsADirectoryError, NotADirectoryError)
     alternate_root: None or str

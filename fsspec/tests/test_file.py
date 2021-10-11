@@ -166,7 +166,7 @@ def test_read_block(ftp_writable):
 def test_with_gzip(ftp_writable):
     import gzip
 
-    data = b"some compressable stuff"
+    data = b"some compressible stuff"
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host=host, port=port, username=user, password=pw)
     fn = "/myfile"

@@ -69,13 +69,13 @@ class Callback:
         """
         Execute hook(s) with current state
 
-        Each funcion is passed the internal size and current value
+        Each function is passed the internal size and current value
 
         Parameters
         ----------
         hook_name: str or None
             If given, execute on this hook
-        kwargs: passed on to (all) hoook(s)
+        kwargs: passed on to (all) hook(s)
         """
         if not self.hooks:
             return
