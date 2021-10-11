@@ -90,7 +90,7 @@ def open_temporary_files(
         [fs.makedirs(parent, exist_ok=True) for parent in parents]
     return OpenFiles(
         [
-            TemporaryFile(
+            TemporaryOpenFile(
                 fs,
                 path,
                 mode=mode,
