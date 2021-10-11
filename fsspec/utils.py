@@ -4,13 +4,20 @@ import os
 import pathlib
 import re
 import sys
+from importlib import import_module
 from contextlib import contextmanager
 from functools import partial
-from hashlib import md5
 from urllib.parse import urlsplit
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 PY36 = sys.version_info < (3, 7)
+
+# Hashing: https://www.blake2.net/
+# 64bits perf, should be blake2s for 32bits; need be cross-plateform
+# Waiting for Blake3
+hashing, hasher = os.environ.get('PYHASH', 'hashlib.blake2b').rsplit('.', 1)
+hashing = import_module(hashing)
+hasher = getattr(hashing, hasher)
 
 
 def infer_storage_options(urlpath, inherit_storage_options=None):
@@ -279,9 +286,7 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    if kwargs:
-        args += (kwargs,)
-    return md5(str(args).encode()).hexdigest()
+    return hasher(''.join(str(args), str(kwargs)).encode() if kwargs else str(args).encode()).hexdigest()
 
 
 def stringify_path(filepath):
@@ -314,6 +319,10 @@ def stringify_path(filepath):
         return str(filepath)
     elif hasattr(filepath, "path"):
         return filepath.path
+    elif hasattr(filepath, "name"):
+        return filepath.name
+    elif isinstance(filepath, bytes):
+        return filepath.decode()
     else:
         return filepath
 
