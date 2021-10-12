@@ -35,7 +35,7 @@ class BaseCache(object):
             start = 0
         if stop is None:
             stop = self.size
-        if start >= self.size or start >= stop or start == stop:
+        if start >= self.size or start >= stop:
             return b""
         return self.fetcher(start, stop)
 
@@ -85,7 +85,7 @@ class MMapCache(BaseCache):
             start = 0
         if end is None:
             end = self.size
-        if start >= self.size or start >= end or start == end:
+        if start >= self.size or start >= end:
             return b""
         start_block = start // self.blocksize
         end_block = end // self.blocksize
@@ -135,7 +135,7 @@ class ReadAheadCache(BaseCache):
             start = 0
         if end is None or end > self.size:
             end = self.size
-        if start >= self.size or start >= end or start == end:
+        if start >= self.size or start >= end:
             return b""
         l = end - start
         if start >= self.start and end <= self.end:
@@ -250,7 +250,7 @@ class BlockCache(BaseCache):
             start = 0
         if end is None:
             end = self.size
-        if start >= self.size or start >= end or start == end:
+        if start >= self.size or start >= end:
             return b""
 
         # byte position -> block numbers
@@ -349,7 +349,7 @@ class BytesCache(BaseCache):
             start = 0
         if end is None:
             end = self.size
-        if start >= self.size or start >= end or start == end:
+        if start >= self.size or start >= end:
             return b""
         if (
             self.start is not None
