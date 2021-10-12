@@ -222,6 +222,8 @@ class HTTPFileSystem(AsyncFileSystem):
 
         # TODO: extract into testable utility function?
         if start is not None or end is not None:
+            if start == end:
+                return b""
             headers = kw.pop("headers", {}).copy()
 
             headers["Range"] = await self._process_limits(url, start, end)
