@@ -567,6 +567,23 @@ def test_add_file_to_cache_after_save(local_filecache):
     assert len(fs2.cached_files[-1]) == 1
 
 
+def test_cached_open_close_read(ftp_writable):
+    # Regression test for <https://github.com/intake/filesystem_spec/issues/799>
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/out_block", "wb") as f:
+        f.write(b"test" * 4000)
+    fs = fsspec.filesystem(
+        "cached",
+        target_protocol="ftp",
+        target_options={"host": host, "port": port, "username": user, "password": pw},
+    )
+    with fs.open("/out_block") as f:
+        pass
+    with fs.open("/out_block") as f:
+        assert f.read(1) == b"t"
+
+
 @pytest.mark.parametrize("impl", ["filecache", "simplecache"])
 @pytest.mark.parametrize("compression", ["gzip", "bz2"])
 def test_with_compression(impl, compression):

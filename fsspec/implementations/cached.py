@@ -343,7 +343,7 @@ class CachingFileSystem(AbstractFileSystem):
         path = self._strip_protocol(f.path)
 
         c = self.cached_files[-1][path]
-        if c["blocks"] is not True and len(["blocks"]) * f.blocksize >= f.size:
+        if c["blocks"] is not True and len(c["blocks"]) * f.blocksize >= f.size:
             c["blocks"] = True
         try:
             logger.debug("going to save")
