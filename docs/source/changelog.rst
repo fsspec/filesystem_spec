@@ -1,13 +1,20 @@
 Changelog
 =========
 
-2021.10.1 (in development)
---------------------------
+2021.10.1
+---------
 
 Fixes
 
 - Removed inaccurate `ZipFileSystem.cat()` override so that the base
-  class' version is used (#788)
+  class' version is used (#789)
+- fix entrypoint processing (#784)
+- case where no blocks of a block-cache have yet been loaded (#801)
+- don't fetch empty ranges (#802, 803)
+
+Other
+
+- simplify doc deps (#786, 791)
 
 
 2021.10.0
