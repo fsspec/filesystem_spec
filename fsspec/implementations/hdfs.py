@@ -3,7 +3,7 @@ import shutil
 import weakref
 from contextlib import suppress
 
-from pyarrow.hdfs import HadoopFileSystem
+from pyarrow.fs import HadoopFileSystem
 
 from fsspec.implementations.arrow import wrap_exceptions
 from fsspec.spec import AbstractFileSystem

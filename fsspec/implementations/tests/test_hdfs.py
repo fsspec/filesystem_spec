@@ -13,7 +13,7 @@ data = b"\n".join([b"some test data"] * 1000)
 @pytest.fixture
 def hdfs(request):
     try:
-        hdfs = pyarrow.hdfs.HadoopFileSystem()
+        hdfs = pyarrow.fs.HadoopFileSystem()
     except IOError:
         pytest.skip("No HDFS configured")
 
