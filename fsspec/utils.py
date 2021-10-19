@@ -1,9 +1,11 @@
+import io
 import logging
 import math
 import os
 import pathlib
 import re
 import sys
+from collections import defaultdict
 from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
@@ -533,3 +535,143 @@ def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=Tru
 
     # `paths` is empty. Just return input lists
     return paths, starts, ends
+
+
+def get_parquet_byte_ranges(
+    paths,
+    fs,
+    columns,
+    row_groups,
+    max_gap=0,
+    max_block=256_000_000,
+    footer_sample_size=32_000_000,
+    engine="fastparquet",
+):
+    """Get a dictionary of the known byte ranges needed
+    to read a specific column/row-group selection from a
+    Parquet dataset. The output of this utility is intended
+    for use as the `data` argument for the `KnownPartsOfAFile`
+    caching strategy.
+    """
+
+    # Gather file footers
+    footer_starts = []
+    footer_ends = []
+    file_sizes = []
+    for path in paths:
+        file_sizes.append(fs.size(path))
+        footer_ends.append(file_sizes[-1])
+        sample_size = max(0, file_sizes[-1] - footer_sample_size)
+        footer_starts.append(sample_size)
+    footer_samples = fs.cat_ranges(paths, footer_starts, footer_ends)
+
+    # Calculate required byte ranges for each path
+    data_paths = []
+    data_starts = []
+    data_ends = []
+    for i in range(len(footer_samples)):
+
+        # Deal with small-file case.
+        # Just include all remaining bytes of the file
+        # in a single range.
+        if file_sizes[i] < max_block:
+            data_paths.append(paths[i])
+            data_starts.append(0)
+            data_ends.append(footer_starts[i])
+            continue
+
+        # Read the footer size and re-sample if necessary.
+        # It may make sense to warn the user that
+        # `footer_sample_size` is too small if we end up in
+        # this block (since it will be slow).
+        footer_size = int.from_bytes(footer_samples[i][-8:-4], "little")
+        if footer_sample_size < (footer_size + 8):
+            footer_samples[i] = fs.tail(path, footer_size + 8)
+            footer_starts[i] = footer_ends[i] - (footer_size + 8)
+
+        # Use "engine" to collect data byte ranges
+        if engine == "fastparquet":
+            path_data_starts, path_data_ends = _fastparquet_parquet_byte_ranges(
+                footer_samples[i], columns, row_groups, footer_starts[i]
+            )
+        elif engine == "pyarrow":
+            path_data_starts, path_data_ends = _pyarrow_parquet_byte_ranges(
+                footer_samples[i], columns, row_groups, footer_starts[i]
+            )
+        else:
+            raise ValueError(f"{engine} engine not supported by parquet_byte_ranges")
+        data_paths += [paths[i]] * len(path_data_starts)
+        data_starts += path_data_starts
+        data_ends += path_data_ends
+
+    # Merge adjacent offset ranges
+    data_paths, data_starts, data_ends = merge_offset_ranges(
+        data_paths,
+        data_starts,
+        data_ends,
+        max_gap=max_gap,
+        max_block=max_block,
+        sort=False,  # Should already be sorted
+    )
+
+    # Use cat_ranges to gather the data byte_ranges
+    result = defaultdict(dict)
+    for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
+        if data_ends[i] > data_starts[i]:
+            result[data_paths[i]][(data_starts[i], data_ends[i])] = data
+
+    # Add footer samples to `result`
+    for i, path in enumerate(paths):
+        result[path][(footer_starts[i], footer_ends[i])] = footer_samples[i]
+
+    return result
+
+
+def _fastparquet_parquet_byte_ranges(footer, columns, row_groups, footer_start):
+    import fastparquet as fp
+
+    data_starts, data_ends = [], []
+    pf = fp.ParquetFile(io.BytesIO(footer))
+    for r, row_group in enumerate(pf.row_groups):
+        # Skip this row-group if we are targetting
+        # specific row-groups
+        if row_groups is None or r in row_groups:
+            for column in row_group.columns:
+                name = column.meta_data.path_in_schema[0]
+                # Skip this column if we are targetting a
+                # specific columns
+                if columns is None or name in columns:
+                    file_offset0 = column.meta_data.dictionary_page_offset
+                    if file_offset0 is None:
+                        file_offset0 = column.meta_data.data_page_offset
+                    num_bytes = column.meta_data.total_uncompressed_size
+                    if file_offset0 < footer_start:
+                        data_starts.append(file_offset0)
+                        data_ends.append(min(file_offset0 + num_bytes, footer_start))
+    return data_starts, data_ends
+
+
+def _pyarrow_parquet_byte_ranges(footer, columns, row_groups, footer_start):
+    import pyarrow.parquet as pq
+
+    data_starts, data_ends = [], []
+    md = pq.ParquetFile(io.BytesIO(footer)).metadata
+    for r in range(md.num_row_groups):
+        # Skip this row-group if we are targetting
+        # specific row-groups
+        if row_groups is None or r in row_groups:
+            row_group = md.row_group(r)
+            for c in range(row_group.num_columns):
+                column = row_group.column(c)
+                name = column.path_in_schema
+                # Skip this column if we are targetting a
+                # specific columns
+                if columns is None or name in columns:
+                    file_offset0 = column.dictionary_page_offset
+                    if file_offset0 is None:
+                        file_offset0 = column.data_page_offset
+                    num_bytes = column.total_uncompressed_size
+                    if file_offset0 < footer_start:
+                        data_starts.append(file_offset0)
+                        data_ends.append(min(file_offset0 + num_bytes, footer_start))
+    return data_starts, data_ends
