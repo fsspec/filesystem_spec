@@ -585,6 +585,17 @@ def get_parquet_byte_ranges(
                 data_ends.append(footer_starts[i])
             continue
 
+        # Deal with full-read case.
+        # Neither a column selection nor a row_group
+        # selection was specified. So, we should be reading the
+        # entire file.
+        if columns is None and row_groups is None:
+            for b in range(0, footer_starts[i], max_block):
+                data_paths.append(paths[i])
+                data_starts.append(b)
+                data_ends.append(min(b + max_block, footer_starts[i]))
+            continue
+
         # Read the footer size and re-sample if necessary.
         # It may make sense to warn the user that
         # `footer_sample_size` is too small if we end up in
