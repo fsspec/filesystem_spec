@@ -5,7 +5,6 @@ import os
 import pathlib
 import re
 import sys
-from collections import defaultdict
 from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
@@ -540,21 +539,24 @@ def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=Tru
 def get_parquet_byte_ranges(
     paths,
     fs,
-    columns,
-    row_groups,
+    columns=None,
+    row_groups=None,
     max_gap=0,
     max_block=256_000_000,
     footer_sample_size=32_000_000,
+    add_header_magic=True,
     engine="fastparquet",
 ):
     """Get a dictionary of the known byte ranges needed
     to read a specific column/row-group selection from a
-    Parquet dataset. The output of this utility is intended
-    for use as the `data` argument for the `KnownPartsOfAFile`
-    caching strategy.
+    Parquet dataset. Each value in the output dictionary
+    is intended for use as the `data` argument for the
+    `KnownPartsOfAFile` caching strategy of a single path.
     """
 
-    # Gather file footers
+    # Gather file footers.
+    # We just take the last `footer_sample_size` bytes of each
+    # file (or the entire file if it is smaller than that). While
     footer_starts = []
     footer_ends = []
     file_sizes = []
@@ -569,15 +571,18 @@ def get_parquet_byte_ranges(
     data_paths = []
     data_starts = []
     data_ends = []
-    for i in range(len(footer_samples)):
+    for i in range(len(paths)):
 
         # Deal with small-file case.
         # Just include all remaining bytes of the file
         # in a single range.
         if file_sizes[i] < max_block:
-            data_paths.append(paths[i])
-            data_starts.append(0)
-            data_ends.append(footer_starts[i])
+            if footer_starts[i] > 0:
+                # Only need to transfer the data if the
+                # footer sample isn't already the whole file
+                data_paths.append(paths[i])
+                data_starts.append(0)
+                data_ends.append(footer_starts[i])
             continue
 
         # Read the footer size and re-sample if necessary.
@@ -614,15 +619,26 @@ def get_parquet_byte_ranges(
         sort=False,  # Should already be sorted
     )
 
+    # Start by populating `result` with footer samples
+    result = {}
+    for i, path in enumerate(paths):
+        result[path] = {(footer_starts[i], footer_ends[i]): footer_samples[i]}
+
     # Use cat_ranges to gather the data byte_ranges
-    result = defaultdict(dict)
     for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
         if data_ends[i] > data_starts[i]:
             result[data_paths[i]][(data_starts[i], data_ends[i])] = data
 
-    # Add footer samples to `result`
-    for i, path in enumerate(paths):
-        result[path][(footer_starts[i], footer_ends[i])] = footer_samples[i]
+    # Add b"PAR1" to header if necessary
+    if add_header_magic:
+        for i, path in enumerate(paths):
+            add_magic = True
+            for k in result[path].keys():
+                if k[0] == 0 and k[1] >= 4:
+                    add_magic = False
+                    break
+            if add_magic:
+                result[path][(0, 4)] = b"PAR1"
 
     return result
 
