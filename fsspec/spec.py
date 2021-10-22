@@ -16,7 +16,6 @@ from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
     get_package_version_without_import,
-    get_parquet_byte_ranges,
     other_paths,
     read_block,
     stringify_path,
@@ -1015,64 +1014,6 @@ class AbstractFileSystem(up, metaclass=_Cached):
             if not ac and "r" not in mode:
                 self.transaction.files.append(f)
             return f
-
-    def open_parquet_file(
-        self,
-        path,
-        columns=None,
-        row_groups=None,
-        engine="fastparquet",
-        **kwargs,
-    ):
-        """
-        Return a file-like object for a single Parquet file.
-
-        The specified parquet `engine` will be used to parse the
-        footer metadata, and determine the required byte ranges
-        from the file. The tartget path will then be opened with
-        the "parts" (`KnownPartsOfAFile`) caching strategy.
-
-        Note that this method is intended for usage with remote
-        file systems, and is unlikely to improve parquet-read
-        performance on local file systems.
-
-        Parameters
-        ----------
-        path: str
-            Target file
-        columns: list, optional
-            List of all column names that may be read from the file.
-        row_groups : list, optional
-            List of all row-group indices that may be read from the file.
-        enngine : list, default "fastparquet"
-            Parquet engine to use for metadata parsing. Allowed engines
-            include "fastparquet" or "pyarrow", but the specified engine
-            must be installed in the current environment.
-        **kwargs :
-            Key-word arguments to pass to the `get_parquet_byte_ranges`
-            utility.
-        """
-
-        # Fetch the known byte ranges needed to read
-        # `columns` and/or `row_groups`
-        ac = kwargs.pop("autocommit", not self._intrans)
-        data = get_parquet_byte_ranges(
-            [path],
-            self,
-            columns=columns,
-            row_groups=row_groups,
-            engine=engine,
-            **kwargs,
-        )
-
-        # Call self.open with "parts" caching
-        return self.open(
-            path,
-            mode="rb",
-            cache_type="parts",
-            cache_options={"data": data[path]},
-            autocommit=ac,
-        )
 
     def touch(self, path, truncate=True, **kwargs):
         """Create empty file, or update timestamp
