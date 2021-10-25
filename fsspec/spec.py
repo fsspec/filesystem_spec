@@ -636,6 +636,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
         """Size in bytes of file"""
         return self.info(path).get("size", None)
 
+    def sizes(self, paths):
+        """Size in bytes of each file in a list of paths"""
+        return [self.size(p) for p in paths]
+
     def isdir(self, path):
         """Is this entry directory-like?"""
         try:

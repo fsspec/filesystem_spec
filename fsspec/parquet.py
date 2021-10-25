@@ -3,6 +3,14 @@ import io
 from .core import get_fs_token_paths
 from .utils import merge_offset_ranges
 
+# Parquet-Specific Utilities for fsspec
+#
+# Most of the functions defined in this module are NOT
+# intended for public consumption. The only exception
+# to this is `open_parquet_file`, which should be used
+# place of `fs.open()` to open parquet-formatted files
+# on remote file systems.
+
 
 def open_parquet_file(
     path,
@@ -32,10 +40,12 @@ def open_parquet_file(
     fs: AbstractFileSystem, optional
         Filesystem object to use for opening the file. If nothing is
         specified, an `AbstractFileSystem` object will be inferred.
-    engine : list, default "fastparquet"
-        Parquet engine to use for metadata parsing. Allowed engines
-        include "fastparquet" or "pyarrow", but the specified engine
-        must be installed in the current environment.
+    engine : str, default "auto"
+        Parquet engine to use for metadata parsing. Allowed options
+        include "fastparquet", "pyarrow", and "auto". The specified
+        engine must be installed in the current environment. If
+        "auto" is specified, and both engines are installed,
+        "fastparquet" will take precedence over "pyarrow".
     columns: list, optional
         List of all column names that may be read from the file.
     row_groups : list, optional
@@ -84,7 +94,7 @@ def _get_parquet_byte_ranges(
     row_groups=None,
     max_gap=0,
     max_block=256_000_000,
-    footer_sample_size=32_000_000,
+    footer_sample_size=8_000_000,
     add_header_magic=True,
     engine="auto",
 ):
@@ -95,83 +105,89 @@ def _get_parquet_byte_ranges(
     `KnownPartsOfAFile` caching strategy of a single path.
     """
 
-    # Gather file footers.
-    # We just take the last `footer_sample_size` bytes of each
-    # file (or the entire file if it is smaller than that). While
-    footer_starts = []
-    footer_ends = []
-    file_sizes = []
-    for path in paths:
-        file_sizes.append(fs.size(path))
-        footer_ends.append(file_sizes[-1])
-        sample_size = max(0, file_sizes[-1] - footer_sample_size)
-        footer_starts.append(sample_size)
-    footer_samples = fs.cat_ranges(paths, footer_starts, footer_ends)
-
     # Set the engine
     engine = _set_engine(engine)
 
-    # Calculate required byte ranges for each path
+    # Get file sizes asynchronously
+    file_sizes = fs.sizes(paths)
+
+    # Populate global paths, starts, & ends
+    result = {}
     data_paths = []
     data_starts = []
     data_ends = []
-    for i in range(len(paths)):
-
-        # Deal with small-file case.
-        # Just include all remaining bytes of the file
-        # in a single range.
-        if file_sizes[i] < max_block:
-            if footer_starts[i] > 0:
-                # Only need to transfer the data if the
-                # footer sample isn't already the whole file
-                data_paths.append(paths[i])
-                data_starts.append(0)
-                data_ends.append(footer_starts[i])
-            continue
-
-        # Deal with full-read case.
-        # Neither a column selection nor a row_group
-        # selection was specified. So, we should be reading the
-        # entire file.
-        if columns is None and row_groups is None:
-            for b in range(0, footer_starts[i], max_block):
-                data_paths.append(paths[i])
+    if columns is None and row_groups is None:
+        # We are NOT selecting specific columns or row-groups.
+        #
+        # We can avoid sampling the footers, and just transfer
+        # all file data with cat_ranges
+        for i, path in enumerate(paths):
+            result[path] = {}
+            for b in range(0, file_sizes[i], max_block):
+                data_paths.append(path)
                 data_starts.append(b)
-                data_ends.append(min(b + max_block, footer_starts[i]))
-            continue
+                data_ends.append(min(b + max_block, file_sizes[i]))
+        add_header_magic = False  # "Magic" should already be included
+    else:
+        # We ARE selecting specific columns or row-groups.
+        #
+        # Gather file footers.
+        # We just take the last `footer_sample_size` bytes of each
+        # file (or the entire file if it is smaller than that)
+        footer_starts = []
+        footer_ends = []
+        for i, path in enumerate(paths):
+            footer_ends.append(file_sizes[i])
+            sample_size = max(0, file_sizes[i] - footer_sample_size)
+            footer_starts.append(sample_size)
+        footer_samples = fs.cat_ranges(paths, footer_starts, footer_ends)
 
-        # Read the footer size and re-sample if necessary.
-        # It may make sense to warn the user that
-        # `footer_sample_size` is too small if we end up in
-        # this block (since it will be slow).
-        footer_size = int.from_bytes(footer_samples[i][-8:-4], "little")
-        if footer_sample_size < (footer_size + 8):
-            footer_samples[i] = fs.tail(path, footer_size + 8)
-            footer_starts[i] = footer_ends[i] - (footer_size + 8)
+        # Calculate required byte ranges for each path
+        for i, path in enumerate(paths):
 
-        # Use "engine" to collect data byte ranges
-        path_data_starts, path_data_ends = engine._parquet_byte_ranges(
-            footer_samples[i], columns, row_groups, footer_starts[i]
+            # Deal with small-file case.
+            # Just include all remaining bytes of the file
+            # in a single range.
+            if file_sizes[i] < max_block:
+                if footer_starts[i] > 0:
+                    # Only need to transfer the data if the
+                    # footer sample isn't already the whole file
+                    data_paths.append(path)
+                    data_starts.append(0)
+                    data_ends.append(footer_starts[i])
+                continue
+
+            # Read the footer size and re-sample if necessary.
+            # It may make sense to warn the user that
+            # `footer_sample_size` is too small if we end up in
+            # this block (since it will be slow).
+            footer_size = int.from_bytes(footer_samples[i][-8:-4], "little")
+            if footer_sample_size < (footer_size + 8):
+                footer_samples[i] = fs.tail(path, footer_size + 8)
+                footer_starts[i] = footer_ends[i] - (footer_size + 8)
+
+            # Use "engine" to collect data byte ranges
+            path_data_starts, path_data_ends = engine._parquet_byte_ranges(
+                footer_samples[i], columns, row_groups, footer_starts[i]
+            )
+
+            data_paths += [path] * len(path_data_starts)
+            data_starts += path_data_starts
+            data_ends += path_data_ends
+
+        # Merge adjacent offset ranges
+        data_paths, data_starts, data_ends = merge_offset_ranges(
+            data_paths,
+            data_starts,
+            data_ends,
+            max_gap=max_gap,
+            max_block=max_block,
+            sort=False,  # Should already be sorted
         )
 
-        data_paths += [paths[i]] * len(path_data_starts)
-        data_starts += path_data_starts
-        data_ends += path_data_ends
-
-    # Merge adjacent offset ranges
-    data_paths, data_starts, data_ends = merge_offset_ranges(
-        data_paths,
-        data_starts,
-        data_ends,
-        max_gap=max_gap,
-        max_block=max_block,
-        sort=False,  # Should already be sorted
-    )
-
-    # Start by populating `result` with footer samples
-    result = {}
-    for i, path in enumerate(paths):
-        result[path] = {(footer_starts[i], footer_ends[i]): footer_samples[i]}
+        # Start by populating `result` with footer samples
+        for i, path in enumerate(paths):
+            result[path] = {(footer_starts[i], footer_ends[i]): footer_samples[i]}
 
     # Use cat_ranges to gather the data byte_ranges
     for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
@@ -228,19 +244,15 @@ def _set_engine(engine_str):
     )
 
 
-class ParquetEngine:
+class FastparquetEngine:
+
+    # The purpose of the FastparquetEngine class is
+    # to check if fastparquet can be imported (on initialization)
+    # and to define a `_parquet_byte_ranges` method. In the
+    # future, this class may also be used to define other
+    # methods/logic that are specific to fastparquet.
+
     def __init__(self):
-        self.init_engine()
-
-    def init_engine(self):
-        raise NotImplementedError
-
-    def _parquet_byte_ranges(self, footer, columns, row_groups, footer_start):
-        raise NotImplementedError
-
-
-class FastparquetEngine(ParquetEngine):
-    def init_engine(self):
         import fastparquet as fp
 
         self.fp = fp
@@ -260,7 +272,7 @@ class FastparquetEngine(ParquetEngine):
                         file_offset0 = column.meta_data.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.meta_data.data_page_offset
-                        num_bytes = column.meta_data.total_uncompressed_size
+                        num_bytes = column.meta_data.total_compressed_size
                         if file_offset0 < footer_start:
                             data_starts.append(file_offset0)
                             data_ends.append(
@@ -269,8 +281,15 @@ class FastparquetEngine(ParquetEngine):
         return data_starts, data_ends
 
 
-class PyarrowEngine(ParquetEngine):
-    def init_engine(self):
+class PyarrowEngine:
+
+    # The purpose of the PyarrowEngine class is
+    # to check if pyarrow can be imported (on initialization)
+    # and to define a `_parquet_byte_ranges` method. In the
+    # future, this class may also be used to define other
+    # methods/logic that are specific to pyarrow.
+
+    def __init__(self):
         import pyarrow.parquet as pq
 
         self.pq = pq
@@ -292,7 +311,7 @@ class PyarrowEngine(ParquetEngine):
                         file_offset0 = column.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.data_page_offset
-                        num_bytes = column.total_uncompressed_size
+                        num_bytes = column.total_compressed_size
                         if file_offset0 < footer_start:
                             data_starts.append(file_offset0)
                             data_ends.append(

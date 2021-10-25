@@ -475,6 +475,9 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _size(self, path):
         return (await self._info(path)).get("size", None)
 
+    async def _sizes(self, paths):
+        return await asyncio.gather(*[self._size(p) for p in paths])
+
     async def _exists(self, path):
         try:
             await self._info(path)
