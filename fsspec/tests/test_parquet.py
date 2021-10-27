@@ -58,7 +58,7 @@ def test_open_parquet_file(
     )
     df.to_parquet(path)
 
-    # Read back without `open_parquet_file`
+    # "Traditional read" (without `open_parquet_file`)
     expect = pd.read_parquet(path, columns=columns)
 
     # Use `_get_parquet_byte_ranges` to re-write a
