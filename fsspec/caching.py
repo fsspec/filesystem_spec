@@ -3,6 +3,7 @@ import io
 import logging
 import math
 import os
+import warnings
 
 logger = logging.getLogger("fsspec")
 
@@ -445,7 +446,15 @@ class KnownPartsOfAFile(BaseCache):
                 # reads beyond buffer are padded with zero
                 out += b"\x00" * (stop - start - len(out))
                 return out
-        raise ValueError("Read outside of know parts of file")
+
+        # We only get here if there is a request outside the
+        # known parts of the file. In an ideal world, this
+        # should never happen.
+        warnings.warn(
+            f"Read is outside the known file parts: {(start, stop)}. "
+            f"IO/caching performance may be poor!"
+        )
+        return super()._fetch(start, stop)
 
 
 caches = {
