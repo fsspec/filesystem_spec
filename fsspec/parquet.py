@@ -1,5 +1,6 @@
 import io
 import json
+import warnings
 
 from .core import get_fs_token_paths
 from .utils import merge_offset_ranges
@@ -20,6 +21,9 @@ def open_parquet_file(
     row_groups=None,
     storage_options=None,
     engine="auto",
+    max_gap=64_000,
+    max_block=256_000_000,
+    footer_sample_size=1_000_000,
     **kwargs,
 ):
     """
@@ -54,9 +58,19 @@ def open_parquet_file(
     storage_options : dict, optional
         Used to generate an `AbstractFileSystem` object if `fs` was
         not specified.
+    max_gap : int, optional
+        Neighboring byte ranges will only be merged when their
+        inter-range gap is <= `max_gap`. Default is 64KB.
+    max_block : int, optional
+        Neighboring byte ranges will only be merged when the size of
+        the aggregated range is <= `max_block`. Default is 256MB.
+    footer_sample_size : int, optional
+        Number of bytes to read from the end of the path to look
+        for the footer metadata. If the sampled bytes do not contain
+        the footer, a second read request will be required, and
+        performance will suffer. Default is 1MB.
     **kwargs :
-        Key-word arguments to pass to the `get_parquet_byte_ranges`
-        utility.
+        Optional key-word arguments to pass to `fs.open`
     """
 
     # Make sure we have an `AbstractFileSystem` object
@@ -68,23 +82,25 @@ def open_parquet_file(
 
     # Fetch the known byte ranges needed to read
     # `columns` and/or `row_groups`
-    ac = kwargs.pop("autocommit", not fs._intrans)
     data = _get_parquet_byte_ranges(
         [path],
         fs,
         columns=columns,
         row_groups=row_groups,
         engine=engine,
-        **kwargs,
+        max_gap=max_gap,
+        max_block=max_block,
+        footer_sample_size=footer_sample_size,
     )
 
     # Call self.open with "parts" caching
+    options = kwargs.pop("cache_options", {}).copy()
     return fs.open(
         path,
         mode="rb",
         cache_type="parts",
-        cache_options={"data": data[path]},
-        autocommit=ac,
+        cache_options={**options, **{"data": data[path]}},
+        **kwargs,
     )
 
 
@@ -93,11 +109,9 @@ def _get_parquet_byte_ranges(
     fs,
     columns=None,
     row_groups=None,
-    max_gap=0,
+    max_gap=64_000,
     max_block=256_000_000,
-    footer_sample_size=72_000,
-    overread_buffer=1_000_000,
-    add_header_magic=True,
+    footer_sample_size=1_000_000,
     engine="auto",
 ):
     """Get a dictionary of the known byte ranges needed
@@ -118,6 +132,7 @@ def _get_parquet_byte_ranges(
     data_paths = []
     data_starts = []
     data_ends = []
+    add_header_magic = True
     if columns is None and row_groups is None:
         # We are NOT selecting specific columns or row-groups.
         #
@@ -144,6 +159,31 @@ def _get_parquet_byte_ranges(
             footer_starts.append(sample_size)
         footer_samples = fs.cat_ranges(paths, footer_starts, footer_ends)
 
+        # Check our footer samples and re-sample if necessary.
+        missing_footer_starts = footer_starts.copy()
+        missing_footer_ends = footer_starts.copy()
+        large_footer = 0
+        for i, path in enumerate(paths):
+            footer_size = int.from_bytes(footer_samples[i][-8:-4], "little")
+            real_footer_start = file_sizes[i] - (footer_size + 8)
+            if real_footer_start < footer_starts[i]:
+                missing_footer_starts[i] = real_footer_start
+                missing_footer_ends[i] = footer_starts[i]
+                large_footer = max(large_footer, (footer_size + 8))
+        if large_footer:
+            warnings.warn(
+                f"Not enough data was used to sample the parquet footer. "
+                f"Try setting footer_sample_size >= {large_footer}."
+            )
+            for i, block in enumerate(
+                fs.cat_ranges(
+                    paths,
+                    missing_footer_starts,
+                    missing_footer_ends,
+                )
+            ):
+                footer_samples[i] = block + footer_samples[i]
+
         # Calculate required byte ranges for each path
         for i, path in enumerate(paths):
 
@@ -158,15 +198,6 @@ def _get_parquet_byte_ranges(
                     data_starts.append(0)
                     data_ends.append(footer_starts[i])
                 continue
-
-            # Read the footer size and re-sample if necessary.
-            # It may make sense to warn the user that
-            # `footer_sample_size` is too small if we end up in
-            # this block (since it will be slow).
-            footer_size = int.from_bytes(footer_samples[i][-8:-4], "little")
-            if footer_sample_size < (footer_size + 8):
-                footer_samples[i] = fs.tail(path, footer_size + 8)
-                footer_starts[i] = footer_ends[i] - (footer_size + 8)
 
             # Use "engine" to collect data byte ranges
             path_data_starts, path_data_ends = engine._parquet_byte_ranges(
@@ -209,7 +240,7 @@ def _get_parquet_byte_ranges(
 
     # Add b"" for reads beyond end of file
     for i, path in enumerate(paths):
-        result[path][(file_sizes[i], file_sizes[i] + overread_buffer)] = b""
+        result[path][(file_sizes[i], 2 * file_sizes[i])] = b""
 
     return result
 
