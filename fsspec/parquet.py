@@ -94,7 +94,7 @@ def _get_parquet_byte_ranges(
     row_groups=None,
     max_gap=0,
     max_block=256_000_000,
-    footer_sample_size=8_000_000,
+    footer_sample_size=32_000,
     add_header_magic=True,
     engine="auto",
 ):
@@ -307,7 +307,8 @@ class PyarrowEngine:
                     name = column.path_in_schema
                     # Skip this column if we are targetting a
                     # specific columns
-                    if columns is None or name in columns:
+                    split_name = name.split(".")[0]
+                    if columns is None or name in columns or split_name in columns:
                         file_offset0 = column.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.data_page_offset

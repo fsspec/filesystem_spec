@@ -11,6 +11,8 @@ try:
 except ImportError:
     pq = None
 
+# from fsspec.core import get_fs_token_paths
+# from fsspec.parquet import _get_parquet_byte_ranges
 from fsspec.parquet import open_parquet_file
 
 # Define `engine` fixture
@@ -33,10 +35,10 @@ def engine(request):
     return request.param
 
 
-@pytest.mark.parametrize("columns", [None, ["x"], ["x", "y"]])
-@pytest.mark.parametrize("max_gap", [64, 0])
+@pytest.mark.parametrize("columns", [None, ["x"], ["x", "y"], ["z"]])
+@pytest.mark.parametrize("max_gap", [0, 64])
 @pytest.mark.parametrize("max_block", [64, 256_000_000])
-@pytest.mark.parametrize("footer_sample_size", [64, 32_000_000])
+@pytest.mark.parametrize("footer_sample_size", [64, 1_000])
 def test_open_parquet_file(
     tmpdir, engine, columns, max_gap, max_block, footer_sample_size
 ):
@@ -49,15 +51,38 @@ def test_open_parquet_file(
     nrows = 40
     df = pd.DataFrame(
         {
-            "x": [i * 7 % 5 for i in range(nrows)],  # Not sorted
-            "y": [i * 2.5 for i in range(nrows)],  # Sorted
+            "x": [i * 7 % 5 for i in range(nrows)],
+            "y": [[0, i] for i in range(nrows)],  # list
+            "z": [{"a": i, "b": "cat"} for i in range(nrows)],  # struct
         },
         index=pd.Index([10 * i for i in range(nrows)], name="myindex"),
     )
     df.to_parquet(path)
 
-    # Read back with and without `open_parquet_file`
+    # Read back without `open_parquet_file`
     expect = pd.read_parquet(path, columns=columns)
+
+    # # Use `_get_parquet_byte_ranges` to re-write a
+    # # place-holder file with all bytes NOT required
+    # # to read `columns` set to b"0"
+    # fs = get_fs_token_paths(path, mode="rb")[0]
+    # data = _get_parquet_byte_ranges(
+    #     [path],
+    #     fs,
+    #     columns=columns,
+    #     engine=engine,
+    #     max_gap=max_gap,
+    #     max_block=max_block,
+    #     footer_sample_size=footer_sample_size,
+    # )[path]
+    # file_size = fs.size(path)
+    # with open(path, "wb") as f:
+    #     f.write(b"0" * file_size)
+    #     for (start, stop), byte_data in data.items():
+    #         f.seek(start)
+    #         f.write(byte_data)
+
+    # Read back the modified file with `open_parquet_file`
     with open_parquet_file(
         path,
         columns=columns,
