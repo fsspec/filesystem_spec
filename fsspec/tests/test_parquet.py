@@ -11,7 +11,7 @@ try:
 except ImportError:
     pq = None
 
-from fsspec.core import get_fs_token_paths
+from fsspec.core import url_to_fs
 from fsspec.parquet import _get_parquet_byte_ranges, open_parquet_file
 
 # Define `engine` fixture
@@ -69,7 +69,7 @@ def test_open_parquet_file(
     # selected by `_get_parquet_byte_ranges`. If this
     # test were reading from remote storage, we would
     # not need this logic to capture errors.
-    fs = get_fs_token_paths(path, mode="rb")[0]
+    fs = url_to_fs(path)[0]
     data = _get_parquet_byte_ranges(
         [path],
         fs,

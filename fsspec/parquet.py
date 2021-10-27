@@ -2,7 +2,7 @@ import io
 import json
 import warnings
 
-from .core import get_fs_token_paths
+from .core import url_to_fs
 from .utils import merge_offset_ranges
 
 # Parquet-Specific Utilities for fsspec
@@ -76,9 +76,7 @@ def open_parquet_file(
     # Make sure we have an `AbstractFileSystem` object
     # to work with
     if fs is None:
-        fs = get_fs_token_paths(
-            path, mode="rb", storage_options=(storage_options or {})
-        )[0]
+        fs = url_to_fs(path, storage_options=(storage_options or {}))[0]
 
     # Fetch the known byte ranges needed to read
     # `columns` and/or `row_groups`
