@@ -96,7 +96,7 @@ def _get_parquet_byte_ranges(
     max_gap=0,
     max_block=256_000_000,
     footer_sample_size=72_000,
-    footer_read_over=1_000_000,
+    overread_buffer=1_000_000,
     add_header_magic=True,
     engine="auto",
 ):
@@ -189,9 +189,7 @@ def _get_parquet_byte_ranges(
 
         # Start by populating `result` with footer samples
         for i, path in enumerate(paths):
-            result[path] = {
-                (footer_starts[i], footer_ends[i] + footer_read_over): footer_samples[i]
-            }
+            result[path] = {(footer_starts[i], footer_ends[i]): footer_samples[i]}
 
     # Use cat_ranges to gather the data byte_ranges
     for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
@@ -208,6 +206,10 @@ def _get_parquet_byte_ranges(
                     break
             if add_magic:
                 result[path][(0, 4)] = b"PAR1"
+
+    # Add b"" for reads beyond end of file
+    for i, path in enumerate(paths):
+        result[path][(file_sizes[i], file_sizes[i] + overread_buffer)] = b""
 
     return result
 

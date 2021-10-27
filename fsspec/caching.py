@@ -430,13 +430,21 @@ class KnownPartsOfAFile(BaseCache):
         super(KnownPartsOfAFile, self).__init__(blocksize, fetcher, size)
 
         # simple consolidation of contiguous blocks
-        for start0, stop in data.copy():
-            for start, stop1 in data.copy():
-                if stop == start:
-                    data[(start0, stop1)] = data.pop((start0, stop)) + data.pop(
-                        (start, stop1)
-                    )
-        self.data = data
+        if data:
+            old_offsets = sorted(list(data.keys()))
+            offsets = [old_offsets[0]]
+            blocks = [data.pop(old_offsets[0])]
+            for start, stop in old_offsets[1:]:
+                start0, stop0 = offsets[-1]
+                if start == stop0:
+                    offsets[-1] = (start0, stop)
+                    blocks[-1] += data.pop((start, stop))
+                else:
+                    offsets.append((start, stop))
+                    blocks.append(data.pop((start, stop)))
+            self.data = dict(zip(offsets, blocks))
+        else:
+            self.data = data
 
     def _fetch(self, start, stop):
         for (loc0, loc1), data in self.data.items():
