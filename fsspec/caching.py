@@ -449,7 +449,12 @@ class KnownPartsOfAFile(BaseCache):
 
         # We only get here if there is a request outside the
         # known parts of the file. In an ideal world, this
-        # should never happen.
+        # should never happen
+        if self.fetcher is None:
+            # We cannot fetch the data, so raise an error
+            raise ValueError(f"Read is outside the known file parts: {(start, stop)}. ")
+        # We can fetch the data, but should warn the user
+        # that this may be slow
         warnings.warn(
             f"Read is outside the known file parts: {(start, stop)}. "
             f"IO/caching performance may be poor!"
