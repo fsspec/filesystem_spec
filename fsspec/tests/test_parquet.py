@@ -11,9 +11,8 @@ try:
 except ImportError:
     pq = None
 
-# from fsspec.core import get_fs_token_paths
-# from fsspec.parquet import _get_parquet_byte_ranges
-from fsspec.parquet import open_parquet_file
+from fsspec.core import get_fs_token_paths
+from fsspec.parquet import _get_parquet_byte_ranges, open_parquet_file
 
 # Define `engine` fixture
 FASTPARQUET_MARK = pytest.mark.skipif(not fastparquet, reason="fastparquet not found")
@@ -62,25 +61,30 @@ def test_open_parquet_file(
     # Read back without `open_parquet_file`
     expect = pd.read_parquet(path, columns=columns)
 
-    # # Use `_get_parquet_byte_ranges` to re-write a
-    # # place-holder file with all bytes NOT required
-    # # to read `columns` set to b"0"
-    # fs = get_fs_token_paths(path, mode="rb")[0]
-    # data = _get_parquet_byte_ranges(
-    #     [path],
-    #     fs,
-    #     columns=columns,
-    #     engine=engine,
-    #     max_gap=max_gap,
-    #     max_block=max_block,
-    #     footer_sample_size=footer_sample_size,
-    # )[path]
-    # file_size = fs.size(path)
-    # with open(path, "wb") as f:
-    #     f.write(b"0" * file_size)
-    #     for (start, stop), byte_data in data.items():
-    #         f.seek(start)
-    #         f.write(byte_data)
+    # Use `_get_parquet_byte_ranges` to re-write a
+    # place-holder file with all bytes NOT required
+    # to read `columns` set to b"0". The purpose of
+    # this step is to make sure the read will fail
+    # if the correct bytes have not been accurately
+    # selected by `_get_parquet_byte_ranges`. If this
+    # test were reading from remote storage, we would
+    # not need this logic to capture errors.
+    fs = get_fs_token_paths(path, mode="rb")[0]
+    data = _get_parquet_byte_ranges(
+        [path],
+        fs,
+        columns=columns,
+        engine=engine,
+        max_gap=max_gap,
+        max_block=max_block,
+        footer_sample_size=footer_sample_size,
+    )[path]
+    file_size = fs.size(path)
+    with open(path, "wb") as f:
+        f.write(b"0" * file_size)
+        for (start, stop), byte_data in data.items():
+            f.seek(start)
+            f.write(byte_data)
 
     # Read back the modified file with `open_parquet_file`
     with open_parquet_file(

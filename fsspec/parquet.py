@@ -1,4 +1,5 @@
 import io
+import json
 
 from .core import get_fs_token_paths
 from .utils import merge_offset_ranges
@@ -260,6 +261,14 @@ class FastparquetEngine:
     def _parquet_byte_ranges(self, footer, columns, row_groups, footer_start):
         data_starts, data_ends = [], []
         pf = self.fp.ParquetFile(io.BytesIO(footer))
+
+        # Convert columns to a set and add any index columns
+        # speficied in the pandas metadata (just in case)
+        column_set = None if columns is None else set(columns)
+        if column_set is not None and hasattr(pf, "pandas_metadata"):
+            column_set |= set(pf.pandas_metadata.get('index_columns', []))
+
+        # Loop through column chunks to add required byte ranges
         for r, row_group in enumerate(pf.row_groups):
             # Skip this row-group if we are targetting
             # specific row-groups
@@ -268,7 +277,7 @@ class FastparquetEngine:
                     name = column.meta_data.path_in_schema[0]
                     # Skip this column if we are targetting a
                     # specific columns
-                    if columns is None or name in columns:
+                    if column_set is None or name in column_set:
                         file_offset0 = column.meta_data.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.meta_data.data_page_offset
@@ -297,6 +306,21 @@ class PyarrowEngine:
     def _parquet_byte_ranges(self, footer, columns, row_groups, footer_start):
         data_starts, data_ends = [], []
         md = self.pq.ParquetFile(io.BytesIO(footer)).metadata
+
+        # Convert columns to a set and add any index columns
+        # speficied in the pandas metadata (just in case)
+        column_set = None if columns is None else set(columns)
+        if column_set is not None:
+            schema = md.schema.to_arrow_schema()
+            has_pandas_metadata = schema.metadata is not None and b"pandas" in schema.metadata
+            if has_pandas_metadata:
+                column_set |= set(
+                    json.loads(
+                        schema.metadata[b"pandas"].decode("utf8")
+                    ).get("index_columns", [])
+            )
+
+        # Loop through column chunks to add required byte ranges
         for r in range(md.num_row_groups):
             # Skip this row-group if we are targetting
             # specific row-groups
@@ -308,7 +332,7 @@ class PyarrowEngine:
                     # Skip this column if we are targetting a
                     # specific columns
                     split_name = name.split(".")[0]
-                    if columns is None or name in columns or split_name in columns:
+                    if column_set is None or name in column_set or split_name in column_set:
                         file_offset0 = column.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.data_page_offset
