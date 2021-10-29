@@ -293,7 +293,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         path: str
             leaf directory name
         exist_ok: bool (False)
-            If True, will error if the target already exists
+            If False, will error if the target already exists
         """
         pass  # not necessary to implement, may not have directories
 
