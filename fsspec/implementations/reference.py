@@ -148,8 +148,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             self._process_dataframe()
         else:
             self._process_references(text, template_overrides)
-        if fs is None and remote_protocol is None:
-            remote_protocol = target_protocol
+        if fs is not None:
+            self.fs = fs
+            return
         if remote_protocol is None:
             for ref in self.templates.values():
                 protocol, _ = fsspec.core.split_protocol(ref)
@@ -291,12 +292,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references = references
 
     def _process_references1(self, references, template_overrides=None):
-        try:
-            # TODO: don't actually need this is gen is empty and
-            #  either simple_templates=True or templates is empty
-            import jinja2
-        except ImportError as e:
-            raise ValueError("Reference Spec Version 1 requires jinja2") from e
+        if not self.simple_templates and self.templates:
+            try:
+                import jinja2
+            except ImportError as e:
+                raise ValueError("Reference Spec Version 1 requires jinja2") from e
         self.references = {}
         self._process_templates(references.get("templates", {}))
 

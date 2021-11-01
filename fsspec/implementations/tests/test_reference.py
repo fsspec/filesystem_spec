@@ -136,7 +136,9 @@ def test_spec1_expand():
             "key4": ["http://target_url"],
         },
     }
-    fs = fsspec.filesystem("reference", fo=in_data, target_protocol="http")
+    fs = fsspec.filesystem(
+        "reference", fo=in_data, target_protocol="http", simple_templates=False
+    )
     assert fs.references == {
         "key0": "data",
         "key1": ["http://target_url", 10000, 100],
