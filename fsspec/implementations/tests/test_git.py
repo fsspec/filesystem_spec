@@ -6,6 +6,7 @@ import tempfile
 import pytest
 
 import fsspec
+from fsspec.implementations.local import make_path_posix
 
 pygit2 = pytest.importorskip("pygit2")
 
@@ -35,6 +36,7 @@ def repo():
         open(os.path.join(d, "inner", "file1"), "wb").write(b"data3")
         subprocess.call("git add inner/file1", shell=True, cwd=d)
         subprocess.call('git commit -m "branch tip"', shell=True, cwd=d)
+        os.chdir(orig_dir)
         yield d, sha
     finally:
         os.chdir(orig_dir)
@@ -57,3 +59,12 @@ def test_refs(repo):
 
     with fsspec.open("git://inner/file1", path=d, ref="abranch") as f:
         assert f.read() == b"data3"
+
+
+def test_url(repo):
+    d, sha = repo
+    fs, _, paths = fsspec.core.get_fs_token_paths(f"git://file1::file://{d}")
+    assert make_path_posix(d) in make_path_posix(fs.repo.path)
+    assert paths == ["file1"]
+    with fsspec.open(f"git://file1::file://{d}") as f:
+        assert f.read() == b"data00"

@@ -4,6 +4,8 @@ import itertools
 import logging
 from functools import lru_cache
 
+import fsspec.core
+
 try:
     import ujson as json
 except ImportError:
@@ -52,7 +54,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         remote_options=None,
         fs=None,
         template_overrides=None,
-        simple_templates=False,
+        simple_templates=True,
         loop=None,
         ref_type=None,
         **kwargs,
@@ -77,7 +79,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             Extra FS options for loading the reference file, if given as a path
         remote_protocol : str
             The protocol of the filesystem on which the references will be evaluated
-            (unless fs is provided)
+            (unless fs is provided). If not given, will be derived from the first
+            URL that has a protocol in the templates or in the references, in that
+            order.
         remote_options : dict
             kwargs to go with remote_protocol
         fs : file system instance
@@ -90,6 +94,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             If None, guessed from URL suffix, defaulting to JSON. Ignored if fo
             is not a string.
         simple_templates: bool
+            Whether templates can be processed with simple replace (True) or if
+            jinja  is needed (False, much slower). All reference sets produced by
+            ``kerchunk`` are simple in this sense, but the spec allows for complex.
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)
@@ -97,6 +104,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.dataframe = False
         self.template_overrides = template_overrides
         self.simple_templates = simple_templates
+        self.templates = {}
         if hasattr(fo, "read"):
             text = fo.read()
         elif isinstance(fo, str):
@@ -142,9 +150,21 @@ class ReferenceFileSystem(AsyncFileSystem):
             self._process_references(text, template_overrides)
         if fs is None and remote_protocol is None:
             remote_protocol = target_protocol
-        if remote_protocol:
-            fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
-        self.fs = fs
+        if remote_protocol is None:
+            for ref in self.templates.values():
+                protocol, _ = fsspec.core.split_protocol(ref)
+                if protocol:
+                    remote_protocol = protocol
+                    break
+        if remote_protocol is None:
+            for ref in self.references.values():
+                if isinstance(ref, list):
+                    protocol, _ = fsspec.core.split_protocol(ref[0])
+                    if protocol:
+                        remote_protocol = protocol
+                        break
+
+        self.fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
 
     @property
     def loop(self):
@@ -272,6 +292,8 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references1(self, references, template_overrides=None):
         try:
+            # TODO: don't actually need this is gen is empty and
+            #  either simple_templates=True or templates is empty
             import jinja2
         except ImportError as e:
             raise ValueError("Reference Spec Version 1 requires jinja2") from e
@@ -369,14 +391,14 @@ class ReferenceFileSystem(AsyncFileSystem):
                     size = None
                 else:
                     _, start, size = part
-            par = self._parent(path)
+            par = path.rsplit("/", 1)[0] if "/" in path else ""
             par0 = par
             while par0 and par0 not in self.dircache:
                 # build parent directories
                 self.dircache[par0] = []
-                self.dircache.setdefault(self._parent(par0), []).append(
-                    {"name": par0, "type": "directory", "size": 0}
-                )
+                self.dircache.setdefault(
+                    par0.rsplit("/", 1)[0] if "/" in par0 else "", []
+                ).append({"name": par0, "type": "directory", "size": 0})
                 par0 = self._parent(par0)
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
@@ -410,6 +432,12 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     async def _ls(self, path, detail=True, **kwargs):  # calls fast sync code
         return self.ls(path, detail, **kwargs)
+
+    def find(self, path, maxdepth=None, withdirs=False, **kwargs):
+        if path:
+            path = self._strip_protocol(path)
+            return sorted(k for k in self.references if k.startswith(path))
+        return sorted(self.references)
 
     def info(self, path, **kwargs):
         out = self.ls(path, True)

@@ -71,6 +71,7 @@ class FUSEr(Operations):
     def read(self, path, size, offset, fh):
         logger.debug("read %s", (path, size, offset))
         if self._ready_file and path in ["/.fuse_ready", ".fuse_ready"]:
+            # status indicator
             return b"ready"
 
         f = self.cache[fh]
@@ -79,7 +80,7 @@ class FUSEr(Operations):
         return out
 
     def write(self, path, data, offset, fh):
-        logger.debug("read %s", (path, offset))
+        logger.debug("write %s", (path, offset))
         f = self.cache[fh]
         f.write(data)
         return len(data)
@@ -87,6 +88,7 @@ class FUSEr(Operations):
     def create(self, path, flags, fi=None):
         logger.debug("create %s", (path, flags))
         fn = "".join([self.root, path.lstrip("/")])
+        self.fs.touch(fn)  # OS will want to get attributes immediately
         f = self.fs.open(fn, "wb")
         self.cache[self.counter] = f
         self.counter += 1

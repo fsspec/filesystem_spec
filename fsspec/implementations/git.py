@@ -3,6 +3,7 @@ import os
 import pygit2
 
 from fsspec.spec import AbstractFileSystem
+from fsspec.utils import infer_storage_options
 
 from .memory import MemoryFile
 
@@ -14,14 +15,19 @@ class GitFileSystem(AbstractFileSystem):
     """
 
     root_marker = ""
+    cachable = True
 
-    def __init__(self, path=None, ref=None, **kwargs):
+    def __init__(self, path=None, fo=None, ref=None, **kwargs):
         """
 
         Parameters
         ----------
         path: str (optional)
-            Local location of the repo (uses current directory if not given)
+            Local location of the repo (uses current directory if not given).
+            May be deprecated in favour of ``fo``.
+        fo: str (optional)
+            Same as ``path``, but passed as part of a chained URL. This one
+            takes precedence if both are given.
         ref: str (optional)
             Reference to work with, could be a hash, tag or branch name. Defaults
             to current working tree. Note that ``ls`` and ``open`` also take hash,
@@ -29,7 +35,7 @@ class GitFileSystem(AbstractFileSystem):
         kwargs
         """
         super().__init__(**kwargs)
-        self.repo = pygit2.Repository(path or os.getcwd())
+        self.repo = pygit2.Repository(fo or path or os.getcwd())
         self.ref = ref or "master"
 
     @classmethod
@@ -44,6 +50,14 @@ class GitFileSystem(AbstractFileSystem):
             if part and isinstance(tree, pygit2.Tree):
                 tree = tree[part]
         return tree
+
+    @staticmethod
+    def _get_kwargs_from_urls(path):
+        opts = infer_storage_options(path)
+        out = {}
+        if opts["host"] and opts["path"]:
+            out["ref"] = opts["host"]
+        return out
 
     def ls(self, path, detail=True, ref=None, **kwargs):
         path = self._strip_protocol(path)
