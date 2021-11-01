@@ -3,6 +3,7 @@ import io
 import logging
 import math
 import os
+import warnings
 
 logger = logging.getLogger("fsspec")
 
@@ -429,13 +430,21 @@ class KnownPartsOfAFile(BaseCache):
         super(KnownPartsOfAFile, self).__init__(blocksize, fetcher, size)
 
         # simple consolidation of contiguous blocks
-        for start0, stop in data.copy():
-            for start, stop1 in data.copy():
-                if stop == start:
-                    data[(start0, stop1)] = data.pop((start0, stop)) + data.pop(
-                        (start, stop1)
-                    )
-        self.data = data
+        if data:
+            old_offsets = sorted(list(data.keys()))
+            offsets = [old_offsets[0]]
+            blocks = [data.pop(old_offsets[0])]
+            for start, stop in old_offsets[1:]:
+                start0, stop0 = offsets[-1]
+                if start == stop0:
+                    offsets[-1] = (start0, stop)
+                    blocks[-1] += data.pop((start, stop))
+                else:
+                    offsets.append((start, stop))
+                    blocks.append(data.pop((start, stop)))
+            self.data = dict(zip(offsets, blocks))
+        else:
+            self.data = data
 
     def _fetch(self, start, stop):
         for (loc0, loc1), data in self.data.items():
@@ -445,7 +454,20 @@ class KnownPartsOfAFile(BaseCache):
                 # reads beyond buffer are padded with zero
                 out += b"\x00" * (stop - start - len(out))
                 return out
-        raise ValueError("Read outside of know parts of file")
+
+        # We only get here if there is a request outside the
+        # known parts of the file. In an ideal world, this
+        # should never happen
+        if self.fetcher is None:
+            # We cannot fetch the data, so raise an error
+            raise ValueError(f"Read is outside the known file parts: {(start, stop)}. ")
+        # We can fetch the data, but should warn the user
+        # that this may be slow
+        warnings.warn(
+            f"Read is outside the known file parts: {(start, stop)}. "
+            f"IO/caching performance may be poor!"
+        )
+        return super()._fetch(start, stop)
 
 
 caches = {
