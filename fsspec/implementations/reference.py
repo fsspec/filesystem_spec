@@ -153,17 +153,23 @@ class ReferenceFileSystem(AsyncFileSystem):
             return
         if remote_protocol is None:
             for ref in self.templates.values():
+                if callable(ref):
+                    ref = ref()
                 protocol, _ = fsspec.core.split_protocol(ref)
                 if protocol:
                     remote_protocol = protocol
                     break
         if remote_protocol is None:
             for ref in self.references.values():
-                if isinstance(ref, list):
+                if callable(ref):
+                    ref = ref()
+                if isinstance(ref, list) and ref[0]:
                     protocol, _ = fsspec.core.split_protocol(ref[0])
                     if protocol:
                         remote_protocol = protocol
                         break
+        if remote_protocol is None:
+            remote_protocol = target_protocol
 
         self.fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
 
@@ -292,7 +298,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references = references
 
     def _process_references1(self, references, template_overrides=None):
-        if not self.simple_templates and self.templates:
+        if not self.simple_templates or self.templates:
             try:
                 import jinja2
             except ImportError as e:
@@ -434,6 +440,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         return self.ls(path, detail, **kwargs)
 
     def find(self, path, maxdepth=None, withdirs=False, **kwargs):
+        if withdirs:
+            return super().find(path, maxdepth=maxdepth, withdirs=withdirs, **kwargs)
         if path:
             path = self._strip_protocol(path)
             return sorted(k for k in self.references if k.startswith(path))

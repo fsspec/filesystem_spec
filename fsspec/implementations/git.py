@@ -3,7 +3,6 @@ import os
 import pygit2
 
 from fsspec.spec import AbstractFileSystem
-from fsspec.utils import infer_storage_options
 
 from .memory import MemoryFile
 
@@ -24,7 +23,10 @@ class GitFileSystem(AbstractFileSystem):
         ----------
         path: str (optional)
             Local location of the repo (uses current directory if not given).
-            May be deprecated in favour of ``fo``.
+            May be deprecated in favour of ``fo``. When used with a higher
+            level function such as fsspec.open(), may be of the form
+            "git://[path-to-repo[:]][ref@]path/to/file" (but the actual
+            file path should not contain "@" or ":").
         fo: str (optional)
             Same as ``path``, but passed as part of a chained URL. This one
             takes precedence if both are given.
@@ -40,7 +42,12 @@ class GitFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        return super()._strip_protocol(path).lstrip("/")
+        path = super()._strip_protocol(path).lstrip("/")
+        if ":" in path:
+            path = path.split(":", 1)[1]
+        if "@" in path:
+            path = path.split("@", 1)[1]
+        return path.lstrip("/")
 
     def _path_to_object(self, path, ref):
         comm, ref = self.repo.resolve_refish(ref or self.ref)
@@ -53,10 +60,13 @@ class GitFileSystem(AbstractFileSystem):
 
     @staticmethod
     def _get_kwargs_from_urls(path):
-        opts = infer_storage_options(path)
+        if path.startswith("git://"):
+            path = path[6:]
         out = {}
-        if opts["host"] and opts["path"]:
-            out["ref"] = opts["host"]
+        if ":" in path:
+            out["path"], path = path.split(":", 1)
+        if "@" in path:
+            out["ref"], path = path.split("@", 1)
         return out
 
     def ls(self, path, detail=True, ref=None, **kwargs):
