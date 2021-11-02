@@ -442,6 +442,15 @@ class KnownPartsOfAFile(BaseCache):
                 else:
                     offsets.append((start, stop))
                     blocks.append(data.pop((start, stop)))
+
+            if self.size:
+                # If our last range goes to the end of the
+                # file, extend the range in case the read
+                # goes beyond the end of the file
+                last_key = offsets[-1]
+                if last_key[1] >= self.size:
+                    offsets[-1] = (last_key[0], max(last_key[1], self.size * 2))
+
             self.data = dict(zip(offsets, blocks))
         else:
             self.data = data
