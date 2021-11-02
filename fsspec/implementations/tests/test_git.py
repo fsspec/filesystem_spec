@@ -68,3 +68,9 @@ def test_url(repo):
     assert paths == ["file1"]
     with fsspec.open(f"git://file1::file://{d}") as f:
         assert f.read() == b"data00"
+
+    fs, _, paths = fsspec.core.get_fs_token_paths(f"git://{d}:master@file1")
+    assert make_path_posix(d) in make_path_posix(fs.repo.path)
+    assert paths == ["file1"]
+    with fsspec.open(f"git://file1::file://{d}") as f:
+        assert f.read() == b"data00"
