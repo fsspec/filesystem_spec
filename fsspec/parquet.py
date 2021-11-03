@@ -16,6 +16,7 @@ from .utils import merge_offset_ranges
 
 def open_parquet_file(
     path,
+    mode="rb",
     fs=None,
     metadata=None,
     columns=None,
@@ -44,6 +45,8 @@ def open_parquet_file(
     ----------
     path: str
         Target file path.
+    mode: str, optional
+        Mode option to be passed through to `fs.open`. Default is "rb".
     metadata: Any, optional
         Parquet metadata object. Object type must be supported
         by the backend parquet engine. For now, only the "fastparquet"
@@ -118,7 +121,6 @@ def open_parquet_file(
 
     # If data is empty, just use default
     # `open` command with `path` input
-    mode = kwargs.pop("mode", "rb")
     if len(data) != 1:
         return fs.open(path, mode=mode)
 
