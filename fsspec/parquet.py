@@ -1,6 +1,7 @@
 import io
 import json
 import warnings
+from collections import defaultdict
 
 from .core import url_to_fs
 from .utils import merge_offset_ranges
@@ -84,6 +85,10 @@ def open_parquet_file(
     if fs is None:
         fs = url_to_fs(path, storage_options=(storage_options or {}))[0]
 
+    # For now, `columns == []` not supported
+    if columns is not None and len(columns) == 0:
+        raise ValueError("Empty columns input not supported")
+
     # Set the engine
     engine = _set_engine(engine)
 
@@ -121,7 +126,7 @@ def open_parquet_file(
 
     # Extract file name from `data` and assert
     # that there is only one path to open
-    assert len(data) <= 1
+    assert len(data) == 1
     fn = next(iter(data))
 
     # Call self.open with "parts" caching
@@ -144,6 +149,7 @@ def _get_parquet_byte_ranges_from_metadata(
     row_groups=None,
     max_gap=64_000,
     max_block=256_000_000,
+    footer_sample_size=16_000,
     engine="auto",
 ):
 
@@ -159,6 +165,18 @@ def _get_parquet_byte_ranges_from_metadata(
         basepath=basepath,
     )
 
+    # Add footer byte ranges
+    paths = list(set(data_paths))
+    if footer_sample_size:
+        file_sizes = fs.sizes(paths)
+        max_ends = defaultdict(int)
+        for _path, _end in zip(data_paths, data_ends):
+            max_ends[_path] = max(max_ends[_path], _end)
+        for i, path in enumerate(paths):
+            data_paths.append(path)
+            data_starts.append(max(file_sizes[i] - footer_sample_size, max_ends[path]))
+            data_ends.append(file_sizes[i])
+
     # Merge adjacent offset ranges
     data_paths, data_starts, data_ends = merge_offset_ranges(
         data_paths,
@@ -166,11 +184,10 @@ def _get_parquet_byte_ranges_from_metadata(
         data_ends,
         max_gap=max_gap,
         max_block=max_block,
-        sort=metadata is not None,
+        sort=bool(footer_sample_size),  # May be unordered
     )
 
     # Use cat_ranges to gather the data byte_ranges
-    paths = set(data_paths)
     result = {fn: {} for fn in paths}
     for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
         if data_ends[i] > data_starts[i]:
