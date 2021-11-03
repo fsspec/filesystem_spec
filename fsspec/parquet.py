@@ -21,6 +21,7 @@ def open_parquet_file(
     columns=None,
     row_groups=None,
     storage_options=None,
+    strict=False,
     engine="auto",
     max_gap=64_000,
     max_block=256_000_000,
@@ -68,6 +69,12 @@ def open_parquet_file(
     storage_options : dict, optional
         Used to generate an `AbstractFileSystem` object if `fs` was
         not specified.
+    strict : bool, optional
+        Whether the resulting `KnownPartsOfAFile` cache should
+        fetch reads that go beyond a known byte-range boundary.
+        If `False` (the default), any read that ends outside a
+        known part will be zero padded. Note that using
+        `strict=True` may be useful for debugging.
     max_gap : int, optional
         Neighboring byte ranges will only be merged when their
         inter-range gap is <= `max_gap`. Default is 64KB.
@@ -124,7 +131,13 @@ def open_parquet_file(
         fn,
         mode=mode,
         cache_type="parts",
-        cache_options={**options, **{"data": data[fn]}},
+        cache_options={
+            **options,
+            **{
+                "data": data[fn],
+                "strict": strict,
+            },
+        },
         **kwargs,
     )
 
