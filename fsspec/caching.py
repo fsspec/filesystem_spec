@@ -426,7 +426,7 @@ class AllBytes(BaseCache):
 class KnownPartsOfAFile(BaseCache):
     name = "parts"
 
-    def __init__(self, blocksize, fetcher, size, data={}, strict=False, **_):
+    def __init__(self, blocksize, fetcher, size, data={}, strict=True, **_):
         super(KnownPartsOfAFile, self).__init__(blocksize, fetcher, size)
         self.strict = strict
 

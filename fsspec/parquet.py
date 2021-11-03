@@ -47,8 +47,8 @@ def open_parquet_file(
         Parquet metadata object. Object type must be supported
         by the backend parquet engine. For now, only the "fastparquet"
         engine supports an explicit `ParquetFile` metadata object.
-        If a metadata object is supplied, the footer metadata will
-        not need to be parsed.
+        If a metadata object is supplied, the remote footer metadata
+        will not need to be transferred into local memory.
     fs: AbstractFileSystem, optional
         Filesystem object to use for opening the file. If nothing is
         specified, an `AbstractFileSystem` object will be inferred.
@@ -97,44 +97,29 @@ def open_parquet_file(
 
     # Fetch the known byte ranges needed to read
     # `columns` and/or `row_groups`
-    if metadata is None:
+    data = _get_parquet_byte_ranges(
+        [path],
+        fs,
+        metadata=metadata,
+        columns=columns,
+        row_groups=row_groups,
+        engine=engine,
+        max_gap=max_gap,
+        max_block=max_block,
+        footer_sample_size=footer_sample_size,
+    )
 
-        # Use footer metadata from the specified
-        # file path
-        data = _get_parquet_byte_ranges(
-            [path],
-            fs,
-            columns=columns,
-            row_groups=row_groups,
-            engine=engine,
-            max_gap=max_gap,
-            max_block=max_block,
-            footer_sample_size=footer_sample_size,
-        )
+    # If data is empty, just use default
+    # `open` command with `path` input
+    mode = kwargs.pop("mode", "rb")
+    if len(data) != 1:
+        return fs.open(path, mode=mode)
 
-    else:
-
-        # Use a provided parquet metadata object
-        # to avoid transfering/parsing footer metadata
-        data = _get_parquet_byte_ranges_from_metadata(
-            metadata,
-            fs,
-            basepath=path,
-            columns=columns,
-            row_groups=row_groups,
-            engine=engine,
-            max_gap=max_gap,
-            max_block=max_block,
-        )
-
-    # Extract file name from `data` and assert
-    # that there is only one path to open
-    assert len(data) == 1
+    # Extract file name from `data`
     fn = next(iter(data))
 
     # Call self.open with "parts" caching
     options = kwargs.pop("cache_options", {}).copy()
-    mode = kwargs.pop("mode", "rb")
     return fs.open(
         fn,
         mode=mode,
@@ -144,62 +129,10 @@ def open_parquet_file(
     )
 
 
-def _get_parquet_byte_ranges_from_metadata(
-    metadata,
-    fs,
-    basepath=None,
-    columns=None,
-    row_groups=None,
-    max_gap=64_000,
-    max_block=256_000_000,
-    engine="auto",
-):
-
-    # Set engine if necessary
-    if isinstance(engine, str):
-        engine = _set_engine(engine)
-
-    # Use "engine" to collect data byte ranges
-    data_paths, data_starts, data_ends = engine._parquet_byte_ranges(
-        columns,
-        row_groups=row_groups,
-        metadata=metadata,
-        basepath=basepath,
-    )
-
-    # Merge adjacent offset ranges
-    data_paths, data_starts, data_ends = merge_offset_ranges(
-        data_paths,
-        data_starts,
-        data_ends,
-        max_gap=max_gap,
-        max_block=max_block,
-        sort=False,  # Should be sorted
-    )
-
-    # Use cat_ranges to gather the data byte_ranges
-    paths = list(set(data_paths))
-    result = {fn: {} for fn in paths}
-    for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
-        if data_ends[i] > data_starts[i]:
-            result[data_paths[i]][(data_starts[i], data_ends[i])] = data
-
-    # Add b"PAR1" to header
-    for i, path in enumerate(paths):
-        add_magic = True
-        for k in result[path].keys():
-            if k[0] == 0 and k[1] >= 4:
-                add_magic = False
-                break
-        if add_magic:
-            result[path][(0, 4)] = b"PAR1"
-
-    return result
-
-
 def _get_parquet_byte_ranges(
     paths,
     fs,
+    metadata=None,
     columns=None,
     row_groups=None,
     max_gap=64_000,
@@ -213,6 +146,21 @@ def _get_parquet_byte_ranges(
     is intended for use as the `data` argument for the
     `KnownPartsOfAFile` caching strategy of a single path.
     """
+
+    # Pass to specialized function if metadata is defined
+    if metadata is not None:
+
+        # Use the provided parquet metadata object
+        # to avoid transfering/parsing footer metadata
+        return _get_parquet_byte_ranges_from_metadata(
+            metadata,
+            fs,
+            columns=columns,
+            row_groups=row_groups,
+            engine=engine,
+            max_gap=max_gap,
+            max_block=max_block,
+        )
 
     # Set engine if necessary
     if isinstance(engine, str):
@@ -319,23 +267,79 @@ def _get_parquet_byte_ranges(
         for i, path in enumerate(paths):
             result[path] = {(footer_starts[i], footer_ends[i]): footer_samples[i]}
 
-    # Use cat_ranges to gather the data byte_ranges
-    for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
-        if data_ends[i] > data_starts[i]:
-            result[data_paths[i]][(data_starts[i], data_ends[i])] = data
+    # Transfer the data byte-ranges into local memory
+    _transfer_ranges(fs, result, data_paths, data_starts, data_ends)
 
     # Add b"PAR1" to header if necessary
     if add_header_magic:
-        for i, path in enumerate(paths):
-            add_magic = True
-            for k in result[path].keys():
-                if k[0] == 0 and k[1] >= 4:
-                    add_magic = False
-                    break
-            if add_magic:
-                result[path][(0, 4)] = b"PAR1"
+        _add_header_magic(result)
 
     return result
+
+
+def _get_parquet_byte_ranges_from_metadata(
+    metadata,
+    fs,
+    columns=None,
+    row_groups=None,
+    max_gap=64_000,
+    max_block=256_000_000,
+    engine="auto",
+):
+    """Simplified version of `_get_parquet_byte_ranges` for
+    the case that an engine-specific `metadata` object is
+    provided, and the remote footer metadata does not need to
+    be transfered before calculating the required byte ranges.
+    """
+
+    # Set engine if necessary
+    if isinstance(engine, str):
+        engine = _set_engine(engine)
+
+    # Use "engine" to collect data byte ranges
+    data_paths, data_starts, data_ends = engine._parquet_byte_ranges(
+        columns,
+        row_groups=row_groups,
+        metadata=metadata,
+    )
+
+    # Merge adjacent offset ranges
+    data_paths, data_starts, data_ends = merge_offset_ranges(
+        data_paths,
+        data_starts,
+        data_ends,
+        max_gap=max_gap,
+        max_block=max_block,
+        sort=False,  # Should be sorted
+    )
+
+    # Transfer the data byte-ranges into local memory
+    result = {fn: {} for fn in list(set(data_paths))}
+    _transfer_ranges(fs, result, data_paths, data_starts, data_ends)
+
+    # Add b"PAR1" to header
+    _add_header_magic(result)
+
+    return result
+
+
+def _transfer_ranges(fs, blocks, data_paths, data_starts, data_ends):
+    # Use cat_ranges to gather the data byte_ranges
+    for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
+        if data_ends[i] > data_starts[i]:
+            blocks[data_paths[i]][(data_starts[i], data_ends[i])] = data
+
+
+def _add_header_magic(data):
+    # Add b"PAR1" to file headers
+    for i, path in enumerate(list(data.keys())):
+        add_magic = True
+        for k in data[path].keys():
+            if k[0] == 0 and k[1] >= 4:
+                add_magic = False
+                break
+        if add_magic:
+            data[path][(0, 4)] = b"PAR1"
 
 
 def _set_engine(engine_str):
@@ -395,7 +399,6 @@ class FastparquetEngine:
         columns,
         row_groups=None,
         metadata=None,
-        basepath=None,
         footer=None,
         footer_start=None,
     ):
@@ -484,7 +487,6 @@ class PyarrowEngine:
         columns,
         row_groups=None,
         metadata=None,
-        basepath=None,
         footer=None,
         footer_start=None,
     ):
