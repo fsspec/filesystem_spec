@@ -98,9 +98,10 @@ def open_parquet_file(
     if fs is None:
         fs = url_to_fs(path, storage_options=(storage_options or {}))[0]
 
-    # For now, `columns == []` not supported
+    # For now, `columns == []` not supported. Just use
+    # default `open` command with `path` input
     if columns is not None and len(columns) == 0:
-        raise ValueError("Empty columns input not supported")
+        return fs.open(path, mode=mode)
 
     # Set the engine
     engine = _set_engine(engine)
