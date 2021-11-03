@@ -426,8 +426,9 @@ class AllBytes(BaseCache):
 class KnownPartsOfAFile(BaseCache):
     name = "parts"
 
-    def __init__(self, blocksize, fetcher, size, data={}, **_):
+    def __init__(self, blocksize, fetcher, size, data={}, strict=False, **_):
         super(KnownPartsOfAFile, self).__init__(blocksize, fetcher, size)
+        self.strict = strict
 
         # simple consolidation of contiguous blocks
         if data:
@@ -443,26 +444,31 @@ class KnownPartsOfAFile(BaseCache):
                     offsets.append((start, stop))
                     blocks.append(data.pop((start, stop)))
 
-            if self.size:
-                # If our last range goes to the end of the
-                # file, extend the range in case the read
-                # goes beyond the end of the file
-                last_key = offsets[-1]
-                if last_key[1] >= self.size:
-                    offsets[-1] = (last_key[0], max(last_key[1], self.size * 2))
-
             self.data = dict(zip(offsets, blocks))
         else:
             self.data = data
 
     def _fetch(self, start, stop):
         for (loc0, loc1), data in self.data.items():
-            if loc0 <= start < loc1 and loc0 <= stop <= loc1:
+            # If self.strict=False, use zero-padded data
+            # for reads beyond the end of a "known" buffer
+            out = b""
+            if loc0 <= start < loc1:
                 off = start - loc0
                 out = data[off : off + stop - start]
-                # reads beyond buffer are padded with zero
-                out += b"\x00" * (stop - start - len(out))
-                return out
+                if not self.strict or loc0 <= stop <= loc1:
+                    # The request is within a known range, or
+                    # it begins within a known range, and we
+                    # are allowed to pad reads beyond the
+                    # buffer with zero
+                    out += b"\x00" * (stop - start - len(out))
+                    return out
+                else:
+                    # The request ends outside a known range,
+                    # and we are being "strict" about reads
+                    # beyond the buffer
+                    start = loc1
+                    break
 
         # We only get here if there is a request outside the
         # known parts of the file. In an ideal world, this
@@ -476,7 +482,7 @@ class KnownPartsOfAFile(BaseCache):
             f"Read is outside the known file parts: {(start, stop)}. "
             f"IO/caching performance may be poor!"
         )
-        return super()._fetch(start, stop)
+        return out + super()._fetch(start, stop)
 
 
 caches = {
