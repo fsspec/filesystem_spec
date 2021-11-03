@@ -1,7 +1,6 @@
 import io
 import json
 import warnings
-from collections import defaultdict
 
 from .core import url_to_fs
 from .utils import merge_offset_ranges
@@ -43,10 +42,13 @@ def open_parquet_file(
     Parameters
     ----------
     path: str
-        Target file path or base path if `metadata` is specified.
+        Target file path.
     metadata: Any, optional
         Parquet metadata object. Object type must be supported
-        by the backend parquet engine.
+        by the backend parquet engine. For now, only the "fastparquet"
+        engine supports an explicit `ParquetFile` metadata object.
+        If a metadata object is supplied, the footer metadata will
+        not need to be parsed.
     fs: AbstractFileSystem, optional
         Filesystem object to use for opening the file. If nothing is
         specified, an `AbstractFileSystem` object will be inferred.
@@ -60,8 +62,9 @@ def open_parquet_file(
         List of all column names that may be read from the file.
     row_groups : list, optional
         List of all row-groups that may be read from the file. This
-        can be a list of row-group indices (integers), or row-group
-        metadata objects.
+        may be a list of row-group indices (integers), or it may be
+        a list of `RowGroup` metadata objects (if the "fastparquet"
+        engine is used).
     storage_options : dict, optional
         Used to generate an `AbstractFileSystem` object if `fs` was
         not specified.
@@ -149,7 +152,6 @@ def _get_parquet_byte_ranges_from_metadata(
     row_groups=None,
     max_gap=64_000,
     max_block=256_000_000,
-    footer_sample_size=16_000,
     engine="auto",
 ):
 
@@ -165,18 +167,6 @@ def _get_parquet_byte_ranges_from_metadata(
         basepath=basepath,
     )
 
-    # Add footer byte ranges
-    paths = list(set(data_paths))
-    if footer_sample_size:
-        file_sizes = fs.sizes(paths)
-        max_ends = defaultdict(int)
-        for _path, _end in zip(data_paths, data_ends):
-            max_ends[_path] = max(max_ends[_path], _end)
-        for i, path in enumerate(paths):
-            data_paths.append(path)
-            data_starts.append(max(file_sizes[i] - footer_sample_size, max_ends[path]))
-            data_ends.append(file_sizes[i])
-
     # Merge adjacent offset ranges
     data_paths, data_starts, data_ends = merge_offset_ranges(
         data_paths,
@@ -184,10 +174,11 @@ def _get_parquet_byte_ranges_from_metadata(
         data_ends,
         max_gap=max_gap,
         max_block=max_block,
-        sort=bool(footer_sample_size),  # May be unordered
+        sort=False,  # Should be sorted
     )
 
     # Use cat_ranges to gather the data byte_ranges
+    paths = list(set(data_paths))
     result = {fn: {} for fn in paths}
     for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
         if data_ends[i] > data_starts[i]:
