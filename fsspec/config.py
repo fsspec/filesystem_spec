@@ -63,7 +63,7 @@ def set_conf_files(cdir, conf_dict):
                 conf_dict.setdefault(key, {}).update(dict(js[key]))
 
 
-def apply_config(cls, kwargs, conf_dict=conf):
+def apply_config(cls, kwargs, conf_dict=None):
     """Supply default values for kwargs when instantiating class
 
     Augments the passed kwargs, by finding entries in the config dict
@@ -80,6 +80,8 @@ def apply_config(cls, kwargs, conf_dict=conf):
     -------
     dict : the modified set of kwargs
     """
+    if conf_dict is None:
+        conf_dict = conf
     protos = cls.protocol if isinstance(cls.protocol, (tuple, list)) else [cls.protocol]
     kw = {}
     for proto in protos:
