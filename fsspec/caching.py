@@ -424,6 +424,28 @@ class AllBytes(BaseCache):
 
 
 class KnownPartsOfAFile(BaseCache):
+    """
+    Cache holding known file parts.
+
+    Parameters
+    ----------
+    blocksize: int
+        How far to read ahead in numbers of bytes
+    fetcher: func
+        Function of the form f(start, end) which gets bytes from remote as
+        specified
+    size: int
+        How big this file is
+    data: dict
+        A dictionary mapping explicit `(start, stop)` file-offset tuples
+        with known bytes.
+    strict: bool, default True
+        Whether to fetch reads that go beyond a known byte-range boundary.
+        If `False`, any read that ends outside a known part will be zero
+        padded. Note that zero padding will not be used for reads that
+        begin outside a known byte-range.
+    """
+
     name = "parts"
 
     def __init__(self, blocksize, fetcher, size, data={}, strict=True, **_):
@@ -482,6 +504,7 @@ class KnownPartsOfAFile(BaseCache):
             f"Read is outside the known file parts: {(start, stop)}. "
             f"IO/caching performance may be poor!"
         )
+        logger.debug(f"KnownPartsOfAFile cache fetching {start}-{stop}")
         return out + super()._fetch(start, stop)
 
 

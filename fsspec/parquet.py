@@ -120,13 +120,8 @@ def open_parquet_file(
         footer_sample_size=footer_sample_size,
     )
 
-    # If data is empty, just use default
-    # `open` command with `path` input
-    if len(data) != 1:
-        return fs.open(path, mode=mode)
-
     # Extract file name from `data`
-    fn = next(iter(data))
+    fn = next(iter(data)) if data else path
 
     # Call self.open with "parts" caching
     options = kwargs.pop("cache_options", {}).copy()
@@ -137,7 +132,7 @@ def open_parquet_file(
         cache_options={
             **options,
             **{
-                "data": data[fn],
+                "data": data.get(fn, {}),
                 "strict": strict,
             },
         },
@@ -163,6 +158,10 @@ def _get_parquet_byte_ranges(
     `KnownPartsOfAFile` caching strategy of a single path.
     """
 
+    # Set engine if necessary
+    if isinstance(engine, str):
+        engine = _set_engine(engine)
+
     # Pass to specialized function if metadata is defined
     if metadata is not None:
 
@@ -171,16 +170,12 @@ def _get_parquet_byte_ranges(
         return _get_parquet_byte_ranges_from_metadata(
             metadata,
             fs,
+            engine,
             columns=columns,
             row_groups=row_groups,
-            engine=engine,
             max_gap=max_gap,
             max_block=max_block,
         )
-
-    # Set engine if necessary
-    if isinstance(engine, str):
-        engine = _set_engine(engine)
 
     # Get file sizes asynchronously
     file_sizes = fs.sizes(paths)
@@ -296,21 +291,17 @@ def _get_parquet_byte_ranges(
 def _get_parquet_byte_ranges_from_metadata(
     metadata,
     fs,
+    engine,
     columns=None,
     row_groups=None,
     max_gap=64_000,
     max_block=256_000_000,
-    engine="auto",
 ):
     """Simplified version of `_get_parquet_byte_ranges` for
     the case that an engine-specific `metadata` object is
     provided, and the remote footer metadata does not need to
     be transfered before calculating the required byte ranges.
     """
-
-    # Set engine if necessary
-    if isinstance(engine, str):
-        engine = _set_engine(engine)
 
     # Use "engine" to collect data byte ranges
     data_paths, data_starts, data_ends = engine._parquet_byte_ranges(
@@ -339,11 +330,12 @@ def _get_parquet_byte_ranges_from_metadata(
     return result
 
 
-def _transfer_ranges(fs, blocks, data_paths, data_starts, data_ends):
+def _transfer_ranges(fs, blocks, *ranges):
     # Use cat_ranges to gather the data byte_ranges
-    for i, data in enumerate(fs.cat_ranges(data_paths, data_starts, data_ends)):
-        if data_ends[i] > data_starts[i]:
-            blocks[data_paths[i]][(data_starts[i], data_ends[i])] = data
+    if len(ranges) != 3:
+        raise ValueError("Incorrect arg count passed to _transfer_ranges")
+    for path, start, stop, data in zip(*ranges, fs.cat_ranges(*ranges)):
+        blocks[path][(start, stop)] = data
 
 
 def _add_header_magic(data):
