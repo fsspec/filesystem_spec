@@ -424,10 +424,33 @@ class AllBytes(BaseCache):
 
 
 class KnownPartsOfAFile(BaseCache):
+    """
+    Cache holding known file parts.
+
+    Parameters
+    ----------
+    blocksize: int
+        How far to read ahead in numbers of bytes
+    fetcher: func
+        Function of the form f(start, end) which gets bytes from remote as
+        specified
+    size: int
+        How big this file is
+    data: dict
+        A dictionary mapping explicit `(start, stop)` file-offset tuples
+        with known bytes.
+    strict: bool, default True
+        Whether to fetch reads that go beyond a known byte-range boundary.
+        If `False`, any read that ends outside a known part will be zero
+        padded. Note that zero padding will not be used for reads that
+        begin outside a known byte-range.
+    """
+
     name = "parts"
 
-    def __init__(self, blocksize, fetcher, size, data={}, **_):
+    def __init__(self, blocksize, fetcher, size, data={}, strict=True, **_):
         super(KnownPartsOfAFile, self).__init__(blocksize, fetcher, size)
+        self.strict = strict
 
         # simple consolidation of contiguous blocks
         if data:
@@ -442,18 +465,32 @@ class KnownPartsOfAFile(BaseCache):
                 else:
                     offsets.append((start, stop))
                     blocks.append(data.pop((start, stop)))
+
             self.data = dict(zip(offsets, blocks))
         else:
             self.data = data
 
     def _fetch(self, start, stop):
         for (loc0, loc1), data in self.data.items():
-            if loc0 <= start < loc1 and loc0 <= stop <= loc1:
+            # If self.strict=False, use zero-padded data
+            # for reads beyond the end of a "known" buffer
+            out = b""
+            if loc0 <= start < loc1:
                 off = start - loc0
                 out = data[off : off + stop - start]
-                # reads beyond buffer are padded with zero
-                out += b"\x00" * (stop - start - len(out))
-                return out
+                if not self.strict or loc0 <= stop <= loc1:
+                    # The request is within a known range, or
+                    # it begins within a known range, and we
+                    # are allowed to pad reads beyond the
+                    # buffer with zero
+                    out += b"\x00" * (stop - start - len(out))
+                    return out
+                else:
+                    # The request ends outside a known range,
+                    # and we are being "strict" about reads
+                    # beyond the buffer
+                    start = loc1
+                    break
 
         # We only get here if there is a request outside the
         # known parts of the file. In an ideal world, this
@@ -467,7 +504,8 @@ class KnownPartsOfAFile(BaseCache):
             f"Read is outside the known file parts: {(start, stop)}. "
             f"IO/caching performance may be poor!"
         )
-        return super()._fetch(start, stop)
+        logger.debug(f"KnownPartsOfAFile cache fetching {start}-{stop}")
+        return out + super()._fetch(start, stop)
 
 
 caches = {

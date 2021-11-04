@@ -99,3 +99,31 @@ def test_open_parquet_file(
 
     # Check that `result` matches `expect`
     pd.testing.assert_frame_equal(expect, result)
+
+    # Try passing metadata
+    if engine == "fastparquet":
+        # Should work fine for "fastparquet"
+        pf = fastparquet.ParquetFile(path)
+        with open_parquet_file(
+            path,
+            metadata=pf,
+            columns=columns,
+            engine=engine,
+            max_gap=max_gap,
+            max_block=max_block,
+            footer_sample_size=footer_sample_size,
+        ) as f:
+            result = pd.read_parquet(f, columns=columns)
+        pd.testing.assert_frame_equal(expect, result)
+    elif engine == "pyarrow":
+        # Should raise ValueError for "pyarrow"
+        with pytest.raises(ValueError):
+            open_parquet_file(
+                path,
+                metadata=["Not-None"],
+                columns=columns,
+                engine=engine,
+                max_gap=max_gap,
+                max_block=max_block,
+                footer_sample_size=footer_sample_size,
+            )

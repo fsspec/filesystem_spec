@@ -504,6 +504,10 @@ def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=Tru
     if len(starts) != len(paths) or len(ends) != len(paths):
         raise ValueError
 
+    # Early Return
+    if len(starts) <= 1:
+        return paths, starts, ends
+
     # Sort by paths and then ranges if `sort=True`
     if sort:
         paths, starts, ends = [list(v) for v in zip(*sorted(zip(paths, starts, ends)))]
