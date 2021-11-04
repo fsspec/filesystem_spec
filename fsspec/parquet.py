@@ -330,10 +330,9 @@ def _get_parquet_byte_ranges_from_metadata(
     return result
 
 
-def _transfer_ranges(fs, blocks, *ranges):
+def _transfer_ranges(fs, blocks, paths, starts, ends):
     # Use cat_ranges to gather the data byte_ranges
-    if len(ranges) != 3:
-        raise ValueError("Incorrect arg count passed to _transfer_ranges")
+    ranges = (paths, starts, ends)
     for path, start, stop, data in zip(*ranges, fs.cat_ranges(*ranges)):
         blocks[path][(start, stop)] = data
 
