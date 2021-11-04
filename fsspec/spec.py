@@ -446,7 +446,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         for _, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
                 files.update(dirs)
-            out.update({info["name"]: info for name, info in files.items()})
+            out.update({self._strip_protocol(info["name"]): info for name, info in files.items()})
         if not out and self.isfile(path):
             # walk works on directories, but find should also return [path]
             # when path happens to be a file
