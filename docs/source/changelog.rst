@@ -1,6 +1,25 @@
 Changelog
 =========
 
+2021.11.0
+---------
+
+Enhancement
+
+- parquet-specific module and cache type (#813, #806)
+
+Fixes
+
+- empty ranges (#802, 801, 803)
+- doc typos (#791, 808)
+- entrypoints processing (#784)
+- cat in ZIP (#789)
+
+Other
+
+- move to fsspec org
+- doc deps (#786, 791)
+
 2021.10.1
 ---------
 
