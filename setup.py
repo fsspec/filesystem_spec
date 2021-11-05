@@ -26,7 +26,7 @@ setup(
     description="File-system specification",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="http://github.com/intake/filesystem_spec",
+    url="http://github.com/fsspec/filesystem_spec",
     maintainer="Martin Durant",
     maintainer_email="mdurant@anaconda.com",
     license="BSD",

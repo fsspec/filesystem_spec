@@ -568,7 +568,7 @@ def test_add_file_to_cache_after_save(local_filecache):
 
 
 def test_cached_open_close_read(ftp_writable):
-    # Regression test for <https://github.com/intake/filesystem_spec/issues/799>
+    # Regression test for <https://github.com/fsspec/filesystem_spec/issues/799>
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out_block", "wb") as f:

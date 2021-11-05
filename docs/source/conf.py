@@ -189,6 +189,6 @@ texinfo_documents = [
 ]
 
 extlinks = {
-    "issue": ("https://github.com/intake/filesystem_spec/issues/%s", "GH#"),
-    "pr": ("https://github.com/intake/filesystem_spec/pull/%s", "GH#"),
+    "issue": ("https://github.com/fsspec/filesystem_spec/issues/%s", "GH#"),
+    "pr": ("https://github.com/fsspec/filesystem_spec/pull/%s", "GH#"),
 }

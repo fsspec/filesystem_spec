@@ -38,7 +38,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     Reference dict format:
     {path0: bytes_data, path1: (target_url, offset, size)}
 
-    https://github.com/intake/fsspec-reference-maker/blob/main/README.md
+    https://github.com/fsspec/kerchunk/blob/main/README.md
     """
 
     protocol = "reference"
