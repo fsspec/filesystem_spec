@@ -72,7 +72,7 @@ def test_pickle():
 
 
 def test_keys_view():
-    # https://github.com/intake/filesystem_spec/issues/186
+    # https://github.com/intake/fsspec/issues/186
     m = fsspec.get_mapper("memory://")
     m["key"] = b"data"
 

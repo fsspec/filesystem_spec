@@ -11,7 +11,7 @@ data = b"hello" * 10000
 
 @pytest.mark.xfail(
     sys.version_info < (3, 6),
-    reason="py35 error, see https://github.com/intake/filesystem_spec/issues/147",
+    reason="py35 error, see https://github.com/fsspec/filesystem_spec/issues/147",
 )
 def test_pickle(ftp_writable):
     host, port, user, pw = ftp_writable
