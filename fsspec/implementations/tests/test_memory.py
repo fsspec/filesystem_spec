@@ -84,7 +84,7 @@ def test_rm_no_psuedo_dir(m):
 
 
 def test_rewind(m):
-    # https://github.com/intake/filesystem_spec/issues/349
+    # https://github.com/fsspec/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:
         f.write("content")
     with m.open("src/file.txt") as f:
@@ -116,7 +116,7 @@ def test_dir_errors(m):
 
 
 def test_no_rewind_append_mode(m):
-    # https://github.com/intake/filesystem_spec/issues/349
+    # https://github.com/fsspec/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:
         f.write("content")
     with m.open("src/file.txt", "a") as f:
@@ -133,7 +133,7 @@ def test_moves(m):
 
 
 def test_rm_reursive_empty_subdir(m):
-    # https://github.com/intake/filesystem_spec/issues/500
+    # https://github.com/fsspec/filesystem_spec/issues/500
     m.mkdir("recdir")
     m.mkdir("recdir/subdir2")
     m.rm("recdir/", recursive=True)

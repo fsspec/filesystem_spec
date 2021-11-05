@@ -75,7 +75,7 @@ coerce. Following on the success of ``s3fs`` and ``gcsfs``, and their use within
 have an interface as close to those as possible. See a
 `discussion`_ on the topic.
 
-.. _discussion: https://github.com/intake/filesystem_spec/issues/5
+.. _discussion: https://github.com/fsspec/filesystem_spec/issues/5
 
 Other newer technologies such as `smart_open`_ and ``pyarrow``'s newer file-system rewrite also have some
 parts of the functionality presented here, that might suit some use cases better.

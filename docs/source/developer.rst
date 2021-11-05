@@ -105,7 +105,7 @@ The following can be used to install ``fsspec`` in development mode
 
 .. code-block::
 
-   git clone https://github.com/intake/filesystem_spec
+   git clone https://github.com/fsspec/filesystem_spec
    cd filesystem_spec
    pip install -e .
 

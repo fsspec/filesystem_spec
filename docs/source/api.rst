@@ -201,7 +201,7 @@ Other Known Implementations
 .. _abfs: https://github.com/dask/adlfs
 .. _dropbox: https://github.com/MarineChap/intake_dropbox
 .. _ocifs: https://pypi.org/project/ocifs
-.. _gdrive: https://github.com/intake/gdrivefs
+.. _gdrive: https://github.com/fsspec/gdrivefs
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 
 .. _readbuffering:
