@@ -189,7 +189,7 @@ def test_chained_fs():
 
 @pytest.mark.xfail(reason="see issue #334", strict=True)
 def test_multilevel_chained_fs():
-    """This test reproduces intake/filesystem_spec#334"""
+    """This test reproduces fsspec/filesystem_spec#334"""
     import zipfile
 
     d1 = tempfile.mkdtemp()
@@ -215,7 +215,7 @@ def test_multilevel_chained_fs():
 
 @pytest.mark.skipif(sys.version_info < (3, 7), reason="no seek in old zipfile")
 def test_multilevel_chained_fs_zip_zip_file():
-    """This test reproduces intake/filesystem_spec#334"""
+    """This test reproduces fsspec/filesystem_spec#334"""
     import zipfile
 
     d1 = tempfile.mkdtemp()
