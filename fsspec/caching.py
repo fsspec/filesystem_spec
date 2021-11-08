@@ -471,10 +471,10 @@ class KnownPartsOfAFile(BaseCache):
             self.data = data
 
     def _fetch(self, start, stop):
+        out = b""
         for (loc0, loc1), data in self.data.items():
             # If self.strict=False, use zero-padded data
             # for reads beyond the end of a "known" buffer
-            out = b""
             if loc0 <= start < loc1:
                 off = start - loc0
                 out = data[off : off + stop - start]
