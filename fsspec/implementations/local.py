@@ -19,7 +19,7 @@ class LocalFileSystem(AbstractFileSystem):
 
     Parameters
     ----------
-    auto_mkdirs: bool
+    auto_mkdir: bool
         Whether, when opening a file, the directory containing it should
         be created (if it doesn't already exist). This is assumed by pyarrow
         code.
