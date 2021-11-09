@@ -513,11 +513,15 @@ class PyarrowEngine:
                 schema.metadata is not None and b"pandas" in schema.metadata
             )
             if has_pandas_metadata:
-                column_set |= set(
-                    json.loads(schema.metadata[b"pandas"].decode("utf8")).get(
-                        "index_columns", []
-                    )
-                )
+                md_index = [
+                    ind
+                    for ind in json.loads(
+                        schema.metadata[b"pandas"].decode("utf8")
+                    ).get("index_columns", [])
+                    # Ignore RangeIndex information
+                    if not isinstance(ind, dict)
+                ]
+                column_set |= set(md_index)
 
         # Loop through column chunks to add required byte ranges
         for r in range(md.num_row_groups):

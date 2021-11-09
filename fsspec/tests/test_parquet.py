@@ -38,8 +38,9 @@ def engine(request):
 @pytest.mark.parametrize("max_gap", [0, 64])
 @pytest.mark.parametrize("max_block", [64, 256_000_000])
 @pytest.mark.parametrize("footer_sample_size", [64, 1_000])
+@pytest.mark.parametrize("range_index", [True, False])
 def test_open_parquet_file(
-    tmpdir, engine, columns, max_gap, max_block, footer_sample_size
+    tmpdir, engine, columns, max_gap, max_block, footer_sample_size, range_index
 ):
 
     # Pandas required for this test
@@ -56,6 +57,9 @@ def test_open_parquet_file(
         },
         index=pd.Index([10 * i for i in range(nrows)], name="myindex"),
     )
+    if range_index:
+        df = df.reset_index(drop=True)
+        df.index.name = "myindex"
     df.to_parquet(path)
 
     # "Traditional read" (without `open_parquet_file`)
