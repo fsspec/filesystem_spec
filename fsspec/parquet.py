@@ -214,14 +214,12 @@ def _get_parquet_byte_ranges(
 
         # Check our footer samples and re-sample if necessary.
         missing_footer_starts = footer_starts.copy()
-        missing_footer_ends = footer_starts.copy()
         large_footer = 0
         for i, path in enumerate(paths):
             footer_size = int.from_bytes(footer_samples[i][-8:-4], "little")
             real_footer_start = file_sizes[i] - (footer_size + 8)
             if real_footer_start < footer_starts[i]:
                 missing_footer_starts[i] = real_footer_start
-                missing_footer_ends[i] = footer_starts[i]
                 large_footer = max(large_footer, (footer_size + 8))
         if large_footer:
             warnings.warn(
@@ -232,10 +230,11 @@ def _get_parquet_byte_ranges(
                 fs.cat_ranges(
                     paths,
                     missing_footer_starts,
-                    missing_footer_ends,
+                    footer_starts,
                 )
             ):
                 footer_samples[i] = block + footer_samples[i]
+                footer_starts[i] = missing_footer_starts[i]
 
         # Calculate required byte ranges for each path
         for i, path in enumerate(paths):
