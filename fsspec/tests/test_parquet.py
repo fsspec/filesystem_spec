@@ -91,7 +91,7 @@ def test_open_parquet_file(
             # We know 8 bytes is too small to include
             # the footer metadata, so there should NOT
             # be a key for the last 8 bytes of the file
-            bad_key = (file_size-8, file_size)
+            bad_key = (file_size - 8, file_size)
             assert bad_key not in data.keys()
 
         for (start, stop), byte_data in data.items():
