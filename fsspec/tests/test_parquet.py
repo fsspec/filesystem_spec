@@ -37,7 +37,7 @@ def engine(request):
 @pytest.mark.parametrize("columns", [None, ["x"], ["x", "y"], ["z"]])
 @pytest.mark.parametrize("max_gap", [0, 64])
 @pytest.mark.parametrize("max_block", [64, 256_000_000])
-@pytest.mark.parametrize("footer_sample_size", [64, 1_000])
+@pytest.mark.parametrize("footer_sample_size", [8, 1_000])
 @pytest.mark.parametrize("range_index", [True, False])
 def test_open_parquet_file(
     tmpdir, engine, columns, max_gap, max_block, footer_sample_size, range_index
@@ -86,6 +86,14 @@ def test_open_parquet_file(
     file_size = fs.size(path)
     with open(path, "wb") as f:
         f.write(b"0" * file_size)
+
+        if footer_sample_size == 8:
+            # We know 8 bytes is too small to include
+            # the footer metadata, so there should NOT
+            # be a key for the last 8 bytes of the file
+            bad_key = (file_size - 8, file_size)
+            assert bad_key not in data.keys()
+
         for (start, stop), byte_data in data.items():
             f.seek(start)
             f.write(byte_data)
