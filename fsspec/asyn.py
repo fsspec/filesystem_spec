@@ -219,16 +219,16 @@ async def _run_coros_in_chunks(
     assert batch_size > 0
     results = []
     for start in range(0, len(coros), batch_size):
-        chunk = [asyncio.Task(c) for c in coros[start : start + batch_size]]
+        chunk = [
+            asyncio.Task(asyncio.wait_for(c, timeout=timeout))
+            for c in coros[start : start + batch_size]
+        ]
         [
             t.add_done_callback(lambda: callback.call("relative_update", 1))
             for t in chunk
         ]
         results.extend(
-            await asyncio.wait_for(
-                asyncio.gather(*chunk, return_exceptions=return_exceptions),
-                timeout=timeout,
-            )
+            await asyncio.gather(*chunk, return_exceptions=return_exceptions),
         )
     return results
 
