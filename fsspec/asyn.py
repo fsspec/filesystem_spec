@@ -217,26 +217,19 @@ async def _run_coros_in_chunks(
         batch_size = len(coros)
 
     assert batch_size > 0
-    if return_exceptions is False:
-        exceptions = ()
-    elif return_exceptions is True:
-        exceptions = (Exception,)
-    else:
-        assert isinstance(return_exceptions, tuple)
-        exceptions = return_exceptions
-
     results = []
     for start in range(0, len(coros), batch_size):
-        chunk = coros[start : start + batch_size]
-        for coro in asyncio.as_completed(chunk, timeout=timeout):
-            try:
-                out = await coro
-            except exceptions as e:
-                # warning: trying to avoid cycles that are hard to clean
-                e.__traceback__ = None
-                out = e
-            results.append(out)
-            callback.call("relative_update", 1)
+        chunk = [asyncio.Task(c) for c in coros[start : start + batch_size]]
+        [
+            t.add_done_callback(lambda: callback.call("relative_update", 1))
+            for t in chunk
+        ]
+        results.extend(
+            await asyncio.wait_for(
+                asyncio.gather(*chunk, return_exceptions=return_exceptions),
+                timeout=timeout,
+            )
+        )
     return results
 
 
@@ -382,7 +375,9 @@ class AsyncFileSystem(AbstractFileSystem):
         paths = await self._expand_path(path, recursive=recursive)
         coros = [self._cat_file(path, **kwargs) for path in paths]
         batch_size = batch_size or self.batch_size
-        out = await _run_coros_in_chunks(coros, batch_size=batch_size, nofiles=True)
+        out = await _run_coros_in_chunks(
+            coros, batch_size=batch_size, nofiles=True, return_exceptions=True
+        )
         if on_error == "raise":
             ex = next(filter(is_exception, out), False)
             if ex:
