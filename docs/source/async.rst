@@ -42,6 +42,26 @@ Example:
     fs = fsspec.filesystem("http")
     out = fs.cat([url1, url2, url3])  # fetches data concurrently
 
+Coroutine batching
+------------------
+
+The various methods which create many coroutines to be passed to the event loop
+for processing may be batched: submitting a certain number in one go and waiting
+for them to complete before launching more. This is important to work around
+local open-file limits (which can be <~100) and not to swamp the heap.
+
+``fsspec.asyn._run_coros_in_chunks`` controls this process, but from the user's point
+of view, there are three ways to affect it. In increasing order or precedence:
+
+    - the global variables ``fsspec.asyn._DEFAULT_BATCH_SIZE`` and
+      ``fsspec.asyn._NOFILES_DEFAULT_BATCH_SIZE`` (for calls involving local files or not,
+      respectively)
+
+    - config keys "gather_batch_size" and "nofiles_gather_batch_size"
+
+    - the ``batch_size`` keyword, accepted by the batch methods of an async filesystem.
+
+
 Using from Async
 ----------------
 

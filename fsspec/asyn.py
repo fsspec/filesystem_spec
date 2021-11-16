@@ -203,12 +203,27 @@ async def _run_coros_in_chunks(
     return_exceptions=False,
     nofiles=False,
 ):
-    """Run the given coroutines in smaller chunks to
-    not crossing the file descriptor limit.
+    """Run the given coroutines in  chunks.
 
-    If batch_size parameter is -1, then it will not be any throttling. If
-    it is none, it will be inferred from the process resources (soft limit divided
-    by 8) and fallback to 128 if the system doesn't support it."""
+    Parameters
+    ----------
+    coros: list of coroutines to run
+    batch_size: int or None
+        Number of coroutines to submit/wait on simultaneously.
+        If -1, then it will not be any throttling. If
+        None, it will be inferred from _get_batch_size()
+    callback: fsspec.callbacks.Callback instance
+        Gets a relative_update when each coroutine completes
+    timeout: number or None
+        If given, each coroutine times out after this time. Note that, since
+        there are multiple batches, the total run time of this function will in
+        general be longer
+    return_exceptions: bool
+        Same meaning as in asyncio.gather
+    nofiles: bool
+        If inferring the batch_size, does this operation involve local files?
+        If yes, you normally expect smaller batches.
+    """
 
     if batch_size is None:
         batch_size = _get_batch_size(nofiles=nofiles)
