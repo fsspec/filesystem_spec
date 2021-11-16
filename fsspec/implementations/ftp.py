@@ -7,7 +7,7 @@ from ..utils import infer_storage_options
 
 
 class FTPFileSystem(AbstractFileSystem):
-    """A filesystem over classic """
+    """A filesystem over classic FTP"""
 
     root_marker = "/"
     cachable = False

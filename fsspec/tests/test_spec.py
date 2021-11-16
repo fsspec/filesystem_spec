@@ -205,7 +205,7 @@ def test_expand_path_recursive(test_paths, expected):
 
 @pytest.mark.xfail
 def test_find():
-    """ Test .find() method on debian server (ftp, https) with constant folder """
+    """Test .find() method on debian server (ftp, https) with constant folder"""
     filesystem, host, test_path = (
         FTPFileSystem,
         "ftp.fau.de",
