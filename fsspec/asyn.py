@@ -167,13 +167,20 @@ else:
     ResourceEror = resource.error
 
 _DEFAULT_BATCH_SIZE = 128
+_NOFILES_DEFAULT_BATCH_SIZE = 1280
 
 
-def _get_batch_size():
+def _get_batch_size(nofiles=False):
     from fsspec.config import conf
 
-    if "gather_batch_size" in conf:
-        return conf["gather_batch_size"]
+    if nofiles:
+        if "nofiles_gather_batch_size" in conf:
+            return conf["nofiles_gather_batch_size"]
+    else:
+        if "gather_batch_size" in conf:
+            return conf["gather_batch_size"]
+    if nofiles:
+        return _NOFILES_DEFAULT_BATCH_SIZE
     if resource is None:
         return _DEFAULT_BATCH_SIZE
 
@@ -189,29 +196,55 @@ def _get_batch_size():
 
 
 async def _run_coros_in_chunks(
-    coros, batch_size=None, callback=_DEFAULT_CALLBACK, timeout=None
+    coros,
+    batch_size=None,
+    callback=_DEFAULT_CALLBACK,
+    timeout=None,
+    return_exceptions=False,
+    nofiles=False,
 ):
-    """Run the given coroutines in smaller chunks to
-    not crossing the file descriptor limit.
+    """Run the given coroutines in  chunks.
 
-    If batch_size parameter is -1, then it will not be any throttling. If
-    it is none, it will be inferred from the process resources (soft limit divided
-    by 8) and fallback to 128 if the system doesn't support it."""
+    Parameters
+    ----------
+    coros: list of coroutines to run
+    batch_size: int or None
+        Number of coroutines to submit/wait on simultaneously.
+        If -1, then it will not be any throttling. If
+        None, it will be inferred from _get_batch_size()
+    callback: fsspec.callbacks.Callback instance
+        Gets a relative_update when each coroutine completes
+    timeout: number or None
+        If given, each coroutine times out after this time. Note that, since
+        there are multiple batches, the total run time of this function will in
+        general be longer
+    return_exceptions: bool
+        Same meaning as in asyncio.gather
+    nofiles: bool
+        If inferring the batch_size, does this operation involve local files?
+        If yes, you normally expect smaller batches.
+    """
 
     if batch_size is None:
-        batch_size = _get_batch_size()
+        batch_size = _get_batch_size(nofiles=nofiles)
 
     if batch_size == -1:
         batch_size = len(coros)
 
     assert batch_size > 0
-
     results = []
     for start in range(0, len(coros), batch_size):
-        chunk = coros[start : start + batch_size]
-        for coro in asyncio.as_completed(chunk, timeout=timeout):
-            results.append(await coro)
-            callback.call("relative_update", 1)
+        chunk = [
+            asyncio.Task(asyncio.wait_for(c, timeout=timeout))
+            for c in coros[start : start + batch_size]
+        ]
+        [
+            t.add_done_callback(lambda: callback.call("relative_update", 1))
+            for t in chunk
+        ]
+        results.extend(
+            await asyncio.gather(*chunk, return_exceptions=return_exceptions),
+        )
     return results
 
 
@@ -255,14 +288,14 @@ class AsyncFileSystem(AbstractFileSystem):
     async_impl = True
     disable_throttling = False
 
-    def __init__(self, *args, asynchronous=False, loop=None, **kwargs):
+    def __init__(self, *args, asynchronous=False, loop=None, batch_size=None, **kwargs):
         self.asynchronous = asynchronous
         self._pid = os.getpid()
         if not asynchronous:
             self._loop = loop or get_loop()
         else:
             self._loop = None
-        self.batch_size = kwargs.pop("batch_size", None)
+        self.batch_size = batch_size
         super().__init__(*args, **kwargs)
 
     @property
@@ -274,13 +307,25 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _rm_file(self, path, **kwargs):
         raise NotImplementedError
 
-    async def _rm(self, path, recursive=False, **kwargs):
+    async def _rm(self, path, recursive=False, batch_size=None, **kwargs):
         # TODO: implement on_error
+        batch_size = batch_size or self.batch_size
         path = await self._expand_path(path, recursive=recursive)
-        await asyncio.gather(*[self._rm_file(p, **kwargs) for p in path])
+        return await _run_coros_in_chunks(
+            [self._rm_file(p, **kwargs) for p in path],
+            batch_size=batch_size,
+            nofiles=True,
+        )
 
     async def _copy(
-        self, path1, path2, recursive=False, on_error=None, maxdepth=None, **kwargs
+        self,
+        path1,
+        path2,
+        recursive=False,
+        on_error=None,
+        maxdepth=None,
+        batch_size=None,
+        **kwargs,
     ):
         if on_error is None and recursive:
             on_error = "ignore"
@@ -289,9 +334,10 @@ class AsyncFileSystem(AbstractFileSystem):
 
         paths = await self._expand_path(path1, maxdepth=maxdepth, recursive=recursive)
         path2 = other_paths(paths, path2)
-        result = await asyncio.gather(
-            *[self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)],
-            return_exceptions=True,
+        batch_size = batch_size or self.batch_size
+        coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
+        result = await _run_coros_in_chunks(
+            coros, batch_size=batch_size, return_exceptions=True, nofiles=True
         )
 
         for ex in filter(is_exception, result):
@@ -299,11 +345,14 @@ class AsyncFileSystem(AbstractFileSystem):
                 continue
             raise ex
 
-    async def _pipe(self, path, value=None, **kwargs):
+    async def _pipe(self, path, value=None, batch_size=None, **kwargs):
         if isinstance(path, str):
             path = {path: value}
-        await asyncio.gather(
-            *[self._pipe_file(k, v, **kwargs) for k, v in path.items()]
+        batch_size = batch_size or self.batch_size
+        return await _run_coros_in_chunks(
+            [self._pipe_file(k, v, **kwargs) for k, v in path.items()],
+            batch_size=batch_size,
+            nofiles=True,
         )
 
     async def _process_limits(self, url, start, end):
@@ -335,11 +384,14 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         raise NotImplementedError
 
-    async def _cat(self, path, recursive=False, on_error="raise", **kwargs):
+    async def _cat(
+        self, path, recursive=False, on_error="raise", batch_size=None, **kwargs
+    ):
         paths = await self._expand_path(path, recursive=recursive)
-        out = await asyncio.gather(
-            *[self._cat_file(path, **kwargs) for path in paths],
-            return_exceptions=True,
+        coros = [self._cat_file(path, **kwargs) for path in paths]
+        batch_size = batch_size or self.batch_size
+        out = await _run_coros_in_chunks(
+            coros, batch_size=batch_size, nofiles=True, return_exceptions=True
         )
         if on_error == "raise":
             ex = next(filter(is_exception, out), False)
@@ -358,7 +410,9 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             return out[0]
 
-    async def _cat_ranges(self, paths, starts, ends, max_gap=None, **kwargs):
+    async def _cat_ranges(
+        self, paths, starts, ends, max_gap=None, batch_size=None, **kwargs
+    ):
         # TODO: on_error
         if max_gap is not None:
             # to be implemented in utils
@@ -371,15 +425,21 @@ class AsyncFileSystem(AbstractFileSystem):
             ends = [starts] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
-        return await asyncio.gather(
-            *[
-                self._cat_file(p, start=s, end=e, **kwargs)
-                for p, s, e in zip(paths, starts, ends)
-            ]
-        )
+        coros = [
+            self._cat_file(p, start=s, end=e, **kwargs)
+            for p, s, e in zip(paths, starts, ends)
+        ]
+        batch_size = batch_size or self.batch_size
+        return await _run_coros_in_chunks(coros, batch_size=batch_size, nofiles=True)
 
     async def _put(
-        self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs
+        self,
+        lpath,
+        rpath,
+        recursive=False,
+        callback=_DEFAULT_CALLBACK,
+        batch_size=None,
+        **kwargs,
     ):
         """Copy file(s) from local.
 
@@ -410,7 +470,7 @@ class AsyncFileSystem(AbstractFileSystem):
         file_pairs = [(l, r) for l, r in zip(lpaths, rpaths) if not is_dir[l]]
 
         await asyncio.gather(*[self._makedirs(d, exist_ok=True) for d in rdirs])
-        batch_size = kwargs.pop("batch_size", self.batch_size)
+        batch_size = batch_size or self.batch_size
 
         coros = []
         callback.call("set_size", len(file_pairs))
@@ -475,8 +535,11 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _size(self, path):
         return (await self._info(path)).get("size", None)
 
-    async def _sizes(self, paths):
-        return await asyncio.gather(*[self._size(p) for p in paths])
+    async def _sizes(self, paths, batch_size=None):
+        batch_size = batch_size or self.batch_size
+        return await _run_coros_in_chunks(
+            [self._size(p) for p in paths], batch_size=batch_size
+        )
 
     async def _exists(self, path):
         try:

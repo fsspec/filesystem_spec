@@ -397,7 +397,7 @@ class WebHDFile(AbstractBufferedFile):
         return True
 
     def _initiate_upload(self):
-        """ Create remote file/upload """
+        """Create remote file/upload"""
         kwargs = self.kwargs.copy()
         if "a" in self.mode:
             op, method = "APPEND", "POST"

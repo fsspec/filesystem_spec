@@ -844,12 +844,12 @@ class AbstractFileSystem(up, metaclass=_Cached):
             self.put_file(lpath, rpath, **kwargs)
 
     def head(self, path, size=1024):
-        """ Get the first ``size`` bytes from file """
+        """Get the first ``size`` bytes from file"""
         with self.open(path, "rb") as f:
             return f.read(size)
 
     def tail(self, path, size=1024):
-        """ Get the last ``size`` bytes from file """
+        """Get the last ``size`` bytes from file"""
         with self.open(path, "rb") as f:
             f.seek(max(-size, -f.size), 2)
             return f.read()
@@ -911,7 +911,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
         return list(sorted(out))
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
-        """ Move file(s) from one location to another """
+        """Move file(s) from one location to another"""
         self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
         self.rm(path1, recursive=recursive)
 
@@ -1421,14 +1421,14 @@ class AbstractBufferedFile(io.IOBase):
         """Throw away temporary file"""
 
     def info(self):
-        """ File information about this path """
+        """File information about this path"""
         if "r" in self.mode:
             return self.details
         else:
             raise ValueError("Info not available while writing")
 
     def tell(self):
-        """ Current file location """
+        """Current file location"""
         return self.loc
 
     def seek(self, loc, whence=0):
@@ -1535,7 +1535,7 @@ class AbstractBufferedFile(io.IOBase):
         # may not yet have been initialized, may need to call _initialize_upload
 
     def _initiate_upload(self):
-        """ Create remote file/upload """
+        """Create remote file/upload"""
         pass
 
     def _fetch_range(self, start, end):
