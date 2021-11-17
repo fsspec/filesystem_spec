@@ -196,6 +196,17 @@ class AbstractFileSystem(up, metaclass=_Cached):
         # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
+    def _unstrip_protocol(self, name):
+        # could be overridden for FSs that make work with URLs
+        if isinstance(self.protocol, str):
+            if name.startswith(self.protocol):
+                return name
+            return self.protocol + "://" + name
+        else:
+            if name.startswith(tuple(self.protocol)):
+                return name
+            return self.protocol[0] + "://" + name
+
     @staticmethod
     def _get_kwargs_from_urls(path):
         """If kwargs can be encoded in the paths, extract them here
