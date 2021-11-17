@@ -4,7 +4,6 @@ import sys
 
 import pytest
 
-import fsspec
 from fsspec.implementations.tests.test_ftp import FTPFileSystem
 
 data = b"hello" * 10000
@@ -180,8 +179,8 @@ def test_with_gzip(ftp_writable):
         assert gf.read() == data
 
 
-def test_auto_compression():
-    fs = fsspec.filesystem("memory")
+def test_auto_compression(m):
+    fs = m
     with fs.open("myfile.gz", mode="wt", compression="infer") as f:
         f.write("text")
     with fs.open("myfile.gz", mode="rt", compression="infer") as f:

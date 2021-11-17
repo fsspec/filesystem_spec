@@ -2,6 +2,7 @@ import tempfile
 
 import pytest
 
+import fsspec
 from fsspec.implementations.local import LocalFileSystem
 
 
@@ -25,3 +26,12 @@ def fs(request):
 def temp_file():
     with tempfile.TemporaryDirectory() as temp_dir:
         return temp_dir + "test-file"
+
+
+@pytest.fixture()
+def m():
+    # memory filesystem with clean state
+    fs = fsspec.filesystem("memory")
+    fs.store.clear()
+    yield fs
+    fs.store.clear()
