@@ -972,7 +972,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
             **kwargs,
         )
 
-    def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
+    def open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        cache_options=None,
+        compression=None,
+        **kwargs,
+    ):
         """
         Return a file-like object from the filesystem
 
@@ -989,6 +997,10 @@ class AbstractFileSystem(up, metaclass=_Cached):
             Some indication of buffering - this is a value in bytes
         cache_options : dict, optional
             Extra arguments to pass through to the cache.
+        compression: string or None
+            If given, open file using compression codec. Can either be a compression
+            name (a key in ``fsspec.compression.compr``) or "infer" to guess the
+            compression from the filename suffix.
         encoding, errors, newline: passed on to TextIOWrapper for text mode
         """
         import io
@@ -1003,7 +1015,15 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 if k in kwargs
             }
             return io.TextIOWrapper(
-                self.open(path, mode, block_size, **kwargs), **text_kwargs
+                self.open(
+                    path,
+                    mode,
+                    block_size=block_size,
+                    cache_options=cache_options,
+                    compression=compression,
+                    **kwargs,
+                ),
+                **text_kwargs,
             )
         else:
             ac = kwargs.pop("autocommit", not self._intrans)
@@ -1015,6 +1035,14 @@ class AbstractFileSystem(up, metaclass=_Cached):
                 cache_options=cache_options,
                 **kwargs,
             )
+            if compression is not None:
+                from fsspec.compression import compr
+                from fsspec.core import get_compression
+
+                compression = get_compression(path, compression)
+                compress = compr[compression]
+                f = compress(f, mode=mode[0])
+
             if not ac and "r" not in mode:
                 self.transaction.files.append(f)
             return f
