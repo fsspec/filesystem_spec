@@ -179,6 +179,14 @@ def test_with_gzip(ftp_writable):
         assert gf.read() == data
 
 
+def test_auto_compression(m):
+    fs = m
+    with fs.open("myfile.gz", mode="wt", compression="infer") as f:
+        f.write("text")
+    with fs.open("myfile.gz", mode="rt", compression="infer") as f:
+        assert f.read() == "text"
+
+
 def test_with_zip(ftp_writable):
     import zipfile
 

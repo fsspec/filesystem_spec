@@ -41,8 +41,8 @@ class OpenFile(object):
     Parameters
     ----------
     fs: FileSystem
-        The file system to use for opening the file. Should match the interface
-        of ``dask.bytes.local.LocalFileSystem``.
+        The file system to use for opening the file. Should be a subclass or duck-type
+        with ``fsspec.spec.AbstractFileSystem``
     path: str
         Location to open
     mode: str like 'rb', optional
@@ -245,8 +245,10 @@ def open_files(
         can pass a globstring or a list of paths, with the caveat that they
         must all have the same protocol.
     mode: 'rb', 'wt', etc.
-    compression: string
-        Compression to use.  See ``dask.bytes.compression.files`` for options.
+    compression: string or None
+        If given, open file using compression codec. Can either be a compression
+        name (a key in ``fsspec.compression.compr``) or "infer" to guess the
+        compression from the filename suffix.
     encoding: str
         For text mode only
     errors: None or str
@@ -420,8 +422,10 @@ def open(
         to read from alternative filesystems. Should not include glob
         character(s).
     mode: 'rb', 'wt', etc.
-    compression: string
-        Compression to use.  See ``dask.bytes.compression.files`` for options.
+    compression: string or None
+        If given, open file using compression codec. Can either be a compression
+        name (a key in ``fsspec.compression.compr``) or "infer" to guess the
+        compression from the filename suffix.
     encoding: str
         For text mode only
     errors: None or str
