@@ -52,6 +52,8 @@ class LocalFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
+        # root_marker if stripped path return an empty string
+        path = path or self.root_marker
         if detail:
             with os.scandir(path) as it:
                 return [self.info(f) for f in it]
