@@ -38,7 +38,7 @@ class DirCache(MutableMapping):
         use_listings_cache: bool
             If False, this cache never returns items, but always reports KeyError,
             and setting items has no effect
-        listings_expiry_time: int (optional)
+        listings_expiry_time: int or float (optional)
             Time in seconds that a listing is considered valid. If None,
             listings do not expire.
         max_paths: int (optional)
