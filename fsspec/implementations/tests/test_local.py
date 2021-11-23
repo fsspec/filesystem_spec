@@ -370,6 +370,7 @@ def test_directories(tmpdir):
     assert fs.ls(tmpdir, True)[0]["type"] == "directory"
     fs.rmdir(tmpdir + "/dir")
     assert not fs.ls(tmpdir)
+    assert fs.ls(fs.root_marker)
 
 
 def test_file_ops(tmpdir):
