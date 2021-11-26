@@ -29,14 +29,6 @@ async def get_client(**kwargs):
     return aiohttp.ClientSession(**kwargs)
 
 
-class BlockSizeError(ValueError):
-    """
-    Helper class for exceptions raised in this module.
-    """
-
-    pass
-
-
 class HTTPFileSystem(AsyncFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
@@ -614,33 +606,22 @@ class HTTPFile(AbstractBufferedFile):
             if r.status == 206:
                 # partial content, as expected
                 out = await r.read()
-            elif "Content-Length" in r.headers:
-                cl = int(r.headers["Content-Length"])
-                if cl <= end - start:
-                    # data size OK
-                    out = await r.read()
-                else:
-                    raise BlockSizeError(
-                        "Got more bytes so far (>%i) than requested (%i)"
-                        % (cl, end - start)
-                    )
+            elif int(r.headers.get("Content-Length", 0)) <= end - start:
+                out = await r.read()
             else:
                 cl = 0
                 out = []
                 while True:
                     chunk = await r.content.read(2 ** 20)
-                    # data size unknown, let's see if it goes too big
+                    # data size unknown, let's read until we have enough
                     if chunk:
                         out.append(chunk)
                         cl += len(chunk)
                         if cl > end - start:
-                            raise BlockSizeError(
-                                "Got more bytes so far (>%i) than requested (%i)"
-                                % (cl, end - start)
-                            )
+                            break
                     else:
                         break
-                out = b"".join(out)
+                out = b"".join(out)[: end - start]
             return out
 
     _fetch_range = sync_wrapper(async_fetch_range)

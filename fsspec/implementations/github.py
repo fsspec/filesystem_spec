@@ -23,7 +23,7 @@ class GithubFileSystem(AbstractFileSystem):
       may specify sha in the extra args
     - 'github://org:repo@/precip/catalog.yml', where the org and repo are
       part of the URI
-    - 'github://org:repo@sha/precip/catalog.yml', where tha sha is also included
+    - 'github://org:repo@sha/precip/catalog.yml', where the sha is also included
 
     ``sha`` can be the full or abbreviated hex of the commit you want to fetch
     from, or a branch or tag name (so long as it doesn't contain special characters

@@ -166,7 +166,7 @@ def _get_parquet_byte_ranges(
     if metadata is not None:
 
         # Use the provided parquet metadata object
-        # to avoid transfering/parsing footer metadata
+        # to avoid transferring/parsing footer metadata
         return _get_parquet_byte_ranges_from_metadata(
             metadata,
             fs,
@@ -299,7 +299,7 @@ def _get_parquet_byte_ranges_from_metadata(
     """Simplified version of `_get_parquet_byte_ranges` for
     the case that an engine-specific `metadata` object is
     provided, and the remote footer metadata does not need to
-    be transfered before calculating the required byte ranges.
+    be transferred before calculating the required byte ranges.
     """
 
     # Use "engine" to collect data byte ranges
@@ -416,7 +416,7 @@ class FastparquetEngine:
             pf = self.fp.ParquetFile(io.BytesIO(footer))
 
         # Convert columns to a set and add any index columns
-        # speficied in the pandas metadata (just in case)
+        # specified in the pandas metadata (just in case)
         column_set = None if columns is None else set(columns)
         if column_set is not None and hasattr(pf, "pandas_metadata"):
             md_index = [
@@ -439,7 +439,7 @@ class FastparquetEngine:
 
         # Loop through column chunks to add required byte ranges
         for r, row_group in enumerate(row_groups):
-            # Skip this row-group if we are targetting
+            # Skip this row-group if we are targeting
             # specific row-groups
             if row_group_indices is None or r in row_group_indices:
 
@@ -448,7 +448,7 @@ class FastparquetEngine:
 
                 for column in row_group.columns:
                     name = column.meta_data.path_in_schema[0]
-                    # Skip this column if we are targetting a
+                    # Skip this column if we are targeting a
                     # specific columns
                     if column_set is None or name in column_set:
                         file_offset0 = column.meta_data.dictionary_page_offset
@@ -504,7 +504,7 @@ class PyarrowEngine:
         md = self.pq.ParquetFile(io.BytesIO(footer)).metadata
 
         # Convert columns to a set and add any index columns
-        # speficied in the pandas metadata (just in case)
+        # specified in the pandas metadata (just in case)
         column_set = None if columns is None else set(columns)
         if column_set is not None:
             schema = md.schema.to_arrow_schema()
@@ -524,14 +524,14 @@ class PyarrowEngine:
 
         # Loop through column chunks to add required byte ranges
         for r in range(md.num_row_groups):
-            # Skip this row-group if we are targetting
+            # Skip this row-group if we are targeting
             # specific row-groups
             if row_groups is None or r in row_groups:
                 row_group = md.row_group(r)
                 for c in range(row_group.num_columns):
                     column = row_group.column(c)
                     name = column.path_in_schema
-                    # Skip this column if we are targetting a
+                    # Skip this column if we are targeting a
                     # specific columns
                     split_name = name.split(".")[0]
                     if (

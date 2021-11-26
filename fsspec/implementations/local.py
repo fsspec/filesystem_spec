@@ -184,7 +184,7 @@ class LocalFileSystem(AbstractFileSystem):
         path = stringify_path(path)
         if path.startswith("file://"):
             path = path[7:]
-        return make_path_posix(path).rstrip("/")
+        return make_path_posix(path).rstrip("/") or cls.root_marker
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)
