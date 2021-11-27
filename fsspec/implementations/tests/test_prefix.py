@@ -13,8 +13,8 @@ from fsspec.core import OpenFile
 from fsspec.implementations.local import make_path_posix
 from fsspec.implementations.prefix import (
     PrefixFileSystem,
-    remove_root_marker,
-    remove_trailing_sep,
+    _remove_root_marker,
+    _remove_trailing_sep,
 )
 
 files = {
@@ -192,7 +192,7 @@ def test_emtpy_prefix():
 def test_remove_trailing_sep(prefix, normalized_prefix):
     fs = fsspec.filesystem("file")
     assert (
-        remove_trailing_sep(prefix, sep=fs.sep, root_marker=fs.root_marker)
+        _remove_trailing_sep(prefix, sep=fs.sep, root_marker=fs.root_marker)
         == normalized_prefix
     )
 
@@ -210,7 +210,7 @@ def test_remove_trailing_sep(prefix, normalized_prefix):
 )
 def test_remove_root_marker(prefix, normalized_prefix):
     fs = fsspec.filesystem("file")
-    assert remove_root_marker(prefix, root_marker=fs.root_marker) == normalized_prefix
+    assert _remove_root_marker(prefix, root_marker=fs.root_marker) == normalized_prefix
 
 
 @pytest.mark.parametrize(

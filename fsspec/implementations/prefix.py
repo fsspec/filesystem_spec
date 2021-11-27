@@ -1,6 +1,5 @@
 from typing import Any, Iterable, Sequence, Union
 
-import fsspec
 from fsspec import AbstractFileSystem
 from fsspec.core import split_protocol
 from fsspec.spec import AbstractBufferedFile
@@ -12,13 +11,13 @@ class PrefixBufferedFile(AbstractBufferedFile):
         pass
 
 
-def remove_trailing_sep(prefix: str, sep: str, root_marker: str) -> str:
+def _remove_trailing_sep(prefix: str, sep: str, root_marker: str) -> str:
     if prefix[-len(sep) :] == sep and prefix != root_marker:
         return prefix[: -len(sep)]
     return prefix
 
 
-def remove_root_marker(path: str, root_marker: str) -> str:
+def _remove_root_marker(path: str, root_marker: str) -> str:
     if path[: len(root_marker)] == root_marker:
         return path[len(root_marker) :]
     return path
@@ -48,10 +47,10 @@ class PrefixFileSystem(AbstractFileSystem):
         self.fs = fs
 
         if not prefix:
-            raise ValueError(f"empty prefix is not a valid prefix")
+            raise ValueError("empty prefix is not a valid prefix")
 
         prefix = stringify_path(prefix)
-        self.prefix = remove_trailing_sep(
+        self.prefix = _remove_trailing_sep(
             prefix, sep=self.fs.sep, root_marker=self.fs.root_marker
         )
 
@@ -60,7 +59,7 @@ class PrefixFileSystem(AbstractFileSystem):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
 
-            path = remove_root_marker(path, root_marker=self.fs.root_marker)
+            path = _remove_root_marker(path, root_marker=self.fs.root_marker)
 
             if self.prefix == self.fs.root_marker:
                 path = f"{self.fs.root_marker}{path}"  # don't add twice the root marker
