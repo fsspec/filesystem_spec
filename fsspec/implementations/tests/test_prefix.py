@@ -98,9 +98,11 @@ def test_prefix_root():
         with fs.open(abs_path_file) as f:
             assert f.read() == b"a,b\n3,4,5\n"
 
-        # Without root marker
-        with fs.open(abs_path_file[1:]) as f:
-            assert f.read() == b"a,b\n3,4,5\n"
+        # no root marker in windows paths
+        if os.name != "nt":
+            # Without root marker
+            with fs.open(abs_path_file[1:]) as f:
+                assert f.read() == b"a,b\n3,4,5\n"
 
 
 def test_cats():
