@@ -147,10 +147,11 @@ def test_isdir():
 
 
 @pytest.mark.parametrize("dirname", ["/dir", "dir"])
-@pytest.mark.parametrize("prefix", ["a/b/c/d/e", "a/b/c/d/e/"])
-def test_directories(tmpdir, prefix, dirname):
+def test_directories(tmpdir, dirname):
+    import posixpath
+
     tmpdir = make_path_posix(str(tmpdir))
-    prefix = os.path.join(tmpdir, prefix)
+    prefix = posixpath.join(tmpdir, "a/b/c/d/e")
 
     fs = PrefixFileSystem(prefix=prefix, fs=fsspec.filesystem("file"))
     fs.mkdir(dirname)
