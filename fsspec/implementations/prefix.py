@@ -1,24 +1,9 @@
-from fsspec import AbstractFileSystem
-from fsspec.core import split_protocol
-from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import stringify_path
+from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
 
 class PrefixBufferedFile(AbstractBufferedFile):
     def _fetch_range(self, start, end):
         pass
-
-
-def _remove_trailing_sep(prefix, sep, root_marker):
-    if prefix[-len(sep) :] == sep and prefix != root_marker:
-        return prefix[: -len(sep)]
-    return prefix
-
-
-def _remove_root_marker(path, root_marker):
-    if path[: len(root_marker)] == root_marker:
-        return path[len(root_marker) :]
-    return path
 
 
 class PrefixFileSystem(AbstractFileSystem):
@@ -50,32 +35,20 @@ class PrefixFileSystem(AbstractFileSystem):
         if not prefix:
             raise ValueError("empty prefix is not a valid prefix")
 
-        prefix = stringify_path(prefix)
-        self.prefix = _remove_trailing_sep(
-            prefix, sep=self.fs.sep, root_marker=self.fs.root_marker
-        )
+        self.prefix = prefix
 
     def _add_fs_prefix(self, path):
         if isinstance(path, str):
-            path = stringify_path(path)
-            protocol, path = split_protocol(path)
-
-            path = _remove_root_marker(path, root_marker=self.fs.root_marker)
-
             if self.prefix == self.fs.root_marker:
-                path = f"{self.fs.root_marker}{path}"  # don't add twice the root marker
-            else:
-                path = f"{self.prefix}{self.fs.sep}{path}"
-
-            return protocol + "://" + path if protocol is not None else path
+                return f"{self.fs.root_marker}{path}"
+            return f"{self.prefix}{self.fs.sep}{path}"
         return [self._add_fs_prefix(x) for x in path]
 
     def _remove_fs_prefix(self, path):
         if isinstance(path, str):
-            path = stringify_path(path)
-            protocol, path = split_protocol(path)
-            path = path[len(self.prefix) + 1 :]
-            return protocol + "://" + path if protocol is not None else path
+            if self.prefix == self.fs.root_marker:
+                return path[len(self.prefix) :]
+            return path[len(self.prefix) + 1 :]
         return [self._remove_fs_prefix(x) for x in path]
 
     def mkdir(self, path, create_parents=True, **kwargs):

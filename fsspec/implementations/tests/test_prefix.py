@@ -11,11 +11,7 @@ import pytest
 import fsspec
 from fsspec.core import OpenFile
 from fsspec.implementations.local import make_path_posix
-from fsspec.implementations.prefix import (
-    PrefixFileSystem,
-    _remove_root_marker,
-    _remove_trailing_sep,
-)
+from fsspec.implementations.prefix import PrefixFileSystem
 
 files = {
     ".test.accounts.1.json": (
@@ -138,9 +134,7 @@ def test_isfile():
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
-            assert fs.isfile("file://" + f)
         assert not fs.isfile("not-a-file")
-        assert not fs.isfile("file://not-a-file")
 
 
 def test_isdir():
@@ -178,41 +172,6 @@ def test_emtpy_prefix():
 
     with pytest.raises(ValueError):
         PrefixFileSystem(prefix=None, fs=fsspec.filesystem("file"))
-
-
-@pytest.mark.parametrize(
-    "prefix, normalized_prefix",
-    [
-        ("/", "/"),
-        ("a", "a"),
-        ("/a", "/a"),
-        ("a/", "a"),
-        ("/a/", "/a"),
-        ("/a/b/c/", "/a/b/c"),
-    ],
-)
-def test_remove_trailing_sep(prefix, normalized_prefix):
-    fs = fsspec.filesystem("file")
-    assert (
-        _remove_trailing_sep(prefix, sep=fs.sep, root_marker=fs.root_marker)
-        == normalized_prefix
-    )
-
-
-@pytest.mark.parametrize(
-    "prefix,normalized_prefix",
-    [
-        ("/", ""),
-        ("a", "a"),
-        ("/a", "a"),
-        ("a/", "a/"),
-        ("/a/", "a/"),
-        ("/a/b/c/", "a/b/c/"),
-    ],
-)
-def test_remove_root_marker(prefix, normalized_prefix):
-    fs = fsspec.filesystem("file")
-    assert _remove_root_marker(prefix, root_marker=fs.root_marker) == normalized_prefix
 
 
 @pytest.mark.parametrize(
