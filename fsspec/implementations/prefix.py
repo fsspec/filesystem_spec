@@ -1,5 +1,3 @@
-from typing import Any, Iterable, Sequence, Union
-
 from fsspec import AbstractFileSystem
 from fsspec.core import split_protocol
 from fsspec.spec import AbstractBufferedFile
@@ -11,13 +9,13 @@ class PrefixBufferedFile(AbstractBufferedFile):
         pass
 
 
-def _remove_trailing_sep(prefix: str, sep: str, root_marker: str) -> str:
+def _remove_trailing_sep(prefix, sep, root_marker):
     if prefix[-len(sep) :] == sep and prefix != root_marker:
         return prefix[: -len(sep)]
     return prefix
 
 
-def _remove_root_marker(path: str, root_marker: str) -> str:
+def _remove_root_marker(path, root_marker):
     if path[: len(root_marker)] == root_marker:
         return path[len(root_marker) :]
     return path
@@ -28,11 +26,11 @@ class PrefixFileSystem(AbstractFileSystem):
 
     def __init__(
         self,
-        prefix: str,
-        fs: AbstractFileSystem,
+        prefix,
+        fs,
         *args,
         **storage_options,
-    ) -> None:
+    ):
         """
         Parameters
         ----------
@@ -54,7 +52,7 @@ class PrefixFileSystem(AbstractFileSystem):
             prefix, sep=self.fs.sep, root_marker=self.fs.root_marker
         )
 
-    def _add_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
+    def _add_fs_prefix(self, path):
         if isinstance(path, str):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
@@ -67,38 +65,34 @@ class PrefixFileSystem(AbstractFileSystem):
                 path = f"{self.prefix}{self.fs.sep}{path}"
 
             return protocol + "://" + path if protocol is not None else path
-        elif isinstance(path, Iterable):
-            return [self._add_fs_prefix(x) for x in path]
-        assert False
+        return [self._add_fs_prefix(x) for x in path]
 
-    def _remove_fs_prefix(self, path: str) -> Union[str, Sequence[str]]:
+    def _remove_fs_prefix(self, path):
         if isinstance(path, str):
             path = stringify_path(path)
             protocol, path = split_protocol(path)
             path = path[len(self.prefix) + 1 :]
             return protocol + "://" + path if protocol is not None else path
-        elif isinstance(path, Iterable):
-            return [self._remove_fs_prefix(x) for x in path]
-        assert False
+        return [self._remove_fs_prefix(x) for x in path]
 
-    def mkdir(self, path: str, create_parents: bool = True, **kwargs) -> None:
+    def mkdir(self, path, create_parents=True, **kwargs):
         path = self._add_fs_prefix(path)
         return self.fs.mkdir(path=path, create_parents=create_parents, **kwargs)
 
-    def makedirs(self, path: str, exist_ok: bool = False):
+    def makedirs(self, path, exist_ok=False):
         path = self._add_fs_prefix(path)
         return self.fs.makedirs(path=path, exist_ok=exist_ok)
 
-    def rmdir(self, path: str):
+    def rmdir(self, path):
         path = self._add_fs_prefix(path)
         return self.fs.rmdir(path=path)
 
     def ls(
         self,
-        path: str,
+        path,
         detail=False,
         **kwargs,
-    ) -> Sequence[str]:
+    ):
         path = self._add_fs_prefix(path)
         ls_out = self.fs.ls(path=path, detail=detail, **kwargs)
         if detail:
@@ -107,70 +101,70 @@ class PrefixFileSystem(AbstractFileSystem):
             return ls_out
         return self._remove_fs_prefix(ls_out)
 
-    def glob(self, path: str, **kwargs):
+    def glob(self, path, **kwargs):
         path = self._add_fs_prefix(path)
         glob_out = self.fs.glob(path=path, **kwargs)
         return [self._remove_fs_prefix(x) for x in glob_out]
 
-    def info(self, path: str, **kwargs):
+    def info(self, path, **kwargs):
         path = self._add_fs_prefix(path)
         return self.fs.info(path=path, **kwargs)
 
-    def cp_file(self, path1: str, path2: str, **kwargs):
+    def cp_file(self, path1, path2, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
         return self.fs.cp_file(path1, path2, **kwargs)
 
-    def get_file(self, path1: str, path2: str, callback=None, **kwargs):
+    def get_file(self, path1, path2, callback=None, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
         return self.fs.get_file(path1, path2, callback, **kwargs)
 
-    def put_file(self, path1: str, path2: str, callback=None, **kwargs):
+    def put_file(self, path1, path2, callback=None, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
         return self.fs.put_file(path1, path2, callback, **kwargs)
 
-    def mv_file(self, path1: str, path2: str, **kwargs):
+    def mv_file(self, path1, path2, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
         return self.fs.mv_file(path1, path2, **kwargs)
 
-    def rm_file(self, path: str):
+    def rm_file(self, path):
         path = self._add_fs_prefix(path)
         return self.fs.rm_file(path)
 
-    def rm(self, path: str, recursive=False, maxdepth=None):
+    def rm(self, path, recursive=False, maxdepth=None):
         path = self._add_fs_prefix(path)
         return self.fs.rm(path, recursive=recursive, maxdepth=maxdepth)
 
-    def touch(self, path: str, **kwargs):
+    def touch(self, path, **kwargs):
         path = self._add_fs_prefix(path)
         return self.fs.touch(path, **kwargs)
 
-    def created(self, path: str):
+    def created(self, path):
         path = self._add_fs_prefix(path)
         return self.fs.created(path)
 
-    def modified(self, path: str):
+    def modified(self, path):
         path = self._add_fs_prefix(path)
         return self.fs.modified(path)
 
-    def sign(self, path: str, expiration=100, **kwargs):
+    def sign(self, path, expiration=100, **kwargs):
         path = self._add_fs_prefix(path)
         return self.fs.sign(path, expiration=expiration, **kwargs)
 
     def cat(
         self,
-        path: str,
-        recursive: bool = False,
-        on_error: str = "raise",
-        **kwargs: Any,
+        path,
+        recursive=False,
+        on_error="raise",
+        **kwargs,
     ):
         path = self._add_fs_prefix(path)
         return self.fs.cat(path, recursive=recursive, on_error=on_error, **kwargs)
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"{self.__class__.__qualname__}(prefix='{self.prefix}', fs={self.fs})"
 
     def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
