@@ -89,12 +89,12 @@ class PrefixFileSystem(AbstractFileSystem):
     def get_file(self, path1, path2, callback=None, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
-        return self.fs.get_file(path1, path2, callback, **kwargs)
+        return self.fs.get_file(path1, path2, callback=callback, **kwargs)
 
     def put_file(self, path1, path2, callback=None, **kwargs):
         path1 = self._add_fs_prefix(path1)
         path2 = self._add_fs_prefix(path2)
-        return self.fs.put_file(path1, path2, callback, **kwargs)
+        return self.fs.put_file(path1, path2, callback=callback, **kwargs)
 
     def mv_file(self, path1, path2, **kwargs):
         path1 = self._add_fs_prefix(path1)
