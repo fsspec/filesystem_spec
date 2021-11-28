@@ -22,7 +22,10 @@ def _remove_root_marker(path, root_marker):
 
 
 class PrefixFileSystem(AbstractFileSystem):
-    """A meta-filesystem to add a prefix and delegate to another filesystem"""
+    """A meta-filesystem to add a prefix and delegate to another filesystem
+
+    This interface is incomplete and experimental.
+    """
 
     def __init__(
         self,
