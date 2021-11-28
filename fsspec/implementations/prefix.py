@@ -1,9 +1,4 @@
-from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
-
-
-class PrefixBufferedFile(AbstractBufferedFile):
-    def _fetch_range(self, start, end):
-        pass
+from fsspec.spec import AbstractFileSystem
 
 
 class PrefixFileSystem(AbstractFileSystem):
