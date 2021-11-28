@@ -139,28 +139,6 @@ class PrefixFileSystem(AbstractFileSystem):
         return f"{self.__class__.__qualname__}(prefix='{self.prefix}', fs={self.fs})"
 
     def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
-        """
-        Return a file-like object from the fs
-
-        The file-like object returned ignores an eventual PrefixFileSystem:
-            - the ``.path`` attribute is always an absolute path
-            - the ``.fs`` attribute, if present, would be the wrapped file-system
-
-        The resultant instance must function correctly in a context ``with``
-        block.
-
-        Parameters
-        ----------
-        path: str
-            Target file
-        mode: str like 'rb', 'w'
-            See builtin ``open()``
-        block_size: int
-            Some indication of buffering - this is a value in bytes
-        cache_options : dict, optional
-            Extra arguments to pass through to the cache.
-        encoding, errors, newline: passed on to TextIOWrapper for text mode
-        """
         return self.fs.open(
             self._add_fs_prefix(path),
             mode=mode,
