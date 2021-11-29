@@ -2,9 +2,9 @@ try:
     from importlib.metadata import entry_points
 except ImportError:  # python < 3.8
     try:
-        from importlib_metadata import entry_points
+        from importlib_metadata import entry_points  # type: ignore
     except ImportError:
-        entry_points = None
+        entry_points = None  # type: ignore
 
 
 from . import _version, caching

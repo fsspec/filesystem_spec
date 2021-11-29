@@ -6,6 +6,7 @@ import pickle
 import tempfile
 import time
 from shutil import move, rmtree
+from typing import Tuple, Union
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -36,7 +37,7 @@ class CachingFileSystem(AbstractFileSystem):
       allowed, for testing
     """
 
-    protocol = ("blockcache", "cached")
+    protocol: Union[str, Tuple[str, str]] = ("blockcache", "cached")
 
     def __init__(
         self,

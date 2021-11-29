@@ -6,16 +6,17 @@ from functools import lru_cache
 
 import fsspec.core
 
-try:
-    import ujson as json
-except ImportError:
-    import json
-
 from ..asyn import AsyncFileSystem, sync
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open
 from ..mapping import get_mapper
 from ..spec import AbstractFileSystem
+
+try:
+    import ujson as json
+except ImportError:
+    import json  # type: ignore
+
 
 logger = logging.getLogger("fsspec.reference")
 

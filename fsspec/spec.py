@@ -8,6 +8,7 @@ from distutils.version import LooseVersion
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
+from typing import Sequence, Tuple, Union
 
 from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -101,7 +102,7 @@ else:  # pragma: no cover
     up = object
 
 
-class AbstractFileSystem(up, metaclass=_Cached):
+class AbstractFileSystem(up, metaclass=_Cached):  # type: ignore
     """
     An abstract super-class for pythonic file-systems
 
@@ -113,7 +114,7 @@ class AbstractFileSystem(up, metaclass=_Cached):
     _cached = False
     blocksize = 2 ** 22
     sep = "/"
-    protocol = "abstract"
+    protocol: Union[str, Tuple[str, str]] = "abstract"
     async_impl = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
 

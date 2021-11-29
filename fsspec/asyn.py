@@ -161,7 +161,7 @@ def fsspec_loop():
 try:
     import resource
 except ImportError:
-    resource = None
+    resource = None  # type: ignore
     ResourceError = OSError
 else:
     ResourceEror = resource.error
