@@ -18,7 +18,7 @@ class MemoryFileSystem(AbstractFileSystem):
     in memory filesystem.
     """
 
-    store: Dict[str, bytes] = {}  # global
+    store: ClassVar[Dict[str, bytes]] = {}  # global
     pseudo_dirs = [""]
     protocol = "memory"
     root_marker = "/"

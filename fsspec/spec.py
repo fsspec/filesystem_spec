@@ -8,7 +8,7 @@ from distutils.version import LooseVersion
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import Sequence, Tuple, Union
+from typing import Tuple, Union
 
 from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
