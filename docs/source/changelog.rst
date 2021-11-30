@@ -1,6 +1,26 @@
 Changelog
 =========
 
+2021.11.1
+---------
+
+Enhancements
+
+- allow compression for fs.open (#826)
+- batch more async operations (#824)
+- allow github backend for alternate URL (#815)
+- speec up reference filesystem (#811)
+
+Fixes
+
+- fixes for parquet functionality (#821, 817)
+- typos and docs (#839, 833, 816)
+- local root (#829)
+
+Other
+
+- remove BlockSizeError for http (#830)
+
 2021.11.0
 ---------
 
