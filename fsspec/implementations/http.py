@@ -15,7 +15,7 @@ from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import DEFAULT_BLOCK_SIZE, nullcontext, tokenize
+from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
 
 from ..caching import AllBytes
 
@@ -241,12 +241,13 @@ class HTTPFileSystem(AsyncFileSystem):
 
             callback.set_size(size)
             self._raise_not_found_for_status(r, rpath)
-            with open(lpath, "wb") as fd:
-                chunk = True
-                while chunk:
-                    chunk = await r.content.read(chunk_size)
-                    fd.write(chunk)
-                    callback.relative_update(len(chunk))
+            if not isfilelike(lpath):
+                lpath = open(lpath, "wb")
+            chunk = True
+            while chunk:
+                chunk = await r.content.read(chunk_size)
+                lpath.write(chunk)
+                callback.relative_update(len(chunk))
 
     async def _put_file(
         self,

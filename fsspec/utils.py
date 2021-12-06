@@ -381,6 +381,13 @@ def is_exception(obj):
     return isinstance(obj, BaseException)
 
 
+def isfilelike(f):
+    for attr in ["read", "close", "tell"]:
+        if not hasattr(f, attr):
+            return False
+    return True
+
+
 def get_protocol(url):
     parts = re.split(r"(\:\:|\://)", url, 1)
     if len(parts) > 1:

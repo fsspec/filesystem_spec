@@ -3,7 +3,7 @@ from ftplib import FTP, Error, error_perm
 from typing import Any
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
-from ..utils import infer_storage_options
+from ..utils import infer_storage_options, isfilelike
 
 
 class FTPFileSystem(AbstractFileSystem):
@@ -130,16 +130,21 @@ class FTPFileSystem(AbstractFileSystem):
         return out
 
     def get_file(self, rpath, lpath, **kwargs):
-        with open(lpath, "wb") as outfile:
+        if isfilelike(lpath):
+            outfile = lpath
+        else:
+            outfile = open(lpath, "wb")
 
-            def cb(x):
-                outfile.write(x)
+        def cb(x):
+            outfile.write(x)
 
-            self.ftp.retrbinary(
-                "RETR %s" % rpath,
-                blocksize=self.blocksize,
-                callback=cb,
-            )
+        self.ftp.retrbinary(
+            "RETR %s" % rpath,
+            blocksize=self.blocksize,
+            callback=cb,
+        )
+        if not isfilelike(lpath):
+            outfile.close()
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         if end is not None:

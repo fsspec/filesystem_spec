@@ -16,6 +16,7 @@ from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open
 from ..mapping import get_mapper
 from ..spec import AbstractFileSystem
+from ..utils import isfilelike
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -234,9 +235,12 @@ class ReferenceFileSystem(AsyncFileSystem):
     def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
         data = self.cat_file(rpath, **kwargs)
         callback.lazy_call("set_size", len, data)
-        with open(lpath, "wb") as f:
-            f.write(data)
-        callback.lazy_call("absolute_update", len, data)
+        if isfilelike(lpath):
+            lpath.writer(data)
+        else:
+            with open(lpath, "wb") as f:
+                f.write(data)
+        callback.absolute_update(len(data))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         if self.fs.async_impl:

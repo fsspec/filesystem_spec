@@ -16,6 +16,7 @@ from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
     get_package_version_without_import,
+    isfilelike,
     other_paths,
     read_block,
     stringify_path,
@@ -770,20 +771,29 @@ class AbstractFileSystem(up, metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get_file(
+        self, rpath, lpath, callback=_DEFAULT_CALLBACK, outfile=None, **kwargs
+    ):
         """Copy single remote file to local"""
-        if self.isdir(rpath):
-            os.makedirs(lpath, exist_ok=True)
-            return None
+        if isfilelike(lpath):
+            outfile = lpath
+        else:
+            if self.isdir(rpath):
+                os.makedirs(lpath, exist_ok=True)
+                return None
+
+            if outfile is None:
+                outfile = open(lpath, "wb")
 
         with self.open(rpath, "rb", **kwargs) as f1:
             callback.set_size(getattr(f1, "size", None))
-            with open(lpath, "wb") as f2:
-                data = True
-                while data:
-                    data = f1.read(self.blocksize)
-                    segment_len = f2.write(data)
-                    callback.relative_update(segment_len)
+            data = True
+            while data:
+                data = f1.read(self.blocksize)
+                segment_len = outfile.write(data)
+                callback.relative_update(segment_len)
+        if not isfilelike(lpath):
+            outfile.close()
 
     def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy file(s) to local.

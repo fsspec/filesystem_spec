@@ -11,7 +11,7 @@ import tempfile
 from fsspec import AbstractFileSystem
 from fsspec.compression import compr
 from fsspec.core import get_compression
-from fsspec.utils import stringify_path
+from fsspec.utils import isfilelike, stringify_path
 
 
 class LocalFileSystem(AbstractFileSystem):
@@ -121,7 +121,11 @@ class LocalFileSystem(AbstractFileSystem):
             raise FileNotFoundError
 
     def get_file(self, path1, path2, callback=None, **kwargs):
-        return self.cp_file(path1, path2, **kwargs)
+        if isfilelike(path2):
+            with open(path1, "rb") as f:
+                shutil.copyfileobj(f, path2)
+        else:
+            return self.cp_file(path1, path2, **kwargs)
 
     def put_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
