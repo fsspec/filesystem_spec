@@ -159,7 +159,13 @@ class CachingFileSystem(AbstractFileSystem):
                     if c["blocks"] is True or cache[k]["blocks"] is True:
                         c["blocks"] = True
                     else:
-                        c["blocks"] = set(c["blocks"]).union(cache[k]["blocks"])
+                        # self.cached_files[*][*]["blocks"] must continue to
+                        # point to the same set object so that updates
+                        # performed by MMapCache are propagated back to
+                        # self.cached_files.
+                        blocks = cache[k]["blocks"]
+                        blocks.update(c["blocks"])
+                        c["blocks"] = blocks
                     c["time"] = max(c["time"], cache[k]["time"])
                     c["uid"] = cache[k]["uid"]
 
