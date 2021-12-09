@@ -578,10 +578,12 @@ def test_cached_open_close_read(ftp_writable):
         target_protocol="ftp",
         target_options={"host": host, "port": port, "username": user, "password": pw},
     )
-    with fs.open("/out_block") as f:
+    with fs.open("/out_block", block_size=1024) as f:
         pass
-    with fs.open("/out_block") as f:
+    with fs.open("/out_block", block_size=1024) as f:
         assert f.read(1) == b"t"
+    # Regression test for <https://github.com/fsspec/filesystem_spec/issues/845>
+    assert fs.cached_files[-1]["/out_block"]["blocks"] == {0}
 
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache"])
