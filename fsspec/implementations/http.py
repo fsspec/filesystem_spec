@@ -274,11 +274,11 @@ class HTTPFileSystem(AsyncFileSystem):
                 else:
                     callback.set_size(getattr(f, "size", None))
 
-                chunk = f.read(64 * 1024)
+                chunk = f.read(chunk_size)
                 while chunk:
                     yield chunk
                     callback.relative_update(len(chunk))
-                    chunk = f.read(64 * 1024)
+                    chunk = f.read(chunk_size)
 
         kw = self.kwargs.copy()
         kw.update(kwargs)
