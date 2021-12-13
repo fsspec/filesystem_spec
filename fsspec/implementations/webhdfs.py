@@ -27,7 +27,7 @@ class WebHDFS(AbstractFileSystem):
     spnego: when kerberos authentication is enabled, auth is negotiated by
         requests_kerberos https://github.com/requests/requests-kerberos .
         This establishes a session based on existing kinit login and/or
-        specified principal/password; paraneters are passed with ``kerb_kwargs``
+        specified principal/password; parameters are passed with ``kerb_kwargs``
     token: uses an existing Hadoop delegation token from another secured
         service. Indeed, this client can also generate such tokens when
         not insecure. Note that tokens expire, but can be renewed (by a
