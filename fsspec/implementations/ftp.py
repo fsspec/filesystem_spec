@@ -1,3 +1,4 @@
+import os
 import tempfile
 import uuid
 from ftplib import FTP, Error, error_perm
@@ -266,7 +267,7 @@ class FTPFile(AbstractBufferedFile):
         )
         if not autocommit:
             self.target = self.path
-            self.path = "/".join([kwargs["tempdir"], str(uuid.uuid4())])
+            self.path = os.path.join(kwargs["tempdir"], str(uuid.uuid4()))
 
     def commit(self):
         self.fs.mv(self.path, self.target)

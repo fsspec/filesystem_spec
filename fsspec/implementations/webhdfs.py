@@ -3,6 +3,7 @@
 import logging
 import secrets
 import shutil
+import os
 import tempfile
 import uuid
 from contextlib import suppress
@@ -378,7 +379,7 @@ class WebHDFile(AbstractBufferedFile):
         tempdir = kwargs.pop("tempdir")
         if kwargs.pop("autocommit", False) is False:
             self.target = self.path
-            self.path = "/".join([tempdir, str(uuid.uuid4())])
+            self.path = os.path.join(tempdir, str(uuid.uuid4()))
 
     def _upload_chunk(self, final=False):
         """Write one part of a multi-block file upload

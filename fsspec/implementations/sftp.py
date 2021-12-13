@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 import tempfile
 import types
 import uuid
@@ -137,7 +138,7 @@ class SFTPFileSystem(AbstractFileSystem):
         logger.debug("Opening file %s" % path)
         if kwargs.get("autocommit", True) is False:
             # writes to temporary file, move on commit
-            path2 = "{}/{}".format(self.temppath, uuid.uuid4())
+            path2 = os.path.join(self.temppath, uuid.uuid4())
             f = self.ftp.open(path2, mode, bufsize=block_size if block_size else -1)
             f.temppath = path2
             f.targetpath = path
