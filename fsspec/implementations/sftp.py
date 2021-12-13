@@ -1,5 +1,6 @@
 import datetime
 import logging
+import tempfile
 import types
 import uuid
 from stat import S_ISDIR, S_ISLNK
@@ -41,7 +42,7 @@ class SFTPFileSystem(AbstractFileSystem):
         if self._cached:
             return
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
-        self.temppath = ssh_kwargs.pop("temppath", "/tmp")
+        self.temppath = ssh_kwargs.pop("temppath", tempfile.gettempdir())
         self.host = host
         self.ssh_kwargs = ssh_kwargs
         self._connect()

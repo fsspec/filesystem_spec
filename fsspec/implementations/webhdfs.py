@@ -3,6 +3,7 @@
 import logging
 import secrets
 import shutil
+import tempfile
 import uuid
 from contextlib import suppress
 from urllib.parse import quote
@@ -35,7 +36,7 @@ class WebHDFS(AbstractFileSystem):
 
     """
 
-    tempdir = "/tmp"
+    tempdir = tempfile.gettempdir()
     protocol = "webhdfs", "webHDFS"
 
     def __init__(

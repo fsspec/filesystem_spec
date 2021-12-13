@@ -1,3 +1,4 @@
+import tempfile
 import uuid
 from ftplib import FTP, Error, error_perm
 from typing import Any
@@ -21,7 +22,7 @@ class FTPFileSystem(AbstractFileSystem):
         password=None,
         acct=None,
         block_size=None,
-        tempdir="/tmp",
+        tempdir=tempfile.gettempdir(),
         timeout=30,
         **kwargs,
     ):
