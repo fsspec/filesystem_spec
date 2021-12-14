@@ -11,6 +11,7 @@ from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
+from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_compression
 
@@ -327,7 +328,7 @@ class CachingFileSystem(AbstractFileSystem):
             f = compr[comp](f, mode="rb")
         if "blocksize" in detail:
             if detail["blocksize"] != f.blocksize:
-                raise ValueError(
+                raise BlocksizeMismatchError(
                     "Cached file must be reopened with same block"
                     "size as original (old: %i, new %i)"
                     "" % (detail["blocksize"], f.blocksize)

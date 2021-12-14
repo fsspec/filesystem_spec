@@ -7,6 +7,7 @@ import pytest
 
 import fsspec
 from fsspec.compression import compr
+from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cached import CachingFileSystem
 
 from .test_ftp import FTPFileSystem
@@ -213,7 +214,7 @@ def test_blocksize(ftp_writable):
 
     with fs.open("/out_block", block_size=20) as f:
         assert f.read(1) == b"t"
-    with pytest.raises(ValueError):
+    with pytest.raises(BlocksizeMismatchError):
         fs.open("/out_block", block_size=30)
 
 
