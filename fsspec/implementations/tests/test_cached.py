@@ -180,6 +180,7 @@ def test_pop():
     with pytest.raises(PermissionError):
         fs.pop_from_cache(f1)
     fs.pop_from_cache(f2)
+    fs.pop_from_cache(os.path.join(origin, "uncached-file"))
     assert len(os.listdir(cache2)) == 1
     assert not fs._check_file(f2)
     assert fs._check_file(f1)
