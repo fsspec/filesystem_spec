@@ -235,9 +235,10 @@ class CachingFileSystem(AbstractFileSystem):
         raises PermissionError
         """
         path = self._strip_protocol(path)
-        _, fn = self._check_file(path)
-        if fn is None:
+        details = self._check_file(path)
+        if not details:
             return
+        _, fn = details
         if fn.startswith(self.storage[-1]):
             # is in in writable cache
             os.remove(fn)
