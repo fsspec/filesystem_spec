@@ -1,8 +1,10 @@
 # https://hadoop.apache.org/docs/r1.0.4/webhdfs.html
 
 import logging
+import os
 import secrets
 import shutil
+import tempfile
 import uuid
 from contextlib import suppress
 from urllib.parse import quote
@@ -35,7 +37,7 @@ class WebHDFS(AbstractFileSystem):
 
     """
 
-    tempdir = "/tmp"
+    tempdir = str(tempfile.gettempdir())
     protocol = "webhdfs", "webHDFS"
 
     def __init__(
@@ -377,7 +379,7 @@ class WebHDFile(AbstractBufferedFile):
         tempdir = kwargs.pop("tempdir")
         if kwargs.pop("autocommit", False) is False:
             self.target = self.path
-            self.path = "/".join([tempdir, str(uuid.uuid4())])
+            self.path = os.path.join(tempdir, str(uuid.uuid4()))
 
     def _upload_chunk(self, final=False):
         """Write one part of a multi-block file upload

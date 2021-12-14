@@ -41,7 +41,7 @@ class SFTPFileSystem(AbstractFileSystem):
         if self._cached:
             return
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
-        self.temppath = ssh_kwargs.pop("temppath", "/tmp")
+        self.temppath = ssh_kwargs.pop("temppath", "/tmp")  # remote temp directory
         self.host = host
         self.ssh_kwargs = ssh_kwargs
         self._connect()
@@ -136,7 +136,7 @@ class SFTPFileSystem(AbstractFileSystem):
         logger.debug("Opening file %s" % path)
         if kwargs.get("autocommit", True) is False:
             # writes to temporary file, move on commit
-            path2 = "{}/{}".format(self.temppath, uuid.uuid4())
+            path2 = "/".join([self.temppath, str(uuid.uuid4())])
             f = self.ftp.open(path2, mode, bufsize=block_size if block_size else -1)
             f.temppath = path2
             f.targetpath = path
