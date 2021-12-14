@@ -103,9 +103,9 @@ def test_write_big(ftp_writable, cache_type):
     assert fs.cat(fn) == b"o" * 1700
 
 
-def test_transaction(ftp_writable, tmpdir):
+def test_transaction(ftp_writable):
     host, port, user, pw = ftp_writable
-    fs = FTPFileSystem(host, port, user, pw, tempdir=str(tmpdir))
+    fs = FTPFileSystem(host, port, user, pw)
     fs.mkdir("/tmp")
     fn = "/tr"
     with fs.transaction:
@@ -121,7 +121,7 @@ def test_transaction(ftp_writable, tmpdir):
 
 def test_transaction_with_cache(ftp_writable, tmpdir):
     host, port, user, pw = ftp_writable
-    fs = FTPFileSystem(host, port, user, pw, tempdir=str(tmpdir))
+    fs = FTPFileSystem(host, port, user, pw)
     fs.mkdir("/tmp")
     fs.mkdir("/tmp/dir")
     assert "dir" in fs.ls("/tmp", detail=False)
