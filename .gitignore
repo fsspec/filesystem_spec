@@ -116,3 +116,5 @@ ENV/
 
 # docker artifacts
 .docker
+
+build/

@@ -43,7 +43,7 @@ class SFTPFileSystem(AbstractFileSystem):
         if self._cached:
             return
         super(SFTPFileSystem, self).__init__(**ssh_kwargs)
-        self.temppath = ssh_kwargs.pop("temppath", tempfile.gettempdir())
+        self.temppath = ssh_kwargs.pop("temppath", str(tempfile.gettempdir()))
         self.host = host
         self.ssh_kwargs = ssh_kwargs
         self._connect()

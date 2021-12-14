@@ -1,9 +1,9 @@
 # https://hadoop.apache.org/docs/r1.0.4/webhdfs.html
 
 import logging
+import os
 import secrets
 import shutil
-import os
 import tempfile
 import uuid
 from contextlib import suppress
@@ -37,7 +37,7 @@ class WebHDFS(AbstractFileSystem):
 
     """
 
-    tempdir = tempfile.gettempdir()
+    tempdir = str(tempfile.gettempdir())
     protocol = "webhdfs", "webHDFS"
 
     def __init__(

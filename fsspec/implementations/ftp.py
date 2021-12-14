@@ -23,7 +23,7 @@ class FTPFileSystem(AbstractFileSystem):
         password=None,
         acct=None,
         block_size=None,
-        tempdir=tempfile.gettempdir(),
+        tempdir=str(tempfile.gettempdir()),
         timeout=30,
         **kwargs,
     ):
