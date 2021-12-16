@@ -1,5 +1,7 @@
+import asyncio
 import os
 import os.path
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,8 +10,10 @@ import pytest
 
 import fsspec
 from fsspec.core import OpenFile
+from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.implementations.local import make_path_posix
-from fsspec.implementations.prefix import PrefixFileSystem
+
+from .test_http import data, realfile, server  # noqa: F401
 
 files = {
     ".test.accounts.1.json": (
@@ -78,14 +82,14 @@ def filetexts(d, open=open, mode="t"):
 
 def test_open():
     with filetexts(csv_files, mode="b"):
-        fs = PrefixFileSystem(prefix="a", fs=fsspec.filesystem("file"))
+        fs = DirFileSystem("a", fs=fsspec.filesystem("file"))
         with fs.open("b/c/.test.fakedata.3.csv") as f:
             assert f.read() == b"a,b\n3,4,5\n"
 
 
 def test_prefix_root():
     with filetexts(csv_files, mode="b"):
-        fs = PrefixFileSystem(prefix="/", fs=fsspec.filesystem("file"))
+        fs = DirFileSystem("/", fs=fsspec.filesystem("file"))
         abs_path_file = os.path.abspath("a/b/c/.test.fakedata.3.csv")
 
         # Risk double root marker (in path and in prefix)
@@ -101,7 +105,7 @@ def test_prefix_root():
 
 def test_cats():
     with filetexts(csv_files, mode="b"):
-        fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
+        fs = DirFileSystem(".", fs=fsspec.filesystem("file"))
         assert fs.cat(".test.fakedata.1.csv") == b"a,b\n" b"1,2\n"
         out = set(fs.cat([".test.fakedata.1.csv", ".test.fakedata.2.csv"]).values())
         assert out == {b"a,b\n" b"1,2\n", b"a,b\n" b"3,4\n"}
@@ -121,23 +125,23 @@ def test_cats():
 
 def test_not_found():
     fn = "not-a-file"
-    fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
+    fs = DirFileSystem(".", fs=fsspec.filesystem("file"))
     with pytest.raises((FileNotFoundError, OSError)):
         with OpenFile(fs, fn, mode="rb"):
             pass
 
 
 def test_isfile():
-    fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
     with filetexts(files, mode="b"):
+        fs = DirFileSystem(os.getcwd(), fs=fsspec.filesystem("file"))
         for f in files.keys():
             assert fs.isfile(f)
         assert not fs.isfile("not-a-file")
 
 
 def test_isdir():
-    fs = PrefixFileSystem(prefix=".", fs=fsspec.filesystem("file"))
     with filetexts(files, mode="b"):
+        fs = DirFileSystem(os.getcwd(), fs=fsspec.filesystem("file"))
         for f in files.keys():
             assert fs.isfile(f)
             assert not fs.isdir(f)
@@ -151,26 +155,18 @@ def test_directories(tmpdir, dirname):
     tmpdir = make_path_posix(str(tmpdir))
     prefix = posixpath.join(tmpdir, "a/b/c/d/e")
 
-    fs = PrefixFileSystem(prefix=prefix, fs=fsspec.filesystem("file"))
+    fs = DirFileSystem(prefix, fs=fsspec.filesystem("file"))
     fs.mkdir(dirname)
     assert not os.path.exists(os.path.join(tmpdir, "dir"))
     assert os.path.exists(os.path.join(prefix, "dir"))
-    assert fs.ls(".") == ["./dir"]
+    assert fs.ls(".", detail=False) == ["./dir"]
     fs.rmdir(dirname)
     assert not os.path.exists(os.path.join(prefix, "dir"))
 
-    fs = PrefixFileSystem(prefix=f"{tmpdir}/a", fs=fsspec.filesystem("file"))
-    assert fs.ls(".") == ["./b"]
+    fs = DirFileSystem(f"{tmpdir}/a", fs=fsspec.filesystem("file"))
+    assert fs.ls(".", detail=False) == ["./b"]
     fs.rm("b", recursive=True)
-    assert fs.ls(".") == []
-
-
-def test_emtpy_prefix():
-    with pytest.raises(ValueError):
-        PrefixFileSystem(prefix="", fs=fsspec.filesystem("file"))
-
-    with pytest.raises(ValueError):
-        PrefixFileSystem(prefix=None, fs=fsspec.filesystem("file"))
+    assert fs.ls(".", detail=False) == []
 
 
 @pytest.mark.parametrize(
@@ -192,5 +188,31 @@ def test_emtpy_prefix():
 )
 def test_ls(tmpdir, ls_arg, expected_out):
     os.makedirs(os.path.join(make_path_posix(str(tmpdir)), "a/b/c/d/e/"))
-    fs = PrefixFileSystem(prefix=f"{tmpdir}/a", fs=fsspec.filesystem("file"))
-    assert fs.ls(ls_arg) == expected_out
+    fs = DirFileSystem(f"{tmpdir}/a", fs=fsspec.filesystem("file"))
+    assert fs.ls(ls_arg, detail=False) == expected_out
+
+
+def test_async_fs_list(server):  # noqa: F811
+    h = fsspec.filesystem("http")
+    fs = DirFileSystem(server + "/index", fs=h)
+    out = fs.glob("*")
+    assert out == ["realfile"]
+
+
+@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
+def test_async_this_thread(server):  # noqa: F811
+    async def _test():
+        h = fsspec.filesystem("http", asynchronous=True)
+        fs = DirFileSystem(server + "/index", fs=h)
+
+        session = await fs.set_session()  # creates client
+
+        url = "realfile"
+        with pytest.raises((NotImplementedError, RuntimeError)):
+            fs.cat([url])
+        out = await fs._cat([url])
+        del fs
+        assert out == {url: data}
+        await session.close()
+
+    asyncio.run(_test())
