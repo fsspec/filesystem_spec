@@ -560,7 +560,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _info(self, path, **kwargs):
         raise NotImplementedError
 
-    async def _ls(self, path, **kwargs):
+    async def _ls(self, path, detail=True, **kwargs):
         raise NotImplementedError
 
     async def _walk(self, path, maxdepth=None, **kwargs):
