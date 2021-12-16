@@ -241,7 +241,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     def get(self, rpath, lpath, recursive=False, **kwargs):
         if self.fs.async_impl:
             return sync(self.loop, self._get, rpath, lpath, recursive, **kwargs)
-        return AbstractFileSystem.get(rpath, lpath, recursive=recursive, **kwargs)
+        return AbstractFileSystem.get(self, rpath, lpath, recursive=recursive, **kwargs)
 
     def cat(self, path, recursive=False, **kwargs):
         if self.fs.async_impl:
