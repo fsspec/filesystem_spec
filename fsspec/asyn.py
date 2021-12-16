@@ -320,6 +320,9 @@ class AsyncFileSystem(AbstractFileSystem):
             nofiles=True,
         )
 
+    async def _cp_file(self, path1, path2, **kwargs):
+        raise NotImplementedError
+
     async def _copy(
         self,
         path1,
@@ -434,6 +437,9 @@ class AsyncFileSystem(AbstractFileSystem):
         ]
         batch_size = batch_size or self.batch_size
         return await _run_coros_in_chunks(coros, batch_size=batch_size, nofiles=True)
+
+    async def _put_file(self, lpath, rpath, **kwargs):
+        raise NotImplementedError
 
     async def _put(
         self,
