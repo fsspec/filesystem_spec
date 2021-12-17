@@ -2,6 +2,7 @@ import base64
 import io
 import itertools
 import logging
+import os
 from functools import lru_cache
 
 import fsspec.core
@@ -227,11 +228,15 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references[path] = value
 
     async def _get_file(self, rpath, lpath, **kwargs):
+        if self.isdir(rpath):
+            return os.makedirs(lpath, exist_ok=True)
         data = await self._cat_file(rpath)
         with open(lpath, "wb") as f:
             f.write(data)
 
     def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
+        if self.isdir(rpath):
+            return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
         callback.lazy_call("set_size", len, data)
         with open(lpath, "wb") as f:
@@ -241,7 +246,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     def get(self, rpath, lpath, recursive=False, **kwargs):
         if self.fs.async_impl:
             return sync(self.loop, self._get, rpath, lpath, recursive, **kwargs)
-        return AbstractFileSystem.get(rpath, lpath, recursive=recursive, **kwargs)
+        return AbstractFileSystem.get(self, rpath, lpath, recursive=recursive, **kwargs)
 
     def cat(self, path, recursive=False, **kwargs):
         if self.fs.async_impl:
