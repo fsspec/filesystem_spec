@@ -63,16 +63,17 @@ class LocalFileSystem(AbstractFileSystem):
         return super().glob(path, **kwargs)
 
     def info(self, path, **kwargs):
+        t = None
         if isinstance(path, os.DirEntry):
             # scandir DirEntry
             out = path.stat(follow_symlinks=False)
             link = path.is_symlink()
+            if link:
+                t = "link"
             if path.is_dir(follow_symlinks=False):
                 t = "directory"
             elif path.is_file(follow_symlinks=False):
                 t = "file"
-            else:
-                t = "other"
             path = self._strip_protocol(path.path)
         else:
             # str or path-like
@@ -80,17 +81,16 @@ class LocalFileSystem(AbstractFileSystem):
             out = os.stat(path, follow_symlinks=False)
             link = stat.S_ISLNK(out.st_mode)
             if link:
-                out = os.stat(path, follow_symlinks=True)
+                out = os.lstat(path)
+                t = "link"
             if stat.S_ISDIR(out.st_mode):
                 t = "directory"
             elif stat.S_ISREG(out.st_mode):
                 t = "file"
-            else:
-                t = "other"
         result = {
             "name": path,
             "size": out.st_size,
-            "type": t,
+            "type": t or "other",
             "created": out.st_ctime,
             "islink": link,
         }

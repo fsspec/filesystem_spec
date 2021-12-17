@@ -508,8 +508,8 @@ def test_linked_files(tmpdir):
 
     fs = LocalFileSystem()
     assert fs.info(fn0)["type"] == "file"
-    assert fs.info(fn1)["type"] == "file"
-    assert fs.info(fn2)["type"] == "file"
+    assert fs.info(fn1)["type"] == "link"
+    assert fs.info(fn2)["type"] == "link"
 
     assert not fs.info(fn0)["islink"]
     assert fs.info(fn1)["islink"]
@@ -526,6 +526,11 @@ def test_linked_files(tmpdir):
     of = fsspec.open(fn2, "rb")
     with of as f:
         assert f.read() == data
+
+    os.unlink(fn0)
+
+    assert fs.info(fn1)["size"] == 0
+    assert fs.info(fn2)["size"] == 0
 
 
 def test_linked_files_exists(tmpdir):
@@ -548,7 +553,7 @@ def test_linked_files_exists(tmpdir):
 
     os.unlink(origin)
 
-    assert not fs.exists(copy_file)
+    assert fs.exists(copy_file)
     assert fs.lexists(copy_file)
 
     os.unlink(copy_file)
@@ -577,8 +582,8 @@ def test_linked_directories(tmpdir):
 
     fs = LocalFileSystem()
     assert fs.info(subdir0)["type"] == "directory"
-    assert fs.info(subdir1)["type"] == "directory"
-    assert fs.info(subdir2)["type"] == "directory"
+    assert fs.info(subdir1)["type"] == "link"
+    assert fs.info(subdir2)["type"] == "link"
 
     assert not fs.info(subdir0)["islink"]
     assert fs.info(subdir1)["islink"]
