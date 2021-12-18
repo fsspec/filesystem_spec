@@ -1,6 +1,7 @@
 """Helper functions for a standard streaming compression API"""
 from bz2 import BZ2File
 from zipfile import ZipFile
+from mimetypes import encodings_map
 
 import fsspec.utils
 from fsspec.spec import AbstractBufferedFile
@@ -51,6 +52,7 @@ def register_compression(name, callback, extensions, force=False):
     compr[name] = callback
 
     for ext in extensions:
+        encodings_map['.%s' % ext] = name
         fsspec.utils.compressions[ext] = name
 
 
