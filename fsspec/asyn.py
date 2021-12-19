@@ -307,6 +307,14 @@ class AsyncFileSystem(AbstractFileSystem):
             raise RuntimeError("This class is not fork-safe")
         return self._loop
 
+    async def set_session(self, *args, **kwargs):
+        """Establish a connection.
+        Returns
+        -------
+        Session to be closed later with await .close()
+        """
+        raise NotImplementedError
+
     async def _rm_file(self, path, **kwargs):
         raise NotImplementedError
 
