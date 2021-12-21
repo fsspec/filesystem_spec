@@ -626,9 +626,6 @@ class HTTPFile(AbstractBufferedFile):
 
     _fetch_range = sync_wrapper(async_fetch_range)
 
-    def close(self):
-        pass
-
     def __reduce__(self):
         return (
             reopen,
@@ -690,6 +687,7 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+        super().close()
 
     def __reduce__(self):
         return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)
