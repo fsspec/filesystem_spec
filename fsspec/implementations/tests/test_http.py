@@ -358,6 +358,7 @@ def test_random_access(server, headers):
         else:
             with pytest.raises(ValueError):
                 f.seek(5, 1)
+    assert f.closed
 
 
 def test_mapper_url(server):
