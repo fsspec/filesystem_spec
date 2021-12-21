@@ -106,6 +106,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.template_overrides = template_overrides
         self.simple_templates = simple_templates
         self.templates = {}
+        self.fss = {}
         if hasattr(fo, "read"):
             text = fo.read()
         elif isinstance(fo, str):
@@ -151,7 +152,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             self._process_references(text, template_overrides)
         if fs is not None:
             self.fs = fs
-            return
+            remote_protocol = (
+                fs.protocol[0] if isinstance(fs.protocol, tuple) else fs.protocol
+            )
         if remote_protocol is None:
             for ref in self.templates.values():
                 if callable(ref):
@@ -172,7 +175,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         if remote_protocol is None:
             remote_protocol = target_protocol
 
-        self.fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
+        self.fs = fs or filesystem(remote_protocol, loop=loop, **(remote_options or {}))
+        self.fss[remote_protocol] = fs
 
     @property
     def loop(self):
