@@ -28,7 +28,7 @@ def _first(d):
 def _prot_in_references(path, references):
     ref = references.get(path)
     if isinstance(ref, (list, tuple)):
-        return split_protocol(ref[0])[0]
+        return split_protocol(ref[0])[0] if ref[0] else ref[0]
 
 
 def _protocol_groups(paths, references):
