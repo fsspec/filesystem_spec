@@ -27,7 +27,7 @@ def _first(d):
 
 def _prot_in_references(path, references):
     ref = references.get(path)
-    if isinstance(ref, list):
+    if isinstance(ref, (list, tuple)):
         return split_protocol(ref[0])[0]
 
 
@@ -299,7 +299,13 @@ class ReferenceFileSystem(AsyncFileSystem):
         proto_dict = _protocol_groups(path, self.references)
         out = {}
         for proto, paths in proto_dict.items():
-            if self.fss[proto].async_impl:
+            if proto is None:
+                # binary/string
+                out.update(
+                    {p: AbstractFileSystem.cat_file(self, p, **kwargs) for p in paths}
+                )
+
+            elif self.fss[proto].async_impl:
                 # TODO: asyncio.gather on multiple async FSs
                 out.update(sync(self.loop, self._cat, paths, recursive, **kwargs))
             elif isinstance(paths, list):

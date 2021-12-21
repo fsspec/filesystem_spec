@@ -251,3 +251,8 @@ def test_multi_fs_provided(m, tmpdir):
 
     fs = fsspec.filesystem("reference", fo=refs, fs={"file": localfs, "memory": m})
     assert fs.cat("c/e") == b"hello"
+    assert fs.cat(["c/e", "a", "b"]) == {
+        "a": b"data",
+        "b": b"01234",
+        "c/e": b"hello",
+    }
