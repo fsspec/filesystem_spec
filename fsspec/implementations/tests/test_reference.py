@@ -231,3 +231,23 @@ def test_get_sync(tmpdir):
     fs.get("c", str(tmpdir / "c"), recursive=True)
     assert (tmpdir / "c").isdir()
     assert (tmpdir / "c" / "d").read_binary() == b"123456"
+
+
+def test_multi_fs_provided(m, tmpdir):
+    localfs = LocalFileSystem()
+
+    real = tmpdir / "file"
+    real.write_binary(b"0123456789")
+
+    m.pipe("afile", b"hello")
+
+    # local URLs are file:// by default
+    refs = {
+        "a": b"data",
+        "b": ("file://" + str(real), 0, 5),
+        "c/d": ("file://" + str(real), 1, 6),
+        "c/e": ["memory://afile"],
+    }
+
+    fs = fsspec.filesystem("reference", fo=refs, fs={"file": localfs, "memory": m})
+    assert fs.cat("c/e") == b"hello"

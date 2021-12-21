@@ -14,11 +14,31 @@ except ImportError:
 
 from ..asyn import AsyncFileSystem, sync
 from ..callbacks import _DEFAULT_CALLBACK
-from ..core import filesystem, open
+from ..core import filesystem, open, split_protocol
 from ..mapping import get_mapper
 from ..spec import AbstractFileSystem
 
 logger = logging.getLogger("fsspec.reference")
+
+
+def _first(d):
+    return list(d.values())[0]
+
+
+def _prot_in_references(path, references):
+    ref = references.get(path)
+    if isinstance(ref, list):
+        return split_protocol(ref[0])[0]
+
+
+def _protocol_groups(paths, references):
+    if isinstance(paths, str):
+        return {_prot_in_references(paths, references): [paths]}
+    out = {}
+    for path in paths:
+        protocol = _prot_in_references(path, references)
+        out.setdefault(protocol, []).append(path)
+    return out
 
 
 class ReferenceFileSystem(AsyncFileSystem):
@@ -150,11 +170,15 @@ class ReferenceFileSystem(AsyncFileSystem):
             self._process_dataframe()
         else:
             self._process_references(text, template_overrides)
+        if isinstance(fs, dict):
+            self.fss = fs
+            return
         if fs is not None:
-            self.fs = fs
+            # single remote FS
             remote_protocol = (
                 fs.protocol[0] if isinstance(fs.protocol, tuple) else fs.protocol
             )
+
         if remote_protocol is None:
             for ref in self.templates.values():
                 if callable(ref):
@@ -175,12 +199,14 @@ class ReferenceFileSystem(AsyncFileSystem):
         if remote_protocol is None:
             remote_protocol = target_protocol
 
-        self.fs = fs or filesystem(remote_protocol, loop=loop, **(remote_options or {}))
+        fs = fs or filesystem(remote_protocol, loop=loop, **(remote_options or {}))
         self.fss[remote_protocol] = fs
+        self.fss[None] = fs  # default one
 
     @property
     def loop(self):
-        return self.fs.loop if self.fs.async_impl else self._loop
+        inloop = [fs.loop for fs in self.fss.values() if fs.async_impl]
+        return inloop[0] if inloop else self._loop
 
     def _cat_common(self, path):
         path = self._strip_protocol(path)
@@ -219,13 +245,21 @@ class ReferenceFileSystem(AsyncFileSystem):
         part_or_url, start0, end0 = self._cat_common(path)
         if isinstance(part_or_url, bytes):
             return part_or_url[start:end]
-        return (await self.fs._cat_file(part_or_url, start=start0, end=end0))[start:end]
+        protocol, _ = split_protocol(part_or_url)
+        # TODO: start and end should be passed to cat_file, not sliced
+        return (
+            await self.fss[protocol]._cat_file(part_or_url, start=start0, end=end0)
+        )[start:end]
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         part_or_url, start0, end0 = self._cat_common(path)
         if isinstance(part_or_url, bytes):
             return part_or_url[start:end]
-        return self.fs.cat_file(part_or_url, start=start0, end=end0)[start:end]
+        protocol, _ = split_protocol(part_or_url)
+        # TODO: start and end should be passed to cat_file, not sliced
+        return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)[
+            start:end
+        ]
 
     def pipe_file(self, path, value, **_):
         """Temporarily add binary data or reference as a file"""
@@ -248,19 +282,37 @@ class ReferenceFileSystem(AsyncFileSystem):
         callback.lazy_call("absolute_update", len, data)
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
-        if self.fs.async_impl:
-            return sync(self.loop, self._get, rpath, lpath, recursive, **kwargs)
-        return AbstractFileSystem.get(self, rpath, lpath, recursive=recursive, **kwargs)
+        if isinstance(lpath, list):
+            # because we have to figure out here which lpath goes with which path
+            # after grouping
+            raise NotImplementedError
+        proto_dict = _protocol_groups(rpath, self.references)
+        for proto, paths in proto_dict.items():
+            if self.fss[proto].async_impl:
+                sync(self.loop, self._get, paths, lpath, recursive, **kwargs)
+            else:
+                AbstractFileSystem.get(
+                    self, paths, lpath, recursive=recursive, **kwargs
+                )
 
     def cat(self, path, recursive=False, **kwargs):
-        if self.fs.async_impl:
-            return sync(self.loop, self._cat, path, recursive, **kwargs)
-        elif isinstance(path, list):
-            if recursive or any("*" in p for p in path):
-                raise NotImplementedError
-            return {p: AbstractFileSystem.cat_file(self, p, **kwargs) for p in path}
-        else:
-            return AbstractFileSystem.cat_file(self, path)
+        proto_dict = _protocol_groups(path, self.references)
+        out = {}
+        for proto, paths in proto_dict.items():
+            if self.fss[proto].async_impl:
+                # TODO: asyncio.gather on multiple async FSs
+                out.update(sync(self.loop, self._cat, paths, recursive, **kwargs))
+            elif isinstance(paths, list):
+                if recursive or any("*" in p for p in paths):
+                    raise NotImplementedError
+                out.update(
+                    {p: AbstractFileSystem.cat_file(self, p, **kwargs) for p in paths}
+                )
+            else:
+                out.update(AbstractFileSystem.cat_file(self, paths))
+        if len(out) == 1 and isinstance(path, str) and "*" not in path:
+            return _first(out)
+        return out
 
     def _process_dataframe(self):
         self._process_templates(self.templates)
