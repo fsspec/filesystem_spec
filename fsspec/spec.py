@@ -803,13 +803,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
             return None
 
         with open(lpath, "rb") as f1:
-            callback.set_size(f1.seek(0, 2))
+            size = f1.seek(0, 2)
+            callback.set_size(size)
             f1.seek(0)
 
             self.mkdirs(self._parent(os.fspath(rpath)), exist_ok=True)
             with self.open(rpath, "wb", **kwargs) as f2:
-                data = True
-                while data:
+                while f2.tell() < size:
                     data = f1.read(self.blocksize)
                     segment_len = f2.write(data)
                     callback.relative_update(segment_len)
