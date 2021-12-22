@@ -495,7 +495,9 @@ def test_dummy_callbacks_file(tmpdir):
     source.write_text("x" * 100, "utf-8")
 
     fs.put_file(source, file, callback=callback)
-    assert callback.events == imitate_transfer(size, 10)
+
+    # -1 here since put_file no longer has final zero-size put
+    assert callback.events == imitate_transfer(size, 10)[:-1]
     callback.events.clear()
 
     fs.get_file(file, destination, callback=callback)
