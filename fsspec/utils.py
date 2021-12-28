@@ -281,7 +281,11 @@ def tokenize(*args, **kwargs):
     """
     if kwargs:
         args += (kwargs,)
-    return md5(str(args).encode()).hexdigest()
+    try:
+        return md5(str(args).encode()).hexdigest()
+    except ValueError:
+        # FIPS systems: https://github.com/fsspec/filesystem_spec/issues/380
+        return md5(str(args).encode(), usedforsecurity=False).hexdigest()
 
 
 def stringify_path(filepath):
