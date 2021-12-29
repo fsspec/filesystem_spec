@@ -46,7 +46,7 @@ from fsspec.utils import infer_storage_options, mirror_from
 class PyArrowHDFS(AbstractFileSystem):
     """Adapted version of Arrow's HadoopFileSystem
 
-    This is a very simple wrapper over the pyarrow.hdfs.HadoopFileSystem, which
+    This is a very simple wrapper over the pyarrow.fs.HadoopFileSystem, which
     passes on all calls to the underlying class."""
 
     protocol = "hdfs", "file"
