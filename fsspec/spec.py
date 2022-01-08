@@ -4,7 +4,6 @@ import os
 import threading
 import warnings
 import weakref
-from distutils.version import LooseVersion
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
@@ -13,14 +12,7 @@ from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
-from .utils import (
-    _unstrip_protocol,
-    get_package_version_without_import,
-    other_paths,
-    read_block,
-    stringify_path,
-    tokenize,
-)
+from .utils import _unstrip_protocol, other_paths, read_block, stringify_path, tokenize
 
 logger = logging.getLogger("fsspec")
 
@@ -88,20 +80,7 @@ class _Cached(type):
             return obj
 
 
-pa_version = get_package_version_without_import("pyarrow")
-if pa_version and LooseVersion(pa_version) < LooseVersion("2.0"):
-    try:
-        import pyarrow as pa
-
-        up = pa.filesystem.DaskFileSystem
-    except ImportError:  # pragma: no cover
-        # pyarrow exists but doesn't import for some reason
-        up = object
-else:  # pragma: no cover
-    up = object
-
-
-class AbstractFileSystem(up, metaclass=_Cached):
+class AbstractFileSystem(metaclass=_Cached):
     """
     An abstract super-class for pythonic file-systems
 
