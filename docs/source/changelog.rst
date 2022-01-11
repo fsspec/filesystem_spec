@@ -1,6 +1,24 @@
 Changelog
 =========
 
+2022.01.0
+---------
+
+Fixes
+
+- blocks cache metadata (#746)
+- default SMB port (#853)
+- caching fixes (#856, 855)
+- explicit close for http files (#866)
+- put_file to continue when no bytes (#869, 870)
+
+Other
+
+- temporary files location (#851, 871)
+- async abstract methods (#858, 859, 860)
+- md5 for FIPS (#872)
+- remove deprecated pyarrow/distutils (#880, 881)
+
 2021.11.1
 ---------
 
