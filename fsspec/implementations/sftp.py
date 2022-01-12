@@ -155,7 +155,7 @@ class SFTPFileSystem(AbstractFileSystem):
 
     def mv(self, old, new):
         logger.debug("Renaming %s into %s" % (old, new))
-        self.ftp.posix_rename(old, new)
+        self.ftp.rename(old, new)
 
 
 def commit_a_file(self):
