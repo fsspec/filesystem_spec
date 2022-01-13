@@ -204,6 +204,12 @@ class OpenFiles(list):
                     break
         [s.__exit__(*args) for s in self]
 
+    def __getitem__(self, item):
+        out = super().__getitem__(item)
+        if isinstance(item, slice):
+            return OpenFiles(out, mode=self.mode, fs=self.fs)
+        return out
+
     def __repr__(self):
         return "<List of %s OpenFile instances>" % len(self)
 
