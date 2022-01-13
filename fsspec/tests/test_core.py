@@ -184,6 +184,8 @@ def test_multi_context(tmpdir):
     assert isinstance(files, OpenFiles)
     assert isinstance(files[0], OpenFile)
     assert len(files) == 2
+    assert isinstance(files[:1], OpenFiles)
+    assert len(files[:1]) == 1
     with files as of:
         assert len(of) == 2
         assert not of[0].closed
