@@ -18,7 +18,6 @@ setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
@@ -32,7 +31,7 @@ setup(
     license="BSD",
     keywords="file",
     packages=["fsspec", "fsspec.implementations"],
-    python_requires=">=3.6",
+    python_requires=">=3.7",
     install_requires=open("requirements.txt").read().strip().split("\n"),
     extras_require={
         "entrypoints": ["importlib_metadata ; python_version < '3.8' "],

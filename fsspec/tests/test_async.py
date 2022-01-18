@@ -1,7 +1,6 @@
 import asyncio
 import inspect
 import os
-import sys
 import time
 
 import pytest
@@ -18,7 +17,6 @@ def test_sync_methods():
     assert not inspect.iscoroutinefunction(inst.info)
 
 
-@pytest.mark.skipif(fsspec.asyn.PY36, reason="missing asyncio features o py36")
 def test_interrupt():
     loop = fsspec.asyn.get_loop()
 
@@ -46,32 +44,27 @@ class _DummyAsyncKlass:
     dummy_func = fsspec.asyn.sync_wrapper(_dummy_async_func)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_sync_wrapper_timeout_on_less_than_expected_wait_time_not_finish_function():
     test_obj = _DummyAsyncKlass()
     with pytest.raises(fsspec.FSTimeoutError):
         test_obj.dummy_func(timeout=0.1)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_sync_wrapper_timeout_on_more_than_expected_wait_time_will_finish_function():
     test_obj = _DummyAsyncKlass()
     assert test_obj.dummy_func(timeout=5)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_sync_wrapper_timeout_none_will_wait_func_finished():
     test_obj = _DummyAsyncKlass()
     assert test_obj.dummy_func(timeout=None)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_sync_wrapper_treat_timeout_0_as_none():
     test_obj = _DummyAsyncKlass()
     assert test_obj.dummy_func(timeout=0)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_run_coros_in_chunks(monkeypatch):
     total_running = 0
 

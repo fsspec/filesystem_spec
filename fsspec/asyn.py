@@ -12,7 +12,7 @@ from glob import has_magic
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
 from .spec import AbstractFileSystem
-from .utils import PY36, is_exception, other_paths
+from .utils import is_exception, other_paths
 
 private = re.compile("_[^_]")
 
@@ -29,12 +29,6 @@ async def _runner(event, coro, result, timeout=None):
         event.set()
 
 
-if PY36:
-    grl = asyncio.events._get_running_loop
-else:
-    grl = asyncio.events.get_running_loop
-
-
 def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
@@ -45,7 +39,7 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     if loop is None or loop.is_closed():
         raise RuntimeError("Loop is not running")
     try:
-        loop0 = grl()
+        loop0 = asyncio.events.get_running_loop()
         if loop0 is loop:
             raise NotImplementedError("Calling sync() from within a running loop")
     except RuntimeError:
@@ -789,9 +783,6 @@ def _dump_running_tasks(
     printout=True, cancel=True, exc=FSSpecCoroutineCancel, with_task=False
 ):
     import traceback
-
-    if PY36:
-        raise NotImplementedError("Do not call this on Py 3.6")
 
     tasks = [t for t in asyncio.tasks.all_tasks(loop[0]) if not t.done()]
     if printout:
