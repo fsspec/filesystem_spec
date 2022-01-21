@@ -221,6 +221,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         part_or_url, start0, end0 = self._cat_common(path)
         if isinstance(part_or_url, bytes):
             return part_or_url[start:end]
+        # TODO: update start0, end0 if start/end given, instead of slicing
         return self.fs.cat_file(part_or_url, start=start0, end=end0)[start:end]
 
     def pipe_file(self, path, value, **_):
@@ -430,16 +431,13 @@ class ReferenceFileSystem(AsyncFileSystem):
         return [o["name"] for o in out]
 
     def exists(self, path, **kwargs):  # overwrite auto-sync version
-        try:
-            return self._ls_from_cache(path) is not None
-        except FileNotFoundError:
-            return False
+        return self.isdir(path) or self.isfile(path)
 
     def isdir(self, path):  # overwrite auto-sync version
-        return self.exists(path) and self.info(path)["type"] == "directory"
+        return path in self.dircache
 
     def isfile(self, path):  # overwrite auto-sync version
-        return self.exists(path) and self.info(path)["type"] == "file"
+        return path in self.references
 
     async def _ls(self, path, detail=True, **kwargs):  # calls fast sync code
         return self.ls(path, detail, **kwargs)
