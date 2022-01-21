@@ -280,7 +280,6 @@ class ReferenceFileSystem(AsyncFileSystem):
 
         if self.templates:
             self.df["url"] = self.df["url"].map(_render_jinja)
-        self._dircache_from_items()
 
     def _process_references(self, references, template_overrides=None):
         if isinstance(references, (str, bytes)):
@@ -294,7 +293,6 @@ class ReferenceFileSystem(AsyncFileSystem):
             raise ValueError(f"Unknown reference spec version: {vers}")
         # TODO: we make dircache by iterating over all entries, but for Spec >= 1,
         #  can replace with programmatic. Is it even needed for mapper interface?
-        self._dircache_from_items()
 
     def _process_references0(self, references):
         """Make reference dict for Spec Version 0"""
@@ -425,6 +423,8 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
+        if not self.dircache:
+            self._dircache_from_items()
         out = self._ls_from_cache(path)
         if out is None:
             raise FileNotFoundError
