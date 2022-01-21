@@ -124,3 +124,18 @@ def test_chmod(mount_local):
     assert cp.stdout == b""
     assert set(os.listdir(source_dir)) == set(["text", "new"])
     assert open(mount_dir / "new").read() == "test"
+
+
+def test_seek_rw(mount_local):
+    source_dir, mount_dir = mount_local
+    fh = open(mount_dir / "text", "w")
+    fh.write("teST")
+    fh.seek(2)
+    fh.write("st")
+    fh.close()
+
+    fh = open(mount_dir / "text", "r")
+    assert fh.read() == "test"
+    fh.seek(2)
+    assert fh.read() == "st"
+    fh.close()
