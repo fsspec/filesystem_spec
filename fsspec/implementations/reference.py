@@ -321,7 +321,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 if v.startswith("base64:"):
                     self.references[k] = base64.b64decode(v[7:])
                 self.references[k] = v
-            else:
+            elif self.templates:
                 u = v[0]
                 if "{{" in u:
                     if self.simple_templates:
@@ -333,6 +333,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                     else:
                         u = _render_jinja(u)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
+            else:
+                self.references[k] = v
         self.references.update(self._process_gen(references.get("gen", [])))
 
     def _process_templates(self, tmp):
