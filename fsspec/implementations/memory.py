@@ -46,7 +46,7 @@ class MemoryFileSystem(AbstractFileSystem):
         paths = set()
         starter = path + "/"
         out = []
-        for p2 in self.store:
+        for p2 in tuple(self.store):
             if p2.startswith(starter):
                 if "/" not in p2[len(starter) :]:
                     # exact child
