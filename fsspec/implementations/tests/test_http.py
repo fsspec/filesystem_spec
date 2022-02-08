@@ -358,6 +358,7 @@ def test_random_access(server, headers):
         else:
             with pytest.raises(ValueError):
                 f.seek(5, 1)
+    assert f.closed
 
 
 def test_mapper_url(server):
@@ -515,7 +516,6 @@ def test_async_other_thread(server):
     loop.call_soon_threadsafe(loop.stop)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_async_this_thread(server):
     async def _():
         fs = fsspec.filesystem("http", asynchronous=True)
@@ -564,7 +564,6 @@ def test_processes(server, method):
 
 
 @pytest.mark.parametrize("get_client", [get_aiohttp, get_proxy])
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in <3.7")
 def test_close(get_client):
     fs = fsspec.filesystem("http", skip_instance_cache=True)
     fs.close_session(None, asyncio.run(get_client()))

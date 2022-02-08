@@ -116,3 +116,8 @@ ENV/
 
 # docker artifacts
 .docker
+
+# vi*
+*.swp
+
+build/

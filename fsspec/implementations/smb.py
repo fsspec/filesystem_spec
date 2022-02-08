@@ -119,7 +119,7 @@ class SMBFileSystem(AbstractFileSystem):
             self.host,
             username=self.username,
             password=self.password,
-            port=self.port,
+            port=445 if self.port is None else self.port,
             encrypt=self.encrypt,
             connection_timeout=self.timeout,
         )

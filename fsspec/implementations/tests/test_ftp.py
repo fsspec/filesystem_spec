@@ -119,7 +119,7 @@ def test_transaction(ftp_writable):
     assert not fs.exists(fn)
 
 
-def test_transaction_with_cache(ftp_writable):
+def test_transaction_with_cache(ftp_writable, tmpdir):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     fs.mkdir("/tmp")

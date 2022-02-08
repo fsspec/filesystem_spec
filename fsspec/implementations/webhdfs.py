@@ -1,8 +1,10 @@
 # https://hadoop.apache.org/docs/r1.0.4/webhdfs.html
 
 import logging
+import os
 import secrets
 import shutil
+import tempfile
 import uuid
 from contextlib import suppress
 from urllib.parse import quote
@@ -27,7 +29,7 @@ class WebHDFS(AbstractFileSystem):
     spnego: when kerberos authentication is enabled, auth is negotiated by
         requests_kerberos https://github.com/requests/requests-kerberos .
         This establishes a session based on existing kinit login and/or
-        specified principal/password; paraneters are passed with ``kerb_kwargs``
+        specified principal/password; parameters are passed with ``kerb_kwargs``
     token: uses an existing Hadoop delegation token from another secured
         service. Indeed, this client can also generate such tokens when
         not insecure. Note that tokens expire, but can be renewed (by a
@@ -35,7 +37,7 @@ class WebHDFS(AbstractFileSystem):
 
     """
 
-    tempdir = "/tmp"
+    tempdir = str(tempfile.gettempdir())
     protocol = "webhdfs", "webHDFS"
 
     def __init__(
@@ -377,7 +379,7 @@ class WebHDFile(AbstractBufferedFile):
         tempdir = kwargs.pop("tempdir")
         if kwargs.pop("autocommit", False) is False:
             self.target = self.path
-            self.path = "/".join([tempdir, str(uuid.uuid4())])
+            self.path = os.path.join(tempdir, str(uuid.uuid4()))
 
     def _upload_chunk(self, final=False):
         """Write one part of a multi-block file upload

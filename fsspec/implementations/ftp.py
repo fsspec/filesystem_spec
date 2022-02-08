@@ -21,7 +21,7 @@ class FTPFileSystem(AbstractFileSystem):
         password=None,
         acct=None,
         block_size=None,
-        tempdir="/tmp",
+        tempdir=None,
         timeout=30,
         **kwargs,
     ):
@@ -54,7 +54,7 @@ class FTPFileSystem(AbstractFileSystem):
         super(FTPFileSystem, self).__init__(**kwargs)
         self.host = host
         self.port = port
-        self.tempdir = tempdir
+        self.tempdir = tempdir or "/tmp"
         self.cred = username, password, acct
         self.timeout = timeout
         if block_size is not None:

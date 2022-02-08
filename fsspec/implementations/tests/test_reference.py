@@ -3,6 +3,7 @@ import json
 import pytest
 
 import fsspec
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.reference import _unmodel_hdf5
 
 from .test_http import data, realfile, server  # noqa: F401
@@ -210,3 +211,23 @@ def test_empty():
     pytest.importorskip("jinja2")
     fs = fsspec.filesystem("reference", fo={"version": 1}, target_protocol="http")
     assert fs.references == {}
+
+
+def test_get_sync(tmpdir):
+    localfs = LocalFileSystem()
+
+    real = tmpdir / "file"
+    real.write_binary(b"0123456789")
+
+    refs = {"a": b"data", "b": (str(real), 0, 5), "c/d": (str(real), 1, 6)}
+    fs = fsspec.filesystem("reference", fo=refs, fs=localfs)
+
+    fs.get("a", str(tmpdir / "a"))
+    assert (tmpdir / "a").read_binary() == b"data"
+    fs.get("b", str(tmpdir / "b"))
+    assert (tmpdir / "b").read_binary() == b"01234"
+    fs.get("c/d", str(tmpdir / "d"))
+    assert (tmpdir / "d").read_binary() == b"123456"
+    fs.get("c", str(tmpdir / "c"), recursive=True)
+    assert (tmpdir / "c").isdir()
+    assert (tmpdir / "c" / "d").read_binary() == b"123456"

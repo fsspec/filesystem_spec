@@ -7,6 +7,7 @@ import pytest
 
 import fsspec
 from fsspec.compression import compr
+from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cached import CachingFileSystem
 
 from .test_ftp import FTPFileSystem
@@ -180,6 +181,7 @@ def test_pop():
     with pytest.raises(PermissionError):
         fs.pop_from_cache(f1)
     fs.pop_from_cache(f2)
+    fs.pop_from_cache(os.path.join(origin, "uncached-file"))
     assert len(os.listdir(cache2)) == 1
     assert not fs._check_file(f2)
     assert fs._check_file(f1)
@@ -212,7 +214,7 @@ def test_blocksize(ftp_writable):
 
     with fs.open("/out_block", block_size=20) as f:
         assert f.read(1) == b"t"
-    with pytest.raises(ValueError):
+    with pytest.raises(BlocksizeMismatchError):
         fs.open("/out_block", block_size=30)
 
 
@@ -578,10 +580,12 @@ def test_cached_open_close_read(ftp_writable):
         target_protocol="ftp",
         target_options={"host": host, "port": port, "username": user, "password": pw},
     )
-    with fs.open("/out_block") as f:
+    with fs.open("/out_block", block_size=1024) as f:
         pass
-    with fs.open("/out_block") as f:
+    with fs.open("/out_block", block_size=1024) as f:
         assert f.read(1) == b"t"
+    # Regression test for <https://github.com/fsspec/filesystem_spec/issues/845>
+    assert fs.cached_files[-1]["/out_block"]["blocks"] == {0}
 
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache"])

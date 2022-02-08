@@ -275,11 +275,11 @@ class HTTPFileSystem(AsyncFileSystem):
                 else:
                     callback.set_size(getattr(f, "size", None))
 
-                chunk = f.read(64 * 1024)
+                chunk = f.read(chunk_size)
                 while chunk:
                     yield chunk
                     callback.relative_update(len(chunk))
-                    chunk = f.read(64 * 1024)
+                    chunk = f.read(chunk_size)
 
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -627,9 +627,6 @@ class HTTPFile(AbstractBufferedFile):
 
     _fetch_range = sync_wrapper(async_fetch_range)
 
-    def close(self):
-        pass
-
     def __reduce__(self):
         return (
             reopen,
@@ -691,6 +688,7 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+        super().close()
 
     def __reduce__(self):
         return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)

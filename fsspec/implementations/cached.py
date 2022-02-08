@@ -11,6 +11,7 @@ from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
+from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_compression
 
@@ -159,7 +160,13 @@ class CachingFileSystem(AbstractFileSystem):
                     if c["blocks"] is True or cache[k]["blocks"] is True:
                         c["blocks"] = True
                     else:
-                        c["blocks"] = set(c["blocks"]).union(cache[k]["blocks"])
+                        # self.cached_files[*][*]["blocks"] must continue to
+                        # point to the same set object so that updates
+                        # performed by MMapCache are propagated back to
+                        # self.cached_files.
+                        blocks = cache[k]["blocks"]
+                        blocks.update(c["blocks"])
+                        c["blocks"] = blocks
                     c["time"] = max(c["time"], cache[k]["time"])
                     c["uid"] = cache[k]["uid"]
 
@@ -173,8 +180,8 @@ class CachingFileSystem(AbstractFileSystem):
         for c in cache.values():
             if isinstance(c["blocks"], set):
                 c["blocks"] = list(c["blocks"])
-        fn2 = tempfile.mktemp()
-        with open(fn2, "wb") as f:
+        fd2, fn2 = tempfile.mkstemp()
+        with open(fd2, "wb") as f:
             pickle.dump(cache, f)
         self._mkcache()
         move(fn2, fn)
@@ -229,9 +236,10 @@ class CachingFileSystem(AbstractFileSystem):
         raises PermissionError
         """
         path = self._strip_protocol(path)
-        _, fn = self._check_file(path)
-        if fn is None:
+        details = self._check_file(path)
+        if not details:
             return
+        _, fn = details
         if fn.startswith(self.storage[-1]):
             # is in in writable cache
             os.remove(fn)
@@ -320,7 +328,7 @@ class CachingFileSystem(AbstractFileSystem):
             f = compr[comp](f, mode="rb")
         if "blocksize" in detail:
             if detail["blocksize"] != f.blocksize:
-                raise ValueError(
+                raise BlocksizeMismatchError(
                     "Cached file must be reopened with same block"
                     "size as original (old: %i, new %i)"
                     "" % (detail["blocksize"], f.blocksize)
@@ -715,10 +723,13 @@ class LocalTempFile:
     """A temporary local file, which will be uploaded on commit"""
 
     def __init__(self, fs, path, fn=None, mode="wb", autocommit=True, seek=0):
-        fn = fn or tempfile.mktemp()
+        if fn:
+            self.fn = fn
+            self.fh = open(fn, mode)
+        else:
+            fd, self.fn = tempfile.mkstemp()
+            self.fh = open(fd, mode)
         self.mode = mode
-        self.fn = fn
-        self.fh = open(fn, mode)
         if seek:
             self.fh.seek(seek)
         self.path = path
@@ -751,6 +762,13 @@ class LocalTempFile:
 
     def commit(self):
         self.fs.put(self.fn, self.path)
+
+    @property
+    def name(self):
+        if isinstance(self.fh.name, str):
+            return self.fh.name  # initialized by open()
+        else:
+            return self.fn  # initialized by tempfile.mkstemp()
 
     def __getattr__(self, item):
         return getattr(self.fh, item)

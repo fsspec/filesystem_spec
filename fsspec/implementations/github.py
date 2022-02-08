@@ -156,15 +156,17 @@ class GithubFileSystem(AbstractFileSystem):
             if r.status_code == 404:
                 raise FileNotFoundError(path)
             r.raise_for_status()
+            types = {"blob": "file", "tree": "directory"}
             out = [
                 {
                     "name": path + "/" + f["path"] if path else f["path"],
                     "mode": f["mode"],
-                    "type": {"blob": "file", "tree": "directory"}[f["type"]],
+                    "type": types[f["type"]],
                     "size": f.get("size", 0),
                     "sha": f["sha"],
                 }
                 for f in r.json()["tree"]
+                if f["type"] in types
             ]
             if sha in [self.root, None]:
                 self.dircache[path] = out
