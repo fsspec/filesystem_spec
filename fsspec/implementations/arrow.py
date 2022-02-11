@@ -5,6 +5,7 @@ import secrets
 import shutil
 from contextlib import suppress
 from functools import wraps
+from setuptools._vendor.packaging import version
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import infer_storage_options, mirror_from, stringify_path
@@ -50,6 +51,12 @@ class ArrowFSWrapper(AbstractFileSystem):
             _, _, path = path.partition("://")
 
         return path
+
+    def pyarrow_filesystem_compression_detect(self) -> bool:
+        from pyarrow import __version__ as pyarrow_version
+        pyarrow_default_compression_started = version.parse('4.0')
+        pyarrow_version = version.parse(pyarrow_version)
+        return pyarrow_version >= pyarrow_default_compression_started
 
     def ls(self, path, detail=False, **kwargs):
         from pyarrow.fs import FileSelector
@@ -139,11 +146,17 @@ class ArrowFSWrapper(AbstractFileSystem):
     @wrap_exceptions
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         if mode == "rb":
-            stream = self.fs.open_input_stream(path)
+            method = self.fs.open_input_stream
         elif mode == "wb":
-            stream = self.fs.open_output_stream(path)
+            method = self.fs.open_output_stream
         else:
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
+
+        # Check if pyarrow detects compression
+        if self.pyarrow_filesystem_compression_detect():
+            stream = method(path, compression=None)
+        else:
+            stream = method(path)
 
         return ArrowFile(self, stream, path, mode, block_size, **kwargs)
 
