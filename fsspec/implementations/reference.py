@@ -436,7 +436,12 @@ class ReferenceFileSystem(AsyncFileSystem):
         return self.isdir(path) or self.isfile(path)
 
     def isdir(self, path):  # overwrite auto-sync version
-        return path in self.dircache
+        if self.dircache:
+            return path in self.dircache
+        else:
+            # this may be faster than building dircache for single calls, but
+            # by looping will be slow for many calls; could cache it?
+            return any(_.startswith(f"{path}/") for _ in self.references)
 
     def isfile(self, path):  # overwrite auto-sync version
         return path in self.references
