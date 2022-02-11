@@ -239,10 +239,10 @@ class ReferenceFileSystem(AsyncFileSystem):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
-        callback.lazy_call("set_size", len, data)
+        callback.set_size(len(data))
         with open(lpath, "wb") as f:
             f.write(data)
-        callback.lazy_call("absolute_update", len, data)
+        callback.absolute_update(len(data))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         if self.fs.async_impl:
