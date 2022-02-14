@@ -55,6 +55,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
 ``fsspec`` filesystems are also supported by:
 
 #. `pyarrow`_, the in-memory data layout engine
+#. `petl`_, a general purpose package for extracting, transforming and loading tables of data.
 
 ... plus many more that we don't know about.
 
@@ -66,7 +67,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
 .. _DVC: https://dvc.org/
 .. _kedro: https://kedro.readthedocs.io/en/stable/01_introduction/01_introduction.html
 .. _pyarrow: https://arrow.apache.org/docs/python/
-
+.. _petl: https://petl.readthedocs.io/en/stable/io.html#petl.io.remotes.RemoteSource
 
 Installation
 ------------
