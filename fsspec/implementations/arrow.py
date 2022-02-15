@@ -154,7 +154,7 @@ class ArrowFSWrapper(AbstractFileSystem):
 
         # Check if pyarrow detects compression
         _kwargs = {}
-        if self._pyarrow_version >= version.parse('4.0'):
+        if self.pyarrow_filesystem_compression_detect:
             _kwargs["compression"] = None
         stream = method(path, **_kwargs)
 
