@@ -153,10 +153,10 @@ class ArrowFSWrapper(AbstractFileSystem):
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
 
         # Check if pyarrow detects compression
-        if self.pyarrow_filesystem_compression_detect():
-            stream = method(path, compression=None)
-        else:
-            stream = method(path)
+        _kwargs = {}
+        if self._pyarrow_version >= version.parse("4.0"):
+            _kwargs["compression"] = None
+        stream = method(path, **_kwargs)
 
         return ArrowFile(self, stream, path, mode, block_size, **kwargs)
 
