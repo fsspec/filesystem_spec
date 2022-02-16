@@ -5,7 +5,6 @@ import secrets
 import shutil
 from contextlib import suppress
 from functools import wraps
-from setuptools._vendor.packaging import version
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import infer_storage_options, mirror_from, stringify_path
