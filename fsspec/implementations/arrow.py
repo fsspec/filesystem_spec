@@ -54,7 +54,7 @@ class ArrowFSWrapper(AbstractFileSystem):
 
     def pyarrow_filesystem_compression_detect(self) -> bool:
         from pyarrow import __version__ as pyarrow_version
-        pyarrow_default_compression_started = version.parse('4.0')
+        pyarrow_default_compression_started = version.parse("4.0")
         pyarrow_version = version.parse(pyarrow_version)
         return pyarrow_version >= pyarrow_default_compression_started
 
