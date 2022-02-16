@@ -52,12 +52,6 @@ class ArrowFSWrapper(AbstractFileSystem):
 
         return path
 
-    def pyarrow_filesystem_compression_detect(self) -> bool:
-        from pyarrow import __version__ as pyarrow_version
-        pyarrow_default_compression_started = version.parse("4.0")
-        pyarrow_version = version.parse(pyarrow_version)
-        return pyarrow_version >= pyarrow_default_compression_started
-
     def ls(self, path, detail=False, **kwargs):
         from pyarrow.fs import FileSelector
 
@@ -145,6 +139,10 @@ class ArrowFSWrapper(AbstractFileSystem):
 
     @wrap_exceptions
     def _open(self, path, mode="rb", block_size=None, **kwargs):
+        import pyarrow
+        from packaging import version
+
+
         if mode == "rb":
             method = self.fs.open_input_stream
         elif mode == "wb":
@@ -152,9 +150,9 @@ class ArrowFSWrapper(AbstractFileSystem):
         else:
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
 
-        # Check if pyarrow detects compression
         _kwargs = {}
-        if self.pyarrow_filesystem_compression_detect:
+        if version.parse(pyarrow.__version__) >= version.parse("4.0"):
+            # disable compression auto-detection
             _kwargs["compression"] = None
         stream = method(path, **_kwargs)
 
