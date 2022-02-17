@@ -43,11 +43,16 @@ class ArrowFSWrapper(AbstractFileSystem):
         self.fs = fs
         super().__init__(**kwargs)
 
+
+    @property
+    def _pyarrow_version_tuple(self) -> tuple:
+        from pyarrow._generated_version import version_tuple
+        return version_tuple
+
     @property
     @lru_cache()
-    def _PYARROW_GT4(self) -> bool:
-        import pyarrow
-        return pyarrow.__version__.split(".") > ["4"]
+    def _PYARROW_GTE4(self) -> bool:
+        return self._pyarrow_version_tuple >= (4,0,0)
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -152,7 +157,7 @@ class ArrowFSWrapper(AbstractFileSystem):
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
 
         _kwargs = {}
-        if self._PYARROW_GT4:
+        if self._PYARROW_GTE4:
             # disable compression auto-detection
             _kwargs["compression"] = None
         stream = method(path, **_kwargs)
