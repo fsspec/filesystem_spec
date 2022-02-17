@@ -234,9 +234,7 @@ async def _run_coros_in_chunks(
         ]
         if callback is not _DEFAULT_CALLBACK:
             [
-                t.add_done_callback(
-                    lambda *_, **__: callback.call("relative_update", 1)
-                )
+                t.add_done_callback(lambda *_, **__: callback.relative_update(1))
                 for t in chunk
             ]
         results.extend(
@@ -476,7 +474,7 @@ class AsyncFileSystem(AbstractFileSystem):
         batch_size = batch_size or self.batch_size
 
         coros = []
-        callback.call("set_size", len(file_pairs))
+        callback.set_size(len(file_pairs))
         for lfile, rfile in file_pairs:
             callback.branch(lfile, rfile, kwargs)
             coros.append(self._put_file(lfile, rfile, **kwargs))
@@ -515,7 +513,7 @@ class AsyncFileSystem(AbstractFileSystem):
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []
-        callback.lazy_call("set_size", len, lpaths)
+        callback.set_size(len(lpaths))
         for lpath, rpath in zip(lpaths, rpaths):
             callback.branch(rpath, lpath, kwargs)
             coros.append(self._get_file(rpath, lpath, **kwargs))

@@ -240,7 +240,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
-        callback.lazy_call("set_size", len, data)
+        callback.set_size(len(data))
         if isfilelike(lpath):
             lpath.writer(data)
         else:
@@ -440,7 +440,12 @@ class ReferenceFileSystem(AsyncFileSystem):
         return self.isdir(path) or self.isfile(path)
 
     def isdir(self, path):  # overwrite auto-sync version
-        return path in self.dircache
+        if self.dircache:
+            return path in self.dircache
+        else:
+            # this may be faster than building dircache for single calls, but
+            # by looping will be slow for many calls; could cache it?
+            return any(_.startswith(f"{path}/") for _ in self.references)
 
     def isfile(self, path):  # overwrite auto-sync version
         return path in self.references
