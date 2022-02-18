@@ -68,25 +68,29 @@ class GenericFileSystem(AsyncFileSystem):
         kw = {"blocksize": 0, "cache_type": "none"}
 
         if not fs.async_impl and not fs2.async_impl:
+            # all blocking
 
-            with fs.open(url, "rb", **kw) as f1, fs2.open(url2, "rb", **kw) as f2:
+            with fs.open(url, "rb", **kw) as f1, fs2.open(
+                url2, "rb", blocksize=blocksize
+            ) as f2:
                 callback.set_size(f1.size)
                 while True:
                     data = f1.read(blocksize)
                     if not data:
-                        # TODO:
                         return
                     f2.write(data)
                     callback.relative_update(len(data))
 
-        if fs.async_impl and fs2.async_impl:
+        elif fs.async_impl and fs2.async_impl:
+            # all async
 
-            with fs.open(url, "rb", **kw) as f1, fs2.open(url2, "rb", **kw) as f2:
+            async with fs.open(url, "rb", **kw) as f1, fs2.open(
+                url2, "rb", blocksize=blocksize
+            ) as f2:
                 callback.set_size(f1.size)
                 while True:
-                    data = f1.read(blocksize)
+                    data = await f1.read(blocksize)
                     if not data:
-                        # TODO:
                         return
-                    f2.write(data)
+                    await f2.write(data)
                     callback.relative_update(len(data))
