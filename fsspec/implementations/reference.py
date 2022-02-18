@@ -242,7 +242,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         data = self.cat_file(rpath, **kwargs)
         callback.set_size(len(data))
         if isfilelike(lpath):
-            lpath.writer(data)
+            lpath.write(data)
         else:
             with open(lpath, "wb") as f:
                 f.write(data)

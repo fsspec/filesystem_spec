@@ -58,21 +58,35 @@ class GenericFileSystem(AsyncFileSystem):
         **kwargs,
     ):
         fs = fs or _resolve_fs(url, method, protocol, storage_options)
-        protocol = protocol2 or split_protocol(url2)[0] or "file"
-        if protocol == fs.protocol or protocol in fs.protocol:
+        fs2 = fs2 or _resolve_fs(url2, method2, protocol2, storage_options2)
+        if fs is fs2:
             # pure remote
             if fs.async_impl:
                 return await fs._cp_file(url, url2, **kwargs)
             else:
                 return fs.cp_file(url, url2, **kwargs)
-        fs2 = fs2 or _resolve_fs(url2, method2, protocol2, storage_options2)
         kw = {"blocksize": 0, "cache_type": "none"}
 
-        with fs.open(url, "rb", **kw) as f1, fs2.open(url2, "rb", **kw) as f2:
-            callback.set_size(f1.size)
-            while True:
-                data = f1.read(blocksize)
-                if not data:
-                    return
-                f2.write(data)
-                callback.relative_update(len(data))
+        if not fs.async_impl and not fs2.async_impl:
+
+            with fs.open(url, "rb", **kw) as f1, fs2.open(url2, "rb", **kw) as f2:
+                callback.set_size(f1.size)
+                while True:
+                    data = f1.read(blocksize)
+                    if not data:
+                        # TODO:
+                        return
+                    f2.write(data)
+                    callback.relative_update(len(data))
+
+        if fs.async_impl and fs2.async_impl:
+
+            with fs.open(url, "rb", **kw) as f1, fs2.open(url2, "rb", **kw) as f2:
+                callback.set_size(f1.size)
+                while True:
+                    data = f1.read(blocksize)
+                    if not data:
+                        # TODO:
+                        return
+                    f2.write(data)
+                    callback.relative_update(len(data))
