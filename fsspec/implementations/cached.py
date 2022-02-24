@@ -180,8 +180,8 @@ class CachingFileSystem(AbstractFileSystem):
         for c in cache.values():
             if isinstance(c["blocks"], set):
                 c["blocks"] = list(c["blocks"])
-        fn2 = tempfile.mktemp()
-        with open(fn2, "wb") as f:
+        fd2, fn2 = tempfile.mkstemp()
+        with open(fd2, "wb") as f:
             pickle.dump(cache, f)
         self._mkcache()
         move(fn2, fn)
@@ -723,10 +723,13 @@ class LocalTempFile:
     """A temporary local file, which will be uploaded on commit"""
 
     def __init__(self, fs, path, fn=None, mode="wb", autocommit=True, seek=0):
-        fn = fn or tempfile.mktemp()
+        if fn:
+            self.fn = fn
+            self.fh = open(fn, mode)
+        else:
+            fd, self.fn = tempfile.mkstemp()
+            self.fh = open(fd, mode)
         self.mode = mode
-        self.fn = fn
-        self.fh = open(fn, mode)
         if seek:
             self.fh.seek(seek)
         self.path = path
@@ -759,6 +762,13 @@ class LocalTempFile:
 
     def commit(self):
         self.fs.put(self.fn, self.path)
+
+    @property
+    def name(self):
+        if isinstance(self.fh.name, str):
+            return self.fh.name  # initialized by open()
+        else:
+            return self.fn  # initialized by tempfile.mkstemp()
 
     def __getattr__(self, item):
         return getattr(self.fh, item)

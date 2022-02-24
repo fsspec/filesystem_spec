@@ -10,7 +10,6 @@ from hashlib import md5
 from urllib.parse import urlsplit
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
-PY36 = sys.version_info < (3, 7)
 
 
 def infer_storage_options(urlpath, inherit_storage_options=None):
@@ -281,7 +280,11 @@ def tokenize(*args, **kwargs):
     """
     if kwargs:
         args += (kwargs,)
-    return md5(str(args).encode()).hexdigest()
+    try:
+        return md5(str(args).encode()).hexdigest()
+    except ValueError:
+        # FIPS systems: https://github.com/fsspec/filesystem_spec/issues/380
+        return md5(str(args).encode(), usedforsecurity=False).hexdigest()
 
 
 def stringify_path(filepath):
@@ -297,8 +300,8 @@ def stringify_path(filepath):
 
     Notes
     -----
-    Objects supporting the fspath protocol (Python 3.6+) are coerced
-    according to its __fspath__ method.
+    Objects supporting the fspath protocol are coerced according to its
+    __fspath__ method.
 
     For backwards compatibility with older Python version, pathlib.Path
     objects are specially coerced.

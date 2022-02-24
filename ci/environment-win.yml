@@ -12,8 +12,10 @@ dependencies:
   - pyftpdlib
   - cloudpickle
   - pytest
+  - pytest-asyncio
   - pytest-benchmark
   - pytest-cov
+  - pytest-mock
   - pytest-vcr
   - python-libarchive-c
   - numpy

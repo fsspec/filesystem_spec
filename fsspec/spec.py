@@ -4,7 +4,6 @@ import os
 import threading
 import warnings
 import weakref
-from distutils.version import LooseVersion
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
@@ -13,14 +12,7 @@ from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
-from .utils import (
-    _unstrip_protocol,
-    get_package_version_without_import,
-    other_paths,
-    read_block,
-    stringify_path,
-    tokenize,
-)
+from .utils import _unstrip_protocol, other_paths, read_block, stringify_path, tokenize
 
 logger = logging.getLogger("fsspec")
 
@@ -88,20 +80,7 @@ class _Cached(type):
             return obj
 
 
-pa_version = get_package_version_without_import("pyarrow")
-if pa_version and LooseVersion(pa_version) < LooseVersion("2.0"):
-    try:
-        import pyarrow as pa
-
-        up = pa.filesystem.DaskFileSystem
-    except ImportError:  # pragma: no cover
-        # pyarrow exists but doesn't import for some reason
-        up = object
-else:  # pragma: no cover
-    up = object
-
-
-class AbstractFileSystem(up, metaclass=_Cached):
+class AbstractFileSystem(metaclass=_Cached):
     """
     An abstract super-class for pythonic file-systems
 
@@ -803,13 +782,13 @@ class AbstractFileSystem(up, metaclass=_Cached):
             return None
 
         with open(lpath, "rb") as f1:
-            callback.set_size(f1.seek(0, 2))
+            size = f1.seek(0, 2)
+            callback.set_size(size)
             f1.seek(0)
 
             self.mkdirs(self._parent(os.fspath(rpath)), exist_ok=True)
             with self.open(rpath, "wb", **kwargs) as f2:
-                data = True
-                while data:
+                while f1.tell() < size:
                     data = f1.read(self.blocksize)
                     segment_len = f2.write(data)
                     callback.relative_update(segment_len)

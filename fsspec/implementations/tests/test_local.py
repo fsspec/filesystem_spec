@@ -9,7 +9,6 @@ import posixpath
 import sys
 import tempfile
 from contextlib import contextmanager
-from distutils.version import LooseVersion
 from pathlib import Path
 from unittest.mock import patch
 
@@ -183,9 +182,6 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize("mode", ["rt", "rb"])
 @pytest.mark.parametrize("fmt", list(compression.compr))
 def test_compressions(fmt, mode, tmpdir):
-    if fmt == "zip" and sys.version_info < (3, 6):
-        pytest.xfail("zip compression requires python3.6 or higher")
-
     tmpdir = str(tmpdir)
     fn = os.path.join(tmpdir, ".tmp.getsize")
     fs = LocalFileSystem()
@@ -344,22 +340,6 @@ def test_touch(tmpdir):
     info2 = fs.info(fn)
     if not WIN:
         assert info2["mtime"] > info["mtime"]
-
-
-def test_get_pyarrow_filesystem():
-    pa = pytest.importorskip("pyarrow")
-
-    fs = LocalFileSystem()
-    if LooseVersion(pa.__version__) < LooseVersion("2.0"):
-        assert isinstance(fs, pa.filesystem.FileSystem)
-        assert fs._get_pyarrow_filesystem() is fs
-    else:
-        assert not isinstance(fs, pa.filesystem.FileSystem)
-
-    class UnknownFileSystem(object):
-        pass
-
-    assert not isinstance(UnknownFileSystem(), pa.filesystem.FileSystem)
 
 
 def test_directories(tmpdir):

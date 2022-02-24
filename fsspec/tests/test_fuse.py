@@ -1,5 +1,4 @@
 import os
-import signal
 import subprocess
 import time
 from multiprocessing import Process
@@ -69,8 +68,11 @@ def test_basic(tmpdir, capfd):
         os.rmdir(fn + "/inner")
         os.rmdir(fn)
     finally:
-        os.kill(fuse_process.pid, signal.SIGTERM)
-        fuse_process.join()
+        fuse_process.terminate()
+        fuse_process.join(timeout=10)
+        if fuse_process.is_alive():
+            fuse_process.kill()
+            fuse_process.join()
 
 
 def host_mount_local(source_dir, mount_dir, debug_log):
@@ -94,8 +96,11 @@ def mount_local(tmpdir):
     try:
         yield (source_dir, mount_dir)
     finally:
-        os.kill(fuse_process.pid, signal.SIGTERM)
-        fuse_process.join()
+        fuse_process.terminate()
+        fuse_process.join(timeout=10)
+        if fuse_process.is_alive():
+            fuse_process.kill()
+            fuse_process.join()
 
 
 def test_mount(mount_local):
@@ -124,3 +129,18 @@ def test_chmod(mount_local):
     assert cp.stdout == b""
     assert set(os.listdir(source_dir)) == set(["text", "new"])
     assert open(mount_dir / "new").read() == "test"
+
+
+def test_seek_rw(mount_local):
+    source_dir, mount_dir = mount_local
+    fh = open(mount_dir / "text", "w")
+    fh.write("teST")
+    fh.seek(2)
+    fh.write("st")
+    fh.close()
+
+    fh = open(mount_dir / "text", "r")
+    assert fh.read() == "test"
+    fh.seek(2)
+    assert fh.read() == "st"
+    fh.close()

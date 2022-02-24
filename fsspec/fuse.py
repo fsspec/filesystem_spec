@@ -82,6 +82,7 @@ class FUSEr(Operations):
     def write(self, path, data, offset, fh):
         logger.debug("write %s", (path, offset))
         f = self.cache[fh]
+        f.seek(offset)
         f.write(data)
         return len(data)
 

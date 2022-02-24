@@ -256,10 +256,10 @@ class ReferenceFileSystem(AsyncFileSystem):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
-        callback.lazy_call("set_size", len, data)
+        callback.set_size(len(data))
         with open(lpath, "wb") as f:
             f.write(data)
-        callback.lazy_call("absolute_update", len, data)
+        callback.absolute_update(len(data))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
         if isinstance(lpath, list):
@@ -321,7 +321,6 @@ class ReferenceFileSystem(AsyncFileSystem):
 
         if self.templates:
             self.df["url"] = self.df["url"].map(_render_jinja)
-        self._dircache_from_items()
 
     def _process_references(self, references, template_overrides=None):
         if isinstance(references, (str, bytes)):
@@ -335,7 +334,6 @@ class ReferenceFileSystem(AsyncFileSystem):
             raise ValueError(f"Unknown reference spec version: {vers}")
         # TODO: we make dircache by iterating over all entries, but for Spec >= 1,
         #  can replace with programmatic. Is it even needed for mapper interface?
-        self._dircache_from_items()
 
     def _process_references0(self, references):
         """Make reference dict for Spec Version 0"""
@@ -362,7 +360,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 if v.startswith("base64:"):
                     self.references[k] = base64.b64decode(v[7:])
                 self.references[k] = v
-            else:
+            elif self.templates:
                 u = v[0]
                 if "{{" in u:
                     if self.simple_templates:
@@ -374,6 +372,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                     else:
                         u = _render_jinja(u)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
+            else:
+                self.references[k] = v
         self.references.update(self._process_gen(references.get("gen", [])))
 
     def _process_templates(self, tmp):
@@ -464,6 +464,8 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
+        if not self.dircache:
+            self._dircache_from_items()
         out = self._ls_from_cache(path)
         if out is None:
             raise FileNotFoundError
@@ -472,16 +474,18 @@ class ReferenceFileSystem(AsyncFileSystem):
         return [o["name"] for o in out]
 
     def exists(self, path, **kwargs):  # overwrite auto-sync version
-        try:
-            return self._ls_from_cache(path) is not None
-        except FileNotFoundError:
-            return False
+        return self.isdir(path) or self.isfile(path)
 
     def isdir(self, path):  # overwrite auto-sync version
-        return self.exists(path) and self.info(path)["type"] == "directory"
+        if self.dircache:
+            return path in self.dircache
+        else:
+            # this may be faster than building dircache for single calls, but
+            # by looping will be slow for many calls; could cache it?
+            return any(_.startswith(f"{path}/") for _ in self.references)
 
     def isfile(self, path):  # overwrite auto-sync version
-        return self.exists(path) and self.info(path)["type"] == "file"
+        return path in self.references
 
     async def _ls(self, path, detail=True, **kwargs):  # calls fast sync code
         return self.ls(path, detail, **kwargs)
