@@ -103,9 +103,13 @@ class ReferenceFileSystem(AsyncFileSystem):
             order.
         remote_options : dict
             kwargs to go with remote_protocol
-        fs : file system instance
-            Directly provide a file system, if you want to configure it beforehand. This
-            takes precedence over target_protocol/target_options
+        fs : AbstractFileSystem | dict(str, (AbstractFileSystem | dict))
+            Directly provide a file system(s):
+                - a single filesystem instance
+                - a dict of protocol:filesystem, where each value is either a filesystem
+                  instance, or a dict of kwargs that can be used to create in
+                  instance for the given protocol
+            If this is given, remote_options and remote_protocol are ignored.
         template_overrides : dict
             Swap out any templates in the references file with these - useful for
             testing.
