@@ -15,7 +15,6 @@ except ImportError:
 from ..asyn import AsyncFileSystem, sync
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
-from ..mapping import get_mapper
 from ..spec import AbstractFileSystem
 
 logger = logging.getLogger("fsspec.reference")
@@ -77,7 +76,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         template_overrides=None,
         simple_templates=True,
         loop=None,
-        ref_type=None,
         **kwargs,
     ):
         """
@@ -111,9 +109,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         template_overrides : dict
             Swap out any templates in the references file with these - useful for
             testing.
-        ref_type : "json" | "parquet" | "zarr"
-            If None, guessed from URL suffix, defaulting to JSON. Ignored if fo
-            is not a string.
         simple_templates: bool
             Whether templates can be processed with simple replace (True) or if
             jinja  is needed (False, much slower). All reference sets produced by
@@ -135,43 +130,26 @@ class ReferenceFileSystem(AsyncFileSystem):
             else:
                 extra = {}
             dic = dict(**(ref_storage_args or target_options or {}), **extra)
-            if ref_type == "zarr" or fo.endswith("zarr"):
-                import pandas as pd
-                import zarr
-
-                self.dataframe = True
-                m = get_mapper(fo, **dic)
-                z = zarr.open_group(m)
-                assert z.attrs["version"] == 1
-                self.templates = z.attrs["templates"]
-                self.gen = z.attrs.get("gen", None)
-                self.df = pd.DataFrame(
-                    {k: z[k][:] for k in ["key", "data", "url", "offset", "size"]}
-                ).set_index("key")
-            elif ref_type == "parquet" or fo.endswith("parquet"):
-                import fastparquet as fp
-
-                self.dataframe = True
-                with open(fo, "rb", **dic) as f:
-                    pf = fp.ParquetFile(f)
-                    assert pf.key_value_metadata["version"] == 1
-                    self.templates = json.loads(pf.key_value_metadata["templates"])
-                    self.gen = json.loads(pf.key_value_metadata.get("gen", "[]"))
-                    self.df = pf.to_pandas(index="key")
-            else:
-                # text JSON
-                with open(fo, "rb", **dic) as f:
-                    logger.info("Read reference from URL %s", fo)
-                    text = f.read()
+            # text JSON
+            with open(fo, "rb", **dic) as f:
+                logger.info("Read reference from URL %s", fo)
+                text = f.read()
         else:
-            # dictionaries; TODO: allow dataframe here?
+            # dictionaries
             text = fo
         if self.dataframe:
             self._process_dataframe()
         else:
             self._process_references(text, template_overrides)
         if isinstance(fs, dict):
-            self.fss = fs
+            self.fss = {
+                k: (
+                    fsspec.filesystem(k.split(":", 1)[0], **opts)
+                    if isinstance(opts, dict)
+                    else opts
+                )
+                for k, opts in fs.items()
+            }
             return
         if fs is not None:
             # single remote FS
@@ -180,6 +158,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             )
 
         if remote_protocol is None:
+            # get single protocol from any templates
             for ref in self.templates.values():
                 if callable(ref):
                     ref = ref()
@@ -188,6 +167,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     remote_protocol = protocol
                     break
         if remote_protocol is None:
+            # get single protocol from references
             for ref in self.references.values():
                 if callable(ref):
                     ref = ref()
