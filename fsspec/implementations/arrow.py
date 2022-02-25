@@ -43,7 +43,6 @@ class ArrowFSWrapper(AbstractFileSystem):
         self.fs = fs
         super().__init__(**kwargs)
 
-
     @property
     def _pyarrow_version_tuple(self) -> tuple:
         from pyarrow import __version__
@@ -52,7 +51,7 @@ class ArrowFSWrapper(AbstractFileSystem):
     @property
     @lru_cache()
     def _PYARROW_GTE4(self) -> bool:
-        return self._pyarrow_version_tuple >= (4,0,0)
+        return self._pyarrow_version_tuple >= (4, 0, 0)
 
     @classmethod
     def _strip_protocol(cls, path):

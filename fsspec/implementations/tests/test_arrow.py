@@ -184,15 +184,15 @@ def test_open_rw_flush(fs, remote_dir):
 
 
 def test_PYARROW_GTE4(fs):
-    with mock.patch('fsspec.implementations.arrow.ArrowFSWrapper._pyarrow_version_tuple', new_callable=mock.PropertyMock) as mock_pyarrow_version_tuple:
-        mock_pyarrow_version_tuple.return_value = (1,0,0)
-        assert fs._PYARROW_GTE4 == False
+    with mock.patch('fsspec.implementations.arrow.ArrowFSWrapper._pyarrow_version_tuple', new_callable=mock.PropertyMock) as mock_pyarrow_version_tuple:  # noqa: E501
+        mock_pyarrow_version_tuple.return_value = (1, 0, 0)
+        assert fs._PYARROW_GTE4 is False
         ArrowFSWrapper._PYARROW_GTE4.fget.cache_clear()
 
-        mock_pyarrow_version_tuple.return_value = (4,0,0)
-        assert fs._PYARROW_GTE4 == True
+        mock_pyarrow_version_tuple.return_value = (4, 0, 0)
+        assert fs._PYARROW_GTE4 is True
         ArrowFSWrapper._PYARROW_GTE4.fget.cache_clear()
 
         mock_pyarrow_version_tuple.return_value = (5, )
-        assert fs._PYARROW_GTE4 == True
+        assert fs._PYARROW_GTE4 is True
         ArrowFSWrapper._PYARROW_GTE4.fget.cache_clear()
