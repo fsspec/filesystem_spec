@@ -4,7 +4,7 @@ import os
 import secrets
 import shutil
 from contextlib import suppress
-from functools import lru_cache, wraps
+from functools import wraps
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import infer_storage_options, mirror_from, stringify_path
@@ -28,6 +28,9 @@ def wrap_exceptions(func):
     return wrapper
 
 
+PYARROW_VERSION = None
+
+
 class ArrowFSWrapper(AbstractFileSystem):
     """FSSpec-compatible wrapper of pyarrow.fs.FileSystem.
 
@@ -40,18 +43,12 @@ class ArrowFSWrapper(AbstractFileSystem):
     root_marker = "/"
 
     def __init__(self, fs, **kwargs):
+        from pyarrow import __version__
+
+        global PYARROW_VERSION
+        PYARROW_VERSION = tuple(map(int, __version__.split(".")))
         self.fs = fs
         super().__init__(**kwargs)
-
-    @property
-    def _pyarrow_version_tuple(self) -> tuple:
-        from pyarrow import __version__
-        return tuple(map(int, __version__.split('.')))
-
-    @property
-    @lru_cache()
-    def _PYARROW_GTE4(self) -> bool:
-        return self._pyarrow_version_tuple >= (4, 0, 0)
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -156,7 +153,7 @@ class ArrowFSWrapper(AbstractFileSystem):
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
 
         _kwargs = {}
-        if self._PYARROW_GTE4:
+        if PYARROW_VERSION[0] >= 4:
             # disable compression auto-detection
             _kwargs["compression"] = None
         stream = method(path, **_kwargs)
