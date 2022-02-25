@@ -46,8 +46,8 @@ class ArrowFSWrapper(AbstractFileSystem):
 
     @property
     def _pyarrow_version_tuple(self) -> tuple:
-        from pyarrow._generated_version import version_tuple
-        return version_tuple
+        from pyarrow import __version__
+        return tuple(map(int, __version__.split('.')))
 
     @property
     @lru_cache()
