@@ -1,6 +1,7 @@
 import secrets
-import pytest
 from unittest import mock
+
+import pytest
 
 pyarrow_fs = pytest.importorskip("pyarrow.fs")
 FileSystem = pyarrow_fs.FileSystem

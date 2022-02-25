@@ -4,7 +4,7 @@ import os
 import secrets
 import shutil
 from contextlib import suppress
-from functools import wraps, lru_cache
+from functools import lru_cache, wraps
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import infer_storage_options, mirror_from, stringify_path
