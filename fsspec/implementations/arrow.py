@@ -28,6 +28,9 @@ def wrap_exceptions(func):
     return wrapper
 
 
+PYARROW_VERSION = None
+
+
 class ArrowFSWrapper(AbstractFileSystem):
     """FSSpec-compatible wrapper of pyarrow.fs.FileSystem.
 
@@ -40,6 +43,10 @@ class ArrowFSWrapper(AbstractFileSystem):
     root_marker = "/"
 
     def __init__(self, fs, **kwargs):
+        from pyarrow import __version__
+
+        global PYARROW_VERSION
+        PYARROW_VERSION = tuple(map(int, __version__.split(".")))
         self.fs = fs
         super().__init__(**kwargs)
 
@@ -139,11 +146,17 @@ class ArrowFSWrapper(AbstractFileSystem):
     @wrap_exceptions
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         if mode == "rb":
-            stream = self.fs.open_input_stream(path)
+            method = self.fs.open_input_stream
         elif mode == "wb":
-            stream = self.fs.open_output_stream(path)
+            method = self.fs.open_output_stream
         else:
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
+
+        _kwargs = {}
+        if PYARROW_VERSION[0] >= 4:
+            # disable compression auto-detection
+            _kwargs["compression"] = None
+        stream = method(path, **_kwargs)
 
         return ArrowFile(self, stream, path, mode, block_size, **kwargs)
 
