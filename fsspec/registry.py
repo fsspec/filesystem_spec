@@ -251,3 +251,8 @@ def filesystem(protocol, **storage_options):
     """
     cls = get_filesystem_class(protocol)
     return cls(**storage_options)
+
+
+def available_protocol():
+    """Return a list of the available protocols."""
+    return list(known_implementations.keys())

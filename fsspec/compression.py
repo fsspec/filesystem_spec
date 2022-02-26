@@ -166,3 +166,8 @@ try:
     register_compression("zstd", zstandard_file, "zst")
 except ImportError:
     pass
+
+
+def available_compression():
+    """Return a list of the available compressions."""
+    return list(compr.keys())
