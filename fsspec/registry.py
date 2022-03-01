@@ -86,6 +86,7 @@ default = "file"
 # updated with register_implementation
 known_implementations = {
     "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
+    "local": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
     "dropbox": {
         "class": "dropboxdrivefs.DropboxDriveFileSystem",
@@ -254,5 +255,5 @@ def filesystem(protocol, **storage_options):
 
 
 def available_protocol():
-    """Return a list of the available protocols."""
+    """Return a list of the implemented protocols."""
     return list(known_implementations.keys())

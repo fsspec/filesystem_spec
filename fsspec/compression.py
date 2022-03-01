@@ -169,5 +169,5 @@ except ImportError:
 
 
 def available_compression():
-    """Return a list of the available compressions."""
+    """Return a list of the implemented compressions."""
     return list(compr.keys())
