@@ -21,8 +21,8 @@ User Functions
 .. autofunction:: fsspec.open_files
 .. autofunction:: fsspec.open
 .. autofunction:: fsspec.open_local
-.. autofunction:: fsspec.available_compression
-.. autofunction:: fsspec.available_protocol
+.. autofunction:: fsspec.available_compressions
+.. autofunction:: fsspec.available_protocols
 .. autofunction:: fsspec.filesystem
 .. autofunction:: fsspec.get_filesystem_class
 .. autofunction:: fsspec.get_mapper
