@@ -28,7 +28,7 @@ Look-up via registry:
 
     import fsspec
 
-    fs = fsspec.filesystem('local')
+    fs = fsspec.filesystem('file')
 
 Many filesystems also take extra parameters, some of which may be options - see :doc:`api`, or use
 :func:`fsspec.get_filesystem_class` to get the class object and inspect its docstring.
@@ -39,7 +39,7 @@ Many filesystems also take extra parameters, some of which may be options - see 
 
     fs = fsspec.filesystem('ftp', host=host, port=port, username=user, password=pw)
 
-The list of implemented ``fsspec`` protocols can be retrieved using :func:`fsspec.available_protocol`.
+The list of implemented ``fsspec`` protocols can be retrieved using :func:`fsspec.available_protocols`.
 
 Use a file-system
 -----------------

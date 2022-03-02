@@ -168,6 +168,6 @@ except ImportError:
     pass
 
 
-def available_compression():
+def available_compressions():
     """Return a list of the implemented compressions."""
-    return list(compr.keys())
+    return list(compr)

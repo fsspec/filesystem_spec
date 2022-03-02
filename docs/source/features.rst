@@ -69,7 +69,7 @@ Transparent text-mode and compression
 As mentioned above, the ``OpenFile`` class allows for the opening of files on a binary store,
 which appear to be in text mode and/or allow for a compression/decompression layer between the
 caller and the back-end storage system. The list of ``fsspec`` supported codec
-can be retrieved using :func:`fsspec.available_compression`.
+can be retrieved using :func:`fsspec.available_compressions`.
 From the user's point of view, this is achieved simply by passing arguments to
 the :func:`fsspec.open_files` or :func:`fsspec.open` functions, and
 thereafter happens transparently.
