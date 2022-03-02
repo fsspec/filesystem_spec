@@ -9,10 +9,12 @@ except ImportError:  # python < 3.8
 
 from . import _version, caching
 from .callbacks import Callback
+from .compression import available_compressions
 from .core import get_fs_token_paths, open, open_files, open_local
 from .exceptions import FSTimeoutError
 from .mapping import FSMap, get_mapper
 from .registry import (
+    available_protocols,
     filesystem,
     get_filesystem_class,
     register_implementation,
@@ -37,6 +39,8 @@ __all__ = [
     "registry",
     "caching",
     "Callback",
+    "available_protocols",
+    "available_compressions",
 ]
 
 
