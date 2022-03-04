@@ -88,7 +88,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
         out = {}
         for ti in self.tar:
             info = ti.get_info()
-            info["type"] = typemap[info["type"]]
+            info["type"] = typemap.get(info["type"], "file")
             name = ti.get_info()["name"].rstrip("/")
             out[name] = (info, ti.offset_data)
 
@@ -96,14 +96,17 @@ class TarFileSystem(AbstractArchiveFileSystem):
         # TODO: save index to self.index_store here, if set
 
     def _get_dirs(self):
-
         if self.dir_cache is not None:
             return
 
-        self.dir_cache = {}
+        # This enables ls to get directories as children as well as files
+        self.dir_cache = {
+            dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+            for dirname in self._all_dirnames(self.tar.getnames())
+        }
         for member in self.tar.getmembers():
             info = member.get_info()
-            info["type"] = typemap[info["type"]]
+            info["type"] = typemap.get(info["type"], "file")
             self.dir_cache[info["name"]] = info
 
     def _open(self, path, mode="rb", **kwargs):
