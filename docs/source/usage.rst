@@ -39,6 +39,8 @@ Many filesystems also take extra parameters, some of which may be options - see 
 
     fs = fsspec.filesystem('ftp', host=host, port=port, username=user, password=pw)
 
+The list of implemented ``fsspec`` protocols can be retrieved using :func:`fsspec.available_protocols`.
+
 Use a file-system
 -----------------
 

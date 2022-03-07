@@ -414,7 +414,7 @@ class AsyncFileSystem(AbstractFileSystem):
     ):
         # TODO: on_error
         if max_gap is not None:
-            # to be implemented in utils
+            # use utils.merge_offset_ranges
             raise NotImplementedError
         if not isinstance(paths, list):
             raise TypeError

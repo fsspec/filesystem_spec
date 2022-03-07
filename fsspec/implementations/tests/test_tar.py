@@ -1,12 +1,17 @@
 import os
 import shutil
+import tarfile
 import tempfile
+from io import BytesIO
+from pathlib import Path
+from typing import Dict
 
 import pytest
 
 import fsspec
 from fsspec.core import OpenFile
 from fsspec.implementations.cached import WholeFileCacheFileSystem
+from fsspec.implementations.tar import TarFileSystem
 from fsspec.implementations.tests.test_archive import archive_data, temptar
 
 
@@ -171,7 +176,6 @@ def test_filesystem_cached(recipe, tmpdir):
     ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
 )
 def test_url_to_fs_direct(recipe, tmpdir):
-
     with temptar(archive_data, mode=recipe["mode"], suffix=recipe["suffix"]) as tf:
         url = f"tar://inner::file://{tf}"
         fs, url = fsspec.core.url_to_fs(url=url)
@@ -189,8 +193,48 @@ def test_url_to_fs_direct(recipe, tmpdir):
     ids=["tar", "tar-gz", "tar-bz2", "tar-xz"],
 )
 def test_url_to_fs_cached(recipe, tmpdir):
-
     with temptar(archive_data, mode=recipe["mode"], suffix=recipe["suffix"]) as tf:
         url = f"tar://inner::simplecache::file://{tf}"
         fs, url = fsspec.core.url_to_fs(url=url)
         assert fs.cat("b") == b"hello"
+
+
+@pytest.mark.parametrize(
+    "compression", ["", "gz", "bz2", "xz"], ids=["tar", "tar-gz", "tar-bz2", "tar-xz"]
+)
+def test_ls_with_folders(compression: str, tmp_path: Path):
+    """
+    Create a tar file that doesn't include the intermediate folder structure,
+    but make sure that the reading filesystem is still able to resolve the
+    intermediate folders, like the ZipFileSystem.
+    """
+    tar_data: Dict[str, bytes] = {
+        "a.pdf": b"Hello A!",
+        "b/c.pdf": b"Hello C!",
+        "d/e/f.pdf": b"Hello F!",
+        "d/g.pdf": b"Hello G!",
+    }
+    if compression:
+        temp_archive_file = tmp_path / f"test_tar_file.tar.{compression}"
+    else:
+        temp_archive_file = tmp_path / "test_tar_file.tar"
+    with open(temp_archive_file, "wb") as fd:
+        # We need to manually write the tarfile here, because temptar
+        # creates intermediate directories which is not how tars are always created
+        with tarfile.open(fileobj=fd, mode=f"w:{compression}") as tf:
+            for tar_file_path, data in tar_data.items():
+                content = data
+                info = tarfile.TarInfo(name=tar_file_path)
+                info.size = len(content)
+                tf.addfile(info, BytesIO(content))
+    with open(temp_archive_file, "rb") as fd:
+        fs = TarFileSystem(fd)
+        assert fs.find("/", withdirs=True) == [
+            "a.pdf",
+            "b/",
+            "b/c.pdf",
+            "d/",
+            "d/e/",
+            "d/e/f.pdf",
+            "d/g.pdf",
+        ]

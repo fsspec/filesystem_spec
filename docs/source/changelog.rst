@@ -1,6 +1,24 @@
 Changelog
 =========
 
+2022.02.0
+---------
+
+Enhancements
+
+- reference FS performance (#892, 900)
+- directory/prefix FS (#745)
+
+Fixes
+
+- FUSE (#905, 891)
+- iteration in threads (#893)
+- OpenFiles slicing (#887)
+
+Other
+
+- drop py36 (#889, 901)
+
 2022.01.0
 ---------
 
