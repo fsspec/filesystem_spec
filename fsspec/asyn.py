@@ -816,8 +816,9 @@ def _dump_running_tasks(
     return out
 
 
-class AbstractAsyncFile(AbstractBufferedFile):
+class AbstractAsyncStreamedFile(AbstractBufferedFile):
     # no read buffering, and always auto-commit
+    # TODO: readahead might still be useful here, but needs async version
 
     async def read(self, length=-1):
         """
