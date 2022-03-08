@@ -279,25 +279,44 @@ class ReferenceFileSystem(AsyncFileSystem):
                     self, paths, lpath, recursive=recursive, **kwargs
                 )
 
-    def cat(self, path, recursive=False, **kwargs):
+    def cat(self, path, recursive=False, on_error="raise", **kwargs):
         proto_dict = _protocol_groups(path, self.references)
         out = {}
         for proto, paths in proto_dict.items():
             if proto is None:
                 # binary/string
-                out.update(
-                    {p: AbstractFileSystem.cat_file(self, p, **kwargs) for p in paths}
-                )
+                for p in paths:
+                    try:
+                        out[p] = AbstractFileSystem.cat_file(self, p, **kwargs)
+                    except Exception as e:
+                        if on_error == "raise":
+                            raise
+                        if on_error == "return":
+                            out[p] = e
 
             elif self.fss[proto].async_impl:
                 # TODO: asyncio.gather on multiple async FSs
-                out.update(sync(self.loop, self._cat, paths, recursive, **kwargs))
+                out.update(
+                    sync(
+                        self.loop,
+                        self._cat,
+                        paths,
+                        recursive,
+                        on_error=on_error,
+                        **kwargs,
+                    )
+                )
             elif isinstance(paths, list):
                 if recursive or any("*" in p for p in paths):
                     raise NotImplementedError
-                out.update(
-                    {p: AbstractFileSystem.cat_file(self, p, **kwargs) for p in paths}
-                )
+                for p in paths:
+                    try:
+                        out[p] = AbstractFileSystem.cat_file(self, p, **kwargs)
+                    except Exception as e:
+                        if on_error == "raise":
+                            raise
+                        if on_error == "return":
+                            out[p] = e
             else:
                 out.update(AbstractFileSystem.cat_file(self, paths))
         if len(out) == 1 and isinstance(path, str) and "*" not in path:

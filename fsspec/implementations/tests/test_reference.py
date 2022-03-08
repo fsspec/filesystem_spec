@@ -279,3 +279,23 @@ def test_multi_fs_created(m, tmpdir):
         "b": b"01234",
         "c/e": b"hello",
     }
+
+
+def test_missing_nonasync(m):
+    zarr = pytest.importorskip("zarr")
+    zarray = {
+        "chunks": [1],
+        "compressor": None,
+        "dtype": "<f8",
+        "fill_value": "NaN",
+        "filters": [],
+        "order": "C",
+        "shape": [10],
+        "zarr_format": 2,
+    }
+    refs = {".zarray": json.dumps(zarray)}
+
+    m = fsspec.get_mapper("reference://", fo=refs, remote_protocol="memory")
+
+    a = zarr.open_array(m)
+    assert str(a[0]) == "nan"
