@@ -526,6 +526,10 @@ class ReferenceFileSystem(AsyncFileSystem):
         out0 = [o for o in out if o["name"] == path]
         if not out0:
             return {"name": path, "type": "directory", "size": 0}
+        if out0[0]["size"] is None:
+            # if this is a whole remote file, update size using remote FS
+            prot, _ = split_protocol(self.references[path][0])
+            out0[0]["size"] = self.fss[prot].size(self.references[path][0])
         return out0[0]
 
     async def _info(self, path, **kwargs):  # calls fast sync code
