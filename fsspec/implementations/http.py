@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 import aiohttp
 import requests
 
-from fsspec.asyn import AbstractAsyncFile, AsyncFileSystem, sync, sync_wrapper
+from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
@@ -103,9 +103,6 @@ class HTTPFileSystem(AsyncFileSystem):
         request_options.pop("max_paths", None)
         request_options.pop("skip_instance_cache", None)
         self.kwargs = request_options
-
-        if not asynchronous:
-            sync(self.loop, self.set_session)
 
     @staticmethod
     def close_session(loop, session):
@@ -694,9 +691,8 @@ class HTTPStreamFile(AbstractBufferedFile):
         return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)
 
 
-class AsyncStreamFile(AbstractAsyncFile):
+class AsyncStreamFile(AbstractAsyncStreamedFile):
     def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
-        kwargs.pop("asynchronous", False)
         self.url = url
         self.loop = loop
         self.session = session

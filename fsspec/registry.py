@@ -193,6 +193,7 @@ known_implementations = {
         "err": "LibArchive requires to be installed",
     },
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
+    "generic": {"class": "fsspec.generic.GenericFileSystem"},
 }
 
 
