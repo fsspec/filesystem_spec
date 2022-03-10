@@ -37,6 +37,21 @@ def test_ls(server):  # noqa: F811
     assert fs.find("", withdirs=True) == ["a", "b", "c", "c/d"]
 
 
+def test_info(server):  # noqa: F811
+    refs = {
+        "a": b"data",
+        "b": (realfile, 0, 5),
+        "c/d": (realfile, 1, 6),
+        "e": (realfile,),
+    }
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    fs = fsspec.filesystem("reference", fo=refs, fs=h)
+    assert fs.size("a") == 4
+    assert fs.size("b") == 5
+    assert fs.size("c/d") == 6
+    assert fs.info("e")["size"] == len(data)
+
+
 def test_defaults(server):  # noqa: F811
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(
