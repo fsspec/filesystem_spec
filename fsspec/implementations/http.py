@@ -358,6 +358,13 @@ class HTTPFileSystem(AsyncFileSystem):
                 self, path, mode=mode, loop=self.loop, session=session, **kw
             )
 
+    async def open_async(self, path, mode="rb", size=None, **kwargs):
+        session = await self.set_session()
+        size = size or (await self._info(path, **kwargs))["size"]
+        return AsyncStreamFile(
+            self, path, loop=self.loop, session=session, size=size, **kwargs
+        )
+
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
         return tokenize(url, self.kwargs, self.protocol)
@@ -692,7 +699,9 @@ class HTTPStreamFile(AbstractBufferedFile):
 
 
 class AsyncStreamFile(AbstractAsyncStreamedFile):
-    def __init__(self, fs, url, mode="rb", loop=None, session=None, **kwargs):
+    def __init__(
+        self, fs, url, mode="rb", loop=None, session=None, size=None, **kwargs
+    ):
         self.url = url
         self.loop = loop
         self.session = session
@@ -702,22 +711,22 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         self.details = {"name": url, "size": None}
         self.kwargs = kwargs
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none")
+        self.size = size
 
-    async def r(self):
+    async def read(self, num=-1):
         if self.r is None:
             r = await self.session.get(self.url, **self.kwargs).__aenter__()
             self.fs._raise_not_found_for_status(r, self.url)
             self.r = r
-        return self.r
-
-    async def read(self, num=-1):
         out = await self.r.content.read(num)
         self.loc += len(out)
         return out
 
     async def close(self):
-        await self.r.close()
-        self.closed = True
+        if self.r is not None:
+            self.r.close()
+            self.r = None
+        await super().close()
 
 
 async def get_range(session, url, start, end, file=None, **kwargs):

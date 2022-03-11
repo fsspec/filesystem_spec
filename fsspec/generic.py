@@ -31,11 +31,14 @@ def _resolve_fs(url, method=None, protocol=None, storage_options=None):
 
 
 class GenericFileSystem(AsyncFileSystem):
-    @staticmethod
+    def __init__(self, default_method=None, **kwargs):
+        self.method = default_method
+        super(GenericFileSystem, self).__init__(**kwargs)
+
     async def _info(
-        url, method=None, protocol=None, storage_options=None, fs=None, **kwargs
+        self, url, method=None, protocol=None, storage_options=None, fs=None, **kwargs
     ):
-        fs = fs or _resolve_fs(url, method, protocol, storage_options)
+        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
         if fs.async_impl:
             out = await fs._info(url, **kwargs)
         else:
@@ -43,8 +46,8 @@ class GenericFileSystem(AsyncFileSystem):
         out["name"] = fs._unstrip_protocol(out["name"])
         return out
 
-    @staticmethod
     async def _ls(
+        self,
         url,
         method=None,
         protocol=None,
@@ -53,7 +56,7 @@ class GenericFileSystem(AsyncFileSystem):
         detail=True,
         **kwargs,
     ):
-        fs = fs or _resolve_fs(url, method, protocol, storage_options)
+        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
         if fs.async_impl:
             out = await fs._ls(url, detail=True, **kwargs)
         else:
@@ -65,8 +68,8 @@ class GenericFileSystem(AsyncFileSystem):
         else:
             return [o["name"] for o in out]
 
-    @staticmethod
     async def _cp_file(
+        self,
         url,
         url2,
         method=None,
@@ -81,8 +84,10 @@ class GenericFileSystem(AsyncFileSystem):
         callback=_DEFAULT_CALLBACK,
         **kwargs,
     ):
-        fs = fs or _resolve_fs(url, method, protocol, storage_options)
-        fs2 = fs2 or _resolve_fs(url2, method2, protocol2, storage_options2)
+        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
+        fs2 = fs2 or _resolve_fs(
+            url2, method2 or self.method, protocol2, storage_options2
+        )
         if fs is fs2:
             # pure remote
             if fs.async_impl:
@@ -92,14 +97,14 @@ class GenericFileSystem(AsyncFileSystem):
         kw = {"blocksize": 0, "cache_type": "none"}
         try:
             f1 = (
-                fs.open_async(url, "rb")
+                await fs.open_async(url, "rb")
                 if hasattr(fs, "open_async")
                 else fs.open(url, "rb", **kw)
             )
-            callback.set_size(f1.size)
+            callback.set_size(maybe_await(f1.size))
             f2 = (
-                fs2.open_async(url2, "wb")
-                if hasattr(fs, "open_async")
+                await fs2.open_async(url2, "wb")
+                if hasattr(fs2, "open_async")
                 else fs2.open(url2, "wb", **kw)
             )
             while f2.tell() < f1.size:
@@ -109,6 +114,7 @@ class GenericFileSystem(AsyncFileSystem):
         finally:
             try:
                 await maybe_await(f2.close())
+                await maybe_await(f1.close())
             except NameError:
                 # fail while opening f1 or f2
                 pass
