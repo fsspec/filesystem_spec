@@ -96,7 +96,7 @@ def open_parquet_file(
     # Make sure we have an `AbstractFileSystem` object
     # to work with
     if fs is None:
-        fs = url_to_fs(path, storage_options=(storage_options or {}))[0]
+        fs = url_to_fs(path, **(storage_options or {}))[0]
 
     # For now, `columns == []` not supported. Just use
     # default `open` command with `path` input
