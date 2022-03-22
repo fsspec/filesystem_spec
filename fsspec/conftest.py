@@ -17,7 +17,7 @@ def m():
     """
     m = fsspec.filesystem("memory")
     m.store.clear()
-    m.pseudo_dirs.clear()
+    m.pseudo_dirs = [""]
     try:
         yield m
     finally:

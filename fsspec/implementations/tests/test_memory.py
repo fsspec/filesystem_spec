@@ -150,3 +150,9 @@ def test_seekable(m):
     f.seek(1)
     assert f.read(1) == "a"
     assert f.tell() == 2
+
+
+def test_remove_all(m):
+    m.touch("afile")
+    m.rm("/", recursive=True)
+    assert not m.ls("/")

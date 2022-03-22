@@ -116,6 +116,9 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def rmdir(self, path):
         path = self._strip_protocol(path)
+        if path == "":
+            # silently avoid deleting FS root
+            return
         if path in self.pseudo_dirs:
             if not self.ls(path):
                 self.pseudo_dirs.remove(path)
@@ -124,7 +127,7 @@ class MemoryFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError(path)
 
-    def exists(self, path):
+    def exists(self, path, **kwargs):
         path = self._strip_protocol(path)
         return path in self.store or path in self.pseudo_dirs
 
