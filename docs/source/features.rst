@@ -399,3 +399,5 @@ feature is new and experimental and supported by varying amounts in the
 backends.
 
 See the docstrings in the callbacks module for further details.
+``fsspec.callbacks.TqdmCallback`` can be used to display a progress bar using
+tqdm.

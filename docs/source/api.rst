@@ -51,6 +51,7 @@ Base Classes
    fsspec.callbacks.Callback
    fsspec.callbacks.NoOpCallback
    fsspec.callbacks.DotPrinterCallback
+   fsspec.callbacks.TqdmCallback
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
    :members:
@@ -94,6 +95,9 @@ Base Classes
    :members:
 
 .. autoclass:: fsspec.callbacks.DotPrinterCallback
+   :members:
+
+.. autoclass:: fsspec.callbacks.TqdmCallback
    :members:
 
 .. _implementations:
