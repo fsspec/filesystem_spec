@@ -187,7 +187,7 @@ def maybe_convert(value):
 
 
 def get_mapper(
-    url,
+    url="",
     check=False,
     create=False,
     missing_exceptions=None,

@@ -9,7 +9,7 @@ def test_1(m):
     files = m.find("")
     assert files == ["/afiles/and/another", "/somefile"]
 
-    files = sorted(m.get_mapper("/"))
+    files = sorted(m.get_mapper())
     assert files == ["afiles/and/another", "somefile"]
 
 

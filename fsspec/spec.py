@@ -1153,7 +1153,7 @@ class AbstractFileSystem(metaclass=_Cached):
         # all instances already also derive from pyarrow
         return self
 
-    def get_mapper(self, root, check=False, create=False):
+    def get_mapper(self, root="", check=False, create=False):
         """Create key/value store based on this file-system
 
         Makes a MutableMapping interface to the FS at the given root path.
