@@ -198,6 +198,7 @@ class TqdmCallback(Callback):
     def __init__(self, *args, **kwargs):
         try:
             import tqdm
+
             self._tqdm = tqdm
         except ImportError as exce:
             raise ImportError(
