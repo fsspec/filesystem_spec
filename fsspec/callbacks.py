@@ -1,6 +1,3 @@
-import importlib
-
-
 class Callback:
     """
     Base class and interface for callback mechanism
