@@ -54,6 +54,7 @@ setup(
         "fuse": ["fusepy"],
         "libarchive": ["libarchive-c"],
         "gui": ["panel"],
+        "tqdm": ["tqdm"],
     },
     zip_safe=False,
 )

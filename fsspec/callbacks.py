@@ -177,4 +177,44 @@ class DotPrinterCallback(Callback):
         print(self.chr, end="")
 
 
+class TqdmCallback(Callback):
+    """
+    A callback to display a progress bar using tqdm
+
+    Examples
+    --------
+    >>> import fsspec
+    >>> from fsspec.callbacks import TqdmCallback
+    >>> fs = fsspec.filesystem("memory")
+    >>> path2distant_data = "/your-path"
+    >>> fs.upload(
+            ".",
+            path2distant_data,
+            recursive=True,
+            callback=TqdmCallback(),
+        )
+    """
+
+    def __init__(self, *args, **kwargs):
+        try:
+            import tqdm
+
+            self._tqdm = tqdm
+        except ImportError as exce:
+            raise ImportError(
+                "Using TqdmCallback requires tqdm to be installed"
+            ) from exce
+        super().__init__(*args, **kwargs)
+
+    def set_size(self, size):
+        self.tqdm = self._tqdm.tqdm(desc="test", total=size)
+
+    def relative_update(self, inc=1):
+        self.tqdm.update(inc)
+
+    def __del__(self):
+        self.tqdm.close()
+        self.tqdm = None
+
+
 _DEFAULT_CALLBACK = NoOpCallback()
