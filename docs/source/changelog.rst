@@ -1,6 +1,27 @@
 Changelog
 =========
 
+2022.03.0
+---------
+
+Enhancements
+
+- tqdm example callback with simple methods (#931, 902)
+- Allow empty root in get_mapper (#930)
+- implement real info for reference FS (#919)
+- list known implementations and compressions (#913)
+
+Fixes
+
+- git branch for testing git backend (#929)
+- maintaine mem FS's root (#926)
+- kargs to FS in parquet module (#921)
+- fix on_error in references (#917)
+- tar ls consistency (#9114)
+- pyarrow: don't decompress twice (#911)
+- fix FUSE tests (#905)
+
+
 2022.02.0
 ---------
 
