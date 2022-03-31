@@ -26,7 +26,7 @@ class CachingFileSystem(AbstractFileSystem):
     directory with random hashes for the filenames. If no directory is given,
     a temporary one is used, which should be cleaned up by the OS after the
     process ends. The files themselves are sparse (as implemented in
-    :class:`~fsspec.core.MMapCache`), so only the data which is accessed takes up space.
+    :class:`~fsspec.caching.MMapCache`), so only the data which is accessed takes up space.
 
     Restrictions:
 
