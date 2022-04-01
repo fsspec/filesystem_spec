@@ -138,7 +138,7 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.arrow.ArrowFSWrapper
    :members: __init__
 
-.. autoclass:: fsspec.implementations.hdfs.HadoopFileSystem
+.. autoclass:: fsspec.implementations.arrow.HadoopFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.dask.DaskWorkerFileSystem
