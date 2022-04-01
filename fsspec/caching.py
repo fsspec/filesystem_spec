@@ -229,7 +229,7 @@ class BlockCache(BaseCache):
         The statistics on the block cache.
 
         Returns
-        ----------
+        -------
         NamedTuple
             Returned directly from the LRU Cache used internally.
         """
