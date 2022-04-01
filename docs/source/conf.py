@@ -101,6 +101,7 @@ autodoc_mock_imports = [
     "pygit2",
     "requests",
     "smbprotocol",
+    "smbclient",
 ]
 
 
