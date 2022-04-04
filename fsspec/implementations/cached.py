@@ -632,7 +632,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    block = getattr(f, "blocksize", 5 * 2 ** 20)
+                    block = getattr(f, "blocksize", 5 * 2**20)
                     data = f.read(block)
                     f2.write(data)
         else:
@@ -712,7 +712,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                 f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    block = getattr(f, "blocksize", 5 * 2 ** 20)
+                    block = getattr(f, "blocksize", 5 * 2**20)
                     data = f.read(block)
                     f2.write(data)
         else:

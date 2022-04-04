@@ -14,7 +14,7 @@ Enhancements
 Fixes
 
 - git branch for testing git backend (#929)
-- maintaine mem FS's root (#926)
+- maintain mem FS's root (#926)
 - kargs to FS in parquet module (#921)
 - fix on_error in references (#917)
 - tar ls consistency (#9114)
