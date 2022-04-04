@@ -44,6 +44,8 @@ class FSMap(MutableMapping):
                 NotADirectoryError,
             )
         self.missing_exceptions = missing_exceptions
+        self.check = check
+        self.create = create
         if create:
             if not self.fs.exists(root):
                 self.fs.mkdir(root)
