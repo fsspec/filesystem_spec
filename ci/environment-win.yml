@@ -20,3 +20,4 @@ dependencies:
   - python-libarchive-c
   - numpy
   - nomkl
+  - tqdm

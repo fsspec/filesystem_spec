@@ -54,7 +54,7 @@ class Callback:
 
     def relative_update(self, inc=1):
         """
-        Delta increment the internal cuonter
+        Delta increment the internal counter
 
         Triggers ``call()``
 
@@ -181,6 +181,13 @@ class TqdmCallback(Callback):
     """
     A callback to display a progress bar using tqdm
 
+    Parameters
+    ----------
+    tqdm_kwargs : dict, (optional)
+        Any argument accepted by the tqdm constructor.
+        See the `tqdm doc <https://tqdm.github.io/docs/tqdm/#__init__>`_.
+        Will be forwarded to tqdm.
+
     Examples
     --------
     >>> import fsspec
@@ -193,9 +200,18 @@ class TqdmCallback(Callback):
             recursive=True,
             callback=TqdmCallback(),
         )
+
+    You can forward args to tqdm using the `tqdm_kwargs` parameter.
+
+    >>> fs.upload(
+            ".",
+            path2distant_data,
+            recursive=True,
+            callback=TqdmCallback(tqdm_kwargs={"desc": "Your tqdm description"}),
+        )
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, tqdm_kwargs=None, *args, **kwargs):
         try:
             import tqdm
 
@@ -204,10 +220,12 @@ class TqdmCallback(Callback):
             raise ImportError(
                 "Using TqdmCallback requires tqdm to be installed"
             ) from exce
+
+        self._tqdm_kwargs = tqdm_kwargs or {}
         super().__init__(*args, **kwargs)
 
     def set_size(self, size):
-        self.tqdm = self._tqdm.tqdm(desc="test", total=size)
+        self.tqdm = self._tqdm.tqdm(total=size, **self._tqdm_kwargs)
 
     def relative_update(self, inc=1):
         self.tqdm.update(inc)
