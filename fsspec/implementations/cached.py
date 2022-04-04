@@ -317,7 +317,7 @@ class CachingFileSystem(AbstractFileSystem):
             block_size=block_size,
             autocommit=autocommit,
             cache_options=cache_options,
-            cache_type=None,
+            cache_type="none",
             **kwargs,
         )
         if self.compression:
