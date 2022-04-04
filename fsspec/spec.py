@@ -90,7 +90,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
     cachable = True  # this class can be cached, instances reused
     _cached = False
-    blocksize = 2 ** 22
+    blocksize = 2**22
     sep = "/"
     protocol = "abstract"
     async_impl = False
@@ -1280,7 +1280,7 @@ class AbstractBufferedFile(io.IOBase):
     ``_initiate_upload`` and ``_fetch_range``.
     """
 
-    DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+    DEFAULT_BLOCK_SIZE = 5 * 2**20
     _details = None
 
     def __init__(

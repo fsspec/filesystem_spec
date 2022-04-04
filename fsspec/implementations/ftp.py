@@ -60,7 +60,7 @@ class FTPFileSystem(AbstractFileSystem):
         if block_size is not None:
             self.blocksize = block_size
         else:
-            self.blocksize = 2 ** 16
+            self.blocksize = 2**16
         self._connect()
 
     def _connect(self):
