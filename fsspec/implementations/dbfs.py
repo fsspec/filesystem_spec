@@ -381,7 +381,7 @@ class DatabricksFile(AbstractBufferedFile):
     Helper class for files referenced in the DatabricksFileSystem.
     """
 
-    DEFAULT_BLOCK_SIZE = 1 * 2 ** 20  # only allowed block size
+    DEFAULT_BLOCK_SIZE = 1 * 2**20  # only allowed block size
 
     def __init__(
         self,
