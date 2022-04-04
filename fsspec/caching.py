@@ -510,6 +510,7 @@ class KnownPartsOfAFile(BaseCache):
 
 caches = {
     "none": BaseCache,
+    None: BaseCache,
     "mmap": MMapCache,
     "bytes": BytesCache,
     "readahead": ReadAheadCache,
