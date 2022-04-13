@@ -64,9 +64,22 @@ class SFTPFileSystem(AbstractFileSystem):
         out.pop("protocol", None)
         return out
 
-    def mkdir(self, path, mode=511):
-        logger.debug("Creating folder %s" % path)
-        self.ftp.mkdir(path, mode)
+    def mkdir(self, path, mode=511, **kwargs):                
+        logger.info("Creating folder %s" % path)           
+        if self.exists(path):            
+            raise FileExistsError("File exists: {}".format(path))                
+        
+        # kwargs is a fix for create_parent 
+        # related issue https://github.com/fsspec/filesystem_spec/issues/792     
+        if kwargs.get("create_parents"):   
+            parts = path.split("/")
+            path = ""       
+            for part in parts:
+                path += "/" + part           
+                if not self.exists(path):  
+                    self.ftp.mkdir(path, mode)
+        else:
+            self.ftp.mkdir(path, mode) 
 
     def makedirs(self, path, exist_ok=False, mode=511):
         if self.exists(path) and not exist_ok:
