@@ -69,8 +69,7 @@ class SFTPFileSystem(AbstractFileSystem):
         if self.exists(path):            
             raise FileExistsError("File exists: {}".format(path))                
         
-        # kwargs is a fix for create_parent 
-        # related issue https://github.com/fsspec/filesystem_spec/issues/792     
+        # kwargs is a fix for create_parent          
         if kwargs.get("create_parents"):   
             parts = path.split("/")
             path = ""       
