@@ -193,6 +193,14 @@ known_implementations = {
         "err": "LibArchive requires to be installed",
     },
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
+    "oss": {
+        "class": "ossfs.OSSFileSystem",
+        "err": "Install ossfs to access Alibaba Object Storage System",
+    },
+    "webdav": {
+        "class": "webdav4.fsspec.WebdavFileSystem",
+        "err": "Install webdav4 to access WebDAV",
+    },
 }
 
 
