@@ -193,6 +193,10 @@ known_implementations = {
         "err": "LibArchive requires to be installed",
     },
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
+    "oss": {
+        "class": "ossfs.OSSFileSystem",
+        "err": "Install ossfs to access Alibaba Object Storage System",
+    },
 }
 
 
