@@ -207,6 +207,7 @@ Other Known Implementations
 - `gdrive`_ to access Google Drive and shares (experimental)
 - `wandbfs`_ to access Wandb run data (experimental)
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
+- `webdav4`_ for WebDAV
 
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
@@ -217,6 +218,7 @@ Other Known Implementations
 .. _gdrive: https://github.com/fsspec/gdrivefs
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _ossfs: https://github.com/fsspec/ossfs
+.. _webdav4: https://github.com/skshetry/webdav4
 
 .. _readbuffering:
 

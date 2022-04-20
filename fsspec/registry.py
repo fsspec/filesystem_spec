@@ -197,6 +197,10 @@ known_implementations = {
         "class": "ossfs.OSSFileSystem",
         "err": "Install ossfs to access Alibaba Object Storage System",
     },
+    "webdav": {
+        "class": "webdav4.fsspec.WebdavFileSystem",
+        "err": "Install webdav4 to access WebDAV",
+    },
 }
 
 
