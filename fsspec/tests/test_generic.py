@@ -17,3 +17,6 @@ def test_cp_async_to_sync(server):
     fs = fsspec.filesystem("generic", default_method="current")
     fs.cp(server + "/index/realfile", "memory://realfile")
     assert m.cat("realfile") == data
+
+    fs.rm("memory://realfile")
+    assert not m.exists("realfile")

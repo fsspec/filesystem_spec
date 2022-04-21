@@ -68,6 +68,15 @@ class GenericFileSystem(AsyncFileSystem):
         else:
             return [o["name"] for o in out]
 
+    async def _rm(
+        self, url, method=None, protocol=None, storage_options=None, fs=None, **kwargs
+    ):
+        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
+        if fs.async_impl:
+            await fs._rm(url, **kwargs)
+        else:
+            fs.rm(url, **kwargs)
+
     async def _cp_file(
         self,
         url,
