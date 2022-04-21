@@ -5,8 +5,7 @@ import pytest
 import fsspec
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.reference import _unmodel_hdf5
-
-from .test_http import data, realfile, server  # noqa: F401
+from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
 
 
 def test_simple(server):  # noqa: F811
