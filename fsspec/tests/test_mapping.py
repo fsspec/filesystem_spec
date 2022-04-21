@@ -5,6 +5,7 @@ import sys
 import pytest
 
 import fsspec
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 
 
@@ -143,3 +144,8 @@ def test_setitem_numpy():
         dtype="<m8[ns]",
     )  # timedelta64 scalar
     assert m["c"] == b',M"\x9e\xc6\x99A\x065\x1c\xf0Rn4\xcb+'
+
+
+def test_empty_url():
+    m = fsspec.get_mapper()
+    assert isinstance(m.fs, LocalFileSystem)

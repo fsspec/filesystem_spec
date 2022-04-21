@@ -224,7 +224,7 @@ class HTTPFileSystem(AsyncFileSystem):
         return out
 
     async def _get_file(
-        self, rpath, lpath, chunk_size=5 * 2 ** 20, callback=_DEFAULT_CALLBACK, **kwargs
+        self, rpath, lpath, chunk_size=5 * 2**20, callback=_DEFAULT_CALLBACK, **kwargs
     ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -250,7 +250,7 @@ class HTTPFileSystem(AsyncFileSystem):
         self,
         lpath,
         rpath,
-        chunk_size=5 * 2 ** 20,
+        chunk_size=5 * 2**20,
         callback=_DEFAULT_CALLBACK,
         method="post",
         **kwargs,
@@ -617,7 +617,7 @@ class HTTPFile(AbstractBufferedFile):
                 cl = 0
                 out = []
                 while True:
-                    chunk = await r.content.read(2 ** 20)
+                    chunk = await r.content.read(2**20)
                     # data size unknown, let's read until we have enough
                     if chunk:
                         out.append(chunk)

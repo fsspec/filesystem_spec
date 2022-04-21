@@ -249,7 +249,7 @@ class TestAnyArchive:
     def test_mapping(self, scenario: ArchiveTestScenario):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
-            m = fs.get_mapper("")
+            m = fs.get_mapper()
             assert list(m) == ["a", "b", "deeply/nested/path"]
             assert m["b"] == archive_data["b"]
 

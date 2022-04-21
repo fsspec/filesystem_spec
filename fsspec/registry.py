@@ -194,6 +194,14 @@ known_implementations = {
     },
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
     "generic": {"class": "fsspec.generic.GenericFileSystem"},
+    "oss": {
+        "class": "ossfs.OSSFileSystem",
+        "err": "Install ossfs to access Alibaba Object Storage System",
+    },
+    "webdav": {
+        "class": "webdav4.fsspec.WebdavFileSystem",
+        "err": "Install webdav4 to access WebDAV",
+    },
 }
 
 

@@ -229,7 +229,7 @@ class BlockCache(BaseCache):
         The statistics on the block cache.
 
         Returns
-        ----------
+        -------
         NamedTuple
             Returned directly from the LRU Cache used internally.
         """
@@ -510,6 +510,7 @@ class KnownPartsOfAFile(BaseCache):
 
 caches = {
     "none": BaseCache,
+    None: BaseCache,
     "mmap": MMapCache,
     "bytes": BytesCache,
     "readahead": ReadAheadCache,

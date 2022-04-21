@@ -44,7 +44,7 @@ class FUSEr(Operations):
         else:
             data["st_mode"] = stat.S_IFREG | perm
             data["st_size"] = info["size"]
-            data["st_blksize"] = 5 * 2 ** 20
+            data["st_blksize"] = 5 * 2**20
             data["st_nlink"] = 1
         data["st_atime"] = time.time()
         data["st_ctime"] = time.time()

@@ -69,7 +69,7 @@ Other similar work
 ------------------
 
 It might have been conceivable to reuse code in ``pyfilesystems``, which has an established interface and several
-implementations of its own. However, it supports none of the :ref:`highlight`, critical to
+implementations of its own. However, it supports none of the **critical** features for
 cloud and parallel access, and would not be easy to
 coerce. Following on the success of ``s3fs`` and ``gcsfs``, and their use within Dask, it seemed best to
 have an interface as close to those as possible. See a

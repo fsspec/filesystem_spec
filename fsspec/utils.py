@@ -9,7 +9,7 @@ from functools import partial
 from hashlib import md5
 from urllib.parse import urlsplit
 
-DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+DEFAULT_BLOCK_SIZE = 5 * 2**20
 
 
 def infer_storage_options(urlpath, inherit_storage_options=None):
@@ -241,14 +241,14 @@ def read_block(f, offset, length, delimiter=None, split_before=False):
     """
     if delimiter:
         f.seek(offset)
-        found_start_delim = seek_delimiter(f, delimiter, 2 ** 16)
+        found_start_delim = seek_delimiter(f, delimiter, 2**16)
         if length is None:
             return f.read()
         start = f.tell()
         length -= start - offset
 
         f.seek(start + length)
-        found_end_delim = seek_delimiter(f, delimiter, 2 ** 16)
+        found_end_delim = seek_delimiter(f, delimiter, 2**16)
         end = f.tell()
 
         # Adjust split location to before delimiter iff seek found the

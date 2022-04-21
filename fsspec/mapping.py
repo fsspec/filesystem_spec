@@ -44,6 +44,8 @@ class FSMap(MutableMapping):
                 NotADirectoryError,
             )
         self.missing_exceptions = missing_exceptions
+        self.check = check
+        self.create = create
         if create:
             if not self.fs.exists(root):
                 self.fs.mkdir(root)
@@ -187,7 +189,7 @@ def maybe_convert(value):
 
 
 def get_mapper(
-    url,
+    url="",
     check=False,
     create=False,
     missing_exceptions=None,

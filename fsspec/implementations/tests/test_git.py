@@ -17,8 +17,8 @@ def repo():
     d = tempfile.mkdtemp()
     try:
         os.chdir(d)
-        subprocess.call("git init", shell=True, cwd=d)
-        subprocess.call("git init", shell=True, cwd=d)
+        subprocess.call("git init -b master", shell=True, cwd=d)
+        subprocess.call("git init -b master", shell=True, cwd=d)
         subprocess.call('git config user.email "you@example.com"', shell=True, cwd=d)
         subprocess.call('git config user.name "Your Name"', shell=True, cwd=d)
         open(os.path.join(d, "file1"), "wb").write(b"data0")

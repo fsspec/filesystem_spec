@@ -25,8 +25,9 @@ class CachingFileSystem(AbstractFileSystem):
     access after the initial download. The files are stored in a given
     directory with random hashes for the filenames. If no directory is given,
     a temporary one is used, which should be cleaned up by the OS after the
-    process ends. The files themselves as sparse (as implemented in
-    MMapCache), so only the data which is accessed takes up space.
+    process ends. The files themselves are sparse (as implemented in
+    :class:`~fsspec.caching.MMapCache`), so only the data which is accessed
+    takes up space.
 
     Restrictions:
 
@@ -316,7 +317,7 @@ class CachingFileSystem(AbstractFileSystem):
             block_size=block_size,
             autocommit=autocommit,
             cache_options=cache_options,
-            cache_type=None,
+            cache_type="none",
             **kwargs,
         )
         if self.compression:
@@ -631,7 +632,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    block = getattr(f, "blocksize", 5 * 2 ** 20)
+                    block = getattr(f, "blocksize", 5 * 2**20)
                     data = f.read(block)
                     f2.write(data)
         else:
@@ -711,7 +712,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                 f = compr[comp](f, mode="rb")
                 data = True
                 while data:
-                    block = getattr(f, "blocksize", 5 * 2 ** 20)
+                    block = getattr(f, "blocksize", 5 * 2**20)
                     data = f.read(block)
                     f2.write(data)
         else:
