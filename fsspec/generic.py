@@ -8,7 +8,7 @@ _generic_fs = {}
 
 
 def set_generic_fs(protocol, **storage_options):
-    _generic_fs[protocol] = filesystem(protocol ** storage_options)
+    _generic_fs[protocol] = filesystem(protocol, **storage_options)
 
 
 default_method = "default"
@@ -80,7 +80,7 @@ class GenericFileSystem(AsyncFileSystem):
         protocol2=None,
         storage_options2=None,
         fs2=None,
-        blocksize=2 ** 20,
+        blocksize=2**20,
         callback=_DEFAULT_CALLBACK,
         **kwargs,
     ):
