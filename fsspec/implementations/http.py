@@ -360,7 +360,11 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def open_async(self, path, mode="rb", size=None, **kwargs):
         session = await self.set_session()
-        size = size or (await self._info(path, **kwargs))["size"]
+        if size is None:
+            try:
+                size = (await self._info(path, **kwargs))["size"]
+            except FileNotFoundError:
+                pass
         return AsyncStreamFile(
             self, path, loop=self.loop, session=session, size=size, **kwargs
         )
@@ -703,7 +707,6 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         self, fs, url, mode="rb", loop=None, session=None, size=None, **kwargs
     ):
         self.url = url
-        self.loop = loop
         self.session = session
         self.r = None
         if mode != "rb":

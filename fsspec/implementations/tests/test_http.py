@@ -420,3 +420,16 @@ def test_processes(server, method):
 def test_close(get_client):
     fs = fsspec.filesystem("http", skip_instance_cache=True)
     fs.close_session(None, asyncio.run(get_client()))
+
+
+@pytest.mark.asyncio
+async def test_async_file(server):
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+    fn = server + "/index/realfile"
+    of = await fs.open_async(fn)
+    async with of as f:
+        out1 = await f.read(10)
+        assert data.startswith(out1)
+        out2 = await f.read()
+        assert data == out1 + out2
+    await fs._session.close()
