@@ -16,6 +16,7 @@ from ..asyn import AsyncFileSystem, sync
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
 from ..spec import AbstractFileSystem
+from ..utils import isfilelike
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -262,8 +263,11 @@ class ReferenceFileSystem(AsyncFileSystem):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
         callback.set_size(len(data))
-        with open(lpath, "wb") as f:
-            f.write(data)
+        if isfilelike(lpath):
+            lpath.write(data)
+        else:
+            with open(lpath, "wb") as f:
+                f.write(data)
         callback.absolute_update(len(data))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):

@@ -52,6 +52,7 @@ Base Classes
    fsspec.callbacks.NoOpCallback
    fsspec.callbacks.DotPrinterCallback
    fsspec.callbacks.TqdmCallback
+   fsspec.generic.GenericFileSystem
 
 .. autoclass:: fsspec.spec.AbstractFileSystem
    :members:
@@ -99,6 +100,8 @@ Base Classes
 
 .. autoclass:: fsspec.callbacks.TqdmCallback
    :members:
+
+.. autoclass:: fsspec.generic.GenericFileSystem
 
 .. _implementations:
 

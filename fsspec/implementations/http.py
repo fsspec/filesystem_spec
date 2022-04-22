@@ -11,11 +11,11 @@ from urllib.parse import urlparse
 import aiohttp
 import requests
 
-from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper
+from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import DEFAULT_BLOCK_SIZE, nullcontext, tokenize
+from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
 
 from ..caching import AllBytes
 
@@ -103,9 +103,6 @@ class HTTPFileSystem(AsyncFileSystem):
         request_options.pop("max_paths", None)
         request_options.pop("skip_instance_cache", None)
         self.kwargs = request_options
-
-        if not asynchronous:
-            sync(self.loop, self.set_session)
 
     @staticmethod
     def close_session(loop, session):
@@ -241,12 +238,13 @@ class HTTPFileSystem(AsyncFileSystem):
 
             callback.set_size(size)
             self._raise_not_found_for_status(r, rpath)
-            with open(lpath, "wb") as fd:
-                chunk = True
-                while chunk:
-                    chunk = await r.content.read(chunk_size)
-                    fd.write(chunk)
-                    callback.relative_update(len(chunk))
+            if not isfilelike(lpath):
+                lpath = open(lpath, "wb")
+            chunk = True
+            while chunk:
+                chunk = await r.content.read(chunk_size)
+                lpath.write(chunk)
+                callback.relative_update(len(chunk))
 
     async def _put_file(
         self,
@@ -359,6 +357,17 @@ class HTTPFileSystem(AsyncFileSystem):
             return HTTPStreamFile(
                 self, path, mode=mode, loop=self.loop, session=session, **kw
             )
+
+    async def open_async(self, path, mode="rb", size=None, **kwargs):
+        session = await self.set_session()
+        if size is None:
+            try:
+                size = (await self._info(path, **kwargs))["size"]
+            except FileNotFoundError:
+                pass
+        return AsyncStreamFile(
+            self, path, loop=self.loop, session=session, size=size, **kwargs
+        )
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
@@ -691,6 +700,36 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def __reduce__(self):
         return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)
+
+
+class AsyncStreamFile(AbstractAsyncStreamedFile):
+    def __init__(
+        self, fs, url, mode="rb", loop=None, session=None, size=None, **kwargs
+    ):
+        self.url = url
+        self.session = session
+        self.r = None
+        if mode != "rb":
+            raise ValueError
+        self.details = {"name": url, "size": None}
+        self.kwargs = kwargs
+        super().__init__(fs=fs, path=url, mode=mode, cache_type="none")
+        self.size = size
+
+    async def read(self, num=-1):
+        if self.r is None:
+            r = await self.session.get(self.url, **self.kwargs).__aenter__()
+            self.fs._raise_not_found_for_status(r, self.url)
+            self.r = r
+        out = await self.r.content.read(num)
+        self.loc += len(out)
+        return out
+
+    async def close(self):
+        if self.r is not None:
+            self.r.close()
+            self.r = None
+        await super().close()
 
 
 async def get_range(session, url, start, end, file=None, **kwargs):

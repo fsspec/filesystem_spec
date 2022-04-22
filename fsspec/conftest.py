@@ -17,12 +17,14 @@ def m():
     """
     m = fsspec.filesystem("memory")
     m.store.clear()
-    m.pseudo_dirs = [""]
+    m.pseudo_dirs.clear()
+    m.pseudo_dirs.append("")
     try:
         yield m
     finally:
         m.store.clear()
         m.pseudo_dirs.clear()
+        m.pseudo_dirs.append("")
 
 
 @pytest.fixture

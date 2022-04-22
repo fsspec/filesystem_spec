@@ -12,7 +12,14 @@ from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
-from .utils import _unstrip_protocol, other_paths, read_block, stringify_path, tokenize
+from .utils import (
+    _unstrip_protocol,
+    isfilelike,
+    other_paths,
+    read_block,
+    stringify_path,
+    tokenize,
+)
 
 logger = logging.getLogger("fsspec")
 
@@ -63,6 +70,7 @@ class _Cached(type):
             cls._cache.clear()
             cls._pid = os.getpid()
         if not skip and cls.cachable and token in cls._cache:
+            cls._latest = token
             return cls._cache[token]
         else:
             obj = super().__call__(*args, **kwargs)
@@ -76,6 +84,7 @@ class _Cached(type):
                 mirror_sync_methods(obj)
 
             if cls.cachable and not skip:
+                cls._latest = token
                 cls._cache[token] = obj
             return obj
 
@@ -93,6 +102,7 @@ class AbstractFileSystem(metaclass=_Cached):
     blocksize = 2**22
     sep = "/"
     protocol = "abstract"
+    _latest = None
     async_impl = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
@@ -175,6 +185,17 @@ class AbstractFileSystem(metaclass=_Cached):
         # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
+    def unstrip_protocol(self, name):
+        """Format FS-specific path to generic, including protocol"""
+        if isinstance(self.protocol, str):
+            if name.startswith(self.protocol):
+                return name
+            return self.protocol + "://" + name
+        else:
+            if name.startswith(tuple(self.protocol)):
+                return name
+            return self.protocol[0] + "://" + name
+
     @staticmethod
     def _get_kwargs_from_urls(path):
         """If kwargs can be encoded in the paths, extract them here
@@ -190,14 +211,13 @@ class AbstractFileSystem(metaclass=_Cached):
 
     @classmethod
     def current(cls):
-        """Return the most recently created FileSystem
+        """Return the most recently instantiated FileSystem
 
         If no instance has been created, then create one with defaults
         """
-        if not len(cls._cache):
-            return cls()
-        else:
-            return list(cls._cache.values())[-1]
+        if cls._latest in cls._cache:
+            return cls._cache[cls._latest]
+        return cls()
 
     @property
     def transaction(self):
@@ -738,20 +758,29 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get_file(
+        self, rpath, lpath, callback=_DEFAULT_CALLBACK, outfile=None, **kwargs
+    ):
         """Copy single remote file to local"""
-        if self.isdir(rpath):
-            os.makedirs(lpath, exist_ok=True)
-            return None
+        if isfilelike(lpath):
+            outfile = lpath
+        else:
+            if self.isdir(rpath):
+                os.makedirs(lpath, exist_ok=True)
+                return None
+
+            if outfile is None:
+                outfile = open(lpath, "wb")
 
         with self.open(rpath, "rb", **kwargs) as f1:
             callback.set_size(getattr(f1, "size", None))
-            with open(lpath, "wb") as f2:
-                data = True
-                while data:
-                    data = f1.read(self.blocksize)
-                    segment_len = f2.write(data)
-                    callback.relative_update(segment_len)
+            data = True
+            while data:
+                data = f1.read(self.blocksize)
+                segment_len = outfile.write(data)
+                callback.relative_update(segment_len)
+        if not isfilelike(lpath):
+            outfile.close()
 
     def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy file(s) to local.

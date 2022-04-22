@@ -17,8 +17,8 @@ class MemoryFileSystem(AbstractFileSystem):
     in memory filesystem.
     """
 
-    store = {}  # global
-    pseudo_dirs = [""]
+    store = {}  # global, do not overwrite!
+    pseudo_dirs = [""]  # global, do not overwrite!
     protocol = "memory"
     root_marker = "/"
 
@@ -215,6 +215,10 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError from e
 
     def rm(self, path, recursive=False, maxdepth=None):
+        if isinstance(path, str):
+            path = self._strip_protocol(path)
+        else:
+            path = [self._strip_protocol(p) for p in path]
         paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
         for p in reversed(paths):
             # If the expanded path doesn't exist, it is only because the expanded

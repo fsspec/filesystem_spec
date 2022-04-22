@@ -384,6 +384,13 @@ def is_exception(obj):
     return isinstance(obj, BaseException)
 
 
+def isfilelike(f):
+    for attr in ["read", "close", "tell"]:
+        if not hasattr(f, attr):
+            return False
+    return True
+
+
 def get_protocol(url):
     parts = re.split(r"(\:\:|\://)", url, 1)
     if len(parts) > 1:
@@ -455,14 +462,7 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG", clear=True):
 
 
 def _unstrip_protocol(name, fs):
-    if isinstance(fs.protocol, str):
-        if name.startswith(fs.protocol):
-            return name
-        return fs.protocol + "://" + name
-    else:
-        if name.startswith(tuple(fs.protocol)):
-            return name
-        return fs.protocol[0] + "://" + name
+    return fs.unstrip_protocol(name)
 
 
 def mirror_from(origin_name, methods):
