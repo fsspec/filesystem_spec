@@ -39,7 +39,7 @@ def test_class_methods():
     assert MemoryFileSystem._get_kwargs_from_urls("memory://user@thing") == {}
 
 
-def test_get_put(tmpdir):
+def test_get_put(tmpdir, m):
     tmpdir = str(tmpdir)
     fn = os.path.join(tmpdir, "one")
     open(fn, "wb").write(b"one")
@@ -93,19 +93,21 @@ def test_get_put(tmpdir):
     assert open(fn, "rb").read() == b"one"
 
 
-def test_du():
+def test_du(m):
     fs = MemoryFileSystem()
-    fs.store = {
-        "/dir/afile": MemoryFile(fs, "/afile", b"a"),
-        "/dir/dirb/afile": MemoryFile(fs, "/afile", b"bb"),
-        "/dir/dirb/bfile": MemoryFile(fs, "/afile", b"ccc"),
-    }
+    fs.store.update(
+        {
+            "/dir/afile": MemoryFile(fs, "/afile", b"a"),
+            "/dir/dirb/afile": MemoryFile(fs, "/afile", b"bb"),
+            "/dir/dirb/bfile": MemoryFile(fs, "/afile", b"ccc"),
+        }
+    )
     assert fs.du("/dir") == 6
     assert fs.du("/dir", total=False)["/dir/dirb/afile"] == 2
     assert fs.du("/dir", maxdepth=0) == 1
 
 
-def test_head_tail():
+def test_head_tail(m):
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:
         f.write(b"I had a nice big cabbage")
@@ -113,7 +115,7 @@ def test_head_tail():
     assert fs.tail("/myfile", 7) == b"cabbage"
 
 
-def test_move():
+def test_move(m):
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:
         f.write(b"I had a nice big cabbage")
@@ -123,7 +125,7 @@ def test_move():
     assert isinstance(fs.ukey("/otherfile"), str)
 
 
-def test_recursive_get_put(tmpdir):
+def test_recursive_get_put(tmpdir, m):
     fs = MemoryFileSystem()
     os.makedirs(f"{tmpdir}/nest")
     for file in ["one", "two", "nest/other"]:
@@ -139,7 +141,7 @@ def test_recursive_get_put(tmpdir):
             f.read() == b"data"
 
 
-def test_pipe_cat():
+def test_pipe_cat(m):
     fs = MemoryFileSystem()
     fs.pipe("afile", b"contents")
     assert fs.cat("afile") == b"contents"
@@ -149,7 +151,7 @@ def test_pipe_cat():
     assert fs.cat(list(data)) == data
 
 
-def test_read_block_delimiter():
+def test_read_block_delimiter(m):
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:
         f.write(b"some\n" b"lines\n" b"of\n" b"text")
@@ -161,7 +163,7 @@ def test_read_block_delimiter():
     assert fs.read_block("/myfile", 0, None) == fs.cat("/myfile")
 
 
-def test_open_text():
+def test_open_text(m):
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:
         f.write(b"some\n" b"lines\n" b"of\n" b"text")

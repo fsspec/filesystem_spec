@@ -11,9 +11,21 @@ def test_remote_async_ops(server):
     assert fs.isfile(server + "/index/realfile")  # this method from superclass
 
 
-def test_cp_async_to_sync(server):
+def test_touch_rm(m):
+    m.touch("afile")
+    m.touch("dir/afile")
+
+    fs = fsspec.filesystem("generic", default_method="current")
+    fs.rm("memory://afile")
+    assert not m.exists("afile")
+
+    fs.rm("memory://dir", recursive=True)
+    assert not m.exists("dir/afile")
+    assert not m.exists("dir")
+
+
+def test_cp_async_to_sync(server, m):
     fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
-    m = fsspec.filesystem("memory")
     fs = fsspec.filesystem("generic", default_method="current")
     fs.cp(server + "/index/realfile", "memory://realfile")
     assert m.cat("realfile") == data

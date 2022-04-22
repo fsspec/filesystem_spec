@@ -70,6 +70,7 @@ class _Cached(type):
             cls._cache.clear()
             cls._pid = os.getpid()
         if not skip and cls.cachable and token in cls._cache:
+            cls._latest = token
             return cls._cache[token]
         else:
             obj = super().__call__(*args, **kwargs)
@@ -83,6 +84,7 @@ class _Cached(type):
                 mirror_sync_methods(obj)
 
             if cls.cachable and not skip:
+                cls._latest = token
                 cls._cache[token] = obj
             return obj
 
@@ -100,6 +102,7 @@ class AbstractFileSystem(metaclass=_Cached):
     blocksize = 2**22
     sep = "/"
     protocol = "abstract"
+    _latest = None
     async_impl = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
@@ -212,10 +215,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         If no instance has been created, then create one with defaults
         """
-        if not len(cls._cache):
-            return cls()
-        else:
-            return list(cls._cache.values())[-1]
+        return cls._cache.get(cls._latest, cls())
 
     @property
     def transaction(self):

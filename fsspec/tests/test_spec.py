@@ -248,6 +248,7 @@ def test_cache():
     fs2 = DummyTestFS()
     assert fs is fs2
 
+    assert DummyTestFS.current() is fs
     assert len(fs._cache) == 1
     del fs2
     assert len(fs._cache) == 1
@@ -258,6 +259,17 @@ def test_cache():
 
     DummyTestFS.clear_instance_cache()
     assert len(DummyTestFS._cache) == 0
+
+
+def test_current():
+    fs = DummyTestFS()
+    fs2 = DummyTestFS(arg=1)
+
+    assert fs is not fs2
+    assert DummyTestFS.current() is fs2
+
+    DummyTestFS()
+    assert DummyTestFS.current() is fs
 
 
 def test_alias():
