@@ -462,7 +462,7 @@ def setup_logging(logger=None, logger_name=None, level="DEBUG", clear=True):
 
 
 def _unstrip_protocol(name, fs):
-    return fs._unstrip_protocol(name)
+    return fs.unstrip_protocol(name)
 
 
 def mirror_from(origin_name, methods):

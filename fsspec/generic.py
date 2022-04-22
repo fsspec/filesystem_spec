@@ -15,6 +15,7 @@ default_method = "default"
 
 
 def _resolve_fs(url, method=None, protocol=None, storage_options=None):
+    """Pick instance of backend FS"""
     method = method or default_method
     protocol = protocol or split_protocol(url)[0]
     storage_options = storage_options or {}
@@ -31,7 +32,35 @@ def _resolve_fs(url, method=None, protocol=None, storage_options=None):
 
 
 class GenericFileSystem(AsyncFileSystem):
+    """Wrapper over all other FS types
+
+    <experimental!>
+
+    This implementation is a single unified interface to be able to run FS operations
+    over generic URLs, and dispatch to the specific implementations using the URL
+    protocol prefix.
+
+    Note: instances of this FS are always async, even if you never use it with any async
+    backend.
+    """
+
+    protocol = "generic"  # there is no real reason to ever use a protocol with this FS
+
     def __init__(self, default_method=None, **kwargs):
+        """
+
+        Parameters
+        ----------
+        default_method: str (optional)
+            Defines how to configure backend FS instances. Options are:
+            - "default" (you get this with None): instantiate like FSClass(), with no
+              extra arguments; this is the default instance of that FS, and can be
+              configured via the config system
+            - "generic": takes instances from the `_generic_fs` dict in this module,
+              which you must populate before use. Keys are by protocol
+            - "current": takes the most recently instantiated version of each FS
+            - "options": expect ``storage_options`` to be passed along with every call.
+        """
         self.method = default_method
         super(GenericFileSystem, self).__init__(**kwargs)
 
@@ -43,7 +72,7 @@ class GenericFileSystem(AsyncFileSystem):
             out = await fs._info(url, **kwargs)
         else:
             out = fs.info(url, **kwargs)
-        out["name"] = fs._unstrip_protocol(out["name"])
+        out["name"] = fs.unstrip_protocol(out["name"])
         return out
 
     async def _ls(
@@ -62,7 +91,7 @@ class GenericFileSystem(AsyncFileSystem):
         else:
             out = fs.ls(url, detail=True, **kwargs)
         for o in out:
-            o["name"] = fs._unstrip_protocol(o["name"])
+            o["name"] = fs.unstrip_protocol(o["name"])
         if detail:
             return out
         else:

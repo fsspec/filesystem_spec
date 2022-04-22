@@ -185,8 +185,8 @@ class AbstractFileSystem(metaclass=_Cached):
         # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
-    def _unstrip_protocol(self, name):
-        # could be overridden for FSs that make work with URLs
+    def unstrip_protocol(self, name):
+        """Format FS-specific path to generic, including protocol"""
         if isinstance(self.protocol, str):
             if name.startswith(self.protocol):
                 return name
