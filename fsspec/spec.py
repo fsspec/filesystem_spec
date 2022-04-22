@@ -211,11 +211,13 @@ class AbstractFileSystem(metaclass=_Cached):
 
     @classmethod
     def current(cls):
-        """Return the most recently created FileSystem
+        """Return the most recently instantiated FileSystem
 
         If no instance has been created, then create one with defaults
         """
-        return cls._cache.get(cls._latest, cls())
+        if cls._latest in cls._cache:
+            return cls._cache[cls._latest]
+        return cls()
 
     @property
     def transaction(self):
