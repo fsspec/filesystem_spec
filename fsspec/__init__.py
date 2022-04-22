@@ -63,4 +63,3 @@ def process_entries():
 
 
 process_entries()
-fs = filesystem("generic")

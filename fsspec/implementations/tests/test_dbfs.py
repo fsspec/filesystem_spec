@@ -30,7 +30,6 @@ import fsspec
 DUMMY_INSTANCE = "my_instance.com"
 INSTANCE = os.getenv("DBFS_INSTANCE", DUMMY_INSTANCE)
 TOKEN = os.getenv("DBFS_TOKEN", "")
-pytest.importorskip("nothere")
 
 
 @pytest.fixture(scope="module")
