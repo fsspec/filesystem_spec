@@ -146,7 +146,7 @@ def test_transaction(ssh, root_path):
         f.touch(root_path + "deeper/afile")
         assert f.find(root_path) == []
         f.end_transaction()
-        f.find(root_path) == [root_path + "deeper/afile"]
+        assert f.find(root_path) == [root_path + "deeper/afile"]
 
         with f.transaction:
             assert f._intrans
