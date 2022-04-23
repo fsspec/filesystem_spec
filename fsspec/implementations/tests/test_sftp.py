@@ -116,14 +116,16 @@ def test_simple_with_tar(ssh, netloc, tmp_path, root_path):
 
     f = fsspec.get_filesystem_class("sftp")(**ssh)
     f.mkdirs(root_path + "deeper", exist_ok=True)
-
-    remote_tar_filename = root_path + "deeper/somefile.tar"
-    with f.open(remote_tar_filename, mode="wb") as wfd:
-        with open(tar_filename, mode="rb") as rfd:
-            wfd.write(rfd.read())
-    fs = fsspec.open("tar::ssh://" + netloc + remote_tar_filename).fs
-    files = fs.find("/")
-    assert files == files_to_pack
+    try:
+        remote_tar_filename = root_path + "deeper/somefile.tar"
+        with f.open(remote_tar_filename, mode="wb") as wfd:
+            with open(tar_filename, mode="rb") as rfd:
+                wfd.write(rfd.read())
+        fs = fsspec.open("tar::ssh://" + netloc + remote_tar_filename).fs
+        files = fs.find("/")
+        assert files == files_to_pack
+    finally:
+        f.rm(root_path, recursive=True)
 
 
 def make_tarfile(files_to_pack, tmp_path):
