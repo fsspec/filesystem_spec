@@ -35,11 +35,9 @@ class TarFileSystem(AbstractArchiveFileSystem):
     ):
         super().__init__(**kwargs)
         target_options = target_options or {}
-        if target_protocol is not None:
-            target_options["target_protocol"] = target_protocol
 
         if isinstance(fo, str):
-            fo = fsspec.open(fo, **target_options).open()
+            fo = fsspec.open(fo, protocol=target_protocol, **target_options).open()
 
         # Try to infer compression.
         if compression is None:

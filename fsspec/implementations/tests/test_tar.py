@@ -195,7 +195,9 @@ def test_url_to_fs_direct(recipe, tmpdir):
 def test_url_to_fs_cached(recipe, tmpdir):
     with temptar(archive_data, mode=recipe["mode"], suffix=recipe["suffix"]) as tf:
         url = f"tar://inner::simplecache::file://{tf}"
-        fs, url = fsspec.core.url_to_fs(url=url)
+        # requires same_names in order to be able to guess compression from
+        # filename
+        fs, url = fsspec.core.url_to_fs(url=url, simplecache={"same_names": True})
         assert fs.cat("b") == b"hello"
 
 
