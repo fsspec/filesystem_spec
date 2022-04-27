@@ -89,10 +89,13 @@ class CachingFileSystem(AbstractFileSystem):
             decompression.
         """
         super().__init__(**kwargs)
+        if fs is None and target_protocol is None:
+            raise ValueError(
+                "Please provide filesystem instance(fs) or target_protocol"
+            )
         if not (fs is None) ^ (target_protocol is None):
             raise ValueError(
-                "Please provide one of filesystem instance (fs) or"
-                " remote_protocol, not both"
+                "Both filesystems (fs) and target_protocol may not be both given."
             )
         if cache_storage == "TMP":
             storage = [tempfile.mkdtemp()]
