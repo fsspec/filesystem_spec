@@ -65,7 +65,7 @@ class SFTPFileSystem(AbstractFileSystem):
         return out
 
     def mkdir(self, path, create_parents=False, mode=511):
-        logger.info("Creating folder %s" % path)        
+        logger.info("Creating folder %s" % path)
 
         if create_parents:
             parts = path.split("/")
