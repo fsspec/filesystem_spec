@@ -116,6 +116,8 @@ def test_mkdir_create_parent(ssh):
     with pytest.raises(FileExistsError, match="/a/b/c"):
         f.mkdir("/a/b/c")
 
+    f.rm("/a/b/c", recursive=True)
+
 
 def test_makedirs_exist_ok(ssh):
     f = fsspec.get_filesystem_class("sftp")(**ssh)
