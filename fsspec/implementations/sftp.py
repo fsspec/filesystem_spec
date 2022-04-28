@@ -65,9 +65,7 @@ class SFTPFileSystem(AbstractFileSystem):
         return out
 
     def mkdir(self, path, create_parents=False, mode=511):
-        logger.info("Creating folder %s" % path)
-        if self.exists(path):
-            raise FileExistsError("File exists: {}".format(path))
+        logger.info("Creating folder %s" % path)        
 
         if create_parents:
             parts = path.split("/")
