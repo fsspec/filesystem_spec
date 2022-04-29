@@ -364,3 +364,8 @@ class TestAnyArchive:
 
             assert lhs_dirs == {e for e in entries if fs.isdir(e)}
             assert lhs_files == {e for e in entries if fs.isfile(e)}
+
+    def test_read_empty_file(self, scenario: ArchiveTestScenario):
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            assert fs.open("a").read() == b""
