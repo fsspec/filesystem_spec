@@ -333,8 +333,6 @@ class ReferenceFileSystem(AsyncFileSystem):
 
         @lru_cache(1000)
         def _render_jinja(url):
-            import jinja2
-
             if "{{" in url:
                 if self.simple_templates:
                     return (
@@ -342,6 +340,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                         .replace("}}", "}")
                         .format(**self.templates)
                     )
+
+                import jinja2
 
                 return jinja2.Template(url).render(**self.templates)
 
@@ -405,13 +405,14 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references.update(self._process_gen(references.get("gen", [])))
 
     def _process_templates(self, tmp):
-        import jinja2
 
         self.templates = {}
         if self.template_overrides is not None:
             tmp.update(self.template_overrides)
         for k, v in tmp.items():
             if "{{" in v:
+                import jinja2
+
                 self.templates[k] = lambda temp=v, **kwargs: jinja2.Template(
                     temp
                 ).render(**kwargs)
@@ -419,7 +420,6 @@ class ReferenceFileSystem(AsyncFileSystem):
                 self.templates[k] = v
 
     def _process_gen(self, gens):
-        import jinja2
 
         out = {}
         for gen in gens:
@@ -434,6 +434,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                 for values in itertools.product(*dimension.values())
             )
             for pr in products:
+                import jinja2
+
                 key = jinja2.Template(gen["key"]).render(**pr, **self.templates)
                 url = jinja2.Template(gen["url"]).render(**pr, **self.templates)
                 if ("offset" in gen) and ("length" in gen):
@@ -518,13 +520,23 @@ class ReferenceFileSystem(AsyncFileSystem):
     async def _ls(self, path, detail=True, **kwargs):  # calls fast sync code
         return self.ls(path, detail, **kwargs)
 
-    def find(self, path, maxdepth=None, withdirs=False, **kwargs):
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        # TODO: details
         if withdirs:
-            return super().find(path, maxdepth=maxdepth, withdirs=withdirs, **kwargs)
+            return super().find(
+                path, maxdepth=maxdepth, withdirs=withdirs, detail=detail, **kwargs
+            )
         if path:
             path = self._strip_protocol(path)
-            return sorted(k for k in self.references if k.startswith(path))
-        return sorted(self.references)
+            r = sorted(k for k in self.references if k.startswith(path))
+        else:
+            r = sorted(self.references)
+        if detail:
+            if not self.dircache:
+                self._dircache_from_items()
+            return {k: self._ls_from_cache(k) for k in r}
+        else:
+            return r
 
     def info(self, path, **kwargs):
         out = self.ls(path, True)
@@ -539,6 +551,37 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     async def _info(self, path, **kwargs):  # calls fast sync code
         return self.info(path)
+
+    async def _rm_file(self, path, **kwargs):
+        self.references.pop(
+            path, None
+        )  # ignores FileNotFound, just as well for directories
+        self.dircache.clear()  # this is a bit heavy handed
+
+    async def _pipe_file(self, path, data):
+        # can be str or bytes
+        self.references[path] = data
+        self.dircache.clear()  # this is a bit heavy handed
+
+    async def _put_file(self, lpath, rpath):
+        # puts binary
+        with open(lpath, "rb") as f:
+            self.references[rpath] = f.read()
+        self.dircache.clear()  # this is a bit heavy handed
+
+    def save_json(self, url, **storage_options):
+        """Write modified references into new location"""
+        out = {}
+        for k, v in self.references.items():
+            if isinstance(v, bytes):
+                try:
+                    out[k] = v.decode("ascii")
+                except UnicodeDecodeError:
+                    out[k] = (b"base64:" + base64.b64encode(v)).decode()
+            else:
+                out[k] = v
+        with fsspec.open(url, "wb", **storage_options) as f:
+            f.write(json.dumps({"version": 1, "refs": out}).encode())
 
 
 def _unmodel_hdf5(references):
