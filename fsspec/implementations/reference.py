@@ -333,8 +333,6 @@ class ReferenceFileSystem(AsyncFileSystem):
 
         @lru_cache(1000)
         def _render_jinja(url):
-            import jinja2
-
             if "{{" in url:
                 if self.simple_templates:
                     return (
@@ -342,6 +340,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                         .replace("}}", "}")
                         .format(**self.templates)
                     )
+
+                import jinja2
 
                 return jinja2.Template(url).render(**self.templates)
 
@@ -405,13 +405,14 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references.update(self._process_gen(references.get("gen", [])))
 
     def _process_templates(self, tmp):
-        import jinja2
 
         self.templates = {}
         if self.template_overrides is not None:
             tmp.update(self.template_overrides)
         for k, v in tmp.items():
             if "{{" in v:
+                import jinja2
+
                 self.templates[k] = lambda temp=v, **kwargs: jinja2.Template(
                     temp
                 ).render(**kwargs)
@@ -419,7 +420,6 @@ class ReferenceFileSystem(AsyncFileSystem):
                 self.templates[k] = v
 
     def _process_gen(self, gens):
-        import jinja2
 
         out = {}
         for gen in gens:
@@ -434,6 +434,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                 for values in itertools.product(*dimension.values())
             )
             for pr in products:
+                import jinja2
+
                 key = jinja2.Template(gen["key"]).render(**pr, **self.templates)
                 url = jinja2.Template(gen["url"]).render(**pr, **self.templates)
                 if ("offset" in gen) and ("length" in gen):
