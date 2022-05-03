@@ -51,6 +51,30 @@ def test_info(server):  # noqa: F811
     assert fs.info("e")["size"] == len(data)
 
 
+def test_mutable(server, m):
+    refs = {
+        "a": b"data",
+        "b": (realfile, 0, 5),
+        "c/d": (realfile, 1, 6),
+        "e": (realfile,),
+    }
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    fs = fsspec.filesystem("reference", fo=refs, fs=h)
+    fs.rm("a")
+    assert not fs.exists("a")
+
+    bin_data = b"bin data"
+    fs.pipe("aa", bin_data)
+    assert fs.cat("aa") == bin_data
+
+    fs.save_json("memory://refs.json")
+    assert m.exists("refs.json")
+
+    fs = fsspec.filesystem("reference", fo="memory://refs.json", remote_protocol="http")
+    assert not fs.exists("a")
+    assert fs.cat("aa") == bin_data
+
+
 def test_defaults(server):  # noqa: F811
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(

@@ -423,7 +423,7 @@ class AbstractFileSystem(metaclass=_Cached):
         for d in full_dirs:
             yield from self.walk(d, maxdepth=maxdepth, detail=detail, **kwargs)
 
-    def find(self, path, maxdepth=None, withdirs=False, **kwargs):
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
         """List all files below path.
 
         Like posix ``find`` command without conditions
@@ -441,7 +441,6 @@ class AbstractFileSystem(metaclass=_Cached):
         # TODO: allow equivalent of -name parameter
         path = self._strip_protocol(path)
         out = dict()
-        detail = kwargs.pop("detail", False)
         for _, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
                 files.update(dirs)
