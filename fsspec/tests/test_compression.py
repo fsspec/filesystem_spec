@@ -118,6 +118,13 @@ def test_zstd_compression(tmpdir):
     ) as infile:
         assert infile.read() == tdat
 
+    # fails in https://github.com/fsspec/filesystem_spec/issues/725
+    infile = fsspec.core.open(
+        str(tmp_path / "out.zst"), mode="rb", compression="infer"
+    ).open()
+
+    infile.close()
+
 
 def test_snappy_compression(tmpdir):
     """No registered compression for snappy, but can be specified."""

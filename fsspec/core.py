@@ -18,6 +18,7 @@ from .caching import (  # noqa: F401
 from .compression import compr
 from .registry import filesystem, get_filesystem_class
 from .utils import (
+    IOWrapper,
     _unstrip_protocol,
     build_name_function,
     infer_compression,
@@ -147,7 +148,11 @@ class OpenFile(object):
             closer()  # original close bound method of the final file-like
             _close(fobjects, mode)  # call close on other dependent file-likes
 
-        out.close = close
+        try:
+            out.close = close
+        except AttributeError:
+            out = IOWrapper(out, lambda: _close(fobjects, mode))
+
         return out
 
     def close(self):
