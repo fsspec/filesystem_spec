@@ -145,8 +145,10 @@ class GenericFileSystem(AsyncFileSystem):
                 if hasattr(fs2, "open_async")
                 else fs2.open(url2, "wb", **kw)
             )
-            while f2.tell() < f1.size:
+            while f1.size is None or f2.tell() < f1.size:
                 data = await maybe_await(f1.read(blocksize))
+                if f1.size is None and not data:
+                    break
                 await maybe_await(f2.write(data))
                 callback.absolute_update(f2.tell())
         finally:
