@@ -65,7 +65,7 @@ def test_expand_paths_if_needed_in_read_mode(create_files, path, out):
 
     path = os.path.join(d, path)
 
-    fs = fsspec.filesystem('file')
+    fs = fsspec.filesystem("file")
     res = expand_paths_if_needed([path], "r", 0, fs, None)
     assert [os.path.basename(p) for p in res] == out
 
@@ -197,8 +197,7 @@ def test_url_kwargs_chain(ftp_writable):
         f.write(data)
 
     with fsspec.open(
-        f"simplecache::ftp://{username}:{password}@{host}:{port}//afile",
-        "rb",
+        f"simplecache::ftp://{username}:{password}@{host}:{port}//afile", "rb"
     ) as f:
         assert f.read() == data
 
