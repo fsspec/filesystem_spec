@@ -66,7 +66,8 @@ def test_expand_paths_if_needed_in_read_mode(create_files, path, out):
     path = os.path.join(d, path)
 
     fs = fsspec.filesystem('file')
-    assert expand_paths_if_needed([path], "r", 0, fs, None) == [os.path.join(d, p) for p in out]
+    res = expand_paths_if_needed([path], "r", 0, fs, None)
+    assert [os.path.basename(p) for p in res] == out
 
 
 def test_expand_error():
