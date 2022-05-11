@@ -70,14 +70,11 @@ class SFTPFileSystem(AbstractFileSystem):
             raise FileExistsError("File exists: {}".format(path))
 
         if create_parents:
-            parts = path.split("/")
-            path = ""
-            for part in parts:
-                path += "/" + part
-                if not self.exists(path):
-                    self.ftp.mkdir(path, mode)
-        else:
-            self.ftp.mkdir(path, mode)
+            p = "/".join(path.split("/")[:-1])
+            if not self.exists(p):
+                self.mkdir(p, create_parents)
+
+        self.ftp.mkdir(path, mode)
 
     def makedirs(self, path, exist_ok=False, mode=511):
         if self.exists(path) and not exist_ok:
