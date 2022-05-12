@@ -138,7 +138,7 @@ def get_loop():
 def fsspec_loop():
     """Temporarily switch the current event loop to the fsspec's
     own loop, and then revert it back after the context gets
-    terinated.
+    terminated.
     """
     try:
         original_loop = get_running_loop()
