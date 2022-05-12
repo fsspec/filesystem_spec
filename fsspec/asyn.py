@@ -16,6 +16,18 @@ from .spec import AbstractBufferedFile, AbstractFileSystem
 from .utils import is_exception, other_paths
 
 private = re.compile("_[^_]")
+iothread = [None]  # dedicated fsspec IO thread
+loop = [None]  # global event loop for any non-async instance
+# lock = threading.Lock()  # for setting exactly one thread
+_lock = None  # the lock is allocatted on first use and we set exactly one lock (thread) per process
+
+def get_lock():
+    """Allocates a lock only if one hasn't already been allocated and returns the allocated lock.
+    """
+    global _lock
+    if not _lock:
+        _lock = threading.Lock()
+    return _lock
 
 
 async def _runner(event, coro, result, timeout=None):
@@ -68,11 +80,6 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         return return_result
 
 
-iothread = [None]  # dedicated fsspec IO thread
-loop = [None]  # global event loop for any non-async instance
-lock = threading.Lock()  # for setting exactly one thread
-
-
 def sync_wrapper(func, obj=None):
     """Given a function, make so can be called in async or blocking contexts
 
@@ -121,7 +128,7 @@ def get_loop():
     The loop will be running on a separate thread.
     """
     if loop[0] is None:
-        with lock:
+        with get_lock():
             # repeat the check just in case the loop got filled between the
             # previous two calls from another thread
             if loop[0] is None:
