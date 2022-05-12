@@ -533,7 +533,8 @@ def strip_protocol(urlpath):
 
 
 def expand_paths_if_needed(paths, mode, num, fs, name_function):
-    """Expand paths if they have a ``*`` in them (write mode) or any of ``*?[]`` in them (read mode).
+    """Expand paths if they have a ``*`` in them (write mode) or any of ``*?[]``
+    in them (read mode).
 
     :param paths: list of paths
     mode: str
