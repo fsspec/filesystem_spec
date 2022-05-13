@@ -18,11 +18,13 @@ from .utils import is_exception, other_paths
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
 loop = [None]  # global event loop for any non-async instance
-# lock = threading.Lock()  # for setting exactly one thread
-_lock = None  # the lock is allocatted on first use and we set exactly one lock (thread) per process
+_lock = None  # global lock placeholder
+
 
 def get_lock():
-    """Allocates a lock only if one hasn't already been allocated and returns the allocated lock.
+    """Allocate or return a threading lock.
+
+    The lock is allocatted on first use to allow setting one lock per forked process.
     """
     global _lock
     if not _lock:
