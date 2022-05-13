@@ -11,6 +11,7 @@ from fsspec.core import (
     OpenFile,
     OpenFiles,
     _expand_paths,
+    expand_paths_if_needed,
     get_compression,
     open_files,
     open_local,
@@ -43,6 +44,30 @@ def tempzip(data={}):
 )
 def test_expand_paths(path, name_function, num, out):
     assert _expand_paths(path, name_function, num) == out
+
+
+@pytest.mark.parametrize(
+    "create_files, path, out",
+    [
+        [["apath"], "apath", ["apath"]],
+        [["apath1"], "apath*", ["apath1"]],
+        [["apath1", "apath2"], "apath*", ["apath1", "apath2"]],
+        [["apath1", "apath2"], "apath[1]", ["apath1"]],
+        [["apath1", "apath11"], "apath?", ["apath1"]],
+    ],
+)
+def test_expand_paths_if_needed_in_read_mode(create_files, path, out):
+
+    d = str(tempfile.mkdtemp())
+    for f in create_files:
+        f = os.path.join(d, f)
+        open(f, "w").write("test")
+
+    path = os.path.join(d, path)
+
+    fs = fsspec.filesystem("file")
+    res = expand_paths_if_needed([path], "r", 0, fs, None)
+    assert [os.path.basename(p) for p in res] == out
 
 
 def test_expand_error():
@@ -172,8 +197,7 @@ def test_url_kwargs_chain(ftp_writable):
         f.write(data)
 
     with fsspec.open(
-        f"simplecache::ftp://{username}:{password}@{host}:{port}//afile",
-        "rb",
+        f"simplecache::ftp://{username}:{password}@{host}:{port}//afile", "rb"
     ) as f:
         assert f.read() == data
 
