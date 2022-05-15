@@ -664,15 +664,11 @@ def get_fs_token_paths(
             update_storage_options(options, storage_options)
             fs = cls(**options)
 
-    if isinstance(paths, (list, tuple, set)):
+    if not isinstance(paths, (list, tuple, set)):
+        paths = [paths]
+    if expand:
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
-    else:
-        if "w" in mode and expand:
-            paths = _expand_paths(paths, name_function, num)
-        elif "*" in paths:
-            paths = [f for f in sorted(fs.glob(paths)) if not fs.isdir(f)]
-        else:
-            paths = [paths]
+    paths = sorted([f for f in paths if not fs.isdir(f)])
 
     return fs, fs._fs_token, paths
 

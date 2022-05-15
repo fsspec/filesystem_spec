@@ -120,9 +120,10 @@ def test_list():
     here = os.path.abspath(os.path.dirname(__file__))
     flist = os.listdir(here)
     plist = [os.path.join(here, p).replace("\\", "/") for p in flist]
+    plist = [p for p in plist if not os.path.isdir(p)]
     of = open_files(plist)
-    assert len(of) == len(flist)
-    assert [f.path for f in of] == plist
+    assert len(of) == len(plist)
+    assert [f.path for f in of] == sorted(plist)
 
 
 def test_pathobject(tmpdir):
