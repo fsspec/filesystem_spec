@@ -209,7 +209,6 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(url)
 
-        # TODO: extract into testable utility function?
         if start is not None or end is not None:
             if start == end:
                 return b""

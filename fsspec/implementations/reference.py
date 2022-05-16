@@ -197,15 +197,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     def _cat_common(self, path):
         path = self._strip_protocol(path)
         logger.debug(f"cat: {path}")
-        # TODO: can extract and cache templating here
-        if self.dataframe:
-            part = self.df.loc[path]
-            if part["data"]:
-                part = part["data"]
-            else:
-                part = part[["url", "offset", "size"]]
-        else:
-            part = self.references[path]
+        part = self.references[path]
         if isinstance(part, str):
             part = part.encode()
         if isinstance(part, bytes):
