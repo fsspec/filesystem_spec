@@ -32,3 +32,10 @@ def test_fsspec_get_mapper():
         assert isinstance(mapping, fsspec.mapping.FSMap)
         items = dict(mapping.getitems(keys))
         assert items == {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
+
+
+def test_not_cached():
+    with tempzip(archive_data) as z:
+        fs = fsspec.filesystem("zip", fo=z)
+        fs2 = fsspec.filesystem("zip", fo=z)
+        assert fs is not fs2

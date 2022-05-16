@@ -91,6 +91,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
 
     root_marker = ""
     protocol = "libarchive"
+    cachable = False
 
     def __init__(
         self,

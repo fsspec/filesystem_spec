@@ -17,6 +17,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
 
     root_marker = ""
     protocol = "zip"
+    cachable = False
 
     def __init__(
         self,

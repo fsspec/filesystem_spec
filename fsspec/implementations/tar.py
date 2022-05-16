@@ -23,6 +23,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
     root_marker = ""
     protocol = "tar"
+    cachable = False
 
     def __init__(
         self,
