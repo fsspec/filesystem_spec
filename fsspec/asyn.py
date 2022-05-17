@@ -18,18 +18,19 @@ from .utils import is_exception, other_paths
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
 loop = [None]  # global event loop for any non-async instance
-_lock = None  # global lock placeholder
+_pid_to_lock = {}  # global dict mapping process id to the lock acquired on that process
 
 
 def get_lock():
-    """Allocate or return a threading lock.
+    """Allocate or return a threading lock for the current process.
 
     The lock is allocatted on first use to allow setting one lock per forked process.
     """
-    global _lock
-    if not _lock:
-        _lock = threading.Lock()
-    return _lock
+    global _pid_to_lock
+    pid = os.getpid()
+    if pid not in _pid_to_lock:
+        _pid_to_lock[pid] = threading.Lock()
+    return _pid_to_lock.get(pid)
 
 
 async def _runner(event, coro, result, timeout=None):
