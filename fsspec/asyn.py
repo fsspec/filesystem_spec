@@ -32,6 +32,15 @@ def get_lock():
     return _lock
 
 
+def reset_lock():
+    """Reset the global lock.
+
+    This should be called only on the init of a forked process to reset the lock to
+    None, enabling the new forked process to get a new lock.
+    """
+    global _lock
+    _lock = None
+
 async def _runner(event, coro, result, timeout=None):
     timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     if timeout is not None:
