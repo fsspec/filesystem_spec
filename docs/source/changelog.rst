@@ -1,6 +1,30 @@
 Changelog
 =========
 
+2022.5.0
+--------
+
+Enhancements
+
+- mutable ReferenceFS (#958)
+
+Fixes
+
+- Make archive FSs not cachable (#966)
+- glob fixes (#961)
+- generic copy with unknown size (#959)
+- zstd open (#956)
+- empty archive file (#954)
+- tar chaining (#950, 947)
+- missing exceptions in mapper (#940)
+
+Other
+
+- update registry (#852)
+- allow None cache (#942)
+- mappers to remember init arguments (#939)
+- cache docstrings (#933)
+
 2022.03.0
 ---------
 
