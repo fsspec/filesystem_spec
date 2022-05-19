@@ -58,7 +58,8 @@ def set_conf_files(cdir, conf_dict):
                     continue
                 conf_dict.setdefault(key, {}).update(dict(ini[key]))
         if fn.endswith(".json"):
-            js = json.load(open(os.path.join(cdir, fn)))
+            with open(os.path.join(cdir, fn)) as f:
+                js = json.load(f)
             for key in js:
                 conf_dict.setdefault(key, {}).update(dict(js[key]))
 
