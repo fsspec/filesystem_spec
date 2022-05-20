@@ -38,7 +38,12 @@ def reset_lock():
     This should be called only on the init of a forked process to reset the lock to
     None, enabling the new forked process to get a new lock.
     """
+    global iothread
+    global loop
     global _lock
+
+    iothread = [None]
+    loop = [None]
     _lock = None
 
 async def _runner(event, coro, result, timeout=None):
