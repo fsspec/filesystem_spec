@@ -46,6 +46,7 @@ def reset_lock():
     loop = [None]
     _lock = None
 
+
 async def _runner(event, coro, result, timeout=None):
     timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     if timeout is not None:
