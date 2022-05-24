@@ -46,9 +46,9 @@ class FUSEr(Operations):
             data["st_size"] = info["size"]
             data["st_blksize"] = 5 * 2**20
             data["st_nlink"] = 1
-        data["st_atime"] = time.time()
-        data["st_ctime"] = time.time()
-        data["st_mtime"] = time.time()
+        data["st_atime"] = info["atime"] if "atime" in info else time.time()
+        data["st_ctime"] = info["ctime"] if "ctime" in info else time.time()
+        data["st_mtime"] = info["mtime"] if "mtime" in info else time.time()
         return data
 
     def readdir(self, path, fh):
