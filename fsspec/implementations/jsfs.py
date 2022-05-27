@@ -1,8 +1,12 @@
 import asyncio
+import urllib.error
+import urllib.parse
+from json import dumps, loads
 
+from js import Blob, XMLHttpRequest, window
 from pyodide.http import FetchResponse, pyfetch
 
-from fsspec.implementations.http import HTTPFileSystem
+# from fsspec.implementations.http import HTTPFileSystem
 from fsspec.registry import known_implementations
 
 # https://pyodide.org/en/stable/usage/api/python-api.html#pyodide.http.pyfetch
@@ -75,7 +79,7 @@ class JSSession:
         return """session-like"""
 
 
-class PyodideFileSystem(HTTPFileSystem):
+class PyodideFileSystem:  # (HTTPFileSystem):
     def __init__(self, asynchronous=True, **kwargs):
         super().__init__(asynchronous=True, **kwargs)
         if not asynchronous:
@@ -93,7 +97,7 @@ class PyodideFileSystem(HTTPFileSystem):
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         headers = kwargs.pop("headers", {})
         if start or end:
-            headers["Range"] = f"bytes={str(start or '')-str(end or '')}"
+            headers["Range"] = f"bytes={str(start or '') - str(end or '')}"
         r = await self.session.get(path, **headers)
         r.raise_for_status()
         async with r as r:
@@ -103,6 +107,149 @@ class PyodideFileSystem(HTTPFileSystem):
         return "JSFS"
 
 
-known_implementations["http"] = {
-    "class": "jsfs.PyodideFileSystem",
-}
+class JsHttpException(urllib.error.HTTPError):
+    ...
+
+
+class ResponseProxy:
+    def __init__(self, req):
+        self.request = req
+        self._data = None
+        self._headers = None
+
+    @property
+    def raw(self):
+        if self._data is None:
+            self._data = str(self.request.response).encode()
+        return self._data
+
+    @property
+    def headers(self):
+        if self._headers is None:
+            self._headers = dict(
+                [
+                    _.split(": ")
+                    for _ in self.request.getAllResponseHeaders().strip().split("\r\n")
+                ]
+            )
+        return self._headers
+
+    @property
+    def status_code(self):
+        return int(self.request.status)
+
+    def raise_for_status(self):
+        if not self.ok:
+            raise JsHttpException(
+                self.url, self.status_code, self.reason, self.headers, None
+            )
+
+    @property
+    def reason(self):
+        return self.request.statusText
+
+    @property
+    def ok(self):
+        return self.status_code < 400
+
+    @property
+    def url(self):
+        return self.request.response.responseURL
+
+    @property
+    def text(self):
+        # TODO: encoding from headers
+        return self.raw.decode()
+
+    @property
+    def json(self):
+        return loads(self.text)
+
+
+class RequestsSessionShim:
+    def __init__(self):
+        self.headers = {}
+
+    def request(
+        self,
+        method,
+        url,
+        params=None,
+        data=None,
+        headers=None,
+        cookies=None,
+        files=None,
+        auth=None,
+        timeout=None,
+        allow_redirects=None,
+        proxies=None,
+        hooks=None,
+        stream=None,
+        verify=None,
+        cert=None,
+        json=None,
+    ):
+        if (
+            cert
+            or verify
+            or proxies
+            or files
+            or cookies
+            or hooks
+            or stream
+            or allow_redirects
+        ):
+            raise NotImplementedError
+        if data and json:
+            raise ValueError("Use json= or data=, not both")
+        req = XMLHttpRequest.new()
+        extra = auth if auth else ()
+        if params:
+            url = f"{url}?{urllib.parse.urlencode(params)}"
+        req.open(method, url, False, *extra)
+        if timeout:
+            req.timeout = timeout
+        if headers:
+            for k, v in headers.items():
+                req.setRequestHeader(k, v)
+
+        req.setRequestHeader("Accept", "application/octet-stream")
+        if json:
+            blob = Blob.new([dumps(data)], {type: "application/json"})
+            req.send(blob)
+        elif data:
+            blob = Blob.new([data], {type: "application/octet-stream"})
+            req.send(blob)
+        else:
+            req.send(None)
+        window.req = req
+        return ResponseProxy(req)
+
+    def get(self, url, **kwargs):
+        return self.request("GET", url, **kwargs)
+
+    def head(self, url, **kwargs):
+        return self.request("HEAD", url, **kwargs)
+
+    def post(self, url, **kwargs):
+        return self.request("POST}", url, **kwargs)
+
+    def put(self, url, **kwargs):
+        return self.request("PUT", url, **kwargs)
+
+    def patch(self, url, **kwargs):
+        return self.request("PATCH", url, **kwargs)
+
+    def delete(self, url, **kwargs):
+        return self.request("DELETE", url, **kwargs)
+
+
+def set_impl(asyn=False):
+    if asyn:
+        bits = {
+            "class": "jsfs.PyodideFileSystem",
+        }
+    else:
+        bits = {"class": ""}
+
+    known_implementations["http"] = bits
