@@ -634,7 +634,7 @@ class HTTPFile(AbstractBufferedFile):
                 self.url,
                 self.mode,
                 self.blocksize,
-                self.cache.name,
+                self.cache.name if self.cache else "none",
                 self.size,
             ),
         )
