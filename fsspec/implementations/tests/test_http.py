@@ -310,6 +310,11 @@ def test_file_pickle(server):
     # via HTTPFile
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     out = server + "/index/realfile"
+
+    with fsspec.open(out, headers={"give_length": "true", "head_ok": "true"}) as f:
+        pic = pickle.loads(pickle.dumps(f))
+        assert pic.read() == data
+
     with h.open(out, "rb") as f:
         pic = pickle.dumps(f)
         assert f.read() == data
