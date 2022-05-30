@@ -354,7 +354,7 @@ class LocalFileOpener(io.IOBase):
 
     def __enter__(self):
         self._incontext = True
-        return self.f.__enter__()
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self._incontext = False

@@ -587,6 +587,20 @@ def test_pickle(tmpdir):
     with pytest.raises(ValueError):
         pickle.dumps(f)
 
+    # with context
+    with fs.open(fn0, "rb") as f:
+        f.seek(1)
+        f2 = pickle.loads(pickle.dumps(f))
+        assert f2.tell() == 1
+        assert f2.read() == f.read()
+
+    # with fsspec.open https://github.com/fsspec/filesystem_spec/issues/579
+    with fsspec.open(fn0, "rb") as f:
+        f.seek(1)
+        f2 = pickle.loads(pickle.dumps(f))
+        assert f2.tell() == 1
+        assert f2.read() == f.read()
+
 
 def test_strip_protocol_expanduser():
     path = "file://~\\foo\\bar" if WIN else "file://~/foo/bar"
