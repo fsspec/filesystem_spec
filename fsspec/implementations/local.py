@@ -158,7 +158,7 @@ class LocalFileSystem(AbstractFileSystem):
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
 
-    def touch(self, path, **kwargs):
+    def touch(self, path, truncate=True, **kwargs):
         path = self._strip_protocol(path)
         if self.auto_mkdir:
             self.makedirs(self._parent(path), exist_ok=True)
@@ -166,6 +166,8 @@ class LocalFileSystem(AbstractFileSystem):
             os.utime(path, None)
         else:
             open(path, "a").close()
+        if truncate:
+            os.truncate(path, 0)
 
     def created(self, path):
         info = self.info(path=path)
