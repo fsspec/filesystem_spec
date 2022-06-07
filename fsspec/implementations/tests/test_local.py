@@ -342,6 +342,18 @@ def test_touch(tmpdir):
         assert info2["mtime"] > info["mtime"]
 
 
+def test_touch_truncate(tmpdir):
+    fn = str(tmpdir + "/tfile")
+    fs = fsspec.filesystem("file")
+    fs.touch(fn, truncate=True)
+    fs.pipe(fn, b"a")
+    fs.touch(fn, truncate=True)
+    assert fs.cat(fn) == b""
+    fs.pipe(fn, b"a")
+    fs.touch(fn, truncate=False)
+    assert fs.cat(fn) == b"a"
+
+
 def test_directories(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
