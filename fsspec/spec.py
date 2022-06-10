@@ -187,14 +187,11 @@ class AbstractFileSystem(metaclass=_Cached):
 
     def unstrip_protocol(self, name):
         """Format FS-specific path to generic, including protocol"""
-        if isinstance(self.protocol, str):
-            if name.startswith(self.protocol):
+        protos = (self.protocol,) if isinstance(self.protocol, str) else self.protocol
+        for protocol in protos:
+            if name.startswith(f"{protocol}://"):
                 return name
-            return self.protocol + "://" + name
-        else:
-            if name.startswith(tuple(self.protocol)):
-                return name
-            return self.protocol[0] + "://" + name
+        return f"{protos[0]}://{name}"
 
     @staticmethod
     def _get_kwargs_from_urls(path):
