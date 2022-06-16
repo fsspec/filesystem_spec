@@ -13,14 +13,25 @@ logger = logging.Logger("fsspec.memoryfs")
 class MemoryFileSystem(AbstractFileSystem):
     """A filesystem based on a dict of BytesIO objects
 
-    This is a global filesystem so instances of this class all point to the same
-    in memory filesystem.
+    Parameters
+    ----------
+    global_store : bool (True)
+        Whether to use global store, so instances of this class all point to
+        the same in memory filesystem. If False, every instance will have its
+        own store.
     """
 
-    store = {}  # global, do not overwrite!
-    pseudo_dirs = [""]  # global, do not overwrite!
+    store = {}  # global
+    pseudo_dirs = [""]  # global
     protocol = "memory"
     root_marker = "/"
+
+    def __init__(self, *args, **storage_options):
+        super().__init__(*args, **storage_options)
+        if not storage_options.get("global_store", True):
+            # detach from global
+            self.store = {}
+            self.pseudo_dirs = [""]
 
     @classmethod
     def _strip_protocol(cls, path):

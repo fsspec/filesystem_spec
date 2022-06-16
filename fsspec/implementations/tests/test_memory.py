@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from fsspec.implementations.memory import MemoryFileSystem
+
 
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
@@ -156,3 +158,15 @@ def test_remove_all(m):
     m.touch("afile")
     m.rm("/", recursive=True)
     assert not m.ls("/")
+
+
+def test_global_store():
+    global_memfs1 = MemoryFileSystem()
+    global_memfs2 = MemoryFileSystem(global_store=True)
+    local_memfs = MemoryFileSystem(global_store=False)
+
+    global_memfs1.pipe_file("foo/bar", b"12345")
+
+    assert global_memfs1.exists("foo/bar")
+    assert global_memfs2.exists("foo/bar")
+    assert not local_memfs.exists("foo/bar")
