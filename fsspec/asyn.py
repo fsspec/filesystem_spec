@@ -60,6 +60,9 @@ async def _runner(event, coro, result, timeout=None):
 def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
+
+    Example usage:
+        fsspec.asyn.sync(fsspec.asyn.get_loop(), func, *args, timeout=timeout, **kwargs)
     """
     timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     # NB: if the loop is not running *yet*, it is OK to submit work
