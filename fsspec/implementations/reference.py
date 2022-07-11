@@ -490,7 +490,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             self._dircache_from_items()
         out = self._ls_from_cache(path)
         if out is None:
-            raise FileNotFoundError
+            raise FileNotFoundError(path)
         if detail:
             return out
         return [o["name"] for o in out]

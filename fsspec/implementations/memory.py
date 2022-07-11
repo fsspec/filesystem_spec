@@ -96,7 +96,7 @@ class MemoryFileSystem(AbstractFileSystem):
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
         if path in self.store or path in self.pseudo_dirs:
-            raise FileExistsError
+            raise FileExistsError(path)
         if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
         if create_parents and self._parent(path).strip("/"):
@@ -165,7 +165,7 @@ class MemoryFileSystem(AbstractFileSystem):
     ):
         path = self._strip_protocol(path)
         if path in self.pseudo_dirs:
-            raise IsADirectoryError
+            raise IsADirectoryError(path)
         parent = path
         while len(parent) > 1:
             parent = self._parent(parent)
@@ -198,7 +198,7 @@ class MemoryFileSystem(AbstractFileSystem):
             if path2 not in self.pseudo_dirs:
                 self.pseudo_dirs.append(path2)
         else:
-            raise FileNotFoundError
+            raise FileNotFoundError(path1)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         path = self._strip_protocol(path)
@@ -212,7 +212,7 @@ class MemoryFileSystem(AbstractFileSystem):
         try:
             del self.store[path]
         except KeyError as e:
-            raise FileNotFoundError from e
+            raise FileNotFoundError(path) from e
 
     def rm(self, path, recursive=False, maxdepth=None):
         if isinstance(path, str):
