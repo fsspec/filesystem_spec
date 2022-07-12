@@ -1,5 +1,6 @@
 import pathlib
 
+import cramjam
 import pytest
 
 import fsspec.core
@@ -61,103 +62,26 @@ def test_lzma_compression_name():
     assert infer_compression("fn.xz") == "xz"
 
 
-def test_lz4_compression(tmpdir):
-    """Infer lz4 compression for .lz4 files if lz4 is available."""
+@pytest.mark.parametrize("variant_name", ("gzip", "snappy", "lz4", "zstd", "brotli"))
+@pytest.mark.parametrize("infer", (True, False), ids=lambda v: f"infer:{v}")
+def test_compression_variant(tmpdir, variant_name, infer):
+    
+    variant = getattr(cramjam, variant_name)
+    variant_suffixes = {v: k for k, v in compressions.items()}
+    suffix = variant_suffixes[variant_name]
+
     tmp_path = pathlib.Path(str(tmpdir))
-
-    lz4 = pytest.importorskip("lz4")
-
     tmp_path.mkdir(exist_ok=True)
+    f_path = tmp_path / f"out.{suffix}"
 
-    tdat = "foobar" * 100
+    data = "foobar" * 100
+    compression = "infer" if infer else variant_name
 
-    with fsspec.core.open(
-        str(tmp_path / "out.lz4"), mode="wt", compression="infer"
-    ) as outfile:
-        outfile.write(tdat)
+    with fsspec.core.open(f_path, mode="wt", compression=compression) as outfile:
+        outfile.write(data)
 
-    compressed = (tmp_path / "out.lz4").open("rb").read()
-    assert lz4.frame.decompress(compressed).decode() == tdat
+    decompressed = variant.decompress(f_path.read_bytes())
+    assert bytes(decompressed).decode() == data
 
-    with fsspec.core.open(
-        str(tmp_path / "out.lz4"), mode="rt", compression="infer"
-    ) as infile:
-        assert infile.read() == tdat
-
-    with fsspec.core.open(
-        str(tmp_path / "out.lz4"), mode="rt", compression="lz4"
-    ) as infile:
-        assert infile.read() == tdat
-
-
-def test_zstd_compression(tmpdir):
-    """Infer zstd compression for .zst files if zstandard is available."""
-    tmp_path = pathlib.Path(str(tmpdir))
-
-    zstd = pytest.importorskip("zstandard")
-
-    tmp_path.mkdir(exist_ok=True)
-
-    tdat = "foobar" * 100
-
-    with fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="wt", compression="infer"
-    ) as outfile:
-        outfile.write(tdat)
-
-    compressed = (tmp_path / "out.zst").open("rb").read()
-    assert zstd.ZstdDecompressor().decompress(compressed, len(tdat)).decode() == tdat
-
-    with fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="rt", compression="infer"
-    ) as infile:
-        assert infile.read() == tdat
-
-    with fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="rt", compression="zstd"
-    ) as infile:
-        assert infile.read() == tdat
-
-    # fails in https://github.com/fsspec/filesystem_spec/issues/725
-    infile = fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="rb", compression="infer"
-    ).open()
-
-    infile.close()
-
-
-def test_snappy_compression(tmpdir):
-    """No registered compression for snappy, but can be specified."""
-    tmp_path = pathlib.Path(str(tmpdir))
-
-    snappy = pytest.importorskip("snappy")
-
-    tmp_path.mkdir(exist_ok=True)
-
-    tdat = "foobar" * 100
-
-    # Snappy isn't inferred.
-    with fsspec.core.open(
-        str(tmp_path / "out.snappy"), mode="wt", compression="infer"
-    ) as outfile:
-        outfile.write(tdat)
-    assert (tmp_path / "out.snappy").open("rb").read().decode() == tdat
-
-    # but can be specified.
-    with fsspec.core.open(
-        str(tmp_path / "out.snappy"), mode="wt", compression="snappy"
-    ) as outfile:
-        outfile.write(tdat)
-
-    compressed = (tmp_path / "out.snappy").open("rb").read()
-    assert snappy.StreamDecompressor().decompress(compressed).decode() == tdat
-
-    with fsspec.core.open(
-        str(tmp_path / "out.snappy"), mode="rb", compression="infer"
-    ) as infile:
-        assert infile.read() == compressed
-
-    with fsspec.core.open(
-        str(tmp_path / "out.snappy"), mode="rt", compression="snappy"
-    ) as infile:
-        assert infile.read() == tdat
+    with fsspec.core.open(f_path, mode="rt", compression=compression) as infile:
+        assert infile.read() == data

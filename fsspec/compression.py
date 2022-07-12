@@ -1,6 +1,9 @@
 """Helper functions for a standard streaming compression API"""
 from bz2 import BZ2File
+from lzma import LZMAFile
 from zipfile import ZipFile
+
+import cramjam
 
 import fsspec.utils
 from fsspec.spec import AbstractBufferedFile
@@ -67,8 +70,46 @@ def unzip(infile, mode="rb", filename=None, **kwargs):
     return z.open(filename, mode="r", **kwargs)
 
 
+
+def buffered_file_factory(codec):
+    """ 
+    Factory for cramjam submodule to BufferedFile interface.
+    """
+    class BufferedFile(AbstractBufferedFile):
+        
+        def __init__(self, infile, mode, **kwargs):
+            super().__init__(
+                fs=None, path="", mode=mode.strip("b") + "b", size=999999999, **kwargs
+            )
+            self.infile = infile
+            self.codec = codec
+            self.compressor = codec.Compressor()
+
+        def _upload_chunk(self, final=False):
+            self.buffer.seek(0)
+            n_bytes = self.compressor.compress(self.buffer.read())
+            out = self.compressor.finish() if final else self.compressor.flush()
+            self.infile.write(out)
+            return n_bytes
+
+        def _fetch_range(self, start, end):
+            """Get the specified set of bytes from remote"""
+            data = self.infile.read(end - start)
+            return bytes(self.codec.decompress(data))
+
+    return type(f"{codec.__name__.capitalize()}File", (BufferedFile,), dict())
+
+
 register_compression("zip", unzip, "zip")
-register_compression("bz2", BZ2File, "bz2")
+register_compression("lzma", LZMAFile, "xz")
+register_compression("xz", LZMAFile, "xz", force=True)
+register_compression("bzip2", BZ2File, "bz2")
+register_compression("gzip", buffered_file_factory(cramjam.gzip), "gz")
+register_compression("snappy", buffered_file_factory(cramjam.snappy), "snappy")
+register_compression("lz4", buffered_file_factory(cramjam.lz4), "lz4")
+register_compression("zstd", buffered_file_factory(cramjam.zstd), "zst")
+register_compression("brotli", buffered_file_factory(cramjam.brotli), "br")
+
 
 try:  # pragma: no cover
     from isal import igzip
@@ -77,20 +118,7 @@ try:  # pragma: no cover
     # so its api and functions are the same as the stdlib’s module. Except
     # where ISA-L does not support the same calls as zlib
     # (See https://python-isal.readthedocs.io/).
-
-    register_compression("gzip", igzip.IGzipFile, "gz")
-except ImportError:
-    from gzip import GzipFile
-
-    register_compression(
-        "gzip", lambda f, **kwargs: GzipFile(fileobj=f, **kwargs), "gz"
-    )
-
-try:
-    from lzma import LZMAFile
-
-    register_compression("lzma", LZMAFile, "xz")
-    register_compression("xz", LZMAFile, "xz", force=True)
+    register_compression("gzip", igzip.IGzipFile, "gz", force=True)
 except ImportError:
     pass
 
@@ -99,71 +127,6 @@ try:
 
     register_compression("lzma", lzmaffi.LZMAFile, "xz", force=True)
     register_compression("xz", lzmaffi.LZMAFile, "xz", force=True)
-except ImportError:
-    pass
-
-
-class SnappyFile(AbstractBufferedFile):
-    def __init__(self, infile, mode, **kwargs):
-        import snappy
-
-        super().__init__(
-            fs=None, path="snappy", mode=mode.strip("b") + "b", size=999999999, **kwargs
-        )
-        self.infile = infile
-        if "r" in mode:
-            self.codec = snappy.StreamDecompressor()
-        else:
-            self.codec = snappy.StreamCompressor()
-
-    def _upload_chunk(self, final=False):
-        self.buffer.seek(0)
-        out = self.codec.add_chunk(self.buffer.read())
-        self.infile.write(out)
-        return True
-
-    def seek(self, loc, whence=0):
-        raise NotImplementedError("SnappyFile is not seekable")
-
-    def seekable(self):
-        return False
-
-    def _fetch_range(self, start, end):
-        """Get the specified set of bytes from remote"""
-        data = self.infile.read(end - start)
-        return self.codec.decompress(data)
-
-
-try:
-    import snappy
-
-    snappy.compress
-    # Snappy may use the .sz file extension, but this is not part of the
-    # standard implementation.
-    register_compression("snappy", SnappyFile, [])
-
-except (ImportError, NameError):
-    pass
-
-try:
-    import lz4.frame
-
-    register_compression("lz4", lz4.frame.open, "lz4")
-except ImportError:
-    pass
-
-try:
-    import zstandard as zstd
-
-    def zstandard_file(infile, mode="rb"):
-        if "r" in mode:
-            cctx = zstd.ZstdDecompressor()
-            return cctx.stream_reader(infile)
-        else:
-            cctx = zstd.ZstdCompressor(level=10)
-            return cctx.stream_writer(infile)
-
-    register_compression("zstd", zstandard_file, "zst")
 except ImportError:
     pass
 
