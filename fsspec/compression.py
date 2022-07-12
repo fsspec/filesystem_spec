@@ -70,14 +70,13 @@ def unzip(infile, mode="rb", filename=None, **kwargs):
     return z.open(filename, mode="r", **kwargs)
 
 
-
 def buffered_file_factory(codec):
-    """ 
+    """
     Factory for cramjam submodule to BufferedFile interface.
     """
+
     class BufferedFile(AbstractBufferedFile):
-        
-        def __init__(self, infile, mode, **kwargs):
+        def __init__(self, infile, mode="rb", **kwargs):
             super().__init__(
                 fs=None, path="", mode=mode.strip("b") + "b", size=999999999, **kwargs
             )
@@ -95,6 +94,8 @@ def buffered_file_factory(codec):
         def _fetch_range(self, start, end):
             """Get the specified set of bytes from remote"""
             data = self.infile.read(end - start)
+            if not data:
+                return b""
             return bytes(self.codec.decompress(data))
 
     return type(f"{codec.__name__.capitalize()}File", (BufferedFile,), dict())
@@ -103,7 +104,7 @@ def buffered_file_factory(codec):
 register_compression("zip", unzip, "zip")
 register_compression("lzma", LZMAFile, "xz")
 register_compression("xz", LZMAFile, "xz", force=True)
-register_compression("bzip2", BZ2File, "bz2")
+register_compression("bz2", BZ2File, "bz2")
 register_compression("gzip", buffered_file_factory(cramjam.gzip), "gz")
 register_compression("snappy", buffered_file_factory(cramjam.snappy), "snappy")
 register_compression("lz4", buffered_file_factory(cramjam.lz4), "lz4")

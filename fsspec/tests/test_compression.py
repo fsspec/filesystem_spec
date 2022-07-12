@@ -65,7 +65,7 @@ def test_lzma_compression_name():
 @pytest.mark.parametrize("variant_name", ("gzip", "snappy", "lz4", "zstd", "brotli"))
 @pytest.mark.parametrize("infer", (True, False), ids=lambda v: f"infer:{v}")
 def test_compression_variant(tmpdir, variant_name, infer):
-    
+
     variant = getattr(cramjam, variant_name)
     variant_suffixes = {v: k for k, v in compressions.items()}
     suffix = variant_suffixes[variant_name]
