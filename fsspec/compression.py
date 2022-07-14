@@ -1,9 +1,8 @@
 """Helper functions for a standard streaming compression API"""
 from bz2 import BZ2File
+from gzip import GzipFile
 from lzma import LZMAFile
 from zipfile import ZipFile
-
-import cramjam
 
 import fsspec.utils
 from fsspec.spec import AbstractBufferedFile
@@ -80,6 +79,14 @@ def buffered_file_factory(codec):
             super().__init__(
                 fs=None, path="", mode=mode.strip("b") + "b", size=999999999, **kwargs
             )
+            try:
+                import cramjam  # noqa: F401
+            except ImportError:
+                raise ImportError(
+                    f"`{codec}` not available, install `cramjam` to access it "
+                    "and other compression algorithms."
+                )
+
             self.infile = infile
             self.codec = codec
             self.compressor = codec.Compressor()
@@ -102,19 +109,35 @@ def buffered_file_factory(codec):
             super().close()
             self.infile.close()
 
-    return type(f"{codec.__name__.capitalize()}File", (BufferedFile,), dict())
+    name = codec if isinstance(codec, str) else codec.__name__
+    return type(f"{name.capitalize()}File", (BufferedFile,), dict())
 
 
 register_compression("zip", unzip, "zip")
 register_compression("lzma", LZMAFile, "xz")
 register_compression("xz", LZMAFile, "xz", force=True)
 register_compression("bz2", BZ2File, "bz2")
-register_compression("gzip", buffered_file_factory(cramjam.gzip), "gz")
-register_compression("snappy", buffered_file_factory(cramjam.snappy), "snappy")
-register_compression("lz4", buffered_file_factory(cramjam.lz4), "lz4")
-register_compression("zstd", buffered_file_factory(cramjam.zstd), "zst")
-register_compression("brotli", buffered_file_factory(cramjam.brotli), "br")
-register_compression("deflate", buffered_file_factory(cramjam.deflate), "zz")
+register_compression("gzip", lambda f, **kwargs: GzipFile(fileobj=f, **kwargs), "gz")
+
+try:
+    import cramjam
+except ImportError:
+
+    class Cramjam:
+        def __getattr__(self, name):
+            return name
+
+    cramjam = Cramjam()
+else:
+    # Override gzip, b/c we know cramjam is installed.
+    register_compression("gzip", buffered_file_factory(cramjam.gzip), "gz", force=True)
+finally:
+    # all others set as present but raise sensible error later if cramjam not installed.
+    register_compression("snappy", buffered_file_factory(cramjam.snappy), "snappy")
+    register_compression("lz4", buffered_file_factory(cramjam.lz4), "lz4")
+    register_compression("zstd", buffered_file_factory(cramjam.zstd), "zst")
+    register_compression("brotli", buffered_file_factory(cramjam.brotli), "br")
+    register_compression("deflate", buffered_file_factory(cramjam.deflate), "zz")
 
 
 try:  # pragma: no cover

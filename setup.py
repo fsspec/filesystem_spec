@@ -60,6 +60,7 @@ setup(
         "libarchive": ["libarchive-c"],
         "gui": ["panel"],
         "tqdm": ["tqdm"],
+        "compression": ["cramjam"],
     },
     zip_safe=False,
 )

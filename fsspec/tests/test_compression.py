@@ -1,6 +1,5 @@
 import pathlib
 
-import cramjam
 import pytest
 
 import fsspec.core
@@ -67,6 +66,8 @@ def test_lzma_compression_name():
 )
 @pytest.mark.parametrize("infer", (True, False), ids=lambda v: f"infer:{v}")
 def test_compression_variant(tmpdir, variant_name, infer):
+
+    cramjam = pytest.importorskip("cramjam")
 
     variant = getattr(cramjam, variant_name)
     variant_suffixes = {v: k for k, v in compressions.items()}
