@@ -98,6 +98,10 @@ def buffered_file_factory(codec):
                 return b""
             return bytes(self.codec.decompress(data))
 
+        def close(self):
+            super().close()
+            self.infile.close()
+
     return type(f"{codec.__name__.capitalize()}File", (BufferedFile,), dict())
 
 
