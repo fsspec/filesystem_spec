@@ -114,6 +114,7 @@ register_compression("snappy", buffered_file_factory(cramjam.snappy), "snappy")
 register_compression("lz4", buffered_file_factory(cramjam.lz4), "lz4")
 register_compression("zstd", buffered_file_factory(cramjam.zstd), "zst")
 register_compression("brotli", buffered_file_factory(cramjam.brotli), "br")
+register_compression("deflate", buffered_file_factory(cramjam.deflate), "zz")
 
 
 try:  # pragma: no cover

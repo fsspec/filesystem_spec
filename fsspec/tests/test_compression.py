@@ -62,7 +62,9 @@ def test_lzma_compression_name():
     assert infer_compression("fn.xz") == "xz"
 
 
-@pytest.mark.parametrize("variant_name", ("gzip", "snappy", "lz4", "zstd", "brotli"))
+@pytest.mark.parametrize(
+    "variant_name", ("gzip", "snappy", "lz4", "zstd", "brotli", "deflate")
+)
 @pytest.mark.parametrize("infer", (True, False), ids=lambda v: f"infer:{v}")
 def test_compression_variant(tmpdir, variant_name, infer):
 
