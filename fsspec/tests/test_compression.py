@@ -1,3 +1,4 @@
+import builtins
 import pathlib
 
 import pytest
@@ -66,9 +67,7 @@ def test_lzma_compression_name():
 )
 @pytest.mark.parametrize("infer", (True, False), ids=lambda v: f"infer:{v}")
 def test_compression_variant(tmpdir, variant_name, infer):
-
     cramjam = pytest.importorskip("cramjam")
-
     variant = getattr(cramjam, variant_name)
     variant_suffixes = {v: k for k, v in compressions.items()}
     suffix = variant_suffixes[variant_name]
@@ -88,3 +87,31 @@ def test_compression_variant(tmpdir, variant_name, infer):
 
     with fsspec.core.open(f_path, mode="rt", compression=compression) as infile:
         assert infile.read() == data
+
+
+@pytest.mark.parametrize("variant", ("snappy", "lz4", "zstd", "brotli", "deflate"))
+def test_optional_compression_variants(monkeypatch, tmpdir, variant):
+    """
+    When attempting compression using an optional algorithm, a sensible message
+    is raised in how to remedy the error.
+    """
+    # ensure cramjam looks like it's not present
+    def importer(name, *args, **kwargs):
+        if name == "cramjam":
+            raise ImportError()
+        return original_importer(name, *args, **kwargs)
+
+    original_importer = builtins.__import__
+    monkeypatch.setattr(builtins, "__import__", importer)
+
+    f_path = pathlib.Path(str(tmpdir)).joinpath("out")
+    f_path.touch()
+
+    with pytest.raises(ImportError) as e:
+        with fsspec.core.open(f_path, mode="wb", compression=variant) as f:
+            f.write(b"data")
+        expected = (
+            f"`{variant}` not available, install `cramjam` "
+            "to access it and other compression algorithms."
+        )
+        assert expected == e.value.msg

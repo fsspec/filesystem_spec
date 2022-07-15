@@ -106,8 +106,11 @@ def buffered_file_factory(codec):
             return bytes(self.codec.decompress(data))
 
         def close(self):
-            super().close()
-            self.infile.close()
+            try:
+                super().close()
+                self.infile.close()
+            except AttributeError:
+                pass
 
     name = codec if isinstance(codec, str) else codec.__name__
     return type(f"{name.capitalize()}File", (BufferedFile,), dict())
