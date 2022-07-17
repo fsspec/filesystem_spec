@@ -60,6 +60,7 @@ setup(
         "libarchive": ["libarchive-c"],
         "gui": ["panel"],
         "tqdm": ["tqdm"],
+        "wandb": ["wandbfsspec"],
     },
     zip_safe=False,
 )
