@@ -208,6 +208,7 @@ Other Known Implementations
 - `dropbox`_ for access to dropbox shares
 - `ocifs`_ for access to Oracle Cloud Object Storage
 - `gdrive`_ to access Google Drive and shares (experimental)
+- `wandbfsspec`_ to access Wandb run data
 - `wandbfs`_ to access Wandb run data (experimental)
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
 - `webdav4`_ for WebDAV
@@ -219,6 +220,7 @@ Other Known Implementations
 .. _dropbox: https://github.com/MarineChap/intake_dropbox
 .. _ocifs: https://pypi.org/project/ocifs
 .. _gdrive: https://github.com/fsspec/gdrivefs
+.. _wandbfsspec: https://github.com/alvarobartt/wandbfsspec
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _ossfs: https://github.com/fsspec/ossfs
 .. _webdav4: https://github.com/skshetry/webdav4
