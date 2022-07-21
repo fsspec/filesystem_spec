@@ -38,7 +38,7 @@ class MemoryFileSystem(AbstractFileSystem):
             return [
                 {
                     "name": path,
-                    "size": self.store[path].getbuffer().nbytes,
+                    "size": _flen(self.store[path]),
                     "type": "file",
                     "created": self.store[path].created,
                 }
@@ -53,7 +53,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     out.append(
                         {
                             "name": p2,
-                            "size": self.store[p2].getbuffer().nbytes,
+                            "size": _flen(self.store[p2]),
                             "type": "file",
                             "created": self.store[p2].created,
                         }
@@ -147,7 +147,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "name": path,
                 "size": filelike.size
                 if hasattr(filelike, "size")
-                else filelike.getbuffer().nbytes,
+                else _flen(filelike),
                 "type": "file",
                 "created": getattr(filelike, "created", None),
             }
@@ -193,7 +193,7 @@ class MemoryFileSystem(AbstractFileSystem):
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
         if self.isfile(path1):
-            self.store[path2] = MemoryFile(self, path2, self.store[path1].getbuffer())
+            self.store[path2] = MemoryFile(self, path2, self.store[path1].getvalue())
         elif self.isdir(path1):
             if path2 not in self.pseudo_dirs:
                 self.pseudo_dirs.append(path2)
@@ -246,7 +246,7 @@ class MemoryFile(BytesIO):
         self.path = path
         self.created = datetime.utcnow().timestamp()
         if data:
-            self.write(data)
+            super().__init__(data)
             self.size = len(data)
             self.seek(0)
 
@@ -263,3 +263,11 @@ class MemoryFile(BytesIO):
 
     def commit(self):
         self.fs.store[self.path] = self
+
+
+def _flen(filelike):
+    """Find length of file without causing a write condition"""
+    pos = filelike.tell()
+    size = filelike.seek(0, 2)
+    filelike.seek(pos)
+    return size
