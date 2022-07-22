@@ -184,7 +184,7 @@ class MemoryFileSystem(AbstractFileSystem):
             else:
                 raise FileNotFoundError(path)
         if mode == "wb":
-            m = MemoryFile(self, path)
+            m = MemoryFile(self, path, kwargs.get('data'))
             if not self._intrans:
                 m.commit()
             return m
