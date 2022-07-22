@@ -114,6 +114,15 @@ class MemoryFileSystem(AbstractFileSystem):
             if not exist_ok:
                 raise
 
+    def pipe_file(self, path, value, **kwargs):
+        """Set the bytes of given file
+
+        Avoids copies of the data if possible
+        """
+        with self.open(path, "wb", data=value, **kwargs) as f:
+            # value passed into initializer to avoid copy
+            assert f.getvalue() is value
+
     def rmdir(self, path):
         path = self._strip_protocol(path)
         if path == "":
