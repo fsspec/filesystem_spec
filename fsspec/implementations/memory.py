@@ -154,9 +154,7 @@ class MemoryFileSystem(AbstractFileSystem):
             filelike = self.store[path]
             return {
                 "name": path,
-                "size": filelike.size
-                if hasattr(filelike, "size")
-                else _flen(filelike),
+                "size": filelike.size if hasattr(filelike, "size") else _flen(filelike),
                 "type": "file",
                 "created": getattr(filelike, "created", None),
             }
