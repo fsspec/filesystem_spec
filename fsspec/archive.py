@@ -34,7 +34,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         self._get_dirs()
         path = self._strip_protocol(path)
-        if path in {"", "/"}:
+        if path in {"", "/"} and self.dir_cache:
             return {"name": "/", "type": "directory", "size": 0}
         if path in self.dir_cache:
             return self.dir_cache[path]
