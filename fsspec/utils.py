@@ -619,3 +619,12 @@ class IOWrapper(IO):
     # forward anything else too
     def __getattr__(self, name):
         return getattr(self.fp, name)
+
+
+def file_size(filelike):
+    """Find length of any open read-mode file-like"""
+    pos = filelike.tell()
+    try:
+        return filelike.seek(0, 2)
+    finally:
+        filelike.seek(pos)

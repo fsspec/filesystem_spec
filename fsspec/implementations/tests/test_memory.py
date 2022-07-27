@@ -156,3 +156,10 @@ def test_remove_all(m):
     m.touch("afile")
     m.rm("/", recursive=True)
     assert not m.ls("/")
+
+
+def test_no_implicit_copy(m):
+    data = b"hello"
+    m.pipe("/path", data)
+    f = m.open("/path", "rb")
+    assert f.getbuffer() is data
