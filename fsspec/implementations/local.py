@@ -118,7 +118,7 @@ class LocalFileSystem(AbstractFileSystem):
         elif self.isdir(path1):
             self.mkdirs(path2, exist_ok=True)
         else:
-            raise FileNotFoundError
+            raise FileNotFoundError(path1)
 
     def get_file(self, path1, path2, callback=None, **kwargs):
         if isfilelike(path2):
