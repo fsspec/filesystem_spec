@@ -38,7 +38,7 @@ class MemoryFileSystem(AbstractFileSystem):
             return [
                 {
                     "name": path,
-                    "size": self.store[path].getbuffer().nbytes,
+                    "size": self.store[path].size,
                     "type": "file",
                     "created": self.store[path].created,
                 }
@@ -53,7 +53,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     out.append(
                         {
                             "name": p2,
-                            "size": self.store[p2].getbuffer().nbytes,
+                            "size": self.store[p2].size,
                             "type": "file",
                             "created": self.store[p2].created,
                         }
@@ -114,6 +114,13 @@ class MemoryFileSystem(AbstractFileSystem):
             if not exist_ok:
                 raise
 
+    def pipe_file(self, path, value, **kwargs):
+        """Set the bytes of given file
+
+        Avoids copies of the data if possible
+        """
+        self.open(path, "wb", data=value)
+
     def rmdir(self, path):
         path = self._strip_protocol(path)
         if path == "":
@@ -145,9 +152,7 @@ class MemoryFileSystem(AbstractFileSystem):
             filelike = self.store[path]
             return {
                 "name": path,
-                "size": filelike.size
-                if hasattr(filelike, "size")
-                else filelike.getbuffer().nbytes,
+                "size": filelike.size,
                 "type": "file",
                 "created": getattr(filelike, "created", None),
             }
@@ -184,7 +189,7 @@ class MemoryFileSystem(AbstractFileSystem):
             else:
                 raise FileNotFoundError(path)
         if mode == "wb":
-            m = MemoryFile(self, path)
+            m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
                 m.commit()
             return m
@@ -193,7 +198,9 @@ class MemoryFileSystem(AbstractFileSystem):
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
         if self.isfile(path1):
-            self.store[path2] = MemoryFile(self, path2, self.store[path1].getbuffer())
+            self.store[path2] = MemoryFile(
+                self, path2, self.store[path1].getvalue()
+            )  # implicit copy
         elif self.isdir(path1):
             if path2 not in self.pseudo_dirs:
                 self.pseudo_dirs.append(path2)
@@ -203,7 +210,7 @@ class MemoryFileSystem(AbstractFileSystem):
     def cat_file(self, path, start=None, end=None, **kwargs):
         path = self._strip_protocol(path)
         try:
-            return self.store[path].getvalue()[start:end]
+            return bytes(self.store[path].getbuffer()[start:end])
         except KeyError:
             raise FileNotFoundError(path)
 
@@ -246,17 +253,18 @@ class MemoryFile(BytesIO):
         self.path = path
         self.created = datetime.utcnow().timestamp()
         if data:
-            self.write(data)
-            self.size = len(data)
+            super().__init__(data)
             self.seek(0)
+
+    @property
+    def size(self):
+        return self.getbuffer().nbytes
 
     def __enter__(self):
         return self
 
     def close(self):
-        position = self.tell()
-        self.size = self.seek(0, 2)
-        self.seek(position)
+        pass
 
     def discard(self):
         pass
