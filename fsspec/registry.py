@@ -202,6 +202,10 @@ known_implementations = {
         "class": "webdav4.fsspec.WebdavFileSystem",
         "err": "Install webdav4 to access WebDAV",
     },
+    "xrootd": {
+        "class": "fsspec_xrootd.XRootDFileSystem",
+        "err": "Install fsspec-xrootd to access xrootd storage system",
+    },
 }
 
 
