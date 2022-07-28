@@ -1,5 +1,6 @@
 import datetime
 import io
+import logging
 import os
 import os.path as osp
 import posixpath
@@ -12,6 +13,8 @@ from fsspec import AbstractFileSystem
 from fsspec.compression import compr
 from fsspec.core import get_compression
 from fsspec.utils import isfilelike, stringify_path
+
+logger = logging.getLogger("fsspec.local")
 
 
 class LocalFileSystem(AbstractFileSystem):
@@ -246,6 +249,7 @@ class LocalFileOpener(io.IOBase):
     def __init__(
         self, path, mode, autocommit=True, fs=None, compression=None, **kwargs
     ):
+        logger.debug("open file: %s", path)
         self.path = path
         self.mode = mode
         self.fs = fs
@@ -343,10 +347,6 @@ class LocalFileOpener(io.IOBase):
     @property
     def closed(self):
         return self.f.closed
-
-    def __fspath__(self):
-        # uniquely among fsspec implementations, this is a real, local path
-        return self.path
 
     def __iter__(self):
         return self.f.__iter__()

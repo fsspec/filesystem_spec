@@ -249,6 +249,7 @@ class MemoryFile(BytesIO):
     """
 
     def __init__(self, fs=None, path=None, data=None):
+        logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
         self.created = datetime.utcnow().timestamp()
