@@ -1,6 +1,30 @@
 Changelog
 =========
 
+2022.7.0
+--------
+
+Enhancements
+
+- added fsspec-xrootd implementation to registry (#1000)
+- memory file not to copy bytes (#999)
+- Filie details passed to FUSE (#972)
+
+Fixes
+
+- Return info for root path of archives (#996)
+- arbitrary kwargs passed through in pipe_file (#993)
+- special cases for host in URLs for azure (#988)
+- unstrip protocol criterion (#980)
+- HTTPFile serialisation (#973)
+
+Other
+
+- Show erroring path in FileNotFounds (#989)
+- Reference file info without searching directory tree (#985)
+- Truncate for local files (#975)
+
+
 2022.5.0
 --------
 
