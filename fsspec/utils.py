@@ -74,7 +74,7 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         # https://github.com/dask/dask/issues/1417
         options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
 
-        if protocol in ("s3", "s3a", "gcs", "gs", "adl", "abfs", "abfss", "gdrive"):
+        if protocol in ("s3", "s3a", "gcs", "gs"):
             options["path"] = options["host"] + options["path"]
         else:
             options["host"] = options["host"]
