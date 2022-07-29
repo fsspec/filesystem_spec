@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2022.7.1
+--------
+
+Fixes
+
+- Remove fspath from LocalFileOpener (#1005)
+- Revert 988 (#1003)
+
 2022.7.0
 --------
 
