@@ -756,6 +756,8 @@ class LocalTempFile:
         self.close()
 
     def close(self):
+        if self.closed:
+            return
         self.fh.close()
         self.closed = True
         if self.autocommit:
