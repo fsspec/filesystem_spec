@@ -542,7 +542,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
         [f.close() for f in open_files]
         for f in open_files:
-            os.remove(f.name)
+            # in case autocommit is off, and so close did not already delete
+            try:
+                os.remove(f.name)
+            except FileNotFoundError:
+                pass
 
     def _make_local_details(self, path):
         hash = self.hash_name(path, self.same_names)
