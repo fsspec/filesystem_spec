@@ -540,6 +540,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
     def commit_many(self, open_files):
         self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
+        [f.close() for f in open_files]
         for f in open_files:
             os.remove(f.name)
 
