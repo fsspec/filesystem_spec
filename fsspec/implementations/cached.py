@@ -774,7 +774,11 @@ class LocalTempFile:
 
     def commit(self):
         self.fs.put(self.fn, self.path)
-        os.remove(self.fn)
+        try:
+            os.remove(self.fn)
+        except (PermissionError, FileNotFoundError):
+            # file path may be held by new version of the file on windows
+            pass
 
     @property
     def name(self):
