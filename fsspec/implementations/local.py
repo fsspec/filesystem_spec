@@ -348,6 +348,9 @@ class LocalFileOpener(io.IOBase):
     def closed(self):
         return self.f.closed
 
+    def fileno(self):
+        return self.raw.fileno()
+
     def __iter__(self):
         return self.f.__iter__()
 
