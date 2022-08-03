@@ -540,8 +540,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
     def commit_many(self, open_files):
         self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
+        [f.close() for f in open_files]
         for f in open_files:
-            os.remove(f.name)
+            # in case autocommit is off, and so close did not already delete
+            try:
+                os.remove(f.name)
+            except FileNotFoundError:
+                pass
 
     def _make_local_details(self, path):
         hash = self.hash_name(path, self.same_names)
@@ -756,6 +761,8 @@ class LocalTempFile:
         self.close()
 
     def close(self):
+        if self.closed:
+            return
         self.fh.close()
         self.closed = True
         if self.autocommit:
@@ -767,7 +774,11 @@ class LocalTempFile:
 
     def commit(self):
         self.fs.put(self.fn, self.path)
-        os.remove(self.fn)
+        try:
+            os.remove(self.fn)
+        except (PermissionError, FileNotFoundError):
+            # file path may be held by new version of the file on windows
+            pass
 
     @property
     def name(self):

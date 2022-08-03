@@ -94,10 +94,6 @@ class OpenFile(object):
     def __repr__(self):
         return "<OpenFile '{}'>".format(self.path)
 
-    def __fspath__(self):
-        # may raise if cannot be resolved to local file
-        return self.open().__fspath__()
-
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
 
