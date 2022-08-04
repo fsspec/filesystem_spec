@@ -110,7 +110,7 @@ class FTPFileSystem(AbstractFileSystem):
                     if info["type"] == "file":
                         out = [(path, info)]
                 except (Error, IndexError):
-                    raise FileNotFoundError
+                    raise FileNotFoundError(path)
         files = self.dircache.get(path, out)
         if not detail:
             return sorted([fn for fn, details in files])

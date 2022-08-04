@@ -497,8 +497,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             self._mkcache()
         else:
             return [
-                LocalTempFile(self.fs, path, mode=open_files.mode, autocommit=False)
-                for path in paths
+                LocalTempFile(self.fs, path, mode=open_files.mode) for path in paths
             ]
 
         if self.compression:
@@ -541,6 +540,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
     def commit_many(self, open_files):
         self.fs.put([f.fn for f in open_files], [f.path for f in open_files])
+        [f.close() for f in open_files]
+        for f in open_files:
+            # in case autocommit is off, and so close did not already delete
+            try:
+                os.remove(f.name)
+            except FileNotFoundError:
+                pass
 
     def _make_local_details(self, path):
         hash = self.hash_name(path, self.same_names)
@@ -595,7 +601,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         if "r" not in mode:
-            return self.fs._open(path, mode=mode, **kwargs)
+            return LocalTempFile(self, path, mode=mode)
         detail = self._check_file(path)
         if detail:
             detail, fn = detail
@@ -755,6 +761,8 @@ class LocalTempFile:
         self.close()
 
     def close(self):
+        if self.closed:
+            return
         self.fh.close()
         self.closed = True
         if self.autocommit:
@@ -766,13 +774,15 @@ class LocalTempFile:
 
     def commit(self):
         self.fs.put(self.fn, self.path)
+        try:
+            os.remove(self.fn)
+        except (PermissionError, FileNotFoundError):
+            # file path may be held by new version of the file on windows
+            pass
 
     @property
     def name(self):
-        if isinstance(self.fh.name, str):
-            return self.fh.name  # initialized by open()
-        else:
-            return self.fn  # initialized by tempfile.mkstemp()
+        return self.fn
 
     def __getattr__(self, item):
         return getattr(self.fh, item)

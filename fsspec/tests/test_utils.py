@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
+import fsspec.utils
 from fsspec.utils import (
     can_be_local,
     common_prefix,
@@ -204,7 +205,7 @@ def test_infer_options():
     # include it in the path. Test that:
     # - Parsing doesn't lowercase the bucket
     # - The bucket is included in path
-    for protocol in ["s3", "s3a", "gcs", "gs", "adl", "abfs", "abfss", "gdrive"]:
+    for protocol in ["s3", "s3a", "gcs", "gs"]:
         options = infer_storage_options("%s://Bucket-name.com/test.csv" % protocol)
         assert options["path"] == "Bucket-name.com/test.csv"
 
@@ -377,3 +378,9 @@ def test_merge_offset_ranges(max_gap, max_block):
     assert expect_paths == result_paths
     assert expect_starts == result_starts
     assert expect_ends == result_ends
+
+
+def test_size():
+    f = io.BytesIO(b"hello")
+    assert fsspec.utils.file_size(f) == 5
+    assert f.tell() == 0

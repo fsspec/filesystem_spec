@@ -8,7 +8,7 @@ import pytest
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
-from fsspec.implementations.cached import CachingFileSystem
+from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
 
 from .test_ftp import FTPFileSystem
 
@@ -724,11 +724,15 @@ def test_strip(protocol):
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_cached_write(protocol):
     d = tempfile.mkdtemp()
-    with fsspec.open_files(f"{protocol}::file://{d}/*.out", mode="wb", num=2) as files:
+    ofs = fsspec.open_files(f"{protocol}::file://{d}/*.out", mode="wb", num=2)
+    with ofs as files:
         for f in files:
+            assert isinstance(f, LocalTempFile)
             f.write(b"data")
+            fn = f.name
 
     assert sorted(os.listdir(d)) == ["0.out", "1.out"]
+    assert not os.path.exists(fn)
 
 
 def test_expiry():
@@ -806,18 +810,10 @@ def test_equality():
     assert hash(cfs2) == hash(cfs3)
 
 
-@pytest.mark.xfail
-def test_json():
-    """Test that the JSON representation refers to correct class.
-
-    Make sure that the JSON representation of a CachingFileSystem refers to the
-    CachingFileSystem, not to the underlying filesystem.
-    """
-    import json
-
+def test_str():
+    """Test that the str representation refers to correct class."""
     from fsspec.implementations.local import LocalFileSystem
 
     lfs = LocalFileSystem()
-    cfs = CachingFileSystem(fs=lfs, cache_storage="raspberry")
-    D = json.loads(cfs.to_json())
-    assert D["cls"].endswith("CachingFileSystem")
+    cfs = CachingFileSystem(fs=lfs)
+    assert "CachingFileSystem" in str(cfs)

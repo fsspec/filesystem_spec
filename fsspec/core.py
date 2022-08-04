@@ -94,10 +94,6 @@ class OpenFile(object):
     def __repr__(self):
         return "<OpenFile '{}'>".format(self.path)
 
-    def __fspath__(self):
-        # may raise if cannot be resolved to local file
-        return self.open().__fspath__()
-
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
 
@@ -196,18 +192,17 @@ class OpenFiles(list):
 
     def __exit__(self, *args):
         fs = self.fs
+        [s.__exit__(*args) for s in self]
         if "r" not in self.mode:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
                     fs.commit_many(self.files)
-                    self.files.clear()
                     return
                 if hasattr(fs, "fs") and fs.fs is not None:
                     fs = fs.fs
                 else:
                     break
-        [s.__exit__(*args) for s in self]
 
     def __getitem__(self, item):
         out = super().__getitem__(item)
