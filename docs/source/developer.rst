@@ -24,7 +24,7 @@ Note the backend-specific parameters that can be passed in this call.
 In cases where the caller wants to control the context directly, they can use the
 ``open`` method of the ``OpenFile``, or get the filesystem object directly,
 skipping the ``OpenFile`` route. In the latter case, text encoding and compression
-or **not** handled for you. The file-like object can also be used as a context
+are **not** handled for you. The file-like object can also be used as a context
 manager, or the ``close()`` method must be called explicitly to release resources.
 
 .. code-block:: python
