@@ -333,7 +333,7 @@ class AsyncFileSystem(AbstractFileSystem):
         batch_size = batch_size or self.batch_size
         path = await self._expand_path(path, recursive=recursive)
         return await _run_coros_in_chunks(
-            [self._rm_file(p, **kwargs) for p in path],
+            [self._rm_file(p, **kwargs) for p in reversed(path)],
             batch_size=batch_size,
             nofiles=True,
         )
