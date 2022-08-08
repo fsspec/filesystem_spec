@@ -46,3 +46,14 @@ def test_root_info():
         fs = fsspec.filesystem("zip", fo=z)
         assert fs.info("/") == {"name": "/", "type": "directory", "size": 0}
         assert fs.info("") == {"name": "/", "type": "directory", "size": 0}
+
+
+def test_write_seek(m):
+    with m.open("afile.zip", "wb") as f:
+        fs = fsspec.filesystem("zip", fo=f, mode="w")
+        fs.pipe("another", b"hi")
+        fs.zip.close()
+
+    with m.open("afile.zip", "rb") as f:
+        fs = fsspec.filesystem("zip", fo=f)
+        assert fs.cat("another") == b"hi"
