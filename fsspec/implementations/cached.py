@@ -592,7 +592,8 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         out = {}
         callback.set_size(len(paths))
         for p, fn in zip(paths, fns):
-            out[p] = open(fn, "rb").read()
+            with open(fn, "rb") as f:
+                out[p] = f.read()
             callback.relative_update(1)
         if isinstance(path, str) and len(paths) == 1 and recursive is False:
             out = out[paths[0]]
