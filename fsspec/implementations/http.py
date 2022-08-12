@@ -620,7 +620,7 @@ class HTTPFile(AbstractBufferedFile):
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-        logger.debug(self.url + " : " + headers["Range"])
+        logger.debug(str(self.url) + " : " + headers["Range"])
         r = await self.session.get(self.url, headers=headers, **kwargs)
         async with r:
             if r.status == 416:
