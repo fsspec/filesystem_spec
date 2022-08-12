@@ -73,7 +73,7 @@ class CachingFileSystem(AbstractFileSystem):
             path, so be sure to set this option to False.
         expiry_time: int
             The time in seconds after which a local copy is considered useless.
-            Set to falsy to prevent expiry. The default is equivalent to one
+            Set to False to prevent expiry. The default is equivalent to one
             week.
         target_options: dict or None
             Passed to the instantiation of the FS, if fs is None.
