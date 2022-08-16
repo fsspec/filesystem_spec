@@ -55,6 +55,10 @@ class OpenFile(io.IOBase):
         How to handle encoding errors if opened in text mode.
     newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
+    autoopen: bool
+        If True, calls open() immediately. Mostly used by pickle
+    pos: int
+        If given and autoopen is True, seek to this location immediately
     """
 
     def __init__(
@@ -67,6 +71,7 @@ class OpenFile(io.IOBase):
         errors=None,
         newline=None,
         autoopen=False,
+        pos=0,
     ):
         self.fs = fs
         self.path = path
@@ -78,8 +83,15 @@ class OpenFile(io.IOBase):
         self.fobjects = []
         if autoopen:
             self.open()
+            self.seek(pos)
 
     def __reduce__(self):
+        if (
+            ("w" in self.mode or "a" in self.mode or "+" in self.mode)
+            and not self.closed
+            and self.tell()
+        ):
+            raise ValueError("cannot pickle write-mode file after a write")
         return (
             OpenFile,
             (
@@ -91,6 +103,7 @@ class OpenFile(io.IOBase):
                 self.errors,
                 self.newline,
                 not self.closed,
+                not self.closed and self.tell(),
             ),
         )
 
@@ -131,7 +144,11 @@ class OpenFile(io.IOBase):
 
     @property
     def f(self):
-        return self.fobjects[-1]
+        if self.fobjects:
+            return self.fobjects[-1]
+        raise ValueError(
+            "I/O operation on closed file. Please call " "open() or use a with context"
+        )
 
     def open(self):
         """Materialise this as a real open file without context
@@ -178,9 +195,12 @@ class OpenFile(io.IOBase):
     def readlines(self, *args, **kwargs):
         return self.f.readlines(*args, **kwargs)
 
+    def flush(self) -> None:
+        self.f.flush()
+
     @property
     def closed(self):
-        return self.f.closed
+        return len(self.fobjects) == 0 or self.f.closed
 
     def fileno(self):
         return self.f.fileno()
