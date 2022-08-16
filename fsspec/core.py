@@ -18,7 +18,6 @@ from .caching import (  # noqa: F401
 from .compression import compr
 from .registry import filesystem, get_filesystem_class
 from .utils import (
-    IOWrapper,
     _unstrip_protocol,
     build_name_function,
     infer_compression,
@@ -29,7 +28,7 @@ from .utils import (
 logger = logging.getLogger("fsspec")
 
 
-class OpenFile(object):
+class OpenFile(io.IOBase):
     """
     File-like object to be used in a context
 
@@ -67,6 +66,7 @@ class OpenFile(object):
         encoding=None,
         errors=None,
         newline=None,
+        autoopen=False,
     ):
         self.fs = fs
         self.path = path
@@ -76,6 +76,8 @@ class OpenFile(object):
         self.errors = errors
         self.newline = newline
         self.fobjects = []
+        if autoopen:
+            self.open()
 
     def __reduce__(self):
         return (
@@ -88,6 +90,7 @@ class OpenFile(object):
                 self.encoding,
                 self.errors,
                 self.newline,
+                not self.closed,
             ),
         )
 
@@ -113,18 +116,22 @@ class OpenFile(object):
             )
             self.fobjects.append(f)
 
-        return self.fobjects[-1]
+        return self
 
     def __exit__(self, *args):
         self.close()
 
     def __del__(self):
         if hasattr(self, "fobjects"):
-            self.fobjects.clear()  # may cause cleanup of objects and close files
+            self.close()
 
     @property
     def full_name(self):
         return _unstrip_protocol(self.path, self.fs)
+
+    @property
+    def f(self):
+        return self.fobjects[-1]
 
     def open(self):
         """Materialise this as a real open file without context
@@ -134,26 +141,55 @@ class OpenFile(object):
         objects, so they can close even if the parent OpenFile object has already
         been deleted; but a with-context is better style.
         """
-        out = self.__enter__()
-        closer = out.close
-        fobjects = self.fobjects.copy()[:-1]
-        mode = self.mode
-
-        def close():
-            # this func has no reference to
-            closer()  # original close bound method of the final file-like
-            _close(fobjects, mode)  # call close on other dependent file-likes
-
-        try:
-            out.close = close
-        except AttributeError:
-            out = IOWrapper(out, lambda: _close(fobjects, mode))
-
-        return out
+        return self.__enter__()
 
     def close(self):
         """Close all encapsulated file objects"""
-        _close(self.fobjects, self.mode)
+        for f in reversed(self.fobjects):
+            if "r" not in self.mode and not f.closed:
+                f.flush()
+            f.close()
+        self.fobjects.clear()
+
+    def readable(self) -> bool:
+        return "r" in self.mode or "a" in self.mode
+
+    def writable(self) -> bool:
+        return "r" not in self.mode
+
+    def read(self, *args, **kwargs):
+        return self.f.read(*args, **kwargs)
+
+    def write(self, *args, **kwargs):
+        return self.f.write(*args, **kwargs)
+
+    def tell(self, *args, **kwargs):
+        return self.f.tell(*args, **kwargs)
+
+    def seek(self, *args, **kwargs):
+        return self.f.seek(*args, **kwargs)
+
+    def seekable(self, *args, **kwargs):
+        return self.f.seekable(*args, **kwargs)
+
+    def readline(self, *args, **kwargs):
+        return self.f.readline(*args, **kwargs)
+
+    def readlines(self, *args, **kwargs):
+        return self.f.readlines(*args, **kwargs)
+
+    @property
+    def closed(self):
+        return self.f.closed
+
+    def fileno(self):
+        return self.f.fileno()
+
+    def __iter__(self):
+        return self.f.__iter__()
+
+    def __getattr__(self, item):
+        return getattr(self.f, item)
 
 
 class OpenFiles(list):
@@ -212,14 +248,6 @@ class OpenFiles(list):
 
     def __repr__(self):
         return "<List of %s OpenFile instances>" % len(self)
-
-
-def _close(fobjects, mode):
-    for f in reversed(fobjects):
-        if "r" not in mode and not f.closed:
-            f.flush()
-        f.close()
-    fobjects.clear()
 
 
 def open_files(

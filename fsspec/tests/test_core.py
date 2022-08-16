@@ -183,6 +183,13 @@ def test_openfile_pickle_newline():
     assert test.newline == restored.newline
 
 
+def test_pickle_after_open_open():
+    test = fsspec.open(__file__, mode="rt").open()
+    test2 = pickle.loads(pickle.dumps(test))
+    test.close()
+    assert not test2.closed
+
+
 def test_mismatch():
     with pytest.raises(ValueError, match="protocol"):
         open_files(["s3://test/path.csv", "/other/path.csv"])
