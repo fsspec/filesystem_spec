@@ -1,8 +1,10 @@
 import copy
 import logging
+import os
 import tarfile
 import weakref
-from io import BufferedReader
+import io
+from typing import BinaryIO, Callable, Optional
 
 import fsspec
 from fsspec.archive import AbstractArchiveFileSystem
@@ -25,6 +27,11 @@ class TarFileSystem(AbstractArchiveFileSystem):
     protocol = "tar"
     cachable = False
 
+    _files_borrowing_fo: weakref.WeakSet["TarFileSystem"]
+    _orig_fo: BinaryIO
+    _compressor: Optional[Callable[[BinaryIO], BinaryIO]] = None
+    _closer: Optional[Callable[[], None]] = None
+
     def __init__(
         self,
         fo="",
@@ -39,6 +46,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
         if isinstance(fo, str):
             fo = fsspec.open(fo, protocol=target_protocol, **target_options).open()
+        self._orig_fo = fo
 
         # Try to infer compression.
         if compression is None:
@@ -79,17 +87,26 @@ class TarFileSystem(AbstractArchiveFileSystem):
         if compression is not None:
             # TODO: tarfile already implements compression with modes like "'r:gz'",
             #  but then would seek to offset in the file work?
-            fo = compr[compression](fo)
+            self._compressor = compr[compression]
+            fo = self._compressor(fo)
 
-        self._fo_ref = fo
-        weakref.finalize(self, fo.close)
-        self.fo = fo.__enter__()  # the whole instance is a context
+        if hasattr(fo, "__enter__"):
+            fo = fo.__enter__()  # the whole instance is a context
+            self._closer = lambda: fo.__exit__(None, None, None)
+        else:
+            self._closer = fo.close
+        self.fo = fo
         self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
         self.index_store = index_store
         self.index = None
+        self._files_borrowing_fo = weakref.WeakSet()
         self._index()
+
+    def __del__(self):
+        if self._closer is not None:
+            self._closer()
 
     def _index(self):
         # TODO: load and set saved index, if exists
@@ -118,21 +135,51 @@ class TarFileSystem(AbstractArchiveFileSystem):
             self.dir_cache[info["name"]] = info
 
     def _open(self, path, mode="rb", **kwargs):
+        if self._files_borrowing_fo:
+            raise ValueError(
+                "underlying file object is borrowed by another file object and it cannot be shared"
+            )
         if mode != "rb":
             raise ValueError("Read-only filesystem implementation")
         details, offset = self.index[path]
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
 
-        # `LocalFileSystem` offers its resources as `io.BufferedReader`
-        # objects, those can't be copied.
-        if isinstance(self.fo, BufferedReader):
-            newfo = self.fo
+        newfo: io.BinaryIO = self.fo
+        if isinstance(self._orig_fo, io.BufferedReader) and isinstance(
+            self._orig_fo.raw, io.FileIO
+        ):
+            # If the underlying file object is backed by a file descriptor,
+            # duplicate it and wrap it with BufferedReader.
+            newfo = os.fdopen(os.dup(self._orig_fo.raw.fileno()), "rb", closefd=True)
+            newfo.seek(0)
+            if self._compressor is not None:
+                newfo = self._compressor(newfo)
         else:
-            newfo = copy.copy(self.fo)
-        newfo.seek(offset)
+            try:
+                if self._orig_fo.seekable():
+                    newfo = copy.copy(self._orig_fo)
+                    newfo.seek(0)
+                    if self._compressor is not None:
+                        newfo = self._compressor(newfo)
+            except TypeError:
+                pass
 
-        return TarContainedFile(newfo, self.info(path))
+        newfo.seek(offset)
+        if newfo == self.fo:
+            f = TarContainedFile(
+                newfo,
+                self.info(path),
+                on_close=lambda source: self._files_borrowing_fo.remove(source),
+            )
+            self._files_borrowing_fo.add(f)
+        else:
+            f = TarContainedFile(
+                newfo,
+                self.info(path),
+                on_close=lambda source: source.of.close(),
+            )
+        return f
 
 
 class TarContainedFile(object):
@@ -140,13 +187,18 @@ class TarContainedFile(object):
     Represent/wrap a TarFileSystem's file object.
     """
 
-    def __init__(self, of, info):
+    on_close: Optional[Callable[["TarContainedFile"], None]]
+
+    def __init__(
+        self, of, info, on_close: Optional[Callable[["TarContainedFile"], None]] = None
+    ):
         self.info = info
         self.size = info["size"]
         self.of = of
         self.start = of.tell()
         self.end = self.start + self.size
         self.closed = False
+        self.on_close = on_close
 
     def tell(self):
         return self.of.tell() - self.start
@@ -176,8 +228,12 @@ class TarContainedFile(object):
         self.of.seek(to)
 
     def close(self):
-        self.of.close()
+        if not self.closed and self.on_close is not None:
+            self.on_close(self)
         self.closed = True
+
+    def __del__(self):
+        self.close()
 
     def __enter__(self):
         return self
