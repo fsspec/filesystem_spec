@@ -27,7 +27,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
     protocol = "tar"
     cachable = False
 
-    _files_borrowing_fo: weakref.WeakSet["TarFileSystem"]
+    _files_borrowing_fo: "weakref.WeakSet[TarFileSystem]"
     _orig_fo: BinaryIO
     _compressor: Optional[Callable[[BinaryIO], BinaryIO]] = None
     _closer: Optional[Callable[[], None]] = None
