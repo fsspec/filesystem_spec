@@ -1,9 +1,9 @@
 import copy
+import io
 import logging
 import os
 import tarfile
 import weakref
-import io
 from typing import BinaryIO, Callable, Optional
 
 import fsspec
@@ -137,7 +137,8 @@ class TarFileSystem(AbstractArchiveFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         if self._files_borrowing_fo:
             raise ValueError(
-                "underlying file object is borrowed by another file object and it cannot be shared"
+                "underlying file object is borrowed by another file "
+                "object and it cannot be shared"
             )
         if mode != "rb":
             raise ValueError("Read-only filesystem implementation")

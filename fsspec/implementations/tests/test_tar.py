@@ -335,7 +335,8 @@ class TestOperationsOnTarFile:
         belongs.
         """
         if compression in ("xz", "bz2"):
-            # skip the test because those compression methods require underlying file object to be seekable.
+            # skip the test because those compression methods require underlying
+            # file object to be seekable.
             return
 
         # should be able to open the files sequentially
@@ -353,6 +354,6 @@ class TestOperationsOnTarFile:
         fd.name = tar_file.name
         fs = TarFileSystem(fd)
 
-        f1 = fs.open("a.pdf")
+        fs.open("a.pdf")
         with pytest.raises(ValueError):
             fs.open("b/c.pdf")
