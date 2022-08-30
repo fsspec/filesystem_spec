@@ -83,7 +83,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
         self._fo_ref = fo
         weakref.finalize(self, fo.close)
-        self.fo = fo.__enter__()  # the whole instance is a context
+        self.fo = fo  # the whole instance is a context
         self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
