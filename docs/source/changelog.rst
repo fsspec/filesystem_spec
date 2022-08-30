@@ -19,6 +19,7 @@ Fixes
 - expose fileno in LocalFileOpener (#1010, #1005)
 - remove temp files with simplecache writing (#1006)
 - azure paths (#1003)
+- copy dircache keys before iter
 
 
 2022.7.1
