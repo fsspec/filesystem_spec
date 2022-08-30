@@ -87,7 +87,9 @@ class DirCache(MutableMapping):
         del self._cache[key]
 
     def __iter__(self):
-        return (k for k in self._cache if k in self)
+        entries = list(self._cache)
+
+        return (k for k in entries if k in self)
 
     def __reduce__(self):
         return (
