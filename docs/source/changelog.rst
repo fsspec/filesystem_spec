@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2022.8.1
+--------
+
+- revert #1024 (#1029), with strciter requirements on OpenFile usage
+
 2022.8.0
 --------
 
