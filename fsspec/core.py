@@ -28,7 +28,7 @@ from .utils import (
 logger = logging.getLogger("fsspec")
 
 
-class OpenFile(io.IOBase):
+class OpenFile:
     """
     File-like object to be used in a context
 
@@ -70,8 +70,6 @@ class OpenFile(io.IOBase):
         encoding=None,
         errors=None,
         newline=None,
-        autoopen=False,
-        pos=0,
     ):
         self.fs = fs
         self.path = path
@@ -81,17 +79,8 @@ class OpenFile(io.IOBase):
         self.errors = errors
         self.newline = newline
         self.fobjects = []
-        if autoopen:
-            self.open()
-            self.seek(pos)
 
     def __reduce__(self):
-        if (
-            ("w" in self.mode or "a" in self.mode or "+" in self.mode)
-            and not self.closed
-            and self.tell()
-        ):
-            raise ValueError("cannot pickle write-mode file after a write")
         return (
             OpenFile,
             (
@@ -102,8 +91,6 @@ class OpenFile(io.IOBase):
                 self.encoding,
                 self.errors,
                 self.newline,
-                not self.closed,
-                not self.closed and self.tell(),
             ),
         )
 
@@ -124,12 +111,12 @@ class OpenFile(io.IOBase):
 
         if "b" not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
-            f = io.TextIOWrapper(
+            f = PickleableTextIOWrapper(
                 f, encoding=self.encoding, errors=self.errors, newline=self.newline
             )
             self.fobjects.append(f)
 
-        return self
+        return self.fobjects[-1]
 
     def __exit__(self, *args):
         self.close()
@@ -142,21 +129,12 @@ class OpenFile(io.IOBase):
     def full_name(self):
         return _unstrip_protocol(self.path, self.fs)
 
-    @property
-    def f(self):
-        if self.fobjects:
-            return self.fobjects[-1]
-        raise ValueError(
-            "I/O operation on closed file. Please call " "open() or use a with context"
-        )
-
     def open(self):
         """Materialise this as a real open file without context
 
-        The file should be explicitly closed to avoid enclosed file
-        instances persisting. This code-path monkey-patches the file-like
-        objects, so they can close even if the parent OpenFile object has already
-        been deleted; but a with-context is better style.
+        The OpenFile object should be explicitly closed to avoid enclosed file
+        instances persisting. You must, therefore, keep a reference to the OpenFile
+        during the life of the file-like it generates.
         """
         return self.__enter__()
 
@@ -167,49 +145,6 @@ class OpenFile(io.IOBase):
                 f.flush()
             f.close()
         self.fobjects.clear()
-
-    def readable(self) -> bool:
-        return "r" in self.mode or "a" in self.mode
-
-    def writable(self) -> bool:
-        return "r" not in self.mode
-
-    def read(self, *args, **kwargs):
-        return self.f.read(*args, **kwargs)
-
-    def write(self, *args, **kwargs):
-        return self.f.write(*args, **kwargs)
-
-    def tell(self, *args, **kwargs):
-        return self.f.tell(*args, **kwargs)
-
-    def seek(self, *args, **kwargs):
-        return self.f.seek(*args, **kwargs)
-
-    def seekable(self, *args, **kwargs):
-        return self.f.seekable(*args, **kwargs)
-
-    def readline(self, *args, **kwargs):
-        return self.f.readline(*args, **kwargs)
-
-    def readlines(self, *args, **kwargs):
-        return self.f.readlines(*args, **kwargs)
-
-    def flush(self) -> None:
-        self.f.flush()
-
-    @property
-    def closed(self):
-        return len(self.fobjects) == 0 or self.f.closed
-
-    def fileno(self):
-        return self.f.fileno()
-
-    def __iter__(self):
-        return self.f.__iter__()
-
-    def __getattr__(self, item):
-        return getattr(self.f, item)
 
 
 class OpenFiles(list):
@@ -748,3 +683,26 @@ def _expand_paths(path, name_function, num):
             "3. A path with a '*' in it: 'foo.*.json'"
         )
     return paths
+
+
+class PickleableTextIOWrapper(io.TextIOWrapper):
+    """TextIOWrapper cannot be pickled. This solves it.
+
+    Requires that ``buffer`` be pickleable, which all instances of
+    AbstractBufferedFile are.
+    """
+
+    def __init__(
+        self,
+        buffer,
+        encoding=None,
+        errors=None,
+        newline=None,
+        line_buffering=False,
+        write_through=False,
+    ):
+        self.args = buffer, encoding, errors, newline, line_buffering, write_through
+        super().__init__(*self.args)
+
+    def __reduce__(self):
+        return PickleableTextIOWrapper, self.args

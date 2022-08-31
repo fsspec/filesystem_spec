@@ -128,6 +128,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
                     'one file: "{}"'.format(fo, files)
                 )
             fo = files[0]
+        self.of = fo
         self.fo = fo.__enter__()  # the whole instance is a context
         self.block_size = block_size
         self.dir_cache = None
