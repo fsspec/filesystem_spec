@@ -192,13 +192,12 @@ def test_write_pickle_context():
     fn = tmp + "afile"
     url = "simplecache::file://" + fn
     with fsspec.open(url, "wb") as f:
-        pickle.loads(pickle.dumps(f))  # ok before write
+        pickle.loads(pickle.dumps(f))
         f.write(b"hello ")
-        with pytest.raises(ValueError):
-            pickle.dumps(f)
+        pickle.dumps(f)
 
-    f2 = pickle.loads(pickle.dumps(f))
-    assert f2.closed
+    with pytest.raises(ValueError):
+        pickle.dumps(f)
 
     assert open(fn, "rb").read() == b"hello "
 
@@ -207,20 +206,17 @@ def test_write_pickle_nocontext():
     tmp = str(tempfile.mkdtemp())
     fn = tmp + "afile"
     url = "simplecache::file://" + fn
-    f = fsspec.open(url, "wb").open()
+    of = fsspec.open(url, "wb")
+    f = of.open()
     f2 = pickle.loads(pickle.dumps(f))
 
     f.write(b"hello ")
 
-    with pytest.raises(ValueError):
-        pickle.loads(pickle.dumps(f))
+    pickle.loads(pickle.dumps(f))  # reopens cache file
     f2.write(b"world")
     f2.close()
-    f.close()
-
-    assert (
-        open(fn, "rb").read() == b"hello "
-    )  # content is first write, since f flushed/closed last
+    with pytest.raises(Exception):
+        f.close()  # we just closed it
 
 
 def test_blocksize(ftp_writable):

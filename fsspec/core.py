@@ -686,6 +686,12 @@ def _expand_paths(path, name_function, num):
 
 
 class PickleableTextIOWrapper(io.TextIOWrapper):
+    """TextIOWrapper cannot be pickled. This solves it.
+
+    Requires that ``buffer`` be pickleable, which all instances of
+    AbstractBufferedFile are.
+    """
+
     def __init__(
         self,
         buffer,
