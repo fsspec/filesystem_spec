@@ -202,23 +202,6 @@ def test_write_pickle_context():
     assert open(fn, "rb").read() == b"hello "
 
 
-def test_write_pickle_nocontext():
-    tmp = str(tempfile.mkdtemp())
-    fn = tmp + "afile"
-    url = "simplecache::file://" + fn
-    of = fsspec.open(url, "wb")
-    f = of.open()
-    f2 = pickle.loads(pickle.dumps(f))
-
-    f.write(b"hello ")
-
-    pickle.loads(pickle.dumps(f))  # reopens cache file
-    f2.write(b"world")
-    f2.close()
-    with pytest.raises(Exception):
-        f.close()  # we just closed it
-
-
 def test_blocksize(ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
