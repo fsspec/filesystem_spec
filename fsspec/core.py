@@ -111,7 +111,7 @@ class OpenFile:
 
         if "b" not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
-            f = io.TextIOWrapper(
+            f = PickleableTextIOWrapper(
                 f, encoding=self.encoding, errors=self.errors, newline=self.newline
             )
             self.fobjects.append(f)
@@ -133,7 +133,8 @@ class OpenFile:
         """Materialise this as a real open file without context
 
         The OpenFile object should be explicitly closed to avoid enclosed file
-        instances persisting.
+        instances persisting. You must, therefore, keep a reference to the OpenFile
+        during the life of the file-like it generates.
         """
         return self.__enter__()
 
@@ -682,3 +683,20 @@ def _expand_paths(path, name_function, num):
             "3. A path with a '*' in it: 'foo.*.json'"
         )
     return paths
+
+
+class PickleableTextIOWrapper(io.TextIOWrapper):
+    def __init__(
+        self,
+        buffer,
+        encoding=None,
+        errors=None,
+        newline=None,
+        line_buffering=False,
+        write_through=False,
+    ):
+        self.args = buffer, encoding, errors, newline, line_buffering, write_through
+        super().__init__(*self.args)
+
+    def __reduce__(self):
+        return PickleableTextIOWrapper, self.args
