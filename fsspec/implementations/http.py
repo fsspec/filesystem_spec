@@ -8,9 +8,6 @@ import weakref
 from copy import copy
 from urllib.parse import urlparse
 
-import aiohttp
-import requests
-
 from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
@@ -26,6 +23,8 @@ logger = logging.getLogger("fsspec.http")
 
 
 async def get_client(**kwargs):
+    import aiohttp
+
     return aiohttp.ClientSession(**kwargs)
 
 
@@ -292,6 +291,9 @@ class HTTPFileSystem(AsyncFileSystem):
             self._raise_not_found_for_status(resp, rpath)
 
     async def _exists(self, path, **kwargs):
+        import aiohttp
+        import requests
+
         kw = self.kwargs.copy()
         kw.update(kwargs)
         try:
