@@ -89,22 +89,19 @@ jobs:
           activate-environment: test_env
           environment-file: ci/environment-downstream.yml
 
-      - name: Run Tests
+      - name: Local install
         shell: bash -l {0}
         run: |
+          git tag -a 3000
           pip install -e .
 
-      - name: clone s3fs
+      - name: Install s3fs
         shell: bash -l {0}
         run: |
           git clone https://github.com/fsspec/s3fs
+          pip install -e ./s3fs --no-deps
 
-      - name: Run Tests
-        shell: bash -l {0}
-        run: |
-          pip install -e ./s3fs
-
-      - name: Run Tests
+      - name: Run fsspec tests
         shell: bash -l {0}
         run: |
           pytest -v fsspec/tests/test_downstream.py
@@ -114,7 +111,7 @@ jobs:
         run: |
           git clone https://github.com/dask/dask
 
-      - name: Run Tests
+      - name: Run dask tests
         shell: bash -l {0}
         run: |
           pytest -v dask/dask/bytes
