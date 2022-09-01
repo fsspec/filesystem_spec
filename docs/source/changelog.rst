@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2022.8.2
+--------
+
+- don't close OpenFile on del (#1035)
+
 2022.8.1
 --------
 
