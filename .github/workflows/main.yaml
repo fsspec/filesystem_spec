@@ -87,7 +87,7 @@ jobs:
           auto-update-conda: true
           auto-activate-base: false
           activate-environment: test_env
-          environment-file: ci/environment-py38.yml
+          environment-file: ci/environment-downstream.yml
 
       - name: Run Tests
         shell: bash -l {0}
