@@ -10,3 +10,4 @@ dependencies:
   - zarr
   - pytest
   - s3fs
+  - requests
