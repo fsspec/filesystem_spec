@@ -93,3 +93,13 @@ jobs:
         shell: bash -l {0}
         run: |
           pytest -v fsspec/tests/test_downstream.py
+
+      - name: clone dask
+        shell: bash -l {0}
+        run: |
+          git clone https://githuc.com/dask/dask
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          pytest -v dask/dask/bytes
