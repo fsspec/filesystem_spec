@@ -9,6 +9,10 @@ dependencies:
   - xarray
   - zarr
   - pytest
+  - pytest-cov
+  - pytest-rerunfailures
+  - pytest-timeout
+  - pytest-xdist
   - s3fs
   - requests
   - moto
