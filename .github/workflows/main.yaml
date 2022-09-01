@@ -97,7 +97,7 @@ jobs:
       - name: clone dask
         shell: bash -l {0}
         run: |
-          git clone https://githuc.com/dask/dask
+          git clone https://github.com/dask/dask
 
       - name: Run Tests
         shell: bash -l {0}

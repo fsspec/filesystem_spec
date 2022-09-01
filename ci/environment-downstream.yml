@@ -11,3 +11,5 @@ dependencies:
   - pytest
   - s3fs
   - requests
+  - moto
+  - flask
