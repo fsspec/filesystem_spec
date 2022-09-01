@@ -89,6 +89,11 @@ jobs:
           activate-environment: test_env
           environment-file: ci/environment-downstream.yml
 
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          pip install -e .
+
       - name: clone s3fs
         shell: bash -l {0}
         run: |
