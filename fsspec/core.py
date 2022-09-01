@@ -121,10 +121,6 @@ class OpenFile:
     def __exit__(self, *args):
         self.close()
 
-    def __del__(self):
-        if hasattr(self, "fobjects"):
-            self.close()
-
     @property
     def full_name(self):
         return _unstrip_protocol(self.path, self.fs)
