@@ -92,6 +92,8 @@ jobs:
       - name: Local install
         shell: bash -l {0}
         run: |
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
           git tag -a 3000
           pip install -e .
 
