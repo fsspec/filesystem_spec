@@ -89,6 +89,16 @@ jobs:
           activate-environment: test_env
           environment-file: ci/environment-downstream.yml
 
+      - name: clone s3fs
+        shell: bash -l {0}
+        run: |
+          git clone https://github.com/fsspec/s3fs
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          pip install -e ./s3fs
+
       - name: Run Tests
         shell: bash -l {0}
         run: |
