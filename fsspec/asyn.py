@@ -369,6 +369,9 @@ class AsyncFileSystem(AbstractFileSystem):
                 continue
             raise ex
 
+    async def _pipe_file(self, path, value, **kwargs):
+        raise NotImplementedError
+
     async def _pipe(self, path, value=None, batch_size=None, **kwargs):
         if isinstance(path, str):
             path = {path: value}

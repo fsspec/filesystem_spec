@@ -32,3 +32,9 @@ def test_cp_async_to_sync(server, m):
 
     fs.rm("memory://realfile")
     assert not m.exists("realfile")
+
+
+def test_pipe_cat_sync(m):
+    fs = fsspec.filesystem("generic", default_method="current")
+    fs.pipe("memory://afile", b"data")
+    assert fs.cat("memory://afile") == b"data"
