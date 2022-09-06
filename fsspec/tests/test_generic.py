@@ -38,3 +38,9 @@ def test_pipe_cat_sync(m):
     fs = fsspec.filesystem("generic", default_method="current")
     fs.pipe("memory://afile", b"data")
     assert fs.cat("memory://afile") == b"data"
+
+
+def test_cat_async(server):
+    fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    fs = fsspec.filesystem("generic", default_method="current")
+    assert fs.cat(server + "/index/realfile") == data
