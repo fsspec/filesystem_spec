@@ -67,7 +67,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         return super()._strip_protocol(path).lstrip("/")
 
     def __del__(self):
-        self.zip.close()
+        if hasattr(self, "zip"):
+            self.zip.close()
 
     def _get_dirs(self):
         if self.dir_cache is None:
