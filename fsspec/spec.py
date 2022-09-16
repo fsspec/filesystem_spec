@@ -649,6 +649,50 @@ class AbstractFileSystem(metaclass=_Cached):
         except:  # noqa: E722
             return False
 
+    def read_text(self, path, encoding=None, errors=None, newline=None, **kwargs):
+        """Get the contents of the file as a string.
+
+        Parameters
+        ----------
+        path: str
+            URL of file on this filesystems
+        encoding, errors, newline: same as `open`.
+        """
+        with self.open(
+            path,
+            mode="r",
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+            **kwargs,
+        ) as f:
+            return f.read()
+
+    def write_text(
+        self, path, value, encoding=None, errors=None, newline=None, **kwargs
+    ):
+        """Write the text to the given file.
+
+        An existing file will be overwritten.
+
+        Parameters
+        ----------
+        path: str
+            URL of file on this filesystems
+        value: str
+            Text to write.
+        encoding, errors, newline: same as `open`.
+        """
+        with self.open(
+            path,
+            mode="w",
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+            **kwargs,
+        ) as f:
+            return f.write(value)
+
     def cat_file(self, path, start=None, end=None, **kwargs):
         """Get the content of a file
 
