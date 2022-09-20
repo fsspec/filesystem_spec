@@ -6,11 +6,11 @@ import pytest
 from fsspec.registry import (
     ReadOnlyError,
     _registry,
+    filesystem,
     get_filesystem_class,
     known_implementations,
     register_implementation,
     registry,
-    filesystem
 )
 from fsspec.spec import AbstractFileSystem
 
