@@ -126,7 +126,7 @@ known_implementations = {
     },
     "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
     "hdfs": {
-        "class": "fsspec.implementations.hdfs.PyArrowHDFS",
+        "class": "fsspec.implementations.arrow.HadoopFileSystem",
         "err": "pyarrow and local java libraries required for HDFS",
     },
     "arrow_hdfs": {
