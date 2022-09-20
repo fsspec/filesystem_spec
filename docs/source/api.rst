@@ -211,6 +211,7 @@ Other Known Implementations
 - `wandbfs`_ to access Wandb run data (experimental)
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
 - `webdav4`_ for WebDAV
+- `dvc`_ to access DVC/Git repository as a filesystem
 
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
@@ -222,6 +223,7 @@ Other Known Implementations
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _ossfs: https://github.com/fsspec/ossfs
 .. _webdav4: https://github.com/skshetry/webdav4
+.. _dvc: https://github.com/iterative/dvc
 
 .. _readbuffering:
 
