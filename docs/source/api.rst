@@ -110,7 +110,6 @@ Built-in Implementations
 
 .. autosummary::
    fsspec.implementations.ftp.FTPFileSystem
-   fsspec.implementations.hdfs.PyArrowHDFS
    fsspec.implementations.arrow.ArrowFSWrapper
    fsspec.implementations.arrow.HadoopFileSystem
    fsspec.implementations.dask.DaskWorkerFileSystem
@@ -133,9 +132,6 @@ Built-in Implementations
    fsspec.implementations.dirfs.DirFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
-   :members: __init__
-
-.. autoclass:: fsspec.implementations.hdfs.PyArrowHDFS
    :members: __init__
 
 .. autoclass:: fsspec.implementations.arrow.ArrowFSWrapper
