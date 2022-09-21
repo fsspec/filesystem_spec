@@ -12,7 +12,7 @@ from urllib.parse import quote
 import requests
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
-from ..utils import infer_storage_options
+from ..utils import infer_storage_options, tokenize
 
 logger = logging.getLogger("webhdfs")
 
@@ -114,6 +114,12 @@ class WebHDFS(AbstractFileSystem):
                 "user, this is handled by kinit."
             )
         self._connect()
+
+        self._fsid = "webhdfs_" + tokenize(host, port)
+
+    @property
+    def fsid(self):
+        return self._fsid
 
     def _connect(self):
         self.session = requests.Session()

@@ -36,6 +36,10 @@ class LocalFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
         self.auto_mkdir = auto_mkdir
 
+    @property
+    def fsid(self):
+        return "local"
+
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
         if self.exists(path):

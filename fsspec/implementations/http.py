@@ -107,6 +107,10 @@ class HTTPFileSystem(AsyncFileSystem):
         request_options.pop("skip_instance_cache", None)
         self.kwargs = request_options
 
+    @property
+    def fsid(self):
+        return "http"
+
     def encode_url(self, url):
         return yarl.URL(url, encoded=self.encoded)
 

@@ -152,6 +152,13 @@ class AbstractFileSystem(metaclass=_Cached):
         self._fs_token_ = None
 
     @property
+    def fsid(self):
+        """Persistent filesystem id that can be used to compare filesystems
+        across sessions.
+        """
+        raise NotImplementedError
+
+    @property
     def _fs_token(self):
         return self._fs_token_
 
