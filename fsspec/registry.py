@@ -1,4 +1,5 @@
 import importlib
+import warnings
 
 __all__ = ["registry", "get_filesystem_class", "default"]
 
@@ -126,7 +127,7 @@ known_implementations = {
     },
     "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
     "hdfs": {
-        "class": "fsspec.implementations.hdfs.PyArrowHDFS",
+        "class": "fsspec.implementations.arrow.HadoopFileSystem",
         "err": "pyarrow and local java libraries required for HDFS",
     },
     "arrow_hdfs": {
@@ -268,6 +269,13 @@ def filesystem(protocol, **storage_options):
     ``storage_options`` are specific to the protocol being chosen, and are
     passed directly to the class.
     """
+    if protocol == "arrow_hdfs":
+        warnings.warn(
+            "The 'arrow_hdfs' protocol has been deprecated and will be "
+            "removed in the future. Specify it as 'hdfs'.",
+            DeprecationWarning,
+        )
+
     cls = get_filesystem_class(protocol)
     return cls(**storage_options)
 
