@@ -1264,6 +1264,14 @@ class AbstractFileSystem(metaclass=_Cached):
     # ------------------------------------------------------------------------
     # Aliases
 
+    def read_bytes(self, path, start=None, end=None, **kwargs):
+        """Alias of `AbstractFileSystem.cat_file`."""
+        return self.cat_file(path, start=start, end=end, **kwargs)
+
+    def write_bytes(self, path, value, **kwargs):
+        """Alias of `AbstractFileSystem.pipe_file`."""
+        self.pipe_file(path, value, **kwargs)
+
     def makedir(self, path, create_parents=True, **kwargs):
         """Alias of `AbstractFileSystem.mkdir`."""
         return self.mkdir(path, create_parents=create_parents, **kwargs)
