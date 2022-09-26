@@ -97,6 +97,37 @@ class GenericFileSystem(AsyncFileSystem):
         else:
             return [o["name"] for o in out]
 
+    async def _cat_file(
+        self,
+        url,
+        method=None,
+        protocol=None,
+        storage_options=None,
+        fs=None,
+        **kwargs,
+    ):
+        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
+        if fs.async_impl:
+            return await fs._cat_file(url, **kwargs)
+        else:
+            return fs.cat_file(url, **kwargs)
+
+    async def _pipe_file(
+        self,
+        path,
+        value,
+        method=None,
+        protocol=None,
+        storage_options=None,
+        fs=None,
+        **kwargs,
+    ):
+        fs = fs or _resolve_fs(path, method or self.method, protocol, storage_options)
+        if fs.async_impl:
+            return await fs._pipe_file(path, value, **kwargs)
+        else:
+            return fs.pipe_file(path, value, **kwargs)
+
     async def _rm(
         self, url, method=None, protocol=None, storage_options=None, fs=None, **kwargs
     ):

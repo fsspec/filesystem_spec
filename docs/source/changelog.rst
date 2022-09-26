@@ -1,6 +1,37 @@
 Changelog
 =========
 
+2022.8.2
+--------
+
+- don't close OpenFile on del (#1035)
+
+2022.8.1
+--------
+
+- revert #1024 (#1029), with strciter requirements on OpenFile usage
+
+2022.8.0
+--------
+
+Enhancements
+
+- writable ZipFileSystem (#1017)
+- make OpenFile behave like files and remove dynamic closer in .open() (#1024)
+- use isal gunzip (#1008)
+
+Fixes
+
+- remove strip from _parent (#1022)
+- disallow aiohttp prereleases (#1018)
+- be sure to close cached file (#1016)
+- async rm in reverse order (#1014)
+- expose fileno in LocalFileOpener (#1010, #1005)
+- remove temp files with simplecache writing (#1006)
+- azure paths (#1003)
+- copy dircache keys before iter
+
+
 2022.7.1
 --------
 

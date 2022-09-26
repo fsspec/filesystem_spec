@@ -171,6 +171,17 @@ def test_open_text(m):
     assert f.encoding == "latin1"
 
 
+def test_read_text(m):
+    with m.open("/myfile", "w", encoding="utf-8") as f:
+        f.write("some\nlines\nof\ntext")
+    assert m.read_text("/myfile", encoding="utf-8") == "some\nlines\nof\ntext"
+
+
+def test_write_text(m):
+    m.write_text("/myfile", "some\nlines\nof\ntext", encoding="utf-8")
+    assert m.read_text("/myfile", encoding="utf-8") == "some\nlines\nof\ntext"
+
+
 def test_chained_fs():
     d1 = tempfile.mkdtemp()
     d2 = tempfile.mkdtemp()

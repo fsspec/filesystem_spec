@@ -191,13 +191,15 @@ def test_write_pickle_context():
     tmp = str(tempfile.mkdtemp())
     fn = tmp + "afile"
     url = "simplecache::file://" + fn
-    f = fsspec.open(url, "wb").open()
-    f.write(b"hello ")
-    f.flush()
-    with pickle.loads(pickle.dumps(f)) as f2:
-        f2.write(b"world")
+    with fsspec.open(url, "wb") as f:
+        pickle.loads(pickle.dumps(f))
+        f.write(b"hello ")
+        pickle.dumps(f)
 
-    assert open(fn, "rb").read() == b"hello world"
+    with pytest.raises(ValueError):
+        pickle.dumps(f)
+
+    assert open(fn, "rb").read() == b"hello "
 
 
 def test_blocksize(ftp_writable):

@@ -1,4 +1,5 @@
 import importlib
+import warnings
 
 __all__ = ["registry", "get_filesystem_class", "default"]
 
@@ -126,7 +127,7 @@ known_implementations = {
     },
     "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
     "hdfs": {
-        "class": "fsspec.implementations.hdfs.PyArrowHDFS",
+        "class": "fsspec.implementations.arrow.HadoopFileSystem",
         "err": "pyarrow and local java libraries required for HDFS",
     },
     "arrow_hdfs": {
@@ -202,6 +203,10 @@ known_implementations = {
         "class": "webdav4.fsspec.WebdavFileSystem",
         "err": "Install webdav4 to access WebDAV",
     },
+    "dvc": {
+        "class": "dvc.api.DVCFileSystem",
+        "err": "Install dvc to access DVCFileSystem",
+    },
     "root": {
         "class": "fsspec_xrootd.XRootDFileSystem",
         "err": "Install fsspec-xrootd to access xrootd storage system."
@@ -264,6 +269,13 @@ def filesystem(protocol, **storage_options):
     ``storage_options`` are specific to the protocol being chosen, and are
     passed directly to the class.
     """
+    if protocol == "arrow_hdfs":
+        warnings.warn(
+            "The 'arrow_hdfs' protocol has been deprecated and will be "
+            "removed in the future. Specify it as 'hdfs'.",
+            DeprecationWarning,
+        )
+
     cls = get_filesystem_class(protocol)
     return cls(**storage_options)
 

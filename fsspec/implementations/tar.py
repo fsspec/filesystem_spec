@@ -1,7 +1,6 @@
 import copy
 import logging
 import tarfile
-import weakref
 from io import BufferedReader
 
 import fsspec
@@ -38,7 +37,8 @@ class TarFileSystem(AbstractArchiveFileSystem):
         target_options = target_options or {}
 
         if isinstance(fo, str):
-            fo = fsspec.open(fo, protocol=target_protocol, **target_options).open()
+            self.of = fsspec.open(fo, protocol=target_protocol, **target_options)
+            fo = self.of.open()  # keep the reference
 
         # Try to infer compression.
         if compression is None:
@@ -82,8 +82,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
             fo = compr[compression](fo)
 
         self._fo_ref = fo
-        weakref.finalize(self, fo.close)
-        self.fo = fo.__enter__()  # the whole instance is a context
+        self.fo = fo  # the whole instance is a context
         self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
