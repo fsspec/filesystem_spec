@@ -1,9 +1,11 @@
 import asyncio
 import io
+import json
 import os
 import sys
 import time
 
+import aiohttp
 import pytest
 
 import fsspec.asyn
@@ -438,3 +440,15 @@ async def test_async_file(server):
         out2 = await f.read()
         assert data == out1 + out2
     await fs._session.close()
+
+
+def test_encoded(server):
+    fs = fsspec.filesystem("http", encoded=True)
+    out = fs.cat(server + "/Hello%20G%C3%BCnter", headers={"give_path": "true"})
+    assert json.loads(out)["path"] == "/Hello%20G%C3%BCnter"
+    with pytest.raises(aiohttp.client_exceptions.ClientError):
+        fs.cat(server + "/Hello Günter", headers={"give_path": "true"})
+
+    fs = fsspec.filesystem("http", encoded=False)
+    out = fs.cat(server + "/Hello Günter", headers={"give_path": "true"})
+    assert json.loads(out)["path"] == "/Hello%20G%C3%BCnter"
