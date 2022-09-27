@@ -1,3 +1,4 @@
+import os
 import uuid
 from ftplib import FTP, Error, error_perm
 from typing import Any
@@ -130,6 +131,10 @@ class FTPFileSystem(AbstractFileSystem):
         return out
 
     def get_file(self, rpath, lpath, **kwargs):
+        if self.isdir(rpath):
+            if not os.path.exists(lpath):
+                os.mkdir(lpath)
+            return
         if isfilelike(lpath):
             outfile = lpath
         else:
