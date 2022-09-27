@@ -97,7 +97,7 @@ class LocalFileSystem(AbstractFileSystem):
             "created": out.st_ctime,
             "islink": link,
         }
-        for field in ["mode", "uid", "gid", "mtime"]:
+        for field in ["mode", "uid", "gid", "mtime", "ino", "nlink"]:
             result[field] = getattr(out, "st_" + field)
         if result["islink"]:
             result["destination"] = os.readlink(path)
