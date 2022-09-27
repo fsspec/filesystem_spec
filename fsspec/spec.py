@@ -78,7 +78,7 @@ class _Cached(type):
             obj._fs_token_ = token
             obj.storage_args = args
             obj.storage_options = kwargs
-            if obj.async_impl:
+            if obj.async_impl and obj.mirror_sync_methods:
                 from .asyn import mirror_sync_methods
 
                 mirror_sync_methods(obj)
@@ -104,6 +104,7 @@ class AbstractFileSystem(metaclass=_Cached):
     protocol = "abstract"
     _latest = None
     async_impl = False
+    mirror_sync_methods = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
     #: Extra *class attributes* that should be considered when hashing.
