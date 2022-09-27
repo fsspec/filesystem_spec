@@ -14,7 +14,18 @@ def test_sync_methods():
     inst = fsspec.asyn.AsyncFileSystem()
     assert inspect.iscoroutinefunction(inst._info)
     assert hasattr(inst, "info")
+    assert inst.info.__qualname__ == "AsyncFileSystem._info"
     assert not inspect.iscoroutinefunction(inst.info)
+
+
+def test_when_sync_methods_are_disabled():
+    class TestFS(fsspec.asyn.AsyncFileSystem):
+        mirror_sync_methods = False
+
+    inst = TestFS()
+    assert inspect.iscoroutinefunction(inst._info)
+    assert not inspect.iscoroutinefunction(inst.info)
+    assert inst.info.__qualname__ == "AbstractFileSystem.info"
 
 
 def test_interrupt():

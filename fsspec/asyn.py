@@ -307,6 +307,7 @@ class AsyncFileSystem(AbstractFileSystem):
     # for _* methods and inferred for overridden methods.
 
     async_impl = True
+    mirror_sync_methods = True
     disable_throttling = False
 
     def __init__(self, *args, asynchronous=False, loop=None, batch_size=None, **kwargs):
