@@ -444,11 +444,11 @@ async def test_async_file(server):
 
 def test_encoded(server):
     fs = fsspec.filesystem("http", encoded=True)
-    out = fs.cat(server + "/Hello%20G%C3%BCnter", headers={"give_path": "true"})
-    assert json.loads(out)["path"] == "/Hello%20G%C3%BCnter"
+    out = fs.cat(server + "/Hello%3A%20G%C3%BCnter", headers={"give_path": "true"})
+    assert json.loads(out)["path"] == "/Hello%3A%20G%C3%BCnter"
     with pytest.raises(aiohttp.client_exceptions.ClientError):
-        fs.cat(server + "/Hello Günter", headers={"give_path": "true"})
+        fs.cat(server + "/Hello: Günter", headers={"give_path": "true"})
 
     fs = fsspec.filesystem("http", encoded=False)
-    out = fs.cat(server + "/Hello Günter", headers={"give_path": "true"})
-    assert json.loads(out)["path"] == "/Hello%20G%C3%BCnter"
+    out = fs.cat(server + "/Hello: Günter", headers={"give_path": "true"})
+    assert json.loads(out)["path"] == "/Hello:%20G%C3%BCnter"
