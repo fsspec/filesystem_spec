@@ -138,6 +138,19 @@ class LocalFileSystem(AbstractFileSystem):
         path2 = self._strip_protocol(path2).rstrip("/")
         shutil.move(path1, path2)
 
+    def link(self, src, dst, **kwargs):
+        src = self._strip_protocol(src)
+        dst = self._strip_protocol(dst)
+        os.link(src, dst, **kwargs)
+
+    def symlink(self, src, dst, **kwargs):
+        src = self._strip_protocol(src)
+        dst = self._strip_protocol(dst)
+        os.symlink(src, dst, **kwargs)
+
+    def islink(self, path) -> bool:
+        return os.path.islink(self._strip_protocol(path))
+
     def rm_file(self, path):
         os.remove(path)
 
