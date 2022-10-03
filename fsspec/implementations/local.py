@@ -142,7 +142,7 @@ class LocalFileSystem(AbstractFileSystem):
         os.remove(path)
 
     def rm(self, path, recursive=False, maxdepth=None):
-        if isinstance(path, str):
+        if not isinstance(path, list):
             path = [path]
 
         for p in path:
