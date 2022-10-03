@@ -145,7 +145,7 @@ known_implementations = {
         "class": "ocifs.OCIFileSystem",
         "err": "Install ocifs to access OCI Object Storage",
     },
-    "asynclocalfs": {
+    "asynclocal": {
         "class": "morefs.asyn_local.AsyncLocalFileSystem",
         "err": "Install 'morefs[asynclocalfs]' to use AsyncLocalFileSystem",
     },
