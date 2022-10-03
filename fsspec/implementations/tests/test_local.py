@@ -785,3 +785,25 @@ def test_numpy_fromfile(tmpdir):
     arr = np.arange(10, dtype=dt)
     arr.tofile(fn)
     assert np.array_equal(np.fromfile(fn, dtype=dt), arr)
+
+
+def test_link(tmpdir):
+    target = os.path.join(tmpdir, "target")
+    link = os.path.join(tmpdir, "link")
+
+    fs = LocalFileSystem()
+    fs.touch(target)
+
+    fs.link(target, link)
+    assert fs.info(link)["nlink"] > 1
+
+
+def test_symlink(tmpdir):
+    target = os.path.join(tmpdir, "target")
+    link = os.path.join(tmpdir, "link")
+
+    fs = LocalFileSystem()
+    fs.touch(target)
+
+    fs.symlink(target, link)
+    assert fs.islink(link)
