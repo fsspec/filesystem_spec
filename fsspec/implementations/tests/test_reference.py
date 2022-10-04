@@ -78,7 +78,11 @@ def test_mutable(server, m):
 def test_defaults(server):  # noqa: F811
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(
-        "reference", fo=refs, target_protocol="http", target=realfile
+        "reference",
+        fo=refs,
+        target_protocol="http",
+        target=realfile,
+        remote_protocol="http",
     )
 
     assert fs.cat("a") == b"data"
@@ -337,3 +341,28 @@ def test_missing_nonasync(m):
 
     a = zarr.open_array(m)
     assert str(a[0]) == "nan"
+
+
+def test_fss_has_defaults(m):
+    fs = fsspec.filesystem("reference", fo={})
+    assert None in fs.fss
+
+    fs = fsspec.filesystem("reference", fo={}, remote_protocol="memory")
+    assert fs.fss[None].protocol == "memory"
+    assert fs.fss["memory"].protocol == "memory"
+
+    fs = fsspec.filesystem("reference", fs=m, fo={})
+    assert fs.fss[None] is m
+
+    fs = fsspec.filesystem("reference", fs={"memory": m}, fo={})
+    assert fs.fss["memory"] is m
+    assert fs.fss[None].protocol == "file"
+
+    fs = fsspec.filesystem("reference", fs={None: m}, fo={})
+    assert fs.fss[None] is m
+
+    fs = fsspec.filesystem("reference", fo={"key": ["memory://a"]})
+    assert fs.fss[None] is fs.fss["memory"]
+
+    fs = fsspec.filesystem("reference", fo={"key": ["memory://a"], "blah": ["path"]})
+    assert fs.fss[None] is fs.fss["memory"]

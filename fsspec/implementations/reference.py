@@ -156,12 +156,15 @@ class ReferenceFileSystem(AsyncFileSystem):
                 )
                 for k, opts in fs.items()
             }
+            if None not in self.fss:
+                self.fss[None] = filesystem("file")
             return
         if fs is not None:
             # single remote FS
             remote_protocol = (
                 fs.protocol[0] if isinstance(fs.protocol, tuple) else fs.protocol
             )
+            self.fss[remote_protocol] = fs
 
         if remote_protocol is None:
             # get single protocol from any templates
@@ -169,9 +172,11 @@ class ReferenceFileSystem(AsyncFileSystem):
                 if callable(ref):
                     ref = ref()
                 protocol, _ = fsspec.core.split_protocol(ref)
-                if protocol:
-                    remote_protocol = protocol
-                    break
+                if protocol and protocol not in self.fss:
+                    fs = filesystem(
+                        remote_protocol, loop=loop, **(remote_options or {})
+                    )
+                    self.fss[protocol] = fs
         if remote_protocol is None:
             # get single protocol from references
             for ref in self.references.values():
@@ -179,15 +184,17 @@ class ReferenceFileSystem(AsyncFileSystem):
                     ref = ref()
                 if isinstance(ref, list) and ref[0]:
                     protocol, _ = fsspec.core.split_protocol(ref[0])
-                    if protocol:
-                        remote_protocol = protocol
-                        break
-        if remote_protocol is None:
-            remote_protocol = target_protocol
+                    if protocol and protocol not in self.fss:
+                        fs = filesystem(
+                            remote_protocol, loop=loop, **(remote_options or {})
+                        )
+                        self.fss[protocol] = fs
 
-        fs = fs or filesystem(remote_protocol, loop=loop, **(remote_options or {}))
-        self.fss[remote_protocol] = fs
-        self.fss[None] = fs  # default one
+        if remote_protocol and remote_protocol not in self.fss:
+            fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
+            self.fss[remote_protocol] = fs
+
+        self.fss[None] = fs or filesystem("file")  # default one
 
     @property
     def loop(self):
@@ -280,18 +287,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         proto_dict = _protocol_groups(path, self.references)
         out = {}
         for proto, paths in proto_dict.items():
-            if proto is None:
-                # binary/string
-                for p in paths:
-                    try:
-                        out[p] = AbstractFileSystem.cat_file(self, p, **kwargs)
-                    except Exception as e:
-                        if on_error == "raise":
-                            raise
-                        if on_error == "return":
-                            out[p] = e
+            fs = self.fss[proto]
 
-            elif self.fss[proto].async_impl:
+            if fs.async_impl:
                 # TODO: asyncio.gather on multiple async FSs
                 out.update(
                     sync(
@@ -304,6 +302,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     )
                 )
             elif isinstance(paths, list):
+                # serial code for non async FSs - list of paths
                 if recursive or any("*" in p for p in paths):
                     raise NotImplementedError
                 for p in paths:
@@ -315,6 +314,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                         if on_error == "return":
                             out[p] = e
             else:
+                # coverage?
                 out.update(AbstractFileSystem.cat_file(self, paths))
         if len(out) == 1 and isinstance(path, str) and "*" not in path:
             return _first(out)
