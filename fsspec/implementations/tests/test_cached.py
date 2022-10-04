@@ -153,6 +153,76 @@ def test_clear():
     assert len(os.listdir(cache1)) < 2
 
 
+def test_clear_expired():
+    import tempfile
+    import time
+
+    origin = tempfile.mkdtemp()
+    cache1 = tempfile.mkdtemp()
+    cache2 = tempfile.mkdtemp()
+    cache3 = tempfile.mkdtemp()
+
+    data = b"test data"
+    f1 = os.path.join(origin, "afile")
+    f2 = os.path.join(origin, "bfile")
+    f3 = os.path.join(origin, "cfile")
+    f4 = os.path.join(origin, "dfile")
+
+    with open(f1, "wb") as f:
+        f.write(data)
+    with open(f2, "wb") as f:
+        f.write(data)
+    with open(f3, "wb") as f:
+        f.write(data)
+    with open(f4, "wb") as f:
+        f.write(data)
+
+    # populates first cache
+    fs = fsspec.filesystem("filecache", target_protocol="file", cache_storage=cache1)
+    assert fs.cat(f1) == data
+
+    # populates last cache if file not found in first cache
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=[cache1, cache2],
+        expiry_time=60,
+    )
+
+    assert fs.cat(f2) == data
+
+    # let f2 expire
+    time.sleep(60)
+    assert fs.cat(f3) == data
+    assert len(os.listdir(cache2)) == 3
+
+    fs.clear_expired_cache()
+    assert len(os.listdir(cache2)) == 2
+
+    # check complete cleanup
+    time.sleep(60)
+    fs.clear_expired_cache()
+    assert not fs._check_file(f2)
+    assert not fs._check_file(f3)
+    assert len(os.listdir(cache2)) < 2
+
+    # check cache1 to be untouched after cleaning
+    assert len(os.listdir(cache1)) == 2
+
+    # check cleaning with 'same_name' option enabled
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=[cache1, cache2, cache3],
+        same_names=True,
+        expiry_time=30,
+    )
+    assert fs.cat(f4) == data
+    time.sleep(30)
+    fs.clear_expired_cache()
+    assert not fs._check_file(f4)
+
+
 def test_pop():
     import tempfile
 
