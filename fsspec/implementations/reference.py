@@ -16,7 +16,7 @@ from ..asyn import AsyncFileSystem, sync
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
 from ..spec import AbstractFileSystem
-from ..utils import isfilelike
+from ..utils import isfilelike, merge_offset_ranges
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -173,9 +173,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     ref = ref()
                 protocol, _ = fsspec.core.split_protocol(ref)
                 if protocol and protocol not in self.fss:
-                    fs = filesystem(
-                        remote_protocol, loop=loop, **(remote_options or {})
-                    )
+                    fs = filesystem(protocol, loop=loop, **(remote_options or {}))
                     self.fss[protocol] = fs
         if remote_protocol is None:
             # get single protocol from references
@@ -185,9 +183,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 if isinstance(ref, list) and ref[0]:
                     protocol, _ = fsspec.core.split_protocol(ref[0])
                     if protocol and protocol not in self.fss:
-                        fs = filesystem(
-                            remote_protocol, loop=loop, **(remote_options or {})
-                        )
+                        fs = filesystem(protocol, loop=loop, **(remote_options or {}))
                         self.fss[protocol] = fs
 
         if remote_protocol and remote_protocol not in self.fss:
@@ -284,38 +280,47 @@ class ReferenceFileSystem(AsyncFileSystem):
                 )
 
     def cat(self, path, recursive=False, on_error="raise", **kwargs):
+        if isinstance(path, str) and recursive:
+            raise NotImplementedError
+        if isinstance(path, list) and (recursive or any("*" in p for p in path)):
+            raise NotImplementedError
         proto_dict = _protocol_groups(path, self.references)
         out = {}
         for proto, paths in proto_dict.items():
             fs = self.fss[proto]
-
-            if fs.async_impl:
-                # TODO: asyncio.gather on multiple async FSs
-                out.update(
-                    sync(
-                        self.loop,
-                        self._cat,
-                        paths,
-                        recursive,
-                        on_error=on_error,
-                        **kwargs,
-                    )
-                )
-            elif isinstance(paths, list):
-                # serial code for non async FSs - list of paths
-                if recursive or any("*" in p for p in paths):
-                    raise NotImplementedError
-                for p in paths:
-                    try:
-                        out[p] = AbstractFileSystem.cat_file(self, p, **kwargs)
-                    except Exception as e:
-                        if on_error == "raise":
-                            raise
-                        if on_error == "return":
-                            out[p] = e
+            urls, starts, ends = zip(*[self._cat_common(p) for p in paths])
+            urls2 = []
+            starts2 = []
+            ends2 = []
+            paths2 = []
+            for u, s, e, p in zip(urls, starts, ends, paths):
+                if isinstance(u, bytes):
+                    out[p] = u
+                else:
+                    urls2.append(u)
+                    starts2.append(s)
+                    ends2.append(e)
+                    paths2.append(p)
+            new_paths, new_starts, new_ends = merge_offset_ranges(
+                list(urls2), list(starts2), list(ends2)
+            )
+            bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
+            if len(urls2) == len(bytes_out):
+                # we didn't do any merging
+                for p, b in zip(paths2, bytes_out):
+                    out[p] = b
             else:
-                # coverage?
-                out.update(AbstractFileSystem.cat_file(self, paths))
+                for u, s, e, p in zip(urls, starts, ends, paths):
+                    if p in out:
+                        continue  # was bytes, already handled
+                    for np, ns, ne, b in zip(
+                        new_paths, new_starts, new_ends, bytes_out
+                    ):
+                        if np == u and (ns is None or ne is None):
+                            out[p] = b[s:e]
+                        elif np == u and s >= ns and e <= ne:
+                            out[p] = b[ns - s : ne - e]
+                # unbundle from merged bytes
         if len(out) == 1 and isinstance(path, str) and "*" not in path:
             return _first(out)
         return out

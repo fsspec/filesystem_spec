@@ -366,3 +366,19 @@ def test_fss_has_defaults(m):
 
     fs = fsspec.filesystem("reference", fo={"key": ["memory://a"], "blah": ["path"]})
     assert fs.fss[None] is fs.fss["memory"]
+
+
+def test_merging(m):
+    m.pipe("/a", b"test data")
+    m.pipe("/b", b"other test data")
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "a": ["memory://a", 1, 1],
+            "b": ["memory://a", 2, 1],
+            "c": ["memory://b"],
+            "d": ["memory://b", 4, 6],
+        },
+    )
+    out = fs.cat(["a", "b", "c"])
+    assert out == {"a": b"e", "b": b"s", "c": b"other test data"}
