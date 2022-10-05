@@ -169,7 +169,6 @@ class TarContainedFile(object):
         self.of.seek(to)
 
     def close(self):
-        self.of.close()
         self.closed = True
 
     def __enter__(self):
