@@ -123,15 +123,9 @@ class TarFileSystem(AbstractArchiveFileSystem):
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
 
-        # `LocalFileSystem` offers its resources as `io.BufferedReader`
-        # objects, those can't be copied.
-        if isinstance(self.fo, BufferedReader):
-            newfo = self.fo
-        else:
-            newfo = copy.copy(self.fo)
-        newfo.seek(offset)
+        self.fo.seek(offset)
 
-        return TarContainedFile(newfo, self.info(path))
+        return TarContainedFile(self.fo, self.info(path))
 
 
 class TarContainedFile(object):
