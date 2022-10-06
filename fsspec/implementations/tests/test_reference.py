@@ -383,3 +383,24 @@ def test_merging(m):
     )
     out = fs.cat(["a", "b", "c", "d"])
     assert out == {"a": b"e", "b": b"s", "c": other, "d": other[4:10]}
+
+
+def test_cat_file_ranges(m):
+    other = b"other test data"
+    m.pipe("/b", other)
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "c": ["memory://b"],
+            "d": ["memory://b", 4, 6],
+        },
+    )
+    assert fs.cat_file("c") == other
+    assert fs.cat_file("c", start=1) == other[1:]
+    assert fs.cat_file("c", start=-5) == other[-5:]
+    assert fs.cat_file("c", 1, -5) == other[1:-5]
+
+    assert fs.cat_file("d") == other[4:10]
+    assert fs.cat_file("d", start=1) == other[4:10][1:]
+    assert fs.cat_file("d", start=-5) == other[4:10][-5:]
+    assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]

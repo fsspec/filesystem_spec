@@ -197,7 +197,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         inloop = [fs.loop for fs in self.fss.values() if fs.async_impl]
         return inloop[0] if inloop else self._loop
 
-    def _cat_common(self, path):
+    def _cat_common(self, path, start=None, end=None):
         path = self._strip_protocol(path)
         logger.debug(f"cat: {path}")
         part = self.references[path]
@@ -212,35 +212,44 @@ class ReferenceFileSystem(AsyncFileSystem):
         if len(part) == 1:
             logger.debug(f"Reference: {path}, whole file")
             url = part[0]
-            start = None
-            end = None
+            start1, end1 = start, end
         else:
-            url, start, size = part
-            logger.debug(f"Reference: {path}, offset {start}, size {size}")
-            end = start + size
+            url, start0, size = part
+            logger.debug(f"Reference: {path} => {url}, offset {start0}, size {size}")
+            end0 = start0 + size
+
+            if start is not None:
+                if start >= 0:
+                    start1 = start0 + start
+                else:
+                    start1 = end0 + start
+            else:
+                start1 = start0
+            if end is not None:
+                if end >= 0:
+                    end1 = start0 + end
+                else:
+                    end1 = end0 + end
+            else:
+                end1 = end0
         if url is None:
             url = self.target
-        return url, start, end
+        return url, start1, end1
 
     async def _cat_file(self, path, start=None, end=None, **kwargs):
-        part_or_url, start0, end0 = self._cat_common(path)
+        part_or_url, start0, end0 = self._cat_common(path, start=start, end=end)
         if isinstance(part_or_url, bytes):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
-        # TODO: start and end should be passed to cat_file, not sliced
-        return (
-            await self.fss[protocol]._cat_file(part_or_url, start=start0, end=end0)
-        )[start:end]
+        return await self.fss[protocol]._cat_file(part_or_url, start=start, end=end)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
-        part_or_url, start0, end0 = self._cat_common(path)
+        part_or_url, start0, end0 = self._cat_common(path, start=start, end=end)
         if isinstance(part_or_url, bytes):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
         # TODO: start and end should be passed to cat_file, not sliced
-        return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)[
-            start:end
-        ]
+        return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)
 
     def pipe_file(self, path, value, **_):
         """Temporarily add binary data or reference as a file"""
