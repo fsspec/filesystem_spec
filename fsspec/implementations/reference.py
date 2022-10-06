@@ -293,16 +293,27 @@ class ReferenceFileSystem(AsyncFileSystem):
             starts2 = []
             ends2 = []
             paths2 = []
+            whole_files = set()
             for u, s, e, p in zip(urls, starts, ends, paths):
                 if isinstance(u, bytes):
+                    # data
                     out[p] = u
-                else:
+                elif s is None:
+                    # whole file - limits are None, None, but no further
+                    # entries take for this file
+                    whole_files.add(u)
+                    urls2.append(u)
+                    starts2.append(s)
+                    ends2.append(e)
+                    paths2.append(p)
+            for u, s, e, p in zip(urls, starts, ends, paths):
+                if s is not None and u not in whole_files:
                     urls2.append(u)
                     starts2.append(s)
                     ends2.append(e)
                     paths2.append(p)
             new_paths, new_starts, new_ends = merge_offset_ranges(
-                list(urls2), list(starts2), list(ends2)
+                list(urls2), list(starts2), list(ends2), sort=False
             )
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
             if len(urls2) == len(bytes_out):
@@ -310,6 +321,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 for p, b in zip(paths2, bytes_out):
                     out[p] = b
             else:
+                # unbundle from merged bytes - simple approach
                 for u, s, e, p in zip(urls, starts, ends, paths):
                     if p in out:
                         continue  # was bytes, already handled
@@ -319,8 +331,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                         if np == u and (ns is None or ne is None):
                             out[p] = b[s:e]
                         elif np == u and s >= ns and e <= ne:
-                            out[p] = b[ns - s : ne - e]
-                # unbundle from merged bytes
+                            out[p] = b[s - ns : (e - ne) or None]
+
         if len(out) == 1 and isinstance(path, str) and "*" not in path:
             return _first(out)
         return out

@@ -370,7 +370,8 @@ def test_fss_has_defaults(m):
 
 def test_merging(m):
     m.pipe("/a", b"test data")
-    m.pipe("/b", b"other test data")
+    other = b"other test data"
+    m.pipe("/b", other)
     fs = fsspec.filesystem(
         "reference",
         fo={
@@ -380,5 +381,5 @@ def test_merging(m):
             "d": ["memory://b", 4, 6],
         },
     )
-    out = fs.cat(["a", "b", "c"])
-    assert out == {"a": b"e", "b": b"s", "c": b"other test data"}
+    out = fs.cat(["a", "b", "c", "d"])
+    assert out == {"a": b"e", "b": b"s", "c": other, "d": other[4:10]}
