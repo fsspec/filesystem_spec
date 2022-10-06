@@ -236,14 +236,16 @@ class CachingFileSystem(AbstractFileSystem):
 
     def clear_expired_cache(self, expiry_time=None):
         """Remove all expired files and metadata from the cache
+
+        In the case of multiple cache locations, this clears only the last one,
+        which is assumed to be the read/write one.
+ 
         Parameters
         ----------
         expiry_time: int
             The time in seconds after which a local copy is considered useless.
             If not defined the default is equivalent to the attribute from the
             file caching instantiation.
-        In the case of multiple cache locations, this clears only the last one,
-        which is assumed to be the read/write one.
         """
         if not expiry_time:
             expiry_time = self.expiry
