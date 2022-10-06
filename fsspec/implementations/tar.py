@@ -1,7 +1,5 @@
-import copy
 import logging
 import tarfile
-from io import BufferedReader
 
 import fsspec
 from fsspec.archive import AbstractArchiveFileSystem
