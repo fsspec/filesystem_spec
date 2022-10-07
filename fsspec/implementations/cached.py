@@ -233,13 +233,12 @@ class CachingFileSystem(AbstractFileSystem):
         rmtree(self.storage[-1])
         self.load_cache()
 
-
     def clear_expired_cache(self, expiry_time=None):
         """Remove all expired files and metadata from the cache
 
         In the case of multiple cache locations, this clears only the last one,
         which is assumed to be the read/write one.
- 
+
         Parameters
         ----------
         expiry_time: int
@@ -268,7 +267,6 @@ class CachingFileSystem(AbstractFileSystem):
         else:
             rmtree(self.storage[-1])
             self.load_cache()
-
 
     def pop_from_cache(self, path):
         """Remove cached version of given file
