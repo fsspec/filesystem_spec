@@ -367,10 +367,6 @@ class LocalFileOpener(io.IOBase):
     def flush(self) -> None:
         self.f.flush()
 
-    @property
-    def name(self) -> str:
-        return self.f.name
-
     def __iter__(self):
         return self.f.__iter__()
 
