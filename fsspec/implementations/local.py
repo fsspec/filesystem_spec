@@ -364,6 +364,9 @@ class LocalFileOpener(io.IOBase):
     def fileno(self):
         return self.raw.fileno()
 
+    def flush(self) -> None:
+        self.f.flush()
+
     def __iter__(self):
         return self.f.__iter__()
 
