@@ -76,6 +76,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         fs=None,
         template_overrides=None,
         simple_templates=True,
+        max_gap=64_000,
+        max_block=256_000_000,
         loop=None,
         **kwargs,
     ):
@@ -85,18 +87,19 @@ class ReferenceFileSystem(AsyncFileSystem):
         ----------
         fo : dict or str
             The set of references to use for this instance, with a structure as above.
-            If str, will use fsspec.open, in conjunction with ref_storage_args to
-            open and parse JSON at this location.
+            If str, will use fsspec.open, in conjunction with target_options
+            and target_protocol to open and parse JSON at this location.
         target : str
             For any references having target_url as None, this is the default file
             target to use
         ref_storage_args : dict
-            If references is a str, use these kwargs for loading the JSON file
+            If references is a str, use these kwargs for loading the JSON file.
+            Deprecated: use target_options instead.
         target_protocol : str
             Used for loading the reference file, if it is a path. If None, protocol
             will be derived from the given path
         target_options : dict
-            Extra FS options for loading the reference file, if given as a path
+            Extra FS options for loading the reference file ``fo``, if given as a path
         remote_protocol : str
             The protocol of the filesystem on which the references will be evaluated
             (unless fs is provided). If not given, will be derived from the first
@@ -119,6 +122,14 @@ class ReferenceFileSystem(AsyncFileSystem):
             Whether templates can be processed with simple replace (True) or if
             jinja  is needed (False, much slower). All reference sets produced by
             ``kerchunk`` are simple in this sense, but the spec allows for complex.
+        max_gap, max_block: int
+            For merging multiple concurrent requests to the same remote file.
+            Neighboring byte ranges will only be merged when their
+            inter-range gap is <= `max_gap`. Default is 64KB. Set to 0
+            to only merge when it requires no extra bytes. Pass a negative
+            number to disable merging, appropriate for local target files.
+            Neighboring byte ranges will only be merged when the size of
+            the aggregated range is <= `max_block`. Default is 256MB.
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)
@@ -128,6 +139,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.simple_templates = simple_templates
         self.templates = {}
         self.fss = {}
+        self.max_gap = max_gap
+        self.max_block = max_block
         if hasattr(fo, "read"):
             text = fo.read()
         elif isinstance(fo, str):
@@ -322,7 +335,12 @@ class ReferenceFileSystem(AsyncFileSystem):
                     ends2.append(e)
                     paths2.append(p)
             new_paths, new_starts, new_ends = merge_offset_ranges(
-                list(urls2), list(starts2), list(ends2), sort=False
+                list(urls2),
+                list(starts2),
+                list(ends2),
+                sort=False,
+                max_gap=self.max_gap,
+                max_block=self.max_block,
             )
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
             if len(urls2) == len(bytes_out):
