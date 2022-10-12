@@ -108,7 +108,7 @@ def test_rm(fs, remote_dir):
     fs.touch(remote_dir + "/dir/a")
     fs.touch(remote_dir + "/dir/b")
     fs.mkdir(remote_dir + "/dir/c/")
-    fs.touch(remote_dir + "/dir/c/a/")
+    fs.touch(remote_dir + "/dir/c/a")
     fs.rm(remote_dir + "/dir", recursive=True)
     assert not fs.exists(remote_dir + "/dir")
 

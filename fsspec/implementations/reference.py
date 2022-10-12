@@ -197,15 +197,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     def _cat_common(self, path):
         path = self._strip_protocol(path)
         logger.debug(f"cat: {path}")
-        # TODO: can extract and cache templating here
-        if self.dataframe:
-            part = self.df.loc[path]
-            if part["data"]:
-                part = part["data"]
-            else:
-                part = part[["url", "offset", "size"]]
-        else:
-            part = self.references[path]
+        part = self.references[path]
         if isinstance(part, str):
             part = part.encode()
         if isinstance(part, bytes):
@@ -498,7 +490,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             self._dircache_from_items()
         out = self._ls_from_cache(path)
         if out is None:
-            raise FileNotFoundError
+            raise FileNotFoundError(path)
         if detail:
             return out
         return [o["name"] for o in out]
@@ -539,10 +531,20 @@ class ReferenceFileSystem(AsyncFileSystem):
             return r
 
     def info(self, path, **kwargs):
-        out = self.ls(path, True)
-        out0 = [o for o in out if o["name"] == path]
-        if not out0:
-            return {"name": path, "type": "directory", "size": 0}
+        if path in self.references:
+            out = self.references[path]
+            if isinstance(out, (str, bytes)):
+                # decode base64 here
+                return {"name": path, "type": "file", "size": len(out)}
+            elif len(out) > 1:
+                return {"name": path, "type": "file", "size": out[2]}
+            else:
+                out0 = [{"name": path, "type": "file", "size": None}]
+        else:
+            out = self.ls(path, True)
+            out0 = [o for o in out if o["name"] == path]
+            if not out0:
+                return {"name": path, "type": "directory", "size": 0}
         if out0[0]["size"] is None:
             # if this is a whole remote file, update size using remote FS
             prot, _ = split_protocol(self.references[path][0])

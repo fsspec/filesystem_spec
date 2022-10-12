@@ -1,4 +1,5 @@
 import contextlib
+import json
 import os
 import threading
 from collections import ChainMap
@@ -53,6 +54,8 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         file_path = self.path.rstrip("/")
         file_data = self.files.get(file_path)
+        if "give_path" in self.headers:
+            return self._respond(200, data=json.dumps({"path": self.path}).encode())
         if file_data is None:
             return self._respond(404)
         if "Range" in self.headers:

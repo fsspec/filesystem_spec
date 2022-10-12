@@ -64,9 +64,15 @@ class SFTPFileSystem(AbstractFileSystem):
         out.pop("protocol", None)
         return out
 
-    def mkdir(self, path, mode=511):
+    def mkdir(self, path, create_parents=False, mode=511):
         logger.debug("Creating folder %s" % path)
-        self.ftp.mkdir(path, mode)
+        if self.exists(path):
+            raise FileExistsError("File exists: {}".format(path))
+
+        if create_parents:
+            self.makedirs(path)
+        else:
+            self.ftp.mkdir(path, mode)
 
     def makedirs(self, path, exist_ok=False, mode=511):
         if self.exists(path) and not exist_ok:
@@ -78,7 +84,7 @@ class SFTPFileSystem(AbstractFileSystem):
         for part in parts:
             path += "/" + part
             if not self.exists(path):
-                self.mkdir(path, mode)
+                self.ftp.mkdir(path, mode)
 
     def rmdir(self, path):
         logger.debug("Removing folder %s" % path)

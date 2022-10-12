@@ -162,6 +162,21 @@ def test_transaction(ssh, root_path):
         f.rm(root_path, recursive=True)
 
 
+def test_mkdir_create_parent(ssh):
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+
+    with pytest.raises(FileNotFoundError):
+        f.mkdir("/a/b/c")
+
+    f.mkdir("/a/b/c", create_parents=True)
+    assert f.exists("/a/b/c")
+
+    with pytest.raises(FileExistsError, match="/a/b/c"):
+        f.mkdir("/a/b/c")
+
+    f.rm("/a/b/c", recursive=True)
+
+
 def test_makedirs_exist_ok(ssh):
     f = fsspec.get_filesystem_class("sftp")(**ssh)
 

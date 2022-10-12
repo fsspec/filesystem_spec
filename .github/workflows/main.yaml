@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        TOXENV: [py37, py38, py39, s3fs, gcsfs]
+        TOXENV: [py38, py39, py310, s3fs, gcsfs]
 
     env:
       TOXENV: ${{ matrix.TOXENV }}
@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        TOXENV: [py38]
+        TOXENV: [py39]
 
     env:
       TOXENV: ${{ matrix.TOXENV }}
@@ -72,3 +72,48 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
       - uses: pre-commit/action@v2.0.0
+
+  downstream:
+    name: downstream
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          auto-activate-base: false
+          activate-environment: test_env
+          environment-file: ci/environment-downstream.yml
+
+      - name: Local install
+        shell: bash -l {0}
+        run: |
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          git tag -a 3000 -m "fake"
+          pip install -e .
+
+      - name: Install s3fs
+        shell: bash -l {0}
+        run: |
+          git clone https://github.com/fsspec/s3fs
+          pip install -e ./s3fs --no-deps
+
+      - name: Run fsspec tests
+        shell: bash -l {0}
+        run: |
+          pytest -v fsspec/tests/test_downstream.py
+
+      - name: clone dask
+        shell: bash -l {0}
+        run: |
+          git clone https://github.com/dask/dask
+
+      - name: Run dask tests
+        shell: bash -l {0}
+        run: |
+          pytest -v dask/dask/bytes

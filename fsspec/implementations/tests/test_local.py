@@ -342,6 +342,18 @@ def test_touch(tmpdir):
         assert info2["mtime"] > info["mtime"]
 
 
+def test_touch_truncate(tmpdir):
+    fn = str(tmpdir + "/tfile")
+    fs = fsspec.filesystem("file")
+    fs.touch(fn, truncate=True)
+    fs.pipe(fn, b"a")
+    fs.touch(fn, truncate=True)
+    assert fs.cat(fn) == b""
+    fs.pipe(fn, b"a")
+    fs.touch(fn, truncate=False)
+    assert fs.cat(fn) == b"a"
+
+
 def test_directories(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
@@ -587,6 +599,20 @@ def test_pickle(tmpdir):
     with pytest.raises(ValueError):
         pickle.dumps(f)
 
+    # with context
+    with fs.open(fn0, "rb") as f:
+        f.seek(1)
+        f2 = pickle.loads(pickle.dumps(f))
+        assert f2.tell() == 1
+        assert f2.read() == f.read()
+
+    # with fsspec.open https://github.com/fsspec/filesystem_spec/issues/579
+    with fsspec.open(fn0, "rb") as f:
+        f.seek(1)
+        f2 = pickle.loads(pickle.dumps(f))
+        assert f2.tell() == 1
+        assert f2.read() == f.read()
+
 
 def test_strip_protocol_expanduser():
     path = "file://~\\foo\\bar" if WIN else "file://~/foo/bar"
@@ -749,3 +775,35 @@ def test_seekable(tmpdir):
     f.seek(1)
     assert f.read(1) == "a"
     assert f.tell() == 2
+
+
+def test_numpy_fromfile(tmpdir):
+    # Regression test for #1005.
+    np = pytest.importorskip("numpy")
+    fn = str(tmpdir / "test_arr.npy")
+    dt = np.int64
+    arr = np.arange(10, dtype=dt)
+    arr.tofile(fn)
+    assert np.array_equal(np.fromfile(fn, dtype=dt), arr)
+
+
+def test_link(tmpdir):
+    target = os.path.join(tmpdir, "target")
+    link = os.path.join(tmpdir, "link")
+
+    fs = LocalFileSystem()
+    fs.touch(target)
+
+    fs.link(target, link)
+    assert fs.info(link)["nlink"] > 1
+
+
+def test_symlink(tmpdir):
+    target = os.path.join(tmpdir, "target")
+    link = os.path.join(tmpdir, "link")
+
+    fs = LocalFileSystem()
+    fs.touch(target)
+
+    fs.symlink(target, link)
+    assert fs.islink(link)

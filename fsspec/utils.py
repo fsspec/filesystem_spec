@@ -7,8 +7,6 @@ import sys
 from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
-from types import TracebackType
-from typing import IO, AnyStr, Callable, Iterable, Iterator, List, Optional, Type
 from urllib.parse import urlsplit
 
 DEFAULT_BLOCK_SIZE = 5 * 2**20
@@ -544,78 +542,10 @@ def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=Tru
     return paths, starts, ends
 
 
-class IOWrapper(IO):
-    """Wrapper for a file-like object that can be used in situations where we might
-    want to, e.g., monkey-patch the close method but can't.
-    (cf https://github.com/fsspec/filesystem_spec/issues/725)
-    """
-
-    def __init__(self, fp: IO, closer: Callable[[], None]):
-        self.fp = fp
-        self.closer = closer
-
-    def close(self) -> None:
-        self.fp.close()
-
-    def fileno(self) -> int:
-        return self.fp.fileno()
-
-    def flush(self) -> None:
-        self.fp.flush()
-
-    def isatty(self) -> bool:
-        return self.fp.isatty()
-
-    def read(self, n: int = ...) -> AnyStr:
-        return self.fp.read(n)
-
-    def readable(self) -> bool:
-        return self.fp.readable()
-
-    def readline(self, limit: int = ...) -> AnyStr:
-        return self.fp.readline(limit)
-
-    def readlines(self, hint: int = ...) -> List[AnyStr]:
-        return self.fp.readlines(hint)
-
-    def seek(self, offset: int, whence: int = ...) -> int:
-        return self.fp.seek(offset, whence)
-
-    def seekable(self) -> bool:
-        return self.fp.seekable()
-
-    def tell(self) -> int:
-        return self.fp.tell()
-
-    def truncate(self, size: Optional[int] = ...) -> int:
-        return self.fp.truncate(size)
-
-    def writable(self) -> bool:
-        return self.fp.writable()
-
-    def write(self, s: AnyStr) -> int:
-        return self.fp.write(s)
-
-    def writelines(self, lines: Iterable[AnyStr]) -> None:
-        self.fp.writelines(lines)
-
-    def __next__(self) -> AnyStr:
-        return next(self.fp)
-
-    def __iter__(self) -> Iterator[AnyStr]:
-        return iter(self.fp)
-
-    def __enter__(self) -> IO[AnyStr]:
-        return self.fp.__enter__()
-
-    def __exit__(
-        self,
-        t: Optional[Type[BaseException]],
-        value: Optional[BaseException],
-        traceback: Optional[TracebackType],
-    ) -> Optional[bool]:
-        return self.fp.__exit__(t, value, traceback)
-
-    # forward anything else too
-    def __getattr__(self, name):
-        return getattr(self.fp, name)
+def file_size(filelike):
+    """Find length of any open read-mode file-like"""
+    pos = filelike.tell()
+    try:
+        return filelike.seek(0, 2)
+    finally:
+        filelike.seek(pos)

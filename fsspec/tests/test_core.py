@@ -83,7 +83,7 @@ def test_openfile_api(m):
     assert f.read() == b"data"
     f.close()
     with OpenFile(m, "somepath", mode="rt") as f:
-        f.read() == "data"
+        assert f.read() == "data"
 
 
 def test_openfile_open(m):
@@ -91,9 +91,7 @@ def test_openfile_open(m):
     f = of.open()
     f.write("hello")
     assert m.size("somepath") == 0  # no flush yet
-    del of
-    assert m.size("somepath") == 0  # still no flush
-    f.close()
+    of.close()
     assert m.size("somepath") == 5
 
 
@@ -182,6 +180,18 @@ def test_openfile_pickle_newline():
     restored = pickle.loads(pickled)
 
     assert test.newline == restored.newline
+
+
+def test_pickle_after_open_open():
+    of = fsspec.open(__file__, mode="rt")
+    test = of.open()
+    of2 = pickle.loads(pickle.dumps(of))
+    test2 = of2.open()
+    test.close()
+
+    assert not test2.closed
+    of.close()
+    of2.close()
 
 
 def test_mismatch():

@@ -1,8 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import datetime
 import zipfile
 
-from fsspec import open_files
+import fsspec
 from fsspec.archive import AbstractArchiveFileSystem
 from fsspec.utils import DEFAULT_BLOCK_SIZE
 
@@ -17,6 +18,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
 
     root_marker = ""
     protocol = "zip"
+    cachable = False
 
     def __init__(
         self,
@@ -43,18 +45,13 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             a string.
         """
         super().__init__(self, **kwargs)
-        if mode != "r":
-            raise ValueError("Only read from zip files accepted")
         if isinstance(fo, str):
-            files = open_files(fo, protocol=target_protocol, **(target_options or {}))
-            if len(files) != 1:
-                raise ValueError(
-                    'Path "{}" did not resolve to exactly'
-                    'one file: "{}"'.format(fo, files)
-                )
-            fo = files[0]
+            fo = fsspec.open(
+                fo, mode=mode + "b", protocol=target_protocol, **(target_options or {})
+            )
+        self.of = fo
         self.fo = fo.__enter__()  # the whole instance is a context
-        self.zip = zipfile.ZipFile(self.fo)
+        self.zip = zipfile.ZipFile(self.fo, mode=mode)
         self.block_size = block_size
         self.dir_cache = None
 
@@ -62,6 +59,14 @@ class ZipFileSystem(AbstractArchiveFileSystem):
     def _strip_protocol(cls, path):
         # zip file paths are always relative to the archive root
         return super()._strip_protocol(path).lstrip("/")
+
+    def __del__(self):
+        if hasattr(self, "zip"):
+            self.close()
+
+    def close(self):
+        "Commits any write changes to the file. Done on ``del`` too."
+        self.zip.close()
 
     def _get_dirs(self):
         if self.dir_cache is None:
@@ -71,7 +76,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 for dirname in self._all_dirnames(self.zip.namelist())
             }
             for z in files:
-                f = {s: getattr(z, s) for s in zipfile.ZipInfo.__slots__}
+                f = {s: getattr(z, s, None) for s in zipfile.ZipInfo.__slots__}
                 f.update(
                     {
                         "name": z.filename,
@@ -80,6 +85,13 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                     }
                 )
                 self.dir_cache[f["name"]] = f
+
+    def pipe_file(self, path, value, **kwargs):
+        # override upstream, because we know the exact file size in this case
+        info = zipfile.ZipInfo(path, datetime.datetime.now().timetuple())
+        info.file_size = len(value)
+        with self.zip.open(path, "w") as f:
+            f.write(value)
 
     def _open(
         self,
@@ -91,10 +103,9 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         **kwargs,
     ):
         path = self._strip_protocol(path)
-        if mode != "rb":
-            raise NotImplementedError
-        info = self.info(path)
-        out = self.zip.open(path, "r")
-        out.size = info["size"]
-        out.name = info["name"]
+        out = self.zip.open(path, mode.strip("b"))
+        if "r" in mode:
+            info = self.info(path)
+            out.size = info["size"]
+            out.name = info["name"]
         return out

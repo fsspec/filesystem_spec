@@ -18,7 +18,6 @@ from .caching import (  # noqa: F401
 from .compression import compr
 from .registry import filesystem, get_filesystem_class
 from .utils import (
-    IOWrapper,
     _unstrip_protocol,
     build_name_function,
     infer_compression,
@@ -29,7 +28,7 @@ from .utils import (
 logger = logging.getLogger("fsspec")
 
 
-class OpenFile(object):
+class OpenFile:
     """
     File-like object to be used in a context
 
@@ -56,6 +55,10 @@ class OpenFile(object):
         How to handle encoding errors if opened in text mode.
     newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
+    autoopen: bool
+        If True, calls open() immediately. Mostly used by pickle
+    pos: int
+        If given and autoopen is True, seek to this location immediately
     """
 
     def __init__(
@@ -94,10 +97,6 @@ class OpenFile(object):
     def __repr__(self):
         return "<OpenFile '{}'>".format(self.path)
 
-    def __fspath__(self):
-        # may raise if cannot be resolved to local file
-        return self.open().__fspath__()
-
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
 
@@ -112,7 +111,7 @@ class OpenFile(object):
 
         if "b" not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
-            f = io.TextIOWrapper(
+            f = PickleableTextIOWrapper(
                 f, encoding=self.encoding, errors=self.errors, newline=self.newline
             )
             self.fobjects.append(f)
@@ -122,10 +121,6 @@ class OpenFile(object):
     def __exit__(self, *args):
         self.close()
 
-    def __del__(self):
-        if hasattr(self, "fobjects"):
-            self.fobjects.clear()  # may cause cleanup of objects and close files
-
     @property
     def full_name(self):
         return _unstrip_protocol(self.path, self.fs)
@@ -133,31 +128,19 @@ class OpenFile(object):
     def open(self):
         """Materialise this as a real open file without context
 
-        The file should be explicitly closed to avoid enclosed file
-        instances persisting. This code-path monkey-patches the file-like
-        objects, so they can close even if the parent OpenFile object has already
-        been deleted; but a with-context is better style.
+        The OpenFile object should be explicitly closed to avoid enclosed file
+        instances persisting. You must, therefore, keep a reference to the OpenFile
+        during the life of the file-like it generates.
         """
-        out = self.__enter__()
-        closer = out.close
-        fobjects = self.fobjects.copy()[:-1]
-        mode = self.mode
-
-        def close():
-            # this func has no reference to
-            closer()  # original close bound method of the final file-like
-            _close(fobjects, mode)  # call close on other dependent file-likes
-
-        try:
-            out.close = close
-        except AttributeError:
-            out = IOWrapper(out, lambda: _close(fobjects, mode))
-
-        return out
+        return self.__enter__()
 
     def close(self):
         """Close all encapsulated file objects"""
-        _close(self.fobjects, self.mode)
+        for f in reversed(self.fobjects):
+            if "r" not in self.mode and not f.closed:
+                f.flush()
+            f.close()
+        self.fobjects.clear()
 
 
 class OpenFiles(list):
@@ -196,18 +179,17 @@ class OpenFiles(list):
 
     def __exit__(self, *args):
         fs = self.fs
+        [s.__exit__(*args) for s in self]
         if "r" not in self.mode:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
                     fs.commit_many(self.files)
-                    self.files.clear()
                     return
                 if hasattr(fs, "fs") and fs.fs is not None:
                     fs = fs.fs
                 else:
                     break
-        [s.__exit__(*args) for s in self]
 
     def __getitem__(self, item):
         out = super().__getitem__(item)
@@ -217,14 +199,6 @@ class OpenFiles(list):
 
     def __repr__(self):
         return "<List of %s OpenFile instances>" % len(self)
-
-
-def _close(fobjects, mode):
-    for f in reversed(fobjects):
-        if "r" not in mode and not f.closed:
-            f.flush()
-        f.close()
-    fobjects.clear()
 
 
 def open_files(
@@ -701,3 +675,26 @@ def _expand_paths(path, name_function, num):
             "3. A path with a '*' in it: 'foo.*.json'"
         )
     return paths
+
+
+class PickleableTextIOWrapper(io.TextIOWrapper):
+    """TextIOWrapper cannot be pickled. This solves it.
+
+    Requires that ``buffer`` be pickleable, which all instances of
+    AbstractBufferedFile are.
+    """
+
+    def __init__(
+        self,
+        buffer,
+        encoding=None,
+        errors=None,
+        newline=None,
+        line_buffering=False,
+        write_through=False,
+    ):
+        self.args = buffer, encoding, errors, newline, line_buffering, write_through
+        super().__init__(*self.args)
+
+    def __reduce__(self):
+        return PickleableTextIOWrapper, self.args

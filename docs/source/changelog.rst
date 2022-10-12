@@ -1,6 +1,93 @@
 Changelog
 =========
 
+2022.8.2
+--------
+
+- don't close OpenFile on del (#1035)
+
+2022.8.1
+--------
+
+- revert #1024 (#1029), with strciter requirements on OpenFile usage
+
+2022.8.0
+--------
+
+Enhancements
+
+- writable ZipFileSystem (#1017)
+- make OpenFile behave like files and remove dynamic closer in .open() (#1024)
+- use isal gunzip (#1008)
+
+Fixes
+
+- remove strip from _parent (#1022)
+- disallow aiohttp prereleases (#1018)
+- be sure to close cached file (#1016)
+- async rm in reverse order (#1014)
+- expose fileno in LocalFileOpener (#1010, #1005)
+- remove temp files with simplecache writing (#1006)
+- azure paths (#1003)
+- copy dircache keys before iter
+
+
+2022.7.1
+--------
+
+Fixes
+
+- Remove fspath from LocalFileOpener (#1005)
+- Revert 988 (#1003)
+
+2022.7.0
+--------
+
+Enhancements
+
+- added fsspec-xrootd implementation to registry (#1000)
+- memory file not to copy bytes (#999)
+- Filie details passed to FUSE (#972)
+
+Fixes
+
+- Return info for root path of archives (#996)
+- arbitrary kwargs passed through in pipe_file (#993)
+- special cases for host in URLs for azure (#988)
+- unstrip protocol criterion (#980)
+- HTTPFile serialisation (#973)
+
+Other
+
+- Show erroring path in FileNotFounds (#989)
+- Reference file info without searching directory tree (#985)
+- Truncate for local files (#975)
+
+
+2022.5.0
+--------
+
+Enhancements
+
+- mutable ReferenceFS (#958)
+
+Fixes
+
+- Make archive FSs not cachable (#966)
+- glob fixes (#961)
+- generic copy with unknown size (#959)
+- zstd open (#956)
+- empty archive file (#954)
+- tar chaining (#950, 947)
+- missing exceptions in mapper (#940)
+
+Other
+
+- update registry (#852)
+- allow None cache (#942)
+- mappers to remember init arguments (#939)
+- cache docstrings (#933)
+
 2022.03.0
 ---------
 

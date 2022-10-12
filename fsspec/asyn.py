@@ -16,6 +16,33 @@ from .spec import AbstractBufferedFile, AbstractFileSystem
 from .utils import is_exception, other_paths
 
 private = re.compile("_[^_]")
+iothread = [None]  # dedicated fsspec IO thread
+loop = [None]  # global event loop for any non-async instance
+_lock = None  # global lock placeholder
+
+
+def get_lock():
+    """Allocate or return a threading lock.
+
+    The lock is allocatted on first use to allow setting one lock per forked process.
+    """
+    global _lock
+    if not _lock:
+        _lock = threading.Lock()
+    return _lock
+
+
+def reset_lock():
+    """Reset the global lock.
+
+    This should be called only on the init of a forked process to reset the lock to
+    None, enabling the new forked process to get a new lock.
+    """
+    global _lock
+
+    iothread[0] = None
+    loop[0] = None
+    _lock = None
 
 
 async def _runner(event, coro, result, timeout=None):
@@ -33,6 +60,9 @@ async def _runner(event, coro, result, timeout=None):
 def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
+
+    Example usage:
+        fsspec.asyn.sync(fsspec.asyn.get_loop(), func, *args, timeout=timeout, **kwargs)
     """
     timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     # NB: if the loop is not running *yet*, it is OK to submit work
@@ -66,11 +96,6 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         raise return_result
     else:
         return return_result
-
-
-iothread = [None]  # dedicated fsspec IO thread
-loop = [None]  # global event loop for any non-async instance
-lock = threading.Lock()  # for setting exactly one thread
 
 
 def sync_wrapper(func, obj=None):
@@ -121,7 +146,7 @@ def get_loop():
     The loop will be running on a separate thread.
     """
     if loop[0] is None:
-        with lock:
+        with get_lock():
             # repeat the check just in case the loop got filled between the
             # previous two calls from another thread
             if loop[0] is None:
@@ -282,6 +307,7 @@ class AsyncFileSystem(AbstractFileSystem):
     # for _* methods and inferred for overridden methods.
 
     async_impl = True
+    mirror_sync_methods = True
     disable_throttling = False
 
     def __init__(self, *args, asynchronous=False, loop=None, batch_size=None, **kwargs):
@@ -308,7 +334,7 @@ class AsyncFileSystem(AbstractFileSystem):
         batch_size = batch_size or self.batch_size
         path = await self._expand_path(path, recursive=recursive)
         return await _run_coros_in_chunks(
-            [self._rm_file(p, **kwargs) for p in path],
+            [self._rm_file(p, **kwargs) for p in reversed(path)],
             batch_size=batch_size,
             nofiles=True,
         )
@@ -343,6 +369,9 @@ class AsyncFileSystem(AbstractFileSystem):
             if on_error == "ignore" and isinstance(ex, FileNotFoundError):
                 continue
             raise ex
+
+    async def _pipe_file(self, path, value, **kwargs):
+        raise NotImplementedError
 
     async def _pipe(self, path, value=None, batch_size=None, **kwargs):
         if isinstance(path, str):

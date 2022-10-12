@@ -160,13 +160,16 @@ def test_mkdir(ftp_writable):
     assert fs.isdir("/tmp/not/exist/inner/inner")
 
 
-def test_rm_recursive(ftp_writable):
+def test_rm_get_recursive(ftp_writable, tmpdir):
+    tmpdir = str(tmpdir)
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     fs.mkdir("/tmp/topdir")
     fs.mkdir("/tmp/topdir/underdir")
     fs.touch("/tmp/topdir/afile")
     fs.touch("/tmp/topdir/underdir/afile")
+
+    fs.get("/tmp/topdir", tmpdir, recursive=True)
 
     with pytest.raises(ftplib.error_perm):
         fs.rmdir("/tmp/topdir")

@@ -78,7 +78,7 @@ class _Cached(type):
             obj._fs_token_ = token
             obj.storage_args = args
             obj.storage_options = kwargs
-            if obj.async_impl:
+            if obj.async_impl and obj.mirror_sync_methods:
                 from .asyn import mirror_sync_methods
 
                 mirror_sync_methods(obj)
@@ -104,6 +104,7 @@ class AbstractFileSystem(metaclass=_Cached):
     protocol = "abstract"
     _latest = None
     async_impl = False
+    mirror_sync_methods = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
 
     #: Extra *class attributes* that should be considered when hashing.
@@ -187,14 +188,11 @@ class AbstractFileSystem(metaclass=_Cached):
 
     def unstrip_protocol(self, name):
         """Format FS-specific path to generic, including protocol"""
-        if isinstance(self.protocol, str):
-            if name.startswith(self.protocol):
+        protos = (self.protocol,) if isinstance(self.protocol, str) else self.protocol
+        for protocol in protos:
+            if name.startswith(f"{protocol}://"):
                 return name
-            return self.protocol + "://" + name
-        else:
-            if name.startswith(tuple(self.protocol)):
-                return name
-            return self.protocol[0] + "://" + name
+        return f"{protos[0]}://{name}"
 
     @staticmethod
     def _get_kwargs_from_urls(path):
@@ -652,6 +650,50 @@ class AbstractFileSystem(metaclass=_Cached):
         except:  # noqa: E722
             return False
 
+    def read_text(self, path, encoding=None, errors=None, newline=None, **kwargs):
+        """Get the contents of the file as a string.
+
+        Parameters
+        ----------
+        path: str
+            URL of file on this filesystems
+        encoding, errors, newline: same as `open`.
+        """
+        with self.open(
+            path,
+            mode="r",
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+            **kwargs,
+        ) as f:
+            return f.read()
+
+    def write_text(
+        self, path, value, encoding=None, errors=None, newline=None, **kwargs
+    ):
+        """Write the text to the given file.
+
+        An existing file will be overwritten.
+
+        Parameters
+        ----------
+        path: str
+            URL of file on this filesystems
+        value: str
+            Text to write.
+        encoding, errors, newline: same as `open`.
+        """
+        with self.open(
+            path,
+            mode="w",
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+            **kwargs,
+        ) as f:
+            return f.write(value)
+
     def cat_file(self, path, start=None, end=None, **kwargs):
         """Get the content of a file
 
@@ -679,7 +721,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
     def pipe_file(self, path, value, **kwargs):
         """Set the bytes of given file"""
-        with self.open(path, "wb") as f:
+        with self.open(path, "wb", **kwargs) as f:
             f.write(value)
 
     def pipe(self, path, value=None, **kwargs):
@@ -952,7 +994,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
     @classmethod
     def _parent(cls, path):
-        path = cls._strip_protocol(path.rstrip("/"))
+        path = cls._strip_protocol(path)
         if "/" in path:
             parent = path.rsplit("/", 1)[0].lstrip(cls.root_marker)
             return cls.root_marker + parent
@@ -1222,6 +1264,14 @@ class AbstractFileSystem(metaclass=_Cached):
 
     # ------------------------------------------------------------------------
     # Aliases
+
+    def read_bytes(self, path, start=None, end=None, **kwargs):
+        """Alias of `AbstractFileSystem.cat_file`."""
+        return self.cat_file(path, start=start, end=end, **kwargs)
+
+    def write_bytes(self, path, value, **kwargs):
+        """Alias of `AbstractFileSystem.pipe_file`."""
+        self.pipe_file(path, value, **kwargs)
 
     def makedir(self, path, create_parents=True, **kwargs):
         """Alias of `AbstractFileSystem.mkdir`."""
