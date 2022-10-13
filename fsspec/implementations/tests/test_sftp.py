@@ -115,7 +115,7 @@ def test_put_file(ssh, tmp_path, root_path):
         fd.write("blabla")
 
     f = fsspec.get_filesystem_class("sftp")(**ssh)
-    fs.put_file(lpath=tmp_file, rpath=root_path)
+    f.put_file(lpath=tmp_file, rpath=root_path)
         
 
 def test_simple_with_tar(ssh, netloc, tmp_path, root_path):
