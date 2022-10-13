@@ -819,6 +819,8 @@ class AbstractFileSystem(metaclass=_Cached):
             while data:
                 data = f1.read(self.blocksize)
                 segment_len = outfile.write(data)
+                if segment_len is None:
+                    segment_len = len(data)
                 callback.relative_update(segment_len)
         if not isfilelike(lpath):
             outfile.close()
@@ -861,6 +863,8 @@ class AbstractFileSystem(metaclass=_Cached):
                 while f1.tell() < size:
                     data = f1.read(self.blocksize)
                     segment_len = f2.write(data)
+                    if segment_len is None:
+                        segment_len = len(data)
                     callback.relative_update(segment_len)
 
     def put(self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
