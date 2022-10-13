@@ -108,6 +108,16 @@ def netloc(ssh):
     return userpass + netloc
 
 
+def test_put_file(ssh, tmp_path, root_path):
+
+    tmp_file = tmp_path / "a.txt"
+    with open(tmp_file, mode="w") as fd:
+        fd.write("blabla")
+
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+    fs.put_file(lpath=tmp_file, rpath=root_path)
+        
+
 def test_simple_with_tar(ssh, netloc, tmp_path, root_path):
 
     files_to_pack = ["a.txt", "b.txt"]
