@@ -1,6 +1,35 @@
 Changelog
 =========
 
+2022.10.0
+---------
+
+Enhancements
+
+- referenceFS consolidates reads in the same remote file (#1063)
+- localfs: add link/symlink/islink (#1059)
+- asyncfs: make mirroring methods optional (#1054)
+- local: info: provide st_ino and st_nlink from stat (#1053)
+- arrow_hdfs replaces hdfs (#1051)
+- Add read/write_text (#1047)
+- Add pipe/cat to genericFS (#1038)
+
+Fixes
+
+- SSH write doesn't return number of bytes (#1072)
+- wrap flush method for LocalFileOpened (#1070)
+- localfs: fix support for pathlib/os.PathLike objects in rm (#1058)
+- don't get_file remote FTP directory (#1056)
+- fix zip write to remote (#1046)
+- fix zip del following failed init (#1040)
+
+Other
+
+- add asynclocalfs to the registry (#1060)
+- add DVCFileSystem to the registry (#1049)
+- add downstream tests (#1037)
+- Don't auto-close OpenFiles (#1035)
+
 2022.8.2
 --------
 
