@@ -439,7 +439,14 @@ class AsyncFileSystem(AbstractFileSystem):
             return out[0]
 
     async def _cat_ranges(
-        self, paths, starts, ends, max_gap=None, batch_size=None, **kwargs
+        self,
+        paths,
+        starts,
+        ends,
+        max_gap=None,
+        batch_size=None,
+        on_error="return",
+        **kwargs,
     ):
         # TODO: on_error
         if max_gap is not None:
@@ -458,7 +465,9 @@ class AsyncFileSystem(AbstractFileSystem):
             for p, s, e in zip(paths, starts, ends)
         ]
         batch_size = batch_size or self.batch_size
-        return await _run_coros_in_chunks(coros, batch_size=batch_size, nofiles=True)
+        return await _run_coros_in_chunks(
+            coros, batch_size=batch_size, nofiles=True, return_exceptions=True
+        )
 
     async def _put_file(self, lpath, rpath, **kwargs):
         raise NotImplementedError

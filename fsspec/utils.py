@@ -496,7 +496,6 @@ def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=Tru
     order. If the user can guarantee that the inputs are already
     sorted, passing `sort=False` will skip the re-ordering.
     """
-
     # Check input
     if not isinstance(paths, list):
         raise TypeError
