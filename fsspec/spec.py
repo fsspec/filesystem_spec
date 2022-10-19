@@ -746,7 +746,9 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             raise ValueError("path must be str or dict")
 
-    def cat_ranges(self, paths, starts, ends, max_gap=None, **kwargs):
+    def cat_ranges(
+        self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
+    ):
         if max_gap is not None:
             raise NotImplementedError
         if not isinstance(paths, list):
@@ -757,7 +759,16 @@ class AbstractFileSystem(metaclass=_Cached):
             ends = [starts] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
-        return [self.cat_file(p, s, e) for p, s, e in zip(paths, starts, ends)]
+        out = []
+        for p, s, e in zip(paths, starts, ends):
+            try:
+                out.append(self.cat_file(p, s, e))
+            except Exception as e:
+                if False:  # on_error == "return":
+                    out.append(e)
+                else:
+                    raise
+        return out
 
     def cat(self, path, recursive=False, on_error="raise", **kwargs):
         """Fetch (potentially multiple) paths' contents

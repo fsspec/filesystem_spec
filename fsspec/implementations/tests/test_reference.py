@@ -78,7 +78,11 @@ def test_mutable(server, m):
 def test_defaults(server):  # noqa: F811
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(
-        "reference", fo=refs, target_protocol="http", target=realfile
+        "reference",
+        fo=refs,
+        target_protocol="http",
+        target=realfile,
+        remote_protocol="http",
     )
 
     assert fs.cat("a") == b"data"
@@ -337,3 +341,66 @@ def test_missing_nonasync(m):
 
     a = zarr.open_array(m)
     assert str(a[0]) == "nan"
+
+
+def test_fss_has_defaults(m):
+    fs = fsspec.filesystem("reference", fo={})
+    assert None in fs.fss
+
+    fs = fsspec.filesystem("reference", fo={}, remote_protocol="memory")
+    assert fs.fss[None].protocol == "memory"
+    assert fs.fss["memory"].protocol == "memory"
+
+    fs = fsspec.filesystem("reference", fs=m, fo={})
+    assert fs.fss[None] is m
+
+    fs = fsspec.filesystem("reference", fs={"memory": m}, fo={})
+    assert fs.fss["memory"] is m
+    assert fs.fss[None].protocol == "file"
+
+    fs = fsspec.filesystem("reference", fs={None: m}, fo={})
+    assert fs.fss[None] is m
+
+    fs = fsspec.filesystem("reference", fo={"key": ["memory://a"]})
+    assert fs.fss[None] is fs.fss["memory"]
+
+    fs = fsspec.filesystem("reference", fo={"key": ["memory://a"], "blah": ["path"]})
+    assert fs.fss[None] is fs.fss["memory"]
+
+
+def test_merging(m):
+    m.pipe("/a", b"test data")
+    other = b"other test data"
+    m.pipe("/b", other)
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "a": ["memory://a", 1, 1],
+            "b": ["memory://a", 2, 1],
+            "c": ["memory://b"],
+            "d": ["memory://b", 4, 6],
+        },
+    )
+    out = fs.cat(["a", "b", "c", "d"])
+    assert out == {"a": b"e", "b": b"s", "c": other, "d": other[4:10]}
+
+
+def test_cat_file_ranges(m):
+    other = b"other test data"
+    m.pipe("/b", other)
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "c": ["memory://b"],
+            "d": ["memory://b", 4, 6],
+        },
+    )
+    assert fs.cat_file("c") == other
+    assert fs.cat_file("c", start=1) == other[1:]
+    assert fs.cat_file("c", start=-5) == other[-5:]
+    assert fs.cat_file("c", 1, -5) == other[1:-5]
+
+    assert fs.cat_file("d") == other[4:10]
+    assert fs.cat_file("d", start=1) == other[4:10][1:]
+    assert fs.cat_file("d", start=-5) == other[4:10][-5:]
+    assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
