@@ -140,7 +140,7 @@ try:
     # standard implementation.
     register_compression("snappy", SnappyFile, [])
 
-except (ImportError, NameError):
+except (ImportError, NameError, AttributeError):
     pass
 
 try:
