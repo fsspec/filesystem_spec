@@ -93,6 +93,21 @@ def test_with_url(protocol, ssh):
         assert f.read() == b"hello"
 
 
+@pytest.mark.parametrize("protocol", ["sftp", "ssh"])
+def test_get_dir(protocol, ssh, root_path):
+    f = fsspec.get_filesystem_class(protocol)(**ssh)
+    f.mkdirs(root_path + "deeper", exist_ok=True)
+    f.touch(root_path + "deeper/afile")
+    f.get(root_path + "deeper", ".", recursive=True)
+
+    f.get(
+        protocol + "://{username}:{password}@{host}:{port}"
+        "{root_path}deeper".format(root_path=root_path, **ssh),
+        ".",
+        recursive=True,
+    )
+
+
 @pytest.fixture(scope="module")
 def netloc(ssh):
     username = ssh.get("username")

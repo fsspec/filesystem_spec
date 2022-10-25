@@ -2,6 +2,8 @@ import datetime
 import logging
 import types
 import uuid
+import os
+from pathlib import Path
 from stat import S_ISDIR, S_ISLNK
 
 import paramiko
@@ -130,8 +132,29 @@ class SFTPFileSystem(AbstractFileSystem):
         self.ftp.put(lpath, rpath)
 
     def get(self, rpath, lpath, callback=None, **kwargs):
-        logger.debug("Get file %s into %s" % (rpath, lpath))
-        self.ftp.get(rpath, lpath)
+        # parse rpath if needed
+        if ":" in rpath:
+            rpath = rpath.split(":")[-1]  # remove protocol and host part
+            if rpath[0] != "/":
+                rpath = "/" + rpath.partition("/")[-1]  # remove port if any
+
+        if "recursive" in kwargs and self.isdir(rpath):
+            Path(lpath).mkdir(parents=True, exist_ok=True)
+            for sub in self.ftp.listdir(rpath):
+                self.get(
+                    os.path.join(rpath, sub),
+                    os.path.join(lpath, sub),
+                    callback=callback,
+                    **kwargs,
+                )
+        else:
+            if lpath == ".":
+                raise Exception(
+                    "Cannot download '%s' to '.', have you forget to set recursive parameter?"
+                    % rpath
+                )
+            logger.debug("Get file %s into %s" % (rpath, lpath))
+            self.ftp.get(rpath, lpath)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         """
