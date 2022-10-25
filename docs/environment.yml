@@ -3,4 +3,5 @@ channels:
   - defaults
 dependencies:
   - python=3.9
+  - docutils<0.17
   - numpydoc
