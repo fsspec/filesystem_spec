@@ -315,7 +315,7 @@ class AbstractFileSystem(metaclass=_Cached):
         - type of entry, "file", "directory" or other
 
         Additional information
-        may be present, aproriate to the file-system, e.g., generation,
+        may be present, appropriate to the file-system, e.g., generation,
         checksum, etc.
 
         May use refresh=True|False to allow use of self._ls_from_cache to
@@ -342,7 +342,7 @@ class AbstractFileSystem(metaclass=_Cached):
     def _ls_from_cache(self, path):
         """Check cache for listing
 
-        Returns listing, if found (may me empty list for a directly that exists
+        Returns listing, if found (may be empty list for a directly that exists
         but contains nothing), None if not in cache.
         """
         parent = self._parent(path)
@@ -362,7 +362,7 @@ class AbstractFileSystem(metaclass=_Cached):
         except KeyError:
             pass
 
-    def walk(self, path, maxdepth=None, **kwargs):
+    def walk(self, path, maxdepth=None, topdown=True, **kwargs):
         """Return all files belows path
 
         List all files, recursing into subdirectories; output is iterator-style,
@@ -378,6 +378,9 @@ class AbstractFileSystem(metaclass=_Cached):
         maxdepth: int
             Maximum recursion depth. None means limitless, but not recommended
             on link-based file-systems.
+        topdown: bool (True)
+            Whether to walk the directory tree from the top downwards or from
+            the bottom upwards.
         kwargs: passed to ``ls``
         """
         path = self._strip_protocol(path)
@@ -408,10 +411,13 @@ class AbstractFileSystem(metaclass=_Cached):
             else:
                 files[name] = info
 
-        if detail:
+        if not detail:
+            dirs = list(dirs)
+            files = list(files)
+
+        if topdown:
+            # Yield before recursion if walking top down
             yield path, dirs, files
-        else:
-            yield path, list(dirs), list(files)
 
         if maxdepth is not None:
             maxdepth -= 1
@@ -419,7 +425,11 @@ class AbstractFileSystem(metaclass=_Cached):
                 return
 
         for d in full_dirs:
-            yield from self.walk(d, maxdepth=maxdepth, detail=detail, **kwargs)
+            yield from self.walk(d, maxdepth=maxdepth, detail=detail, topdown=topdown, **kwargs)
+
+        if not topdown:
+            # Yield after recursion if walking bottom up
+            yield path, dirs, files
 
     def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
         """List all files below path.
