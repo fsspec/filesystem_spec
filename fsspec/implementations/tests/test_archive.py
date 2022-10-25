@@ -301,7 +301,8 @@ class TestAnyArchive:
             assert fs.find("deeply") == ["deeply/nested/path"]
             assert fs.find("deeply/") == fs.find("deeply")
 
-    def test_walk(self, scenario: ArchiveTestScenario):
+    @pytest.mark.parametrize("topdown", [True, False])
+    def test_walk(self, scenario: ArchiveTestScenario, topdown):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             expected = [
@@ -310,7 +311,9 @@ class TestAnyArchive:
                 ("deeply", ["nested"], []),
                 ("deeply/nested", [], ["path"]),
             ]
-            for lhs, rhs in zip(fs.walk(""), expected):
+            if not topdown:
+                expected.reverse()
+            for lhs, rhs in zip(fs.walk("", topdown=topdown), expected):
                 assert lhs[0] == rhs[0]
                 assert sorted(lhs[1]) == sorted(rhs[1])
                 assert sorted(lhs[2]) == sorted(rhs[2])
