@@ -425,7 +425,9 @@ class AbstractFileSystem(metaclass=_Cached):
                 return
 
         for d in full_dirs:
-            yield from self.walk(d, maxdepth=maxdepth, detail=detail, topdown=topdown, **kwargs)
+            yield from self.walk(
+                d, maxdepth=maxdepth, detail=detail, topdown=topdown, **kwargs
+            )
 
         if not topdown:
             # Yield after recursion if walking bottom up
