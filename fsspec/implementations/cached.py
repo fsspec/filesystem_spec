@@ -15,7 +15,7 @@ from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_compression
 
-logger = logging.getLogger("fsspec")
+logger = logging.getLogger("fsspec.cached")
 
 
 class CachingFileSystem(AbstractFileSystem):

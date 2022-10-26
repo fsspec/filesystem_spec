@@ -18,6 +18,7 @@ dependencies:
   - pytest-mock
   - pytest-vcr
   - python-libarchive-c
+  - py
   - numpy
   - nomkl
   - tqdm
