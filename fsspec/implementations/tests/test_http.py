@@ -452,3 +452,12 @@ def test_encoded(server):
     fs = fsspec.filesystem("http", encoded=False)
     out = fs.cat(server + "/Hello: Günter", headers={"give_path": "true"})
     assert json.loads(out)["path"] == "/Hello:%20G%C3%BCnter"
+
+
+def test_with_cache(server):
+    fs = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    fn = server + "/index/realfile"
+    fs1 = fsspec.filesystem("blockcache", fs=fs)
+    with fs1.open(fn, "rb") as f:
+        out = f.read()
+    assert out == fs1.cat(fn)
