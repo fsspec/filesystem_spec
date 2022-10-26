@@ -131,30 +131,11 @@ class SFTPFileSystem(AbstractFileSystem):
         logger.debug("Put file %s into %s" % (lpath, rpath))
         self.ftp.put(lpath, rpath)
 
-    def get(self, rpath, lpath, callback=None, **kwargs):
-        # parse rpath if needed
-        if ":" in rpath:
-            rpath = rpath.split(":")[-1]  # remove protocol and host part
-            if rpath[0] != "/":
-                rpath = "/" + rpath.partition("/")[-1]  # remove port if any
-
-        if "recursive" in kwargs and self.isdir(rpath):
-            Path(lpath).mkdir(parents=True, exist_ok=True)
-            for sub in self.ftp.listdir(rpath):
-                self.get(
-                    os.path.join(rpath, sub),
-                    os.path.join(lpath, sub),
-                    callback=callback,
-                    **kwargs,
-                )
+    def get_file(self, rpath, lpath, **kwargs):
+        if self.isdir(rpath):
+            os.makedirs(lpath, exist_ok=True)
         else:
-            if lpath == ".":
-                raise Exception(
-                    "Cannot download '%s' to '.', have you forget to set recursive parameter?"
-                    % rpath
-                )
-            logger.debug("Get file %s into %s" % (rpath, lpath))
-            self.ftp.get(rpath, lpath)
+            self.ftp.get(self._strip_protocol(rpath), lpath)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         """

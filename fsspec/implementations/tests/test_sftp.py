@@ -95,7 +95,7 @@ def test_with_url(protocol, ssh):
 
 @pytest.mark.parametrize("protocol", ["sftp", "ssh"])
 def test_get_dir(protocol, ssh, root_path):
-    f = fsspec.get_filesystem_class(protocol)(**ssh)
+    f = fsspec.filesystem(protocol, **ssh)
     f.mkdirs(root_path + "deeper", exist_ok=True)
     f.touch(root_path + "deeper/afile")
     f.get(root_path + "deeper", ".", recursive=True)
