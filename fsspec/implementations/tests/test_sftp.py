@@ -2,6 +2,7 @@ import shlex
 import subprocess
 import time
 from tarfile import TarFile
+import os
 
 import pytest
 
@@ -98,14 +99,20 @@ def test_get_dir(protocol, ssh, root_path):
     f = fsspec.filesystem(protocol, **ssh)
     f.mkdirs(root_path + "deeper", exist_ok=True)
     f.touch(root_path + "deeper/afile")
-    f.get(root_path + "deeper", ".", recursive=True)
+    f.get(root_path, ".", recursive=True)
+
+    assert os.path.isdir("./deeper")
+    assert os.path.isfile("./deeper/afile")
 
     f.get(
         protocol + "://{username}:{password}@{host}:{port}"
-        "{root_path}deeper".format(root_path=root_path, **ssh),
-        ".",
+        "{root_path}".format(root_path=root_path, **ssh),
+        "./test2",
         recursive=True,
     )
+
+    assert os.path.isdir("./test2/deeper")
+    assert os.path.isfile("./test2/deeper/afile")
 
 
 @pytest.fixture(scope="module")
