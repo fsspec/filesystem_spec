@@ -10,7 +10,7 @@ import pytest
 requests = pytest.importorskip("requests")
 port = 9898
 data = b"\n".join([b"some test data"] * 1000)
-realfile = "http://localhost:%i/index/realfile" % port
+realfile = "http://127.0.0.1:%i/index/realfile" % port
 index = b'<a href="%s">Link</a>' % realfile.encode()
 listing = open(
     os.path.join(os.path.dirname(__file__), "data", "listing.html"), "rb"
@@ -139,7 +139,7 @@ def serve():
     th.daemon = True
     th.start()
     try:
-        yield "http://localhost:%i" % port
+        yield "http://127.0.0.1:%i" % port
     finally:
         httpd.socket.close()
         httpd.shutdown()
