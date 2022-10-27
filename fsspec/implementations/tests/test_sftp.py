@@ -1,8 +1,8 @@
+import os
 import shlex
 import subprocess
 import time
 from tarfile import TarFile
-import os
 
 import pytest
 

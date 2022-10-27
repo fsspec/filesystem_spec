@@ -1,9 +1,8 @@
 import datetime
 import logging
+import os
 import types
 import uuid
-import os
-from pathlib import Path
 from stat import S_ISDIR, S_ISLNK
 
 import paramiko
