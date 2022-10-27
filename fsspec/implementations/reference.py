@@ -338,7 +338,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 list(urls2),
                 list(starts2),
                 list(ends2),
-                sort=False,
+                sort=True,
                 max_gap=self.max_gap,
                 max_block=self.max_block,
             )
