@@ -181,3 +181,16 @@ def test_open_rw_flush(fs, remote_dir):
 
     with fs.open(remote_dir + "/b.txt", "rb") as stream:
         assert stream.read() == data * 400
+
+
+def test_open_append(fs, remote_dir):
+    data = b"dvc.org"
+
+    with fs.open(remote_dir + "/a.txt", "wb") as stream:
+        stream.write(data)
+
+    with fs.open(remote_dir + "/a.txt", "ab") as stream:
+        stream.write(data)
+
+    with fs.open(remote_dir + "/a.txt") as stream:
+        assert stream.read() == 2 * data
