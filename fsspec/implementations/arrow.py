@@ -149,6 +149,8 @@ class ArrowFSWrapper(AbstractFileSystem):
             method = self.fs.open_input_stream
         elif mode == "wb":
             method = self.fs.open_output_stream
+        elif mode == "ab":
+            method = self.fs.open_append_stream
         else:
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
 
