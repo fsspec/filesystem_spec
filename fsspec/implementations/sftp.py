@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 import types
 import uuid
 from stat import S_ISDIR, S_ISLNK
@@ -129,9 +130,11 @@ class SFTPFileSystem(AbstractFileSystem):
         logger.debug("Put file %s into %s" % (lpath, rpath))
         self.ftp.put(lpath, rpath)
 
-    def get(self, rpath, lpath, callback=None, **kwargs):
-        logger.debug("Get file %s into %s" % (rpath, lpath))
-        self.ftp.get(rpath, lpath)
+    def get_file(self, rpath, lpath, **kwargs):
+        if self.isdir(rpath):
+            os.makedirs(lpath, exist_ok=True)
+        else:
+            self.ftp.get(self._strip_protocol(rpath), lpath)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         """
