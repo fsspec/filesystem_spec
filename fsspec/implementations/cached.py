@@ -232,6 +232,44 @@ class CachingFileSystem(AbstractFileSystem):
         rmtree(self.storage[-1])
         self.load_cache()
 
+    def clear_expired_cache(self, expiry_time=None):
+        """Remove all expired files and metadata from the cache
+
+        In the case of multiple cache locations, this clears only the last one,
+        which is assumed to be the read/write one.
+
+        Parameters
+        ----------
+        expiry_time: int
+            The time in seconds after which a local copy is considered useless.
+            If not defined the default is equivalent to the attribute from the
+            file caching instantiation.
+        """
+
+        if not expiry_time:
+            expiry_time = self.expiry
+
+        self._check_cache()
+
+        for path, detail in self.cached_files[-1].copy().items():
+            if time.time() - detail["time"] > expiry_time:
+                if self.same_names:
+                    basename = os.path.basename(detail["original"])
+                    fn = os.path.join(self.storage[-1], basename)
+                else:
+                    fn = os.path.join(self.storage[-1], detail["fn"])
+                if os.path.exists(fn):
+                    os.remove(fn)
+                    self.cached_files[-1].pop(path)
+
+        if self.cached_files[-1]:
+            cache_path = os.path.join(self.storage[-1], "cache")
+            with open(cache_path, "wb") as fc:
+                pickle.dump(self.cached_files[-1], fc)
+        else:
+            rmtree(self.storage[-1])
+            self.load_cache()
+
     def pop_from_cache(self, path):
         """Remove cached version of given file
 
@@ -389,6 +427,7 @@ class CachingFileSystem(AbstractFileSystem):
             "_check_cache",
             "_mkcache",
             "clear_cache",
+            "clear_expired_cache",
             "pop_from_cache",
             "_mkcache",
             "local_file",
