@@ -144,9 +144,12 @@ class ArrowFSWrapper(AbstractFileSystem):
             self.fs.delete_file(path)
 
     @wrap_exceptions
-    def _open(self, path, mode="rb", block_size=None, **kwargs):
+    def _open(self, path, mode="rb", block_size=None, seekable=False, **kwargs):
         if mode == "rb":
-            method = self.fs.open_input_stream
+            if seekable:
+                method = self.fs.open_input_file
+            else:
+                method = self.fs.open_input_stream
         elif mode == "wb":
             method = self.fs.open_output_stream
         elif mode == "ab":
@@ -155,9 +158,10 @@ class ArrowFSWrapper(AbstractFileSystem):
             raise ValueError(f"unsupported mode for Arrow filesystem: {mode!r}")
 
         _kwargs = {}
-        if PYARROW_VERSION[0] >= 4:
-            # disable compression auto-detection
-            _kwargs["compression"] = None
+        if mode != "rb" or not seekable:
+            if PYARROW_VERSION[0] >= 4:
+                # disable compression auto-detection
+                _kwargs["compression"] = None
         stream = method(path, **_kwargs)
 
         return ArrowFile(self, stream, path, mode, block_size, **kwargs)
@@ -182,7 +186,7 @@ class ArrowFSWrapper(AbstractFileSystem):
 
 
 @mirror_from(
-    "stream", ["read", "seek", "tell", "write", "readable", "writable", "close"]
+    "stream", ["read", "seek", "tell", "write", "readable", "writable", "close", "size"]
 )
 class ArrowFile(io.IOBase):
     def __init__(self, fs, stream, path, mode, block_size=None, **kwargs):
