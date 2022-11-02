@@ -159,7 +159,7 @@ class CachingFileSystem(AbstractFileSystem):
         if os.path.exists(fn):
             with open(fn, "rb") as f:
                 cached_files = pickle.load(f)
-            for k, c in cached_files.copy().items():
+            for k, c in cached_files.items():
                 if k in cache:
                     if c["blocks"] is True or cache[k]["blocks"] is True:
                         c["blocks"] = True
@@ -173,8 +173,6 @@ class CachingFileSystem(AbstractFileSystem):
                         c["blocks"] = blocks
                     c["time"] = max(c["time"], cache[k]["time"])
                     c["uid"] = cache[k]["uid"]
-                else:
-                    cached_files.pop(k)
             # Files can be added to cache after it was written once
             for k, c in cache.items():
                 if k not in cached_files:
@@ -246,6 +244,7 @@ class CachingFileSystem(AbstractFileSystem):
             If not defined the default is equivalent to the attribute from the
             file caching instantiation.
         """
+
         if not expiry_time:
             expiry_time = self.expiry
 
@@ -263,7 +262,9 @@ class CachingFileSystem(AbstractFileSystem):
                     self.cached_files[-1].pop(path)
 
         if self.cached_files[-1]:
-            self.save_cache()
+            cache_path = os.path.join(self.storage[-1], "cache")
+            with open(cache_path, "wb") as fc:
+                pickle.dump(self.cached_files[-1], fc)
         else:
             rmtree(self.storage[-1])
             self.load_cache()
