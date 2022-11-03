@@ -170,7 +170,7 @@ class GenericFileSystem(AsyncFileSystem):
                 if hasattr(fs, "open_async")
                 else fs.open(url, "rb", **kw)
             )
-            callback.set_size(maybe_await(f1.size))
+            callback.set_size(await maybe_await(f1.size))
             f2 = (
                 await fs2.open_async(url2, "wb")
                 if hasattr(fs2, "open_async")
