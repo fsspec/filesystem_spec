@@ -183,11 +183,12 @@ class ArrowFSWrapper(AbstractFileSystem):
     def rmdir(self, path):
         path = self._strip_protocol(path)
         self.fs.delete_dir(path)
-    
+
     @wrap_exceptions
     def modified(self, path):
         path = self._strip_protocol(path)
         return self.fs.get_file_info(path).mtime
+
 
 @mirror_from(
     "stream", ["read", "seek", "tell", "write", "readable", "writable", "close", "size"]

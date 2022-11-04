@@ -7,14 +7,16 @@ from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.arrow import ArrowFSWrapper
 
 # A dummy filesystem that has a list of protocols
+
+
 class MultiProtocolFileSystem(LocalFileSystem):
     protocol = ["file", "other"]
 
 
 FILESYSTEMS = {
-    "local": LocalFileSystem, 
-    "multi": MultiProtocolFileSystem, 
-    "memory": MemoryFileSystem, 
+    "local": LocalFileSystem,
+    "multi": MultiProtocolFileSystem,
+    "memory": MemoryFileSystem,
 }
 
 READ_ONLY_FILESYSTEMS = []
