@@ -153,6 +153,109 @@ def test_clear():
     assert len(os.listdir(cache1)) < 2
 
 
+def test_clear_expired(tmp_path):
+    def __ager(cache_fn, fn):
+        """
+        Modify the cache file to virtually add time lag to selected files.
+
+        Parameters
+        ---------
+        cache_fn: str
+            cache path
+        fn: str
+            file name to be modified
+        """
+        import pathlib
+        import time
+
+        if os.path.exists(cache_fn):
+            with open(cache_fn, "rb") as f:
+                cached_files = pickle.load(f)
+                fn_posix = pathlib.Path(fn).as_posix()
+                cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
+            assert os.access(cache_fn, os.W_OK), "Cache is not writable"
+            with open(cache_fn, "wb") as f:
+                pickle.dump(cached_files, f)
+            time.sleep(1)
+
+    origin = tmp_path.joinpath("origin")
+    cache1 = tmp_path.joinpath("cache1")
+    cache2 = tmp_path.joinpath("cache2")
+    cache3 = tmp_path.joinpath("cache3")
+
+    origin.mkdir()
+    cache1.mkdir()
+    cache2.mkdir()
+    cache3.mkdir()
+
+    data = b"test data"
+    f1 = origin.joinpath("afile")
+    f2 = origin.joinpath("bfile")
+    f3 = origin.joinpath("cfile")
+    f4 = origin.joinpath("dfile")
+
+    with open(f1, "wb") as f:
+        f.write(data)
+    with open(f2, "wb") as f:
+        f.write(data)
+    with open(f3, "wb") as f:
+        f.write(data)
+    with open(f4, "wb") as f:
+        f.write(data)
+
+    # populates first cache
+    fs = fsspec.filesystem(
+        "filecache", target_protocol="file", cache_storage=str(cache1), cache_check=1
+    )
+    assert fs.cat(str(f1)) == data
+
+    # populates "last" cache if file not found in first one
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=[str(cache1), str(cache2)],
+        cache_check=1,
+    )
+    assert fs.cat(str(f2)) == data
+    assert fs.cat(str(f3)) == data
+    assert len(os.listdir(cache2)) == 3
+
+    # force the expiration
+    cache_fn = os.path.join(fs.storage[-1], "cache")
+    __ager(cache_fn, f2)
+
+    # remove from cache2 the expired files
+    fs.clear_expired_cache()
+    assert len(os.listdir(cache2)) == 2
+
+    # check complete cleanup
+    __ager(cache_fn, f3)
+
+    fs.clear_expired_cache()
+    assert not fs._check_file(f2)
+    assert not fs._check_file(f3)
+    assert len(os.listdir(cache2)) < 2
+
+    # check cache1 to be untouched after cleaning
+    assert len(os.listdir(cache1)) == 2
+
+    # check cleaning with 'same_name' option enabled
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=[str(cache1), str(cache2), str(cache3)],
+        same_names=True,
+        cache_check=1,
+    )
+    assert fs.cat(str(f4)) == data
+
+    cache_fn = os.path.join(fs.storage[-1], "cache")
+    __ager(cache_fn, f4)
+
+    fs.clear_expired_cache()
+    assert not fs._check_file(str(f4))
+
+
 def test_pop():
     import tempfile
 
