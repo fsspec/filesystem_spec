@@ -25,7 +25,7 @@ class MemoryFileSystem(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         if path.startswith("memory://"):
-            path = path[len("memory://"):]
+            path = path[len("memory://") :]
         if "::" in path or "://" in path:
             return path.rstrip("/")
         path = path.lstrip("/").rstrip("/")
@@ -48,7 +48,7 @@ class MemoryFileSystem(AbstractFileSystem):
         out = []
         for p2 in tuple(self.store):
             if p2.startswith(starter):
-                if "/" not in p2[len(starter):]:
+                if "/" not in p2[len(starter) :]:
                     # exact child
                     out.append(
                         {
@@ -60,7 +60,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     )
                 elif len(p2) > len(starter):
                     # implied child directory
-                    ppath = starter + p2[len(starter):].split("/", 1)[0]
+                    ppath = starter + p2[len(starter) :].split("/", 1)[0]
                     if ppath not in paths:
                         out = out or []
                         out.append(
@@ -73,14 +73,14 @@ class MemoryFileSystem(AbstractFileSystem):
                         paths.add(ppath)
         for p2 in self.pseudo_dirs:
             if p2.startswith(starter):
-                if "/" not in p2[len(starter):]:
+                if "/" not in p2[len(starter) :]:
                     # exact child pdir
                     if p2 not in paths:
                         out.append({"name": p2, "size": 0, "type": "directory"})
                         paths.add(p2)
                 else:
                     # directory implied by deeper pdir
-                    ppath = starter + p2[len(starter):].split("/", 1)[0]
+                    ppath = starter + p2[len(starter) :].split("/", 1)[0]
                     if ppath not in paths:
                         out.append({"name": ppath, "size": 0, "type": "directory"})
                         paths.add(ppath)

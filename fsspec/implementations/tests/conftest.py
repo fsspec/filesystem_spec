@@ -2,9 +2,9 @@ import tempfile
 
 import pytest
 
+from fsspec.implementations.arrow import ArrowFSWrapper
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
-from fsspec.implementations.arrow import ArrowFSWrapper
 
 # A dummy filesystem that has a list of protocols
 
