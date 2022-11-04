@@ -8,6 +8,7 @@ import re
 import shutil
 import stat
 import tempfile
+import warnings
 
 from fsspec import AbstractFileSystem
 from fsspec.compression import compr
@@ -132,6 +133,13 @@ class LocalFileSystem(AbstractFileSystem):
 
     def put_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
+
+    def put(self, lpath, rpath, **kwargs):
+        if kwargs.pop("callback", None):
+            warnings.warn(
+                f"'callback' kwarg is ignored by {self.__class__.__name__}.put()"
+            )
+        self.cp(lpath, rpath, **kwargs)
 
     def mv_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1).rstrip("/")
