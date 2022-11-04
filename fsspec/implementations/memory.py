@@ -40,7 +40,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     "name": path,
                     "size": self.store[path].size,
                     "type": "file",
-                    "created": self.store[path].created,
+                    "created": self.store[path].created.timestamp(),
                 }
             ]
         paths = set()
@@ -55,7 +55,7 @@ class MemoryFileSystem(AbstractFileSystem):
                             "name": p2,
                             "size": self.store[p2].size,
                             "type": "file",
-                            "created": self.store[p2].created,
+                            "created": self.store[p2].created.timestamp(),
                         }
                     )
                 elif len(p2) > len(starter):
@@ -221,6 +221,20 @@ class MemoryFileSystem(AbstractFileSystem):
         except KeyError as e:
             raise FileNotFoundError(path) from e
 
+    def modified(self, path):
+        path = self._strip_protocol(path)
+        try:
+            return self.store[path].modified
+        except KeyError:
+            raise FileNotFoundError(path)
+
+    def created(self, path):
+        path = self._strip_protocol(path)
+        try:
+            return self.store[path].created
+        except KeyError:
+            raise FileNotFoundError(path)
+
     def rm(self, path, recursive=False, maxdepth=None):
         if isinstance(path, str):
             path = self._strip_protocol(path)
@@ -252,7 +266,8 @@ class MemoryFile(BytesIO):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
-        self.created = datetime.utcnow().timestamp()
+        self.created = datetime.utcnow()
+        self.modified = datetime.utcnow()
         if data:
             super().__init__(data)
             self.seek(0)
@@ -272,3 +287,4 @@ class MemoryFile(BytesIO):
 
     def commit(self):
         self.fs.store[self.path] = self
+        self.modified = datetime.utcnow()
