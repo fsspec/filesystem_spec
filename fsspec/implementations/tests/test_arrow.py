@@ -14,11 +14,11 @@ def fs():
     return ArrowFSWrapper(fs)
 
 
-@pytest.fixture(scope="function")
-def remote_dir(fs):
+@pytest.fixture(scope="function", params=[False, True])
+def remote_dir(fs, request):
     directory = secrets.token_hex(16)
     fs.makedirs(directory)
-    yield directory
+    yield ("hdfs://" if request.param else "") + directory
     fs.rm(directory, recursive=True)
 
 
@@ -30,18 +30,19 @@ def strip_keys(original_entry):
 
 def test_info(fs, remote_dir):
     fs.touch(remote_dir + "/a.txt")
+    remote_dir_strip_protocol = fs._strip_protocol(remote_dir)
     details = fs.info(remote_dir + "/a.txt")
     assert details["type"] == "file"
-    assert details["name"] == remote_dir + "/a.txt"
+    assert details["name"] == remote_dir_strip_protocol + "/a.txt"
     assert details["size"] == 0
 
     fs.mkdir(remote_dir + "/dir")
     details = fs.info(remote_dir + "/dir")
     assert details["type"] == "directory"
-    assert details["name"] == remote_dir + "/dir"
+    assert details["name"] == remote_dir_strip_protocol + "/dir"
 
     details = fs.info(remote_dir + "/dir/")
-    assert details["name"] == remote_dir + "/dir/"
+    assert details["name"] == remote_dir_strip_protocol + "/dir/"
 
 
 def test_move(fs, remote_dir):
@@ -114,12 +115,14 @@ def test_rm(fs, remote_dir):
 
 
 def test_ls(fs, remote_dir):
+    remote_dir_strip_protocol = fs._strip_protocol(remote_dir)
     fs.mkdir(remote_dir + "dir/")
     files = set()
     for no in range(8):
         file = remote_dir + f"dir/test_{no}"
+        # we also want to make sure `fs.touch` works with protocol
         fs.touch(file)
-        files.add(file)
+        files.add(remote_dir_strip_protocol + f"dir/test_{no}")
 
     assert set(fs.ls(remote_dir + "dir/")) == files
 

@@ -59,6 +59,7 @@ class ArrowFSWrapper(AbstractFileSystem):
         return path
 
     def ls(self, path, detail=False, **kwargs):
+        path = self._strip_protocol(path)
         from pyarrow.fs import FileSelector
 
         entries = [
