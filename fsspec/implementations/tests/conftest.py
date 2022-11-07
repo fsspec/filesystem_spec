@@ -36,7 +36,10 @@ def fs(request):
 
 @pytest.fixture(scope="function")
 def fscls(request):
-    return fsspec.get_filesystem_class(request.param)
+    try:
+        return fsspec.get_filesystem_class(request.param)
+    except ImportError:
+        pytest.skip(f"filesystem {request.param} not installed")
 
 
 @pytest.fixture(scope="function")
