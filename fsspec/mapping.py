@@ -1,4 +1,5 @@
 import array
+import os.path
 from collections.abc import MutableMapping
 
 from .core import url_to_fs
@@ -37,6 +38,7 @@ class FSMap(MutableMapping):
         self.root = fs._strip_protocol(root).rstrip(
             "/"
         )  # we join on '/' in _key_to_str
+        self._root_prefix = fs._strip_protocol(os.path.join(root, "x"))[:-1]
         if missing_exceptions is None:
             missing_exceptions = (
                 FileNotFoundError,
@@ -120,11 +122,7 @@ class FSMap(MutableMapping):
 
     def _key_to_str(self, key):
         """Generate full path for the key"""
-        if isinstance(key, (tuple, list)):
-            key = str(tuple(key))
-        else:
-            key = str(key)
-        return self.fs._strip_protocol("/".join([self.root, key]) if self.root else key)
+        return f"{self._root_prefix}{key}"
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
