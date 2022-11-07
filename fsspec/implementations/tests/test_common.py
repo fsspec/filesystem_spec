@@ -5,6 +5,7 @@ import pytest
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.tests.conftest import READ_ONLY_FILESYSTEMS
+from inspect import signature, isfunction
 
 
 @pytest.mark.parametrize("fs", ["local"], indirect=["fs"])
@@ -31,3 +32,19 @@ def test_modified(fs: AbstractFileSystem, temp_file):
         assert modified > created
     finally:
         fs.rm(temp_file)
+
+# TODO: add more filesystems
+@pytest.mark.parametrize("fscls", ["file", "memory", "hdfs"], indirect=["fscls"])
+def test_signature(fscls):
+    abstract_fs = AbstractFileSystem
+    for method in dir(abstract_fs):
+        if isfunction(getattr(abstract_fs, method)):
+            print(method)
+            if method.startswith('_'): continue
+            abs_signature = signature(getattr(abstract_fs, method))
+            fs_signature = signature(getattr(fscls, method))
+            # assert abs_signature == fs_signature
+            for k in abs_signature.parameters:
+                if k in ['self', 'args', 'kwargs']: continue
+                assert abs_signature.parameters[k] == fs_signature.parameters[k]
+    assert False
