@@ -33,9 +33,11 @@ def fs(request):
     cls = FILESYSTEMS[request.param]
     return cls()
 
+
 @pytest.fixture(scope="function")
 def fscls(request):
     return fsspec.get_filesystem_class(request.param)
+
 
 @pytest.fixture(scope="function")
 def temp_file():
