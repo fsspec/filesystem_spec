@@ -165,3 +165,32 @@ def test_fsmap_access_with_root_prefix(tmp_path):
     assert m["/a"] == b"data"
     with pytest.raises(KeyError):
         _ = m["a"]
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param(b"k", id="bytes"),
+        pytest.param(1234, id="int"),
+        pytest.param((1,), id="tuple"),
+        pytest.param([""], id="list"),
+    ],
+)
+def test_fsmap_non_str_keys(key):
+    m = fsspec.get_mapper()
+
+    # Once the deprecation period passes
+    # FSMap.__getitem__ should raise TypeError for non-str keys
+    #   with pytest.raises(TypeError):
+    #       _ = m[key]
+
+    with pytest.warns(FutureWarning):
+        with pytest.raises(KeyError):
+            _ = m[key]
+
+
+def test_fsmap_error_on_protocol_keys():
+    m = fsspec.get_mapper()
+
+    with pytest.raises(ValueError):
+        _ = m["protocol://key"]
