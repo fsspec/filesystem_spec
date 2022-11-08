@@ -131,6 +131,8 @@ class FSMap(MutableMapping):
                 FutureWarning,
                 stacklevel=2,
             )
+            if isinstance(key, list):
+                key = tuple(key)
             key = str(key)
         return f"{self._root_prefix}{key}"
 
