@@ -1,6 +1,6 @@
 import datetime
 import time
-from inspect import isfunction, signature
+from inspect import signature
 
 import pytest
 
@@ -34,71 +34,73 @@ def test_modified(fs: AbstractFileSystem, temp_file):
         fs.rm(temp_file)
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize(
     "method",
     [
- 'cat',
- 'cat_file',
- 'cat_ranges',
- 'checksum',
- 'copy',
- 'cp',
- 'cp_file',
- 'created',
- 'delete',
- 'disk_usage',
- 'download',
- 'du',
- 'end_transaction',
- 'exists',
- 'expand_path',
- 'find',
- 'from_json',
- 'get',
- 'get_file',
- 'get_mapper',
- 'glob',
- 'head',
- 'info',
- 'invalidate_cache',
- 'isdir',
- 'isfile',
- 'lexists',
- 'listdir',
- 'ls',
- 'makedir',
- 'makedirs',
- 'mkdir',
- 'mkdirs',
- 'modified',
- 'move',
- 'mv',
- 'open',
- 'pipe',
- 'pipe_file',
- 'put',
- 'put_file',
- 'read_block',
- 'read_bytes',
- 'read_text',
- 'rename',
- 'rm',
- 'rm_file',
- 'rmdir',
- 'sign',
- 'size',
- 'sizes',
- 'start_transaction',
- 'stat',
- 'tail',
- 'to_json',
- 'touch',
- 'ukey',
- 'unstrip_protocol',
- 'upload',
- 'walk',
- 'write_bytes',
- 'write_text']
+        "cat",
+        "cat_file",
+        "cat_ranges",
+        "checksum",
+        "copy",
+        "cp",
+        "cp_file",
+        "created",
+        "delete",
+        "disk_usage",
+        "download",
+        "du",
+        "end_transaction",
+        "exists",
+        "expand_path",
+        "find",
+        "from_json",
+        "get",
+        "get_file",
+        "get_mapper",
+        "glob",
+        "head",
+        "info",
+        "invalidate_cache",
+        "isdir",
+        "isfile",
+        "lexists",
+        "listdir",
+        "ls",
+        "makedir",
+        "makedirs",
+        "mkdir",
+        "mkdirs",
+        "modified",
+        "move",
+        "mv",
+        "open",
+        "pipe",
+        "pipe_file",
+        "put",
+        "put_file",
+        "read_block",
+        "read_bytes",
+        "read_text",
+        "rename",
+        "rm",
+        "rm_file",
+        "rmdir",
+        "sign",
+        "size",
+        "sizes",
+        "start_transaction",
+        "stat",
+        "tail",
+        "to_json",
+        "touch",
+        "ukey",
+        "unstrip_protocol",
+        "upload",
+        "walk",
+        "write_bytes",
+        "write_text",
+    ],
 )
 @pytest.mark.parametrize(
     "fscls",
@@ -138,14 +140,8 @@ def test_signature(fscls, method):
         if k1 in ["self", "args", "kwargs"]:
             continue
         assert (
-            abs_signature.parameters[k1].kind
-            == fs_signature.parameters[k2].kind
-        ), (
-            f"{abs_signature} != {fs_signature}"
-        )
+            abs_signature.parameters[k1].kind == fs_signature.parameters[k2].kind
+        ), f"{abs_signature} != {fs_signature}"
         assert (
-            abs_signature.parameters[k1].default
-            == fs_signature.parameters[k2].default
-        ), (
-            f"{abs_signature} != {fs_signature}"
-        )
+            abs_signature.parameters[k1].default == fs_signature.parameters[k2].default
+        ), f"{abs_signature} != {fs_signature}"
