@@ -1,6 +1,7 @@
 import os
 import pickle
 import sys
+import uuid
 
 import pytest
 
@@ -149,3 +150,18 @@ def test_setitem_numpy():
 def test_empty_url():
     m = fsspec.get_mapper()
     assert isinstance(m.fs, LocalFileSystem)
+
+
+def test_fsmap_access_with_root_prefix(tmp_path):
+    # "/a" and "a" are the same for LocalFileSystem
+    tmp_path.joinpath("a").write_bytes(b"data")
+    m = fsspec.get_mapper(f"file://{tmp_path}")
+    assert m["/a"] == m["a"] == b"data"
+
+    # "/a" and "a" differ for MemoryFileSystem
+    m = fsspec.get_mapper(f"memory://{uuid.uuid4()}")
+    m["/a"] = b"data"
+
+    assert m["/a"] == b"data"
+    with pytest.raises(KeyError):
+        _ = m["a"]
