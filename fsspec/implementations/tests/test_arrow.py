@@ -18,7 +18,7 @@ def fs():
 def remote_dir(fs, request):
     directory = secrets.token_hex(16)
     fs.makedirs(directory)
-    yield ("hdfs://" if request.param else "") + directory
+    yield ("hdfs://" if request.param else "/") + directory
     fs.rm(directory, recursive=True)
 
 
@@ -26,6 +26,13 @@ def strip_keys(original_entry):
     entry = original_entry.copy()
     entry.pop("mtime")
     return entry
+
+
+def test_strip(fs):
+    assert fs._strip_protocol("/a/file") == "/a/file"
+    assert fs._strip_protocol("hdfs:///a/file") == "/a/file"
+    assert fs._strip_protocol("hdfs://1.1.1.1/a/file") == "/a/file"
+    assert fs._strip_protocol("hdfs://1.1.1.1:8888/a/file") == "/a/file"
 
 
 def test_info(fs, remote_dir):
@@ -115,6 +122,8 @@ def test_rm(fs, remote_dir):
 
 
 def test_ls(fs, remote_dir):
+    if remote_dir != "/":
+        remote_dir = remote_dir + "/"
     remote_dir_strip_protocol = fs._strip_protocol(remote_dir)
     fs.mkdir(remote_dir + "dir/")
     files = set()
@@ -137,6 +146,8 @@ def test_ls(fs, remote_dir):
 
 
 def test_mkdir(fs, remote_dir):
+    if remote_dir != "/":
+        remote_dir = remote_dir + "/"
     fs.mkdir(remote_dir + "dir/")
     assert fs.isdir(remote_dir + "dir/")
     assert len(fs.ls(remote_dir + "dir/")) == 0
