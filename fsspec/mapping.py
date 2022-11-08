@@ -1,5 +1,6 @@
 import array
 import os.path
+import warnings
 from collections.abc import MutableMapping
 
 from .core import url_to_fs
@@ -122,6 +123,15 @@ class FSMap(MutableMapping):
 
     def _key_to_str(self, key):
         """Generate full path for the key"""
+        if not isinstance(key, str):
+            # raise TypeError("key must be of type `str`, got `{type(key).__name__}`"
+            warnings.warn(
+                "from fsspec 2023.5 onward FSMap non-str keys will raise TypeError,"
+                f" got: {key!r} of type `{type(key).__name__}`",
+                FutureWarning,
+                stacklevel=2,
+            )
+            key = str(key)
         return f"{self._root_prefix}{key}"
 
     def _str_to_key(self, s):
