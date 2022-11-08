@@ -7,7 +7,7 @@ from contextlib import suppress
 from functools import wraps
 
 from fsspec.spec import AbstractFileSystem
-from fsspec.utils import infer_storage_options, mirror_from, stringify_path
+from fsspec.utils import infer_storage_options, mirror_from
 
 
 def wrap_exceptions(func):
@@ -52,10 +52,8 @@ class ArrowFSWrapper(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        path = stringify_path(path)
-        if "://" in path:
-            _, _, path = path.partition("://")
-
+        ops = infer_storage_options(path)
+        path = ops["path"]
         return path
 
     def ls(self, path, detail=False, **kwargs):

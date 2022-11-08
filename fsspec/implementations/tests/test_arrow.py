@@ -28,6 +28,13 @@ def strip_keys(original_entry):
     return entry
 
 
+def test_strip(fs):
+    assert fs._strip_protocol("/a/file") == "/a/file"
+    assert fs._strip_protocol("hdfs:///a/file") == "/a/file"
+    assert fs._strip_protocol("hdfs://1.1.1.1/a/file") == "/a/file"
+    assert fs._strip_protocol("hdfs://1.1.1.1:8888/a/file") == "/a/file"
+
+
 def test_info(fs, remote_dir):
     fs.touch(remote_dir + "/a.txt")
     remote_dir_strip_protocol = fs._strip_protocol(remote_dir)
