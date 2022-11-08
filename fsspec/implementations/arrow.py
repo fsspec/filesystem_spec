@@ -54,6 +54,9 @@ class ArrowFSWrapper(AbstractFileSystem):
     def _strip_protocol(cls, path):
         ops = infer_storage_options(path)
         path = ops["path"]
+        if path.startswith("//"):
+            # special case for "hdfs://path" (without the triple slash)
+            path = path[1:]
         return path
 
     def ls(self, path, detail=False, **kwargs):
@@ -108,7 +111,7 @@ class ArrowFSWrapper(AbstractFileSystem):
         path2 = self._strip_protocol(path2).rstrip("/")
 
         with self._open(path1, "rb") as lstream:
-            tmp_fname = "/".join([self._parent(path2), f".tmp.{secrets.token_hex(16)}"])
+            tmp_fname = f"{path2}.tmp.{secrets.token_hex(6)}"
             try:
                 with self.open(tmp_fname, "wb") as rstream:
                     shutil.copyfileobj(lstream, rstream)
