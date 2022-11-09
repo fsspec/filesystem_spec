@@ -130,6 +130,7 @@ Built-in Implementations
    fsspec.implementations.dbfs.DatabricksFileSystem
    fsspec.implementations.reference.ReferenceFileSystem
    fsspec.implementations.dirfs.DirFileSystem
+   fsspec.implementations.tar.TarFileSystem
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
@@ -194,6 +195,9 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.dirfs.DirFileSystem
    :members: __init__
 
+.. autoclass:: fsspec.implementations.tar.TarFileSystem
+   :members: __init__
+
 Other Known Implementations
 ---------------------------
 
@@ -244,3 +248,12 @@ Read Buffering
 
 .. autoclass:: fsspec.caching.BlockCache
    :members:
+
+Utilities
+---------
+
+.. autosummary::
+
+   fsspec.utils.read_block
+
+.. autofunction:: fsspec.utils.read_block

@@ -218,7 +218,7 @@ Other
 
 Fixes
 
-- Removed inaccurate `ZipFileSystem.cat()` override so that the base
+- Removed inaccurate ``ZipFileSystem.cat()`` override so that the base
   class' version is used (#789)
 - fix entrypoint processing (#784)
 - case where no blocks of a block-cache have yet been loaded (#801)
@@ -475,7 +475,7 @@ Version 0.8.3
 Features:
 
 - error options for cat
-- memory fs created time in detailed `ls`
+- memory fs created time in detailed ``ls```
 
 
 Fixes:
@@ -604,7 +604,7 @@ Version 0.6.0
   file reads in blocks (:pr:`191`).
 * Fixed equality checks for file system instance to return ``False`` when compared to objects
   other than file systems (:pr:`192`)
-* Fixed a bug in :meth:`fsspec.FSMap.keys` returning a generator, which was consumed upon iteration (:pr:`189`).
+* Fixed a bug in ``fsspec.FSMap.keys`` returning a generator, which was consumed upon iteration (:pr:`189`).
 * Removed the magic addition of aliases in ``AbstractFileSystem.__init__``. Now alias methods are always
   present (:pr:`177`)
 * Deprecated passing ``trim`` to :class:`fsspec.spec.AbstractBufferedFile`. Pass it in ``storage_options`` instead (:pr:`188`)

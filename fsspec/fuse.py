@@ -176,8 +176,8 @@ def run(
         within the mounter directory. Operation will typically be more
         stable if False.
     ready_file: bool
-        Whether the FUSE process is ready. The `.fuse_ready` file will
-        exist in the `mount_point` directory if True. Debugging purpose.
+        Whether the FUSE process is ready. The ``.fuse_ready`` file will
+        exist in the ``mount_point`` directory if True. Debugging purpose.
     ops_class: FUSEr or Subclass of FUSEr
         To override the default behavior of FUSEr. For Example, logging
         to file.

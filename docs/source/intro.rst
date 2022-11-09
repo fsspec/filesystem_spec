@@ -33,7 +33,7 @@ At the same time, the Apache `Arrow`_ project was also concerned with a similar 
 particularly a common interface to local and HDFS files, for example the
 `hdfs`_ interface (which actually communicated with HDFS
 with a choice of driver). These are mostly used internally within Arrow, but Dask was modified in order to be able
-to use the alternate HDFS interface (which solves some security issues with `hdfs3`). In the process, a
+to use the alternate HDFS interface (which solves some security issues with ``hdfs3``). In the process, a
 `conversation`_
 was started, and I invite all interested parties to continue the conversation in this location.
 
@@ -51,7 +51,7 @@ Influences
 The following places to consider, when choosing the definitions of how we would like the file-system specification
 to look:
 
-#. python's `os`_ module and its `path` namespace; also other file-connected
+#. python's `os`_ module and its `path`_ namespace; also other file-connected
    functionality in the standard library
 #. posix/bash method naming conventions that linux/unix/osx users are familiar with; or perhaps their Windows variants
 #. the existing implementations for the various backends (e.g.,
@@ -62,6 +62,7 @@ to look:
    validation code.
 
 .. _os: https://docs.python.org/3/library/os.html
+.. _path: https://docs.python.org/3/library/os.path.html
 .. _gcsfs: http://gcsfs.readthedocs.io/en/latest/api.html#gcsfs.core.GCSFileSystem
 .. _pyfilesystems: https://docs.pyfilesystem.org/en/latest/index.html
 

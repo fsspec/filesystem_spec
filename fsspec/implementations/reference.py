@@ -125,11 +125,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         max_gap, max_block: int
             For merging multiple concurrent requests to the same remote file.
             Neighboring byte ranges will only be merged when their
-            inter-range gap is <= `max_gap`. Default is 64KB. Set to 0
+            inter-range gap is <= ``max_gap``. Default is 64KB. Set to 0
             to only merge when it requires no extra bytes. Pass a negative
             number to disable merging, appropriate for local target files.
             Neighboring byte ranges will only be merged when the size of
-            the aggregated range is <= `max_block`. Default is 256MB.
+            the aggregated range is <= ``max_block``. Default is 256MB.
         kwargs : passed to parent class
         """
         super().__init__(loop=loop, **kwargs)

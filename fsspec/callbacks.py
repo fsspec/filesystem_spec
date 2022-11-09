@@ -201,7 +201,7 @@ class TqdmCallback(Callback):
             callback=TqdmCallback(),
         )
 
-    You can forward args to tqdm using the `tqdm_kwargs` parameter.
+    You can forward args to tqdm using the ``tqdm_kwargs`` parameter.
 
     >>> fs.upload(
             ".",

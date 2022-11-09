@@ -192,15 +192,15 @@ class BlockCache(BaseCache):
     """
     Cache holding memory as a set of blocks.
 
-    Requests are only ever made `blocksize` at a time, and are
+    Requests are only ever made ``blocksize`` at a time, and are
     stored in an LRU cache. The least recently accessed block is
-    discarded when more than `maxblocks` are stored.
+    discarded when more than ``maxblocks`` are stored.
 
     Parameters
     ----------
     blocksize : int
         The number of bytes to store in each block.
-        Requests are only ever made for `blocksize`, so this
+        Requests are only ever made for ``blocksize``, so this
         should balance the overhead of making a request against
         the granularity of the blocks.
     fetcher : Callable

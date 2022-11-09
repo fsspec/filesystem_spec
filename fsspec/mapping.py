@@ -148,6 +148,7 @@ class FSMap(MutableMapping):
         return result
 
     def pop(self, key, default=None):
+        """Pop data"""
         result = self.__getitem__(key, default)
         try:
             del self[key]

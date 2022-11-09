@@ -1179,7 +1179,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         See Also
         --------
-        utils.read_block
+        :func:`fsspec.utils.read_block`
         """
         with self.open(fn, "rb") as f:
             size = f.size

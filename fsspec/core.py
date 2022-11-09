@@ -36,7 +36,7 @@ class OpenFile:
     are typically binary-only.
 
     These instances are safe to serialize, as the low-level file object
-    is not created until invoked using `with`.
+    is not created until invoked using ``with``.
 
     Parameters
     ----------

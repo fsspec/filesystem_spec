@@ -24,7 +24,7 @@ _lock = None  # global lock placeholder
 def get_lock():
     """Allocate or return a threading lock.
 
-    The lock is allocatted on first use to allow setting one lock per forked process.
+    The lock is allocated on first use to allow setting one lock per forked process.
     """
     global _lock
     if not _lock:
@@ -61,8 +61,10 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     """
     Make loop run coroutine until it returns. Runs in other thread
 
-    Example usage:
-        fsspec.asyn.sync(fsspec.asyn.get_loop(), func, *args, timeout=timeout, **kwargs)
+    Examples
+    --------
+    >>> fsspec.asyn.sync(fsspec.asyn.get_loop(), func, *args,
+                         timeout=timeout, **kwargs)
     """
     timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     # NB: if the loop is not running *yet*, it is OK to submit work
