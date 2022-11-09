@@ -1,4 +1,6 @@
 import array
+import posixpath
+import warnings
 from collections.abc import MutableMapping
 
 from .core import url_to_fs
@@ -34,9 +36,8 @@ class FSMap(MutableMapping):
 
     def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
         self.fs = fs
-        self.root = fs._strip_protocol(root).rstrip(
-            "/"
-        )  # we join on '/' in _key_to_str
+        self.root = fs._strip_protocol(root).rstrip("/")
+        self._root_key_to_str = fs._strip_protocol(posixpath.join(root, "x"))[:-1]
         if missing_exceptions is None:
             missing_exceptions = (
                 FileNotFoundError,
@@ -120,11 +121,16 @@ class FSMap(MutableMapping):
 
     def _key_to_str(self, key):
         """Generate full path for the key"""
-        if isinstance(key, (tuple, list)):
-            key = str(tuple(key))
-        else:
+        if not isinstance(key, str):
+            # raise TypeError("key must be of type `str`, got `{type(key).__name__}`"
+            warnings.warn(
+                "from fsspec 2023.5 onward FSMap non-str keys will raise TypeError",
+                DeprecationWarning,
+            )
+            if isinstance(key, list):
+                key = tuple(key)
             key = str(key)
-        return self.fs._strip_protocol("/".join([self.root, key]) if self.root else key)
+        return f"{self._root_key_to_str}{key}"
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""

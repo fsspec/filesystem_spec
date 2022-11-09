@@ -1,6 +1,8 @@
 import os
 import pickle
+import platform
 import sys
+import uuid
 
 import pytest
 
@@ -149,3 +151,66 @@ def test_setitem_numpy():
 def test_empty_url():
     m = fsspec.get_mapper()
     assert isinstance(m.fs, LocalFileSystem)
+
+
+def test_fsmap_access_with_root_prefix(tmp_path):
+    # "/a" and "a" are the same for LocalFileSystem
+    tmp_path.joinpath("a").write_bytes(b"data")
+    m = fsspec.get_mapper(f"file://{tmp_path}")
+    assert m["/a"] == m["a"] == b"data"
+
+    # "/a" and "a" differ for MemoryFileSystem
+    m = fsspec.get_mapper(f"memory://{uuid.uuid4()}")
+    m["/a"] = b"data"
+
+    assert m["/a"] == b"data"
+    with pytest.raises(KeyError):
+        _ = m["a"]
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param(b"k", id="bytes"),
+        pytest.param(1234, id="int"),
+        pytest.param((1,), id="tuple"),
+        pytest.param([""], id="list"),
+    ],
+)
+def test_fsmap_non_str_keys(key):
+    m = fsspec.get_mapper()
+
+    # Once the deprecation period passes
+    # FSMap.__getitem__ should raise TypeError for non-str keys
+    #   with pytest.raises(TypeError):
+    #       _ = m[key]
+
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(KeyError):
+            _ = m[key]
+
+
+def test_fsmap_error_on_protocol_keys():
+    root = uuid.uuid4()
+    m = fsspec.get_mapper(f"memory://{root}", create=True)
+    m["a"] = b"data"
+
+    assert m["a"] == b"data"
+    with pytest.raises(KeyError):
+        _ = m[f"memory://{root}/a"]
+
+
+# on Windows opening a directory will raise PermissionError
+# see: https://bugs.python.org/issue43095
+@pytest.mark.skipif(
+    platform.system() == "Windows", reason="raises PermissionError on windows"
+)
+def test_fsmap_access_with_suffix(tmp_path):
+    tmp_path.joinpath("b").mkdir()
+    tmp_path.joinpath("b", "a").write_bytes(b"data")
+    m = fsspec.get_mapper(f"file://{tmp_path}")
+
+    with pytest.raises(KeyError):
+        _ = m["b/"]
+
+    assert m["b/a/"] == b"data"
