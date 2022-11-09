@@ -1,5 +1,6 @@
 import os
 import pickle
+import platform
 import sys
 import uuid
 
@@ -196,6 +197,11 @@ def test_fsmap_error_on_protocol_keys():
         _ = m["protocol://key"]
 
 
+# on Windows opening a directory will raise PermissionError
+# see: https://bugs.python.org/issue43095
+@pytest.mark.skipif(
+    platform.system() == "Windows", reason="raises PermissionError on windows"
+)
 def test_fsmap_access_with_suffix(tmp_path):
     tmp_path.joinpath("b").mkdir()
     tmp_path.joinpath("b", "a").write_bytes(b"data")
