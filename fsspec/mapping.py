@@ -126,7 +126,7 @@ class FSMap(MutableMapping):
             warnings.warn(
                 "from fsspec 2023.5 onward FSMap non-str keys will raise TypeError,"
                 f" got: {key!r} of type `{type(key).__name__}`",
-                FutureWarning,
+                DeprecationWarning,
                 stacklevel=2,
             )
             if isinstance(key, list):

@@ -185,7 +185,7 @@ def test_fsmap_non_str_keys(key):
     #   with pytest.raises(TypeError):
     #       _ = m[key]
 
-    with pytest.warns(FutureWarning):
+    with pytest.warns(DeprecationWarning):
         with pytest.raises(KeyError):
             _ = m[key]
 
