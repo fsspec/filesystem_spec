@@ -1,5 +1,6 @@
 import array
 import os.path
+import platform
 import warnings
 from collections.abc import MutableMapping
 
@@ -41,12 +42,15 @@ class FSMap(MutableMapping):
         )  # we join on '/' in _key_to_str
         self._root_prefix = fs._strip_protocol(os.path.join(root, "x"))[:-1]
         if missing_exceptions is None:
-            missing_exceptions = (
+            missing_exceptions = [
                 FileNotFoundError,
                 IsADirectoryError,
                 NotADirectoryError,
-            )
-        self.missing_exceptions = missing_exceptions
+            ]
+            if platform.system() == "Windows":
+                # see: https://bugs.python.org/issue43095
+                missing_exceptions.append(PermissionError)
+        self.missing_exceptions = tuple(missing_exceptions)
         self.check = check
         self.create = create
         if create:
