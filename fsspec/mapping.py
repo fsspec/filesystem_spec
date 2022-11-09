@@ -132,8 +132,6 @@ class FSMap(MutableMapping):
             if isinstance(key, list):
                 key = tuple(key)
             key = str(key)
-        if ":" in key and "://" in key:
-            raise ValueError(f"keys must not contain protocols, got: {key!r}")
         return f"{self._root_key_to_str}{key}"
 
     def _str_to_key(self, s):
