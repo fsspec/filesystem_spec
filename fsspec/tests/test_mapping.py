@@ -194,3 +194,14 @@ def test_fsmap_error_on_protocol_keys():
 
     with pytest.raises(ValueError):
         _ = m["protocol://key"]
+
+
+def test_fsmap_access_with_suffix(tmp_path):
+    tmp_path.joinpath("b").mkdir()
+    tmp_path.joinpath("b", "a").write_bytes(b"data")
+    m = fsspec.get_mapper(f"file://{tmp_path}")
+
+    with pytest.raises(KeyError):
+        _ = m["b/"]
+
+    assert m["b/a/"] == b"data"
