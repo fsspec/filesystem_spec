@@ -191,10 +191,13 @@ def test_fsmap_non_str_keys(key):
 
 
 def test_fsmap_error_on_protocol_keys():
-    m = fsspec.get_mapper()
+    root = uuid.uuid4()
+    m = fsspec.get_mapper(f"memory://{root}", create=True)
+    m["a"] = b"data"
 
-    with pytest.raises(ValueError):
-        _ = m["protocol://key"]
+    assert m["a"] == b"data"
+    with pytest.raises(KeyError):
+        _ = m[f"memory://{root}/a"]
 
 
 # on Windows opening a directory will raise PermissionError
