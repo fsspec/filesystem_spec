@@ -37,10 +37,8 @@ class FSMap(MutableMapping):
 
     def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
         self.fs = fs
-        self.root = fs._strip_protocol(root).rstrip(
-            "/"
-        )  # we join on '/' in _key_to_str
-        self._root_prefix = fs._strip_protocol(os.path.join(root, "x"))[:-1]
+        self.root = fs._strip_protocol(root).rstrip("/")
+        self._root_key_to_str = fs._strip_protocol(os.path.join(root, "x"))[:-1]
         if missing_exceptions is None:
             missing_exceptions = [
                 FileNotFoundError,
@@ -140,7 +138,7 @@ class FSMap(MutableMapping):
             key = str(key)
         if ":" in key and "://" in key:
             raise ValueError(f"keys must not contain protocols, got: {key!r}")
-        return f"{self._root_prefix}{key}"
+        return f"{self._root_key_to_str}{key}"
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
