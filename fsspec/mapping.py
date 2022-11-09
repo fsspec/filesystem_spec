@@ -124,10 +124,8 @@ class FSMap(MutableMapping):
         if not isinstance(key, str):
             # raise TypeError("key must be of type `str`, got `{type(key).__name__}`"
             warnings.warn(
-                "from fsspec 2023.5 onward FSMap non-str keys will raise TypeError,"
-                f" got: {key!r} of type `{type(key).__name__}`",
+                "from fsspec 2023.5 onward FSMap non-str keys will raise TypeError",
                 DeprecationWarning,
-                stacklevel=2,
             )
             if isinstance(key, list):
                 key = tuple(key)
