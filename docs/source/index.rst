@@ -72,7 +72,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
 Installation
 ------------
 
-`fsspec` can be installed from PyPI or conda and has no dependencies of its own
+``fsspec`` can be installed from PyPI or conda and has no dependencies of its own
 
 .. code-block:: sh
 
@@ -88,7 +88,7 @@ pip install syntax below, or install the specific package required
    pip install fsspec[gcs]
    conda install -c conda-forge gcsfs
 
-`fsspec` attempts to provide the right message when you attempt to use a filesystem
+``fsspec``` attempts to provide the right message when you attempt to use a filesystem
 for which you need additional dependencies.
 The current list of known implementations can be found as follows
 

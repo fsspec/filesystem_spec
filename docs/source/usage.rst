@@ -12,7 +12,7 @@ remote store, local files, files within some wrapper, or anything else that is c
 file-like objects.
 
 Some concrete implementations are bundled with ``fsspec`` and others can be installed separately. They
-can be instantiated directly, or the `registry` can be used to find them.
+can be instantiated directly, or the ``registry`` can be used to find them.
 
 Direct instantiation:
 

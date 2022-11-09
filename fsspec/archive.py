@@ -6,8 +6,10 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
     """
     A generic superclass for implementing Archive-based filesystems.
 
-    Currently, it is shared amongst `ZipFileSystem`, `LibArchiveFileSystem` and
-    `TarFileSystem`.
+    Currently, it is shared amongst
+    :class:`~fsspec.implementations.zip.ZipFileSystem`,
+    :class:`~fsspec.implementations.libarchive.LibArchiveFileSystem` and
+    :class:`~fsspec.implementations.tar.TarFileSystem`.
     """
 
     def __str__(self):
@@ -19,7 +21,8 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
         return tokenize(path, self.fo, self.protocol)
 
     def _all_dirnames(self, paths):
-        """Returns *all* directory names for each path in paths, including intermediate ones.
+        """Returns *all* directory names for each path in paths, including intermediate
+        ones.
 
         Parameters
         ----------

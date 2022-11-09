@@ -34,7 +34,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         ----------
         fo: str or file-like
             Contains ZIP, and must exist. If a str, will fetch file using
-            `open_files()`, which must return one file exactly.
+            :meth:`~fsspec.open_files`, which must return one file exactly.
         mode: str
             Currently, only 'r' accepted
         target_protocol: str (optional)

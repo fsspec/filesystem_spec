@@ -24,7 +24,7 @@ class WebHDFS(AbstractFileSystem):
     Three auth mechanisms are supported:
 
     insecure: no auth is done, and the user is assumed to be whoever they
-        say they are (parameter `user`), or a predefined value such as
+        say they are (parameter ``user``), or a predefined value such as
         "dr.who" if not given
     spnego: when kerberos authentication is enabled, auth is negotiated by
         requests_kerberos https://github.com/requests/requests-kerberos .
@@ -79,9 +79,9 @@ class WebHDFS(AbstractFileSystem):
             HDFS cluster is behind a proxy, running on Docker or otherwise has
             a mismatch between the host-names given by the name-node and the
             address by which to refer to them from the client. If a dict,
-            maps host names `host->data_proxy[host]`; if a callable, full
+            maps host names ``host->data_proxy[host]``; if a callable, full
             URLs are passed, and function must conform to
-            `url->data_proxy(url)`.
+            ``url->data_proxy(url)``.
         use_https: bool
             Whether to connect to the Name-node using HTTPS instead of HTTP
         kwargs

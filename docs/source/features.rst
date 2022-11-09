@@ -252,7 +252,7 @@ option exists to copy files locally when you first access them, and thereafter t
 This local cache of data might be temporary (i.e., attached to the process and discarded when the
 process ends) or at some specific location in your local storage.
 
-Two mechanisms are provided, and both involve wrapping a `target` filesystem. The following example
+Two mechanisms are provided, and both involve wrapping a ``target`` filesystem. The following example
 creates a file-based cache.
 
 .. code-block:: python
