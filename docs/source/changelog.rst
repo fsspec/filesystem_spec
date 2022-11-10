@@ -1,6 +1,33 @@
 Changelog
 =========
 
+2022.11.0
+---------
+
+Enhancements
+
+- Speed up FSMap._key_to_str (#1101)
+- Add modified/created to Memory and Arrow (#1096)
+- Clear expired cache method (#1092)
+- Allow seekable arrow file (#1091)
+- Allow append for arrow (#1089)
+- recursive for sftp.get (#1082)
+- topdown arg to walk() (#1081)
+
+Fixes
+
+- fix doc warnings (#1106, #1084)
+- Fix HDFS _strip_protocol (#1103)
+- Allow URLs with protocol for HDFS (#1099)
+- yarl in doc deps (#1095)
+- missing await in genericFS.cp (#1094)
+- explicit IPv4 for test HTTP server (#1088)
+- sort when merging ranges for referenceFS (#1087)
+
+Other
+
+- Check that snappy is snappy (#1079)
+
 2022.10.0
 ---------
 
