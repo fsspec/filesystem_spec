@@ -229,7 +229,7 @@ def make_path_posix(path, sep=os.sep):
         # most common fast case for posix
         if path.startswith("/"):
             return path
-        return os.getcwd() + "/" + path
+        return os.getcwd() + "/" + path.lstrip("./")
     if (
         (sep not in path and "/" not in path)
         or (sep == "/" and not path.startswith("/"))

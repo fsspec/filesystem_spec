@@ -480,6 +480,8 @@ def test_make_path_posix():
         )
     assert "/" in make_path_posix("rel\\path")
 
+    assert "." not in make_path_posix("./path")
+
 
 def test_linked_files(tmpdir):
     tmpdir = str(tmpdir)
