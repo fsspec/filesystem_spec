@@ -23,7 +23,7 @@ class CachingFileSystem(AbstractFileSystem):
 
     This class implements chunk-wise local storage of remote files, for quick
     access after the initial download. The files are stored in a given
-    directory with random hashes for the filenames. If no directory is given,
+    directory with hashes of URLs for the filenames. If no directory is given,
     a temporary one is used, which should be cleaned up by the OS after the
     process ends. The files themselves are sparse (as implemented in
     :class:`~fsspec.caching.MMapCache`), so only the data which is accessed
