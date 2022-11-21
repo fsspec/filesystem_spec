@@ -130,7 +130,7 @@ jobs:
       - name: Setup conda
         uses: mamba-org/provision-with-micromamba@main
         with:
-          environment-file: ci/environment-downstream.yml
+          environment-file: ci/environment-friends.yml
 
       - name: Clone
         shell: bash -l {0}
