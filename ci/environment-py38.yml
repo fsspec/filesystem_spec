@@ -12,7 +12,7 @@ dependencies:
   - lz4
   - distributed
   - dask
-  - pyarro
+  - pyarrow
   - panel
   - notebook
   - pygit2

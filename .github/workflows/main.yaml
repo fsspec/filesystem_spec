@@ -115,14 +115,14 @@ jobs:
       AWS_SECRET_ACCESS_KEY: foobar_secret
 
     steps:
+      - name: Clone
+        shell: bash -l {0}
+        run: git clone https://github.com/fsspec/{{ matrix.FRIEND }}
+
       - name: Install
         shell: bash -l {0}
-        run: |
-          git clone https://github.com/fsspec/{{ matrix.FRIEND }}
-          pip install -e ./{{ matrix.FRIEND }} --no-deps
+        run: pip install -e ./{{ matrix.FRIEND }} --no-deps
 
       - name: Test
         shell: bash -l {0}
-        run: |
-          cd {{ matrix.FRIEND }}
-          pytest -v
+        run: pytest -v {{ matrix.FRIEND }}
