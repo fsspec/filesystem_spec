@@ -884,7 +884,7 @@ def test_expiry():
     assert detail["time"] - start_time > 0.09
 
 
-def test_equality():
+def test_equality(tmpdir):
     """Test sane behaviour for equality and hashing.
 
     Make sure that different CachingFileSystem only test equal to each other
@@ -897,9 +897,11 @@ def test_equality():
     from fsspec.implementations.local import LocalFileSystem
 
     lfs = LocalFileSystem()
-    cfs1 = CachingFileSystem(fs=lfs, cache_storage="raspberry")
-    cfs2 = CachingFileSystem(fs=lfs, cache_storage="banana")
-    cfs3 = CachingFileSystem(fs=lfs, cache_storage="banana")
+    dir1 = f"{tmpdir}/raspberry"
+    dir2 = f"{tmpdir}/banana"
+    cfs1 = CachingFileSystem(fs=lfs, cache_storage=dir1)
+    cfs2 = CachingFileSystem(fs=lfs, cache_storage=dir2)
+    cfs3 = CachingFileSystem(fs=lfs, cache_storage=dir2)
     assert cfs1 == cfs1
     assert cfs1 != cfs2
     assert cfs1 != cfs3

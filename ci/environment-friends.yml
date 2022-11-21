@@ -1,0 +1,22 @@
+name: test_env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+  - pytest
+  - ujson
+  - requests
+  - decorator
+  - google-auth
+  - aiohttp
+  - google-auth-oauthlib
+  - flake8
+  - black
+  - google-cloud-core
+  - google-api-core
+  - google-api-python-client
+  - httpretty
+  - aiobotocore
+  - "moto>=4"
+  - flask

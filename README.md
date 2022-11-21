@@ -33,26 +33,25 @@ Please refer to [RTD](https://filesystem-spec.readthedocs.io/en/latest/?badge=la
 
 ## Develop
 
-fsspec uses [tox](https://tox.readthedocs.io/en/latest/) and
-[tox-conda](https://github.com/tox-dev/tox-conda) to manage dev and test
-environments. First, install conda with tox and tox-conda in a base environment
-(eg. ``conda install -c conda-forge tox tox-conda``). Calls to ``tox`` can then be
-used to configure a development environment and run tests.
-
-First, setup a development conda environment via ``tox -e {env}`` where ``env`` is one of ``{py38,py39,py310}``.
-This will install fsspec dependencies, test & dev tools, and install fsspec in develop
-mode. You may activate the dev environment under ``.tox/{env}`` via ``conda activate .tox/{env}``.
+fsspec uses GitHub Actions for CI. Environment files can be found
+in the "ci/" directory. Note that the main environment is called "py38",
+but it is expected that the version of python installed be adjustable at
+CI runtime. For local use, pick a version suitable for you.
 
 ### Testing
 
 Tests can be run in the dev environment, if activated, via ``pytest fsspec``.
 
-Alternatively, the full fsspec test suite can also be run via ``tox``, which will
-also build the appropriate environment (see above), with the environment specified
-by the TOXENV environment variable.
-
 The full fsspec suite requires a system-level docker, docker-compose, and fuse
-installation.
+installation. If only making changes to one backend implementation, it is
+not generally necessary to run all tests locally.
+
+It is expected that contributors ensure that any change to fsspec does not
+cause issues or regressions for either other fsspec-related packages such
+as gcsfs and s3fs, nor for downstream users of fsspec. The "downstream" CI
+run and corresponding environment file run a set of tests from the dask
+test suite, and very minimal tests against pandas and zarr from the test_dowstream.py
+module in this repo.
 
 ### Code Formatting
 
@@ -61,7 +60,6 @@ a consistent code format throughout the project.
 Run ``black fsspec`` from the root of the filesystem_spec repository to
 auto-format your code. Additionally, many editors have plugins that will apply
 ``black`` as you edit files. ``black`` is included in the ``tox`` environments.
-
 
 Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com) to
 automatically run ``black`` when you make a git commit.
