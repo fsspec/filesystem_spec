@@ -85,6 +85,15 @@ jobs:
           git tag -a 3000 -m "fake"
           pip install -e .
 
+      - name: Clone s3fs
+        shell: bash -l {0}
+        run: git clone https://github.com/fsspec/s3fs
+
+      - name: Install s3fs
+        shell: bash -l {0}
+        run: |
+          pip install -e ./s3fs --no-deps
+
       - name: Run fsspec tests
         shell: bash -l {0}
         run: |
@@ -115,13 +124,23 @@ jobs:
       AWS_SECRET_ACCESS_KEY: foobar_secret
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup conda
+        uses: mamba-org/provision-with-micromamba@main
+        with:
+          environment-file: ci/environment-downstream.yml
+
       - name: Clone
         shell: bash -l {0}
         run: git clone https://github.com/fsspec/${{ matrix.FRIEND }}
 
       - name: Install
         shell: bash -l {0}
-        run: pip install -e ./${{ matrix.FRIEND }} --no-deps
+        run: |
+          pip install -e . --no-deps
+          pip install -e ./${{ matrix.FRIEND }} --no-deps
 
       - name: Test
         shell: bash -l {0}
