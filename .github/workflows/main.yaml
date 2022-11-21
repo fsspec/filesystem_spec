@@ -26,7 +26,7 @@ jobs:
         uses: mamba-org/provision-with-micromamba@main
         with:
           environment-file: ci/environment-py38.yml
-          extra-specs: python={{ matrix.PY }}
+          extra-specs: python=${{ matrix.PY }}
 
       - name: Run Tests
         shell: bash -l {0}
@@ -117,12 +117,12 @@ jobs:
     steps:
       - name: Clone
         shell: bash -l {0}
-        run: git clone https://github.com/fsspec/{{ matrix.FRIEND }}
+        run: git clone https://github.com/fsspec/${{ matrix.FRIEND }}
 
       - name: Install
         shell: bash -l {0}
-        run: pip install -e ./{{ matrix.FRIEND }} --no-deps
+        run: pip install -e ./${{ matrix.FRIEND }} --no-deps
 
       - name: Test
         shell: bash -l {0}
-        run: pytest -v {{ matrix.FRIEND }}
+        run: pytest -v ${{ matrix.FRIEND }}
