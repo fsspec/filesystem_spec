@@ -3,6 +3,12 @@ channels:
   - conda-forge
 dependencies:
   - python=3.9
+  - pytest
+  - pytest-asyncio
+  - pytest-benchmark
+  - pytest-cov
+  - pytest-mock
+  - pytest-vcr
   - pip
   - pytest
   - ujson
