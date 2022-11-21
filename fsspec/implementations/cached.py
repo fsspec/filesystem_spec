@@ -837,6 +837,11 @@ def hash_name(path, same_name):
 
 @contextlib.contextmanager
 def atomic_write(path, mode="wb"):
+    """
+    A context manager that opens a temporary file next to `path` and, on exit,
+    replaces `path` with the temporary file, thereby updating `path`
+    atomically.
+    """
     fd, fn = tempfile.mkstemp(
         dir=os.path.dirname(path), prefix=os.path.basename(path) + "-"
     )
