@@ -1,8 +1,8 @@
 name: test_env
 channels:
   - conda-forge
-  - defaults
 dependencies:
+  - python=3.9
   - aiohttp
   - pip
   - requests

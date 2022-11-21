@@ -4,7 +4,7 @@ import pytest
 
 import fsspec
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.implementations.reference import _unmodel_hdf5
+from fsspec.implementations.reference import ReferenceNotReachable, _unmodel_hdf5
 from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
 
 
@@ -404,3 +404,46 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", start=1) == other[4:10][1:]
     assert fs.cat_file("d", start=-5) == other[4:10][-5:]
     assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
+
+
+def test_cat_missing(m):
+    other = b"other test data"
+    m.pipe("/b", other)
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "c": ["memory://b"],
+            "d": ["memory://unknown", 4, 6],
+        },
+    )
+    with pytest.raises(FileNotFoundError):
+        fs.cat("notafile")
+
+    with pytest.raises(FileNotFoundError):
+        fs.cat(["notone", "nottwo"])
+
+    mapper = fs.get_mapper("")
+
+    with pytest.raises(KeyError):
+        mapper["notakey"]
+
+    with pytest.raises(KeyError):
+        mapper.getitems(["notone", "nottwo"])
+
+    with pytest.raises(ReferenceNotReachable) as ex:
+        fs.cat("d")
+    assert ex.value.__cause__
+    out = fs.cat("d", on_error="return")
+    assert isinstance(out, ReferenceNotReachable)
+
+    with pytest.raises(ReferenceNotReachable):
+        mapper["d"]
+
+    with pytest.raises(ReferenceNotReachable):
+        mapper.getitems(["c", "d"])
+
+    out = mapper.getitems(["c", "d"], on_error="return")
+    assert isinstance(out["d"], ReferenceNotReachable)
+
+    out = mapper.getitems(["c", "d"], on_error="omit")
+    assert list(out) == ["c"]

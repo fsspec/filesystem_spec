@@ -21,6 +21,16 @@ from ..utils import isfilelike, merge_offset_ranges
 logger = logging.getLogger("fsspec.reference")
 
 
+class ReferenceNotReachable(RuntimeError):
+    def __init__(self, reference, target, *args):
+        super().__init__(*args)
+        self.reference = reference
+        self.target = target
+
+    def __str__(self):
+        return f'Reference "{self.reference}" failed to fetch target {self.target}'
+
+
 def _first(d):
     return list(d.values())[0]
 
@@ -213,7 +223,10 @@ class ReferenceFileSystem(AsyncFileSystem):
     def _cat_common(self, path, start=None, end=None):
         path = self._strip_protocol(path)
         logger.debug(f"cat: {path}")
-        part = self.references[path]
+        try:
+            part = self.references[path]
+        except KeyError:
+            raise FileNotFoundError(path)
         if isinstance(part, str):
             part = part.encode()
         if isinstance(part, bytes):
@@ -254,7 +267,10 @@ class ReferenceFileSystem(AsyncFileSystem):
         if isinstance(part_or_url, bytes):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
-        return await self.fss[protocol]._cat_file(part_or_url, start=start, end=end)
+        try:
+            await self.fss[protocol]._cat_file(part_or_url, start=start, end=end)
+        except Exception as e:
+            raise ReferenceNotReachable(path, part_or_url) from e
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         part_or_url, start0, end0 = self._cat_common(path, start=start, end=end)
@@ -262,7 +278,10 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
         # TODO: start and end should be passed to cat_file, not sliced
-        return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)
+        try:
+            return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)
+        except Exception as e:
+            raise ReferenceNotReachable(path, part_or_url) from e
 
     def pipe_file(self, path, value, **_):
         """Temporarily add binary data or reference as a file"""
@@ -359,6 +378,16 @@ class ReferenceFileSystem(AsyncFileSystem):
                             out[p] = b[s:e]
                         elif np == u and s >= ns and e <= ne:
                             out[p] = b[s - ns : (e - ne) or None]
+
+        for k, v in out.copy().items():
+            if isinstance(v, Exception):
+                ex = out[k]
+                new_ex = ReferenceNotReachable(k, self.references[k])
+                new_ex.__cause__ = ex
+                if on_error == "raise":
+                    raise new_ex
+                elif on_error != "omit":
+                    out[k] = new_ex
 
         if len(out) == 1 and isinstance(path, str) and "*" not in path:
             return _first(out)

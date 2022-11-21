@@ -776,7 +776,7 @@ class AbstractFileSystem(metaclass=_Cached):
             try:
                 out.append(self.cat_file(p, s, e))
             except Exception as e:
-                if False:  # on_error == "return":
+                if on_error == "return":
                     out.append(e)
                 else:
                     raise

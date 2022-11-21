@@ -1,8 +1,40 @@
 name: test_env
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python=3.8
-  - tox
-  - tox-conda
+  # - python=3.8  # set by env
+  - pip
+  - paramiko
+  - requests
+  - zstandard
+  - python-snappy
+  - aiohttp
+  - lz4
+  - distributed
+  - dask
+  - pyarrow
+  - panel
+  - notebook
+  - pygit2
+  - git
+  - s3fs
+  - pyftpdlib
+  - cloudpickle
+  - pytest
+  - pytest-asyncio
+  - pytest-benchmark
+  - pytest-cov
+  - pytest-mock
+  - pytest-vcr
+  - py
+  - fusepy
+  - tomli < 2
+  - msgpack-python
+  - python-libarchive-c
+  - numpy
+  - nomkl
+  - jinja2
+  - tqdm
+  - pip:
+    - hadoop-test-cluster
+    - smbprotocol
