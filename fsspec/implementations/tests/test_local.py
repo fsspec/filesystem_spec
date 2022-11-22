@@ -480,6 +480,8 @@ def test_make_path_posix():
         )
     assert "/" in make_path_posix("rel\\path")
 
+    assert "." not in make_path_posix("./path")
+
 
 def test_linked_files(tmpdir):
     tmpdir = str(tmpdir)
@@ -807,3 +809,17 @@ def test_symlink(tmpdir):
 
     fs.symlink(target, link)
     assert fs.islink(link)
+
+
+# https://github.com/fsspec/filesystem_spec/issues/967
+def test_put_file_to_dir(tmpdir):
+    src_file = os.path.join(str(tmpdir), "src")
+    target_dir = os.path.join(str(tmpdir), "target")
+    target_file = os.path.join(target_dir, "src")
+
+    fs = LocalFileSystem()
+    fs.touch(src_file)
+    fs.mkdir(target_dir)
+    fs.put(src_file, target_dir)
+
+    assert fs.isfile(target_file)

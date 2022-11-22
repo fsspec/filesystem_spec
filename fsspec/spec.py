@@ -776,7 +776,7 @@ class AbstractFileSystem(metaclass=_Cached):
             try:
                 out.append(self.cat_file(p, s, e))
             except Exception as e:
-                if False:  # on_error == "return":
+                if on_error == "return":
                     out.append(e)
                 else:
                     raise
@@ -910,8 +910,12 @@ class AbstractFileSystem(metaclass=_Cached):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
+        isdir = isinstance(rpath, str) and self.isdir(rpath)
         rpaths = other_paths(
-            lpaths, rpath, exists=isinstance(rpath, str) and self.isdir(rpath)
+            lpaths,
+            rpath,
+            exists=isdir,
+            is_dir=isdir and len(lpaths) == 1,
         )
 
         callback.set_size(len(rpaths))
