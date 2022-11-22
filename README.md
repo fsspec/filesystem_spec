@@ -50,8 +50,8 @@ It is expected that contributors ensure that any change to fsspec does not
 cause issues or regressions for either other fsspec-related packages such
 as gcsfs and s3fs, nor for downstream users of fsspec. The "downstream" CI
 run and corresponding environment file run a set of tests from the dask
-test suite, and very minimal tests against pandas and zarr from the test_dowstream.py
-module in this repo.
+test suite, and very minimal tests against pandas and zarr from the
+test_downstream.py module in this repo.
 
 ### Code Formatting
 
