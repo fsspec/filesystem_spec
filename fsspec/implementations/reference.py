@@ -306,13 +306,18 @@ class ReferenceFileSystem(AsyncFileSystem):
         callback.absolute_update(len(data))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
+        if recursive:
+            # trigger directory build
+            self.ls("")
+        rpath = self.expand_path(rpath, recursive=recursive)
         fs = fsspec.filesystem("file", auto_mkdir=True)
-        if isinstance(lpath, list):
-            # because we have to figure out here which lpath goes with which path
-            # after grouping
+        targets = other_paths(rpath, lpath)
+        if recursive:
+            data = self.cat([r for r in rpath if not self.isdir(r)])
+        else:
             data = self.cat(rpath)
-            targets = other_paths(list(data), lpath)
-            for remote, local in zip(data, targets):
+        for remote, local in zip(rpath, targets):
+            if remote in data:
                 fs.pipe_file(local, data[remote])
 
     def cat(self, path, recursive=False, on_error="raise", **kwargs):
