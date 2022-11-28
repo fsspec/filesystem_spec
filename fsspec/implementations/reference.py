@@ -12,11 +12,10 @@ try:
 except ImportError:
     import json
 
-from ..asyn import AsyncFileSystem, sync
+from ..asyn import AsyncFileSystem
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
-from ..spec import AbstractFileSystem
-from ..utils import isfilelike, merge_offset_ranges
+from ..utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -307,18 +306,19 @@ class ReferenceFileSystem(AsyncFileSystem):
         callback.absolute_update(len(data))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
-        if isinstance(lpath, list):
-            # because we have to figure out here which lpath goes with which path
-            # after grouping
-            raise NotImplementedError
-        proto_dict = _protocol_groups(rpath, self.references)
-        for proto, paths in proto_dict.items():
-            if self.fss[proto].async_impl:
-                sync(self.loop, self._get, paths, lpath, recursive, **kwargs)
-            else:
-                AbstractFileSystem.get(
-                    self, paths, lpath, recursive=recursive, **kwargs
-                )
+        if recursive:
+            # trigger directory build
+            self.ls("")
+        rpath = self.expand_path(rpath, recursive=recursive)
+        fs = fsspec.filesystem("file", auto_mkdir=True)
+        targets = other_paths(rpath, lpath)
+        if recursive:
+            data = self.cat([r for r in rpath if not self.isdir(r)])
+        else:
+            data = self.cat(rpath)
+        for remote, local in zip(rpath, targets):
+            if remote in data:
+                fs.pipe_file(local, data[remote])
 
     def cat(self, path, recursive=False, on_error="raise", **kwargs):
         if isinstance(path, str) and recursive:
