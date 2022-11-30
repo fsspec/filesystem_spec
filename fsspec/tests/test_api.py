@@ -103,8 +103,29 @@ def test_du(m):
         }
     )
     assert fs.du("/dir") == 6
-    assert fs.du("/dir", total=False)["/dir/dirb/afile"] == 2
+    assert fs.du("/dir", total=False) == {
+        "/dir/afile": 1,
+        "/dir/dirb/afile": 2,
+        "/dir/dirb/bfile": 3,
+    }
+    assert fs.du("/dir", withdirs=True) == 6
+    assert fs.du("/dir", total=False, withdirs=True) == {
+        "/dir": 0,
+        "/dir/afile": 1,
+        "/dir/dirb": 0,
+        "/dir/dirb/afile": 2,
+        "/dir/dirb/bfile": 3,
+    }
     assert fs.du("/dir", maxdepth=0) == 1
+    assert fs.du("/dir", total=False, withdirs=True, maxdepth=1) == {
+        "/dir": 0,
+        "/dir/afile": 1,
+        "/dir/dirb": 0,
+    }
+
+    # Size of file only.
+    assert fs.du("/dir/afile") == 1
+    assert fs.du("/dir/afile", withdirs=True) == 1
 
 
 def test_head_tail(m):

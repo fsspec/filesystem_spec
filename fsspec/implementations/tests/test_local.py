@@ -823,3 +823,36 @@ def test_put_file_to_dir(tmpdir):
     fs.put(src_file, target_dir)
 
     assert fs.isfile(target_file)
+
+
+def test_du(tmpdir):
+    file = os.path.join(tmpdir, "file")
+    subdir = os.path.join(tmpdir, "subdir")
+    subfile = os.path.join(subdir, "subfile")
+
+    fs = LocalFileSystem()
+    with open(file, "wb") as f:
+        f.write(b"4444")
+    fs.mkdir(subdir)
+    with open(subfile, "wb") as f:
+        f.write(b"7777777")
+
+    assert fs.du(tmpdir) == 11
+    assert fs.du(tmpdir, total=False) == {file: 4, subfile: 7}
+    # Note directory size is OS-specific, but must be positive
+    assert fs.du(tmpdir, withdirs=True) > 11
+
+    d = fs.du(tmpdir, total=False, withdirs=True)
+    assert len(d) == 4
+    assert d[file] == 4
+    assert d[subfile] == 7
+    assert d[tmpdir] > 0
+    assert d[subdir] > 0
+
+    assert fs.du(tmpdir, maxdepth=2) == 11
+    assert fs.du(tmpdir, maxdepth=1) == 4
+    assert fs.du(tmpdir, maxdepth=0) == 4
+
+    # Size of file only.
+    assert fs.du(file) == 4
+    assert fs.du(file, withdirs=True) == 4

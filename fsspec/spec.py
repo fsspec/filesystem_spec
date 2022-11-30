@@ -465,25 +465,33 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return {name: out[name] for name in names}
 
-    def du(self, path, total=True, maxdepth=None, **kwargs):
-        """Space used by files within a path
+    def du(self, path, total=True, maxdepth=None, withdirs=False, **kwargs):
+        """Space used by files and optionally directories within a path
+
+        Directory size does not include the size of its contents.
 
         Parameters
         ----------
         path: str
         total: bool
-            whether to sum all the file sizes
+            Whether to sum all the file sizes
         maxdepth: int or None
-            maximum number of directory levels to descend, None for unlimited.
-        kwargs: passed to ``ls``
+            Maximum number of directory levels to descend, None for unlimited.
+        withdirs: bool
+            Whether to include directory paths in the output.
+        kwargs: passed to ``find``
 
         Returns
         -------
-        Dict of {fn: size} if total=False, or int otherwise, where numbers
+        Dict of {path: size} if total=False, or int otherwise, where numbers
         refer to bytes used.
         """
         sizes = {}
-        for f in self.find(path, maxdepth=maxdepth, **kwargs):
+        if withdirs and self.isdir(path):
+            # Include top-level directory in output
+            info = self.info(path)
+            sizes[info["name"]] = info["size"]
+        for f in self.find(path, maxdepth=maxdepth, withdirs=withdirs, **kwargs):
             info = self.info(f)
             sizes[info["name"]] = info["size"]
         if total:
