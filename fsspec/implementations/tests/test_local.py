@@ -826,9 +826,9 @@ def test_put_file_to_dir(tmpdir):
 
 
 def test_du(tmpdir):
-    file = os.path.join(tmpdir, "file")
-    subdir = os.path.join(tmpdir, "subdir")
-    subfile = os.path.join(subdir, "subfile")
+    file = tmpdir / "file"
+    subdir = tmpdir / "subdir"
+    subfile = subdir / "subfile"
 
     fs = LocalFileSystem()
     with open(file, "wb") as f:
@@ -837,17 +837,23 @@ def test_du(tmpdir):
     with open(subfile, "wb") as f:
         f.write(b"7777777")
 
+    # Switch to posix paths for comparisons
+    tmpdir_posix = Path(tmpdir).as_posix()
+    file_posix = Path(file).as_posix()
+    subdir_posix = Path(subdir).as_posix()
+    subfile_posix = Path(subfile).as_posix()
+
     assert fs.du(tmpdir) == 11
-    assert fs.du(tmpdir, total=False) == {file: 4, subfile: 7}
-    # Note directory size is OS-specific, but must be positive
-    assert fs.du(tmpdir, withdirs=True) > 11
+    assert fs.du(tmpdir, total=False) == {file_posix: 4, subfile_posix: 7}
+    # Note directory size is OS-specific, but must be >= 0
+    assert fs.du(tmpdir, withdirs=True) >= 11
 
     d = fs.du(tmpdir, total=False, withdirs=True)
     assert len(d) == 4
-    assert d[file] == 4
-    assert d[subfile] == 7
-    assert d[tmpdir] > 0
-    assert d[subdir] > 0
+    assert d[file_posix] == 4
+    assert d[subfile_posix] == 7
+    assert d[tmpdir_posix] >= 0
+    assert d[subdir_posix] >= 0
 
     assert fs.du(tmpdir, maxdepth=2) == 11
     assert fs.du(tmpdir, maxdepth=1) == 4
