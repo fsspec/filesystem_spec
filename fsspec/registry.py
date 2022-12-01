@@ -1,44 +1,15 @@
 import importlib
 import warnings
+import types
 
 __all__ = ["registry", "get_filesystem_class", "default"]
 
-# mapping protocol: implementation class object
-_registry = {}  # internal, mutable
+# internal, mutable
+_registry = {}
 
-
-class ReadOnlyError(TypeError):
-    pass
-
-
-class ReadOnlyRegistry(dict):
-    """Dict-like registry, but immutable
-
-    Maps backend name to implementation class
-
-    To add backend implementations, use ``register_implementation``
-    """
-
-    def __init__(self, target):
-        self.target = target
-
-    def __getitem__(self, item):
-        return self.target[item]
-
-    def __delitem__(self, key):
-        raise ReadOnlyError
-
-    def __setitem__(self, key, value):
-        raise ReadOnlyError
-
-    def clear(self):
-        raise ReadOnlyError
-
-    def __contains__(self, item):
-        return item in self.target
-
-    def __iter__(self):
-        yield from self.target
+# external, immutable
+registry = types.MappingProxyType(_registry)
+default = "file"
 
 
 def register_implementation(name, cls, clobber=True, errtxt=None):
@@ -79,9 +50,6 @@ def register_implementation(name, cls, clobber=True, errtxt=None):
             )
         _registry[name] = cls
 
-
-registry = ReadOnlyRegistry(_registry)
-default = "file"
 
 # protocols mapped to the class which implements them. This dict can
 # updated with register_implementation

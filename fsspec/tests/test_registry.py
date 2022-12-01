@@ -4,7 +4,6 @@ from unittest.mock import create_autospec, patch
 import pytest
 
 from fsspec.registry import (
-    ReadOnlyError,
     _registry,
     filesystem,
     get_filesystem_class,
@@ -43,11 +42,11 @@ def test_registry_readonly():
     get_filesystem_class("file")
     assert "file" in registry
     assert "file" in list(registry)
-    with pytest.raises(ReadOnlyError):
+    with pytest.raises(TypeError):
         del registry["file"]
-    with pytest.raises(ReadOnlyError):
+    with pytest.raises(TypeError):
         registry["file"] = None
-    with pytest.raises(ReadOnlyError):
+    with pytest.raises(AttributeError):
         registry.clear()
 
 
