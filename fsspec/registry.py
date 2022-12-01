@@ -1,6 +1,6 @@
 import importlib
-import warnings
 import types
+import warnings
 
 __all__ = ["registry", "get_filesystem_class", "default"]
 
