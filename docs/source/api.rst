@@ -46,7 +46,6 @@ Base Classes
    fsspec.core.get_fs_token_paths
    fsspec.core.url_to_fs
    fsspec.dircache.DirCache
-   fsspec.registry.ReadOnlyRegistry
    fsspec.registry.register_implementation
    fsspec.callbacks.Callback
    fsspec.callbacks.NoOpCallback
@@ -82,9 +81,6 @@ Base Classes
 .. autofunction:: fsspec.core.url_to_fs
 
 .. autoclass:: fsspec.dircache.DirCache
-   :members: __init__
-
-.. autoclass:: fsspec.registry.ReadOnlyRegistry
    :members: __init__
 
 .. autofunction:: fsspec.registry.register_implementation
