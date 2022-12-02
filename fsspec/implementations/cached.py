@@ -197,15 +197,14 @@ class CachingFileSystem(AbstractFileSystem):
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
-        with self.lock:
-            self._mkcache()
-            if not self.cache_check:
-                # explicitly told not to bother checking
-                return
-            timecond = time.time() - self.last_cache > self.cache_check
-            existcond = all(os.path.exists(storage) for storage in self.storage)
-            if timecond or not existcond:
-                self.load_cache()
+        self._mkcache()
+        if not self.cache_check:
+            # explicitly told not to bother checking
+            return
+        timecond = time.time() - self.last_cache > self.cache_check
+        existcond = all(os.path.exists(storage) for storage in self.storage)
+        if timecond or not existcond:
+            self.load_cache()
 
     def _check_file(self, path):
         """Is path in cache and still valid"""
