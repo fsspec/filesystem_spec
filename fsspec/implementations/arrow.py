@@ -4,10 +4,10 @@ import os
 import secrets
 import shutil
 from contextlib import suppress
-from functools import wraps
+from functools import cached_property, wraps
 
 from fsspec.spec import AbstractFileSystem
-from fsspec.utils import infer_storage_options, mirror_from
+from fsspec.utils import infer_storage_options, mirror_from, tokenize
 
 
 def wrap_exceptions(func):
@@ -49,6 +49,10 @@ class ArrowFSWrapper(AbstractFileSystem):
         PYARROW_VERSION = tuple(map(int, __version__.split(".")))
         self.fs = fs
         super().__init__(**kwargs)
+
+    @cached_property
+    def fsid(self):
+        return "hdfs_" + tokenize(self.fs.host, self.fs.port)
 
     @classmethod
     def _strip_protocol(cls, path):
