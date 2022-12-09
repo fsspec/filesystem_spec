@@ -143,15 +143,16 @@ class ReferenceFileSystem(AsyncFileSystem):
         """
         super().__init__(loop=loop, **kwargs)
         self.target = target
-        self.dataframe = False
         self.template_overrides = template_overrides
         self.simple_templates = simple_templates
         self.templates = {}
         self.fss = {}
+        self._dircache = {}
         self.max_gap = max_gap
         self.max_block = max_block
         if hasattr(fo, "read"):
-            text = fo.read()
+            text = json.load(fo)
+            text = text.decode() if isinstance(text, bytes) else text
         elif isinstance(fo, str):
             if target_protocol:
                 extra = {"protocol": target_protocol}
@@ -161,14 +162,11 @@ class ReferenceFileSystem(AsyncFileSystem):
             # text JSON
             with open(fo, "rb", **dic) as f:
                 logger.info("Read reference from URL %s", fo)
-                text = f.read()
+                text = json.load(f)
         else:
             # dictionaries
             text = fo
-        if self.dataframe:
-            self._process_dataframe()
-        else:
-            self._process_references(text, template_overrides)
+        self._process_references(text, template_overrides)
         if isinstance(fs, dict):
             self.fss = {
                 k: (
@@ -276,7 +274,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         if isinstance(part_or_url, bytes):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
-        # TODO: start and end should be passed to cat_file, not sliced
         try:
             return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)
         except Exception as e:
@@ -393,31 +390,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             return _first(out)
         return out
 
-    def _process_dataframe(self):
-        self._process_templates(self.templates)
-
-        @lru_cache(1000)
-        def _render_jinja(url):
-            if "{{" in url:
-                if self.simple_templates:
-                    return (
-                        url.replace("{{", "{")
-                        .replace("}}", "}")
-                        .format(**self.templates)
-                    )
-
-                import jinja2
-
-                return jinja2.Template(url).render(**self.templates)
-
-            return url
-
-        if self.templates:
-            self.df["url"] = self.df["url"].map(_render_jinja)
-
     def _process_references(self, references, template_overrides=None):
-        if isinstance(references, (str, bytes)):
-            references = json.loads(references)
         vers = references.get("version", None)
         if vers is None:
             self._process_references0(references)
@@ -437,10 +410,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references1(self, references, template_overrides=None):
         if not self.simple_templates or self.templates:
-            try:
-                import jinja2
-            except ImportError as e:
-                raise ValueError("Reference Spec Version 1 requires jinja2") from e
+            import jinja2
         self.references = {}
         self._process_templates(references.get("templates", {}))
 
@@ -522,23 +492,14 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _dircache_from_items(self):
         self.dircache = {"": []}
-        if self.dataframe:
-            it = self.df.iterrows()
-        else:
-            it = self.references.items()
+        it = self.references.items()
         for path, part in it:
-            if self.dataframe:
-                if part["data"]:
-                    size = len(part["data"])
-                else:
-                    size = part["size"]
+            if isinstance(part, (bytes, str)):
+                size = len(part)
+            elif len(part) == 1:
+                size = None
             else:
-                if isinstance(part, (bytes, str)):
-                    size = len(part)
-                elif len(part) == 1:
-                    size = None
-                else:
-                    _, start, size = part
+                _, start, size = part
             par = path.rsplit("/", 1)[0] if "/" in path else ""
             par0 = par
             while par0 and par0 not in self.dircache:
@@ -551,9 +512,7 @@ class ReferenceFileSystem(AsyncFileSystem):
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
 
-    def open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
-        if mode != "rb":
-            raise NotImplementedError
+    def _open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
         data = self.cat_file(path)  # load whole chunk into memory
         return io.BytesIO(data)
 
@@ -599,7 +558,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         if detail:
             if not self.dircache:
                 self._dircache_from_items()
-            return {k: self._ls_from_cache(k) for k in r}
+            return {k: self._ls_from_cache(k)[0] for k in r}
         else:
             return r
 
@@ -662,17 +621,10 @@ class ReferenceFileSystem(AsyncFileSystem):
 def _unmodel_hdf5(references):
     """Special JSON format from HDF5 prototype"""
     # see https://gist.github.com/ajelenak/80354a95b449cedea5cca508004f97a9
-    import re
-
     ref = {}
     for key, value in references["metadata"].items():
         if key.endswith(".zchunkstore"):
             source = value.pop("source")["uri"]
-            match = re.findall(r"https://([^.]+)\.s3\.amazonaws\.com", source)
-            if match:
-                source = source.replace(
-                    f"https://{match[0]}.s3.amazonaws.com", match[0]
-                )
             for k, v in value.items():
                 ref[k] = (source, v["offset"], v["offset"] + v["size"])
         else:
