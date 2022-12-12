@@ -7,7 +7,7 @@ import pytest
 
 import fsspec
 import fsspec.asyn
-from fsspec.asyn import _run_coros_in_chunks, get_running_loop
+from fsspec.asyn import _run_coros_in_chunks
 
 
 def test_sync_methods():
@@ -136,23 +136,3 @@ def test_windows_policy():
     # check ensures that we are restoring the old policy back
     # after our change.
     assert isinstance(policy, asyncio.DefaultEventLoopPolicy)
-
-
-def test_fsspec_loop():
-    asyncio._set_running_loop(None)
-
-    with fsspec.asyn.fsspec_loop() as loop:
-        assert get_running_loop() is loop
-        assert get_running_loop() is fsspec.asyn.get_loop()
-
-    with pytest.raises(RuntimeError):
-        get_running_loop()
-
-    original_loop = asyncio.new_event_loop()
-    asyncio._set_running_loop(original_loop)
-
-    with fsspec.asyn.fsspec_loop() as loop:
-        assert get_running_loop() is loop
-        assert get_running_loop() is fsspec.asyn.get_loop()
-
-    assert get_running_loop() is original_loop

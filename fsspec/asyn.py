@@ -131,17 +131,6 @@ def _selector_policy():
         asyncio.set_event_loop_policy(original_policy)
 
 
-def get_running_loop():
-    if hasattr(asyncio, "get_running_loop"):
-        return asyncio.get_running_loop()
-    else:
-        loop = asyncio._get_running_loop()
-        if loop is None:
-            raise RuntimeError("no running event loop")
-        else:
-            return loop
-
-
 def get_loop():
     """Create or return the default fsspec IO loop
 
@@ -159,25 +148,6 @@ def get_loop():
                 th.start()
                 iothread[0] = th
     return loop[0]
-
-
-@contextmanager
-def fsspec_loop():
-    """Temporarily switch the current event loop to the fsspec's
-    own loop, and then revert it back after the context gets
-    terminated.
-    """
-    try:
-        original_loop = get_running_loop()
-    except RuntimeError:
-        original_loop = None
-
-    fsspec_loop = get_loop()
-    try:
-        asyncio._set_running_loop(fsspec_loop)
-        yield fsspec_loop
-    finally:
-        asyncio._set_running_loop(original_loop)
 
 
 try:
