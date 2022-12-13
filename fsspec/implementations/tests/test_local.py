@@ -674,7 +674,7 @@ def test_mv_recursive(tmpdir):
 
 @pytest.mark.xfail(WIN, reason="windows expand path to be revisited")
 def test_copy_errors(tmpdir):
-    localfs = fsspec.filesystem("file")
+    localfs = fsspec.filesystem("file", auto_mkdir=True)
 
     dest1 = os.path.join(str(tmpdir), "dest1")
     dest2 = os.path.join(str(tmpdir), "dest2")
@@ -695,9 +695,10 @@ def test_copy_errors(tmpdir):
         localfs.copy([file1, file2, dne], dest1)
 
     localfs.copy([file1, file2, dne], dest1, on_error="ignore")
-    assert sorted(localfs.ls(dest1)) == [
-        make_path_posix(os.path.join(dest1, "afile1")),
-        make_path_posix(os.path.join(dest1, "afile2")),
+
+    assert sorted(localfs.ls(os.path.join(dest1, "src"))) == [
+        make_path_posix(os.path.join(dest1, "src", "afile1")),
+        make_path_posix(os.path.join(dest1, "src", "afile2")),
     ]
 
     # Recursive should raise an error only if we specify raise
@@ -709,9 +710,9 @@ def test_copy_errors(tmpdir):
             localfs.copy(src, dest2, recursive=True, on_error="raise")
 
         localfs.copy(src, dest2, recursive=True)
-        assert sorted(localfs.ls(dest2)) == [
-            make_path_posix(os.path.join(dest2, "afile1")),
-            make_path_posix(os.path.join(dest2, "afile2")),
+        assert sorted(localfs.ls(os.path.join(dest2, "src"))) == [
+            make_path_posix(os.path.join(dest2, "src", "afile1")),
+            make_path_posix(os.path.join(dest2, "src", "afile2")),
         ]
 
 
@@ -864,3 +865,45 @@ def test_du(tmpdir):
     # Size of file only.
     assert fs.du(file) == 4
     assert fs.du(file, withdirs=True) == 4
+
+
+@pytest.mark.parametrize("funcname", ["cp", "get", "put"])
+def test_cp_get_put_directory_recursive(tmpdir, funcname):
+    # https://github.com/fsspec/filesystem_spec/issues/1062
+    # Recursive cp/get/put of source directory into non-existent target directory.
+    fs = LocalFileSystem()
+    src = os.path.join(str(tmpdir), "src")
+    fs.mkdir(src)
+    fs.touch(os.path.join(src, "file"))
+
+    target = os.path.join(str(tmpdir), "target")
+
+    if funcname == "cp":
+        func = fs.cp
+    elif funcname == "get":
+        func = fs.get
+    elif funcname == "put":
+        func = fs.put
+
+    # cp/get/put without slash
+    assert not fs.exists(target)
+    for loop in range(2):
+        func(src, target, recursive=True)
+        assert fs.isdir(target)
+
+        if loop == 0:
+            assert fs.find(target) == [make_path_posix(os.path.join(target, "file"))]
+        else:
+            assert sorted(fs.find(target)) == [
+                make_path_posix(os.path.join(target, "file")),
+                make_path_posix(os.path.join(target, "src", "file")),
+            ]
+
+    fs.rm(target, recursive=True)
+
+    # cp/get/put with slash
+    assert not fs.exists(target)
+    for loop in range(2):
+        func(src + "/", target, recursive=True)
+        assert fs.isdir(target)
+        assert fs.find(target) == [make_path_posix(os.path.join(target, "file"))]

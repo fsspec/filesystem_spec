@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from fsspec.implementations.local import LocalFileSystem, make_path_posix
+
 
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
@@ -26,9 +28,11 @@ def test_put_single(m, tmpdir):
     os.mkdir(fn)
     open(os.path.join(fn, "abc"), "w").write("text")
     m.put(fn, "/test")  # no-op, no files
+    assert m.isdir("/test")
     assert not m.exists("/test/abc")
     assert not m.exists("/test/dir")
-    m.put(fn + "/", "/test", recursive=True)
+    m.put(fn, "/test", recursive=True)
+    assert m.isdir("/test/dir")
     assert m.cat("/test/dir/abc") == b"text"
 
 
@@ -159,3 +163,54 @@ def test_remove_all(m):
     m.touch("afile")
     m.rm("/", recursive=True)
     assert not m.ls("/")
+
+
+@pytest.mark.parametrize("funcname", ["cp", "get", "put"])
+def test_cp_get_put_directory_recursive(m, tmpdir, funcname):
+    # https://github.com/fsspec/filesystem_spec/issues/1062
+    # Recursive cp/get/put of source directory into non-existent target directory.
+
+    if funcname == "cp":
+        func, remote_source, remote_target = m.cp, True, True
+    elif funcname == "get":
+        func, remote_source, remote_target = m.get, True, False
+    elif funcname == "put":
+        func, remote_source, remote_target = m.put, False, True
+
+    if remote_source:
+        src, source_fs = "src", m
+    else:
+        src, source_fs = os.path.join(tmpdir, "src"), LocalFileSystem()
+
+    if remote_target:
+        target, target_fs = "/target", m
+    else:
+        target, target_fs = os.path.join(tmpdir, "target"), LocalFileSystem()
+
+    source_fs.mkdir(src)
+    source_fs.touch(os.path.join(src, "file"))
+
+    # cp/get/put without slash
+    assert not target_fs.exists(target)
+    for loop in range(2):
+        func(src, target, recursive=True)
+        assert target_fs.isdir(target)
+
+        if loop == 0:
+            assert target_fs.find(target) == [
+                make_path_posix(os.path.join(target, "file"))
+            ]
+        else:
+            assert sorted(target_fs.find(target)) == [
+                make_path_posix(os.path.join(target, "file")),
+                make_path_posix(os.path.join(target, "src", "file")),
+            ]
+
+    target_fs.rm(target, recursive=True)
+
+    # cp/get/put with slash
+    assert not target_fs.exists(target)
+    for loop in range(2):
+        func(src + "/", target, recursive=True)
+        assert target_fs.isdir(target)
+        assert target_fs.find(target) == [make_path_posix(os.path.join(target, "file"))]

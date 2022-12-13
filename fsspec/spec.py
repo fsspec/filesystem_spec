@@ -878,12 +878,23 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls get_file for each source.
         """
-        from .implementations.local import make_path_posix
+        from .implementations.local import LocalFileSystem, make_path_posix
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
+        trailing_slash = isinstance(rpath, str) and rpath.endswith("/")
         rpaths = self.expand_path(rpath, recursive=recursive)
-        lpaths = other_paths(rpaths, lpath)
+        if isinstance(lpath, str):
+            local_fs = LocalFileSystem()
+            isdir = local_fs.isdir(lpath)
+        else:
+            isdir = False
+        lpaths = other_paths(
+            rpaths,
+            lpath,
+            exists=isdir and not trailing_slash,
+            is_dir=isdir and len(rpaths) == 1,
+        )
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
@@ -928,13 +939,16 @@ class AbstractFileSystem(metaclass=_Cached):
         )
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
+            trailing_slash = lpath.endswith("/")
+        else:
+            trailing_slash = False
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         isdir = isinstance(rpath, str) and self.isdir(rpath)
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir,
+            exists=isdir and not trailing_slash,
             is_dir=isdir and len(lpaths) == 1,
         )
 
@@ -970,8 +984,16 @@ class AbstractFileSystem(metaclass=_Cached):
         elif on_error is None:
             on_error = "raise"
 
+        trailing_slash = isinstance(path1, str) and path1.endswith("/")
         paths = self.expand_path(path1, recursive=recursive)
-        path2 = other_paths(paths, path2)
+        isdir = isinstance(path2, str) and self.isdir(path2)
+        path2 = other_paths(
+            paths,
+            path2,
+            exists=isdir and not trailing_slash,
+            is_dir=isdir and len(paths) == 1,
+        )
+
         for p1, p2 in zip(paths, path2):
             try:
                 self.cp_file(p1, p2, **kwargs)
