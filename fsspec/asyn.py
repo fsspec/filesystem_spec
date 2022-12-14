@@ -187,6 +187,15 @@ def _get_batch_size(nofiles=False):
         return soft_limit // 8
 
 
+def running_async() -> bool:
+    """Being executed by an event loop?"""
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False
+
+
 async def _run_coros_in_chunks(
     coros,
     batch_size=None,

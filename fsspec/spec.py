@@ -996,7 +996,9 @@ class AbstractFileSystem(metaclass=_Cached):
                         )
                     continue
                 elif recursive:
-                    rec = set(self.find(p, maxdepth=maxdepth, withdirs=True))
+                    rec = set(
+                        self.find(p, maxdepth=maxdepth, withdirs=True, detail=False)
+                    )
                     out |= rec
                 if p not in out and (recursive is False or self.exists(p)):
                     # should only check once, for the root
