@@ -720,97 +720,24 @@ class DFReferenceFileSystem(AsyncFileSystem):
                 }
         return self.dataframes[part]
 
-    def _cat_common(self, path, start=None, end=None):
-        """Figure out URL(s) and bounds for a path
-
-        When allow_multi is True, we just pass back the
-        """
-        pref = self.prefix_func(path)
-        df = self._reference_part(pref)
-        try:
-            index = self.keysets[pref][path]
-        except KeyError:
-            raise FileNotFoundError
-        if self.allow_multi:
-            # TODO: maybe handle it here
-            return index, None, None
-        raw = df["raw"][index]
-        if raw:
-            return raw, None, None
-        size = df["size"][index]
-        if size:
-            start0 = df["offset"][index]
-            end0 = start0 + size
-            if start is not None:
-                if start >= 0:
-                    start1 = start0 + start
-                else:
-                    start1 = end0 + start
-            else:
-                start1 = start0
-            if end is not None:
-                if end >= 0:
-                    end1 = start0 + end
-                else:
-                    end1 = end0 + end
-            else:
-                end1 = end0
-            return df["path"][index], start1, end1
-        return df["path"][index], start, end
-
-    def cat_file(self, path, start=None, end=None, **kwargs):
-        part_or_url, start0, end0 = self._cat_common(path, start, end)
-        pref = self.prefix_func(path)
-        df = self.dataframes[pref]
-        if self.allow_multi:
-            # move this big block?
-            protocol = None
-            for p in df["path"][part_or_url]:
-                if p:
-                    prot, _ = split_protocol(p)
-                    if prot:
-                        protocol = prot
-                        break
-            get_index = [p for p in part_or_url if df["raw"][part_or_url] is not None]
-            paths = df["path"][get_index].tolist()
-            get_data = self.fss[protocol].cat_ranges(
-                paths,
-                df["offset"][get_index].tolist(),
-                (df["offset"] + df["size"])[get_index].tolist(),
-            )
-            if any(isinstance(d, Exception) for d in get_data):
-                raise ReferenceNotReachable(path, paths)
-            out = []
-            for p in part_or_url:
-                out.append(df["raw"][p] or get_data.pop(0))
-            return self.multi_func(out)
-
-        if isinstance(part_or_url, bytes):
-            return part_or_url[start:end]
-        protocol, _ = split_protocol(part_or_url)
-        try:
-            data = self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)
-        except Exception as e:
-            raise ReferenceNotReachable(path, part_or_url) from e
-        if self.chunk_func:
-            data = self.chunk_func(data, path)
-        return data
-
     def isdir(self, path):
         return path in self.dirs
 
+    def cat_file(self, path, start=None, end=None, **kwargs):
+        return self.cat_ranges([path], [start], [end])[0]
+
+    def cat_ranges(
+        self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
+    ):
+        # cat is a special case of this, with all Non start/ends
+        pass
+
     def cat(self, path, recursive=False, on_error="raise", **kwargs):
         paths = self.expand_path(path, recursive=recursive)
-        if not (
-            len(paths) > 1
-            or isinstance(path, list)
-            or paths[0] != self._strip_protocol(path)
-        ):
-            return self.cat_file(paths[0], **kwargs)
         paths1 = [p for p in paths if not self.isdir(p)]
-        out = {}
-        proto_dict = {}
-        assign_dict = {}
+        out = {}  # eventual output; initially each key contains raw bytes or None
+        proto_dict = {}  # mapping of protocol to lists of URL/start/end to fetch
+        assign_dict = {}  # how to assign the results of cat_ranges to output
         for p in paths1:
             pref = self.prefix_func(p)
             inds = self.keysets[pref][p]
