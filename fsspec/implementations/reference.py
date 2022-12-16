@@ -15,6 +15,7 @@ except ImportError:
 from ..asyn import AsyncFileSystem, running_async
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
+from ..spec import AbstractFileSystem
 from ..utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
@@ -620,9 +621,7 @@ def constant_prefix(x):
     return "metadata"
 
 
-class DFReferenceFileSystem(AsyncFileSystem):
-    mirror_sync_methods = False
-
+class DFReferenceFileSystem(AbstractFileSystem):
     def __init__(
         self,
         fo,
@@ -643,6 +642,8 @@ class DFReferenceFileSystem(AsyncFileSystem):
     ):
         self.fo = fo
         self.target_options = target_options
+        self.max_gap = max_gap
+        self.max_block = max_block
         self.dataframes = {}
         self.keysets = {}
         self.fss = {}
@@ -726,49 +727,99 @@ class DFReferenceFileSystem(AsyncFileSystem):
     def cat_file(self, path, start=None, end=None, **kwargs):
         return self.cat_ranges([path], [start], [end])[0]
 
-    def cat_ranges(
-        self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
-    ):
-        # cat is a special case of this, with all Non start/ends
-        pass
-
-    def cat(self, path, recursive=False, on_error="raise", **kwargs):
+    def cat(self, path, recursive=False, on_error="return", **kwargs):
         paths = self.expand_path(path, recursive=recursive)
         paths1 = [p for p in paths if not self.isdir(p)]
-        out = {}  # eventual output; initially each key contains raw bytes or None
+        result = {
+            p: data
+            for p, data in zip(
+                paths1, self.cat_ranges(paths1, on_error=on_error, **kwargs)
+            )
+        }
+        if len(paths1) == 1 and recursive is False and "*" not in path:
+            # same as cat_file
+            return list(result.values())[0]
+        return result
+
+    def cat_ranges(self, paths, starts=None, ends=None, on_error="return", **kwargs):
+        out = []  # eventual output; initially each key contains raw bytes or None
         proto_dict = {}  # mapping of protocol to lists of URL/start/end to fetch
         assign_dict = {}  # how to assign the results of cat_ranges to output
-        for p in paths1:
+        if starts is None:
+            starts = [None] * len(paths)
+        if ends is None:
+            ends = [None] * len(paths)
+        for p, s, e in zip(paths, starts, ends):
+            thislist = []
+            out.append(thislist)
             pref = self.prefix_func(p)
             inds = self.keysets[pref][p]
             if isinstance(inds, int):
                 inds = [inds]
             for i in inds:
                 if x := self.dataframes[pref]["raw"][i]:
-                    out.setdefault(p, []).append(x)
+                    thislist.append(x)
                 else:
                     path = self.dataframes[pref]["path"][i]
                     prot, _ = split_protocol(path)
                     proto_dict.setdefault(prot, [[], [], []])
                     proto_dict[prot][0].append(path)
-                    proto_dict[prot][1].append(
-                        self.dataframes[pref]["offset"][i] or None
-                    )
-                    proto_dict[prot][2].append(
-                        self.dataframes[pref]["offset"][i]
-                        + self.dataframes[pref]["size"][i]
-                        or None
-                    )
-                    out.setdefault(p, []).append(None)
-                    assign_dict.setdefault(prot, []).append((out[p], len(out[p]) - 1))
+                    if s is None or s >= 0:
+                        proto_dict[prot][1].append(
+                            self.dataframes[pref]["offset"][i] or s
+                        )
+                    else:
+                        # range is from end of file, which we do not know
+                        # the size of, so this can only work if there is no
+                        # merging
+                        proto_dict[prot][1].append(s)
 
-        for proto, bits in proto_dict.items():
+                    if e is None or e >= 0:
+                        proto_dict[prot][2].append(
+                            self.dataframes[pref]["offset"][i]
+                            + self.dataframes[pref]["size"][i]
+                            or e
+                        )
+                    else:
+                        # range is from end of file, which we do not know
+                        # the size of, so this can only work if there is no
+                        # merging
+                        proto_dict[prot][1].append(e)
+                    thislist.append(None)
+                    assign_dict.setdefault(prot, []).append(
+                        (thislist, len(thislist) - 1)
+                    )
+
+        for proto, (urls2, starts2, ends2) in proto_dict.items():
             fs = self.fss[proto]
-            data = fs.cat_ranges(*bits)
-            for (l, i), d in zip(assign_dict[proto], data):
-                l[i] = d
-        for k in out.copy():
-            out[k] = self.multi_func(out[k])
+
+            new_paths, new_starts, new_ends = merge_offset_ranges(
+                list(urls2),
+                list(starts2),
+                list(ends2),
+                sort=True,
+                max_gap=self.max_gap,
+                max_block=self.max_block,
+            )
+            bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
+            if len(urls2) == len(bytes_out):
+                # we didn't do any merging
+                for (l, i), d in zip(assign_dict[proto], bytes_out):
+                    l[i] = d
+            else:
+                # unbundle from merged bytes - simple approach
+                for u, s, e, (l, i) in zip(urls2, starts2, ends2, assign_dict[proto]):
+                    if p in out:
+                        continue  # was bytes, already handled
+                    for np, ns, ne, b in zip(
+                        new_paths, new_starts, new_ends, bytes_out
+                    ):
+                        if np == u and (ns is None or ne is None):
+                            l[i] = b[s:e]
+                        elif np == u and s >= ns and e <= ne:
+                            l[i] = b[s - ns : (e - ne) or None]
+
+        out = [self.multi_func(part) for part in out]
         return out
 
     def find(self, path, detail=True, withdirs=True, **kwargs):
@@ -815,18 +866,12 @@ class DFReferenceFileSystem(AsyncFileSystem):
             return subdfiles
         return [p["name"] for p in subdfiles]
 
-    async def _ls(self, path, detail=True, **kwargs):  # calls fast sync code
-        return self.ls(path, detail, **kwargs)
-
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
 
         if path in self.dirs:
             return {"name": path, "type": "directory", "Size": 0}
         return self.ls(path, detail=True)[0]
-
-    async def _info(self, path, **kwargs):
-        return self.info(path, **kwargs)
 
 
 def _size(df, i):
