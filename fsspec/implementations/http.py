@@ -633,12 +633,29 @@ class HTTPFile(AbstractBufferedFile):
                 # range request outside file
                 return b""
             r.raise_for_status()
-            if r.status == 206:
+
+            # If the server has handled the range request, it should reply
+            # with status 206 (partial content). But we'll guess that any
+            # Content-Range header or a Content-Length no more than the
+            # requested range also mean we have got the desired range.
+            response_is_range = (
+                r.status == 206
+                or "Content-Range" in r.headers
+                or int(r.headers.get("Content-Length", end + 1)) <= end - start
+            )
+
+            if response_is_range:
                 # partial content, as expected
                 out = await r.read()
-            elif int(r.headers.get("Content-Length", 0)) <= end - start:
-                out = await r.read()
+            elif start > 0:
+                raise ValueError(
+                    "The HTTP server doesn't appear to support range requests. "
+                    "Only reading this file from the beginning is supported. "
+                    "Open with block_size=0 for a streaming file interface."
+                )
             else:
+                # Response is not a range, but we want the start of the file,
+                # so we can read the required amount anyway.
                 cl = 0
                 out = []
                 while True:
