@@ -21,4 +21,5 @@ dependencies:
   - py
   - numpy
   - nomkl
+  - s3fs
   - tqdm
