@@ -612,6 +612,20 @@ class HTTPFile(AbstractBufferedFile):
 
     _fetch_all = sync_wrapper(async_fetch_all)
 
+    def _parse_content_range(self, headers):
+        """Parse the Content-Range header"""
+        s = headers.get("Content-Range", "")
+        m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", s)
+        if not m:
+            return None, None, None
+
+        if m[1] == "*":
+            start = end = None
+        else:
+            start, end = [int(x) for x in m[1].split("-")]
+        total = None if m[2] == "*" else int(m[2])
+        return start, end, total
+
     async def async_fetch_range(self, start, end):
         """Download a block of data
 
@@ -635,12 +649,12 @@ class HTTPFile(AbstractBufferedFile):
             r.raise_for_status()
 
             # If the server has handled the range request, it should reply
-            # with status 206 (partial content). But we'll guess that any
+            # with status 206 (partial content). But we'll guess that a suitable
             # Content-Range header or a Content-Length no more than the
             # requested range also mean we have got the desired range.
             response_is_range = (
                 r.status == 206
-                or "Content-Range" in r.headers
+                or self._parse_content_range(r.headers)[0] == start
                 or int(r.headers.get("Content-Length", end + 1)) <= end - start
             )
 

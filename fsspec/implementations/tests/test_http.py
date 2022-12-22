@@ -224,14 +224,16 @@ def test_random_access(server, headers):
     assert f.closed
 
 
-def test_no_range_support(server):
-    h = fsspec.filesystem(
-        "http",
-        headers={
-            "ignore_range": "true",
-            "give_length": "true",
-        },
-    )
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"ignore_range": "true", "head_ok": "true", "head_give_length": "true"},
+        {"ignore_range": "true", "give_length": "true"},
+        {"ignore_range": "true", "give_range": "true"},
+    ],
+)
+def test_no_range_support(server, headers):
+    h = fsspec.filesystem("http", headers=headers)
     url = server + "/index/realfile"
     with h.open(url, "rb") as f:
         # Random access is not possible if the server doesn't respect Range
