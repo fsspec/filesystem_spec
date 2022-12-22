@@ -194,7 +194,7 @@ def test_pickle_after_open_open():
 
 
 def test_mismatch():
-    with pytest.raises(ValueError, match="protocol"):
+    with pytest.raises(ValueError, match="Protocol"):
         open_files(["s3://test/path.csv", "/other/path.csv"])
 
 

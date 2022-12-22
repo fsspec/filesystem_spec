@@ -107,7 +107,7 @@ def test_urlpath_inference_errors():
     # Protocols differ
     with pytest.raises(ValueError) as err:
         get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
-    assert "protocol" in str(err.value)
+    assert "Protocol" in str(err.value)
 
 
 def test_urlpath_expand_read():
