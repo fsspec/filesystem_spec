@@ -7,7 +7,12 @@ from contextlib import suppress
 from functools import cached_property, wraps
 
 from fsspec.spec import AbstractFileSystem
-from fsspec.utils import infer_storage_options, mirror_from, tokenize
+from fsspec.utils import (
+    get_package_version_without_import,
+    infer_storage_options,
+    mirror_from,
+    tokenize,
+)
 
 
 def wrap_exceptions(func):
@@ -43,10 +48,8 @@ class ArrowFSWrapper(AbstractFileSystem):
     root_marker = "/"
 
     def __init__(self, fs, **kwargs):
-        from pyarrow import __version__
-
         global PYARROW_VERSION
-        PYARROW_VERSION = tuple(map(int, __version__.split(".")))
+        PYARROW_VERSION = get_package_version_without_import("pyarrow")
         self.fs = fs
         super().__init__(**kwargs)
 
@@ -165,7 +168,7 @@ class ArrowFSWrapper(AbstractFileSystem):
 
         _kwargs = {}
         if mode != "rb" or not seekable:
-            if PYARROW_VERSION[0] >= 4:
+            if int(PYARROW_VERSION.split(".")[0]) >= 4:
                 # disable compression auto-detection
                 _kwargs["compression"] = None
         stream = method(path, **_kwargs)
