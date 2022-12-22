@@ -202,6 +202,9 @@ def test_methods(server):
         {"give_range": "true"},
         {"give_length": "true", "head_not_auth": "true"},
         {"give_range": "true", "head_not_auth": "true"},
+        {"use_206": "true", "head_ok": "true", "head_give_length": "true"},
+        {"use_206": "true", "give_length": "true"},
+        {"use_206": "true", "give_range": "true"},
     ],
 )
 def test_random_access(server, headers):
@@ -219,6 +222,26 @@ def test_random_access(server, headers):
             with pytest.raises(ValueError):
                 f.seek(5, 1)
     assert f.closed
+
+
+def test_no_range_support(server):
+    h = fsspec.filesystem(
+        "http",
+        headers={
+            "ignore_range": "true",
+            "give_length": "true",
+        },
+    )
+    url = server + "/index/realfile"
+    with h.open(url, "rb") as f:
+        # Random access is not possible if the server doesn't respect Range
+        f.seek(5)
+        with pytest.raises(ValueError):
+            f.read(10)
+
+        # Reading from the beginning should still work
+        f.seek(0)
+        assert f.read(10) == data[:10]
 
 
 def test_mapper_url(server):
