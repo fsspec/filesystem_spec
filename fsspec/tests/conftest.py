@@ -58,26 +58,30 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             return self._respond(200, data=json.dumps({"path": self.path}).encode())
         if file_data is None:
             return self._respond(404)
-        if "Range" in self.headers:
+
+        status = 200
+        content_range = "bytes 0-%i/%i" % (len(file_data) - 1, len(file_data))
+        if ("Range" in self.headers) and ("ignore_range" not in self.headers):
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")
             if start:
+                content_range = f"bytes {start}-{end}/{len(file_data)}"
                 file_data = file_data[int(start) : (int(end) + 1) if end else None]
             else:
                 # suffix only
+                l = len(file_data)
+                content_range = f"bytes {l-int(end)}-{l-1}/{l}"
                 file_data = file_data[-int(end) :]
+            if "use_206" in self.headers:
+                status = 206
         if "give_length" in self.headers:
             response_headers = {"Content-Length": len(file_data)}
-            self._respond(200, response_headers, file_data)
+            self._respond(status, response_headers, file_data)
         elif "give_range" in self.headers:
-            self._respond(
-                200,
-                {"Content-Range": "0-%i/%i" % (len(file_data) - 1, len(file_data))},
-                file_data,
-            )
+            self._respond(status, {"Content-Range": content_range}, file_data)
         else:
-            self._respond(200, data=file_data)
+            self._respond(status, data=file_data)
 
     def do_POST(self):
         length = self.headers.get("Content-Length")
@@ -115,7 +119,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         if file_data is None:
             return self._respond(404)
 
-        if "give_length" in self.headers:
+        if ("give_length" in self.headers) or ("head_give_length" in self.headers):
             response_headers = {"Content-Length": len(file_data)}
             if "zero_length" in self.headers:
                 response_headers["Content-Length"] = 0
