@@ -26,5 +26,5 @@ def cli(tmpdir):
 def test_basic(cli):
 
     fs = fsspec.filesystem("dask", target_protocol="memory")
-    assert fs.ls("") == ["/afile"]
+    assert fs.ls("", detail=False) == ["/afile"]
     assert fs.cat("/afile") == b"data"
