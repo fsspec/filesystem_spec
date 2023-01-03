@@ -35,6 +35,8 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         if path in self.store:
             # there is a key with this exact name
+            if not detail:
+                return [path]
             return [
                 {
                     "name": path,
