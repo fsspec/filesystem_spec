@@ -1,3 +1,5 @@
+import pytest
+
 import fsspec
 from fsspec.tests.conftest import data, server  # noqa: F401
 
@@ -44,3 +46,42 @@ def test_cat_async(server):
     fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("generic", default_method="current")
     assert fs.cat(server + "/index/realfile") == data
+
+
+def test_rsync(tmpdir, m):
+    from fsspec.generic import GenericFileSystem, rsync
+
+    fs = GenericFileSystem()
+    fs.pipe("memory:///deep/path/afile", b"data1")
+    fs.pipe("memory:///deep/afile", b"data2")
+
+    with pytest.raises(ValueError):
+        rsync("memory:///deep/afile", f"file://{tmpdir}")
+    rsync("memory://", f"file://{tmpdir}")
+
+    allfiles = fs.find(f"file://{tmpdir}", withdirs=True, detail=True)
+    assert set(allfiles) == {
+        f"file://{tmpdir}{_}"
+        for _ in [
+            "/deep",
+            "/deep/path",
+            "/deep/path/afile",
+            "/deep/afile",
+        ]
+    }
+    fs.rm("memory:///deep/afile")
+    rsync("memory://", f"file://{tmpdir}", delete_missing=True)
+    allfiles2 = fs.find(f"file://{tmpdir}", withdirs=True, detail=True)
+    assert set(allfiles2) == {
+        f"file://{tmpdir}{_}"
+        for _ in [
+            "/deep",
+            "/deep/path",
+            "/deep/path/afile",
+        ]
+    }
+    # the file was not updated, since size was correct
+    assert (
+        allfiles[f"file://{tmpdir}/deep/path/afile"]
+        == allfiles2[f"file://{tmpdir}/deep/path/afile"]
+    )

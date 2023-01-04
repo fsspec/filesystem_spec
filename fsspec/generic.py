@@ -44,7 +44,19 @@ def rsync(
     fs=None,
     **kwargs,
 ):
-    """Sync files between two directory trees"""
+    """Sync files between two directory trees
+
+    Parameters
+    ----------
+    source: str
+    destination: str
+    delete_missing: bool
+    source_field: str
+    dest_field: str
+    update_cond: "different"|"always"|"never"
+    inst_kwargs: dict|None
+    fs: AbstractFileSystem|None
+    """
     fs = fs or GenericFileSystem(**(inst_kwargs or {}))
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
@@ -52,14 +64,20 @@ def rsync(
     otherfiles = fs.find(destination, withdirs=True, detail=True)
     dirs = [
         a
-        for a, v in allfiles
+        for a, v in allfiles.items()
         if v["type"] == "directory" and a.replace(source, destination) not in otherfiles
     ]
     logger.debug(f"{len(dirs)} directories to create")
-    for dir in dirs:
-        fs.mkdirs(dir.replace(source, destination))
-    allfiles = [a for a, v in allfiles if v["type"] == "file"]
+    for dirn in dirs:
+        # no async
+        fs.mkdirs(dirn.replace(source, destination), exist_ok=True)
+    allfiles = {a: v for a, v in allfiles.items() if v["type"] == "file"}
     logger.debug(f"{len(allfiles)} files to consider for copy")
+    to_delete = [
+        o
+        for o, v in otherfiles.items()
+        if o.replace(destination, source) not in allfiles and v["type"] == "file"
+    ]
     for k, v in allfiles.copy().items():
         otherfile = k.replace(source, destination)
         if otherfile in otherfiles:
@@ -75,15 +93,11 @@ def rsync(
         else:
             # file not in target yet
             allfiles[k] = otherfile
-    source_files, target_files = zip(allfiles.items())
-    logger.debug(f"{len(source_files)} files to copy")
-    fs.cp(source_files, target_files, **kwargs)
+    if allfiles:
+        source_files, target_files = zip(*allfiles.items())
+        logger.debug(f"{len(source_files)} files to copy")
+        fs.cp(source_files, target_files, **kwargs)
     if delete_missing:
-        to_delete = [
-            o
-            for o, v in otherfiles.items()
-            if o.replace(destination, source) not in allfiles and v["type"] == "file"
-        ]
         logger.debug(f"{len(to_delete)} files to delete")
         fs.rm(to_delete)
 
@@ -124,10 +138,12 @@ class GenericFileSystem(AsyncFileSystem):
         fs = _resolve_fs(path, self.method)
         if fs.async_impl:
             out = await fs._find(
-                path, maxdepth=None, withdirs=False, detail=True, **kwargs
+                path, maxdepth=maxdepth, withdirs=withdirs, detail=detail, **kwargs
             )
         else:
-            out = fs.find(path, maxdepth=None, withdirs=False, detail=True, **kwargs)
+            out = fs.find(
+                path, maxdepth=maxdepth, withdirs=withdirs, detail=detail, **kwargs
+            )
         result = {}
         for k, v in out.items():
             name = fs.unstrip_protocol(k)
