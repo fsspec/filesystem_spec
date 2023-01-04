@@ -172,6 +172,10 @@ class LocalFileSystem(AbstractFileSystem):
             else:
                 os.remove(p)
 
+    def unstrip_protocol(self, name):
+        name = self._strip_protocol(name)  # normalise for local/win/...
+        return f"file://{name}"
+
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
         if self.auto_mkdir and "w" in mode:
