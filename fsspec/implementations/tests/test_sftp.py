@@ -95,24 +95,25 @@ def test_with_url(protocol, ssh):
 
 
 @pytest.mark.parametrize("protocol", ["sftp", "ssh"])
-def test_get_dir(protocol, ssh, root_path):
+def test_get_dir(protocol, ssh, root_path, tmpdir):
+    path = str(tmpdir)
     f = fsspec.filesystem(protocol, **ssh)
     f.mkdirs(root_path + "deeper", exist_ok=True)
     f.touch(root_path + "deeper/afile")
-    f.get(root_path, ".", recursive=True)
+    f.get(root_path, path, recursive=True)
 
-    assert os.path.isdir("./deeper")
-    assert os.path.isfile("./deeper/afile")
+    assert os.path.isdir(f"{path}/deeper")
+    assert os.path.isfile(f"{path}/deeper/afile")
 
     f.get(
         protocol + "://{username}:{password}@{host}:{port}"
         "{root_path}".format(root_path=root_path, **ssh),
-        "./test2",
+        f"{path}/test2",
         recursive=True,
     )
 
-    assert os.path.isdir("./test2/deeper")
-    assert os.path.isfile("./test2/deeper/afile")
+    assert os.path.isdir(f"{path}/test2/deeper")
+    assert os.path.isfile(f"{path}/test2/deeper/afile")
 
 
 @pytest.fixture(scope="module")

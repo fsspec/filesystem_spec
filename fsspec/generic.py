@@ -1,10 +1,12 @@
 import inspect
+import logging
 
 from .asyn import AsyncFileSystem
 from .callbacks import _DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol
 
 _generic_fs = {}
+logger = logging.getLogger("fsspec.generic")
 
 
 def set_generic_fs(protocol, **storage_options):
@@ -31,6 +33,61 @@ def _resolve_fs(url, method=None, protocol=None, storage_options=None):
     raise ValueError(f"Unknown FS resolution method: {method}")
 
 
+def rsync(
+    source,
+    destination,
+    delete_missing=False,
+    source_field="size",
+    dest_field="size",
+    update_cond="different",
+    inst_kwargs=None,
+    fs=None,
+    **kwargs,
+):
+    """Sync files between two directory trees"""
+    fs = fs or GenericFileSystem(**(inst_kwargs or {}))
+    allfiles = fs.find(source, withdirs=True, detail=True)
+    if not fs.isdir(source):
+        raise ValueError("Can only rsync on a directory")
+    otherfiles = fs.find(destination, withdirs=True, detail=True)
+    dirs = [
+        a
+        for a, v in allfiles
+        if v["type"] == "directory" and a.replace(source, destination) not in otherfiles
+    ]
+    logger.debug(f"{len(dirs)} directories to create")
+    for dir in dirs:
+        fs.mkdirs(dir.replace(source, destination))
+    allfiles = [a for a, v in allfiles if v["type"] == "file"]
+    logger.debug(f"{len(allfiles)} files to consider for copy")
+    for k, v in allfiles.copy().items():
+        otherfile = k.replace(source, destination)
+        if otherfile in otherfiles:
+            if update_cond == "always":
+                allfiles[k] = otherfile
+            elif update_cond == "different":
+                if v[source_field] != otherfiles[otherfile][dest_field]:
+                    # details mismatch, make copy
+                    allfiles[k] = otherfile
+                else:
+                    # details match, don't copy
+                    allfiles.pop(k)
+        else:
+            # file not in target yet
+            allfiles[k] = otherfile
+    source_files, target_files = zip(allfiles.items())
+    logger.debug(f"{len(source_files)} files to copy")
+    fs.cp(source_files, target_files, **kwargs)
+    if delete_missing:
+        to_delete = [
+            o
+            for o, v in otherfiles.items()
+            if o.replace(destination, source) not in allfiles and v["type"] == "file"
+        ]
+        logger.debug(f"{len(to_delete)} files to delete")
+        fs.rm(to_delete)
+
+
 class GenericFileSystem(AsyncFileSystem):
     """Wrapper over all other FS types
 
@@ -46,28 +103,42 @@ class GenericFileSystem(AsyncFileSystem):
 
     protocol = "generic"  # there is no real reason to ever use a protocol with this FS
 
-    def __init__(self, default_method=None, **kwargs):
+    def __init__(self, default_method="default", **kwargs):
         """
 
         Parameters
         ----------
         default_method: str (optional)
             Defines how to configure backend FS instances. Options are:
-            - "default" (you get this with None): instantiate like FSClass(), with no
+            - "default": instantiate like FSClass(), with no
               extra arguments; this is the default instance of that FS, and can be
               configured via the config system
             - "generic": takes instances from the `_generic_fs` dict in this module,
               which you must populate before use. Keys are by protocol
             - "current": takes the most recently instantiated version of each FS
-            - "options": expect ``storage_options`` to be passed along with every call.
         """
         self.method = default_method
         super(GenericFileSystem, self).__init__(**kwargs)
 
-    async def _info(
-        self, url, method=None, protocol=None, storage_options=None, fs=None, **kwargs
-    ):
-        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
+    async def _find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        fs = _resolve_fs(path, self.method)
+        if fs.async_impl:
+            out = await fs._find(
+                path, maxdepth=None, withdirs=False, detail=True, **kwargs
+            )
+        else:
+            out = fs.find(path, maxdepth=None, withdirs=False, detail=True, **kwargs)
+        result = {}
+        for k, v in out.items():
+            name = fs.unstrip_protocol(k)
+            v["name"] = name
+            result[name] = v
+        if detail:
+            return result
+        return list(result)
+
+    async def _info(self, url, **kwargs):
+        fs = _resolve_fs(url, self.method)
         if fs.async_impl:
             out = await fs._info(url, **kwargs)
         else:
@@ -78,14 +149,10 @@ class GenericFileSystem(AsyncFileSystem):
     async def _ls(
         self,
         url,
-        method=None,
-        protocol=None,
-        storage_options=None,
-        fs=None,
         detail=True,
         **kwargs,
     ):
-        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
+        fs = _resolve_fs(url, self.method)
         if fs.async_impl:
             out = await fs._ls(url, detail=True, **kwargs)
         else:
@@ -100,13 +167,9 @@ class GenericFileSystem(AsyncFileSystem):
     async def _cat_file(
         self,
         url,
-        method=None,
-        protocol=None,
-        storage_options=None,
-        fs=None,
         **kwargs,
     ):
-        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
+        fs = _resolve_fs(url, self.method)
         if fs.async_impl:
             return await fs._cat_file(url, **kwargs)
         else:
@@ -116,47 +179,42 @@ class GenericFileSystem(AsyncFileSystem):
         self,
         path,
         value,
-        method=None,
-        protocol=None,
-        storage_options=None,
-        fs=None,
         **kwargs,
     ):
-        fs = fs or _resolve_fs(path, method or self.method, protocol, storage_options)
+        fs = _resolve_fs(path, self.method)
         if fs.async_impl:
             return await fs._pipe_file(path, value, **kwargs)
         else:
             return fs.pipe_file(path, value, **kwargs)
 
-    async def _rm(
-        self, url, method=None, protocol=None, storage_options=None, fs=None, **kwargs
-    ):
-        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
+    async def _rm(self, url, **kwargs):
+        fs = _resolve_fs(url, self.method)
         if fs.async_impl:
             await fs._rm(url, **kwargs)
         else:
             fs.rm(url, **kwargs)
 
+    async def _makedirs(self, path, exist_ok=False):
+        fs = _resolve_fs(path, self.method)
+        if fs.async_impl:
+            await fs._makedirs(path, exist_ok=exist_ok)
+        else:
+            fs.makedirs(path, exist_ok=exist_ok)
+
+    def rsync(self, source, destination, **kwargs):
+        """Sync files between two directory trees"""
+        rsync(source, destination, fs=self, **kwargs)
+
     async def _cp_file(
         self,
         url,
         url2,
-        method=None,
-        protocol=None,
-        storage_options=None,
-        fs=None,
-        method2=None,
-        protocol2=None,
-        storage_options2=None,
-        fs2=None,
         blocksize=2**20,
         callback=_DEFAULT_CALLBACK,
         **kwargs,
     ):
-        fs = fs or _resolve_fs(url, method or self.method, protocol, storage_options)
-        fs2 = fs2 or _resolve_fs(
-            url2, method2 or self.method, protocol2, storage_options2
-        )
+        fs = _resolve_fs(url, self.method)
+        fs2 = _resolve_fs(url2, self.method)
         if fs is fs2:
             # pure remote
             if fs.async_impl:
