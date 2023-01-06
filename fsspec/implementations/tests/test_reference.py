@@ -558,7 +558,10 @@ def test_df_multi(m):
             "raw": [b"raw", None, None, None, None],
         }
     )
-    fs = DFReferenceFileSystem(fo=df, remote_protocol="memory", allow_multi=True)
+    df.to_parquet("memory://df.parq")
+    fs = DFReferenceFileSystem(
+        fo="memory://df.parq", remote_protocol="memory", allow_multi=True
+    )
     assert fs.cat("a") == b"raw"
     assert fs.cat("b") == data + data[4:8]
     assert fs.cat("d") == data[4:6] + b"hello"[1:3]
