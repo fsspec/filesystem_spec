@@ -629,7 +629,6 @@ class DFReferenceFileSystem(AbstractFileSystem):
         remote_protocol=None,
         remote_options=None,
         fs=None,
-        template_overrides=None,
         max_gap=64_000,
         max_block=256_000_000,
         parquet_kwargs=None,
@@ -646,6 +645,8 @@ class DFReferenceFileSystem(AbstractFileSystem):
         self.max_block = max_block
         self.dataframes = {}
         self.keysets = {}
+        self.url_dict = {}
+        self.template_dict = {}
         self.fss = {}
         self.dirs = None
         self.lazy = lazy
@@ -686,7 +687,7 @@ class DFReferenceFileSystem(AbstractFileSystem):
         the target parquet file, and the resultant columns will be
         cached so the file need not be read again
         """
-        import pandas as pd
+        import fastparquet
 
         if part == "a":
             breakpoint()
@@ -698,13 +699,19 @@ class DFReferenceFileSystem(AbstractFileSystem):
                     "Cannot load references in async context, because"
                     "load may trigger nested async operations"
                 )
-            if isinstance(self.fo, str):
-                url = f"{self.fo}/{part}.parq" if self.lazy else self.fo
-                df = pd.read_parquet(url, **self.pkwargs)
-            else:
-                # used for testing
-                df = self.fo
-            self.dataframes[part] = {k: df[k].values for k in df}
+            url = f"{self.fo}/{part}.parq" if self.lazy else self.fo
+            fs, path = fsspec.core.url_to_fs(url, **self.target_options)
+            pf = fastparquet.ParquetFile(path, fs=fs)
+            self.template_dict[part] = pf.key_value_metadata
+            df = pf.to_pandas()
+            part = {}
+            for k in df:
+                if df[k].dtype == "category" and k == "path":
+                    self.url_dict[part] = df[k].cat.categories.values
+                    part[k] = df[k].cat.codes.values
+                else:
+                    part[k] = df[k].values
+            self.dataframes[part] = part
             if self.allow_multi is False:
                 self.keysets[part] = {
                     k: i for (i, k) in enumerate(self.dataframes[part]["key"])
@@ -760,7 +767,15 @@ class DFReferenceFileSystem(AbstractFileSystem):
                 if x := self.dataframes[pref]["raw"][i]:
                     thislist.append(x)
                 else:
+                    # infer path - cache this?
                     path = self.dataframes[pref]["path"][i]
+                    if pref in self.url_dict:
+                        # dict-encoded columns; actually, numpy can do
+                        # many of these at once with int fancy indexing
+                        path = self.url_dict[pref][path]
+                    # apply template: common prefix
+                    path = path.format(**self.template_dict[pref])
+
                     prot, _ = split_protocol(path)
                     proto_dict.setdefault(prot, [[], [], []])
                     proto_dict[prot][0].append(path)
