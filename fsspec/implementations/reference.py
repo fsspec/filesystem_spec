@@ -729,7 +729,9 @@ class DFReferenceFileSystem(AbstractFileSystem):
                     if "/" in k
                 }
                 self.prefs = ast.literal_eval(
-                    pf.key_value_metadata.get("prefs", "set()")
+                    pf.key_value_metadata["prefs"]
+                    if "pref" in pf.key_value_metadata
+                    else set()
                 )
         return self.dataframes[part]
 
