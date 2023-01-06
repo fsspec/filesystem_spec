@@ -728,11 +728,12 @@ class DFReferenceFileSystem(AbstractFileSystem):
                     for k in self.dataframes[part]["key"]
                     if "/" in k
                 }
-                self.prefs = ast.literal_eval(
-                    pf.key_value_metadata["prefs"]
+                self.prefs = (
+                    ast.literal_eval(pf.key_value_metadata["prefs"])
                     if "pref" in pf.key_value_metadata
                     else set()
                 )
+
         return self.dataframes[part]
 
     def isdir(self, path):
