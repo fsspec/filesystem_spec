@@ -532,7 +532,8 @@ def test_df_single(m):
             "raw": [b"raw", None, None],
         }
     )
-    fs = DFReferenceFileSystem(fo=df, remote_protocol="memory")
+    df.to_parquet("memory://df.parq")
+    fs = DFReferenceFileSystem(fo="memory://df.parq", remote_protocol="memory")
     assert fs.cat("a") == b"raw"
     assert fs.cat("b") == data
     assert fs.cat("c") == data[4:8]
