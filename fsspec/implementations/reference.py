@@ -614,11 +614,13 @@ class ReferenceFileSystem(AsyncFileSystem):
 
 
 def prefix(x):
-    return x.split("/", 1)[0]
+    if "/.z" in x or "/" not in x:
+        return "metadata", x
+    return x.split("/", 1)
 
 
 def constant_prefix(x):
-    return "metadata"
+    return "metadata", x
 
 
 class DFReferenceFileSystem(AbstractFileSystem):
@@ -640,7 +642,7 @@ class DFReferenceFileSystem(AbstractFileSystem):
         **kwargs,
     ):
         self.fo = fo
-        self.target_options = target_options
+        self.target_options = target_options or {}
         self.max_gap = max_gap
         self.max_block = max_block
         self.dataframes = {}
@@ -689,10 +691,8 @@ class DFReferenceFileSystem(AbstractFileSystem):
         """
         import fastparquet
 
-        if part == "a":
-            breakpoint()
         if part != "metadata" and part not in self.dirs:
-            raise FileNotFoundError
+            raise FileNotFoundError(f"prefix {part}")
         if part not in self.dataframes:
             if running_async():
                 raise RuntimeError(
@@ -704,14 +704,14 @@ class DFReferenceFileSystem(AbstractFileSystem):
             pf = fastparquet.ParquetFile(path, fs=fs)
             self.template_dict[part] = pf.key_value_metadata
             df = pf.to_pandas()
-            part = {}
+            thispart = {}
             for k in df:
                 if df[k].dtype == "category" and k == "path":
                     self.url_dict[part] = df[k].cat.categories.values
-                    part[k] = df[k].cat.codes.values
+                    thispart[k] = df[k].cat.codes.values
                 else:
-                    part[k] = df[k].values
-            self.dataframes[part] = part
+                    thispart[k] = df[k].values
+            self.dataframes[part] = thispart
             if self.allow_multi is False:
                 self.keysets[part] = {
                     k: i for (i, k) in enumerate(self.dataframes[part]["key"])
@@ -759,7 +759,11 @@ class DFReferenceFileSystem(AbstractFileSystem):
         for p, s, e in zip(paths, starts, ends):
             thislist = []
             out.append(thislist)
-            pref = self.prefix_func(p)
+            if self.lazy:
+                pref, p = self.prefix_func(p)
+            else:
+                pref = "metadata"
+            self._reference_part(pref)
             inds = self.keysets[pref][p]
             if isinstance(inds, int):
                 inds = [inds]
@@ -837,12 +841,11 @@ class DFReferenceFileSystem(AbstractFileSystem):
         out = [self.multi_func(part) for part in out]
         return out
 
-    def find(self, path, detail=True, withdirs=True, **kwargs):
+    def find(self, path, detail=False, withdirs=True, **kwargs):
         path = self._strip_protocol(path)
-        pref = self.prefix_func(path)
-        df = self._reference_part()
         if path in self.dirs:
             path = path + "/"
+        pref, p = self.prefix_func(path)
         dirs = (
             [
                 {"name": d, "size": 0, "type": "directory"}
@@ -852,18 +855,18 @@ class DFReferenceFileSystem(AbstractFileSystem):
             if withdirs
             else []
         )
+        df = self._reference_part(pref)
         files = [
-            {"name": k, "type": "file", "size": _size(df, i)}
-            for k, i in self.keysets[pref].items()
+            {"name": k, "type": "file", "size": _size(self.dataframes["metadata"], i)}
+            for k, i in self.keysets["metadata"].items()
             if k.startswith(path)
         ]
-        if pref and pref != "metadata":
-            df = self._reference_part(pref)
+        if self.lazy and pref != "metadata":
             files.extend(
                 [
-                    {"name": k, "type": "file", "size": _size(df, i)}
+                    {"name": f"{pref}/{k}", "type": "file", "size": _size(df, i)}
                     for k, i in self.keysets[pref].items()
-                    if k.startswith(path)
+                    if k.startswith(p)
                 ]
             )
         if detail:

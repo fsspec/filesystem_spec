@@ -15,4 +15,5 @@ dependencies:
   - s3fs
   - requests
   - moto
+  - sqlalchemy
   - flask
