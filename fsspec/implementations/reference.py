@@ -1,3 +1,4 @@
+import ast
 import base64
 import io
 import itertools
@@ -649,6 +650,7 @@ class DFReferenceFileSystem(AbstractFileSystem):
         self.keysets = {}
         self.url_dict = {}
         self.template_dict = {}
+        self.prefs = None
         self.fss = {}
         self.dirs = None
         self.lazy = lazy
@@ -726,6 +728,9 @@ class DFReferenceFileSystem(AbstractFileSystem):
                     for k in self.dataframes[part]["key"]
                     if "/" in k
                 }
+                self.prefs = ast.literal_eval(
+                    pf.key_value_metadata.get("prefs", "set()")
+                )
         return self.dataframes[part]
 
     def isdir(self, path):
@@ -760,8 +765,15 @@ class DFReferenceFileSystem(AbstractFileSystem):
             thislist = []
             out.append(thislist)
             if self.lazy:
-                pref, p = self.prefix_func(p)
+                pref, p0 = self.prefix_func(p)
+                if pref in self.prefs:
+                    # reference already inlined in metadata file
+                    pref = "metadata"
+                else:
+                    # new key in the target pref file
+                    p = p0
             else:
+                # everything is in the same file
                 pref = "metadata"
             self._reference_part(pref)
             inds = self.keysets[pref][p]
@@ -841,7 +853,7 @@ class DFReferenceFileSystem(AbstractFileSystem):
         out = [self.multi_func(part) for part in out]
         return out
 
-    def find(self, path, detail=False, withdirs=True, **kwargs):
+    def find(self, path, detail=False, withdirs=False, **kwargs):
         path = self._strip_protocol(path)
         if path in self.dirs:
             path = path + "/"
@@ -855,6 +867,8 @@ class DFReferenceFileSystem(AbstractFileSystem):
             if withdirs
             else []
         )
+        if pref in self.prefs:
+            pref = "metadata"
         df = self._reference_part(pref)
         files = [
             {"name": k, "type": "file", "size": _size(self.dataframes["metadata"], i)}
