@@ -72,7 +72,7 @@ def test_rsync(tmpdir, m):
     fs.rm("memory:///deep/afile")
     rsync("memory://", f"file://{tmpdir}", delete_missing=True)
     allfiles2 = fs.find(f"file://{tmpdir}", withdirs=True, detail=True)
-    pos_tmpdir = fsspec.implementations.local.make_path_posix(tmpdir)  # for WIN
+    pos_tmpdir = fsspec.implementations.local.make_path_posix(str(tmpdir))  # for WIN
     assert set(allfiles2) == {
         f"file://{pos_tmpdir}/{_}"
         for _ in [
