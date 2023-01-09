@@ -31,10 +31,12 @@ class MemoryFileSystem(AbstractFileSystem):
         path = path.lstrip("/").rstrip("/")
         return "/" + path if path else ""
 
-    def ls(self, path, detail=False, **kwargs):
+    def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         if path in self.store:
             # there is a key with this exact name
+            if not detail:
+                return [path]
             return [
                 {
                     "name": path,

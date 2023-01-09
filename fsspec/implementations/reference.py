@@ -1,3 +1,4 @@
+import ast
 import base64
 import io
 import itertools
@@ -12,9 +13,10 @@ try:
 except ImportError:
     import json
 
-from ..asyn import AsyncFileSystem
+from ..asyn import AsyncFileSystem, running_async
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
+from ..spec import AbstractFileSystem
 from ..utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
@@ -87,7 +89,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         simple_templates=True,
         max_gap=64_000,
         max_block=256_000_000,
-        loop=None,
         **kwargs,
     ):
         """
@@ -141,7 +142,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             the aggregated range is <= ``max_block``. Default is 256MB.
         kwargs : passed to parent class
         """
-        super().__init__(loop=loop, **kwargs)
+        super().__init__(**kwargs)
         self.target = target
         self.template_overrides = template_overrides
         self.simple_templates = simple_templates
@@ -193,7 +194,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     ref = ref()
                 protocol, _ = fsspec.core.split_protocol(ref)
                 if protocol and protocol not in self.fss:
-                    fs = filesystem(protocol, loop=loop, **(remote_options or {}))
+                    fs = filesystem(protocol, **(remote_options or {}))
                     self.fss[protocol] = fs
         if remote_protocol is None:
             # get single protocol from references
@@ -203,19 +204,14 @@ class ReferenceFileSystem(AsyncFileSystem):
                 if isinstance(ref, list) and ref[0]:
                     protocol, _ = fsspec.core.split_protocol(ref[0])
                     if protocol and protocol not in self.fss:
-                        fs = filesystem(protocol, loop=loop, **(remote_options or {}))
+                        fs = filesystem(protocol, **(remote_options or {}))
                         self.fss[protocol] = fs
 
         if remote_protocol and remote_protocol not in self.fss:
-            fs = filesystem(remote_protocol, loop=loop, **(remote_options or {}))
+            fs = filesystem(remote_protocol, **(remote_options or {}))
             self.fss[remote_protocol] = fs
 
         self.fss[None] = fs or filesystem("file")  # default one
-
-    @property
-    def loop(self):
-        inloop = [fs.loop for fs in self.fss.values() if fs.async_impl]
-        return inloop[0] if inloop else self._loop
 
     def _cat_common(self, path, start=None, end=None):
         path = self._strip_protocol(path)
@@ -616,6 +612,322 @@ class ReferenceFileSystem(AsyncFileSystem):
                 out[k] = v
         with fsspec.open(url, "wb", **storage_options) as f:
             f.write(json.dumps({"version": 1, "refs": out}).encode())
+
+
+def prefix(x):
+    if "/.z" in x or "/" not in x:
+        return "metadata", x
+    return x.split("/", 1)
+
+
+def constant_prefix(x):
+    return "metadata", x
+
+
+class DFReferenceFileSystem(AbstractFileSystem):
+    """
+    (Experimental) Parquet-based Reference Filesystem
+
+    Putative replacement or adjunct to ReferenceFileSystem with
+    additional capabilities:
+    - loads from parquet for better on-disk and in-memory space
+    - optional lazy loading by key prefix (lazy=True)
+    - multiple targets for a given key (allow_multi=True), concatenated
+      together by default, of multi_func=
+    - per-chunk processing with extra parameters stored in the parquet
+      (chunk_func=)
+
+    This implementation is not (yet) multable.
+    """
+
+    def __init__(
+        self,
+        fo,
+        target_options=None,
+        remote_protocol=None,
+        remote_options=None,
+        fs=None,
+        max_gap=64_000,
+        max_block=256_000_000,
+        parquet_kwargs=None,
+        chunk_func=None,
+        allow_multi=False,
+        multi_func=b"".join,
+        prefix_func=prefix,
+        lazy=False,
+        **kwargs,
+    ):
+        self.fo = fo
+        self.target_options = target_options or {}
+        self.max_gap = max_gap
+        self.max_block = max_block
+        self.dataframes = {}
+        self.keysets = {}
+        self.url_dict = {}
+        self.template_dict = {}
+        self.prefs = None
+        self.fss = {}
+        self.dirs = None
+        self.lazy = lazy
+        self.chunk_func = chunk_func
+        self.allow_multi = allow_multi
+        self.multi_func = multi_func
+        self.prefix_func = prefix_func if lazy else constant_prefix
+        self.pkwargs = parquet_kwargs or {}
+        if fs is not None:
+            # single remote FS
+            remote_protocol = (
+                fs.protocol[0] if isinstance(fs.protocol, tuple) else fs.protocol
+            )
+            self.fss[remote_protocol] = fs
+
+        if remote_protocol and remote_protocol not in self.fss:
+            fs = filesystem(remote_protocol, **(remote_options or {}))
+            self.fss[remote_protocol] = fs
+
+        if fs:
+            self.fss[None] = fs
+        elif self.fss:
+            self.fss[None] = iter(self.fss.values()).__next__()
+        else:
+            self.fss[None] = fsspec.filesystem(
+                remote_protocol, **(remote_options or {})
+            )
+
+        super().__init__(**kwargs)
+        self._reference_part()
+
+    def _reference_part(self, part="metadata"):
+        """Load some references from parquet
+
+        If lazy is False, this is called exactly once per instance
+
+        If lazy is true, selecting a path will determine the name of
+        the target parquet file, and the resultant columns will be
+        cached so the file need not be read again
+        """
+        import fastparquet
+
+        if part != "metadata" and part not in self.dirs:
+            raise FileNotFoundError(f"prefix {part}")
+        if part not in self.dataframes:
+            if running_async():
+                raise RuntimeError(
+                    "Cannot load references in async context, because"
+                    "load may trigger nested async operations"
+                )
+            url = f"{self.fo}/{part}.parq" if self.lazy else self.fo
+            fs, path = fsspec.core.url_to_fs(url, **self.target_options)
+            pf = fastparquet.ParquetFile(path, fs=fs)
+            self.template_dict[part] = pf.key_value_metadata
+            df = pf.to_pandas()
+            thispart = {}
+            for k in df:
+                if df[k].dtype == "category" and k == "path":
+                    self.url_dict[part] = df[k].cat.categories.values
+                    thispart[k] = df[k].cat.codes.values
+                else:
+                    thispart[k] = df[k].values
+            self.dataframes[part] = thispart
+            if self.allow_multi is False:
+                self.keysets[part] = {
+                    k: i for (i, k) in enumerate(self.dataframes[part]["key"])
+                }
+            else:
+                self.keysets[part] = {}
+                for i, k in enumerate(self.dataframes[part]["key"]):
+                    self.keysets[part].setdefault(k, []).append(i)
+            if part == "metadata":
+                self.dirs = {
+                    k.rsplit("/", 1)[0]
+                    for k in self.dataframes[part]["key"]
+                    if "/" in k
+                }
+                self.prefs = (
+                    ast.literal_eval(pf.key_value_metadata["prefs"])
+                    if "pref" in pf.key_value_metadata
+                    else set()
+                )
+
+        return self.dataframes[part]
+
+    def isdir(self, path):
+        return path in self.dirs
+
+    def cat_file(self, path, start=None, end=None, **kwargs):
+        return self.cat_ranges([path], [start], [end])[0]
+
+    def cat(self, path, recursive=False, on_error="return", **kwargs):
+        paths = self.expand_path(path, recursive=recursive)
+        paths1 = [p for p in paths if not self.isdir(p)]
+        result = {
+            p: data
+            for p, data in zip(
+                paths1, self.cat_ranges(paths1, on_error=on_error, **kwargs)
+            )
+        }
+        if len(paths1) == 1 and recursive is False and "*" not in path:
+            # same as cat_file
+            return list(result.values())[0]
+        return result
+
+    def cat_ranges(self, paths, starts=None, ends=None, on_error="return", **kwargs):
+        out = []  # eventual output; initially each key contains raw bytes or None
+        proto_dict = {}  # mapping of protocol to lists of URL/start/end to fetch
+        assign_dict = {}  # how to assign the results of cat_ranges to output
+        if starts is None:
+            starts = [None] * len(paths)
+        if ends is None:
+            ends = [None] * len(paths)
+        for p, s, e in zip(paths, starts, ends):
+            thislist = []
+            out.append(thislist)
+            if self.lazy:
+                pref, p0 = self.prefix_func(p)
+                if pref in self.prefs:
+                    # reference already inlined in metadata file
+                    pref = "metadata"
+                else:
+                    # new key in the target pref file
+                    p = p0
+            else:
+                # everything is in the same file
+                pref = "metadata"
+            self._reference_part(pref)
+            inds = self.keysets[pref][p]
+            if isinstance(inds, int):
+                inds = [inds]
+            for i in inds:
+                if x := self.dataframes[pref]["raw"][i]:
+                    thislist.append(x)
+                else:
+                    # infer path - cache this?
+                    path = self.dataframes[pref]["path"][i]
+                    if pref in self.url_dict:
+                        # dict-encoded columns; actually, numpy can do
+                        # many of these at once with int fancy indexing
+                        path = self.url_dict[pref][path]
+                    # apply template: common prefix
+                    path = path.format(**self.template_dict[pref])
+
+                    prot, _ = split_protocol(path)
+                    proto_dict.setdefault(prot, [[], [], []])
+                    proto_dict[prot][0].append(path)
+                    if s is None or s >= 0:
+                        proto_dict[prot][1].append(
+                            self.dataframes[pref]["offset"][i] or s
+                        )
+                    else:
+                        # range is from end of file, which we do not know
+                        # the size of, so this can only work if there is no
+                        # merging
+                        proto_dict[prot][1].append(s)
+
+                    if e is None or e >= 0:
+                        proto_dict[prot][2].append(
+                            self.dataframes[pref]["offset"][i]
+                            + self.dataframes[pref]["size"][i]
+                            or e
+                        )
+                    else:
+                        # range is from end of file, which we do not know
+                        # the size of, so this can only work if there is no
+                        # merging
+                        proto_dict[prot][1].append(e)
+                    thislist.append(None)
+                    assign_dict.setdefault(prot, []).append(
+                        (thislist, len(thislist) - 1)
+                    )
+
+        for proto, (urls2, starts2, ends2) in proto_dict.items():
+            fs = self.fss[proto]
+
+            new_paths, new_starts, new_ends = merge_offset_ranges(
+                list(urls2),
+                list(starts2),
+                list(ends2),
+                sort=True,
+                max_gap=self.max_gap,
+                max_block=self.max_block,
+            )
+            bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
+            if len(urls2) == len(bytes_out):
+                # we didn't do any merging
+                for (l, i), d in zip(assign_dict[proto], bytes_out):
+                    l[i] = d
+            else:
+                # unbundle from merged bytes - simple approach
+                for u, s, e, (l, i) in zip(urls2, starts2, ends2, assign_dict[proto]):
+                    if p in out:
+                        continue  # was bytes, already handled
+                    for np, ns, ne, b in zip(
+                        new_paths, new_starts, new_ends, bytes_out
+                    ):
+                        if np == u and (ns is None or ne is None):
+                            l[i] = b[s:e]
+                        elif np == u and s >= ns and e <= ne:
+                            l[i] = b[s - ns : (e - ne) or None]
+
+        out = [self.multi_func(part) for part in out]
+        return out
+
+    def find(self, path, detail=False, withdirs=False, **kwargs):
+        path = self._strip_protocol(path)
+        if path in self.dirs:
+            path = path + "/"
+        pref, p = self.prefix_func(path)
+        dirs = (
+            [
+                {"name": d, "size": 0, "type": "directory"}
+                for d in self.dirs
+                if d.startswith(path)
+            ]
+            if withdirs
+            else []
+        )
+        if pref in self.prefs:
+            pref = "metadata"
+        df = self._reference_part(pref)
+        files = [
+            {"name": k, "type": "file", "size": _size(self.dataframes["metadata"], i)}
+            for k, i in self.keysets["metadata"].items()
+            if k.startswith(path)
+        ]
+        if self.lazy and pref != "metadata":
+            files.extend(
+                [
+                    {"name": f"{pref}/{k}", "type": "file", "size": _size(df, i)}
+                    for k, i in self.keysets[pref].items()
+                    if k.startswith(p)
+                ]
+            )
+        if detail:
+            return dirs + files
+        return [k["name"] for k in dirs + files]
+
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path)
+        allfiles = self.find(path, detail=True, withdirs=True)
+        isdir = path in self.dirs
+        subdfiles = [
+            p for p in allfiles if p["name"].count("/") == path.count("/") + isdir
+        ]
+        if detail:
+            return subdfiles
+        return [p["name"] for p in subdfiles]
+
+    def info(self, path, **kwargs):
+        path = self._strip_protocol(path)
+
+        if path in self.dirs:
+            return {"name": path, "type": "directory", "Size": 0}
+        return self.ls(path, detail=True)[0]
+
+
+def _size(df, i):
+    if isinstance(i, int):
+        return len(df["raw"][i]) if df["raw"][i] else df["size"][i]
+    return sum(len(df["raw"][_]) if df["raw"][_] else df["size"][_] for _ in i)
 
 
 def _unmodel_hdf5(references):

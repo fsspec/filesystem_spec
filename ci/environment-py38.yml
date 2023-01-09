@@ -28,6 +28,7 @@ dependencies:
   - pytest-vcr
   - py
   - fusepy
+  - fastparquet
   - tomli < 2
   - msgpack-python
   - python-libarchive-c

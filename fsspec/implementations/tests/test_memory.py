@@ -44,8 +44,11 @@ def test_ls(m):
     assert m.ls("/dir", False) == ["/dir/afile", "/dir/dir1"]
     assert m.ls("/dir", True)[0]["type"] == "file"
     assert m.ls("/dir", True)[1]["type"] == "directory"
+    assert m.ls("/dir/afile", False) == ["/dir/afile"]
+    assert m.ls("/dir/afile", True)[0]["type"] == "file"
 
     assert len(m.ls("/dir/dir1")) == 2
+    assert len(m.ls("/dir/afile")) == 1
 
 
 def test_directories(m):

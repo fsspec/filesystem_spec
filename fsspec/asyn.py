@@ -19,6 +19,7 @@ private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
 loop = [None]  # global event loop for any non-async instance
 _lock = None  # global lock placeholder
+get_running_loop = asyncio.get_running_loop
 
 
 def get_lock():
@@ -185,6 +186,15 @@ def _get_batch_size(nofiles=False):
         return -1
     else:
         return soft_limit // 8
+
+
+def running_async() -> bool:
+    """Being executed by an event loop?"""
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False
 
 
 async def _run_coros_in_chunks(
