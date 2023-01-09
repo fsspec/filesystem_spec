@@ -74,7 +74,7 @@ def test_rsync(tmpdir, m):
     allfiles2 = fs.find(f"file://{tmpdir}", withdirs=True, detail=True)
     pos_tmpdir = fsspec.implementations.local.make_path_posix(str(tmpdir))  # for WIN
     assert set(allfiles2) == {
-        f"file://{pos_tmpdir}/{_}"
+        f"file://{pos_tmpdir}{_}"
         for _ in [
             "/deep",
             "/deep/path",
