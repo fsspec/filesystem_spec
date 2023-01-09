@@ -465,6 +465,7 @@ def test_make_path_posix():
     )
     if WIN:
         assert make_path_posix("C:\\path") == "C:/path"
+        assert make_path_posix("file://C:\\path\\file") == "C:/path/file"
     if WIN:
         assert (
             make_path_posix(
