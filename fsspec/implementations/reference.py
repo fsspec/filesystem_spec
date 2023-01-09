@@ -625,6 +625,21 @@ def constant_prefix(x):
 
 
 class DFReferenceFileSystem(AbstractFileSystem):
+    """
+    (Experimental) Parquet-based Reference Filesystem
+
+    Putative replacement or adjunct to ReferenceFileSystem with
+    additional capabilities:
+    - loads from parquet for better on-disk and in-memory space
+    - optional lazy loading by key prefix (lazy=True)
+    - multiple targets for a given key (allow_multi=True), concatenated
+      together by default, of multi_func=
+    - per-chunk processing with extra parameters stored in the parquet
+      (chunk_func=)
+
+    This implementation is not (yet) multable.
+    """
+
     def __init__(
         self,
         fo,
