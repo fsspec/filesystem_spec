@@ -136,3 +136,12 @@ def test_windows_policy():
     # check ensures that we are restoring the old policy back
     # after our change.
     assert isinstance(policy, asyncio.DefaultEventLoopPolicy)
+
+
+def test_running_async():
+    assert not fsspec.asyn.running_async()
+
+    async def go():
+        assert fsspec.asyn.running_async()
+
+    asyncio.run(go())

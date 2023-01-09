@@ -5,7 +5,11 @@ import pytest
 
 import fsspec
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.implementations.reference import ReferenceNotReachable, _unmodel_hdf5
+from fsspec.implementations.reference import (
+    DFReferenceFileSystem,
+    ReferenceNotReachable,
+    _unmodel_hdf5,
+)
 from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
 
 
@@ -513,3 +517,51 @@ def test_cat_missing(m):
 
     out = mapper.getitems(["c", "d"], on_error="omit")
     assert list(out) == ["c"]
+
+
+def test_df_single(m):
+    pd = pytest.importorskip("pandas")
+    data = b"data0data1data2"
+    m.pipe({"data": data})
+    df = pd.DataFrame(
+        {
+            "key": ["a", "b", "c"],
+            "path": [None, "memory://data", "memory://data"],
+            "offset": [0, 0, 4],
+            "size": [0, 0, 4],
+            "raw": [b"raw", None, None],
+        }
+    )
+    df.to_parquet("memory://df.parq")
+    fs = DFReferenceFileSystem(fo="memory://df.parq", remote_protocol="memory")
+    assert fs.cat("a") == b"raw"
+    assert fs.cat("b") == data
+    assert fs.cat("c") == data[4:8]
+
+
+def test_df_multi(m):
+    pd = pytest.importorskip("pandas")
+    data = b"data0data1data2"
+    m.pipe({"data": data, "data2": b"hello"})
+    df = pd.DataFrame(
+        {
+            "key": ["a", "b", "b", "d", "d"],
+            "path": [
+                None,
+                "memory://data",
+                "memory://data",
+                "memory://data",
+                "memory://data2",
+            ],
+            "offset": [0, 0, 4, 4, 1],
+            "size": [0, 0, 4, 2, 2],
+            "raw": [b"raw", None, None, None, None],
+        }
+    )
+    df.to_parquet("memory://df.parq")
+    fs = DFReferenceFileSystem(
+        fo="memory://df.parq", remote_protocol="memory", allow_multi=True
+    )
+    assert fs.cat("a") == b"raw"
+    assert fs.cat("b") == data + data[4:8]
+    assert fs.cat("d") == data[4:6] + b"hello"[1:3]
