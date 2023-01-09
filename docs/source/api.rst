@@ -17,6 +17,7 @@ User Functions
    fsspec.get_mapper
    fsspec.fuse.run
    fsspec.gui.FileSelector
+   fsspec.generic.rsync
 
 .. autofunction:: fsspec.open_files
 .. autofunction:: fsspec.open
@@ -29,6 +30,7 @@ User Functions
 .. autofunction:: fsspec.fuse.run
 .. autoclass:: fsspec.gui.FileSelector
    :members:
+.. autofunction:: fsspec.generic.rsync
 
 Base Classes
 ------------

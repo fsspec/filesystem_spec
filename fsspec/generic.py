@@ -46,16 +46,36 @@ def rsync(
 ):
     """Sync files between two directory trees
 
+    (experimental)
+
     Parameters
     ----------
     source: str
+        Root of the directory tree to take files from.
     destination: str
+        Root path to copy into. The contents of this location should be
+        identical to the contents of ``source`` when done.
     delete_missing: bool
+        If there are paths in the destination that don't exist in the
+        source and this is True, delete them. Otherwise, leave them alone.
     source_field: str
+        If ``update_field`` is "different", this is the key in the info
+        of source files to consider for difference.
     dest_field: str
+        If ``update_field`` is "different", this is the key in the info
+        of destination files to consider for difference.
     update_cond: "different"|"always"|"never"
+        If "always", every file is copied, regardless of whether it exists in
+        the destination. If "never", files that exist in the destination are
+        not copied again. If "different" (default), only copy if the info
+        fields given by ``source_field`` and ``dest_field`` (usually "size")
+        are different. Other comparisons may be added in the future.
     inst_kwargs: dict|None
-    fs: AbstractFileSystem|None
+        If ``fs`` is None, use this set of keyword arguments to make a
+        GenericFileSystem instance
+    fs: GenericFileSystem|None
+        Instance to use if explicitly given. The instance defines how to
+        to make downstream file system instances from paths.
     """
     fs = fs or GenericFileSystem(**(inst_kwargs or {}))
     source = fs._strip_protocol(source)
@@ -225,7 +245,10 @@ class GenericFileSystem(AsyncFileSystem):
             fs.makedirs(path, exist_ok=exist_ok)
 
     def rsync(self, source, destination, **kwargs):
-        """Sync files between two directory trees"""
+        """Sync files between two directory trees
+
+        See `func:rsync` for more details.
+        """
         rsync(source, destination, fs=self, **kwargs)
 
     async def _cp_file(
