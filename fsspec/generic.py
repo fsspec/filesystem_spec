@@ -58,6 +58,8 @@ def rsync(
     fs: AbstractFileSystem|None
     """
     fs = fs or GenericFileSystem(**(inst_kwargs or {}))
+    source = fs._strip_protocol(source)
+    destination = fs._strip_protocol(destination)
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
         raise ValueError("Can only rsync on a directory")
@@ -133,6 +135,11 @@ class GenericFileSystem(AsyncFileSystem):
         """
         self.method = default_method
         super(GenericFileSystem, self).__init__(**kwargs)
+
+    def _strip_protocol(self, path):
+        # normalization only
+        fs = _resolve_fs(path, self.method)
+        return fs.unstrip_protocol(fs._strip_protocol(path))
 
     async def _find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
         fs = _resolve_fs(path, self.method)
