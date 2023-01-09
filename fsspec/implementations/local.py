@@ -251,10 +251,12 @@ def make_path_posix(path, sep=os.sep):
             return make_path_posix(osp.abspath(path))
         else:
             return os.getcwd() + "/" + path
+    if path.startswith("file://"):
+        path = path[7:]
     if re.match("/[A-Za-z]:", path):
         # for windows file URI like "file:///C:/folder/file"
         # or "file:///C:\\dir\\file"
-        path = path[1:]
+        path = path[1:].replace("\\", "/").replace("//", "/")
     if path.startswith("\\\\"):
         # special case for windows UNC/DFS-style paths, do nothing,
         # just flip the slashes around (case below does not work!)
