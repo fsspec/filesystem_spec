@@ -83,6 +83,6 @@ def test_rsync(tmpdir, m):
     }
     # the file was not updated, since size was correct
     assert (
-        allfiles[f"file://{tmpdir}/deep/path/afile"]
-        == allfiles2[f"file://{tmpdir}/deep/path/afile"]
+        allfiles[f"file://{pos_tmpdir}/deep/path/afile"]
+        == allfiles2[f"file://{pos_tmpdir}/deep/path/afile"]
     )
