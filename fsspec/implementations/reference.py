@@ -745,7 +745,7 @@ class DFReferenceFileSystem(AbstractFileSystem):
                 }
                 self.prefs = (
                     ast.literal_eval(pf.key_value_metadata["prefs"])
-                    if "pref" in pf.key_value_metadata
+                    if "prefs" in pf.key_value_metadata
                     else set()
                 )
 
