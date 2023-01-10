@@ -390,6 +390,9 @@ class AbstractFileSystem(metaclass=_Cached):
             the bottom upwards.
         kwargs: passed to ``ls``
         """
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
         path = self._strip_protocol(path)
         full_dirs = {}
         dirs = {}
@@ -429,6 +432,8 @@ class AbstractFileSystem(metaclass=_Cached):
         if maxdepth is not None:
             maxdepth -= 1
             if maxdepth < 1:
+                if not topdown:
+                    yield path, dirs, files
                 return
 
         for d in full_dirs:

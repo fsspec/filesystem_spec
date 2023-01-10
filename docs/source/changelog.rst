@@ -464,7 +464,7 @@ Fixes:
 - random appending of a directory within the filesystems ``find()`` method (#507, 537)
 - fix git tests (#501)
 - fix recursive memfs operations (#502)
-- fix recorsive/maxdepth for cp (#508)
+- fix recursive/maxdepth for cp (#508)
 - fix listings cache timeout (#513)
 - big endian bytes tests (#519)
 - docs syntax (#535, 524, 520, 542)
