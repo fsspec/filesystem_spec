@@ -368,11 +368,11 @@ def test_url_to_fs():
 
 def test_walk(m):
     dir0 = "/dir0"
-    dir1 = os.path.join(dir0, "dir1")
-    dir2 = os.path.join(dir1, "dir2")
-    file1 = os.path.join(dir0, "file1")
-    file2 = os.path.join(dir1, "file2")
-    file3 = os.path.join(dir2, "file3")
+    dir1 = dir0 + "/dir1"
+    dir2 = dir1 + "/dir2"
+    file1 = dir0 + "/file1"
+    file2 = dir1 + "/file2"
+    file3 = dir2 + "/file3"
 
     m.mkdir(dir2)  # Creates parents too
     m.touch(file1)
