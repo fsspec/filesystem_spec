@@ -486,3 +486,40 @@ def test_with_cache(server):
     with fs1.open(fn, "rb") as f:
         out = f.read()
     assert out == fs1.cat(fn)
+
+
+@pytest.mark.asyncio
+async def test_async_expand_path(server):
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+
+    # maxdepth=1
+    assert await fs._expand_path(server + "/index", recursive=True, maxdepth=1) == [
+        server + "/index",
+        server + "/index/realfile",
+    ]
+
+    # maxdepth=0
+    with pytest.raises(ValueError):
+        await fs._expand_path(server + "/index", maxdepth=0)
+    with pytest.raises(ValueError):
+        await fs._expand_path(server + "/index", recursive=True, maxdepth=0)
+
+    await fs._session.close()
+
+
+@pytest.mark.asyncio
+async def test_async_walk(server):
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+
+    # No maxdepth
+    res = []
+    async for a in fs._walk(server + "/index"):
+        res.append(a)
+    assert res == [(server + "/index", [], ["realfile"])]
+
+    # maxdepth=0
+    with pytest.raises(ValueError):
+        async for a in fs._walk(server + "/index", maxdepth=0):
+            pass
+
+    await fs._session.close()
