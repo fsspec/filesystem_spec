@@ -147,5 +147,3 @@ available as the attribute ``.loop``.
 .. autofunction:: fsspec.asyn.sync_wrapper
 
 .. autofunction:: fsspec.asyn.get_loop
-
-.. autofunction:: fsspec.asyn.fsspec_loop
