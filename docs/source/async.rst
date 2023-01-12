@@ -135,17 +135,15 @@ available as the attribute ``.loop``.
 
 .. autosummary::
    fsspec.asyn.AsyncFileSystem
+   fsspec.asyn.get_loop
    fsspec.asyn.sync
    fsspec.asyn.sync_wrapper
-   fsspec.asyn.get_loop
 
 .. autoclass:: fsspec.asyn.AsyncFileSystem
    :members:
 
+.. autofunction:: fsspec.asyn.get_loop
+
 .. autofunction:: fsspec.asyn.sync
 
 .. autofunction:: fsspec.asyn.sync_wrapper
-
-.. autofunction:: fsspec.asyn.get_loop
-
-.. autofunction:: fsspec.asyn.fsspec_loop
