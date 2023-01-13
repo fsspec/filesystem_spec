@@ -200,7 +200,18 @@ class ArrowFSWrapper(AbstractFileSystem):
 
 
 @mirror_from(
-    "stream", ["read", "seek", "tell", "write", "readable", "writable", "close", "size"]
+    "stream",
+    [
+        "read",
+        "seek",
+        "tell",
+        "write",
+        "readable",
+        "writable",
+        "close",
+        "size",
+        "seekable",
+    ],
 )
 class ArrowFile(io.IOBase):
     def __init__(self, fs, stream, path, mode, block_size=None, **kwargs):
