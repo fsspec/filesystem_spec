@@ -219,3 +219,14 @@ def test_open_seekable(fs, remote_dir):
     with fs.open(remote_dir + "/a.txt", "rb", seekable=True) as file:
         file.seek(2)
         assert file.read() == data[2:]
+
+
+def test_seekable(fs, remote_dir):
+    data = b"dvc.org"
+
+    with fs.open(remote_dir + "/a.txt", "wb") as stream:
+        stream.write(data)
+
+    for seekable in [True, False]:
+        with fs.open(remote_dir + "/a.txt", "rb", seekable=seekable) as file:
+            assert file.seekable() == seekable

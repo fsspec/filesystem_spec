@@ -7,7 +7,7 @@ Async
 allows for concurrent calls within bulk operations such as ``cat`` (fetch
 the contents of many files at once) even from normal code, and for the direct
 use of fsspec in async code without blocking.
-Async implementations derive from the class ``fsspec.async.AsyncFileSystem``.
+Async implementations derive from the class ``fsspec.asyn.AsyncFileSystem``.
 The class attribute ``async_impl`` can be used to test whether an
 implementation is async of not.
 

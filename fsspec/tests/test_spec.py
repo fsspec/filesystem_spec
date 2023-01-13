@@ -202,6 +202,17 @@ def test_expand_path_recursive(test_paths, expected):
     paths = test_fs.expand_path(list(test_paths), recursive=True)
     assert sorted(paths) == sorted(expected)
 
+    # test with maxdepth
+    assert test_fs.expand_path("top_level", recursive=True, maxdepth=1) == [
+        "top_level",
+        "top_level/second_level",
+    ]
+
+    with pytest.raises(ValueError):
+        test_fs.expand_path("top_level", recursive=True, maxdepth=0)
+    with pytest.raises(ValueError):
+        test_fs.expand_path("top_level", maxdepth=0)
+
 
 @pytest.mark.xfail
 def test_find():
