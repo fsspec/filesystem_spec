@@ -116,7 +116,8 @@ def test_du(m):
         "/dir/dirb/afile": 2,
         "/dir/dirb/bfile": 3,
     }
-    assert fs.du("/dir", maxdepth=0) == 1
+    with pytest.raises(ValueError):
+        assert fs.du("/dir", maxdepth=0) == 1
     assert fs.du("/dir", total=False, withdirs=True, maxdepth=1) == {
         "/dir": 0,
         "/dir/afile": 1,
@@ -363,3 +364,53 @@ def test_url_to_fs():
 
     assert isinstance(fs, MemoryFileSystem)
     assert url2 == "/a.txt"
+
+
+def test_walk(m):
+    dir0 = "/dir0"
+    dir1 = dir0 + "/dir1"
+    dir2 = dir1 + "/dir2"
+    file1 = dir0 + "/file1"
+    file2 = dir1 + "/file2"
+    file3 = dir2 + "/file3"
+
+    m.mkdir(dir2)  # Creates parents too
+    m.touch(file1)
+    m.touch(file2)
+    m.touch(file3)
+
+    # No maxdepth
+    assert list(m.walk(dir0, topdown=True)) == [
+        (dir0, ["dir1"], ["file1"]),
+        (dir1, ["dir2"], ["file2"]),
+        (dir2, [], ["file3"]),
+    ]
+    assert list(m.walk(dir0, topdown=False)) == [
+        (dir2, [], ["file3"]),
+        (dir1, ["dir2"], ["file2"]),
+        (dir0, ["dir1"], ["file1"]),
+    ]
+
+    # maxdepth=2
+    assert list(m.walk(dir0, maxdepth=2, topdown=True)) == [
+        (dir0, ["dir1"], ["file1"]),
+        (dir1, ["dir2"], ["file2"]),
+    ]
+    assert list(m.walk(dir0, maxdepth=2, topdown=False)) == [
+        (dir1, ["dir2"], ["file2"]),
+        (dir0, ["dir1"], ["file1"]),
+    ]
+
+    # maxdepth=1
+    assert list(m.walk(dir0, maxdepth=1, topdown=True)) == [
+        (dir0, ["dir1"], ["file1"]),
+    ]
+    assert list(m.walk(dir0, maxdepth=1, topdown=False)) == [
+        (dir0, ["dir1"], ["file1"]),
+    ]
+
+    # maxdepth=0
+    with pytest.raises(ValueError):
+        list(m.walk(dir0, maxdepth=0, topdown=True))
+    with pytest.raises(ValueError):
+        list(m.walk(dir0, maxdepth=0, topdown=False))

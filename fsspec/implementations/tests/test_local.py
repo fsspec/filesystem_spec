@@ -858,7 +858,8 @@ def test_du(tmpdir):
 
     assert fs.du(tmpdir, maxdepth=2) == 11
     assert fs.du(tmpdir, maxdepth=1) == 4
-    assert fs.du(tmpdir, maxdepth=0) == 4
+    with pytest.raises(ValueError):
+        fs.du(tmpdir, maxdepth=0)
 
     # Size of file only.
     assert fs.du(file) == 4
