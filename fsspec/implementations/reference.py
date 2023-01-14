@@ -13,7 +13,7 @@ try:
 except ImportError:
     import json
 
-from ..asyn import AsyncFileSystem, running_async
+from ..asyn import AsyncFileSystem
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
 from ..spec import AbstractFileSystem
@@ -711,11 +711,6 @@ class DFReferenceFileSystem(AbstractFileSystem):
         if part != "metadata" and part not in self.dirs:
             raise FileNotFoundError(f"prefix {part}")
         if part not in self.dataframes:
-            if running_async():
-                raise RuntimeError(
-                    "Cannot load references in async context, because"
-                    "load may trigger nested async operations"
-                )
             url = f"{self.fo}/{part}.parq" if self.lazy else self.fo
             fs, path = fsspec.core.url_to_fs(url, **self.target_options)
             pf = fastparquet.ParquetFile(path, fs=fs)
