@@ -39,6 +39,12 @@ def test_class_methods():
     assert MemoryFileSystem._get_kwargs_from_urls("memory://user@thing") == {}
 
 
+def test_multi(m):
+    m.pipe("/afile", b"data")
+    fs, token, paths = fsspec.core.get_fs_token_paths(["/afile", "/afile"])
+    assert len(paths) == 2
+
+
 def test_get_put(tmpdir, m):
     tmpdir = str(tmpdir)
     fn = os.path.join(tmpdir, "one")

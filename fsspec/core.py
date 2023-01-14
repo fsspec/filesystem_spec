@@ -300,19 +300,6 @@ def open_files(
 
 
 def _un_chain(path, kwargs):
-    if isinstance(path, (tuple, list)):
-        bits = [_un_chain(p, kwargs) for p in path]
-        out = []
-        for pbit in zip(*bits):
-            paths, protocols, kwargs = zip(*pbit)
-            if len(set(protocols)) > 1:
-                raise ValueError("Protocol mismatch in URL chain")
-            if len(set(paths)) == 1:
-                paths = paths[0]
-            else:
-                paths = list(paths)
-            out.append([paths, protocols[0], kwargs[0]])
-        return out
     x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
     bits = (
         [p if "://" in p or x.match(p) else p + "://" for p in path.split("::")]
@@ -322,6 +309,7 @@ def _un_chain(path, kwargs):
     # [[url, protocol, kwargs], ...]
     out = []
     previous_bit = None
+    kwargs = kwargs.copy()
     for bit in reversed(bits):
         protocol = kwargs.pop("protocol", None) or split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
@@ -577,13 +565,13 @@ def get_fs_token_paths(
     if isinstance(urlpath, (list, tuple, set)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
-        urlpath = [stringify_path(u) for u in urlpath]
+        urlpath0 = stringify_path(list(urlpath)[0])
     else:
-        urlpath = stringify_path(urlpath)
+        urlpath0 = stringify_path(urlpath)
     storage_options = storage_options or {}
     if protocol:
         storage_options["protocol"] = protocol
-    chain = _un_chain(urlpath, storage_options or {})
+    chain = _un_chain(urlpath0, storage_options or {})
     inkwargs = {}
     # Reverse iterate the chain, creating a nested target_* structure
     for i, ch in enumerate(reversed(chain)):
@@ -596,8 +584,13 @@ def get_fs_token_paths(
         inkwargs["fo"] = urls
     paths, protocol, _ = chain[0]
     fs = filesystem(protocol, **inkwargs)
-    if isinstance(paths, (list, tuple, set)):
-        paths = [fs._strip_protocol(u) for u in paths]
+    if isinstance(urlpath, (list, tuple, set)):
+        pchains = [
+            _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
+        ]
+        if len(set(pc[1] for pc in pchains)) > 1:
+            raise ValueError("Protocol mismatch getting fs from %s", urlpath)
+        paths = [pc[0] for pc in pchains]
     else:
         paths = fs._strip_protocol(paths)
     if isinstance(paths, (list, tuple, set)):
