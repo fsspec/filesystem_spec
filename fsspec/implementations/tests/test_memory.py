@@ -214,3 +214,23 @@ def test_cp_get_put_directory_recursive(m, tmpdir, funcname):
         func(src + "/", target, recursive=True)
         assert target_fs.isdir(target)
         assert target_fs.find(target) == [make_path_posix(os.path.join(target, "file"))]
+
+
+def test_cp_two_files(m):
+    src = "/src"
+    file0 = os.path.join(src, "file0")
+    file1 = os.path.join(src, "file1")
+    m.mkdir(src)
+    m.touch(file0)
+    m.touch(file1)
+
+    target = "/target"
+    assert not m.exists(target)
+
+    m.cp([file0, file1], target)
+
+    assert m.isdir(target)
+    assert sorted(m.find(target)) == [
+        "/target/file0",
+        "/target/file1",
+    ]

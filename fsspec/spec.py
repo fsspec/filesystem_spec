@@ -882,18 +882,13 @@ class AbstractFileSystem(metaclass=_Cached):
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
-        trailing_slash = isinstance(rpath, str) and rpath.endswith("/")
         rpaths = self.expand_path(rpath, recursive=recursive)
-        if isinstance(lpath, str):
-            local_fs = LocalFileSystem()
-            isdir = local_fs.isdir(lpath)
-        else:
-            isdir = False
+        isdir = isinstance(lpath, str) and LocalFileSystem().isdir(lpath)
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and not trailing_slash,
-            is_dir=isdir and len(rpaths) == 1,
+            exists=isdir and isinstance(rpath, str) and not rpath.endswith("/"),
+            is_dir=isdir,
         )
 
         callback.set_size(len(lpaths))
@@ -939,17 +934,14 @@ class AbstractFileSystem(metaclass=_Cached):
         )
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
-            trailing_slash = lpath.endswith("/")
-        else:
-            trailing_slash = False
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         isdir = isinstance(rpath, str) and self.isdir(rpath)
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and not trailing_slash,
-            is_dir=isdir and len(lpaths) == 1,
+            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
+            is_dir=isdir,
         )
 
         callback.set_size(len(rpaths))
@@ -984,14 +976,13 @@ class AbstractFileSystem(metaclass=_Cached):
         elif on_error is None:
             on_error = "raise"
 
-        trailing_slash = isinstance(path1, str) and path1.endswith("/")
         paths = self.expand_path(path1, recursive=recursive)
         isdir = isinstance(path2, str) and self.isdir(path2)
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and not trailing_slash,
-            is_dir=isdir and len(paths) == 1,
+            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
+            is_dir=isdir,
         )
 
         for p1, p2 in zip(paths, path2):

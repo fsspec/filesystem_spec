@@ -696,9 +696,9 @@ def test_copy_errors(tmpdir):
 
     localfs.copy([file1, file2, dne], dest1, on_error="ignore")
 
-    assert sorted(localfs.ls(os.path.join(dest1, "src"))) == [
-        make_path_posix(os.path.join(dest1, "src", "afile1")),
-        make_path_posix(os.path.join(dest1, "src", "afile2")),
+    assert sorted(localfs.ls(dest1)) == [
+        make_path_posix(os.path.join(dest1, "afile1")),
+        make_path_posix(os.path.join(dest1, "afile2")),
     ]
 
     # Recursive should raise an error only if we specify raise
@@ -707,12 +707,12 @@ def test_copy_errors(tmpdir):
     current_files = localfs.expand_path(src, recursive=True)
     with patch.object(localfs, "expand_path", return_value=current_files + [dne]):
         with pytest.raises(FileNotFoundError):
-            localfs.copy(src, dest2, recursive=True, on_error="raise")
+            localfs.copy(src + "/", dest2, recursive=True, on_error="raise")
 
-        localfs.copy(src, dest2, recursive=True)
-        assert sorted(localfs.ls(os.path.join(dest2, "src"))) == [
-            make_path_posix(os.path.join(dest2, "src", "afile1")),
-            make_path_posix(os.path.join(dest2, "src", "afile2")),
+        localfs.copy(src + "/", dest2, recursive=True)
+        assert sorted(localfs.ls(dest2)) == [
+            make_path_posix(os.path.join(dest2, "afile1")),
+            make_path_posix(os.path.join(dest2, "afile2")),
         ]
 
 
@@ -907,3 +907,24 @@ def test_cp_get_put_directory_recursive(tmpdir, funcname):
         func(src + "/", target, recursive=True)
         assert fs.isdir(target)
         assert fs.find(target) == [make_path_posix(os.path.join(target, "file"))]
+
+
+def test_cp_two_files(tmpdir):
+    fs = LocalFileSystem(auto_mkdir=True)
+    src = os.path.join(str(tmpdir), "src")
+    file0 = os.path.join(src, "file0")
+    file1 = os.path.join(src, "file1")
+    fs.mkdir(src)
+    fs.touch(file0)
+    fs.touch(file1)
+
+    target = os.path.join(str(tmpdir), "target")
+    assert not fs.exists(target)
+
+    fs.cp([file0, file1], target)
+
+    assert fs.isdir(target)
+    assert sorted(fs.find(target)) == [
+        make_path_posix(os.path.join(target, "file0")),
+        make_path_posix(os.path.join(target, "file1")),
+    ]
