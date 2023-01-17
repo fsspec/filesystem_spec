@@ -178,9 +178,11 @@ def test_cp_get_put_directory_recursive(m, tmpdir, funcname):
         func, remote_source, remote_target = m.put, False, True
 
     if remote_source:
-        src, source_fs = "src", m
+        src, source_fs = "/src", m
+        src_file = src + "/file"
     else:
         src, source_fs = os.path.join(tmpdir, "src"), LocalFileSystem()
+        src_file = os.path.join(src, "file")
 
     if remote_target:
         target, target_fs = "/target", m
@@ -188,7 +190,7 @@ def test_cp_get_put_directory_recursive(m, tmpdir, funcname):
         target, target_fs = os.path.join(tmpdir, "target"), LocalFileSystem()
 
     source_fs.mkdir(src)
-    source_fs.touch(os.path.join(src, "file"))
+    source_fs.touch(src_file)
 
     # cp/get/put without slash
     assert not target_fs.exists(target)
@@ -197,14 +199,20 @@ def test_cp_get_put_directory_recursive(m, tmpdir, funcname):
         assert target_fs.isdir(target)
 
         if loop == 0:
-            assert target_fs.find(target) == [
-                make_path_posix(os.path.join(target, "file"))
-            ]
+            if remote_target:
+                correct = [target + "/file"]
+            else:
+                correct = [make_path_posix(os.path.join(target, "file"))]
+            assert target_fs.find(target) == correct
         else:
-            assert sorted(target_fs.find(target)) == [
-                make_path_posix(os.path.join(target, "file")),
-                make_path_posix(os.path.join(target, "src", "file")),
-            ]
+            if remote_target:
+                correct = [target + "/file", target + "/src/file"]
+            else:
+                correct = [
+                    make_path_posix(os.path.join(target, "file")),
+                    make_path_posix(os.path.join(target, "src", "file")),
+                ]
+            assert sorted(target_fs.find(target)) == correct
 
     target_fs.rm(target, recursive=True)
 
@@ -213,13 +221,17 @@ def test_cp_get_put_directory_recursive(m, tmpdir, funcname):
     for loop in range(2):
         func(src + "/", target, recursive=True)
         assert target_fs.isdir(target)
-        assert target_fs.find(target) == [make_path_posix(os.path.join(target, "file"))]
+        if remote_target:
+            correct = [target + "/file"]
+        else:
+            correct = [make_path_posix(os.path.join(target, "file"))]
+        assert target_fs.find(target) == correct
 
 
 def test_cp_two_files(m):
     src = "/src"
-    file0 = os.path.join(src, "file0")
-    file1 = os.path.join(src, "file1")
+    file0 = src + "/file0"
+    file1 = src + "/file1"
     m.mkdir(src)
     m.touch(file0)
     m.touch(file1)
