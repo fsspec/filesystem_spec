@@ -1,6 +1,28 @@
 Changelog
 =========
 
+2023.1.0
+--------
+
+Enhancements
+
+- experimental DFReferenceFileSystem (#1157, 1138)
+- pyarrow seeking (#1154)
+- tar thread safety (#1132)
+- fsid method (#1122)
+
+Fixes
+
+- ReferenceFS order fix (#1158)
+- fix du and maxdepth (#1128, 1151)
+- http ranges (#1141)
+
+Other
+
+- coverage on referenceFS (#1133, 1123)
+- docs (#1152, 1150
+- remove code duplication in unchain (#1143, 1156, 1121)
+
 2022.11.0
 ---------
 
