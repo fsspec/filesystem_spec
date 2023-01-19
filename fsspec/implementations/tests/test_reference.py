@@ -565,3 +565,16 @@ def test_df_multi(m):
     assert fs.cat("a") == b"raw"
     assert fs.cat("b") == data + data[4:8]
     assert fs.cat("d") == data[4:6] + b"hello"[1:3]
+
+
+def test_mapping_getitems(m):
+    m.pipe({"a": b"A", "b": b"B"})
+
+    refs = {
+        "a": ["a"],
+        "b": ["b"],
+    }
+    h = fsspec.filesystem("memory")
+    fs = fsspec.filesystem("reference", fo=refs, fs=h)
+    mapping = fs.get_mapper("")
+    assert mapping.getitems(["b", "a"]) == {"a": b"A", "b": b"B"}
