@@ -233,6 +233,7 @@ Read Buffering
    fsspec.caching.BytesCache
    fsspec.caching.MMapCache
    fsspec.caching.ReadAheadCache
+   fsspec.caching.FirstChunkCache
 
 .. autoclass:: fsspec.caching.BlockCache
    :members:
@@ -244,6 +245,9 @@ Read Buffering
    :members:
 
 .. autoclass:: fsspec.caching.ReadAheadCache
+   :members:
+
+.. autoclass:: fsspec.caching.FirstChunkCache
    :members:
 
 Utilities
