@@ -357,7 +357,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
             if len(urls2) == len(bytes_out):
                 # we didn't do any merging
-                for p, b in zip(paths2, bytes_out):
+                for url, b in zip(new_paths, bytes_out):
+                    p = paths2[urls2.index(url)]
                     out[p] = b
             else:
                 # unbundle from merged bytes - simple approach
