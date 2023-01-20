@@ -878,12 +878,18 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls get_file for each source.
         """
-        from .implementations.local import make_path_posix
+        from .implementations.local import LocalFileSystem, make_path_posix
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
-        lpaths = other_paths(rpaths, lpath)
+        isdir = isinstance(lpath, str) and LocalFileSystem().isdir(lpath)
+        lpaths = other_paths(
+            rpaths,
+            lpath,
+            exists=isdir and isinstance(rpath, str) and not rpath.endswith("/"),
+            is_dir=isdir,
+        )
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
@@ -934,8 +940,8 @@ class AbstractFileSystem(metaclass=_Cached):
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir,
-            is_dir=isdir and len(lpaths) == 1,
+            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
+            is_dir=isdir,
         )
 
         callback.set_size(len(rpaths))
@@ -971,7 +977,14 @@ class AbstractFileSystem(metaclass=_Cached):
             on_error = "raise"
 
         paths = self.expand_path(path1, recursive=recursive)
-        path2 = other_paths(paths, path2)
+        isdir = isinstance(path2, str) and self.isdir(path2)
+        path2 = other_paths(
+            paths,
+            path2,
+            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
+            is_dir=isdir,
+        )
+
         for p1, p2 in zip(paths, path2):
             try:
                 self.cp_file(p1, p2, **kwargs)

@@ -162,9 +162,17 @@ def test_recursive_get_put(tmpdir, m):
 
     fs.put(str(tmpdir), "test", recursive=True)
 
+    # get to directory with slash
+    d = tempfile.mkdtemp()
+    fs.get("test/", d, recursive=True)
+    for file in ["one", "two", "nest/other"]:
+        with open(f"{d}/{file}", "rb") as f:
+            f.read() == b"data"
+
+    # get to directory without slash
     d = tempfile.mkdtemp()
     fs.get("test", d, recursive=True)
-    for file in ["one", "two", "nest/other"]:
+    for file in ["test/one", "test/two", "test/nest/other"]:
         with open(f"{d}/{file}", "rb") as f:
             f.read() == b"data"
 

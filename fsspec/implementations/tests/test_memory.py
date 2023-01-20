@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from fsspec.implementations.local import LocalFileSystem, make_path_posix
+
 
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
@@ -26,9 +28,11 @@ def test_put_single(m, tmpdir):
     os.mkdir(fn)
     open(os.path.join(fn, "abc"), "w").write("text")
     m.put(fn, "/test")  # no-op, no files
+    assert m.isdir("/test")
     assert not m.exists("/test/abc")
     assert not m.exists("/test/dir")
-    m.put(fn + "/", "/test", recursive=True)
+    m.put(fn, "/test", recursive=True)
+    assert m.isdir("/test/dir")
     assert m.cat("/test/dir/abc") == b"text"
 
 
@@ -159,3 +163,130 @@ def test_remove_all(m):
     m.touch("afile")
     m.rm("/", recursive=True)
     assert not m.ls("/")
+
+
+def test_cp_directory_recursive(m):
+    # https://github.com/fsspec/filesystem_spec/issues/1062
+    # Recursive cp/get/put of source directory into non-existent target directory.
+    src = "/src"
+    src_file = src + "/file"
+    m.mkdir(src)
+    m.touch(src_file)
+
+    target = "/target"
+
+    # cp without slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.cp(src, target, recursive=True)
+        assert m.isdir(target)
+
+        if loop == 0:
+            correct = [target + "/file"]
+            assert m.find(target) == correct
+        else:
+            correct = [target + "/file", target + "/src/file"]
+            assert sorted(m.find(target)) == correct
+
+    m.rm(target, recursive=True)
+
+    # cp with slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.cp(src + "/", target, recursive=True)
+        assert m.isdir(target)
+        correct = [target + "/file"]
+        assert m.find(target) == correct
+
+
+def test_get_directory_recursive(m, tmpdir):
+    # https://github.com/fsspec/filesystem_spec/issues/1062
+    # Recursive cp/get/put of source directory into non-existent target directory.
+    src = "/src"
+    src_file = src + "/file"
+    m.mkdir(src)
+    m.touch(src_file)
+
+    target = os.path.join(tmpdir, "target")
+    target_fs = LocalFileSystem()
+
+    # get without slash
+    assert not target_fs.exists(target)
+    for loop in range(2):
+        m.get(src, target, recursive=True)
+        assert target_fs.isdir(target)
+
+        if loop == 0:
+            correct = [make_path_posix(os.path.join(target, "file"))]
+            assert target_fs.find(target) == correct
+        else:
+            correct = [
+                make_path_posix(os.path.join(target, "file")),
+                make_path_posix(os.path.join(target, "src", "file")),
+            ]
+            assert sorted(target_fs.find(target)) == correct
+
+    target_fs.rm(target, recursive=True)
+
+    # get with slash
+    assert not target_fs.exists(target)
+    for loop in range(2):
+        m.get(src + "/", target, recursive=True)
+        assert target_fs.isdir(target)
+        correct = [make_path_posix(os.path.join(target, "file"))]
+        assert target_fs.find(target) == correct
+
+
+def test_put_directory_recursive(m, tmpdir):
+    # https://github.com/fsspec/filesystem_spec/issues/1062
+    # Recursive cp/get/put of source directory into non-existent target directory.
+    src = os.path.join(tmpdir, "src")
+    src_file = os.path.join(src, "file")
+    source_fs = LocalFileSystem()
+    source_fs.mkdir(src)
+    source_fs.touch(src_file)
+
+    target = "/target"
+
+    # put without slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.put(src, target, recursive=True)
+        assert m.isdir(target)
+
+        if loop == 0:
+            correct = [target + "/file"]
+            assert m.find(target) == correct
+        else:
+            correct = [target + "/file", target + "/src/file"]
+            assert sorted(m.find(target)) == correct
+
+    m.rm(target, recursive=True)
+
+    # put with slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.put(src + "/", target, recursive=True)
+        assert m.isdir(target)
+        correct = [target + "/file"]
+        assert m.find(target) == correct
+
+
+def test_cp_two_files(m):
+    src = "/src"
+    file0 = src + "/file0"
+    file1 = src + "/file1"
+    m.mkdir(src)
+    m.touch(file0)
+    m.touch(file1)
+
+    target = "/target"
+    assert not m.exists(target)
+
+    m.cp([file0, file1], target)
+
+    assert m.isdir(target)
+    assert sorted(m.find(target)) == [
+        "/target/file0",
+        "/target/file1",
+    ]
