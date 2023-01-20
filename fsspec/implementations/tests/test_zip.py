@@ -1,5 +1,7 @@
 import collections.abc
 
+import pytest
+
 import fsspec
 from fsspec.implementations.tests.test_archive import archive_data, tempzip
 
@@ -57,3 +59,27 @@ def test_write_seek(m):
     with m.open("afile.zip", "rb") as f:
         fs = fsspec.filesystem("zip", fo=f)
         assert fs.cat("another") == b"hi"
+
+
+def test_rw(m):
+    # extra arg to zip means "create archive"
+    with fsspec.open(
+        "zip://afile::memory://out.zip", mode="wb", zip={"mode": "w"}
+    ) as f:
+        f.write(b"data")
+
+    with fsspec.open("zip://afile::memory://out.zip", mode="rb") as f:
+        assert f.read() == b"data"
+
+
+def test_mapper(m):
+    # extra arg to zip means "create archive"
+    mapper = fsspec.get_mapper("zip::memory://out.zip", zip={"mode": "w"})
+    with pytest.raises(KeyError):
+        mapper["a"]
+
+    mapper["a"] = b"data"
+    with pytest.raises(OSError):
+        # fails because this is write mode and we cannot also read
+        mapper["a"]
+    assert "a" in mapper  # but be can list

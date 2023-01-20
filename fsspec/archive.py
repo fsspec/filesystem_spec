@@ -46,7 +46,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError(path)
 
-    def ls(self, path, detail=False, **kwargs):
+    def ls(self, path, detail=True, **kwargs):
         self._get_dirs()
         paths = {}
         for p, f in self.dir_cache.items():
@@ -66,8 +66,8 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                 if ppath not in paths:
                     out = {"name": ppath + "/", "size": 0, "type": "directory"}
                     paths[ppath] = out
-        out = list(paths.values())
+        out = sorted(paths.values(), key=lambda _: _["name"])
         if detail:
             return out
         else:
-            return list(sorted(f["name"] for f in out))
+            return [f["name"] for f in out]
