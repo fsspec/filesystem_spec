@@ -165,67 +165,111 @@ def test_remove_all(m):
     assert not m.ls("/")
 
 
-@pytest.mark.parametrize("funcname", ["cp", "get", "put"])
-def test_cp_get_put_directory_recursive(m, tmpdir, funcname):
+def test_cp_directory_recursive(m):
     # https://github.com/fsspec/filesystem_spec/issues/1062
     # Recursive cp/get/put of source directory into non-existent target directory.
+    src = "/src"
+    src_file = src + "/file"
+    m.mkdir(src)
+    m.touch(src_file)
 
-    if funcname == "cp":
-        func, remote_source, remote_target = m.cp, True, True
-    elif funcname == "get":
-        func, remote_source, remote_target = m.get, True, False
-    elif funcname == "put":
-        func, remote_source, remote_target = m.put, False, True
+    target = "/target"
 
-    if remote_source:
-        src, source_fs = "/src", m
-        src_file = src + "/file"
-    else:
-        src, source_fs = os.path.join(tmpdir, "src"), LocalFileSystem()
-        src_file = os.path.join(src, "file")
+    # cp without slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.cp(src, target, recursive=True)
+        assert m.isdir(target)
 
-    if remote_target:
-        target, target_fs = "/target", m
-    else:
-        target, target_fs = os.path.join(tmpdir, "target"), LocalFileSystem()
+        if loop == 0:
+            correct = [target + "/file"]
+            assert m.find(target) == correct
+        else:
+            correct = [target + "/file", target + "/src/file"]
+            assert sorted(m.find(target)) == correct
 
-    source_fs.mkdir(src)
-    source_fs.touch(src_file)
+    m.rm(target, recursive=True)
 
-    # cp/get/put without slash
+    # cp with slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.cp(src + "/", target, recursive=True)
+        assert m.isdir(target)
+        correct = [target + "/file"]
+        assert m.find(target) == correct
+
+
+def test_get_directory_recursive(m, tmpdir):
+    # https://github.com/fsspec/filesystem_spec/issues/1062
+    # Recursive cp/get/put of source directory into non-existent target directory.
+    src = "/src"
+    src_file = src + "/file"
+    m.mkdir(src)
+    m.touch(src_file)
+
+    target = os.path.join(tmpdir, "target")
+    target_fs = LocalFileSystem()
+
+    # get without slash
     assert not target_fs.exists(target)
     for loop in range(2):
-        func(src, target, recursive=True)
+        m.get(src, target, recursive=True)
         assert target_fs.isdir(target)
 
         if loop == 0:
-            if remote_target:
-                correct = [target + "/file"]
-            else:
-                correct = [make_path_posix(os.path.join(target, "file"))]
+            correct = [make_path_posix(os.path.join(target, "file"))]
             assert target_fs.find(target) == correct
         else:
-            if remote_target:
-                correct = [target + "/file", target + "/src/file"]
-            else:
-                correct = [
-                    make_path_posix(os.path.join(target, "file")),
-                    make_path_posix(os.path.join(target, "src", "file")),
-                ]
+            correct = [
+                make_path_posix(os.path.join(target, "file")),
+                make_path_posix(os.path.join(target, "src", "file")),
+            ]
             assert sorted(target_fs.find(target)) == correct
 
     target_fs.rm(target, recursive=True)
 
-    # cp/get/put with slash
+    # get with slash
     assert not target_fs.exists(target)
     for loop in range(2):
-        func(src + "/", target, recursive=True)
+        m.get(src + "/", target, recursive=True)
         assert target_fs.isdir(target)
-        if remote_target:
-            correct = [target + "/file"]
-        else:
-            correct = [make_path_posix(os.path.join(target, "file"))]
+        correct = [make_path_posix(os.path.join(target, "file"))]
         assert target_fs.find(target) == correct
+
+
+def test_put_directory_recursive(m, tmpdir):
+    # https://github.com/fsspec/filesystem_spec/issues/1062
+    # Recursive cp/get/put of source directory into non-existent target directory.
+    src = os.path.join(tmpdir, "src")
+    src_file = os.path.join(src, "file")
+    source_fs = LocalFileSystem()
+    source_fs.mkdir(src)
+    source_fs.touch(src_file)
+
+    target = "/target"
+
+    # put without slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.put(src, target, recursive=True)
+        assert m.isdir(target)
+
+        if loop == 0:
+            correct = [target + "/file"]
+            assert m.find(target) == correct
+        else:
+            correct = [target + "/file", target + "/src/file"]
+            assert sorted(m.find(target)) == correct
+
+    m.rm(target, recursive=True)
+
+    # put with slash
+    assert not m.exists(target)
+    for loop in range(2):
+        m.put(src + "/", target, recursive=True)
+        assert m.isdir(target)
+        correct = [target + "/file"]
+        assert m.find(target) == correct
 
 
 def test_cp_two_files(m):
