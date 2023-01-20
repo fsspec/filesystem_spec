@@ -66,8 +66,8 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                 if ppath not in paths:
                     out = {"name": ppath + "/", "size": 0, "type": "directory"}
                     paths[ppath] = out
-        out = list(paths.values())
+        out = sorted(paths.values(), key=lambda _: _["name"])
         if detail:
             return out
         else:
-            return list(sorted(f["name"] for f in out))
+            return [f["name"] for f in out]
