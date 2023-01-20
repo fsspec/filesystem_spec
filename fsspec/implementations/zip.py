@@ -113,7 +113,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         **kwargs,
     ):
         path = self._strip_protocol(path)
-        if "r" in mode and "w" in self.mode:
+        if "r" in mode and self.mode in set("wa"):
             if self.exists(path):
                 raise IOError("ZipFS can only be open for reading or writing, not both")
             raise FileNotFoundError(path)
