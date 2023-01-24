@@ -340,7 +340,13 @@ class AsyncFileSystem(AbstractFileSystem):
             on_error = "raise"
 
         paths = await self._expand_path(path1, maxdepth=maxdepth, recursive=recursive)
-        path2 = other_paths(paths, path2)
+        isdir = isinstance(path2, str) and await self._isdir(path2)
+        path2 = other_paths(
+            paths,
+            path2,
+            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
+            is_dir=isdir,
+        )
         batch_size = batch_size or self.batch_size
         coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
         result = await _run_coros_in_chunks(
@@ -483,8 +489,12 @@ class AsyncFileSystem(AbstractFileSystem):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
+        isdir = isinstance(rpath, str) and await self._isdir(rpath)
         rpaths = other_paths(
-            lpaths, rpath, exists=isinstance(rpath, str) and await self._isdir(rpath)
+            lpaths,
+            rpath,
+            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
+            is_dir=isdir,
         )
 
         is_dir = {l: os.path.isdir(l) for l in lpaths}
@@ -524,12 +534,20 @@ class AsyncFileSystem(AbstractFileSystem):
         constructor, or for all instances by setting the "gather_batch_size" key
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
-        from fsspec.implementations.local import make_path_posix
+        from fsspec.implementations.local import LocalFileSystem, make_path_posix
 
+        # First check for rpath trailing slash as _strip_protocol removes it.
+        rpath_trailing_slash = isinstance(rpath, str) and rpath.endswith("/")
         rpath = self._strip_protocol(rpath)
         lpath = make_path_posix(lpath)
         rpaths = await self._expand_path(rpath, recursive=recursive)
-        lpaths = other_paths(rpaths, lpath)
+        isdir = isinstance(lpath, str) and LocalFileSystem().isdir(lpath)
+        lpaths = other_paths(
+            rpaths,
+            lpath,
+            exists=isdir and not rpath_trailing_slash,
+            is_dir=isdir,
+        )
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
