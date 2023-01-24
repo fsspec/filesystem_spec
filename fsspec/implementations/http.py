@@ -239,7 +239,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(rpath)
         session = await self.set_session()
-        async with session.get(self.encode_url(rpath), **self.kwargs) as r:
+        async with session.get(self.encode_url(rpath), **kw) as r:
             try:
                 size = int(r.headers["content-length"])
             except (ValueError, KeyError):
