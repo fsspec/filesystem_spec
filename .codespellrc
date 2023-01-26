@@ -1,0 +1,8 @@
+[codespell]
+skip = *.css*,.git,build
+# many short "words-like" non-words are used in the project as variables/args
+# hel - used in a test, cannot exclude in-line yet
+# cachable - historically happened
+# falsy - too cute although used only once and could be made strict bool
+# doas - used as argument to some call in WebHDFS
+ignore-words-list = fo,dne,fro,hel,cachable,falsy,doas
