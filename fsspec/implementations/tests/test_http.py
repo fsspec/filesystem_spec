@@ -246,6 +246,19 @@ def test_no_range_support(server, headers):
         assert f.read(10) == data[:10]
 
 
+def test_stream_seek(server):
+    h = fsspec.filesystem("http")
+    url = server + "/index/realfile"
+    with h.open(url, "rb") as f:
+        f.seek(0)  # is OK
+        data1 = f.read(5)
+        assert len(data1) == 5
+        f.seek(5)
+        f.seek(0, 1)
+        data2 = f.read()
+        assert data1 + data2 == data
+
+
 def test_mapper_url(server):
     h = fsspec.filesystem("http")
     mapper = h.get_mapper(server + "/index/")

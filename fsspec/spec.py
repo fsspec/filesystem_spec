@@ -1204,7 +1204,7 @@ class AbstractFileSystem(metaclass=_Cached):
         offset: int
             Byte offset to start read
         length: int
-            Number of bytes to read
+            Number of bytes to read. If None, read to end.
         delimiter: bytes (optional)
             Ensure reading starts and stops at delimiter bytestring
 
