@@ -733,7 +733,11 @@ class HTTPStreamFile(AbstractBufferedFile):
 
         self.r = sync(self.loop, cor)
 
-    def seek(self, *args, **kwargs):
+    def seek(self, loc, whence=0):
+        if loc == 0 and whence == 1:
+            return
+        if loc == self.loc:
+            return
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
