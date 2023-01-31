@@ -736,7 +736,7 @@ class HTTPStreamFile(AbstractBufferedFile):
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:
             return
-        if loc == self.loc:
+        if loc == self.loc and whence == 0:
             return
         raise ValueError("Cannot seek streaming HTTP file")
 
