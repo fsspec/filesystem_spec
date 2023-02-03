@@ -576,7 +576,7 @@ class BackgroundBlockCache(BaseCache):
                 self._cache.popitem(last=False)
 
         def cache_info(self):
-            return CacheInfo(
+            return self.CacheInfo(
                 maxsize=self._max_size,
                 currsize=len(self._cache),
                 hits=self._hits,
