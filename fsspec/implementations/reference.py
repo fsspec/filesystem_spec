@@ -322,7 +322,22 @@ class ReferenceFileSystem(AsyncFileSystem):
         out = {}
         for proto, paths in proto_dict.items():
             fs = self.fss[proto]
-            urls, starts, ends = zip(*[self._cat_common(p) for p in paths])
+            urls, starts, ends = [], [], []
+            for p in paths:
+                # find references or label not-found. Early exit if any not
+                # found and on_error is "raise"
+                try:
+                    u, s, e = self._cat_common(p)
+                    urls.append(u)
+                    starts.append(s)
+                    ends.append(e)
+                except FileNotFoundError as e:
+                    if on_error == "raise":
+                        raise
+                    if on_error != "omit":
+                        out[p] = e
+
+            # process references into form for merging
             urls2 = []
             starts2 = []
             ends2 = []
@@ -341,11 +356,14 @@ class ReferenceFileSystem(AsyncFileSystem):
                     ends2.append(e)
                     paths2.append(p)
             for u, s, e, p in zip(urls, starts, ends, paths):
+                # second run to account for files that are to be loaded whole
                 if s is not None and u not in whole_files:
                     urls2.append(u)
                     starts2.append(s)
                     ends2.append(e)
                     paths2.append(p)
+
+            # merge and fetch consolidated ranges
             new_paths, new_starts, new_ends = merge_offset_ranges(
                 list(urls2),
                 list(starts2),
@@ -355,26 +373,26 @@ class ReferenceFileSystem(AsyncFileSystem):
                 max_block=self.max_block,
             )
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
-            if len(urls2) == len(bytes_out):
-                # we didn't do any merging
-                for url, b in zip(new_paths, bytes_out):
-                    p = paths2[urls2.index(url)]
-                    out[p] = b
-            else:
-                # unbundle from merged bytes - simple approach
-                for u, s, e, p in zip(urls, starts, ends, paths):
-                    if p in out:
-                        continue  # was bytes, already handled
-                    for np, ns, ne, b in zip(
-                        new_paths, new_starts, new_ends, bytes_out
-                    ):
-                        if np == u and (ns is None or ne is None):
+
+            # unbundle from merged bytes - simple approach
+            for u, s, e, p in zip(urls, starts, ends, paths):
+                if p in out:
+                    continue  # was bytes, already handled
+                for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
+                    if np == u and (ns is None or ne is None):
+                        if isinstance(b, Exception):
+                            out[p] = b
+                        else:
                             out[p] = b[s:e]
-                        elif np == u and s >= ns and e <= ne:
+                    elif np == u and s >= ns and e <= ne:
+                        if isinstance(b, Exception):
+                            out[p] = b
+                        else:
                             out[p] = b[s - ns : (e - ne) or None]
 
         for k, v in out.copy().items():
-            if isinstance(v, Exception):
+            # these were valid references, but fetch failed, so transform exc
+            if isinstance(v, Exception) and k in self.references:
                 ex = out[k]
                 new_ex = ReferenceNotReachable(k, self.references[k])
                 new_ex.__cause__ = ex
