@@ -1,10 +1,10 @@
+import collections
 import functools
 import io
 import logging
 import math
 import os
 import warnings
-import collections
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger("fsspec")
