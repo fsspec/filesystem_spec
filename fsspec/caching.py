@@ -4,6 +4,7 @@ import io
 import logging
 import math
 import os
+import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
@@ -553,35 +554,43 @@ class BackgroundBlockCache(BaseCache):
             self._max_size = max_size
             self._hits = 0
             self._misses = 0
+            self._lock = threading.Lock()
 
         def __call__(self, *args):
-            if args in self._cache:
-                self._cache.move_to_end(args)
-                self._hits += 1
-                return self._cache[args]
+            with self._lock:
+                if args in self._cache:
+                    self._cache.move_to_end(args)
+                    self._hits += 1
+                    return self._cache[args]
 
-            self._misses += 1
             result = self._func(*args)
-            self._cache[args] = result
-            if len(self._cache) > self._max_size:
-                self._cache.popitem(last=False)
+
+            with self._lock:
+                self._cache[args] = result
+                self._misses += 1
+                if len(self._cache) > self._max_size:
+                    self._cache.popitem(last=False)
+
             return result
 
         def is_key_cached(self, *args):
-            return args in self._cache
+            with self._lock:
+                return args in self._cache
 
         def add_key(self, result, *args):
-            self._cache[args] = result
-            if len(self._cache) > self._max_size:
-                self._cache.popitem(last=False)
+            with self._lock:
+                self._cache[args] = result
+                if len(self._cache) > self._max_size:
+                    self._cache.popitem(last=False)
 
         def cache_info(self):
-            return self.CacheInfo(
-                maxsize=self._max_size,
-                currsize=len(self._cache),
-                hits=self._hits,
-                misses=self._misses,
-            )
+            with self._lock:
+                return self.CacheInfo(
+                    maxsize=self._max_size,
+                    currsize=len(self._cache),
+                    hits=self._hits,
+                    misses=self._misses,
+                )
 
     def __init__(self, blocksize, fetcher, size, maxblocks=32):
         super().__init__(blocksize, fetcher, size)
@@ -594,6 +603,7 @@ class BackgroundBlockCache(BaseCache):
         self._thread_executor = ThreadPoolExecutor(max_workers=1)
         self._fetch_future_block_number = None
         self._fetch_future = None
+        self._fetch_future_lock = threading.Lock()
 
     def __repr__(self):
         return "<BackgroundBlockCache blocksize={}, size={}, nblocks={}>".format(
@@ -617,6 +627,7 @@ class BackgroundBlockCache(BaseCache):
         del state["_thread_executor"]
         del state["_fetch_future_block_number"]
         del state["_fetch_future"]
+        del state["_fetch_future_lock"]
         return state
 
     def __setstate__(self, state):
@@ -627,6 +638,7 @@ class BackgroundBlockCache(BaseCache):
         self._thread_executor = ThreadPoolExecutor(max_workers=1)
         self._fetch_future_block_number = None
         self._fetch_future = None
+        self._fetch_future_lock = threading.Lock()
 
     def _fetch(self, start, end):
         if start is None:
@@ -640,27 +652,40 @@ class BackgroundBlockCache(BaseCache):
         start_block_number = start // self.blocksize
         end_block_number = end // self.blocksize
 
-        # Background thread is running. Check we we can or must join it.
-        if self._fetch_future is not None:
-            # Must join if we need the block for the current fetch
-            must_join = bool(
-                start_block_number
-                <= self._fetch_future_block_number
-                <= end_block_number
+        fetch_future_block_number = None
+        fetch_future = None
+        with self._fetch_future_lock:
+            # Background thread is running. Check we we can or must join it.
+            if self._fetch_future is not None:
+                if self._fetch_future.done():
+                    logger.info("BlockCache joined background fetch without waiting.")
+                    self._fetch_block_cached.add_key(
+                        self._fetch_future.result(), self._fetch_future_block_number
+                    )
+                else:
+                    # Must join if we need the block for the current fetch
+                    must_join = bool(
+                        start_block_number
+                        <= self._fetch_future_block_number
+                        <= end_block_number
+                    )
+                    if must_join:
+                        # Copy to the local variables to release lock
+                        # before waiting for result
+                        fetch_future_block_number = self._fetch_future_block_number
+                        fetch_future = self._fetch_future
+
+            # Cleanup the fetch variables. Either done or have a local copy.
+            self._fetch_future_block_number = None
+            self._fetch_future = None
+
+        # Need to wait for the future for the current read
+        if fetch_future is not None:
+            logger.info("BlockCache waiting for background fetch.")
+            # Wait until result and put it in cache
+            self._fetch_block_cached.add_key(
+                fetch_future.result(), fetch_future_block_number
             )
-            if self._fetch_future.done() or must_join:
-                logger.info(
-                    "BlockCache waiting for background fetch. Done: %d. Must wait: %d.",
-                    self._fetch_future.done(),
-                    must_join,
-                )
-                # Wait until result and put it in cache
-                self._fetch_block_cached.add_key(
-                    self._fetch_future.result(), self._fetch_future_block_number
-                )
-                # Clear background thread variables
-                self._fetch_future_block_number = None
-                self._fetch_future = None
 
         # these are cached, so safe to do multiple calls for the same start and end.
         for block_number in range(start_block_number, end_block_number + 1):
@@ -669,15 +694,16 @@ class BackgroundBlockCache(BaseCache):
         # fetch next block in the background if nothing is running in the background,
         # the block is within file and it is not already cached
         end_block_plus_1 = end_block_number + 1
-        if (
-            self._fetch_future is None
-            and end_block_plus_1 <= self.nblocks
-            and not self._fetch_block_cached.is_key_cached(end_block_plus_1)
-        ):
-            self._fetch_future_block_number = end_block_plus_1
-            self._fetch_future = self._thread_executor.submit(
-                self._fetch_block, end_block_plus_1, "async"
-            )
+        with self._fetch_future_lock:
+            if (
+                self._fetch_future is None
+                and end_block_plus_1 <= self.nblocks
+                and not self._fetch_block_cached.is_key_cached(end_block_plus_1)
+            ):
+                self._fetch_future_block_number = end_block_plus_1
+                self._fetch_future = self._thread_executor.submit(
+                    self._fetch_block, end_block_plus_1, "async"
+                )
 
         return self._read_cache(
             start,
