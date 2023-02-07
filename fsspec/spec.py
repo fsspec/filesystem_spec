@@ -935,7 +935,7 @@ class AbstractFileSystem(metaclass=_Cached):
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive)
+        lpaths = fs.expand_path(lpath, recursive=recursive, sort=False)
         isdir = isinstance(rpath, str) and self.isdir(rpath)
         rpaths = other_paths(
             lpaths,
@@ -992,7 +992,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 if on_error == "raise":
                     raise
 
-    def expand_path(self, path, recursive=False, maxdepth=None):
+    def expand_path(self, path, recursive=False, maxdepth=None, sort=True):
         """Turn one or more globs or directories into a list of all matching paths
         to files or directories."""
         if maxdepth is not None and maxdepth < 1:
@@ -1026,7 +1026,10 @@ class AbstractFileSystem(metaclass=_Cached):
             maxdepth = maxdepth if not maxdepth else maxdepth - 1
         if not out:
             raise FileNotFoundError(path)
-        return list(sorted(out))
+        if sort:
+            return list(sorted(out))
+        else:
+            return list(out)
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """Move file(s) from one location to another"""
