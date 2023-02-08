@@ -53,6 +53,10 @@ class ArrowFSWrapper(AbstractFileSystem):
         self.fs = fs
         super().__init__(**kwargs)
 
+    @property
+    def protocol(self):
+        return self.fs.type_name
+
     @cached_property
     def fsid(self):
         return "hdfs_" + tokenize(self.fs.host, self.fs.port)

@@ -193,7 +193,6 @@ class HTTPFileSystem(AsyncFileSystem):
             ]
         else:
             return list(sorted(out))
-        return out
 
     async def _ls(self, url, detail=True, **kwargs):
 
