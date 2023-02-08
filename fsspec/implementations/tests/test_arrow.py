@@ -22,6 +22,12 @@ def remote_dir(fs, request):
     fs.rm(directory, recursive=True)
 
 
+def test_protocol():
+    fs, _ = FileSystem.from_uri("mock://")
+    fss = ArrowFSWrapper(fs)
+    assert fss.protocol == "mock"
+
+
 def strip_keys(original_entry):
     entry = original_entry.copy()
     entry.pop("mtime")
