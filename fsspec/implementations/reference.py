@@ -812,7 +812,8 @@ class DFReferenceFileSystem(AbstractFileSystem):
             if isinstance(inds, int):
                 inds = [inds]
             for i in inds:
-                if x := self.dataframes[pref]["raw"][i]:
+                x = self.dataframes[pref]["raw"][i]
+                if x:
                     thislist.append(x)
                 else:
                     # infer path - cache this?
