@@ -329,6 +329,15 @@ def test_cat_file_range(server):
     assert h.cat(urla, end=-10) == data[:-10]
 
 
+def test_cat_file_range_numpy(server):
+    np = pytest.importorskip("numpy")
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    urla = server + "/index/realfile"
+    assert h.cat(urla, start=np.int8(1), end=np.int8(10)) == data[1:10]
+    out = h.cat_ranges([urla, urla], starts=np.array([1, 5]), ends=np.array([10, 15]))
+    assert out == [data[1:10], data[5:15]]
+
+
 def test_mcat_cache(server):
     urla = server + "/index/realfile"
     urlb = server + "/index/otherfile"

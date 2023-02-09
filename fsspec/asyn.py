@@ -3,12 +3,14 @@ import asyncio.events
 import functools
 import inspect
 import io
+import numbers
 import os
 import re
 import sys
 import threading
 from contextlib import contextmanager
 from glob import has_magic
+from typing import Iterable
 
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
@@ -393,7 +395,7 @@ class AsyncFileSystem(AbstractFileSystem):
                     end = size + end
             elif end is None:
                 end = ""
-            if isinstance(end, int):
+            if isinstance(end, numbers.Integral):
                 end -= 1  # bytes range is inclusive
         return "bytes=%s-%s" % (start, end)
 
@@ -442,9 +444,9 @@ class AsyncFileSystem(AbstractFileSystem):
             raise NotImplementedError
         if not isinstance(paths, list):
             raise TypeError
-        if not isinstance(starts, list):
+        if not isinstance(starts, Iterable):
             starts = [starts] * len(paths)
-        if not isinstance(ends, list):
+        if not isinstance(ends, Iterable):
             ends = [starts] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
