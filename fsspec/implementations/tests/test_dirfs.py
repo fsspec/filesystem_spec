@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 
 from fsspec.asyn import AsyncFileSystem
@@ -21,9 +19,6 @@ def make_fs(mocker):
         }
 
         if async_impl:
-            if asynchronous and sys.version_info < (3, 8):
-                pytest.skip("no AsyncMock before Python 3.8")
-
             attrs["asynchronous"] = asynchronous
             cls = AsyncFileSystem
         else:

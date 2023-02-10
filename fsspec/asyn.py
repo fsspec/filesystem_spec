@@ -6,7 +6,6 @@ import io
 import numbers
 import os
 import re
-import sys
 import threading
 from contextlib import contextmanager
 from glob import has_magic
@@ -122,11 +121,7 @@ def sync_wrapper(func, obj=None):
 def _selector_policy():
     original_policy = asyncio.get_event_loop_policy()
     try:
-        if (
-            sys.version_info >= (3, 8)
-            and os.name == "nt"
-            and hasattr(asyncio, "WindowsSelectorEventLoopPolicy")
-        ):
+        if os.name == "nt" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
         yield

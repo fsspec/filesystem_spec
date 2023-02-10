@@ -7,6 +7,7 @@ import sys
 from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
+from importlib.metadata import version
 from urllib.parse import urlsplit
 
 DEFAULT_BLOCK_SIZE = 5 * 2**20
@@ -422,20 +423,10 @@ def get_package_version_without_import(name):
         mod = sys.modules[name]
         if hasattr(mod, "__version__"):
             return mod.__version__
-    if sys.version_info >= (3, 8):
-        try:
-            import importlib.metadata
-
-            return importlib.metadata.distribution(name).version
-        except:  # noqa: E722
-            pass
-    else:
-        try:
-            import importlib_metadata
-
-            return importlib_metadata.distribution(name).version
-        except:  # noqa: E722
-            pass
+    try:
+        return version(name)
+    except:  # noqa: E722
+        pass
     try:
         import importlib
 

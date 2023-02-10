@@ -1,11 +1,4 @@
-try:
-    from importlib.metadata import entry_points
-except ImportError:  # python < 3.8
-    try:
-        from importlib_metadata import entry_points
-    except ImportError:
-        entry_points = None
-
+from importlib.metadata import entry_points
 
 from . import _version, caching
 from .callbacks import Callback
