@@ -511,6 +511,62 @@ class KnownPartsOfAFile(BaseCache):
         return out + super()._fetch(start, stop)
 
 
+class UpdatableLRU:
+    """
+    Custom implementation of LRU cache that allows updating keys
+
+    Used by BackgroudBlockCache
+    """
+
+    CacheInfo = collections.namedtuple(
+        "CacheInfo", ["hits", "misses", "maxsize", "currsize"]
+    )
+
+    def __init__(self, func, max_size=128):
+        self._cache = collections.OrderedDict()
+        self._func = func
+        self._max_size = max_size
+        self._hits = 0
+        self._misses = 0
+        self._lock = threading.Lock()
+
+    def __call__(self, *args):
+        with self._lock:
+            if args in self._cache:
+                self._cache.move_to_end(args)
+                self._hits += 1
+                return self._cache[args]
+
+        result = self._func(*args)
+
+        with self._lock:
+            self._cache[args] = result
+            self._misses += 1
+            if len(self._cache) > self._max_size:
+                self._cache.popitem(last=False)
+
+        return result
+
+    def is_key_cached(self, *args):
+        with self._lock:
+            return args in self._cache
+
+    def add_key(self, result, *args):
+        with self._lock:
+            self._cache[args] = result
+            if len(self._cache) > self._max_size:
+                self._cache.popitem(last=False)
+
+    def cache_info(self):
+        with self._lock:
+            return self.CacheInfo(
+                maxsize=self._max_size,
+                currsize=len(self._cache),
+                hits=self._hits,
+                misses=self._misses,
+            )
+
+
 class BackgroundBlockCache(BaseCache):
     """
     Cache holding memory as a set of blocks with pre-loading of
@@ -539,66 +595,11 @@ class BackgroundBlockCache(BaseCache):
 
     name = "background"
 
-    class UpdatableLRU:
-        """
-        Custom implementation of LRU cache that allows updating keys
-        """
-
-        CacheInfo = collections.namedtuple(
-            "CacheInfo", ["hits", "misses", "maxsize", "currsize"]
-        )
-
-        def __init__(self, func, max_size=128):
-            self._cache = collections.OrderedDict()
-            self._func = func
-            self._max_size = max_size
-            self._hits = 0
-            self._misses = 0
-            self._lock = threading.Lock()
-
-        def __call__(self, *args):
-            with self._lock:
-                if args in self._cache:
-                    self._cache.move_to_end(args)
-                    self._hits += 1
-                    return self._cache[args]
-
-            result = self._func(*args)
-
-            with self._lock:
-                self._cache[args] = result
-                self._misses += 1
-                if len(self._cache) > self._max_size:
-                    self._cache.popitem(last=False)
-
-            return result
-
-        def is_key_cached(self, *args):
-            with self._lock:
-                return args in self._cache
-
-        def add_key(self, result, *args):
-            with self._lock:
-                self._cache[args] = result
-                if len(self._cache) > self._max_size:
-                    self._cache.popitem(last=False)
-
-        def cache_info(self):
-            with self._lock:
-                return self.CacheInfo(
-                    maxsize=self._max_size,
-                    currsize=len(self._cache),
-                    hits=self._hits,
-                    misses=self._misses,
-                )
-
     def __init__(self, blocksize, fetcher, size, maxblocks=32):
         super().__init__(blocksize, fetcher, size)
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
-        self._fetch_block_cached = BackgroundBlockCache.UpdatableLRU(
-            self._fetch_block, maxblocks
-        )
+        self._fetch_block_cached = UpdatableLRU(self._fetch_block, maxblocks)
 
         self._thread_executor = ThreadPoolExecutor(max_workers=1)
         self._fetch_future_block_number = None
