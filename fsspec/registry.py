@@ -183,7 +183,7 @@ known_implementations = {
         "class": "fsspec_xrootd.XRootDFileSystem",
         "err": "Install fsspec-xrootd to access xrootd storage system."
         + " Note: 'root' is the protocol name for xrootd storage systems,"
-        + " not refering to root directories",
+        + " not referring to root directories",
     },
 }
 
