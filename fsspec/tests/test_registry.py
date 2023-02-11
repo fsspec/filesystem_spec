@@ -1,4 +1,5 @@
 import sys
+from importlib.metadata import EntryPoint
 from unittest.mock import create_autospec, patch
 
 import pytest
@@ -12,11 +13,6 @@ from fsspec.registry import (
     registry,
 )
 from fsspec.spec import AbstractFileSystem
-
-try:
-    from importlib.metadata import EntryPoint
-except ImportError:  # python < 3.8
-    from importlib_metadata import EntryPoint
 
 
 @pytest.fixture()
@@ -94,10 +90,7 @@ def test_entry_points_registered_on_import(clear_registry, clean_imports):
     mock_ep = create_autospec(EntryPoint, module="fsspec.spec.AbstractFileSystem")
     mock_ep.name = "test"  # this can't be set in the constructor...
     mock_ep.value = "fsspec.spec.AbstractFileSystem"
-    if sys.version_info < (3, 8):
-        import_location = "importlib_metadata.entry_points"
-    else:
-        import_location = "importlib.metadata.entry_points"
+    import_location = "importlib.metadata.entry_points"
     with patch(import_location, return_value={"fsspec.specs": [mock_ep]}):
         assert "test" not in registry
         import fsspec  # noqa
@@ -110,10 +103,7 @@ def test_filesystem_warning_arrow_hdfs_deprecated(clear_registry, clean_imports)
     mock_ep = create_autospec(EntryPoint, module="fsspec.spec.AbstractFileSystem")
     mock_ep.name = "arrow_hdfs"  # this can't be set in the constructor...
     mock_ep.value = "fsspec.spec.AbstractFileSystem"
-    if sys.version_info < (3, 8):
-        import_location = "importlib_metadata.entry_points"
-    else:
-        import_location = "importlib.metadata.entry_points"
+    import_location = "importlib.metadata.entry_points"
     with patch(import_location, return_value={"fsspec.specs": [mock_ep]}):
         import fsspec  # noqa
 
