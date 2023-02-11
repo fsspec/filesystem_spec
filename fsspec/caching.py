@@ -633,9 +633,7 @@ class BackgroundBlockCache(BaseCache):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self._fetch_block_cached = BackgroundBlockCache.UpdatableLRU(
-            self._fetch_block, state["maxblocks"]
-        )
+        self._fetch_block_cached = UpdatableLRU(self._fetch_block, state["maxblocks"])
         self._thread_executor = ThreadPoolExecutor(max_workers=1)
         self._fetch_future_block_number = None
         self._fetch_future = None
