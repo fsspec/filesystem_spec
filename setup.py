@@ -36,7 +36,7 @@ setup(
     license="BSD",
     keywords="file",
     packages=["fsspec", "fsspec.implementations"],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=open("requirements.txt").read().strip().split("\n"),
     extras_require={
         "entrypoints": [],
