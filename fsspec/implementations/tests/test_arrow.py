@@ -236,3 +236,8 @@ def test_seekable(fs, remote_dir):
     for seekable in [True, False]:
         with fs.open(remote_dir + "/a.txt", "rb", seekable=seekable) as file:
             assert file.seekable() == seekable
+            assert file.read() == data
+
+    with fs.open(remote_dir + "/a.txt", "rb", seekable=False) as file:
+        with pytest.raises(IOError):
+            file.seek(5)
