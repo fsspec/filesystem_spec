@@ -157,7 +157,7 @@ class ArrowFSWrapper(AbstractFileSystem):
             self.fs.delete_file(path)
 
     @wrap_exceptions
-    def _open(self, path, mode="rb", block_size=None, seekable=False, **kwargs):
+    def _open(self, path, mode="rb", block_size=None, seekable=True, **kwargs):
         if mode == "rb":
             if seekable:
                 method = self.fs.open_input_file
@@ -201,6 +201,14 @@ class ArrowFSWrapper(AbstractFileSystem):
     def modified(self, path):
         path = self._strip_protocol(path)
         return self.fs.get_file_info(path).mtime
+
+    def cat_file(self, path, start=None, end=None, **kwargs):
+        kwargs["seekable"] = start not in [None, 0]
+        return super().cat_file(path, start=None, end=None, **kwargs)
+
+    def get_file(self, rpath, lpath, **kwargs):
+        kwargs["seekable"] = False
+        super().get_file(rpath, lpath, **kwargs)
 
 
 @mirror_from(
