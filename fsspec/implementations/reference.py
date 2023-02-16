@@ -1,10 +1,13 @@
 import ast
 import base64
+import collections
 import io
 import itertools
 import logging
 import os
 from functools import lru_cache
+
+import numpy as np
 
 import fsspec.core
 
@@ -50,6 +53,160 @@ def _protocol_groups(paths, references):
         protocol = _prot_in_references(path, references)
         out.setdefault(protocol, []).append(path)
     return out
+
+
+class LazyReferenceMapper(collections.abc.MutableMapping):
+    """Interface to read parquet store lazily as if it were a standard kerchunk
+    references dict."""
+
+    def __init__(self, root, fs=None, engine="fastparquet", cache_size=128):
+        """
+        Parameters
+        ----------
+        root : str
+            Root of parquet store
+        fs : fsspec.AbstractFileSystem
+            fsspec filesystem object, default is local filesystem.
+        cache_size : int
+            Maximum size of LRU cache, where cache_size*row_group_size denotes
+            the total number of references that can be loaded in memory at once.
+        engine : {'fastparquet', 'pyarrow'}
+            Library to use for writing parquet files.
+        """
+        self.root = root
+        self.chunk_sizes = {}
+        self._items = {}
+        self.pfs = {}
+        self.engine = engine
+        self.fs = fsspec.filesystem("file") if fs is None else fs
+
+        # Define function to open and decompress row group data and store
+        # in LRU cache
+        if self.engine == "pyarrow":
+            import pyarrow.parquet as pq
+
+            self.pf_cls = pq.ParquetFile
+
+            @lru_cache(maxsize=cache_size)
+            def open_row_group(pf, row_group):
+                return pf.read_row_group(row_group)
+
+        else:
+            import fastparquet
+
+            self.pf_cls = fastparquet.ParquetFile
+
+            @lru_cache(maxsize=cache_size)
+            def open_row_group(pf, row_group):
+                return pf.read_row_group_file(
+                    pf.row_groups[row_group], pf.columns, pf.categories
+                )
+
+        self.open_row_group = open_row_group
+
+    def listdir(self, basename=True):
+        listing = self.fs.ls(self.root)
+        if basename:
+            listing = [os.path.basename(path) for path in listing]
+        return listing
+
+    def join(self, *args):
+        return self.fs.sep.join(args)
+
+    @property
+    def row_group_size(self):
+        if not hasattr(self, "_row_group_size"):
+            with self.fs.open(self.join(self.root, ".row_group_size")) as f:
+                self._row_group_size = json.load(f)["row_group_size"]
+        return self._row_group_size
+
+    def _load_one_key(self, key):
+        if "/" not in key:
+            if key not in self.listdir():
+                raise KeyError
+            return self._get_and_cache_metadata(key)
+        else:
+            field, sub_key = key.split("/")
+            if sub_key.startswith("."):
+                # zarr metadata keys are always cached
+                return self._get_and_cache_metadata(key)
+            # Chunk keys can be loaded from row group and cached in LRU cache
+            row_group, row_number = self._key_to_row_group(key)
+            if field not in self.pfs:
+                pf_path = self.join(self.root, field, "refs.parq")
+                self.pfs[field] = self.pf_cls(self.fs.open(pf_path))
+            pf = self.pfs[field]
+            rg = self.open_row_group(pf, row_group)
+            if self.engine == "pyarrow":
+                data = rg[0][row_number].as_py()
+            else:
+                data = rg.data.values[row_number]
+            if data.startswith(b"["):
+                return json.loads(data)
+            else:
+                return data.decode()
+
+    def _get_and_cache_metadata(self, key):
+        with self.fs.open(self.join(self.root, key), "rb") as f:
+            data = f.read()
+        self._items[key] = data
+        return data
+
+    def _key_to_row_group(self, key):
+        field, chunk = key.split("/")
+        chunk_sizes = self._get_chunk_sizes(field)
+        if chunk_sizes.size == 0:
+            return 0, 0
+        chunk_idx = np.array([int(c) for c in chunk.split(".")])
+        chunk_number = np.ravel_multi_index(chunk_idx, chunk_sizes)
+        row_group = chunk_number // self.row_group_size
+        row_number = chunk_number % self.row_group_size
+        return row_group, row_number
+
+    def _get_chunk_sizes(self, field):
+        if field not in self.chunk_sizes:
+            zarray = json.loads(self.__getitem__(f"{field}/.zarray"))
+            size_ratio = np.array(zarray["shape"]) / np.array(zarray["chunks"])
+            self.chunk_sizes[field] = np.ceil(size_ratio).astype(int)
+        return self.chunk_sizes[field]
+
+    def __getitem__(self, key):
+        if key in self._items:
+            return self._items[key]
+        return self._load_one_key(key)
+
+    def __setitem__(self, key, value):
+        self._items[key] = value
+
+    def __delitem__(self, key):
+        del self._items[key]
+
+    def __len__(self):
+        # Caveat: This counts expected references, not actual
+        count = 0
+        for field in self.fs.ls(self.root):
+            if field.startswith("."):
+                count += 1
+            else:
+                chunk_sizes = self._get_chunk_sizes(field)
+                nchunks = np.product(chunk_sizes)
+                count += 2 + nchunks
+        return count
+
+    def __iter__(self):
+        # Caveat: Note that this generates all expected keys, but does not
+        # account for reference keys that are missing.
+        for field in self.listdir():
+            if field.startswith("."):
+                yield field
+            else:
+                chunk_sizes = self._get_chunk_sizes(field)
+                nchunks = np.product(chunk_sizes)
+                yield "/".join([field, ".zarray"])
+                yield "/".join([field, ".zattrs"])
+                inds = np.asarray(np.unravel_index(np.arange(nchunks), chunk_sizes)).T
+                for ind in inds:
+                    yield field + "/" + ".".join(ind.astype(str))
 
 
 class ReferenceFileSystem(AsyncFileSystem):
@@ -378,13 +535,13 @@ class ReferenceFileSystem(AsyncFileSystem):
             for u, s, e, p in zip(urls, starts, ends, paths):
                 if p in out:
                     continue  # was bytes, already handled
-                for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
-                    if np == u and (ns is None or ne is None):
+                for npth, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
+                    if npth == u and (ns is None or ne is None):
                         if isinstance(b, Exception):
                             out[p] = b
                         else:
                             out[p] = b[s:e]
-                    elif np == u and s >= ns and e <= ne:
+                    elif npth == u and s >= ns and e <= ne:
                         if isinstance(b, Exception):
                             out[p] = b
                         else:
@@ -874,12 +1031,12 @@ class DFReferenceFileSystem(AbstractFileSystem):
                 for u, s, e, (l, i) in zip(urls2, starts2, ends2, assign_dict[proto]):
                     if p in out:
                         continue  # was bytes, already handled
-                    for np, ns, ne, b in zip(
+                    for npth, ns, ne, b in zip(
                         new_paths, new_starts, new_ends, bytes_out
                     ):
-                        if np == u and (ns is None or ne is None):
+                        if npth == u and (ns is None or ne is None):
                             l[i] = b[s:e]
-                        elif np == u and s >= ns and e <= ne:
+                        elif npth == u and s >= ns and e <= ne:
                             l[i] = b[s - ns : (e - ne) or None]
 
         out = [self.multi_func(part) for part in out]
