@@ -1,9 +1,12 @@
+import collections
 import functools
 import io
 import logging
 import math
 import os
+import threading
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger("fsspec")
 
@@ -508,6 +511,258 @@ class KnownPartsOfAFile(BaseCache):
         return out + super()._fetch(start, stop)
 
 
+class UpdatableLRU:
+    """
+    Custom implementation of LRU cache that allows updating keys
+
+    Used by BackgroudBlockCache
+    """
+
+    CacheInfo = collections.namedtuple(
+        "CacheInfo", ["hits", "misses", "maxsize", "currsize"]
+    )
+
+    def __init__(self, func, max_size=128):
+        self._cache = collections.OrderedDict()
+        self._func = func
+        self._max_size = max_size
+        self._hits = 0
+        self._misses = 0
+        self._lock = threading.Lock()
+
+    def __call__(self, *args):
+        with self._lock:
+            if args in self._cache:
+                self._cache.move_to_end(args)
+                self._hits += 1
+                return self._cache[args]
+
+        result = self._func(*args)
+
+        with self._lock:
+            self._cache[args] = result
+            self._misses += 1
+            if len(self._cache) > self._max_size:
+                self._cache.popitem(last=False)
+
+        return result
+
+    def is_key_cached(self, *args):
+        with self._lock:
+            return args in self._cache
+
+    def add_key(self, result, *args):
+        with self._lock:
+            self._cache[args] = result
+            if len(self._cache) > self._max_size:
+                self._cache.popitem(last=False)
+
+    def cache_info(self):
+        with self._lock:
+            return self.CacheInfo(
+                maxsize=self._max_size,
+                currsize=len(self._cache),
+                hits=self._hits,
+                misses=self._misses,
+            )
+
+
+class BackgroundBlockCache(BaseCache):
+    """
+    Cache holding memory as a set of blocks with pre-loading of
+    the next block in the background.
+
+    Requests are only ever made ``blocksize`` at a time, and are
+    stored in an LRU cache. The least recently accessed block is
+    discarded when more than ``maxblocks`` are stored. If the
+    next block is not in cache, it is loaded in a separate thread
+    in non-blocking way.
+
+    Parameters
+    ----------
+    blocksize : int
+        The number of bytes to store in each block.
+        Requests are only ever made for ``blocksize``, so this
+        should balance the overhead of making a request against
+        the granularity of the blocks.
+    fetcher : Callable
+    size : int
+        The total size of the file being cached.
+    maxblocks : int
+        The maximum number of blocks to cache for. The maximum memory
+        use for this cache is then ``blocksize * maxblocks``.
+    """
+
+    name = "background"
+
+    def __init__(self, blocksize, fetcher, size, maxblocks=32):
+        super().__init__(blocksize, fetcher, size)
+        self.nblocks = math.ceil(size / blocksize)
+        self.maxblocks = maxblocks
+        self._fetch_block_cached = UpdatableLRU(self._fetch_block, maxblocks)
+
+        self._thread_executor = ThreadPoolExecutor(max_workers=1)
+        self._fetch_future_block_number = None
+        self._fetch_future = None
+        self._fetch_future_lock = threading.Lock()
+
+    def __repr__(self):
+        return "<BackgroundBlockCache blocksize={}, size={}, nblocks={}>".format(
+            self.blocksize, self.size, self.nblocks
+        )
+
+    def cache_info(self):
+        """
+        The statistics on the block cache.
+
+        Returns
+        -------
+        NamedTuple
+            Returned directly from the LRU Cache used internally.
+        """
+        return self._fetch_block_cached.cache_info()
+
+    def __getstate__(self):
+        state = self.__dict__
+        del state["_fetch_block_cached"]
+        del state["_thread_executor"]
+        del state["_fetch_future_block_number"]
+        del state["_fetch_future"]
+        del state["_fetch_future_lock"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._fetch_block_cached = UpdatableLRU(self._fetch_block, state["maxblocks"])
+        self._thread_executor = ThreadPoolExecutor(max_workers=1)
+        self._fetch_future_block_number = None
+        self._fetch_future = None
+        self._fetch_future_lock = threading.Lock()
+
+    def _fetch(self, start, end):
+        if start is None:
+            start = 0
+        if end is None:
+            end = self.size
+        if start >= self.size or start >= end:
+            return b""
+
+        # byte position -> block numbers
+        start_block_number = start // self.blocksize
+        end_block_number = end // self.blocksize
+
+        fetch_future_block_number = None
+        fetch_future = None
+        with self._fetch_future_lock:
+            # Background thread is running. Check we we can or must join it.
+            if self._fetch_future is not None:
+                if self._fetch_future.done():
+                    logger.info("BlockCache joined background fetch without waiting.")
+                    self._fetch_block_cached.add_key(
+                        self._fetch_future.result(), self._fetch_future_block_number
+                    )
+                else:
+                    # Must join if we need the block for the current fetch
+                    must_join = bool(
+                        start_block_number
+                        <= self._fetch_future_block_number
+                        <= end_block_number
+                    )
+                    if must_join:
+                        # Copy to the local variables to release lock
+                        # before waiting for result
+                        fetch_future_block_number = self._fetch_future_block_number
+                        fetch_future = self._fetch_future
+
+            # Cleanup the fetch variables. Either done or have a local copy.
+            self._fetch_future_block_number = None
+            self._fetch_future = None
+
+        # Need to wait for the future for the current read
+        if fetch_future is not None:
+            logger.info("BlockCache waiting for background fetch.")
+            # Wait until result and put it in cache
+            self._fetch_block_cached.add_key(
+                fetch_future.result(), fetch_future_block_number
+            )
+
+        # these are cached, so safe to do multiple calls for the same start and end.
+        for block_number in range(start_block_number, end_block_number + 1):
+            self._fetch_block_cached(block_number)
+
+        # fetch next block in the background if nothing is running in the background,
+        # the block is within file and it is not already cached
+        end_block_plus_1 = end_block_number + 1
+        with self._fetch_future_lock:
+            if (
+                self._fetch_future is None
+                and end_block_plus_1 <= self.nblocks
+                and not self._fetch_block_cached.is_key_cached(end_block_plus_1)
+            ):
+                self._fetch_future_block_number = end_block_plus_1
+                self._fetch_future = self._thread_executor.submit(
+                    self._fetch_block, end_block_plus_1, "async"
+                )
+
+        return self._read_cache(
+            start,
+            end,
+            start_block_number=start_block_number,
+            end_block_number=end_block_number,
+        )
+
+    def _fetch_block(self, block_number, log_info="sync"):
+        """
+        Fetch the block of data for `block_number`.
+        """
+        if block_number > self.nblocks:
+            raise ValueError(
+                "'block_number={}' is greater than the number of blocks ({})".format(
+                    block_number, self.nblocks
+                )
+            )
+
+        start = block_number * self.blocksize
+        end = start + self.blocksize
+        logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
+        block_contents = super()._fetch(start, end)
+        return block_contents
+
+    def _read_cache(self, start, end, start_block_number, end_block_number):
+        """
+        Read from our block cache.
+
+        Parameters
+        ----------
+        start, end : int
+            The start and end byte positions.
+        start_block_number, end_block_number : int
+            The start and end block numbers.
+        """
+        start_pos = start % self.blocksize
+        end_pos = end % self.blocksize
+
+        if start_block_number == end_block_number:
+            block = self._fetch_block_cached(start_block_number)
+            return block[start_pos:end_pos]
+
+        else:
+            # read from the initial
+            out = []
+            out.append(self._fetch_block_cached(start_block_number)[start_pos:])
+
+            # intermediate blocks
+            # Note: it'd be nice to combine these into one big request. However
+            # that doesn't play nicely with our LRU cache.
+            for block_number in range(start_block_number + 1, end_block_number):
+                out.append(self._fetch_block_cached(block_number))
+
+            # final block
+            out.append(self._fetch_block_cached(end_block_number)[:end_pos])
+
+            return b"".join(out)
+
+
 caches = {
     "none": BaseCache,
     None: BaseCache,
@@ -518,4 +773,5 @@ caches = {
     "first": FirstChunkCache,
     "all": AllBytes,
     "parts": KnownPartsOfAFile,
+    "background": BackgroundBlockCache,
 }

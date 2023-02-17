@@ -114,3 +114,27 @@ def test_known(sort, strict):
     else:
         # Over-read will be zero-padded
         assert c._fetch(25, 35) == b"2" * 5 + b"\x00" * 5
+
+
+def test_background(server, monkeypatch):
+    import threading
+    import time
+
+    import fsspec
+
+    head = {"head_ok": "true", "head_give_length": "true"}
+    urla = server + "/index/realfile"
+    h = fsspec.filesystem("http", headers=head)
+    thread_ids = {threading.current_thread().ident}
+    f = h.open(urla, block_size=5, cache_type="background")
+    orig = f.cache._fetch_block
+
+    def wrapped(*a, **kw):
+        thread_ids.add(threading.current_thread().ident)
+        return orig(*a, **kw)
+
+    f.cache._fetch_block = wrapped
+    assert len(thread_ids) == 1
+    f.read(1)
+    time.sleep(0.1)  # second block is loading
+    assert len(thread_ids) == 2
