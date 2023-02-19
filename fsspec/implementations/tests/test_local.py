@@ -104,6 +104,7 @@ def test_urlpath_inference_errors():
         get_fs_token_paths([])
     assert "empty" in str(err.value)
 
+    pytest.importorskip("s3fs")
     # Protocols differ
     with pytest.raises(ValueError) as err:
         get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
