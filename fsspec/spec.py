@@ -848,25 +848,26 @@ class AbstractFileSystem(metaclass=_Cached):
         """Copy single remote file to local"""
         if isfilelike(lpath):
             outfile = lpath
-        else:
-            if self.isdir(rpath):
-                os.makedirs(lpath, exist_ok=True)
-                return None
+        elif self.isdir(rpath):
+            os.makedirs(lpath, exist_ok=True)
+            return None
 
+        with self.open(rpath, "rb", **kwargs) as f1:
             if outfile is None:
                 outfile = open(lpath, "wb")
 
-        with self.open(rpath, "rb", **kwargs) as f1:
-            callback.set_size(getattr(f1, "size", None))
-            data = True
-            while data:
-                data = f1.read(self.blocksize)
-                segment_len = outfile.write(data)
-                if segment_len is None:
-                    segment_len = len(data)
-                callback.relative_update(segment_len)
-        if not isfilelike(lpath):
-            outfile.close()
+            try:
+                callback.set_size(getattr(f1, "size", None))
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    segment_len = outfile.write(data)
+                    if segment_len is None:
+                        segment_len = len(data)
+                    callback.relative_update(segment_len)
+            finally:
+                if not isfilelike(lpath):
+                    outfile.close()
 
     def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy file(s) to local.
