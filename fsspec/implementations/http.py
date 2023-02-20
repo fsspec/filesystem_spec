@@ -246,13 +246,20 @@ class HTTPFileSystem(AsyncFileSystem):
 
             callback.set_size(size)
             self._raise_not_found_for_status(r, rpath)
-            if not isfilelike(lpath):
-                lpath = open(lpath, "wb")
-            chunk = True
-            while chunk:
-                chunk = await r.content.read(chunk_size)
-                lpath.write(chunk)
-                callback.relative_update(len(chunk))
+            if isfilelike(lpath):
+                outfile = lpath
+            else:
+                outfile = open(lpath, "wb")
+
+            try:
+                chunk = True
+                while chunk:
+                    chunk = await r.content.read(chunk_size)
+                    outfile.write(chunk)
+                    callback.relative_update(len(chunk))
+            finally:
+                if not isfilelike(lpath):
+                    outfile.close()
 
     async def _put_file(
         self,
