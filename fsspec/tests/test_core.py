@@ -194,6 +194,7 @@ def test_pickle_after_open_open():
 
 
 def test_mismatch():
+    pytest.importorskip("s3fs")
     with pytest.raises(ValueError):
         open_files(["s3://test/path.csv", "/other/path.csv"])
 
