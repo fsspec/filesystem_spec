@@ -7,8 +7,6 @@ import logging
 import os
 from functools import lru_cache
 
-import numpy as np
-
 import fsspec.core
 
 try:
@@ -56,10 +54,16 @@ def _protocol_groups(paths, references):
 
 
 class LazyReferenceMapper(collections.abc.MutableMapping):
-    """Interface to read parquet store lazily as if it were a standard kerchunk
+    """Interface to read parquet store as if it were a standard kerchunk
     references dict."""
 
-    def __init__(self, root, fs=None, engine="fastparquet", cache_size=128):
+    # import is class level to prevent numpy dep requirement for fsspec
+    import numpy as np
+    import pandas as pd
+
+    def __init__(
+        self, root, fs=None, engine="fastparquet", cache_size=128, categorical_urls=True
+    ):
         """
         Parameters
         ----------
@@ -72,12 +76,18 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             the total number of references that can be loaded in memory at once.
         engine : {'fastparquet', 'pyarrow'}
             Library to use for writing parquet files.
+        categorical_urls : bool
+            Whether to use pandas.Categorical to encode urls. This can greatly
+            reduce memory usage for reference sets with URLs that are used many
+            times by multiple keys (eg, when a single variable has many chunks)
+            in exchange for a bit of additional overhead when loading references.
         """
         self.root = root
         self.chunk_sizes = {}
         self._items = {}
         self.pfs = {}
         self.engine = engine
+        self.categorical_urls = categorical_urls
         self.fs = fsspec.filesystem("file") if fs is None else fs
 
         # Define function to open and decompress row group data and store
@@ -89,7 +99,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
             @lru_cache(maxsize=cache_size)
             def open_row_group(pf, row_group):
-                return pf.read_row_group(row_group)
+                rg = pf.read_row_group(row_group)
+                refs = {c: rg[c].to_numpy() for c in rg.column_names}
+                if self.categorical_urls:
+                    refs["path"] = self.pd.Categorical(refs["path"])
+                return refs
 
         else:
             import fastparquet
@@ -98,9 +112,24 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
             @lru_cache(maxsize=cache_size)
             def open_row_group(pf, row_group):
-                return pf.read_row_group_file(
-                    pf.row_groups[row_group], pf.columns, pf.categories
+                rg = pf.row_groups[row_group]
+                refs = {
+                    c: self.np.empty(rg.num_rows, dtype=dtype)
+                    for c, dtype in pf.dtypes.items()
+                }
+                fastparquet.core.read_row_group_arrays(
+                    pf.open(),
+                    rg,
+                    pf.columns,
+                    pf.categories,
+                    pf.schema,
+                    pf.cats,
+                    assign=refs,
                 )
+
+                if self.categorical_urls:
+                    refs["path"] = self.pd.Categorical(refs["path"])
+                return refs
 
         self.open_row_group = open_row_group
 
@@ -136,15 +165,15 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 pf_path = self.join(self.root, field, "refs.parq")
                 self.pfs[field] = self.pf_cls(self.fs.open(pf_path))
             pf = self.pfs[field]
-            rg = self.open_row_group(pf, row_group)
-            if self.engine == "pyarrow":
-                data = rg[0][row_number].as_py()
-            else:
-                data = rg.data.values[row_number]
-            if data.startswith(b"["):
-                return json.loads(data)
-            else:
-                return data.decode()
+            refs = self.open_row_group(pf, row_group)
+            columns = ["path", "offset", "size", "raw"]
+            selection = [refs[c][row_number] for c in columns]
+            raw = selection[-1]
+            if raw is not None:
+                if isinstance(raw, bytes):
+                    raw = raw.decode()
+                return raw
+            return selection[:-1]
 
     def _get_and_cache_metadata(self, key):
         with self.fs.open(self.join(self.root, key), "rb") as f:
@@ -157,8 +186,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         chunk_sizes = self._get_chunk_sizes(field)
         if chunk_sizes.size == 0:
             return 0, 0
-        chunk_idx = np.array([int(c) for c in chunk.split(".")])
-        chunk_number = np.ravel_multi_index(chunk_idx, chunk_sizes)
+        chunk_idx = self.np.array([int(c) for c in chunk.split(".")])
+        chunk_number = self.np.ravel_multi_index(chunk_idx, chunk_sizes)
         row_group = chunk_number // self.row_group_size
         row_number = chunk_number % self.row_group_size
         return row_group, row_number
@@ -166,8 +195,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def _get_chunk_sizes(self, field):
         if field not in self.chunk_sizes:
             zarray = json.loads(self.__getitem__(f"{field}/.zarray"))
-            size_ratio = np.array(zarray["shape"]) / np.array(zarray["chunks"])
-            self.chunk_sizes[field] = np.ceil(size_ratio).astype(int)
+            size_ratio = self.np.array(zarray["shape"]) / self.np.array(
+                zarray["chunks"]
+            )
+            self.chunk_sizes[field] = self.np.ceil(size_ratio).astype(int)
         return self.chunk_sizes[field]
 
     def __getitem__(self, key):
@@ -189,7 +220,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 count += 1
             else:
                 chunk_sizes = self._get_chunk_sizes(field)
-                nchunks = np.product(chunk_sizes)
+                nchunks = self.np.product(chunk_sizes)
                 count += 2 + nchunks
         return count
 
@@ -201,10 +232,12 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 yield field
             else:
                 chunk_sizes = self._get_chunk_sizes(field)
-                nchunks = np.product(chunk_sizes)
+                nchunks = self.np.product(chunk_sizes)
                 yield "/".join([field, ".zarray"])
                 yield "/".join([field, ".zattrs"])
-                inds = np.asarray(np.unravel_index(np.arange(nchunks), chunk_sizes)).T
+                inds = self.np.asarray(
+                    self.np.unravel_index(self.np.arange(nchunks), chunk_sizes)
+                ).T
                 for ind in inds:
                     yield field + "/" + ".".join(ind.astype(str))
 
@@ -535,13 +568,13 @@ class ReferenceFileSystem(AsyncFileSystem):
             for u, s, e, p in zip(urls, starts, ends, paths):
                 if p in out:
                     continue  # was bytes, already handled
-                for npth, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
-                    if npth == u and (ns is None or ne is None):
+                for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
+                    if np == u and (ns is None or ne is None):
                         if isinstance(b, Exception):
                             out[p] = b
                         else:
                             out[p] = b[s:e]
-                    elif npth == u and s >= ns and e <= ne:
+                    elif np == u and s >= ns and e <= ne:
                         if isinstance(b, Exception):
                             out[p] = b
                         else:
@@ -1031,12 +1064,12 @@ class DFReferenceFileSystem(AbstractFileSystem):
                 for u, s, e, (l, i) in zip(urls2, starts2, ends2, assign_dict[proto]):
                     if p in out:
                         continue  # was bytes, already handled
-                    for npth, ns, ne, b in zip(
+                    for np, ns, ne, b in zip(
                         new_paths, new_starts, new_ends, bytes_out
                     ):
-                        if npth == u and (ns is None or ne is None):
+                        if np == u and (ns is None or ne is None):
                             l[i] = b[s:e]
-                        elif npth == u and s >= ns and e <= ne:
+                        elif np == u and s >= ns and e <= ne:
                             l[i] = b[s - ns : (e - ne) or None]
 
         out = [self.multi_func(part) for part in out]
