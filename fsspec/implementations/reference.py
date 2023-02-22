@@ -279,6 +279,9 @@ class ReferenceFileSystem(AsyncFileSystem):
         simple_templates=True,
         max_gap=64_000,
         max_block=256_000_000,
+        cache_size=128,
+        engine="fastparquet",
+        categorical_urls=False,
         **kwargs,
     ):
         """
@@ -287,8 +290,10 @@ class ReferenceFileSystem(AsyncFileSystem):
         ----------
         fo : dict or str
             The set of references to use for this instance, with a structure as above.
-            If str, will use fsspec.open, in conjunction with target_options
-            and target_protocol to open and parse JSON at this location.
+            If str referencing a JSON file, will use fsspec.open, in conjunction
+            with target_options and target_protocol to open and parse JSON at this
+            location. If a directory, then assume references are a set of parquet
+            files to be loaded lazily.
         target : str
             For any references having target_url as None, this is the default file
             target to use
@@ -330,6 +335,19 @@ class ReferenceFileSystem(AsyncFileSystem):
             number to disable merging, appropriate for local target files.
             Neighboring byte ranges will only be merged when the size of
             the aggregated range is <= ``max_block``. Default is 256MB.
+        cache_size : int
+            Maximum size of LRU cache, where cache_size*row_group_size denotes
+            the total number of references that can be loaded in memory at once.
+            Only used for lazily loaded references.
+        engine : {'fastparquet', 'pyarrow'}
+            Library to use for writing parquet files.
+            Only used for lazily loaded references.
+        categorical_urls : bool
+            Whether to use pandas.Categorical to encode urls. This can greatly
+            reduce memory usage for reference sets with URLs that are used many
+            times by multiple keys (eg, when a single variable has many chunks)
+            in exchange for a bit of additional overhead when loading references.
+            Only used for lazily loaded references.
         kwargs : passed to parent class
         """
         super().__init__(**kwargs)
@@ -344,16 +362,27 @@ class ReferenceFileSystem(AsyncFileSystem):
         if hasattr(fo, "read"):
             text = json.load(fo)
             text = text.decode() if isinstance(text, bytes) else text
-        elif isinstance(fo, str):
-            if target_protocol:
-                extra = {"protocol": target_protocol}
+        if target_protocol:
+            extra = {"protocol": target_protocol}
+        else:
+            extra = {"protocol": "file"}
+        dic = dict(**(ref_storage_args or target_options or {}), **extra)
+        ref_fs = filesystem(**dic)
+        if isinstance(fo, str):
+            if ref_fs.isfile(fo):
+                # text JSON
+                with ref_fs.open(fo, "rb") as f:
+                    logger.info("Read reference from URL %s", fo)
+                    text = json.load(f)
             else:
-                extra = {}
-            dic = dict(**(ref_storage_args or target_options or {}), **extra)
-            # text JSON
-            with open(fo, "rb", **dic) as f:
-                logger.info("Read reference from URL %s", fo)
-                text = json.load(f)
+                # Lazy parquet refs
+                text = LazyReferenceMapper(
+                    fo,
+                    fs=ref_fs,
+                    cache_size=cache_size,
+                    categorical_urls=categorical_urls,
+                    engine=engine,
+                )
         else:
             # dictionaries
             text = fo
