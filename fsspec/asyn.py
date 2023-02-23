@@ -52,9 +52,9 @@ async def _runner(event, coro, result, timeout=None):
     if timeout is not None:
         coro = asyncio.wait_for(coro, timeout=timeout)
     try:
-        result[0] = await coro
+        return await coro
     except Exception as ex:
-        result[0] = ex
+        return ex
     finally:
         event.set()
 
@@ -82,24 +82,11 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     coro = func(*args, **kwargs)
     result = [None]
     event = threading.Event()
-    asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
-    while True:
-        # this loops allows thread to get interrupted
-        if event.wait(1):
-            break
-        if timeout is not None:
-            timeout -= 1
-            if timeout < 0:
-                raise FSTimeoutError
-
-    return_result = result[0]
-    if isinstance(return_result, asyncio.TimeoutError):
-        # suppress asyncio.TimeoutError, raise FSTimeoutError
-        raise FSTimeoutError from return_result
-    elif isinstance(return_result, BaseException):
-        raise return_result
-    else:
-        return return_result
+    fut = asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
+    try:
+        return fut.result(timeout=timeout)
+    except asyncio.TimeoutError as e:
+        raise FSTimeoutError from e
 
 
 def sync_wrapper(func, obj=None):
