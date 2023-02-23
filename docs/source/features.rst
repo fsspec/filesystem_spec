@@ -365,14 +365,16 @@ For instance:
 Obviously, you should only define default values that are appropriate for
 a given file system implementation. INI files only support string values.
 
-Alternatively, you can provide overrides with environment variables of
-the style ``FSSPEC_{protocol}_{kwargname}=value``.
+Alternatively, you can provide overrides with environment variables of the style
+``FSSPEC_{protocol}=<json_dict_value>`` and
+``FSSPEC_{protocol}_{kwargname}=<string_value>``.
 
 Configuration is determined in the following order, with later items winning:
 
 #. the contents of ini files, and json files in the config directory, sorted
    alphabetically
-#. environment variables
+#. ``FSSPEC_{protocol}`` environment variables
+#. ``FSSPEC_{protocol}_{kwargname}`` environment variables
 #. the contents of ``fsspec.config.conf``, which can be edited at runtime
 #. kwargs explicitly passed, whether with ``fsspec.open``, ``fsspec.filesystem``
    or directly instantiating the implementation class.
