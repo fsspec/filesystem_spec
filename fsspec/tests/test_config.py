@@ -1,4 +1,5 @@
 import os
+from warnings import catch_warnings
 
 import pytest
 
@@ -16,14 +17,21 @@ def clean_conf():
 
 def test_from_env_ignored(clean_conf):
     env = {
-        "FSSPEC": "missing_proto",
-        "FSSPEC_": "missing_proto",
-        "FSSPEC__INVALID_KEY": "invalid_proto",
+        "FSSPEC": "missing_protocol",
+        "FSSPEC_": "missing_protocol",
+        "FSSPEC__INVALID_KEY": "invalid_protocol",
         "FSSPEC_INVALID1": "not_json_dict",
         "FSSPEC_INVALID2": '["not_json_dict"]',
     }
     cd = {}
-    set_conf_env(conf_dict=cd, envdict=env)
+    with catch_warnings(record=True) as w:
+        set_conf_env(conf_dict=cd, envdict=env)
+        assert len(w) == 5
+        assert "unexpected name" in str(w[0].message)
+        assert "unexpected name" in str(w[1].message)
+        assert "unexpected name" in str(w[2].message)
+        assert "parse failure" in str(w[3].message)
+        assert "not being a dict" in str(w[4].message)
     assert cd == {}
 
 
@@ -34,11 +42,14 @@ def test_from_env_kwargs(clean_conf):
         "FSSPEC_MALFORMED": "novalue",
     }
     cd = {}
-    set_conf_env(conf_dict=cd, envdict=env)
+    with catch_warnings(record=True) as w:
+        set_conf_env(conf_dict=cd, envdict=env)
+        assert len(w) == 1
+        assert "parse failure" in str(w[0].message)
     assert cd == {"proto": {"key": "value", "long_key": "othervalue"}}
 
 
-def test_from_env_proto_dict(clean_conf):
+def test_from_env_protocol_dict(clean_conf):
     env = {
         "FSSPEC_PROTO": '{"int": 1, "float": 2.3, "bool": true, "dict": {"key": "val"}}'
     }
@@ -49,7 +60,7 @@ def test_from_env_proto_dict(clean_conf):
     }
 
 
-def test_from_env_kwargs_override_proto_dict(clean_conf):
+def test_from_env_kwargs_override_protocol_dict(clean_conf):
     env = {
         "FSSPEC_PROTO_LONG_KEY": "override1",
         "FSSPEC_PROTO": '{"key": "value1", "long_key": "value2", "otherkey": "value3"}',

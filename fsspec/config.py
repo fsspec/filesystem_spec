@@ -1,6 +1,7 @@
 import configparser
 import json
 import os
+import warnings
 
 conf = {}
 default_conf_dir = os.path.join(os.path.expanduser("~"), ".config/fsspec")
@@ -34,12 +35,23 @@ def set_conf_env(conf_dict, envdict=os.environ):
                 continue
             try:
                 value = json.loads(envdict[key])
-            except json.decoder.JSONDecodeError:
-                pass
+            except json.decoder.JSONDecodeError as ex:
+                warnings.warn(
+                    f"Ignoring environment variable {key} due to a parse failure: {ex}"
+                )
             else:
                 if isinstance(value, dict):
                     _, proto = key.split("_", 1)
                     conf_dict.setdefault(proto.lower(), {}).update(value)
+                else:
+                    warnings.warn(
+                        f"Ignoring environment variable {key} due to not being a dict:"
+                        f" {type(value)}"
+                    )
+        elif key.startswith("FSSPEC"):
+            warnings.warn(
+                f"Ignoring environment variable {key} due to having an unexpected name"
+            )
 
     for key in kwarg_keys:
         _, proto, kwarg = key.split("_", 2)
