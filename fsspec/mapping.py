@@ -191,7 +191,7 @@ def maybe_convert(value):
             # The buffer interface doesn't support datetime64/timdelta64 numpy
             # arrays
             value = value.view("int64")
-        value = bytearray(memoryview(value))
+        value = bytes(memoryview(value))
     return value
 
 
