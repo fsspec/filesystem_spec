@@ -371,8 +371,8 @@ Alternatively, you can provide overrides with environment variables of the style
 
 Configuration is determined in the following order, with later items winning:
 
-#. the contents of ini files, and json files in the config directory, sorted
-   alphabetically
+#.  ini and json files in the config directory (``FSSPEC_CONFIG_DIRECTORY`` or ``$HOME/.config/fsspec/``), sorted
+   lexically by filename
 #. ``FSSPEC_{protocol}`` environment variables
 #. ``FSSPEC_{protocol}_{kwargname}`` environment variables
 #. the contents of ``fsspec.config.conf``, which can be edited at runtime
