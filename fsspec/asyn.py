@@ -338,7 +338,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
         paths = await self._expand_path(path1, maxdepth=maxdepth, recursive=recursive)
         isdir = isinstance(path2, str) and (
-            await self._isdir(path2) or path2.endswith("/")
+            path2.endswith("/") or await self._isdir(path2)
         )
         path2 = other_paths(
             paths,
@@ -489,7 +489,7 @@ class AsyncFileSystem(AbstractFileSystem):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         isdir = isinstance(rpath, str) and (
-            await self._isdir(rpath) or rpath.endswith("/")
+            rpath.endswith("/") or await self._isdir(rpath)
         )
         rpaths = other_paths(
             lpaths,
@@ -543,7 +543,7 @@ class AsyncFileSystem(AbstractFileSystem):
         lpath = make_path_posix(lpath)
         rpaths = await self._expand_path(rpath, recursive=recursive)
         isdir = isinstance(lpath, str) and (
-            LocalFileSystem().isdir(lpath) or lpath.endswith("/")
+            lpath.endswith("/") or LocalFileSystem().isdir(lpath)
         )
         lpaths = other_paths(
             rpaths,
