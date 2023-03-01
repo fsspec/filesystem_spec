@@ -272,6 +272,44 @@ def test_put_directory_recursive(m, tmpdir):
         assert m.find(target) == correct
 
 
+def test_cp_empty_directory(m):
+    # https://github.com/fsspec/filesystem_spec/issues/1198
+    # cp/get/put of empty directory.
+    empty = "/src/empty"
+    m.mkdir(empty)
+
+    target = "/target"
+    m.mkdir(target)
+
+    # cp without slash, target directory exists
+    assert m.isdir(target)
+    m.cp(empty, target)
+    assert m.find(target, withdirs=True) == [target + "/empty"]
+
+    m.rm(target + "/empty", recursive=True)
+
+    # cp with slash, target directory exists
+    assert m.isdir(target)
+    m.cp(empty + "/", target)
+    assert m.find(target, withdirs=True) == []
+
+    m.rm(target, recursive=True)
+
+    # cp without slash, target directory doesn't exist
+    assert not m.isdir(target)
+    m.cp(empty, target)
+    assert m.isdir(target)
+    assert m.find(target, withdirs=True) == []
+
+    m.rm(target, recursive=True)
+
+    # cp with slash, target directory doesn't exist
+    assert not m.isdir(target)
+    m.cp(empty + "/", target)
+    assert m.isdir(target)
+    assert m.find(target, withdirs=True) == []
+
+
 def test_cp_two_files(m):
     src = "/src"
     file0 = src + "/file0"

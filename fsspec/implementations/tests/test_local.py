@@ -910,6 +910,55 @@ def test_cp_get_put_directory_recursive(tmpdir, funcname):
         assert fs.find(target) == [make_path_posix(os.path.join(target, "file"))]
 
 
+@pytest.mark.parametrize("funcname", ["cp", "get", "put"])
+def test_cp_get_put_empty_directory(tmpdir, funcname):
+    # https://github.com/fsspec/filesystem_spec/issues/1198
+    # cp/get/put of empty directory.
+    fs = LocalFileSystem(auto_mkdir=True)
+    empty = os.path.join(str(tmpdir), "empty")
+    fs.mkdir(empty)
+
+    target = os.path.join(str(tmpdir), "target")
+    fs.mkdir(target)
+
+    if funcname == "cp":
+        func = fs.cp
+    elif funcname == "get":
+        func = fs.get
+    elif funcname == "put":
+        func = fs.put
+
+    # cp/get/put without slash, target directory exists
+    assert fs.isdir(target)
+    func(empty, target)
+    assert fs.find(target, withdirs=True) == [
+        make_path_posix(os.path.join(target, "empty"))
+    ]
+
+    fs.rm(target + "/empty", recursive=True)
+
+    # cp/get/put with slash, target directory exists
+    assert fs.isdir(target)
+    func(empty + "/", target)
+    assert fs.find(target, withdirs=True) == []
+
+    fs.rm(target, recursive=True)
+
+    # cp/get/put without slash, target directory doesn't exist
+    assert not fs.isdir(target)
+    func(empty, target)
+    assert fs.isdir(target)
+    assert fs.find(target, withdirs=True) == []
+
+    fs.rm(target, recursive=True)
+
+    # cp/get/put with slash, target directory doesn't exist
+    assert not fs.isdir(target)
+    func(empty + "/", target)
+    assert fs.isdir(target)
+    assert fs.find(target, withdirs=True) == []
+
+
 def test_cp_two_files(tmpdir):
     fs = LocalFileSystem(auto_mkdir=True)
     src = os.path.join(str(tmpdir), "src")

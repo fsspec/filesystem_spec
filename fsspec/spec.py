@@ -884,7 +884,9 @@ class AbstractFileSystem(metaclass=_Cached):
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
-        isdir = isinstance(lpath, str) and LocalFileSystem().isdir(lpath)
+        isdir = isinstance(lpath, str) and (
+            lpath.endswith("/") or LocalFileSystem().isdir(lpath)
+        )
         lpaths = other_paths(
             rpaths,
             lpath,
@@ -937,7 +939,7 @@ class AbstractFileSystem(metaclass=_Cached):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
-        isdir = isinstance(rpath, str) and self.isdir(rpath)
+        isdir = isinstance(rpath, str) and (rpath.endswith("/") or self.isdir(rpath))
         rpaths = other_paths(
             lpaths,
             rpath,
@@ -978,7 +980,7 @@ class AbstractFileSystem(metaclass=_Cached):
             on_error = "raise"
 
         paths = self.expand_path(path1, recursive=recursive)
-        isdir = isinstance(path2, str) and self.isdir(path2)
+        isdir = isinstance(path2, str) and (path2.endswith("/") or self.isdir(path2))
         path2 = other_paths(
             paths,
             path2,
