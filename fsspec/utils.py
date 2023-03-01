@@ -366,16 +366,10 @@ def other_paths(paths, path2, is_dir=None, exists=False):
     if isinstance(path2, str):
         is_dir = is_dir or path2.endswith("/")
         path2 = path2.rstrip("/")
-        if len(paths) > 1:
-            cp = common_prefix(paths)
-            if exists:
-                cp = cp.rsplit("/", 1)[0]
-            path2 = [p.replace(cp, path2, 1) for p in paths]
-        else:
-            if is_dir:
-                path2 = [path2.rstrip("/") + "/" + paths[0].rsplit("/")[-1]]
-            else:
-                path2 = [path2]
+        cp = common_prefix(paths)
+        if exists:
+            cp = cp.rsplit("/", 1)[0]
+        path2 = [p.replace(cp, path2, 1) for p in paths]
     else:
         assert len(paths) == len(path2)
     return path2
