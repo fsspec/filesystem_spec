@@ -216,7 +216,7 @@ class DirFileSystem(AsyncFileSystem):
         return self.fs.info(self._join(path), **kwargs)
 
     async def _ls(self, path, detail=True, **kwargs):
-        ret = await self.fs._ls(self._join(path), detail=detail, **kwargs).copy()
+        ret = (await self.fs._ls(self._join(path), detail=detail, **kwargs)).copy()
         if detail:
             out = []
             for entry in ret:
