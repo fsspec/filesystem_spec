@@ -185,6 +185,7 @@ known_implementations = {
         + " Note: 'root' is the protocol name for xrootd storage systems,"
         + " not referring to root directories",
     },
+    "dir": {"class": "fsspec.implementations.dirfs.DirFileSystem"},
 }
 
 

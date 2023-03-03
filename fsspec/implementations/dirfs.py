@@ -1,8 +1,17 @@
+from .. import filesystem
 from ..asyn import AsyncFileSystem
 
 
 class DirFileSystem(AsyncFileSystem):
-    def __init__(self, path, fs, *args, **storage_options):
+    def __init__(
+        self,
+        path=None,
+        fs=None,
+        fo=None,
+        target_protocol=None,
+        target_options=None,
+        **storage_options,
+    ):
         """
         Parameters
         ----------
@@ -10,8 +19,17 @@ class DirFileSystem(AsyncFileSystem):
             Path to the directory.
         fs: AbstractFileSystem
             An instantiated filesystem to wrap.
+        target_protocol, target_options:
+            if fs is none, construct it from these
+        fo: str
+            Alternate for path; do not provide both
         """
-        super().__init__(*args, **storage_options)
+        super().__init__(**storage_options)
+        if fs is None:
+            fs = filesystem(protocol=target_protocol, **(target_options or {}))
+        if (path is not None) ^ (fo is not None) is False:
+            raise ValueError("Provide path or fo, not both")
+        path = path or fo
 
         if self.asynchronous and not fs.async_impl:
             raise ValueError("can't use asynchronous with non-async fs")
@@ -198,20 +216,26 @@ class DirFileSystem(AsyncFileSystem):
         return self.fs.info(self._join(path), **kwargs)
 
     async def _ls(self, path, detail=True, **kwargs):
-        ret = await self.fs._ls(self._join(path), detail=detail, **kwargs)
+        ret = (await self.fs._ls(self._join(path), detail=detail, **kwargs)).copy()
         if detail:
+            out = []
             for entry in ret:
+                entry = entry.copy()
                 entry["name"] = self._relpath(entry["name"])
-            return ret
+                out.append(entry)
+            return out
 
         return self._relpath(ret)
 
     def ls(self, path, detail=True, **kwargs):
-        ret = self.fs.ls(self._join(path), detail=detail, **kwargs)
+        ret = self.fs.ls(self._join(path), detail=detail, **kwargs).copy()
         if detail:
+            out = []
             for entry in ret:
+                entry = entry.copy()
                 entry["name"] = self._relpath(entry["name"])
-            return ret
+                out.append(entry)
+            return out
 
         return self._relpath(ret)
 
