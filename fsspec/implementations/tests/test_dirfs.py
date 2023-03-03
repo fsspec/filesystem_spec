@@ -559,3 +559,13 @@ def test_open(mocker, dirfs):
     dirfs.fs.open = mocker.Mock()
     assert dirfs.open("file", *ARGS, **KWARGS) == dirfs.fs.open.return_value
     dirfs.fs.open.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+def test_from_url(m):
+    from fsspec.core import url_to_fs
+
+    m.pipe("inner/file", b"data")
+    fs, _ = url_to_fs("dir::memory://inner")
+    assert fs.ls("", False) == ["file"]
+    assert fs.ls("", True)[0]["name"] == "file"
+    assert fs.cat("file") == b"data"
