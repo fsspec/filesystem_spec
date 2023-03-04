@@ -1,6 +1,30 @@
 Changelog
 =========
 
+2023.3.0
+--------
+
+Enhancements
+
+- #1201, add directory FS to the registry and constructable from URLs
+- #1194, allow JSON for setting dict-like kwargs in the config
+- #1181, give arrow FS proper place in the registry
+- #1178, add experimental background-thread buffering cache
+- #1162, make ZipFS writable
+
+Fixes
+
+- #1202, fix on_error="omit" when using caching's cat
+- #1199, 1163, get/put/cp consistency and empty directories
+- #1197, 1183 use bytes for setting value on mapper using numpy
+- #1191, clean up open files in spec get_file
+- #1164, pass on kwargs correctly to http
+
+Other
+
+- #1186, make seekable=True default for pyarrow files
+= #1184, 1185, set minimum python version to 3.8
+
 2023.1.0
 --------
 
