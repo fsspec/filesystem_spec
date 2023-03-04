@@ -614,20 +614,28 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         getpaths = []
         storepaths = []
         fns = []
-        for p in paths:
-            detail = self._check_file(p)
-            if not detail:
-                fn = self._make_local_details(p)
-                getpaths.append(p)
-                storepaths.append(fn)
-            else:
-                detail, fn = detail if isinstance(detail, tuple) else (None, detail)
-            fns.append(fn)
+        out = {}
+        for p in paths.copy():
+            try:
+                detail = self._check_file(p)
+                if not detail:
+                    fn = self._make_local_details(p)
+                    getpaths.append(p)
+                    storepaths.append(fn)
+                else:
+                    detail, fn = detail if isinstance(detail, tuple) else (None, detail)
+                fns.append(fn)
+            except Exception as e:
+                if on_error == "raise":
+                    raise
+                if on_error == "return":
+                    out[p] = e
+                paths.remove(p)
+
         if getpaths:
             self.fs.get(getpaths, storepaths)
             self.save_cache()
 
-        out = {}
         callback.set_size(len(paths))
         for p, fn in zip(paths, fns):
             with open(fn, "rb") as f:

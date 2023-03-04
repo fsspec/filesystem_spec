@@ -924,3 +924,28 @@ def test_str():
     lfs = LocalFileSystem()
     cfs = CachingFileSystem(fs=lfs)
     assert "CachingFileSystem" in str(cfs)
+
+
+def test_getitems_errors(tmpdir):
+    tmpdir = str(tmpdir)
+    os.makedirs(os.path.join(tmpdir, "afolder"))
+    open(os.path.join(tmpdir, "afile"), "w").write("test")
+    open(os.path.join(tmpdir, "afolder", "anotherfile"), "w").write("test2")
+    m = fsspec.get_mapper("file://" + tmpdir)
+    assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
+
+    # my code
+    m2 = fsspec.get_mapper("simplecache::file://" + tmpdir)
+    assert m2.getitems(["afile"], on_error="omit") == {"afile": b"test"}  # works
+    assert m2.getitems(["afile", "bfile"], on_error="omit") == {
+        "afile": b"test"
+    }  # throws KeyError
+
+    with pytest.raises(KeyError):
+        m.getitems(["afile", "bfile"])
+    out = m.getitems(["afile", "bfile"], on_error="return")
+    assert isinstance(out["bfile"], KeyError)
+    m = fsspec.get_mapper("file://" + tmpdir, missing_exceptions=())
+    assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
+    with pytest.raises(FileNotFoundError):
+        m.getitems(["afile", "bfile"])
