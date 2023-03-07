@@ -3,14 +3,17 @@ from __future__ import absolute_import, division, print_function
 import io
 import logging
 import re
-import weakref
+import urllib.error
+import urllib.parse
 from copy import copy
+from json import dumps, loads
 from urllib.parse import urlparse
 
 import requests
 import yarl
 
 from fsspec.callbacks import _DEFAULT_CALLBACK
+from fsspec.registry import register_implementation
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
 
@@ -20,6 +23,154 @@ from ..caching import AllBytes
 ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
+
+
+class JsHttpException(urllib.error.HTTPError):
+    ...
+
+
+class ResponseProxy:
+    """Looks like a requests response"""
+
+    def __init__(self, req):
+        self.request = req
+        self._data = None
+        self._headers = None
+
+    @property
+    def raw(self):
+        if self._data is None:
+            self._data = str(self.request.response).encode()
+        return self._data
+
+    @property
+    def headers(self):
+        if self._headers is None:
+            self._headers = dict(
+                [
+                    _.split(": ")
+                    for _ in self.request.getAllResponseHeaders().strip().split("\r\n")
+                ]
+            )
+        return self._headers
+
+    @property
+    def status_code(self):
+        return int(self.request.status)
+
+    def raise_for_status(self):
+        if not self.ok:
+            raise JsHttpException(
+                self.url, self.status_code, self.reason, self.headers, None
+            )
+
+    @property
+    def reason(self):
+        return self.request.statusText
+
+    @property
+    def ok(self):
+        return self.status_code < 400
+
+    @property
+    def url(self):
+        return self.request.response.responseURL
+
+    @property
+    def text(self):
+        # TODO: encoding from headers
+        return self.raw.decode()
+
+    @property
+    def content(self):
+        return self.raw
+
+    @property
+    def json(self):
+        return loads(self.text)
+
+
+class RequestsSessionShim:
+    def __init__(self):
+        self.headers = {}
+
+    def request(
+        self,
+        method,
+        url,
+        params=None,
+        data=None,
+        headers=None,
+        cookies=None,
+        files=None,
+        auth=None,
+        timeout=None,
+        allow_redirects=None,
+        proxies=None,
+        hooks=None,
+        stream=None,
+        verify=None,
+        cert=None,
+        json=None,
+    ):
+        from js import Blob, XMLHttpRequest
+
+        logger.debug("JS request: %s %s", method, url)
+
+        if (
+            cert
+            or verify
+            or proxies
+            or files
+            or cookies
+            or hooks
+            or stream
+            or allow_redirects
+        ):
+            raise NotImplementedError
+        if data and json:
+            raise ValueError("Use json= or data=, not both")
+        req = XMLHttpRequest.new()
+        extra = auth if auth else ()
+        if params:
+            url = f"{url}?{urllib.parse.urlencode(params)}"
+        req.open(method, url, False, *extra)
+        if timeout:
+            req.timeout = timeout
+        if headers:
+            for k, v in headers.items():
+                req.setRequestHeader(k, v)
+
+        req.setRequestHeader("Accept", "application/octet-stream")
+        if json:
+            blob = Blob.new([dumps(data)], {type: "application/json"})
+            req.send(blob)
+        elif data:
+            if isinstance(data, io.IOBase):
+                data = data.read()
+            blob = Blob.new([data], {type: "application/octet-stream"})
+            req.send(blob)
+        else:
+            req.send(None)
+        return ResponseProxy(req)
+
+    def get(self, url, **kwargs):
+        return self.request("GET", url, **kwargs)
+
+    def head(self, url, **kwargs):
+        return self.request("HEAD", url, **kwargs)
+
+    def post(self, url, **kwargs):
+        return self.request("POST}", url, **kwargs)
+
+    def put(self, url, **kwargs):
+        return self.request("PUT", url, **kwargs)
+
+    def patch(self, url, **kwargs):
+        return self.request("PATCH", url, **kwargs)
+
+    def delete(self, url, **kwargs):
+        return self.request("DELETE", url, **kwargs)
 
 
 class HTTPFileSystem(AbstractFileSystem):
@@ -39,7 +190,7 @@ class HTTPFileSystem(AbstractFileSystem):
         simple_links=True,
         block_size=None,
         same_scheme=True,
-        cache_type="bytes",
+        cache_type="readahead",
         cache_options=None,
         client_kwargs=None,
         encoded=False,
@@ -77,14 +228,17 @@ class HTTPFileSystem(AbstractFileSystem):
         self.encoded = encoded
         self.kwargs = storage_options
 
-        session = requests.Session(**(client_kwargs or {}))
-        weakref.finalize(self, session.close)
-        self.session = session
+        try:
+            import js  # noqa: F401
 
-        # Clean caching-related parameters from `storage_options`
-        # before propagating them as `request_options` through `self.kwargs`.
-        # TODO: Maybe rename `self.kwargs` to `self.request_options` to make
-        #       it clearer.
+            logger.debug("Starting JS session")
+            self.session = RequestsSessionShim()
+            self.js = True
+        except Exception as e:
+            logger.debug("Starting cpython session because of: %s", e)
+            self.session = requests.Session(**(client_kwargs or {}))
+            self.js = False
+
         request_options = copy(storage_options)
         self.use_listings_cache = request_options.pop("use_listings_cache", False)
         request_options.pop("listings_expiry_time", None)
@@ -157,7 +311,6 @@ class HTTPFileSystem(AbstractFileSystem):
             ]
         else:
             return list(sorted(out))
-        return out
 
     def ls(self, url, detail=True, **kwargs):
 
@@ -256,7 +409,7 @@ class HTTPFileSystem(AbstractFileSystem):
                 f"method has to be either 'post' or 'put', not: {method!r}"
             )
 
-        meth = getattr(self.ession, method)
+        meth = getattr(self.session, method)
         resp = meth(rpath, data=gen_chunks(), **kw)
         self._raise_not_found_for_status(resp, rpath)
 
@@ -701,6 +854,6 @@ def _file_info(url, session, size_policy="head", **kwargs):
     return info
 
 
-def _file_size(url, session, *args, **kwargs):
-    info = _file_info(url, session=session, *args, **kwargs)
-    return info.get("size")
+# importing this is enough to register it
+register_implementation("http", HTTPFileSystem, clobber=True)
+register_implementation("https", HTTPFileSystem, clobber=True)
