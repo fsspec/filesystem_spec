@@ -49,10 +49,11 @@ class ResponseProxy:
     @property
     def raw(self):
         if self._data is None:
+            b = self.request.response.to_bytes()
             if self.stream:
-                self._data = StreamIO(str(self.request.response).encode())
+                self._data = StreamIO(b)
             else:
-                self._data = str(self.request.response).encode()
+                self._data = b
         return self._data
 
     def close(self):
@@ -129,7 +130,11 @@ class RequestsSessionShim:
         cert=None,
         json=None,
     ):
+        import js
         from js import Blob, XMLHttpRequest
+
+        if hasattr(js, "document"):
+            raise RuntimeError("Filesystem can only be run from a worker, not main")
 
         logger.debug("JS request: %s %s", method, url)
 
@@ -149,8 +154,7 @@ class RequestsSessionShim:
                 req.setRequestHeader(k, v)
 
         req.setRequestHeader("Accept", "application/octet-stream")
-        # TODO: can only do this in a worker
-        # req.responseType = "arraybuffer"
+        req.responseType = "arraybuffer"
         if json:
             blob = Blob.new([dumps(data)], {type: "application/json"})
             req.send(blob)
@@ -803,11 +807,9 @@ class HTTPStreamFile(AbstractBufferedFile):
         raise ValueError("Cannot seek streaming HTTP file")
 
     def read(self, num=-1):
-        if num < 0:
-            return self.r.content
         bufs = []
         leng = 0
-        while not self.r.raw.closed and leng < num:
+        while not self.r.raw.closed and (leng < num or num < 0):
             out = self.r.raw.read(num)
             if out:
                 bufs.append(out)
@@ -841,7 +843,8 @@ def _file_info(url, session, size_policy="head", **kwargs):
     kwargs = kwargs.copy()
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
-    head["Accept-Encoding"] = "identity"
+    # TODO: not allowed in JS
+    # head["Accept-Encoding"] = "identity"
     kwargs["headers"] = head
 
     info = {}
