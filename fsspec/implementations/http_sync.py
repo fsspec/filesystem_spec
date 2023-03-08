@@ -9,8 +9,10 @@ from copy import copy
 from json import dumps, loads
 from urllib.parse import urlparse
 
-import requests
-import yarl
+try:
+    import yarl
+except (ImportError, ModuleNotFoundError, OSError):
+    yarl = False
 
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.registry import register_implementation
@@ -29,19 +31,32 @@ class JsHttpException(urllib.error.HTTPError):
     ...
 
 
+class StreamIO(io.BytesIO):
+    # fake class, so you can set attributes on it
+    # will eventually actually stream
+    ...
+
+
 class ResponseProxy:
     """Looks like a requests response"""
 
-    def __init__(self, req):
+    def __init__(self, req, stream=False):
         self.request = req
+        self.stream = stream
         self._data = None
         self._headers = None
 
     @property
     def raw(self):
         if self._data is None:
-            self._data = str(self.request.response).encode()
+            if self.stream:
+                self._data = StreamIO(str(self.request.response).encode())
+            else:
+                self._data = str(self.request.response).encode()
         return self._data
+
+    def close(self):
+        del self._data
 
     @property
     def headers(self):
@@ -83,6 +98,7 @@ class ResponseProxy:
 
     @property
     def content(self):
+        self.stream = False
         return self.raw
 
     @property
@@ -117,16 +133,7 @@ class RequestsSessionShim:
 
         logger.debug("JS request: %s %s", method, url)
 
-        if (
-            cert
-            or verify
-            or proxies
-            or files
-            or cookies
-            or hooks
-            or stream
-            or allow_redirects
-        ):
+        if cert or verify or proxies or files or cookies or hooks:
             raise NotImplementedError
         if data and json:
             raise ValueError("Use json= or data=, not both")
@@ -142,6 +149,8 @@ class RequestsSessionShim:
                 req.setRequestHeader(k, v)
 
         req.setRequestHeader("Accept", "application/octet-stream")
+        # TODO: can only do this in a worker
+        # req.responseType = "arraybuffer"
         if json:
             blob = Blob.new([dumps(data)], {type: "application/json"})
             req.send(blob)
@@ -152,7 +161,7 @@ class RequestsSessionShim:
             req.send(blob)
         else:
             req.send(None)
-        return ResponseProxy(req)
+        return ResponseProxy(req, stream=stream)
 
     def get(self, url, **kwargs):
         return self.request("GET", url, **kwargs)
@@ -235,6 +244,8 @@ class HTTPFileSystem(AbstractFileSystem):
             self.session = RequestsSessionShim()
             self.js = True
         except Exception as e:
+            import requests
+
             logger.debug("Starting cpython session because of: %s", e)
             self.session = requests.Session(**(client_kwargs or {}))
             self.js = False
@@ -251,7 +262,9 @@ class HTTPFileSystem(AbstractFileSystem):
         return "http"
 
     def encode_url(self, url):
-        return yarl.URL(url, encoded=self.encoded)
+        if yarl:
+            return yarl.URL(url, encoded=self.encoded)
+        return url
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -421,7 +434,7 @@ class HTTPFileSystem(AbstractFileSystem):
             session = self.set_session()
             r = session.get(self.encode_url(path), **kw)
             return r.status_code < 400
-        except requests.HTTPError:
+        except Exception:
             return False
 
     def isfile(self, path, **kwargs):
@@ -791,13 +804,15 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def read(self, num=-1):
         if num < 0:
-            return self.content
+            return self.r.content
         bufs = []
         leng = 0
         while not self.r.raw.closed and leng < num:
             out = self.r.raw.read(num)
             if out:
                 bufs.append(out)
+            else:
+                break
             leng += len(out)
         self.loc += leng
         return b"".join(bufs)
