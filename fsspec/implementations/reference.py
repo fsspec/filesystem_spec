@@ -143,14 +143,19 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self.fs.sep.join(args)
 
     @property
+    def zmetadata(self):
+        if ".zmetadata" not in self._items:
+            self._get_and_cache_metadata()
+        return self._items[".zmetadata"]
+
+    @property
     def row_group_size(self):
-        if not hasattr(self, "_row_group_size"):
-            with self.fs.open(self.join(self.root, ".row_group_size")) as f:
-                self._row_group_size = json.load(f)["row_group_size"]
-        return self._row_group_size
+        return self.zmetadata["row_group_size"]
 
     def _load_one_key(self, key):
         if "/" not in key:
+            if key in self.zmetadata["metadata"]:
+                return self._get_and_cache_metadata(key)
             if key not in self.listdir():
                 raise KeyError
             return self._get_and_cache_metadata(key)
@@ -172,15 +177,20 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             if raw is not None:
                 return raw
             data = selection[:-1]
-            if not isinstance(str, data[0]):
+            if not isinstance(data[0], str):
                 data[0] = ""
             return data
 
-    def _get_and_cache_metadata(self, key):
-        with self.fs.open(self.join(self.root, key), "rb") as f:
-            data = f.read()
-        self._items[key] = data
-        return data
+    def _get_and_cache_metadata(self, key=None):
+        if key is None or ".zmetadata" not in self._items:
+            with self.fs.open(self.join(self.root, ".zmetadata"), "rb") as f:
+                self._items[".zmetadata"] = json.load(f)
+        if key is None:
+            return
+        if key == ".zmetadata":
+            # consolidated metadata JSON needs to be encoded as string for zarr
+            return json.dumps(self.zmetadata)
+        return self.zmetadata["metadata"][key]
 
     def _key_to_row_group(self, key):
         field, chunk = key.split("/")
@@ -195,7 +205,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def _get_chunk_sizes(self, field):
         if field not in self.chunk_sizes:
-            zarray = json.loads(self.__getitem__(f"{field}/.zarray"))
+            zarray = self._get_and_cache_metadata(f"{field}/.zarray")
             size_ratio = self.np.array(zarray["shape"]) / self.np.array(
                 zarray["chunks"]
             )
@@ -203,7 +213,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self.chunk_sizes[field]
 
     def __getitem__(self, key):
-        if key in self._items:
+        if key in self._items and key != ".zmetadata":
             return self._items[key]
         return self._load_one_key(key)
 
@@ -216,7 +226,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def __len__(self):
         # Caveat: This counts expected references, not actual
         count = 0
-        for field in self.fs.ls(self.root):
+        for field in self.listdir():
             if field.startswith("."):
                 count += 1
             else:
