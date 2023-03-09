@@ -170,10 +170,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             selection = [refs[c][row_number] for c in columns]
             raw = selection[-1]
             if raw is not None:
-                if isinstance(raw, bytes):
-                    raw = raw.decode()
                 return raw
-            return selection[:-1]
+            data = selection[:-1]
+            if not isinstance(str, data[0]):
+                data[0] = ""
+            return data
 
     def _get_and_cache_metadata(self, key):
         with self.fs.open(self.join(self.root, key), "rb") as f:
