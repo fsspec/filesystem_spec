@@ -420,7 +420,9 @@ class WebHDFile(AbstractBufferedFile):
                 location, headers={"content-type": "application/octet-stream"}
             )
             out2.raise_for_status()
-        self.location = location.replace("CREATE", "APPEND")
+            # after creating empty file, change location to append to
+            out2 = self.fs._call("APPEND", "POST", self.path, redirect=False, **kwargs)
+            self.location = self.fs._apply_proxy(out2.headers["Location"])
 
     def _fetch_range(self, start, end):
         start = max(start, 0)
