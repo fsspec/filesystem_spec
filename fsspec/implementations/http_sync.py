@@ -57,7 +57,8 @@ class ResponseProxy:
         return self._data
 
     def close(self):
-        del self._data
+        if hasattr(self, "_data"):
+            del self._data
 
     @property
     def headers(self):
@@ -80,6 +81,14 @@ class ResponseProxy:
                 self.url, self.status_code, self.reason, self.headers, None
             )
 
+    def iter_content(self, chunksize, *_, **__):
+        while True:
+            out = self.raw.read(chunksize)
+            if out:
+                yield out
+            else:
+                break
+
     @property
     def reason(self):
         return self.request.statusText
@@ -95,7 +104,7 @@ class ResponseProxy:
     @property
     def text(self):
         # TODO: encoding from headers
-        return self.raw.decode()
+        return self.content.decode()
 
     @property
     def content(self):
@@ -190,10 +199,13 @@ class HTTPFileSystem(AbstractFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
 
-    ``ls()`` is implemented by loading the parent page and doing a regex
-    match on the result. If simple_link=True, anything of the form
-    "http(s)://server.com/stuff?thing=other"; otherwise only links within
-    HTML href tags will be used.
+    This is the BLOCKING version of the normal HTTPFileSystem. It uses
+    requests in normal python and the JS runtime in pyodide.
+
+    Note that
+    for pyodide, it only runs in a webworker, because we require binary
+    blocking fetches. Also, all requests must pass the browser's CORS
+    checks, which requires the server to send the right headers.
     """
 
     sep = "/"
@@ -290,7 +302,7 @@ class HTTPFileSystem(AbstractFileSystem):
         logger.debug(url)
         r = self.session.get(self.encode_url(url), **self.kwargs)
         self._raise_not_found_for_status(r, url)
-        text = r.text()
+        text = r.text
         if self.simple_links:
             links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
         else:
@@ -370,18 +382,18 @@ class HTTPFileSystem(AbstractFileSystem):
         logger.debug(rpath)
         r = self.session.get(self.encode_url(rpath), **kw)
         try:
-            size = int(r.headers["content-length"])
-        except (ValueError, KeyError):
+            size = int(
+                r.headers.get("content-length", None)
+                or r.headers.get("Content-Length", None)
+            )
+        except (ValueError, KeyError, TypeError):
             size = None
 
         callback.set_size(size)
         self._raise_not_found_for_status(r, rpath)
         if not isfilelike(lpath):
             lpath = open(lpath, "wb")
-        chunk = True
-        while chunk:
-            r.raw.decode_content = True
-            chunk = r.raw.read(chunk_size)
+        for chunk in r.iter_content(chunk_size, decode_unicode=False):
             lpath.write(chunk)
             callback.relative_update(len(chunk))
 
@@ -430,13 +442,38 @@ class HTTPFileSystem(AbstractFileSystem):
         resp = meth(rpath, data=gen_chunks(), **kw)
         self._raise_not_found_for_status(resp, rpath)
 
+    def _process_limits(self, url, start, end):
+        """Helper for "Range"-based _cat_file"""
+        size = None
+        suff = False
+        if start is not None and start < 0:
+            # if start is negative and end None, end is the "suffix length"
+            if end is None:
+                end = -start
+                start = ""
+                suff = True
+            else:
+                size = size or self.info(url)["size"]
+                start = size + start
+        elif start is None:
+            start = 0
+        if not suff:
+            if end is not None and end < 0:
+                if start is not None:
+                    size = size or self.info(url)["size"]
+                    end = size + end
+            elif end is None:
+                end = ""
+            if isinstance(end, int):
+                end -= 1  # bytes range is inclusive
+        return "bytes=%s-%s" % (start, end)
+
     def exists(self, path, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         try:
             logger.debug(path)
-            session = self.set_session()
-            r = session.get(self.encode_url(path), **kw)
+            r = self.session.get(self.encode_url(path), **kw)
             return r.status_code < 400
         except Exception:
             return False
@@ -613,7 +650,7 @@ class HTTPFileSystem(AbstractFileSystem):
     def isdir(self, path):
         # override, since all URLs are (also) files
         try:
-            return bool(self._ls(path))
+            return bool(self.ls(path))
         except (FileNotFoundError, ValueError):
             return False
 
@@ -744,10 +781,11 @@ class HTTPFile(AbstractBufferedFile):
         # with status 206 (partial content). But we'll guess that a suitable
         # Content-Range header or a Content-Length no more than the
         # requested range also mean we have got the desired range.
+        cl = r.headers.get("Content-Length", r.headers.get("content-length", end + 1))
         response_is_range = (
             r.status_code == 206
             or self._parse_content_range(r.headers)[0] == start
-            or int(r.headers.get("Content-Length", end + 1)) <= end - start
+            or int(cl) <= end - start
         )
 
         if response_is_range:
@@ -764,18 +802,9 @@ class HTTPFile(AbstractBufferedFile):
             # so we can read the required amount anyway.
             cl = 0
             out = []
-            while True:
-                r.raw.decode_content = True
-                chunk = r.raw.read(2**20)
-                # data size unknown, let's read until we have enough
-                if chunk:
-                    out.append(chunk)
-                    cl += len(chunk)
-                    if cl > end - start:
-                        break
-                else:
-                    break
-            r.raw.close()
+            for chunk in r.iter_content(2**20, False):
+                out.append(chunk)
+                cl += len(chunk)
             out = b"".join(out)[: end - start]
         return out
 
@@ -798,8 +827,9 @@ class HTTPStreamFile(AbstractBufferedFile):
         super().__init__(fs=fs, path=url, mode=mode, cache_type="readahead", **kwargs)
 
         r = self.session.get(self.fs.encode_url(url), stream=True, **kwargs)
-        r.raw.decode_content = True
         self.fs._raise_not_found_for_status(r, url)
+        self.it = r.iter_content(1024, False)
+        self.leftover = b""
 
         self.r = r
 
@@ -807,20 +837,30 @@ class HTTPStreamFile(AbstractBufferedFile):
         raise ValueError("Cannot seek streaming HTTP file")
 
     def read(self, num=-1):
-        bufs = []
-        leng = 0
-        while not self.r.raw.closed and (leng < num or num < 0):
-            out = self.r.raw.read(num)
+        bufs = [self.leftover]
+        leng = len(self.leftover)
+        while leng < num or num < 0:
+            try:
+                out = self.it.__next__()
+            except StopIteration:
+                break
             if out:
                 bufs.append(out)
             else:
                 break
             leng += len(out)
-        self.loc += leng
-        return b"".join(bufs)
+        out = b"".join(bufs)
+        if num >= 0:
+            self.leftover = out[num:]
+            out = out[:num]
+        else:
+            self.leftover = b""
+        self.loc += len(out)
+        return out
 
     def close(self):
         self.r.close()
+        self.closed = True
 
 
 def get_range(session, url, start, end, **kwargs):
@@ -854,16 +894,20 @@ def _file_info(url, session, size_policy="head", **kwargs):
         r = session.get(url, allow_redirects=ar, **kwargs)
     else:
         raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
-        r.raise_for_status()
+    r.raise_for_status()
 
-        # TODO:
-        #  recognise lack of 'Accept-Ranges',
-        #                 or 'Accept-Ranges': 'none' (not 'bytes')
-        #  to mean streaming only, no random access => return None
+    # TODO:
+    #  recognise lack of 'Accept-Ranges',
+    #                 or 'Accept-Ranges': 'none' (not 'bytes')
+    #  to mean streaming only, no random access => return None
     if "Content-Length" in r.headers:
         info["size"] = int(r.headers["Content-Length"])
     elif "Content-Range" in r.headers:
         info["size"] = int(r.headers["Content-Range"].split("/")[1])
+    elif "content-length" in r.headers:
+        info["size"] = int(r.headers["content-length"])
+    elif "content-range" in r.headers:
+        info["size"] = int(r.headers["content-range"].split("/")[1])
 
     for checksum_field in ["ETag", "Content-MD5", "Digest"]:
         if r.headers.get(checksum_field):
@@ -873,5 +917,16 @@ def _file_info(url, session, size_policy="head", **kwargs):
 
 
 # importing this is enough to register it
-register_implementation("http", HTTPFileSystem, clobber=True)
-register_implementation("https", HTTPFileSystem, clobber=True)
+def register():
+    register_implementation("http", HTTPFileSystem, clobber=True)
+    register_implementation("https", HTTPFileSystem, clobber=True)
+
+
+register()
+
+
+def unregister():
+    from fsspec.implementations.http import HTTPFileSystem
+
+    register_implementation("http", HTTPFileSystem, clobber=True)
+    register_implementation("https", HTTPFileSystem, clobber=True)
