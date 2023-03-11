@@ -62,7 +62,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     import pandas as pd
 
     def __init__(
-        self, root, fs=None, engine="fastparquet", cache_size=128, categorical_urls=True
+        self,
+        root,
+        fs=None,
+        cache_size=128,
     ):
         """
         Parameters
@@ -72,66 +75,23 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         fs : fsspec.AbstractFileSystem
             fsspec filesystem object, default is local filesystem.
         cache_size : int
-            Maximum size of LRU cache, where cache_size*row_group_size denotes
+            Maximum size of LRU cache, where cache_size*record_size denotes
             the total number of references that can be loaded in memory at once.
-        engine : {'fastparquet', 'pyarrow'}
-            Library to use for writing parquet files.
-        categorical_urls : bool
-            Whether to use pandas.Categorical to encode urls. This can greatly
-            reduce memory usage for reference sets with URLs that are used many
-            times by multiple keys (eg, when a single variable has many chunks)
-            in exchange for a bit of additional overhead when loading references.
         """
         self.root = root
         self.chunk_sizes = {}
         self._items = {}
-        self.pfs = {}
-        self.engine = engine
-        self.categorical_urls = categorical_urls
         self.fs = fsspec.filesystem("file") if fs is None else fs
 
-        # Define function to open and decompress row group data and store
-        # in LRU cache
-        if self.engine == "pyarrow":
-            import pyarrow.parquet as pq
+        # Define function to open and decompress refs
+        @lru_cache(maxsize=cache_size)
+        def open_refs(path):
+            with self.fs.open(path) as f:
+                df = self.pd.read_parquet(f, engine="fastparquet")
+            refs = {c: df[c].values for c in df.columns}
+            return refs
 
-            self.pf_cls = pq.ParquetFile
-
-            @lru_cache(maxsize=cache_size)
-            def open_row_group(pf, row_group):
-                rg = pf.read_row_group(row_group)
-                refs = {c: rg[c].to_numpy() for c in rg.column_names}
-                if self.categorical_urls:
-                    refs["path"] = self.pd.Categorical(refs["path"])
-                return refs
-
-        else:
-            import fastparquet
-
-            self.pf_cls = fastparquet.ParquetFile
-
-            @lru_cache(maxsize=cache_size)
-            def open_row_group(pf, row_group):
-                rg = pf.row_groups[row_group]
-                refs = {
-                    c: self.np.empty(rg.num_rows, dtype=dtype)
-                    for c, dtype in pf.dtypes.items()
-                }
-                fastparquet.core.read_row_group_arrays(
-                    pf.open(),
-                    rg,
-                    pf.columns,
-                    pf.categories,
-                    pf.schema,
-                    pf.cats,
-                    assign=refs,
-                )
-
-                if self.categorical_urls:
-                    refs["path"] = self.pd.Categorical(refs["path"])
-                return refs
-
-        self.open_row_group = open_row_group
+        self.open_refs = open_refs
 
     def listdir(self, basename=True):
         listing = self.fs.ls(self.root)
@@ -149,8 +109,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self._items[".zmetadata"]
 
     @property
-    def row_group_size(self):
-        return self.zmetadata["row_group_size"]
+    def record_size(self):
+        return self.zmetadata["record_size"]
 
     def _load_one_key(self, key):
         if "/" not in key:
@@ -165,14 +125,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 # zarr metadata keys are always cached
                 return self._get_and_cache_metadata(key)
             # Chunk keys can be loaded from row group and cached in LRU cache
-            row_group, row_number = self._key_to_row_group(key)
-            if field not in self.pfs:
-                pf_path = self.join(self.root, field, "refs.parq")
-                self.pfs[field] = self.pf_cls(self.fs.open(pf_path))
-            pf = self.pfs[field]
-            refs = self.open_row_group(pf, row_group)
+            record, ri = self._key_to_record(key)
+            pf_path = self.join(self.root, field, f"refs.{record}.parq")
+            refs = self.open_refs(pf_path)
             columns = ["path", "offset", "size", "raw"]
-            selection = [refs[c][row_number] for c in columns]
+            selection = [refs[c][ri] if c in refs else None for c in columns]
             raw = selection[-1]
             if raw is not None:
                 return raw
@@ -192,16 +149,16 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             return json.dumps(self.zmetadata)
         return self.zmetadata["metadata"][key]
 
-    def _key_to_row_group(self, key):
+    def _key_to_record(self, key):
         field, chunk = key.split("/")
         chunk_sizes = self._get_chunk_sizes(field)
         if chunk_sizes.size == 0:
             return 0, 0
         chunk_idx = self.np.array([int(c) for c in chunk.split(".")])
         chunk_number = self.np.ravel_multi_index(chunk_idx, chunk_sizes)
-        row_group = chunk_number // self.row_group_size
-        row_number = chunk_number % self.row_group_size
-        return row_group, row_number
+        record = chunk_number // self.record_size
+        ri = chunk_number % self.record_size
+        return record, ri
 
     def _get_chunk_sizes(self, field):
         if field not in self.chunk_sizes:
@@ -347,7 +304,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             Neighboring byte ranges will only be merged when the size of
             the aggregated range is <= ``max_block``. Default is 256MB.
         cache_size : int
-            Maximum size of LRU cache, where cache_size*row_group_size denotes
+            Maximum size of LRU cache, where cache_size*record_size denotes
             the total number of references that can be loaded in memory at once.
             Only used for lazily loaded references.
         engine : {'fastparquet', 'pyarrow'}
