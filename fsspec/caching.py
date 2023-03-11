@@ -661,6 +661,9 @@ class BackgroundBlockCache(BaseCache):
                     self._fetch_block_cached.add_key(
                         self._fetch_future.result(), self._fetch_future_block_number
                     )
+                    # Cleanup the fetch variables. Done with fetching the block.
+                    self._fetch_future_block_number = None
+                    self._fetch_future = None
                 else:
                     # Must join if we need the block for the current fetch
                     must_join = bool(
@@ -674,9 +677,9 @@ class BackgroundBlockCache(BaseCache):
                         fetch_future_block_number = self._fetch_future_block_number
                         fetch_future = self._fetch_future
 
-            # Cleanup the fetch variables. Either done or have a local copy.
-            self._fetch_future_block_number = None
-            self._fetch_future = None
+                        # Cleanup the fetch variables. Have a local copy.
+                        self._fetch_future_block_number = None
+                        self._fetch_future = None
 
         # Need to wait for the future for the current read
         if fetch_future is not None:
