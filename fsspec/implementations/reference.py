@@ -53,6 +53,32 @@ def _protocol_groups(paths, references):
     return out
 
 
+class RefsValuesView(collections.abc.ValuesView):
+    def __iter__(self):
+        # Caveat: Note that this generates all expected keys, but does not
+        # account for reference keys that are missing.
+        metkeys = [".zgroup", ".zattrs"]
+        for metkey in metkeys:
+            if metkey in self._mapping.zmetadata["metadata"]:
+                yield self._mapping[metkey]
+        for field in self._mapping.listdir():
+            if field.startswith("."):
+                yield self._mapping[field]
+            else:
+                chunk_sizes = self._mapping._get_chunk_sizes(field)
+                yield self._mapping["/".join([field, ".zarray"])]
+                yield self._mapping["/".join([field, ".zattrs"])]
+                if chunk_sizes.size == 0:
+                    yield self._mapping[field + "/0"]
+                    continue
+                yield from self._mapping._generate_all_records(field)
+
+
+class RefsItemsView(collections.abc.ItemsView):
+    def __iter__(self):
+        return zip(self._mapping.keys(), self._mapping.values())
+
+
 class LazyReferenceMapper(collections.abc.MutableMapping):
     """Interface to read parquet store as if it were a standard kerchunk
     references dict."""
@@ -125,7 +151,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 # zarr metadata keys are always cached
                 return self._get_and_cache_metadata(key)
             # Chunk keys can be loaded from row group and cached in LRU cache
-            record, ri = self._key_to_record(key)
+            record, ri, chunk_size = self._key_to_record(key)
+            if chunk_size == 0:
+                return b""
             pf_path = self.join(self.root, field, f"refs.{record}.parq")
             refs = self.open_refs(pf_path)
             columns = ["path", "offset", "size", "raw"]
@@ -153,12 +181,12 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         field, chunk = key.split("/")
         chunk_sizes = self._get_chunk_sizes(field)
         if chunk_sizes.size == 0:
-            return 0, 0
+            return 0, 0, 0
         chunk_idx = self.np.array([int(c) for c in chunk.split(".")])
         chunk_number = self.np.ravel_multi_index(chunk_idx, chunk_sizes)
         record = chunk_number // self.record_size
         ri = chunk_number % self.record_size
-        return record, ri
+        return record, ri, chunk_sizes.size
 
     def _get_chunk_sizes(self, field):
         if field not in self.chunk_sizes:
@@ -168,6 +196,51 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             )
             self.chunk_sizes[field] = self.np.ceil(size_ratio).astype(int)
         return self.chunk_sizes[field]
+
+    def _generate_record(self, field, irec):
+        refs = self.open_refs(self.join(self.root, field, f"refs.{irec}.parq"))
+        refs_type = ""
+        if "path" in refs:
+            refs_type += "url"
+            paths = refs["path"]
+            offsets = refs["offset"]
+            sizes = refs["size"]
+            if hasattr(paths, "codes"):
+                # Since this is meant to be temporarily iterated over we don't
+                # need to mind fully expanded categoricals
+                paths = self.np.asarray(paths)
+        if "raw" in refs:
+            refs_type += "raw"
+            raws = refs["raw"]
+        if refs_type == "url":
+            # Only urls
+            for i in range(paths.size):
+                yield [paths[i], offsets[i], sizes[i]]
+        elif refs_type == "raw":
+            # Only raws
+            for i in range(raws.size):
+                yield raws[i]
+        else:
+            # Mix of raw and urls
+            for i in range(raws.size):
+                raw = raws[i]
+                if raw:
+                    yield raw
+                else:
+                    yield [paths[i], offsets[i], sizes[i]]
+
+    def _generate_all_records(self, field):
+        chunk_size = self._get_chunk_sizes(field)
+        nrec = int(self.np.ceil(self.np.product(chunk_size) / self.record_size))
+        for irec in range(nrec):
+            record = self._generate_record(field, irec)
+            yield from record
+
+    def values(self):
+        return RefsValuesView(self)
+
+    def items(self):
+        return RefsItemsView(self)
 
     def __getitem__(self, key):
         if key in self._items and key != ".zmetadata":
@@ -190,24 +263,32 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 chunk_sizes = self._get_chunk_sizes(field)
                 nchunks = self.np.product(chunk_sizes)
                 count += 2 + nchunks
+        metkeys = [".zgroup", ".zattrs"]
+        for metkey in metkeys:
+            if metkey in self.zmetadata["metadata"]:
+                count += 1
         return count
 
     def __iter__(self):
         # Caveat: Note that this generates all expected keys, but does not
         # account for reference keys that are missing.
+        metkeys = [".zgroup", ".zattrs"]
+        for metkey in metkeys:
+            if metkey in self.zmetadata["metadata"]:
+                yield metkey
         for field in self.listdir():
             if field.startswith("."):
                 yield field
             else:
                 chunk_sizes = self._get_chunk_sizes(field)
-                nchunks = self.np.product(chunk_sizes)
                 yield "/".join([field, ".zarray"])
                 yield "/".join([field, ".zattrs"])
-                inds = self.np.asarray(
-                    self.np.unravel_index(self.np.arange(nchunks), chunk_sizes)
-                ).T
+                if chunk_sizes.size == 0:
+                    yield field + "/0"
+                    continue
+                inds = self.np.ndindex(*chunk_sizes)
                 for ind in inds:
-                    yield field + "/" + ".".join(ind.astype(str))
+                    yield field + "/" + ".".join([str(c) for c in ind])
 
 
 class ReferenceFileSystem(AsyncFileSystem):
@@ -248,8 +329,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         max_gap=64_000,
         max_block=256_000_000,
         cache_size=128,
-        engine="fastparquet",
-        categorical_urls=False,
         **kwargs,
     ):
         """
@@ -307,15 +386,6 @@ class ReferenceFileSystem(AsyncFileSystem):
             Maximum size of LRU cache, where cache_size*record_size denotes
             the total number of references that can be loaded in memory at once.
             Only used for lazily loaded references.
-        engine : {'fastparquet', 'pyarrow'}
-            Library to use for writing parquet files.
-            Only used for lazily loaded references.
-        categorical_urls : bool
-            Whether to use pandas.Categorical to encode urls. This can greatly
-            reduce memory usage for reference sets with URLs that are used many
-            times by multiple keys (eg, when a single variable has many chunks)
-            in exchange for a bit of additional overhead when loading references.
-            Only used for lazily loaded references.
         kwargs : passed to parent class
         """
         super().__init__(**kwargs)
@@ -348,8 +418,6 @@ class ReferenceFileSystem(AsyncFileSystem):
                     fo,
                     fs=ref_fs,
                     cache_size=cache_size,
-                    categorical_urls=categorical_urls,
-                    engine=engine,
                 )
         else:
             # dictionaries
