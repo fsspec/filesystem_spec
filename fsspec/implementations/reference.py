@@ -1,4 +1,3 @@
-import ast
 import base64
 import collections
 import io
@@ -17,7 +16,6 @@ except ImportError:
 from ..asyn import AsyncFileSystem
 from ..callbacks import _DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
-from ..spec import AbstractFileSystem
 from ..utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
@@ -53,32 +51,6 @@ def _protocol_groups(paths, references):
     return out
 
 
-class RefsValuesView(collections.abc.ValuesView):
-    def __iter__(self):
-        # Caveat: Note that this generates all expected keys, but does not
-        # account for reference keys that are missing.
-        metkeys = [".zgroup", ".zattrs"]
-        for metkey in metkeys:
-            if metkey in self._mapping.zmetadata["metadata"]:
-                yield self._mapping[metkey]
-        for field in self._mapping.listdir():
-            if field.startswith("."):
-                yield self._mapping[field]
-            else:
-                chunk_sizes = self._mapping._get_chunk_sizes(field)
-                yield self._mapping["/".join([field, ".zarray"])]
-                yield self._mapping["/".join([field, ".zattrs"])]
-                if chunk_sizes.size == 0:
-                    yield self._mapping[field + "/0"]
-                    continue
-                yield from self._mapping._generate_all_records(field)
-
-
-class RefsItemsView(collections.abc.ItemsView):
-    def __iter__(self):
-        return zip(self._mapping.keys(), self._mapping.values())
-
-
 class LazyReferenceMapper(collections.abc.MutableMapping):
     """Interface to read parquet store as if it were a standard kerchunk
     references dict."""
@@ -107,6 +79,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.root = root
         self.chunk_sizes = {}
         self._items = {}
+        self.dirs = None
         self.fs = fsspec.filesystem("file") if fs is None else fs
 
         # Define function to open and decompress refs
@@ -119,63 +92,47 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
         self.open_refs = open_refs
 
+        with self.fs.open("/".join([self.root, ".zmetadata"]), "rb") as f:
+            self._items[".zmetadata"] = f.read()
+        met = json.loads(self._items[".zmetadata"])
+        self.record_size = met["record_size"]
+        self.zmetadata = met["metadata"]
+        if self.root:
+            self.url = self.root + "/{field}/refs.{record}.parq"
+        else:
+            self.url = "{field}/refs.{record}.parq"
+
     def listdir(self, basename=True):
-        listing = self.fs.ls(self.root)
+        if self.dirs is None:
+            dirs = [p.split("/", 1)[0] for p in self.zmetadata]
+            self.dirs = set(sorted(p for p in dirs if p and not p.startswith(".")))
+        listing = self.dirs
         if basename:
             listing = [os.path.basename(path) for path in listing]
         return listing
 
-    def join(self, *args):
-        return self.fs.sep.join(args)
-
-    @property
-    def zmetadata(self):
-        if ".zmetadata" not in self._items:
-            self._get_and_cache_metadata()
-        return self._items[".zmetadata"]
-
-    @property
-    def record_size(self):
-        return self.zmetadata["record_size"]
-
     def _load_one_key(self, key):
-        if "/" not in key:
-            if key in self.zmetadata["metadata"]:
-                return self._get_and_cache_metadata(key)
-            if key not in self.listdir():
-                raise KeyError
-            return self._get_and_cache_metadata(key)
-        else:
-            field, sub_key = key.split("/")
-            if sub_key.startswith("."):
-                # zarr metadata keys are always cached
-                return self._get_and_cache_metadata(key)
-            # Chunk keys can be loaded from row group and cached in LRU cache
-            record, ri, chunk_size = self._key_to_record(key)
-            if chunk_size == 0:
-                return b""
-            pf_path = self.join(self.root, field, f"refs.{record}.parq")
-            refs = self.open_refs(pf_path)
-            columns = ["path", "offset", "size", "raw"]
-            selection = [refs[c][ri] if c in refs else None for c in columns]
-            raw = selection[-1]
-            if raw is not None:
-                return raw
-            data = selection[:-1]
-            if not isinstance(data[0], str):
-                data[0] = ""
-            return data
-
-    def _get_and_cache_metadata(self, key=None):
-        if key is None or ".zmetadata" not in self._items:
-            with self.fs.open(self.join(self.root, ".zmetadata"), "rb") as f:
-                self._items[".zmetadata"] = json.load(f)
-        if key is None:
-            return
-        if key == ".zmetadata":
-            # consolidated metadata JSON needs to be encoded as string for zarr
-            return json.dumps(self.zmetadata)
-        return self.zmetadata["metadata"][key]
+        if key in self._items:
+            return self._items[key]
+        elif key in self.zmetadata:
+            return json.dumps(self.zmetadata[key]).encode()
+        field, sub_key = key.split("/")
+        # Chunk keys can be loaded from row group and cached in LRU cache
+        record, ri, chunk_size = self._key_to_record(key)
+        if chunk_size == 0:
+            # raise KeyError ?
+            return b""
+        pf_path = self.url.format(field=field, record=record)
+        refs = self.open_refs(pf_path)
+        columns = ["path", "offset", "size", "raw"]
+        selection = [refs[c][ri] if c in refs else None for c in columns]
+        raw = selection[-1]
+        if raw is not None:
+            return raw
+        data = selection[:-1]
+        if data[1:] == [0, 0]:
+            data = data[:1]
+        return data
 
     def _key_to_record(self, key):
         field, chunk = key.split("/")
@@ -190,68 +147,31 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def _get_chunk_sizes(self, field):
         if field not in self.chunk_sizes:
-            zarray = self._get_and_cache_metadata(f"{field}/.zarray")
+            zarray = self.zmetadata[f"{field}/.zarray"]
             size_ratio = self.np.array(zarray["shape"]) / self.np.array(
                 zarray["chunks"]
             )
             self.chunk_sizes[field] = self.np.ceil(size_ratio).astype(int)
         return self.chunk_sizes[field]
 
-    def _generate_record(self, field, irec):
-        refs = self.open_refs(self.join(self.root, field, f"refs.{irec}.parq"))
-        refs_type = ""
-        if "path" in refs:
-            refs_type += "url"
-            paths = refs["path"]
-            offsets = refs["offset"]
-            sizes = refs["size"]
-            if hasattr(paths, "codes"):
-                # Since this is meant to be temporarily iterated over we don't
-                # need to mind fully expanded categoricals
-                paths = self.np.asarray(paths)
-        if "raw" in refs:
-            refs_type += "raw"
-            raws = refs["raw"]
-        if refs_type == "url":
-            # Only urls
-            for i in range(paths.size):
-                yield [paths[i], offsets[i], sizes[i]]
-        elif refs_type == "raw":
-            # Only raws
-            for i in range(raws.size):
-                yield raws[i]
-        else:
-            # Mix of raw and urls
-            for i in range(raws.size):
-                raw = raws[i]
-                if raw:
-                    yield raw
-                else:
-                    yield [paths[i], offsets[i], sizes[i]]
-
-    def _generate_all_records(self, field):
-        chunk_size = self._get_chunk_sizes(field)
-        nrec = int(self.np.ceil(self.np.product(chunk_size) / self.record_size))
-        for irec in range(nrec):
-            record = self._generate_record(field, irec)
-            yield from record
-
-    def values(self):
-        return RefsValuesView(self)
-
-    def items(self):
-        return RefsItemsView(self)
-
     def __getitem__(self, key):
-        if key in self._items and key != ".zmetadata":
+        if key in self._items:
             return self._items[key]
+        if key in self.zmetadata:
+            return self.zmetadata[key]
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
         self._items[key] = value
 
     def __delitem__(self, key):
-        del self._items[key]
+        if key in self._items:
+            del self._items[key]
+        elif key in self.zmetadata:
+            del self.zmetadata[key]
+        else:
+            # set appropriate reference to zeros in memory
+            raise KeyError
 
     def __len__(self):
         # Caveat: This counts expected references, not actual
@@ -263,32 +183,23 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 chunk_sizes = self._get_chunk_sizes(field)
                 nchunks = self.np.product(chunk_sizes)
                 count += 2 + nchunks
-        metkeys = [".zgroup", ".zattrs"]
-        for metkey in metkeys:
-            if metkey in self.zmetadata["metadata"]:
-                count += 1
+        count += len(self.zmetadata)  # all metadata keys
+        count += len(self._items)  # the metadata file itself
         return count
 
     def __iter__(self):
         # Caveat: Note that this generates all expected keys, but does not
         # account for reference keys that are missing.
-        metkeys = [".zgroup", ".zattrs"]
-        for metkey in metkeys:
-            if metkey in self.zmetadata["metadata"]:
-                yield metkey
+        yield from self.zmetadata
+        yield from self._items
         for field in self.listdir():
-            if field.startswith("."):
-                yield field
-            else:
-                chunk_sizes = self._get_chunk_sizes(field)
-                yield "/".join([field, ".zarray"])
-                yield "/".join([field, ".zattrs"])
-                if chunk_sizes.size == 0:
-                    yield field + "/0"
-                    continue
-                inds = self.np.ndindex(*chunk_sizes)
-                for ind in inds:
-                    yield field + "/" + ".".join([str(c) for c in ind])
+            chunk_sizes = self._get_chunk_sizes(field)
+            if chunk_sizes.size == 0:
+                yield field + "/0"
+                continue
+            inds = self.np.ndindex(*chunk_sizes)
+            for ind in inds:
+                yield field + "/" + ".".join([str(c) for c in ind])
 
 
 class ReferenceFileSystem(AsyncFileSystem):
@@ -397,32 +308,27 @@ class ReferenceFileSystem(AsyncFileSystem):
         self._dircache = {}
         self.max_gap = max_gap
         self.max_block = max_block
-        if hasattr(fo, "read"):
-            text = json.load(fo)
-            text = text.decode() if isinstance(text, bytes) else text
-        if target_protocol:
-            extra = {"protocol": target_protocol}
-        else:
-            extra = {"protocol": "file"}
-        dic = dict(**(ref_storage_args or target_options or {}), **extra)
-        ref_fs = filesystem(**dic)
         if isinstance(fo, str):
+            dic = dict(
+                **(ref_storage_args or target_options or {}), protocol=target_protocol
+            )
+            ref_fs, fo = fsspec.core.url_to_fs(fo, **dic)
             if ref_fs.isfile(fo):
                 # text JSON
                 with ref_fs.open(fo, "rb") as f:
                     logger.info("Read reference from URL %s", fo)
                     text = json.load(f)
+                self._process_references(text, template_overrides)
             else:
                 # Lazy parquet refs
-                text = LazyReferenceMapper(
+                self.references = LazyReferenceMapper(
                     fo,
                     fs=ref_fs,
                     cache_size=cache_size,
                 )
         else:
             # dictionaries
-            text = fo
-        self._process_references(text, template_overrides)
+            self._process_references(fo, template_overrides)
         if isinstance(fs, dict):
             self.fss = {
                 k: (
@@ -673,9 +579,6 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references0(self, references):
         """Make reference dict for Spec Version 0"""
-        if "zarr_consolidated_format" in references:
-            # special case for Ike prototype
-            references = _unmodel_hdf5(references)
         self.references = references
 
     def _process_references1(self, references, template_overrides=None):
@@ -886,328 +789,3 @@ class ReferenceFileSystem(AsyncFileSystem):
                 out[k] = v
         with fsspec.open(url, "wb", **storage_options) as f:
             f.write(json.dumps({"version": 1, "refs": out}).encode())
-
-
-def prefix(x):
-    if "/.z" in x or "/" not in x:
-        return "metadata", x
-    return x.split("/", 1)
-
-
-def constant_prefix(x):
-    return "metadata", x
-
-
-class DFReferenceFileSystem(AbstractFileSystem):
-    """
-    (Experimental) Parquet-based Reference Filesystem
-
-    Putative replacement or adjunct to ReferenceFileSystem with
-    additional capabilities:
-    - loads from parquet for better on-disk and in-memory space
-    - optional lazy loading by key prefix (lazy=True)
-    - multiple targets for a given key (allow_multi=True), concatenated
-      together by default, of multi_func=
-    - per-chunk processing with extra parameters stored in the parquet
-      (chunk_func=)
-
-    This implementation is not (yet) multable.
-    """
-
-    def __init__(
-        self,
-        fo,
-        target_options=None,
-        remote_protocol=None,
-        remote_options=None,
-        fs=None,
-        max_gap=64_000,
-        max_block=256_000_000,
-        parquet_kwargs=None,
-        chunk_func=None,
-        allow_multi=False,
-        multi_func=b"".join,
-        prefix_func=prefix,
-        lazy=False,
-        **kwargs,
-    ):
-        self.fo = fo
-        self.target_options = target_options or {}
-        self.max_gap = max_gap
-        self.max_block = max_block
-        self.dataframes = {}
-        self.keysets = {}
-        self.url_dict = {}
-        self.template_dict = {}
-        self.prefs = None
-        self.fss = {}
-        self.dirs = None
-        self.lazy = lazy
-        self.chunk_func = chunk_func
-        self.allow_multi = allow_multi
-        self.multi_func = multi_func
-        self.prefix_func = prefix_func if lazy else constant_prefix
-        self.pkwargs = parquet_kwargs or {}
-        if fs is not None:
-            # single remote FS
-            remote_protocol = (
-                fs.protocol[0] if isinstance(fs.protocol, tuple) else fs.protocol
-            )
-            self.fss[remote_protocol] = fs
-
-        if remote_protocol and remote_protocol not in self.fss:
-            fs = filesystem(remote_protocol, **(remote_options or {}))
-            self.fss[remote_protocol] = fs
-
-        if fs:
-            self.fss[None] = fs
-        elif self.fss:
-            self.fss[None] = iter(self.fss.values()).__next__()
-        else:
-            self.fss[None] = fsspec.filesystem(
-                remote_protocol, **(remote_options or {})
-            )
-
-        super().__init__(**kwargs)
-        self._reference_part()
-
-    def _reference_part(self, part="metadata"):
-        """Load some references from parquet
-
-        If lazy is False, this is called exactly once per instance
-
-        If lazy is true, selecting a path will determine the name of
-        the target parquet file, and the resultant columns will be
-        cached so the file need not be read again
-        """
-        import fastparquet
-
-        if part != "metadata" and part not in self.dirs:
-            raise FileNotFoundError(f"prefix {part}")
-        if part not in self.dataframes:
-            url = f"{self.fo}/{part}.parq" if self.lazy else self.fo
-            fs, path = fsspec.core.url_to_fs(url, **self.target_options)
-            pf = fastparquet.ParquetFile(path, fs=fs)
-            self.template_dict[part] = pf.key_value_metadata
-            df = pf.to_pandas()
-            thispart = {}
-            for k in df:
-                if df[k].dtype == "category" and k == "path":
-                    self.url_dict[part] = df[k].cat.categories.values
-                    thispart[k] = df[k].cat.codes.values
-                else:
-                    thispart[k] = df[k].values
-            self.dataframes[part] = thispart
-            if self.allow_multi is False:
-                self.keysets[part] = {
-                    k: i for (i, k) in enumerate(self.dataframes[part]["key"])
-                }
-            else:
-                self.keysets[part] = {}
-                for i, k in enumerate(self.dataframes[part]["key"]):
-                    self.keysets[part].setdefault(k, []).append(i)
-            if part == "metadata":
-                self.dirs = {
-                    k.rsplit("/", 1)[0]
-                    for k in self.dataframes[part]["key"]
-                    if "/" in k
-                }
-                self.prefs = (
-                    ast.literal_eval(pf.key_value_metadata["prefs"])
-                    if "prefs" in pf.key_value_metadata
-                    else set()
-                )
-
-        return self.dataframes[part]
-
-    def isdir(self, path):
-        return path in self.dirs
-
-    def cat_file(self, path, start=None, end=None, **kwargs):
-        return self.cat_ranges([path], [start], [end])[0]
-
-    def cat(self, path, recursive=False, on_error="return", **kwargs):
-        paths = self.expand_path(path, recursive=recursive)
-        paths1 = [p for p in paths if not self.isdir(p)]
-        result = {
-            p: data
-            for p, data in zip(
-                paths1, self.cat_ranges(paths1, on_error=on_error, **kwargs)
-            )
-        }
-        if len(paths1) == 1 and recursive is False and "*" not in path:
-            # same as cat_file
-            return list(result.values())[0]
-        return result
-
-    def cat_ranges(self, paths, starts=None, ends=None, on_error="return", **kwargs):
-        out = []  # eventual output; initially each key contains raw bytes or None
-        proto_dict = {}  # mapping of protocol to lists of URL/start/end to fetch
-        assign_dict = {}  # how to assign the results of cat_ranges to output
-        if starts is None:
-            starts = [None] * len(paths)
-        if ends is None:
-            ends = [None] * len(paths)
-        for p, s, e in zip(paths, starts, ends):
-            thislist = []
-            out.append(thislist)
-            if self.lazy:
-                pref, p0 = self.prefix_func(p)
-                if pref in self.prefs:
-                    # reference already inlined in metadata file
-                    pref = "metadata"
-                else:
-                    # new key in the target pref file
-                    p = p0
-            else:
-                # everything is in the same file
-                pref = "metadata"
-            self._reference_part(pref)
-            inds = self.keysets[pref][p]
-            if isinstance(inds, int):
-                inds = [inds]
-            for i in inds:
-                if x := self.dataframes[pref]["raw"][i]:
-                    thislist.append(x)
-                else:
-                    # infer path - cache this?
-                    path = self.dataframes[pref]["path"][i]
-                    if pref in self.url_dict:
-                        # dict-encoded columns; actually, numpy can do
-                        # many of these at once with int fancy indexing
-                        path = self.url_dict[pref][path]
-                    # apply template: common prefix
-                    path = path.format(**self.template_dict[pref])
-
-                    prot, _ = split_protocol(path)
-                    proto_dict.setdefault(prot, [[], [], []])
-                    proto_dict[prot][0].append(path)
-                    if s is None or s >= 0:
-                        proto_dict[prot][1].append(
-                            self.dataframes[pref]["offset"][i] or s
-                        )
-                    else:
-                        # range is from end of file, which we do not know
-                        # the size of, so this can only work if there is no
-                        # merging
-                        proto_dict[prot][1].append(s)
-
-                    if e is None or e >= 0:
-                        proto_dict[prot][2].append(
-                            self.dataframes[pref]["offset"][i]
-                            + self.dataframes[pref]["size"][i]
-                            or e
-                        )
-                    else:
-                        # range is from end of file, which we do not know
-                        # the size of, so this can only work if there is no
-                        # merging
-                        proto_dict[prot][1].append(e)
-                    thislist.append(None)
-                    assign_dict.setdefault(prot, []).append(
-                        (thislist, len(thislist) - 1)
-                    )
-
-        for proto, (urls2, starts2, ends2) in proto_dict.items():
-            fs = self.fss[proto]
-
-            new_paths, new_starts, new_ends = merge_offset_ranges(
-                list(urls2),
-                list(starts2),
-                list(ends2),
-                sort=True,
-                max_gap=self.max_gap,
-                max_block=self.max_block,
-            )
-            bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
-            if len(urls2) == len(bytes_out):
-                # we didn't do any merging
-                for (l, i), d in zip(assign_dict[proto], bytes_out):
-                    l[i] = d
-            else:
-                # unbundle from merged bytes - simple approach
-                for u, s, e, (l, i) in zip(urls2, starts2, ends2, assign_dict[proto]):
-                    if p in out:
-                        continue  # was bytes, already handled
-                    for np, ns, ne, b in zip(
-                        new_paths, new_starts, new_ends, bytes_out
-                    ):
-                        if np == u and (ns is None or ne is None):
-                            l[i] = b[s:e]
-                        elif np == u and s >= ns and e <= ne:
-                            l[i] = b[s - ns : (e - ne) or None]
-
-        out = [self.multi_func(part) for part in out]
-        return out
-
-    def find(self, path, detail=False, withdirs=False, **kwargs):
-        path = self._strip_protocol(path)
-        if path in self.dirs:
-            path = path + "/"
-        pref, p = self.prefix_func(path)
-        dirs = (
-            [
-                {"name": d, "size": 0, "type": "directory"}
-                for d in self.dirs
-                if d.startswith(path)
-            ]
-            if withdirs
-            else []
-        )
-        if pref in self.prefs:
-            pref = "metadata"
-        df = self._reference_part(pref)
-        files = [
-            {"name": k, "type": "file", "size": _size(self.dataframes["metadata"], i)}
-            for k, i in self.keysets["metadata"].items()
-            if k.startswith(path)
-        ]
-        if self.lazy and pref != "metadata":
-            files.extend(
-                [
-                    {"name": f"{pref}/{k}", "type": "file", "size": _size(df, i)}
-                    for k, i in self.keysets[pref].items()
-                    if k.startswith(p)
-                ]
-            )
-        if detail:
-            return dirs + files
-        return [k["name"] for k in dirs + files]
-
-    def ls(self, path, detail=True, **kwargs):
-        path = self._strip_protocol(path)
-        allfiles = self.find(path, detail=True, withdirs=True)
-        isdir = path in self.dirs
-        subdfiles = [
-            p for p in allfiles if p["name"].count("/") == path.count("/") + isdir
-        ]
-        if detail:
-            return subdfiles
-        return [p["name"] for p in subdfiles]
-
-    def info(self, path, **kwargs):
-        path = self._strip_protocol(path)
-
-        if path in self.dirs:
-            return {"name": path, "type": "directory", "Size": 0}
-        return self.ls(path, detail=True)[0]
-
-
-def _size(df, i):
-    if isinstance(i, int):
-        return len(df["raw"][i]) if df["raw"][i] else df["size"][i]
-    return sum(len(df["raw"][_]) if df["raw"][_] else df["size"][_] for _ in i)
-
-
-def _unmodel_hdf5(references):
-    """Special JSON format from HDF5 prototype"""
-    # see https://gist.github.com/ajelenak/80354a95b449cedea5cca508004f97a9
-    ref = {}
-    for key, value in references["metadata"].items():
-        if key.endswith(".zchunkstore"):
-            source = value.pop("source")["uri"]
-            for k, v in value.items():
-                ref[k] = (source, v["offset"], v["offset"] + v["size"])
-        else:
-            ref[key] = json.dumps(value).encode()
-    return ref
