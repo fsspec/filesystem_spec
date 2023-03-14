@@ -208,6 +208,26 @@ def test_expand_path_recursive(test_paths, expected):
         "top_level/second_level",
     ]
 
+    assert test_fs.expand_path("top_level", recursive=True, maxdepth=2) == [
+        "top_level",
+        "top_level/second_level",
+        "top_level/second_level/date=2019-10-01",
+        "top_level/second_level/date=2019-10-02",
+        "top_level/second_level/date=2019-10-04",
+    ]
+
+    assert test_fs.expand_path("top_level", recursive=True, maxdepth=3) == [
+        "top_level",
+        "top_level/second_level",
+        "top_level/second_level/date=2019-10-01",
+        "top_level/second_level/date=2019-10-01/a.parquet",
+        "top_level/second_level/date=2019-10-01/b.parquet",
+        "top_level/second_level/date=2019-10-02",
+        "top_level/second_level/date=2019-10-02/a.parquet",
+        "top_level/second_level/date=2019-10-04",
+        "top_level/second_level/date=2019-10-04/a.parquet",
+    ]
+
     with pytest.raises(ValueError):
         test_fs.expand_path("top_level", recursive=True, maxdepth=0)
     with pytest.raises(ValueError):
