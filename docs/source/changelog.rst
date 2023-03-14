@@ -23,7 +23,7 @@ Fixes
 Other
 
 - #1186, make seekable=True default for pyarrow files
-= #1184, 1185, set minimum python version to 3.8
+- #1184, 1185, set minimum python version to 3.8
 
 2023.1.0
 --------
