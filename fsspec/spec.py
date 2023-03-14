@@ -1025,8 +1025,6 @@ class AbstractFileSystem(metaclass=_Cached):
                 if p not in out and (recursive is False or self.exists(p)):
                     # should only check once, for the root
                     out.add(p)
-            # reduce depth on each recursion level unless None or 0
-            maxdepth = maxdepth if not maxdepth else maxdepth - 1
         if not out:
             raise FileNotFoundError(path)
         return list(sorted(out))
