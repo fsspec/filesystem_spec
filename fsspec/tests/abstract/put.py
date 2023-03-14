@@ -28,7 +28,7 @@ class AbstractPutTests:
         # put with slash
         assert not fs.exists(target)
         for loop in range(2):
-            fs.put(src + "/", target, recursive=True)  # May fail on windows
+            fs.put(src + "/", target, recursive=True)
             assert fs.isdir(target)
-            assert fs.isfile(self.local_join(target, "file"))
-            assert not fs.exists(self.local_join(target, "src"))
+            assert fs.isfile(self.fs_join(target, "file"))
+            assert not fs.exists(self.fs_join(target, "src"))
