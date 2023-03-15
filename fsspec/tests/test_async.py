@@ -145,3 +145,53 @@ def test_running_async():
         assert fsspec.asyn.running_async()
 
     asyncio.run(go())
+
+
+class DummyAsyncFS(fsspec.asyn.AsyncFileSystem):
+    _file_class = fsspec.asyn.AbstractAsyncStreamedFile
+
+    async def _info(self, path, **kwargs):
+        return {"name": "misc/foo.txt", "type": "file", "size": 100}
+
+    async def open_async(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs,
+    ):
+        return DummyAsyncStreamedFile(
+            self,
+            path,
+            mode,
+            block_size,
+            autocommit,
+            cache_options=cache_options,
+            **kwargs,
+        )
+
+
+class DummyAsyncStreamedFile(fsspec.asyn.AbstractAsyncStreamedFile):
+    async def _fetch_range(self, start, end):
+        return "foo-bar"[start:end]
+
+    async def _upload_chunk(self, final=False):
+        return final
+
+
+@pytest.mark.asyncio
+async def test_async_streamed_file_write():
+    test_fs = DummyAsyncFS()
+    streamed_file = await test_fs.open_async("misc/foo.txt", mode="wb")
+    await streamed_file.write("foo-bar".encode("utf8"))
+    await streamed_file.close()
+
+
+@pytest.mark.asyncio
+async def test_async_streamed_file_read():
+    test_fs = DummyAsyncFS()
+    streamed_file = await test_fs.open_async("misc/foo.txt", mode="rb")
+    await streamed_file.read()
+    await streamed_file.close()

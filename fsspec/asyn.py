@@ -960,7 +960,7 @@ class AbstractAsyncStreamedFile(AbstractBufferedFile):
                 self.closed = True
                 raise
 
-        if self._upload_chunk(final=force) is not False:
+        if await self._upload_chunk(final=force) is not False:
             self.offset += self.buffer.seek(0, 2)
             self.buffer = io.BytesIO()
 
@@ -974,7 +974,7 @@ class AbstractAsyncStreamedFile(AbstractBufferedFile):
         raise NotImplementedError
 
     async def _initiate_upload(self):
-        raise NotImplementedError
+        pass
 
     async def _upload_chunk(self, final=False):
         raise NotImplementedError
