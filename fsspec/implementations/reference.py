@@ -183,7 +183,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             return (t[3] for t in it)
         else:
             # Mix of urls and raws
-            return (list(t[:3]) if not t[3] else t[3])
+            return (list(t[:3]) if not t[3] else t[3] for t in it)
 
     def _generate_all_records(self, field):
         chunk_size = self._get_chunk_sizes(field)
