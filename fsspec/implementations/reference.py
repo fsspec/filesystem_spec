@@ -107,7 +107,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             self.url = self.root + "/{field}/refs.{record}.parq"
         else:
             self.url = "{field}/refs.{record}.parq"
-            
+
         # Define function to open and decompress refs
         @lru_cache(maxsize=cache_size)
         def open_refs(field, record):
@@ -116,12 +116,12 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 df = self.pd.read_parquet(f, engine="fastparquet")
             refs = {c: df[c].values for c in df.columns}
             # Return both df and dict of views becaues the former is
-            # more convenient for iterating sequentially while the latter 
-            # is faster for random access. 
+            # more convenient for iterating sequentially while the latter
+            # is faster for random access.
             return df, refs
 
         self.open_refs = open_refs
-            
+
     def listdir(self, basename=True):
         if self.dirs is None:
             dirs = [p.split("/", 1)[0] for p in self.zmetadata]
@@ -180,7 +180,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             return (list(t) for t in it)
         elif df.columns.size == 1:
             # All raws
-            return (t[3] for t in it)
+            return (t[0] for t in it)
         else:
             # Mix of urls and raws
             return (list(t[:3]) if not t[3] else t[3] for t in it)
@@ -196,7 +196,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def items(self):
         return RefsItemsView(self)
-    
+
     def __getitem__(self, key):
         if key in self._items:
             val = self._items[key]
@@ -228,7 +228,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             else:
                 chunk_sizes = self._get_chunk_sizes(field)
                 nchunks = self.np.product(chunk_sizes)
-                count += 2 + nchunks
+                count += nchunks
         count += len(self.zmetadata)  # all metadata keys
         count += len(self._items)  # the metadata file itself
         return count
@@ -250,22 +250,17 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
 class ReferenceFileSystem(AsyncFileSystem):
     """View byte ranges of some other file as a file system
-
     Initial version: single file system target, which must support
     async, and must allow start and end args in _cat_file. Later versions
     may allow multiple arbitrary URLs for the targets.
-
     This FileSystem is read-only. It is designed to be used with async
     targets (for now). This FileSystem only allows whole-file access, no
     ``open``. We do not get original file details from the target FS.
-
     Configuration is by passing a dict of references at init, or a URL to
     a JSON file containing the same; this dict
     can also contain concrete data for some set of paths.
-
     Reference dict format:
     {path0: bytes_data, path1: (target_url, offset, size)}
-
     https://github.com/fsspec/kerchunk/blob/main/README.md
     """
 
@@ -289,7 +284,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         **kwargs,
     ):
         """
-
         Parameters
         ----------
         fo : dict or str
@@ -322,7 +316,6 @@ class ReferenceFileSystem(AsyncFileSystem):
                 - a dict of protocol:filesystem, where each value is either a filesystem
                   instance, or a dict of kwargs that can be used to create in
                   instance for the given protocol
-
             If this is given, remote_options and remote_protocol are ignored.
         template_overrides : dict
             Swap out any templates in the references file with these - useful for
