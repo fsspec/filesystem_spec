@@ -51,6 +51,23 @@ def _protocol_groups(paths, references):
     return out
 
 
+class RefsValuesView(collections.abc.ValuesView):
+    def __iter__(self):
+        yield from self._mapping.zmetadata.values()
+        yield from self._mapping._items.values()
+        for field in self._mapping.listdir():
+            chunk_sizes = self._mapping._get_chunk_sizes(field)
+            if chunk_sizes.size == 0:
+                yield self._mapping[field + "/0"]
+                continue
+            yield from self._mapping._generate_all_records(field)
+
+
+class RefsItemsView(collections.abc.ItemsView):
+    def __iter__(self):
+        return zip(self._mapping.keys(), self._mapping.values())
+
+
 class LazyReferenceMapper(collections.abc.MutableMapping):
     """Interface to read parquet store as if it were a standard kerchunk
     references dict."""
@@ -81,17 +98,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self._items = {}
         self.dirs = None
         self.fs = fsspec.filesystem("file") if fs is None else fs
-
-        # Define function to open and decompress refs
-        @lru_cache(maxsize=cache_size)
-        def open_refs(path):
-            with self.fs.open(path) as f:
-                df = self.pd.read_parquet(f, engine="fastparquet")
-            refs = {c: df[c].values for c in df.columns}
-            return refs
-
-        self.open_refs = open_refs
-
         with self.fs.open("/".join([self.root, ".zmetadata"]), "rb") as f:
             self._items[".zmetadata"] = f.read()
         met = json.loads(self._items[".zmetadata"])
@@ -101,7 +107,21 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             self.url = self.root + "/{field}/refs.{record}.parq"
         else:
             self.url = "{field}/refs.{record}.parq"
+            
+        # Define function to open and decompress refs
+        @lru_cache(maxsize=cache_size)
+        def open_refs(field, record):
+            path = self.url.format(field=field, record=record)
+            with self.fs.open(path) as f:
+                df = self.pd.read_parquet(f, engine="fastparquet")
+            refs = {c: df[c].values for c in df.columns}
+            # Return both df and dict of views becaues the former is
+            # more convenient for iterating sequentially while the latter 
+            # is faster for random access. 
+            return df, refs
 
+        self.open_refs = open_refs
+            
     def listdir(self, basename=True):
         if self.dirs is None:
             dirs = [p.split("/", 1)[0] for p in self.zmetadata]
@@ -120,10 +140,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # Chunk keys can be loaded from row group and cached in LRU cache
         record, ri, chunk_size = self._key_to_record(key)
         if chunk_size == 0:
-            # raise KeyError ?
             return b""
-        pf_path = self.url.format(field=field, record=record)
-        refs = self.open_refs(pf_path)
+        _, refs = self.open_refs(field, record)
         columns = ["path", "offset", "size", "raw"]
         selection = [refs[c][ri] if c in refs else None for c in columns]
         raw = selection[-1]
@@ -154,9 +172,36 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             self.chunk_sizes[field] = self.np.ceil(size_ratio).astype(int)
         return self.chunk_sizes[field]
 
+    def _generate_record(self, field, record):
+        df, _ = self.open_refs(field, record)
+        it = df.itertuples(name=None, index=False)
+        if df.columns.size == 3:
+            # All urls
+            return (list(t) for t in it)
+        elif df.columns.size == 1:
+            # All raws
+            return (t[3] for t in it)
+        else:
+            # Mix of urls and raws
+            return (list(t[:3]) if not t[3] else t[3])
+
+    def _generate_all_records(self, field):
+        chunk_size = self._get_chunk_sizes(field)
+        nrec = int(self.np.ceil(self.np.product(chunk_size) / self.record_size))
+        for record in range(nrec):
+            yield from self._generate_record(field, record)
+
+    def values(self):
+        return RefsValuesView(self)
+
+    def items(self):
+        return RefsItemsView(self)
+    
     def __getitem__(self, key):
         if key in self._items:
-            return self._items[key]
+            val = self._items[key]
+            if val is None:
+                raise KeyError
         if key in self.zmetadata:
             return self.zmetadata[key]
         return self._load_one_key(key)
@@ -170,8 +215,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         elif key in self.zmetadata:
             del self.zmetadata[key]
         else:
-            # set appropriate reference to zeros in memory
-            raise KeyError
+            # TODO: Add method to RefFs that tracks changes in _items
+            # and updates / copies appropriate parquet ref files.
+            self._items[key] = None
 
     def __len__(self):
         # Caveat: This counts expected references, not actual
