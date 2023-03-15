@@ -193,5 +193,5 @@ async def test_async_streamed_file_write():
 async def test_async_streamed_file_read():
     test_fs = DummyAsyncFS()
     streamed_file = await test_fs.open_async("misc/foo.txt", mode="rb")
-    await streamed_file.read()
+    assert (await streamed_file.read(3)) + (await streamed_file.read()) == b"foo-bar"
     await streamed_file.close()
