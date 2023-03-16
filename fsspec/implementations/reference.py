@@ -115,7 +115,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             with self.fs.open(path) as f:
                 df = self.pd.read_parquet(f, engine="fastparquet")
             refs = {c: df[c].values for c in df.columns}
-            # Return both df and dict of views becaues the former is
+            # Return both df and dict of views because the former is
             # more convenient for iterating sequentially while the latter
             # is faster for random access.
             return df, refs
