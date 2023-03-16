@@ -5,11 +5,7 @@ import pytest
 
 import fsspec
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.implementations.reference import (
-    DFReferenceFileSystem,
-    ReferenceNotReachable,
-    _unmodel_hdf5,
-)
+from fsspec.implementations.reference import ReferenceFileSystem, ReferenceNotReachable
 from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
 
 
@@ -134,22 +130,6 @@ def test_defaults(server):  # noqa: F811
     assert fs.cat("b") == data[:5]
 
 
-def test_inputs():  # noqa: F811
-    import io
-
-    refs = io.StringIO("""{"a": "data", "b": [null, 0, 5]}""")
-    fs = fsspec.filesystem(
-        "reference", fo=refs, target_protocol="http", target=realfile
-    )
-    assert fs.cat("a") == b"data"
-
-    refs = io.BytesIO(b"""{"a": "data", "b": [null, 0, 5]}""")
-    fs = fsspec.filesystem(
-        "reference", fo=refs, target_protocol="http", target=realfile
-    )
-    assert fs.cat("a") == b"data"
-
-
 jdata = """{
     "metadata": {
         ".zattrs": {
@@ -188,13 +168,6 @@ jdata = """{
     "zarr_consolidated_format": 1
 }
 """
-
-
-def test_unmodel():
-    refs = _unmodel_hdf5(json.loads(jdata))
-    # apparently the output may or may not contain a space after ":"
-    assert b'"Conventions":"UGRID-0.9.0"' in refs[".zattrs"].replace(b" ", b"")
-    assert refs["adcirc_mesh/0"] == ("https://url", 8928, 8932)
 
 
 def test_spec1_expand():
@@ -526,47 +499,104 @@ def test_df_single(m):
     m.pipe({"data": data})
     df = pd.DataFrame(
         {
-            "key": ["a", "b", "c"],
             "path": [None, "memory://data", "memory://data"],
             "offset": [0, 0, 4],
             "size": [0, 0, 4],
             "raw": [b"raw", None, None],
         }
     )
-    df.to_parquet("memory://df.parq")
-    fs = DFReferenceFileSystem(fo="memory://df.parq", remote_protocol="memory")
-    assert fs.cat("a") == b"raw"
-    assert fs.cat("b") == data
-    assert fs.cat("c") == data[4:8]
+    df.to_parquet("memory://stuff/refs.0.parq")
+    m.pipe(
+        ".zmetadata",
+        b"""{
+    "metadata": {
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "stuff/.zarray": {
+            "chunks": [1],
+            "compressor": null,
+            "dtype": "i8",
+            "filters": null,
+            "shape": [3],
+            "zarr_format": 2
+        }
+    },
+    "zarr_consolidated_format": 1,
+    "record_size": 10
+    }
+    """,
+    )
+    fs = ReferenceFileSystem(fo="memory:///", remote_protocol="memory")
+    allfiles = fs.find("")
+    assert ".zmetadata" in allfiles
+    assert ".zgroup" in allfiles
+    assert "stuff/2" in allfiles
+
+    assert fs.cat("stuff/0") == b"raw"
+    assert fs.cat("stuff/1") == data
+    assert fs.cat("stuff/2") == data[4:8]
 
 
 def test_df_multi(m):
     pd = pytest.importorskip("pandas")
     pytest.importorskip("pyarrow")
     data = b"data0data1data2"
-    m.pipe({"data": data, "data2": b"hello"})
-    df = pd.DataFrame(
+    m.pipe({"data": data})
+    df0 = pd.DataFrame(
         {
-            "key": ["a", "b", "b", "d", "d"],
-            "path": [
-                None,
-                "memory://data",
-                "memory://data",
-                "memory://data",
-                "memory://data2",
-            ],
-            "offset": [0, 0, 4, 4, 1],
-            "size": [0, 0, 4, 2, 2],
-            "raw": [b"raw", None, None, None, None],
+            "path": [None, "memory://data", "memory://data"],
+            "offset": [0, 0, 4],
+            "size": [0, 0, 4],
+            "raw": [b"raw1", None, None],
         }
     )
-    df.to_parquet("memory://df.parq")
-    fs = DFReferenceFileSystem(
-        fo="memory://df.parq", remote_protocol="memory", allow_multi=True
+    df0.to_parquet("memory://stuff/refs.0.parq")
+    df1 = pd.DataFrame(
+        {
+            "path": [None, "memory://data", "memory://data"],
+            "offset": [0, 0, 2],
+            "size": [0, 0, 2],
+            "raw": [b"raw2", None, None],
+        }
     )
-    assert fs.cat("a") == b"raw"
-    assert fs.cat("b") == data + data[4:8]
-    assert fs.cat("d") == data[4:6] + b"hello"[1:3]
+    df1.to_parquet("memory://stuff/refs.1.parq")
+    m.pipe(
+        ".zmetadata",
+        b"""{
+    "metadata": {
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "stuff/.zarray": {
+            "chunks": [1],
+            "compressor": null,
+            "dtype": "i8",
+            "filters": null,
+            "shape": [6],
+            "zarr_format": 2
+        }
+    },
+    "zarr_consolidated_format": 1,
+    "record_size": 3
+    }
+    """,
+    )
+    fs = ReferenceFileSystem(
+        fo="memory:///", remote_protocol="memory", skip_instance_cache=True
+    )
+    allfiles = fs.find("")
+    assert ".zmetadata" in allfiles
+    assert ".zgroup" in allfiles
+    assert "stuff/2" in allfiles
+    assert "stuff/4" in allfiles
+
+    assert fs.cat("stuff/0") == b"raw1"
+    assert fs.cat("stuff/1") == data
+    assert fs.cat("stuff/2") == data[4:8]
+    assert fs.cat("stuff/3") == b"raw2"
+    assert fs.cat("stuff/4") == data
+    assert fs.cat("stuff/5") == data[2:4]
 
 
 def test_mapping_getitems(m):
