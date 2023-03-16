@@ -1032,7 +1032,10 @@ class AbstractFileSystem(metaclass=_Cached):
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """Move file(s) from one location to another"""
         if path1 == path2:
-            logger.debug("%s mv: The source and destination paths are the same, so no files were moved." % (self))
+            logger.debug(
+                "%s mv: The source and destination paths are the same, so no files were moved."
+                % (self)
+            )
         else:
             self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
             self.rm(path1, recursive=recursive)
