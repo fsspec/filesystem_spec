@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import io
 import os
 import time
 
@@ -145,3 +146,74 @@ def test_running_async():
         assert fsspec.asyn.running_async()
 
     asyncio.run(go())
+
+
+class DummyAsyncFS(fsspec.asyn.AsyncFileSystem):
+    _file_class = fsspec.asyn.AbstractAsyncStreamedFile
+
+    async def _info(self, path, **kwargs):
+        return {"name": "misc/foo.txt", "type": "file", "size": 100}
+
+    async def open_async(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs,
+    ):
+        return DummyAsyncStreamedFile(
+            self,
+            path,
+            mode,
+            block_size,
+            autocommit,
+            cache_options=cache_options,
+            **kwargs,
+        )
+
+
+class DummyAsyncStreamedFile(fsspec.asyn.AbstractAsyncStreamedFile):
+    def __init__(self, fs, path, mode, block_size, autocommit, **kwargs):
+        super().__init__(fs, path, mode, block_size, autocommit, **kwargs)
+        self.temp_buffer = io.BytesIO(b"foo-bar" * 20)
+
+    async def _fetch_range(self, start, end):
+        return self.temp_buffer.read(end - start)
+
+    async def _initiate_upload(self):
+        # Reinitialize for new uploads.
+        self.temp_buffer = io.BytesIO()
+
+    async def _upload_chunk(self, final=False):
+        self.temp_buffer.write(self.buffer.getbuffer())
+
+    async def get_data(self):
+        return self.temp_buffer.getbuffer().tobytes()
+
+    async def get_data(self):
+        return self.temp_buffer.getbuffer().tobytes()
+
+
+@pytest.mark.asyncio
+async def test_async_streamed_file_write():
+    test_fs = DummyAsyncFS()
+    streamed_file = await test_fs.open_async("misc/foo.txt", mode="wb")
+    inp_data = "foo-bar".encode("utf8") * streamed_file.blocksize * 2
+    await streamed_file.write(inp_data)
+    assert streamed_file.loc == len(inp_data)
+    await streamed_file.close()
+    out_data = await streamed_file.get_data()
+    assert out_data.count(b"foo-bar") == streamed_file.blocksize * 2
+
+
+@pytest.mark.asyncio
+async def test_async_streamed_file_read():
+    test_fs = DummyAsyncFS()
+    streamed_file = await test_fs.open_async("misc/foo.txt", mode="rb")
+    assert (
+        await streamed_file.read(7 * 3) + await streamed_file.read(7 * 18)
+        == b"foo-bar" * 20
+    )
+    await streamed_file.close()
