@@ -79,6 +79,13 @@ def test_mv_recursive(m):
     assert not m.exists("src")
 
 
+def test_mv_same_paths(m):
+    m.mkdir("src")
+    m.touch("src/file.txt")
+    m.mv("src", "src", recursive=True)
+    assert m.exists("src/file.txt")
+
+
 def test_rm_no_psuedo_dir(m):
     m.touch("/dir1/dir2/file")
     m.rm("/dir1", recursive=True)
