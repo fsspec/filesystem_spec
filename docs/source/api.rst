@@ -196,6 +196,8 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.zip.ZipFileSystem
    :members: __init__
 
+.. _external_implementations:
+
 Other Known Implementations
 ---------------------------
 
