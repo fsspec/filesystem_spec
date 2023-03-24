@@ -146,7 +146,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 return b""
             _, refs = self.open_refs(field, record)
         except (ValueError, TypeError, FileNotFoundError):
-            raise FileNotFoundError(key)
+            raise KeyError(key)
         columns = ["path", "offset", "size", "raw"]
         selection = [refs[c][ri] if c in refs else None for c in columns]
         raw = selection[-1]
