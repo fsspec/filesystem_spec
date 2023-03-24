@@ -136,12 +136,17 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             return self._items[key]
         elif key in self.zmetadata:
             return json.dumps(self.zmetadata[key]).encode()
+        elif "/" not in key:
+            raise FileNotFoundError(key)
         field, sub_key = key.split("/")
         # Chunk keys can be loaded from row group and cached in LRU cache
-        record, ri, chunk_size = self._key_to_record(key)
-        if chunk_size == 0:
-            return b""
-        _, refs = self.open_refs(field, record)
+        try:
+            record, ri, chunk_size = self._key_to_record(key)
+            if chunk_size == 0:
+                return b""
+            _, refs = self.open_refs(field, record)
+        except (ValueError, TypeError, FileNotFoundError):
+            raise FileNotFoundError(key)
         columns = ["path", "offset", "size", "raw"]
         selection = [refs[c][ri] if c in refs else None for c in columns]
         raw = selection[-1]
