@@ -209,7 +209,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 raise KeyError
         if key in self.zmetadata:
             # spec requires bytes even if we already decoded the metadata
-            return json.dumps(self.zmetadata[key]).encode(0)
+            return json.dumps(self.zmetadata[key]).encode()
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
