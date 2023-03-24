@@ -208,7 +208,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             if val is None:
                 raise KeyError
         if key in self.zmetadata:
-            return self.zmetadata[key]
+            # spec requires bytes even if we already decoded the metadata
+            return json.dumps(self.zmetadata[key]).encode(0)
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
