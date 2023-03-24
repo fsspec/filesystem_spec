@@ -53,7 +53,8 @@ def _protocol_groups(paths, references):
 
 class RefsValuesView(collections.abc.ValuesView):
     def __iter__(self):
-        yield from self._mapping.zmetadata.values()
+        for val in self._mapping.zmetadata.values():
+            yield json.dumps(val).encode()
         yield from self._mapping._items.values()
         for field in self._mapping.listdir():
             chunk_sizes = self._mapping._get_chunk_sizes(field)
