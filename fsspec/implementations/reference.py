@@ -137,7 +137,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         elif key in self.zmetadata:
             return json.dumps(self.zmetadata[key]).encode()
         elif "/" not in key:
-            raise FileNotFoundError(key)
+            raise KeyError(key)
         field, sub_key = key.split("/")
         # Chunk keys can be loaded from row group and cached in LRU cache
         try:
