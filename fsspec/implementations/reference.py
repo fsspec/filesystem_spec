@@ -434,7 +434,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part, None, None
 
         if len(part) == 1:
-            logger.debug(f"Reference: {path}, whole file")
+            logger.debug(f"Reference: {path}, whole file => {part}")
             url = part[0]
             start1, end1 = start, end
         else:
