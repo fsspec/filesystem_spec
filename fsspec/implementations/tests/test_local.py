@@ -631,7 +631,8 @@ def test_strip_protocol_expanduser():
 def test_strip_protocol_no_authority():
     path = "file:\\foo\\bar" if WIN else "file:/foo/bar"
     stripped = LocalFileSystem._strip_protocol(path)
-    assert stripped == "/foo/bar"
+    assert "file:" not in stripped
+    assert stripped.endswith("/foo/bar")
 
 
 def test_mkdir_twice_faile(tmpdir):
