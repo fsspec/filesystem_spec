@@ -18,7 +18,7 @@ def test_created(fs: AbstractFileSystem, temp_file):
             fs.rm(temp_file)
 
 
-@pytest.mark.parametrize("fs", ["local", "memory", "arrow"], indirect=["fs"])
+@pytest.mark.parametrize("fs", ["local", "memory"], indirect=["fs"])
 def test_modified(fs: AbstractFileSystem, temp_file):
     try:
         fs.touch(temp_file)

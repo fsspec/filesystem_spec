@@ -74,8 +74,17 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     references dict."""
 
     # import is class level to prevent numpy dep requirement for fsspec
-    import numpy as np
-    import pandas as pd
+    @property
+    def np(self):
+        import numpy as np
+
+        return np
+
+    @property
+    def pd(self):
+        import pandas as pd
+
+        return pd
 
     def __init__(
         self,
