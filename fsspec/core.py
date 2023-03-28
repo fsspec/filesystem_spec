@@ -268,6 +268,16 @@ def open_files(
     -------
     An ``OpenFiles`` instance, which is a list of ``OpenFile`` objects that can
     be used as a single context
+
+    Notes
+    -----
+    For a full list of the available protocols and the implementations that
+    they map across to see the latest online documentation:
+
+    - For implementations built into ``fsspec`` see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#built-in-implementations
+    - For implementations in separate packages see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
@@ -415,6 +425,16 @@ def open(
     Returns
     -------
     ``OpenFile`` object.
+
+    Notes
+    -----
+    For a full list of the available protocols and the implementations that
+    they map across to see the latest online documentation:
+
+    - For implementations built into ``fsspec`` see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#built-in-implementations
+    - For implementations in separate packages see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
     return open_files(
         urlpath=[urlpath],
