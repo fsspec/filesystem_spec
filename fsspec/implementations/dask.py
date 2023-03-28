@@ -1,6 +1,6 @@
 import dask
 from distributed.client import Client, _get_global_client
-from distributed.worker import get_worker
+from distributed.worker import Worker
 
 from fsspec import filesystem
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
@@ -15,6 +15,10 @@ def _get_client(client):
     else:
         # e.g., connection string
         return Client(client)
+
+
+def _in_worker():
+    return bool(Worker._instances)
 
 
 class DaskWorkerFileSystem(AbstractFileSystem):
@@ -51,14 +55,13 @@ class DaskWorkerFileSystem(AbstractFileSystem):
             return {}
 
     def _determine_worker(self):
-        try:
-            get_worker()
+        if _in_worker():
             self.worker = True
             if self.fs is None:
                 self.fs = filesystem(
                     self.target_protocol, **(self.target_options or {})
                 )
-        except ValueError:
+        else:
             self.worker = False
             self.client = _get_client(self.client)
             self.rfs = dask.delayed(self)
