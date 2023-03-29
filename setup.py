@@ -35,6 +35,15 @@ extras_require = {
 # To simplify full installation
 extras_require["full"] = sorted(set(sum(extras_require.values(), [])))
 
+extras_require["devel"] = [
+    "pytest",
+    "pytest-cov",
+    # might want to add other optional depends which are used exclusively
+    # in the tests or not listed/very optional for other extra depends, e.g.
+    # 'pyftpdlib',
+    # 'fastparquet',
+]
+
 setup(
     name="fsspec",
     version=versioneer.get_version(),
