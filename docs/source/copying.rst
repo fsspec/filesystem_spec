@@ -16,18 +16,18 @@ functions is:
 The ``source`` and ``target`` are the first two arguments passed to these functions, and each
 consists of one or more files, directories and/or ``glob`` (wildcard) patterns.
 The behavior of the ``fsspec`` copy functions is intended to be the same as that obtained using
-POSIX command line ``cp`` but the ``fsspec`` functions have extra functionality because:
+POSIX command line ``cp`` but ``fsspec`` functions have extra functionality because:
 
     - They support more than one ``target`` whereas command line ``cp`` is restricted to one.
-    - They can create new directories, either automatically or via the ``auto_mkdir`` kwarg,
-      whereas command line ``cp`` only does this as part of a recursive copy.
+    - They can create new directories, either automatically or via the ``auto_mkdir=True`` keyword
+      argument, whereas command line ``cp`` only does this as part of a recursive copy.
 
 Expected behavior
 -----------------
 
 There follows a comprehensive list of the expected behavior of the ``fsspec`` copying functions
 that also forms the basis of a set of tests that all classes that derive from
-:class:`~fsspec.spec.AbstractFileSystem` can be tested against to confirm that they conform.
+:class:`~fsspec.spec.AbstractFileSystem` can be tested against to check that they conform.
 For all scenarios the ``source`` filesystem contains the following directories and files::
 
     📁 source
@@ -44,7 +44,7 @@ and before each scenario the ``target`` directory exists and is empty unless oth
     📁 target
 
 All example code uses :meth:`~fsspec.spec.AbstractFileSystem.cp` which is an alias of
-:meth:`~fsspec.spec.AbstractFileSystem.copy`; equivalent behavior is produced by
+:meth:`~fsspec.spec.AbstractFileSystem.copy`; equivalent behavior is expected by
 :meth:`~fsspec.spec.AbstractFileSystem.get` and :meth:`~fsspec.spec.AbstractFileSystem.put`.
 Forward slashes are used for directory separators throughout.
 
