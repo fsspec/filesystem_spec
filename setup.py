@@ -9,6 +9,32 @@ here = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
+extras_require = {
+    "entrypoints": [],
+    "abfs": ["adlfs"],
+    "adl": ["adlfs"],
+    "dask": ["dask", "distributed"],
+    "dropbox": ["dropboxdrivefs", "requests", "dropbox"],
+    "gcs": ["gcsfs"],
+    "git": ["pygit2"],
+    "github": ["requests"],
+    "gs": ["gcsfs"],
+    "hdfs": ["pyarrow >= 1"],
+    "arrow": ["pyarrow >= 1"],
+    "http": ["requests", "aiohttp !=4.0.0a0, !=4.0.0a1"],
+    "sftp": ["paramiko"],
+    "s3": ["s3fs"],
+    "oci": ["ocifs"],
+    "smb": ["smbprotocol"],
+    "ssh": ["paramiko"],
+    "fuse": ["fusepy"],
+    "libarchive": ["libarchive-c"],
+    "gui": ["panel"],
+    "tqdm": ["tqdm"],
+}
+# To simplify full installation
+extras_require["full"] = sorted(set(sum(extras_require.values(), [])))
+
 setup(
     name="fsspec",
     version=versioneer.get_version(),
@@ -38,28 +64,6 @@ setup(
     packages=["fsspec", "fsspec.implementations"],
     python_requires=">=3.8",
     install_requires=open("requirements.txt").read().strip().split("\n"),
-    extras_require={
-        "entrypoints": [],
-        "abfs": ["adlfs"],
-        "adl": ["adlfs"],
-        "dask": ["dask", "distributed"],
-        "dropbox": ["dropboxdrivefs", "requests", "dropbox"],
-        "gcs": ["gcsfs"],
-        "git": ["pygit2"],
-        "github": ["requests"],
-        "gs": ["gcsfs"],
-        "hdfs": ["pyarrow >= 1"],
-        "arrow": ["pyarrow >= 1"],
-        "http": ["requests", "aiohttp !=4.0.0a0, !=4.0.0a1"],
-        "sftp": ["paramiko"],
-        "s3": ["s3fs"],
-        "oci": ["ocifs"],
-        "smb": ["smbprotocol"],
-        "ssh": ["paramiko"],
-        "fuse": ["fusepy"],
-        "libarchive": ["libarchive-c"],
-        "gui": ["panel"],
-        "tqdm": ["tqdm"],
-    },
+    extras_require=extras_require,
     zip_safe=False,
 )
