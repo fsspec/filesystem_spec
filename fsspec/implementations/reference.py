@@ -332,6 +332,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 - a dict of protocol:filesystem, where each value is either a filesystem
                   instance, or a dict of kwargs that can be used to create in
                   instance for the given protocol
+
             If this is given, remote_options and remote_protocol are ignored.
         template_overrides : dict
             Swap out any templates in the references file with these - useful for
