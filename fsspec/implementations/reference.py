@@ -53,7 +53,8 @@ def _protocol_groups(paths, references):
 
 class RefsValuesView(collections.abc.ValuesView):
     def __iter__(self):
-        yield from self._mapping.zmetadata.values()
+        for val in self._mapping.zmetadata.values():
+            yield json.dumps(val).encode()
         yield from self._mapping._items.values()
         for field in self._mapping.listdir():
             chunk_sizes = self._mapping._get_chunk_sizes(field)
@@ -73,8 +74,17 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     references dict."""
 
     # import is class level to prevent numpy dep requirement for fsspec
-    import numpy as np
-    import pandas as pd
+    @property
+    def np(self):
+        import numpy as np
+
+        return np
+
+    @property
+    def pd(self):
+        import pandas as pd
+
+        return pd
 
     def __init__(
         self,
@@ -136,12 +146,17 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             return self._items[key]
         elif key in self.zmetadata:
             return json.dumps(self.zmetadata[key]).encode()
+        elif "/" not in key:
+            raise KeyError(key)
         field, sub_key = key.split("/")
         # Chunk keys can be loaded from row group and cached in LRU cache
-        record, ri, chunk_size = self._key_to_record(key)
-        if chunk_size == 0:
-            return b""
-        _, refs = self.open_refs(field, record)
+        try:
+            record, ri, chunk_size = self._key_to_record(key)
+            if chunk_size == 0:
+                return b""
+            _, refs = self.open_refs(field, record)
+        except (ValueError, TypeError, FileNotFoundError):
+            raise KeyError(key)
         columns = ["path", "offset", "size", "raw"]
         selection = [refs[c][ri] if c in refs else None for c in columns]
         raw = selection[-1]
@@ -203,7 +218,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             if val is None:
                 raise KeyError
         if key in self.zmetadata:
-            return self.zmetadata[key]
+            # spec requires bytes even if we already decoded the metadata
+            return json.dumps(self.zmetadata[key]).encode()
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
@@ -316,6 +332,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 - a dict of protocol:filesystem, where each value is either a filesystem
                   instance, or a dict of kwargs that can be used to create in
                   instance for the given protocol
+
             If this is given, remote_options and remote_protocol are ignored.
         template_overrides : dict
             Swap out any templates in the references file with these - useful for
@@ -429,7 +446,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part, None, None
 
         if len(part) == 1:
-            logger.debug(f"Reference: {path}, whole file")
+            logger.debug(f"Reference: {path}, whole file => {part}")
             url = part[0]
             start1, end1 = start, end
         else:
