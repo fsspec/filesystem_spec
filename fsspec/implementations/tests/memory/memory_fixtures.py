@@ -19,8 +19,10 @@ class MemoryFixtures(AbstractFixtures):
             m.pseudo_dirs.clear()
             m.pseudo_dirs.append("")
 
-    def fs_join(self, *args):
-        return "/".join(args)
+    @staticmethod
+    @pytest.fixture
+    def fs_join():
+        return lambda *args: "/".join(args)
 
     @staticmethod
     @pytest.fixture
