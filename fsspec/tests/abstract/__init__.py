@@ -22,6 +22,32 @@ class AbstractFixtures:
 
     @staticmethod
     @pytest.fixture
+    def fs_scenario_cp(fs, fs_join, fs_path):
+        """
+        Scenario on remote filesystem that is used for many cp/get/put tests.
+
+        📁 source
+        ├── 📄 file1
+        ├── 📄 file2
+        └── 📁 subdir
+            ├── 📄 subfile1
+            ├── 📄 subfile2
+            └── 📁 nesteddir
+                └── 📄 nestedfile
+        """
+        source = fs_join(fs_path, "source")
+        subdir = fs_join(source, "subdir")
+        nesteddir = fs_join(subdir, "nesteddir")
+        fs.makedirs(nesteddir)
+        fs.touch(fs_join(source, "file1"))
+        fs.touch(fs_join(source, "file2"))
+        fs.touch(fs_join(subdir, "subfile1"))
+        fs.touch(fs_join(subdir, "subfile2"))
+        fs.touch(fs_join(nesteddir, "nestedfile"))
+        return source
+
+    @staticmethod
+    @pytest.fixture
     def local_fs():
         # Maybe need an option for auto_mkdir=False?  This is only relevant
         # for certain implementations.
