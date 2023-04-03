@@ -12,10 +12,17 @@ A specification for pythonic filesystems.
 ```bash
 pip install fsspec
 ```
-or
+
+would install the base fsspec. Various optionally supported features might require specification of custom
+extra require, e.g. `pip install fsspec[ssh]` will install dependencies for `ssh` backends support.
+Use `pip install fsspec[full]` for installation of all known extra dependencies.
+
+Up-to-date package also provided through conda-forge distribution:
+
 ```bash
 conda install -c conda-forge fsspec
 ```
+
 
 ## Purpose
 
