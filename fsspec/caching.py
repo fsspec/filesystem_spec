@@ -766,10 +766,13 @@ class BackgroundBlockCache(BaseCache):
             return b"".join(out)
 
 
-caches = {}
+caches = {
+    # one custom case
+    None: BaseCache,
+}
 
 
-def add_cache(cls, overload=False):
+def register_cache(cls, clobber=False):
     """'Register' cache implementation.
 
     Parameters
@@ -783,28 +786,20 @@ def add_cache(cls, overload=False):
     ValueError
     """
     name = cls.name
-    if not overload and name in caches:
+    if not clobber and name in caches:
         raise ValueError(f"Cache with name {name!r} is already known: {caches[name]}")
     caches[name] = cls
-    # custom handling for None
-    if name == "none":
-        if not overload:
-            if None in caches:
-                raise ValueError(f"Cache for None is already known: {caches[None]}")
-        caches[None] = cls
 
 
-[
-    add_cache(c)
-    for c in (
-        BaseCache,
-        MMapCache,
-        BytesCache,
-        ReadAheadCache,
-        BlockCache,
-        FirstChunkCache,
-        AllBytes,
-        KnownPartsOfAFile,
-        BackgroundBlockCache,
-    )
-]
+for c in (
+    BaseCache,
+    MMapCache,
+    BytesCache,
+    ReadAheadCache,
+    BlockCache,
+    FirstChunkCache,
+    AllBytes,
+    KnownPartsOfAFile,
+    BackgroundBlockCache,
+):
+    register_cache(c)

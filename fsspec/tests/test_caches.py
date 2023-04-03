@@ -3,7 +3,7 @@ import string
 
 import pytest
 
-from fsspec.caching import BlockCache, FirstChunkCache, add_cache, caches
+from fsspec.caching import BlockCache, FirstChunkCache, caches, register_cache
 
 
 def test_cache_getitem(Cache_imp):
@@ -140,8 +140,8 @@ def test_background(server, monkeypatch):
     assert len(thread_ids) == 2
 
 
-def test_add_cache():
+def test_register_cache():
     # just test that we have them populated and fail to re-add again unless overload
     with pytest.raises(ValueError):
-        add_cache(BlockCache)
-    add_cache(BlockCache, overload=True)
+        register_cache(BlockCache)
+    register_cache(BlockCache, clobber=True)
