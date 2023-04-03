@@ -11,13 +11,15 @@ class AbstractCopyTests:
 
         target = fs_join(fs_path, "target")
         fs.mkdir(target)
+        if not self.supports_empty_directories():
+            fs.touch(fs_join(target, "dummy"))
+        assert fs.isdir(target)
 
         target_file2 = fs_join(target, "file2")
         target_subfile1 = fs_join(target, "subfile1")
 
         # Copy from source directory
         fs.cp(file2, target)
-        assert fs.isdir(target)
         assert fs.isfile(target_file2)
 
         # Copy from sub directory

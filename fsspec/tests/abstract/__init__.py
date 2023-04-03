@@ -40,3 +40,9 @@ class AbstractFixtures:
     @pytest.fixture
     def local_path(tmpdir):
         return tmpdir
+
+    def supports_empty_directories(self):
+        """
+        Return whether this implementation supports empty directories.
+        """
+        return True
