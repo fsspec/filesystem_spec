@@ -9,10 +9,16 @@ from fsspec.tests.abstract.put import AbstractPutTests  # noqa
 
 
 class AbstractFixtures:
-    def fs_join(self, *args):
-        # Most fsspec implementations join paths in a platform-dependent way,
-        # but some will override this to always use a forward slash.
-        return os.path.join(*args)
+    @staticmethod
+    @pytest.fixture
+    def fs_join():
+        """
+        Return a function that joins its arguments together into a path.
+
+        Most fsspec implementations join paths in a platform-dependent way,
+        but some will override this to always use a forward slash.
+        """
+        return os.path.join
 
     @staticmethod
     @pytest.fixture
@@ -21,8 +27,14 @@ class AbstractFixtures:
         # for certain implementations.
         return LocalFileSystem(auto_mkdir=True)
 
-    def local_join(self, *args):
-        return os.path.join(*args)
+    @staticmethod
+    @pytest.fixture
+    def local_join():
+        """
+        Return a function that joins its arguments together into a path, on
+        the local filesystem.
+        """
+        return os.path.join
 
     @staticmethod
     @pytest.fixture
