@@ -51,7 +51,13 @@ def process_entries():
             for spec in specs:
                 err_msg = f"Unable to load filesystem from {spec}"
                 register_implementation(
-                    spec.name, spec.value.replace(":", "."), errtxt=err_msg
+                    spec.name,
+                    spec.value.replace(":", "."),
+                    errtxt=err_msg,
+                    # We take our implementations as the ones to overload with if
+                    # for some reason we encounter some, may be the same, already
+                    # registered
+                    clobber=True,
                 )
 
 
