@@ -778,7 +778,7 @@ def register_cache(cls, clobber=False):
     Parameters
     ----------
     clobber: bool, optional
-        If overload is set to True (default is False) - allow to overload existing
+        If set to True (default is False) - allow to overwrite existing
         entry.
 
     Raises
