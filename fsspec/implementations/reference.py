@@ -354,12 +354,29 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 self._items[key] = None
 
     def write(self, field, record, base_url=None, storage_options=None):
+        # TODO: if the dict is incomplete, also load records and merge in
         bit = self._items[(field, record)]
         fn = f"{base_url or self.root}/{field}/refs.{record}.parq"
         df  # = code from kerchunk.df to create dataframe from references
         bit.clear()
         # maybe use dict encoding, etc.
-        df.to_parquet(fn, storage_options=storage_options, **options)
+        df.to_parquet(fn, storage_options=storage_options, **parquet_options)
+
+    def flush(self, base_url=None, storage_options=None):
+        # done when all writing finishes
+        for field in self.listdir():
+            n_chunks = (
+                self.np.product(self._get_chunk_sizes(field)) // self.record_size
+            )  # ??
+            for record in range(n_chunks):
+                if (field, record) in self._items:
+                    self.write(
+                        field,
+                        record,
+                        base_url=base_url,
+                        storage_options=storage_options,
+                    )
+        # gather .zmetadata from self._items and write that too
 
     def __len__(self):
         # Caveat: This counts expected references, not actual
