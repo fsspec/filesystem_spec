@@ -767,14 +767,39 @@ class BackgroundBlockCache(BaseCache):
 
 
 caches = {
-    "none": BaseCache,
+    # one custom case
     None: BaseCache,
-    "mmap": MMapCache,
-    "bytes": BytesCache,
-    "readahead": ReadAheadCache,
-    "block": BlockCache,
-    "first": FirstChunkCache,
-    "all": AllBytes,
-    "parts": KnownPartsOfAFile,
-    "background": BackgroundBlockCache,
 }
+
+
+def register_cache(cls, clobber=False):
+    """'Register' cache implementation.
+
+    Parameters
+    ----------
+    clobber: bool, optional
+        If set to True (default is False) - allow to overwrite existing
+        entry.
+
+    Raises
+    ------
+    ValueError
+    """
+    name = cls.name
+    if not clobber and name in caches:
+        raise ValueError(f"Cache with name {name!r} is already known: {caches[name]}")
+    caches[name] = cls
+
+
+for c in (
+    BaseCache,
+    MMapCache,
+    BytesCache,
+    ReadAheadCache,
+    BlockCache,
+    FirstChunkCache,
+    AllBytes,
+    KnownPartsOfAFile,
+    BackgroundBlockCache,
+):
+    register_cache(c)
