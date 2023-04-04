@@ -28,3 +28,6 @@ markers = [
     "asyncio",
     "vcr",
 ]
+filterwarnings = [
+    "error",
+]
