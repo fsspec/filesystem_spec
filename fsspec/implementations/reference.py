@@ -340,10 +340,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def flush(self, base_url=None, storage_options=None):
         # done when all writing finishes
         for field in self.listdir():
-            n_chunks = (
-                self.np.product(self._get_chunk_sizes(field)) // self.record_size
-            )  # ??
-            for record in range(n_chunks):
+            nchunks = self.np.product(self._get_chunk_sizes(field))
+            nrecs = int(self.np.ceil(nchunks / self.record_size))
+            for record in range(nrecs):
                 if self._items.get((record, field)):
                     self.write(
                         field,
