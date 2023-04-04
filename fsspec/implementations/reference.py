@@ -69,31 +69,6 @@ class RefsItemsView(collections.abc.ItemsView):
         return zip(self._mapping.keys(), self._mapping.values())
 
 
-class CountedReferenceSubSet(dict):
-    def __init__(self, target_url=None, target_options=None, full_size=None):
-        self.target_url = target_url
-        self.target_options = target_options
-        self.count = 0
-        self.full_size = full_size
-        super().__init__()
-
-    def __setitem__(self, key, value):
-        import pandas as pd
-
-        if self.full_size is None:
-            raise ValueError("already written")
-        super().__setitem__(key, value)
-        self.count += 1
-        if self.count == self.full_size:
-            # TODO: this probably doesn't make the right frame; maybe start with numpy
-            #  arrays and fill them in?
-            df = pd.DataFrame(self)
-            # TODO: dict encoding and other options here
-            df.to_parquet(self.target_url, storage_options=self.target_options)
-            self.clear()
-            self.full_size = None  # prevents further setting
-
-
 class LazyReferenceMapper(collections.abc.MutableMapping):
     """Interface to read parquet store as if it were a standard kerchunk
     references dict."""
