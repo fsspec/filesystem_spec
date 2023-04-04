@@ -777,7 +777,7 @@ def register_cache(cls, clobber=False):
 
     Parameters
     ----------
-    overload: bool, optional
+    clobber: bool, optional
         If overload is set to True (default is False) - allow to overload existing
         entry.
 
