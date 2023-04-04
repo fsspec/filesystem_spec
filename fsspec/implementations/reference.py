@@ -369,7 +369,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 self.np.product(self._get_chunk_sizes(field)) // self.record_size
             )  # ??
             for record in range(n_chunks):
-                if (field, record) in self._items:
+                if self._items.get((record, field)):
                     self.write(
                         field,
                         record,
