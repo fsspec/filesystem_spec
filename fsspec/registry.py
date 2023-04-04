@@ -12,7 +12,7 @@ registry = types.MappingProxyType(_registry)
 default = "file"
 
 
-def register_implementation(name, cls, clobber=True, errtxt=None):
+def register_implementation(name, cls, clobber=False, errtxt=None):
     """Add implementation class to the registry
 
     Parameters
