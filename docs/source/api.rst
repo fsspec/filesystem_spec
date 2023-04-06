@@ -207,6 +207,7 @@ Other Known Implementations
 - `dvc`_ to access DVC/Git repository as a filesystem
 - `gcsfs`_ for Google Cloud Storage
 - `gdrive`_ to access Google Drive and shares (experimental)
+- `huggingface_hub` to access the Hugging Face Hub as a filesystem
 - `ocifs`_ for access to Oracle Cloud Object Storage
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
 - `s3fs`_ for Amazon S3 and other compatible stores
@@ -219,6 +220,7 @@ Other Known Implementations
 .. _dvc: https://github.com/iterative/dvc
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _gdrive: https://github.com/fsspec/gdrivefs
+.. _huggingface_hub: https://huggingface.co/docs/huggingface_hub/main/en/guides/hf_file_system
 .. _ocifs: https://pypi.org/project/ocifs
 .. _ossfs: https://github.com/fsspec/ossfs
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
