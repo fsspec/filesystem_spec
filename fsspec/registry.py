@@ -179,6 +179,10 @@ known_implementations = {
         "class": "dvc.api.DVCFileSystem",
         "err": "Install dvc to access DVCFileSystem",
     },
+    "hf": {
+        "class": "huggingface_hub.HfFileSystem",
+        "err": "Install huggingface_hub to access HfFileSystem",
+    },
     "root": {
         "class": "fsspec_xrootd.XRootDFileSystem",
         "err": "Install fsspec-xrootd to access xrootd storage system."
