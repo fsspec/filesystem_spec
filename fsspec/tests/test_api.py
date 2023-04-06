@@ -428,3 +428,20 @@ def test_walk(m):
         list(m.walk(dir0, maxdepth=0, topdown=True))
     with pytest.raises(ValueError):
         list(m.walk(dir0, maxdepth=0, topdown=False))
+
+    # purne dir2
+    def _walk(*args, **kwargs):
+        for path, dirs, files in m.walk(*args, **kwargs):
+            yield (path, dirs.copy(), files)
+            if "dir2" in dirs:
+                dirs.remove("dir2")
+
+    assert list(_walk(dir0, topdown=True)) == [
+        (dir0, ["dir1"], ["file1"]),
+        (dir1, ["dir2"], ["file2"]),
+    ]
+    assert list(_walk(dir0, topdown=False)) == [
+        (dir2, [], ["file3"]),
+        (dir1, ["dir2"], ["file2"]),
+        (dir0, ["dir1"], ["file1"]),
+    ]

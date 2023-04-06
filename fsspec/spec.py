@@ -375,6 +375,10 @@ class AbstractFileSystem(metaclass=_Cached):
         List all files, recursing into subdirectories; output is iterator-style,
         like ``os.walk()``. For a simple list of files, ``find()`` is available.
 
+        When topdown is True, the caller can modify the dirs list in-place,
+        and walk() will only recurse into the subdirectories whose names remain in dirs.
+        Modifying dirs when topdown is False has no effect.
+
         Note that the "files" outputted will include anything that is not
         a directory, such as links.
 
@@ -413,7 +417,7 @@ class AbstractFileSystem(metaclass=_Cached):
             name = pathname.rsplit("/", 1)[-1]
             if info["type"] == "directory" and pathname != path:
                 # do not include "self" path
-                full_dirs[pathname] = info
+                full_dirs[name] = pathname
                 dirs[name] = info
             elif pathname == path:
                 # file-like with same name as give path
@@ -436,9 +440,9 @@ class AbstractFileSystem(metaclass=_Cached):
                     yield path, dirs, files
                 return
 
-        for d in full_dirs:
+        for d in dirs:
             yield from self.walk(
-                d, maxdepth=maxdepth, detail=detail, topdown=topdown, **kwargs
+                full_dirs[d], maxdepth=maxdepth, detail=detail, topdown=topdown, **kwargs
             )
 
         if not topdown:

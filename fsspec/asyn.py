@@ -623,7 +623,7 @@ class AsyncFileSystem(AbstractFileSystem):
             name = pathname.rsplit("/", 1)[-1]
             if info["type"] == "directory" and pathname != path:
                 # do not include "self" path
-                full_dirs[pathname] = info
+                full_dirs[name] = pathname
                 dirs[name] = info
             elif pathname == path:
                 # file-like with same name as give path
@@ -641,8 +641,10 @@ class AsyncFileSystem(AbstractFileSystem):
             if maxdepth < 1:
                 return
 
-        for d in full_dirs:
-            async for _ in self._walk(d, maxdepth=maxdepth, detail=detail, **kwargs):
+        for d in dirs:
+            async for _ in self._walk(
+                full_dirs[d], maxdepth=maxdepth, detail=detail, **kwargs
+            ):
                 yield _
 
     async def _glob(self, path, **kwargs):
