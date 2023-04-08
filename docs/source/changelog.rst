@@ -1,6 +1,33 @@
 Changelog
 =========
 
+2023.4.0
+--------
+
+Enhancements
+
+- #1225, comprehensive docs of expected behaviour of cp/get/put and tests
+- #1216, test harness for any backend
+
+Fixes
+
+- #1224, small fixes in reference and dask FSs
+- #1218, mv is no-op when origin and destination are the same
+- #1217, await in AbstractStreamedFile
+- #1215, docbuild fixes
+- #1214, unneeded maxdepth manipulation in expand_path
+- #1213, pyarros and posixpath related test fixes
+- #1211, BackgroundBlockCache: keep a block longer if not yet used
+- #1210, webHDFS: location parameter
+
+Other
+
+- #1241, add HfFileSystem to registry
+- #1237, register_implementation clobber default changes to False
+- #1228, "full" and "devel" installation options
+- #1227, register_cache and reporting collision
+- #1221, docs about implementations and protocols
+
 2023.3.0
 --------
 
