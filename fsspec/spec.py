@@ -999,7 +999,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """Turn one or more globs or directories into a list of all matching paths
         to files or directories.
 
-        kwargs are passed to ``ls``.
+        kwargs are passed to ``glob`` or ``find``, which may in turn call ``ls``
         """
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
