@@ -1011,7 +1011,7 @@ class AbstractFileSystem(metaclass=_Cached):
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if has_magic(p):
-                    bit = set(self.glob(p))
+                    bit = set(self.glob(p, **kwargs))
                     out |= bit
                     if recursive:
                         out |= set(
