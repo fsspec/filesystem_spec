@@ -369,7 +369,10 @@ def other_paths(paths, path2, is_dir=None, exists=False):
         cp = common_prefix(paths)
         if exists:
             cp = cp.rsplit("/", 1)[0]
-        path2 = [p.replace(cp, path2, 1) for p in paths]
+        if not cp and all(not s.startswith("/") for s in paths):
+            path2 = ["/".join([path2, p]) for p in paths]
+        else:
+            path2 = [p.replace(cp, path2, 1) for p in paths]
     else:
         assert len(paths) == len(path2)
     return path2
