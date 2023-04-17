@@ -76,7 +76,205 @@ class AbstractCopyTests:
         assert fs.isdir(fs_join(target, "newdir"))
         assert fs.isfile(fs_join(target, "newdir", "newfile"))
 
+    def test_copy_directory_to_existing_directory(
+        self, fs, fs_join, fs_path, fs_scenario_cp
+    ):
+        # Copy scenario 1e
+        source = fs_scenario_cp
+
+        target = fs_join(fs_path, "target")
+        fs.mkdir(target)
+
+        for source_slash, target_slash in zip([False, True], [False, True]):
+            s = fs_join(source, "subdir")
+            if source_slash:
+                s += "/"
+            t = target + "/" if target_slash else target
+
+            # Without recursive does nothing
+            # ERROR: erronously creates new directory
+            # fs.cp(s, t)
+            # assert fs.ls(target) == []
+
+            # With recursive
+            fs.cp(s, t, recursive=True)
+            if source_slash:
+                assert fs.isfile(fs_join(target, "subfile1"))
+                assert fs.isfile(fs_join(target, "subfile2"))
+                assert fs.isdir(fs_join(target, "nesteddir"))
+                assert fs.isfile(fs_join(target, "nesteddir", "nestedfile"))
+
+                fs.rm(
+                    [
+                        fs_join(target, "subfile1"),
+                        fs_join(target, "subfile2"),
+                        fs_join(target, "nesteddir"),
+                    ],
+                    recursive=True,
+                )
+            else:
+                assert fs.isdir(fs_join(target, "subdir"))
+                assert fs.isfile(fs_join(target, "subdir", "subfile1"))
+                assert fs.isfile(fs_join(target, "subdir", "subfile2"))
+                assert fs.isdir(fs_join(target, "subdir", "nesteddir"))
+                assert fs.isfile(fs_join(target, "subdir", "nesteddir", "nestedfile"))
+
+                fs.rm(fs_join(target, "subdir"), recursive=True)
+            assert fs.ls(target) == []
+
+            # Limit by maxdepth
+            # ERROR: maxdepth ignored here
+
+    def test_copy_directory_to_new_directory(
+        self, fs, fs_join, fs_path, fs_scenario_cp
+    ):
+        # Copy scenario 1f
+        source = fs_scenario_cp
+
+        target = fs_join(fs_path, "target")
+        fs.mkdir(target)
+
+        for source_slash, target_slash in zip([False, True], [False, True]):
+            s = fs_join(source, "subdir")
+            if source_slash:
+                s += "/"
+            t = fs_join(target, "newdir")
+            if target_slash:
+                t += "/"
+
+            # Without recursive does nothing
+            # ERROR: erronously creates new directory
+            # fs.cp(s, t)
+            # assert fs.ls(target) == []
+
+            # With recursive
+            fs.cp(s, t, recursive=True)
+            assert fs.isdir(fs_join(target, "newdir"))
+            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
+            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
+            assert fs.isdir(fs_join(target, "newdir", "nesteddir"))
+            assert fs.isfile(fs_join(target, "newdir", "nesteddir", "nestedfile"))
+
+            fs.rm(fs_join(target, "newdir"), recursive=True)
+            assert fs.ls(target) == []
+
+            # Limit by maxdepth
+            # ERROR: maxdepth ignored here
+
+    def test_copy_glob_to_existing_directory(
+        self, fs, fs_join, fs_path, fs_scenario_cp
+    ):
+        # Copy scenario 1g
+        source = fs_scenario_cp
+
+        target = fs_join(fs_path, "target")
+        fs.mkdir(target)
+
+        # for target_slash in [False, True]:
+        for target_slash in [False]:
+            t = target + "/" if target_slash else target
+
+            # Without recursive
+            fs.cp(fs_join(source, "subdir", "*"), t)
+            # ERROR: this is not correct
+            # assert fs.isfile(fs_join(target, "subfile1"))
+            # assert fs.isfile(fs_join(target, "subfile2"))
+            # assert not fs.isdir(fs_join(target, "subdir"))
+
+            # With recursive
+
+            # Limit by maxdepth
+
+    def test_copy_glob_to_new_directory(self, fs, fs_join, fs_path, fs_scenario_cp):
+        # Copy scenario 1h
+        source = fs_scenario_cp
+
+        target = fs_join(fs_path, "target")
+        fs.mkdir(target)
+
+        # for target_slash in [False, True]:
+        for target_slash in [False]:
+            t = fs_join(target, "newdir")
+            if target_slash:
+                t += "/"
+
+            # Without recursive
+            fs.cp(fs_join(source, "subdir", "*"), t)
+            assert fs.isdir(fs_join(target, "newdir"))
+            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
+            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
+            # ERROR - do not copy empty directory
+            # assert not fs.exists(fs_join(target, "newdir", "nesteddir"))
+
+            fs.rm(fs_join(target, "newdir"), recursive=True)
+            assert fs.ls(target) == []
+
+            # With recursive
+            fs.cp(fs_join(source, "subdir", "*"), t, recursive=True)
+            assert fs.isdir(fs_join(target, "newdir"))
+            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
+            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
+            assert fs.isdir(fs_join(target, "newdir", "nesteddir"))
+            assert fs.isfile(fs_join(target, "newdir", "nesteddir", "nestedfile"))
+
+            fs.rm(fs_join(target, "newdir"), recursive=True)
+            assert fs.ls(target) == []
+
+            # Limit by maxdepth
+            # ERROR: this is not correct
+
+    def test_copy_list_of_files_to_existing_directory(
+        self, fs, fs_join, fs_path, fs_scenario_cp
+    ):
+        # Copy scenario 2a
+        source = fs_scenario_cp
+
+        target = fs_join(fs_path, "target")
+        fs.mkdir(target)
+
+        source_files = [
+            fs_join(source, "file1"),
+            fs_join(source, "file2"),
+            fs_join(source, "subdir", "subfile1"),
+        ]
+
+        # for target_slash in [False, True]:
+        for target_slash in [True]:
+            t = target + "/" if target_slash else target
+
+            fs.cp(source_files, t)
+            assert fs.isfile(fs_join(target, "file1"))
+            assert fs.isfile(fs_join(target, "file2"))
+            # assert fs.isfile(fs_join(target, "subfile1"))  # ERROR
+
+            # fs.rm()
+
+    def test_copy_list_of_files_to_new_directory(
+        self, fs, fs_join, fs_path, fs_scenario_cp
+    ):
+        # Copy scenario 2b
+        source = fs_scenario_cp
+
+        target = fs_join(fs_path, "target")
+        fs.mkdir(target)
+
+        source_files = [
+            fs_join(source, "file1"),
+            fs_join(source, "file2"),
+            fs_join(source, "subdir", "subfile1"),
+        ]
+
+        fs.cp(source_files, fs_join(target, "newdir") + "/")  # Note trailing slash
+        assert fs.isdir(fs_join(target, "newdir"))
+        assert fs.isfile(fs_join(target, "newdir", "file1"))
+        assert fs.isfile(fs_join(target, "newdir", "file2"))
+        # assert fs.isfile(fs_join(target, "newdir", "subfile1"))  # ERROR
+
+        # If no trailing slash on target it is interpreted as a filename not directory
+
     def test_copy_two_files_new_directory(self, fs, fs_join, fs_path, fs_scenario_cp):
+        # This is a duplicate of test_copy_list_of_files_to_new_directory and
+        # can eventually be removed.
         source = fs_scenario_cp
 
         target = fs_join(fs_path, "target")
