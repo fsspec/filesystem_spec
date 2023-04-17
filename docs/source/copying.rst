@@ -55,14 +55,15 @@ Forward slashes are used for directory separators throughout.
 
     .. code-block:: python
 
-        cp("source/subdir/subfile1", "target")
+        cp("source/subdir/subfile1", "target/")
 
     results in::
 
         📁 target
         └── 📄 subfile1
 
-    The same result is obtained if the target has a trailing slash: ``"target/"``.
+    The trailing slash on ``"target/"`` is optional but recommended as it explicitly indicates that
+    the target is a directory.
 
 .. dropdown:: 1b. File to new directory
 
@@ -94,7 +95,8 @@ Forward slashes are used for directory separators throughout.
         📁 target
         └── 📄 newfile
 
-    The same result is obtained if the target has a trailing slash: ``target/newfile/``.
+    The target cannot have a trailing slash as ``"newfile/"`` is interpreted as a new directory
+    which is a different scenario (1b. File to new directory).
 
 .. dropdown:: 1d. File to file in new directory
 
@@ -115,5 +117,217 @@ Forward slashes are used for directory separators throughout.
     If there is a trailing slash on the target ``target/newdir/newfile/`` then it is interpreted as
     a new directory which is a different scenario (1b. File to new directory).
 
+.. dropdown:: 1e. Directory to existing directory
+
+    .. warning::
+
+       ``recursive=False`` is not correct
+       (`issue 1232 <https://github.com/fsspec/filesystem_spec/issues/1232>`_).
+
+       ``maxdepth`` is not yet implemented for copying functions
+       (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
+
+    .. code-block:: python
+
+        cp("source/subdir/", "target/", recursive=True)
+
+    results in::
+
+       📁 target
+        ├── 📄 subfile1
+        └── 📄 subfile2
+            └── 📁 nesteddir
+                └── 📄 nestedfile
+
+    The ``recursive=True`` keyword argument is required otherwise the call does nothing. The depth
+    of recursion can be controlled using the ``maxdepth`` keyword argument, for example:
+
+    .. code-block:: python
+
+        cp("source/subdir/", "target/", recursive=True, maxdepth=1)
+
+    results in::
+
+       📁 target
+        ├── 📄 subfile1
+        └── 📄 subfile2
+
+    The trailing slash on ``"target/"`` is optional but recommended as it explicitly indicates that
+    the target is a directory.
+
+    If the trailing slash is omitted from ``"source/subdir"`` then the ``subdir`` is also copied,
+    not just its contents:
+
+    .. code-block:: python
+
+        cp("source/subdir", "target/", recursive=True)
+
+    results in::
+
+       📁 target
+        └── 📁 subdir
+            ├── 📄 subfile1
+            └── 📄 subfile2
+                └── 📁 nesteddir
+                    └── 📄 nestedfile
+
+.. dropdown:: 1f. Directory to new directory
+
+    .. warning::
+
+       ``recursive=False`` is not correct
+       (`issue 1232 <https://github.com/fsspec/filesystem_spec/issues/1232>`_).
+
+       ``maxdepth`` is not yet implemented for copying functions
+       (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
+
+    .. code-block:: python
+
+        cp("source/subdir/", "target/newdir/", recursive=True)
+
+    results in::
+
+       📁 target
+        └── 📁 newdir
+            ├── 📄 subfile1
+            └── 📄 subfile2
+                └── 📁 nesteddir
+                    └── 📄 nestedfile
+
+    Trailing slashes on both ``source`` and ``target`` are optional and do not affect the result.
+    They are recommended to explicitly indicate both are directories.
+
+    The ``recursive=True`` keyword argument is required otherwise the call does nothing. The depth
+    of recursion can be controlled using the ``maxdepth`` keyword argument.
+
+.. dropdown:: 1g. Glob to existing directory
+
+    .. warning::
+
+        This does not currently work correctly, it creates a extra directory
+        (`issue 1233 <https://github.com/fsspec/filesystem_spec/issues/1233>`_).
+
+    Nonrecursive
+
+    .. code-block:: python
+
+        cp("source/subdir/*", "target/")
+
+    copies files from the top-level directory only and results in::
+
+       📁 target
+        ├── 📄 subfile1
+        └── 📄 subfile2
+
+    Recursive
+
+    .. code-block:: python
+
+        cp("source/subdir/*", "target/", recursive=True)
+
+    results in::
+
+        📁 target
+        ├── 📄 subfile1
+        └── 📄 subfile2
+            └── 📁 nesteddir
+                └── 📄 nestedfile
+
+    The depth of recursion can be controlled by the ``maxdepth`` keyword argument.
+
+    The trailing slash on ``"target/"`` is optional but recommended as it explicitly indicates that
+    the target is a directory.
+
+.. dropdown:: 1h. Glob to new directory
+
+    .. warning::
+
+        This does not currently work correctly, it creates a extra directory
+        (`issue 1233 <https://github.com/fsspec/filesystem_spec/issues/1233>`_).
+
+    Nonrecursive
+
+    .. code-block:: python
+
+        cp("source/subdir/*", "target/newdir/")
+
+    copies files from the top-level directory only and results in::
+
+       📁 target
+        └── 📁 newdir
+            ├── 📄 subfile1
+            └── 📄 subfile2
+
+    Recursive
+
+    .. code-block:: python
+
+        cp("source/subdir/*", "target/newdir/", recursive=True)
+
+    results in::
+
+        📁 target
+        └── 📁 newdir
+            ├── 📄 subfile1
+            └── 📄 subfile2
+                └── 📁 nesteddir
+                    └── 📄 nestedfile
+
+    The depth of recursion can be controlled by the ``maxdepth`` keyword argument.
+
+    The trailing slash on the ``target`` is optional but recommended as it explicitly indicates that
+    it is a directory.
+
+    These calls fail if the ``target`` file system is not capable of creating the directory, for
+    example if it is write-only or if ``auto_mkdir=False``. There is no command line equivalent of
+    this scenario without an explicit ``mkdir`` to create the new directory.
+
 2. Multiple source to single target
 -----------------------------------
+
+.. dropdown:: 2a. List of files to existing directory
+
+    .. warning::
+
+        This is not correct currently, it does not place all files in the same directory
+        (`issue 1234 <https://github.com/fsspec/filesystem_spec/issues/1234>`_).
+
+    .. code-block:: python
+
+        cp(["source/file1", "source/file2", "source/subdir/subfile1"], "target/")
+
+    results in::
+
+        📁 target
+        ├── 📄 file1
+        ├── 📄 file2
+        └── 📄 subfile1
+
+    All of the files are copied to the target directory regardless of their relative paths in the
+    source filesystem. The trailing slash on the ``target`` is optional but recommended as it
+    explicitly indicates that it is a directory.
+
+.. dropdown:: 2b. List of files to new directory
+
+    .. warning::
+
+        This is not correct currently, it does not place all files in the same directory
+        (`issue 1234 <https://github.com/fsspec/filesystem_spec/issues/1234>`_).
+
+    .. code-block:: python
+
+        cp(["source/file1", "source/file2", "source/subdir/subfile1"], "target/newdir/")
+
+    results in::
+
+        📁 target
+        └── 📁 newdir
+            ├── 📄 file1
+            ├── 📄 file2
+            └── 📄 subfile1
+
+    All of the files are copied to the target directory regardless of their relative paths in the
+    source filesystem.
+
+    The trailing slash is required on the new directory otherwise it is interpreted as a filename
+    rather than a directory.
