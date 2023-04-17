@@ -121,8 +121,11 @@ Forward slashes are used for directory separators throughout.
 
     .. warning::
 
-       ``recursive=False`` is not correct.
-       ``maxdepth`` is not yet implemented for copying functions.
+       ``recursive=False`` is not correct
+       (`issue 1232 <https://github.com/fsspec/filesystem_spec/issues/1232>`_).
+
+       ``maxdepth`` is not yet implemented for copying functions
+       (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
 
     .. code-block:: python
 
@@ -172,8 +175,11 @@ Forward slashes are used for directory separators throughout.
 
     .. warning::
 
-       ``recursive=False`` is not correct.
-       ``maxdepth`` is not yet implemented for copying functions.
+       ``recursive=False`` is not correct
+       (`issue 1232 <https://github.com/fsspec/filesystem_spec/issues/1232>`_).
+
+       ``maxdepth`` is not yet implemented for copying functions
+       (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
 
     .. code-block:: python
 
@@ -198,7 +204,8 @@ Forward slashes are used for directory separators throughout.
 
     .. warning::
 
-        This does not currently work correctly.
+        This does not currently work correctly, it creates a extra directory
+        (`issue 1233 <https://github.com/fsspec/filesystem_spec/issues/1233>`_).
 
     Nonrecursive
 
@@ -235,7 +242,8 @@ Forward slashes are used for directory separators throughout.
 
     .. warning::
 
-        This does not currently work correctly.
+        This does not currently work correctly, it creates a extra directory
+        (`issue 1233 <https://github.com/fsspec/filesystem_spec/issues/1233>`_).
 
     Nonrecursive
 
@@ -279,6 +287,11 @@ Forward slashes are used for directory separators throughout.
 
 .. dropdown:: 2a. List of files to existing directory
 
+    .. warning::
+
+        This is not correct currently, it does not place all files in the same directory
+        (`issue 1234 <https://github.com/fsspec/filesystem_spec/issues/1234>`_).
+
     .. code-block:: python
 
         cp(["source/file1", "source/file2", "source/subdir/subfile1"], "target/")
@@ -294,11 +307,12 @@ Forward slashes are used for directory separators throughout.
     source filesystem. The trailing slash on the ``target`` is optional but recommended as it
     explicitly indicates that it is a directory.
 
+.. dropdown:: 2b. List of files to new directory
+
     .. warning::
 
-        This is not correct currently.
-
-.. dropdown:: 2b. List of files to new directory
+        This is not correct currently, it does not place all files in the same directory
+        (`issue 1234 <https://github.com/fsspec/filesystem_spec/issues/1234>`_).
 
     .. code-block:: python
 
@@ -317,7 +331,3 @@ Forward slashes are used for directory separators throughout.
 
     The trailing slash is required on the new directory otherwise it is interpreted as a filename
     rather than a directory.
-
-    .. warning::
-
-        This is not correct currently.
