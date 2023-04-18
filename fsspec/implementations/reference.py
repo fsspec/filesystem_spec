@@ -90,6 +90,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self,
         root,
         fs=None,
+        out_root=None,
         cache_size=128,
     ):
         """
@@ -113,11 +114,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         met = json.loads(self._items[".zmetadata"])
         self.record_size = met["record_size"]
         self.zmetadata = met["metadata"]
-        if self.root:
-            self.url = self.root + "/{field}/refs.{record}.parq"
-        else:
-            self.url = "{field}/refs.{record}.parq"
-        self.writecounts = collections.defaultdict(0)
+        self.url = self.root + "/{field}/refs.{record}.parq"
+        self.out_root = out_root or self.root
 
         # Define function to open and decompress refs
         @lru_cache(maxsize=cache_size)
@@ -329,13 +327,68 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 self._items[key] = None
 
     def write(self, field, record, base_url=None, storage_options=None):
+        # extra requirements if writing
+        import kerchunk.df
+        import numpy as np
+        import pandas as pd
+
         # TODO: if the dict is incomplete, also load records and merge in
-        bit = self._items[(field, record)]
+        partition = self._items[(field, record)]
         fn = f"{base_url or self.root}/{field}/refs.{record}.parq"
-        df  # = code from kerchunk.df to create dataframe from references
-        bit.clear()
-        # maybe use dict encoding, etc.
-        df.to_parquet(fn, storage_options=storage_options, **parquet_options)
+
+        ####
+        paths = np.full(self.record_size, np.nan, dtype="O")
+        offsets = np.zeros(self.record_size, dtype="int64")
+        sizes = np.zeros(self.record_size, dtype="int64")
+        raws = np.full(self.record_size, np.nan, dtype="O")
+        zarray = json.loads(self[f"{field}/.zarray"])
+        shape = np.array(zarray["shape"])
+        nraw = 0
+        npath = 0
+        for key, data in partition.items():
+            chunk_id = key.rsplit("/", 1)[-1]
+            chunk_ints = [int(ch) for ch in chunk_id.split(".")]
+            i = 0
+            mult = 1
+            for chunk_int, sh in zip(chunk_ints[::-1], shape[::-1]):
+                i += chunk_int * mult
+                mult *= sh
+            j = i % self.record_size
+            # Make note if expected number of chunks differs from actual
+            # number found in references
+            if isinstance(data, list):
+                npath += 1
+                paths[j] = data[0]
+                if len(data) > 1:
+                    offsets[j] = data[1]
+                    sizes[j] = data[2]
+            else:
+                nraw += 1
+                raws[j] = kerchunk.df._proc_raw(data)
+        df = pd.DataFrame(
+            dict(
+                path=paths,
+                offset=offsets,
+                size=sizes,
+                raw=raws,
+            ),
+            copy=False,
+        )
+        object_encoding = dict(raw="bytes", path="utf8")
+        has_nulls = ["path", "raw"]
+
+        df.to_parquet(
+            fn,
+            engine="fastparquet",
+            storage_options=storage_options,
+            compression="zstd",
+            index=False,
+            stats=False,
+            object_encoding=object_encoding,
+            has_nulls=has_nulls,
+            # **kwargs,
+        )
+        partition.clear()
 
     def flush(self, base_url=None, storage_options=None):
         # done when all writing finishes
