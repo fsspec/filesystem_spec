@@ -887,11 +887,13 @@ class AbstractFileSystem(metaclass=_Cached):
         isdir = isinstance(lpath, str) and (
             lpath.endswith("/") or LocalFileSystem().isdir(lpath)
         )
+        source_is_str = isinstance(rpath, str)
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and isinstance(rpath, str) and not rpath.endswith("/"),
+            exists=isdir and source_is_str and not rpath.endswith(("/", "/*")),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
 
         callback.set_size(len(lpaths))
@@ -940,11 +942,13 @@ class AbstractFileSystem(metaclass=_Cached):
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
         isdir = isinstance(rpath, str) and (rpath.endswith("/") or self.isdir(rpath))
+        source_is_str = isinstance(lpath, str)
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
+            exists=isdir and source_is_str and not lpath.endswith(("/", "/*")),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
 
         callback.set_size(len(rpaths))
@@ -981,11 +985,13 @@ class AbstractFileSystem(metaclass=_Cached):
 
         paths = self.expand_path(path1, recursive=recursive)
         isdir = isinstance(path2, str) and (path2.endswith("/") or self.isdir(path2))
+        source_is_str = isinstance(path1, str)
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
+            exists=isdir and source_is_str and not path1.endswith(("/", "/*")),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
 
         for p1, p2 in zip(paths, path2):

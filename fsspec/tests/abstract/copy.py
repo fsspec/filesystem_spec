@@ -176,10 +176,10 @@ class AbstractCopyTests:
 
             # Without recursive
             fs.cp(fs_join(source, "subdir", "*"), t)
-            # ERROR: this is not correct
-            # assert fs.isfile(fs_join(target, "subfile1"))
-            # assert fs.isfile(fs_join(target, "subfile2"))
-            # assert not fs.isdir(fs_join(target, "subdir"))
+            assert fs.isfile(fs_join(target, "subfile1"))
+            assert fs.isfile(fs_join(target, "subfile2"))
+            # assert not fs.isdir(fs_join(target, "nesteddir"))  # ERROR
+            assert not fs.isdir(fs_join(target, "subdir"))
 
             # With recursive
 
@@ -192,8 +192,7 @@ class AbstractCopyTests:
         target = fs_join(fs_path, "target")
         fs.mkdir(target)
 
-        # for target_slash in [False, True]:
-        for target_slash in [False]:
+        for target_slash in [False, True]:
             t = fs_join(target, "newdir")
             if target_slash:
                 t += "/"
@@ -238,16 +237,16 @@ class AbstractCopyTests:
             fs_join(source, "subdir", "subfile1"),
         ]
 
-        # for target_slash in [False, True]:
-        for target_slash in [True]:
+        for target_slash in [False, True]:
             t = target + "/" if target_slash else target
 
             fs.cp(source_files, t)
             assert fs.isfile(fs_join(target, "file1"))
             assert fs.isfile(fs_join(target, "file2"))
-            # assert fs.isfile(fs_join(target, "subfile1"))  # ERROR
+            assert fs.isfile(fs_join(target, "subfile1"))
 
-            # fs.rm()
+            fs.rm(fs.find(target))
+            assert fs.ls(target) == []
 
     def test_copy_list_of_files_to_new_directory(
         self, fs, fs_join, fs_path, fs_scenario_cp
@@ -268,9 +267,7 @@ class AbstractCopyTests:
         assert fs.isdir(fs_join(target, "newdir"))
         assert fs.isfile(fs_join(target, "newdir", "file1"))
         assert fs.isfile(fs_join(target, "newdir", "file2"))
-        # assert fs.isfile(fs_join(target, "newdir", "subfile1"))  # ERROR
-
-        # If no trailing slash on target it is interpreted as a filename not directory
+        assert fs.isfile(fs_join(target, "newdir", "subfile1"))
 
     def test_copy_two_files_new_directory(self, fs, fs_join, fs_path, fs_scenario_cp):
         # This is a duplicate of test_copy_list_of_files_to_new_directory and

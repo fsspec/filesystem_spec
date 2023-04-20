@@ -341,7 +341,7 @@ def common_prefix(paths):
     return "/".join(parts[0][:i])
 
 
-def other_paths(paths, path2, is_dir=None, exists=False):
+def other_paths(paths, path2, is_dir=None, exists=False, flatten=False):
     """In bulk file operations, construct a new file tree from a list of files
 
     Parameters
@@ -358,21 +358,29 @@ def other_paths(paths, path2, is_dir=None, exists=False):
     exists: bool (optional)
         For a str destination, it is already exists (and is a dir), files should
         end up inside.
+    flatten: bool (optional)
+        Whether to flatten the input directory tree structure so that the output files
+        are in the same directory.
 
     Returns
     -------
     list of str
     """
+
     if isinstance(path2, str):
         is_dir = is_dir or path2.endswith("/")
         path2 = path2.rstrip("/")
-        cp = common_prefix(paths)
-        if exists:
-            cp = cp.rsplit("/", 1)[0]
-        if not cp and all(not s.startswith("/") for s in paths):
-            path2 = ["/".join([path2, p]) for p in paths]
+
+        if flatten:
+            path2 = ["/".join((path2, p.split("/")[-1])) for p in paths]
         else:
-            path2 = [p.replace(cp, path2, 1) for p in paths]
+            cp = common_prefix(paths)
+            if exists:
+                cp = cp.rsplit("/", 1)[0]
+            if not cp and all(not s.startswith("/") for s in paths):
+                path2 = ["/".join([path2, p]) for p in paths]
+            else:
+                path2 = [p.replace(cp, path2, 1) for p in paths]
     else:
         assert len(paths) == len(path2)
     return path2
