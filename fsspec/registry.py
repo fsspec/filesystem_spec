@@ -45,10 +45,12 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
 
     else:
         if name in registry and clobber is False:
-            raise ValueError(
-                "Name (%s) already in the registry and clobber is False" % name
-            )
-        _registry[name] = cls
+            if _registry[name] is not cls:
+                raise ValueError(
+                    "Name (%s) already in the registry and clobber is False" % name
+                )
+        else:
+            _registry[name] = cls
 
 
 # protocols mapped to the class which implements them. This dict can
