@@ -34,14 +34,16 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
     """
     if isinstance(cls, str):
         if name in known_implementations and clobber is False:
-            raise ValueError(
-                "Name (%s) already in the known_implementations and clobber "
-                "is False" % name
-            )
-        known_implementations[name] = {
-            "class": cls,
-            "err": errtxt or "%s import failed for protocol %s" % (cls, name),
-        }
+            if cls != known_implementations[name]["class"]:
+                raise ValueError(
+                    "Name (%s) already in the known_implementations and clobber "
+                    "is False" % name
+                )
+        else:
+            known_implementations[name] = {
+                "class": cls,
+                "err": errtxt or "%s import failed for protocol %s" % (cls, name),
+            }
 
     else:
         if name in registry and clobber is False:
