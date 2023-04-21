@@ -381,7 +381,6 @@ def test_url_to_fs():
 
 
 def test_walk(m):
-
     # depth = 0
     dir1 = "/dir1"
     # depth = 1 (2 dirs, 1 file)
@@ -396,7 +395,7 @@ def test_walk(m):
     file1111 = dir111 + "/file1111"
 
     m.mkdir(dir111)  # Creates parents too
-    m.mkdir(dir12)   # Creates parents too
+    m.mkdir(dir12)  # Creates parents too
     m.touch(file11)
     m.touch(file111)
     m.touch(file121)
