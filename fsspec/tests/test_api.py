@@ -381,67 +381,102 @@ def test_url_to_fs():
 
 
 def test_walk(m):
-    dir0 = "/dir0"
-    dir1 = dir0 + "/dir1"
-    dir2 = dir1 + "/dir2"
-    file1 = dir0 + "/file1"
-    file2 = dir1 + "/file2"
-    file3 = dir2 + "/file3"
 
-    m.mkdir(dir2)  # Creates parents too
-    m.touch(file1)
-    m.touch(file2)
-    m.touch(file3)
+    # depth = 0
+    dir1 = "/dir1"
+    # depth = 1 (2 dirs, 1 file)
+    dir11 = dir1 + "/dir11"
+    dir12 = dir1 + "/dir12"
+    file11 = dir1 + "/file11"
+    # depth = 2
+    dir111 = dir11 + "/dir111"
+    file111 = dir11 + "/file111"
+    file121 = dir12 + "/file121"
+    # depth = 3
+    file1111 = dir111 + "/file1111"
+
+    m.mkdir(dir111)  # Creates parents too
+    m.mkdir(dir12)   # Creates parents too
+    m.touch(file11)
+    m.touch(file111)
+    m.touch(file121)
+    m.touch(file1111)
 
     # No maxdepth
-    assert list(m.walk(dir0, topdown=True)) == [
-        (dir0, ["dir1"], ["file1"]),
-        (dir1, ["dir2"], ["file2"]),
-        (dir2, [], ["file3"]),
+    assert list(m.walk(dir1, topdown=True)) == [
+        (dir1, ["dir11", "dir12"], ["file11"]),
+        (dir11, ["dir111"], ["file111"]),
+        (dir111, [], ["file1111"]),
+        (dir12, [], ["file121"]),
     ]
-    assert list(m.walk(dir0, topdown=False)) == [
-        (dir2, [], ["file3"]),
-        (dir1, ["dir2"], ["file2"]),
-        (dir0, ["dir1"], ["file1"]),
+    assert list(m.walk(dir1, topdown=False)) == [
+        (dir111, [], ["file1111"]),
+        (dir11, ["dir111"], ["file111"]),
+        (dir12, [], ["file121"]),
+        (dir1, ["dir11", "dir12"], ["file11"]),
     ]
 
     # maxdepth=2
-    assert list(m.walk(dir0, maxdepth=2, topdown=True)) == [
-        (dir0, ["dir1"], ["file1"]),
-        (dir1, ["dir2"], ["file2"]),
+    assert list(m.walk(dir1, maxdepth=2, topdown=True)) == [
+        (dir1, ["dir11", "dir12"], ["file11"]),
+        (dir11, ["dir111"], ["file111"]),
+        (dir12, [], ["file121"]),
     ]
-    assert list(m.walk(dir0, maxdepth=2, topdown=False)) == [
-        (dir1, ["dir2"], ["file2"]),
-        (dir0, ["dir1"], ["file1"]),
+    assert list(m.walk(dir1, maxdepth=2, topdown=False)) == [
+        (dir11, ["dir111"], ["file111"]),
+        (dir12, [], ["file121"]),
+        (dir1, ["dir11", "dir12"], ["file11"]),
     ]
 
     # maxdepth=1
-    assert list(m.walk(dir0, maxdepth=1, topdown=True)) == [
-        (dir0, ["dir1"], ["file1"]),
+    assert list(m.walk(dir1, maxdepth=1, topdown=True)) == [
+        (dir1, ["dir11", "dir12"], ["file11"]),
     ]
-    assert list(m.walk(dir0, maxdepth=1, topdown=False)) == [
-        (dir0, ["dir1"], ["file1"]),
+    assert list(m.walk(dir1, maxdepth=1, topdown=False)) == [
+        (dir1, ["dir11", "dir12"], ["file11"]),
     ]
 
     # maxdepth=0
     with pytest.raises(ValueError):
-        list(m.walk(dir0, maxdepth=0, topdown=True))
+        list(m.walk(dir1, maxdepth=0, topdown=True))
     with pytest.raises(ValueError):
-        list(m.walk(dir0, maxdepth=0, topdown=False))
+        list(m.walk(dir1, maxdepth=0, topdown=False))
 
-    # purne dir2
+    # purne dir111
     def _walk(*args, **kwargs):
         for path, dirs, files in m.walk(*args, **kwargs):
             yield (path, dirs.copy(), files)
-            if "dir2" in dirs:
-                dirs.remove("dir2")
+            if "dir111" in dirs:
+                dirs.remove("dir111")
 
-    assert list(_walk(dir0, topdown=True)) == [
-        (dir0, ["dir1"], ["file1"]),
-        (dir1, ["dir2"], ["file2"]),
+    assert list(_walk(dir1, topdown=True)) == [
+        (dir1, ["dir11", "dir12"], ["file11"]),
+        (dir11, ["dir111"], ["file111"]),
+        (dir12, [], ["file121"]),
     ]
-    assert list(_walk(dir0, topdown=False)) == [
-        (dir2, [], ["file3"]),
-        (dir1, ["dir2"], ["file2"]),
-        (dir0, ["dir1"], ["file1"]),
+    assert list(_walk(dir1, topdown=False)) == [
+        (dir111, [], ["file1111"]),
+        (dir11, ["dir111"], ["file111"]),
+        (dir12, [], ["file121"]),
+        (dir1, ["dir11", "dir12"], ["file11"]),
+    ]
+
+    # reverse dirs order
+    def _walk(*args, **kwargs):
+        for path, dirs, files in m.walk(*args, **kwargs):
+            yield (path, dirs.copy(), files)
+            dirs.reverse()
+
+    assert list(_walk(dir1, topdown=True)) == [
+        (dir1, ["dir11", "dir12"], ["file11"]),
+        # Here dir12 comes before dir11
+        (dir12, [], ["file121"]),
+        (dir11, ["dir111"], ["file111"]),
+        (dir111, [], ["file1111"]),
+    ]
+    assert list(_walk(dir1, topdown=False)) == [
+        (dir111, [], ["file1111"]),
+        (dir11, ["dir111"], ["file111"]),
+        (dir12, [], ["file121"]),
+        (dir1, ["dir11", "dir12"], ["file11"]),
     ]
