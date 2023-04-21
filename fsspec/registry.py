@@ -34,21 +34,25 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
     """
     if isinstance(cls, str):
         if name in known_implementations and clobber is False:
-            raise ValueError(
-                "Name (%s) already in the known_implementations and clobber "
-                "is False" % name
-            )
-        known_implementations[name] = {
-            "class": cls,
-            "err": errtxt or "%s import failed for protocol %s" % (cls, name),
-        }
+            if cls != known_implementations[name]["class"]:
+                raise ValueError(
+                    "Name (%s) already in the known_implementations and clobber "
+                    "is False" % name
+                )
+        else:
+            known_implementations[name] = {
+                "class": cls,
+                "err": errtxt or "%s import failed for protocol %s" % (cls, name),
+            }
 
     else:
         if name in registry and clobber is False:
-            raise ValueError(
-                "Name (%s) already in the registry and clobber is False" % name
-            )
-        _registry[name] = cls
+            if _registry[name] is not cls:
+                raise ValueError(
+                    "Name (%s) already in the registry and clobber is False" % name
+                )
+        else:
+            _registry[name] = cls
 
 
 # protocols mapped to the class which implements them. This dict can
@@ -178,6 +182,10 @@ known_implementations = {
     "dvc": {
         "class": "dvc.api.DVCFileSystem",
         "err": "Install dvc to access DVCFileSystem",
+    },
+    "hf": {
+        "class": "huggingface_hub.HfFileSystem",
+        "err": "Install huggingface_hub to access HfFileSystem",
     },
     "root": {
         "class": "fsspec_xrootd.XRootDFileSystem",
