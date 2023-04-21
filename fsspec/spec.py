@@ -1009,9 +1009,12 @@ class AbstractFileSystem(metaclass=_Cached):
                 if on_error == "raise":
                     raise
 
-    def expand_path(self, path, recursive=False, maxdepth=None):
+    def expand_path(self, path, recursive=False, maxdepth=None, **kwargs):
         """Turn one or more globs or directories into a list of all matching paths
-        to files or directories."""
+        to files or directories.
+
+        kwargs are passed to ``glob`` or ``find``, which may in turn call ``ls``
+        """
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
@@ -1022,18 +1025,23 @@ class AbstractFileSystem(metaclass=_Cached):
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if has_magic(p):
-                    bit = set(self.glob(p))
+                    bit = set(self.glob(p, **kwargs))
                     out |= bit
                     if recursive:
                         out |= set(
                             self.expand_path(
-                                list(bit), recursive=recursive, maxdepth=maxdepth
+                                list(bit),
+                                recursive=recursive,
+                                maxdepth=maxdepth,
+                                **kwargs,
                             )
                         )
                     continue
                 elif recursive:
                     rec = set(
-                        self.find(p, maxdepth=maxdepth, withdirs=True, detail=False)
+                        self.find(
+                            p, maxdepth=maxdepth, withdirs=True, detail=False, **kwargs
+                        )
                     )
                     out |= rec
                 if p not in out and (recursive is False or self.exists(p)):
