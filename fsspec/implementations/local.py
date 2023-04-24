@@ -272,6 +272,29 @@ def make_path_posix(path, sep=os.sep):
     return path
 
 
+def trailing_sep(path):
+    """Return True if the path ends with a path separator.
+
+    A forward slash is always considered a path separator, even on Operating
+    Systems that normally use a backslash.
+    """
+    return path.endswith(os.sep) or os.altsep and path.endswith(os.altsep)
+
+
+def trailing_sep_maybe_asterisk(path):
+    """Return True if the path ends with a path separator and optionally an
+    asterisk.
+
+    A forward slash is always considered a path separator, even on Operating
+    Systems that normally use a backslash.
+    """
+    return (
+        path.endswith((os.sep, os.sep + "*"))
+        or os.altsep
+        and path.endswith((os.altsep, os.altsep + "*"))
+    )
+
+
 class LocalFileOpener(io.IOBase):
     def __init__(
         self, path, mode, autocommit=True, fs=None, compression=None, **kwargs

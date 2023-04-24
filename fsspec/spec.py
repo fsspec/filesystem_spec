@@ -879,19 +879,24 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls get_file for each source.
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
+        from .implementations.local import (
+            LocalFileSystem,
+            make_path_posix,
+            trailing_sep,
+            trailing_sep_maybe_asterisk,
+        )
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         rpaths = self.expand_path(rpath, recursive=recursive)
         isdir = isinstance(lpath, str) and (
-            lpath.endswith("/") or LocalFileSystem().isdir(lpath)
+            trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
         )
         source_is_str = isinstance(rpath, str)
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and source_is_str and not rpath.endswith(("/", "/*")),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(rpath),
             is_dir=isdir,
             flatten=not source_is_str,
         )
@@ -930,7 +935,12 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls put_file for each source.
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
+        from .implementations.local import (
+            LocalFileSystem,
+            make_path_posix,
+            trailing_sep,
+            trailing_sep_maybe_asterisk,
+        )
 
         rpath = (
             self._strip_protocol(rpath)
@@ -941,12 +951,12 @@ class AbstractFileSystem(metaclass=_Cached):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         lpaths = fs.expand_path(lpath, recursive=recursive)
-        isdir = isinstance(rpath, str) and (rpath.endswith("/") or self.isdir(rpath))
+        isdir = isinstance(rpath, str) and (trailing_sep(rpath) or self.isdir(rpath))
         source_is_str = isinstance(lpath, str)
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and source_is_str and not lpath.endswith(("/", "/*")),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
             is_dir=isdir,
             flatten=not source_is_str,
         )
@@ -978,18 +988,20 @@ class AbstractFileSystem(metaclass=_Cached):
             not-found exceptions will cause the path to be skipped; defaults to
             raise unless recursive is true, where the default is ignore
         """
+        from .implementations.local import trailing_sep, trailing_sep_maybe_asterisk
+
         if on_error is None and recursive:
             on_error = "ignore"
         elif on_error is None:
             on_error = "raise"
 
         paths = self.expand_path(path1, recursive=recursive)
-        isdir = isinstance(path2, str) and (path2.endswith("/") or self.isdir(path2))
+        isdir = isinstance(path2, str) and (trailing_sep(path2) or self.isdir(path2))
         source_is_str = isinstance(path1, str)
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and source_is_str and not path1.endswith(("/", "/*")),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
             is_dir=isdir,
             flatten=not source_is_str,
         )
