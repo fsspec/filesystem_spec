@@ -88,7 +88,7 @@ pip install syntax below, or install the specific package required
    pip install fsspec[gcs]
    conda install -c conda-forge gcsfs
 
-``fsspec``` attempts to provide the right message when you attempt to use a filesystem
+``fsspec`` attempts to provide the right message when you attempt to use a filesystem
 for which you need additional dependencies.
 The current list of known implementations can be found as follows
 
