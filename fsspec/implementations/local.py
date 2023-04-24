@@ -278,6 +278,9 @@ def trailing_sep(path):
     A forward slash is always considered a path separator, even on Operating
     Systems that normally use a backslash.
     """
+    # TODO: if all incoming paths were posix-compliant then separator would
+    # always be a forward slash, simplifying this function.
+    # See https://github.com/fsspec/filesystem_spec/pull/1250
     return path.endswith(os.sep) or os.altsep and path.endswith(os.altsep)
 
 
@@ -288,6 +291,9 @@ def trailing_sep_maybe_asterisk(path):
     A forward slash is always considered a path separator, even on Operating
     Systems that normally use a backslash.
     """
+    # TODO: if all incoming paths were posix-compliant then separator would
+    # always be a forward slash, simplifying this function.
+    # See https://github.com/fsspec/filesystem_spec/pull/1250
     return (
         path.endswith((os.sep, os.sep + "*"))
         or os.altsep
