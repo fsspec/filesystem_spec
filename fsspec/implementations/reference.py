@@ -302,7 +302,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             record, _, _ = self._key_to_record(key)
             subdict = self._items.setdefault((field, record), {})
             subdict[chunk] = value
-            if len(subdict) == self.record_size:
+            if len(subdict) == self._output_size(field, record):
                 self.write(field, record)
         else:
             # metadata or top-level
@@ -320,11 +320,25 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 record, _, _ = self._key_to_record(key)
                 subdict = self._items.setdefault((field, record), {})
                 subdict[chunk] = None
-                if len(subdict) == self.record_size:
+                if len(subdict) == self._output_size(field, record):
                     self.write(field, record)
             else:
                 # metadata or top-level
                 self._items[key] = None
+
+    def _output_size(self, field, record):
+        np = self.np
+
+        zarray = json.loads(self[f"{field}/.zarray"])
+        chunk_sizes = np.ceil(np.array(zarray["shape"]) / np.array(zarray["chunks"]))
+        if chunk_sizes.size == 0:
+            chunk_sizes = np.array([0])
+        nchunks = int(np.product(chunk_sizes))
+        nrec = nchunks // self.record_size
+        rem = nchunks % self.record_size
+        if rem != 0:
+            nrec += 1
+        return self.record_size if record < nrec - 1 else rem
 
     def write(self, field, record, base_url=None, storage_options=None):
         # extra requirements if writing
@@ -335,6 +349,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # TODO: if the dict is incomplete, also load records and merge in
         partition = self._items[(field, record)]
         fn = f"{base_url or self.root}/{field}/refs.{record}.parq"
+        output_size = self._output_size(field, record)
 
         ####
         paths = np.full(self.record_size, np.nan, dtype="O")
@@ -373,7 +388,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 raw=raws,
             ),
             copy=False,
-        )
+        )[:output_size]
         object_encoding = dict(raw="bytes", path="utf8")
         has_nulls = ["path", "raw"]
 
@@ -389,9 +404,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             # **kwargs,
         )
         partition.clear()
+        self._items.pop((field, record))
 
     def flush(self, base_url=None, storage_options=None):
-        # done when all writing finishes
+        # write what we have so far and clear sub chunks
         for field in self.listdir():
             nchunks = self.np.product(self._get_chunk_sizes(field))
             nrecs = int(self.np.ceil(nchunks / self.record_size))
@@ -403,7 +419,15 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                         base_url=base_url,
                         storage_options=storage_options,
                     )
+
         # gather .zmetadata from self._items and write that too
+        for k in list(self._items):
+            if k != ".zmetadata" and ".z" in k:
+                self.zmetadata[k] = json.loads(self._items.pop(k))
+        met = {"metadata": self.zmetadata, "record_size": self.record_size}
+        self._items[".zmetadata"] = json.dumps(met).encode()
+        self.fs.pipe("/".join([self.root, ".zmetadata"]), self._items[".zmetadata"])
+        # TODO: reload/reinstantiate here?
 
     def __len__(self):
         # Caveat: This counts expected references, not actual
