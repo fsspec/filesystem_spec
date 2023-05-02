@@ -7,3 +7,5 @@ dependencies:
   - numpydoc
   - sphinx_rtd_theme
   - yarl
+  - pip:
+    - sphinx-design

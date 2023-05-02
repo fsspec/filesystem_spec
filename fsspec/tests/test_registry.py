@@ -4,6 +4,8 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 
+import fsspec
+from fsspec.implementations.zip import ZipFileSystem
 from fsspec.registry import (
     _registry,
     filesystem,
@@ -69,9 +71,16 @@ def test_register_fail(clear_registry):
     with pytest.raises(ImportError):
         get_filesystem_class("test")
 
-    register_implementation("test", "doesntexist.AbstractFileSystem")
+    # NOOP
+    register_implementation("test", "doesntexist.AbstractFileSystem", clobber=False)
     with pytest.raises(ValueError):
-        register_implementation("test", "doesntexist.AbstractFileSystem", clobber=False)
+        register_implementation(
+            "test", "doesntexist.AbstractFileSystemm", clobber=False
+        )
+
+    # by default we do not allow clobbering
+    with pytest.raises(ValueError):
+        register_implementation("test", "doesntexist.AbstractFileSystemm")
 
     register_implementation(
         "test", "doesntexist.AbstractFileSystem", errtxt="hiho", clobber=True
@@ -81,9 +90,12 @@ def test_register_fail(clear_registry):
     assert "hiho" in str(e.value)
     register_implementation("test", AbstractFileSystem)
 
+    # NOOP
+    register_implementation("test", AbstractFileSystem)
     with pytest.raises(ValueError):
-        register_implementation("test", AbstractFileSystem, clobber=False)
+        register_implementation("test", ZipFileSystem)
     register_implementation("test", AbstractFileSystem, clobber=True)
+    assert isinstance(fsspec.filesystem("test"), AbstractFileSystem)
 
 
 def test_entry_points_registered_on_import(clear_registry, clean_imports):

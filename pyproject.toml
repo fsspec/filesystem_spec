@@ -21,3 +21,10 @@ exclude = '''
   | versioneer.py
 )
 '''
+
+[tool.pytest.ini_options]
+# custom markers, need to be defined to avoid warnings
+markers = [
+    "asyncio",
+    "vcr",
+]

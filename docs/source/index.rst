@@ -107,6 +107,7 @@ The current list of known implementations can be found as follows
    intro.rst
    usage.rst
    features.rst
+   copying.rst
    developer.rst
    async.rst
    api.rst

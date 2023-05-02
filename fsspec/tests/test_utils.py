@@ -321,6 +321,14 @@ def test_common_prefix(paths, out):
             True,
             ["/path2/more/path1", "/path2/diff/path2"],
         ),
+        (["a", "b/", "b/c"], "dest/", True, False, ["dest/a", "dest/b/", "dest/b/c"]),
+        (
+            ["/a", "/b/", "/b/c"],
+            "dest/",
+            True,
+            False,
+            ["dest/a", "dest/b/", "dest/b/c"],
+        ),
     ),
 )
 def test_other_paths(paths, other, is_dir, exists, expected):
