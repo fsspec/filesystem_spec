@@ -132,6 +132,12 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
         self.open_refs = open_refs
 
+    @staticmethod
+    def create(record_size, root, fs, **kwargs):
+        met = {"metadata": {}, "record_size": record_size}
+        fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
+        return LazyReferenceMapper(root, fs, **kwargs)
+
     def listdir(self, basename=True):
         """List top-level directories"""
         if self.dirs is None:
@@ -296,9 +302,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
-        field, chunk = key.split("/")
-        is_meta = chunk.startswith(".z")
-        if field and not is_meta:
+        if "/" in key and not self._is_meta(key):
+            field, chunk = key.split("/")
             record, _, _ = self._key_to_record(key)
             subdict = self._items.setdefault((field, record), {})
             subdict[chunk] = value
@@ -308,15 +313,18 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             # metadata or top-level
             self._items[key] = value
 
+    @staticmethod
+    def _is_meta(key):
+        return key.startswith(".z") or "/.z" in key
+
     def __delitem__(self, key):
-        field, chunk = key.split("/")
-        is_meta = chunk.startswith(".z")
         if key in self._items:
             del self._items[key]
         elif key in self.zmetadata:
             del self.zmetadata[key]
         else:
-            if field and not is_meta:
+            if "/" in key and not self._is_meta(key):
+                field, chunk = key.split("/")
                 record, _, _ = self._key_to_record(key)
                 subdict = self._items.setdefault((field, record), {})
                 subdict[chunk] = None
@@ -348,7 +356,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
         # TODO: if the dict is incomplete, also load records and merge in
         partition = self._items[(field, record)]
-        fn = f"{base_url or self.root}/{field}/refs.{record}.parq"
+        fn = f"{base_url or self.out_root}/{field}/refs.{record}.parq"
         output_size = self._output_size(field, record)
 
         ####
@@ -392,6 +400,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         object_encoding = dict(raw="bytes", path="utf8")
         has_nulls = ["path", "raw"]
 
+        self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
         df.to_parquet(
             fn,
             engine="fastparquet",
@@ -407,6 +416,13 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self._items.pop((field, record))
 
     def flush(self, base_url=None, storage_options=None):
+        """Output any modified or deleted keys
+
+        Parameters
+        ----------
+        base_url: str
+            Location of the output
+        """
         # write what we have so far and clear sub chunks
         for field in self.listdir():
             nchunks = self.np.product(self._get_chunk_sizes(field))
@@ -426,8 +442,13 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 self.zmetadata[k] = json.loads(self._items.pop(k))
         met = {"metadata": self.zmetadata, "record_size": self.record_size}
         self._items[".zmetadata"] = json.dumps(met).encode()
-        self.fs.pipe("/".join([self.root, ".zmetadata"]), self._items[".zmetadata"])
-        # TODO: reload/reinstantiate here?
+        self.fs.pipe(
+            "/".join([base_url or self.out_root, ".zmetadata"]),
+            self._items[".zmetadata"],
+        )
+
+        # TODO: only clear those that we wrote to?
+        self.open_refs.cache_clear()
 
     def __len__(self):
         # Caveat: This counts expected references, not actual
