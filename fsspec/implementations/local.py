@@ -281,7 +281,7 @@ def trailing_sep(path):
     # TODO: if all incoming paths were posix-compliant then separator would
     # always be a forward slash, simplifying this function.
     # See https://github.com/fsspec/filesystem_spec/pull/1250
-    return path.endswith(os.sep) or os.altsep and path.endswith(os.altsep)
+    return path.endswith(os.sep) or (os.altsep is not None and path.endswith(os.altsep))
 
 
 def trailing_sep_maybe_asterisk(path):
@@ -294,10 +294,8 @@ def trailing_sep_maybe_asterisk(path):
     # TODO: if all incoming paths were posix-compliant then separator would
     # always be a forward slash, simplifying this function.
     # See https://github.com/fsspec/filesystem_spec/pull/1250
-    return (
-        path.endswith((os.sep, os.sep + "*"))
-        or os.altsep
-        and path.endswith((os.altsep, os.altsep + "*"))
+    return path.endswith((os.sep, os.sep + "*")) or (
+        os.altsep is not None and path.endswith((os.altsep, os.altsep + "*"))
     )
 
 

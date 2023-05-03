@@ -92,9 +92,8 @@ class AbstractCopyTests:
             t = target + "/" if target_slash else target
 
             # Without recursive does nothing
-            # ERROR: erroneously creates new directory
-            # fs.cp(s, t)
-            # assert fs.ls(target) == []
+            fs.cp(s, t)
+            assert fs.ls(target) == []
 
             # With recursive
             fs.cp(s, t, recursive=True)
@@ -143,9 +142,8 @@ class AbstractCopyTests:
                 t += "/"
 
             # Without recursive does nothing
-            # ERROR: erroneously creates new directory
-            # fs.cp(s, t)
-            # assert fs.ls(target) == []
+            fs.cp(s, t)
+            assert fs.ls(target) == []
 
             # With recursive
             fs.cp(s, t, recursive=True)

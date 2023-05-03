@@ -121,9 +121,6 @@ Forward slashes are used for directory separators throughout.
 
     .. warning::
 
-       ``recursive=False`` is not correct
-       (`issue 1232 <https://github.com/fsspec/filesystem_spec/issues/1232>`_).
-
        ``maxdepth`` is not yet implemented for copying functions
        (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
 
@@ -174,9 +171,6 @@ Forward slashes are used for directory separators throughout.
 .. dropdown:: 1f. Directory to new directory
 
     .. warning::
-
-       ``recursive=False`` is not correct
-       (`issue 1232 <https://github.com/fsspec/filesystem_spec/issues/1232>`_).
 
        ``maxdepth`` is not yet implemented for copying functions
        (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
