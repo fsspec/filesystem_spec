@@ -886,13 +886,21 @@ class AbstractFileSystem(metaclass=_Cached):
             trailing_sep_maybe_asterisk,
         )
 
+        rpaths = self.expand_path(rpath, recursive=recursive)
+        if (
+            len(rpaths) == 1
+            and not recursive
+            and (trailing_sep(rpaths[0]) or self.isdir(rpaths[0]))
+        ):
+            # Non-recursive copy of directory does nothing.
+            return
+        source_is_str = isinstance(rpath, str)
+
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
-        rpaths = self.expand_path(rpath, recursive=recursive)
         isdir = isinstance(lpath, str) and (
             trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
         )
-        source_is_str = isinstance(rpath, str)
         lpaths = other_paths(
             rpaths,
             lpath,
@@ -942,17 +950,25 @@ class AbstractFileSystem(metaclass=_Cached):
             trailing_sep_maybe_asterisk,
         )
 
+        if isinstance(lpath, str):
+            lpath = make_path_posix(lpath)
+        fs = LocalFileSystem()
+        lpaths = fs.expand_path(lpath, recursive=recursive)
+        if (
+            len(lpaths) == 1
+            and not recursive
+            and (trailing_sep(lpaths[0]) or self.isdir(lpaths[0]))
+        ):
+            # Non-recursive copy of directory does nothing.
+            return
+        source_is_str = isinstance(lpath, str)
+
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
             else [self._strip_protocol(p) for p in rpath]
         )
-        if isinstance(lpath, str):
-            lpath = make_path_posix(lpath)
-        fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive)
         isdir = isinstance(rpath, str) and (trailing_sep(rpath) or self.isdir(rpath))
-        source_is_str = isinstance(lpath, str)
         rpaths = other_paths(
             lpaths,
             rpath,
@@ -996,8 +1012,16 @@ class AbstractFileSystem(metaclass=_Cached):
             on_error = "raise"
 
         paths = self.expand_path(path1, recursive=recursive)
-        isdir = isinstance(path2, str) and (trailing_sep(path2) or self.isdir(path2))
+        if (
+            len(paths) == 1
+            and not recursive
+            and (trailing_sep(paths[0]) or self.isdir(paths[0]))
+        ):
+            # Non-recursive copy of directory does nothing.
+            return
         source_is_str = isinstance(path1, str)
+
+        isdir = isinstance(path2, str) and (trailing_sep(path2) or self.isdir(path2))
         path2 = other_paths(
             paths,
             path2,
@@ -1019,6 +1043,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         kwargs are passed to ``glob`` or ``find``, which may in turn call ``ls``
         """
+
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 

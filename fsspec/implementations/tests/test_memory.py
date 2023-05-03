@@ -291,30 +291,24 @@ def test_cp_empty_directory(m):
     # cp without slash, target directory exists
     assert m.isdir(target)
     m.cp(empty, target)
-    assert m.find(target, withdirs=True) == [target + "/empty"]
-
-    m.rm(target + "/empty", recursive=True)
+    assert m.find(target, withdirs=True) == []
 
     # cp with slash, target directory exists
     assert m.isdir(target)
     m.cp(empty + "/", target)
     assert m.find(target, withdirs=True) == []
 
-    m.rm(target, recursive=True)
+    m.rmdir(target)
 
     # cp without slash, target directory doesn't exist
     assert not m.isdir(target)
     m.cp(empty, target)
-    assert m.isdir(target)
-    assert m.find(target, withdirs=True) == []
-
-    m.rm(target, recursive=True)
+    assert not m.isdir(target)
 
     # cp with slash, target directory doesn't exist
     assert not m.isdir(target)
     m.cp(empty + "/", target)
-    assert m.isdir(target)
-    assert m.find(target, withdirs=True) == []
+    assert not m.isdir(target)
 
 
 def test_cp_two_files(m):
