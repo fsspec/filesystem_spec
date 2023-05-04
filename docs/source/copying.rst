@@ -196,11 +196,6 @@ Forward slashes are used for directory separators throughout.
 
 .. dropdown:: 1g. Glob to existing directory
 
-    .. warning::
-
-        This does not currently work correctly, it creates a extra directory
-        (`issue 1233 <https://github.com/fsspec/filesystem_spec/issues/1233>`_).
-
     Nonrecursive
 
     .. code-block:: python
@@ -233,11 +228,6 @@ Forward slashes are used for directory separators throughout.
     the target is a directory.
 
 .. dropdown:: 1h. Glob to new directory
-
-    .. warning::
-
-        This does not currently work correctly, it creates a extra directory
-        (`issue 1233 <https://github.com/fsspec/filesystem_spec/issues/1233>`_).
 
     Nonrecursive
 

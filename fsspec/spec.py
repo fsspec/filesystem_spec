@@ -886,15 +886,13 @@ class AbstractFileSystem(metaclass=_Cached):
             trailing_sep_maybe_asterisk,
         )
 
-        rpaths = self.expand_path(rpath, recursive=recursive)
-        if (
-            len(rpaths) == 1
-            and not recursive
-            and (trailing_sep(rpaths[0]) or self.isdir(rpaths[0]))
-        ):
-            # Non-recursive copy of directory does nothing.
-            return
         source_is_str = isinstance(rpath, str)
+        rpaths = self.expand_path(rpath, recursive=recursive)
+        if source_is_str and not recursive:
+            # Non-recursive glob does not copy directories
+            rpaths = [p for p in rpaths if not (trailing_sep(p) or self.isdir(p))]
+            if not rpaths:
+                return
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
@@ -953,15 +951,13 @@ class AbstractFileSystem(metaclass=_Cached):
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive)
-        if (
-            len(lpaths) == 1
-            and not recursive
-            and (trailing_sep(lpaths[0]) or self.isdir(lpaths[0]))
-        ):
-            # Non-recursive copy of directory does nothing.
-            return
         source_is_str = isinstance(lpath, str)
+        lpaths = fs.expand_path(lpath, recursive=recursive)
+        if source_is_str and not recursive:
+            # Non-recursive glob does not copy directories
+            lpaths = [p for p in lpaths if not (trailing_sep(p) or self.isdir(p))]
+            if not lpaths:
+                return
 
         rpath = (
             self._strip_protocol(rpath)
@@ -1011,15 +1007,13 @@ class AbstractFileSystem(metaclass=_Cached):
         elif on_error is None:
             on_error = "raise"
 
-        paths = self.expand_path(path1, recursive=recursive)
-        if (
-            len(paths) == 1
-            and not recursive
-            and (trailing_sep(paths[0]) or self.isdir(paths[0]))
-        ):
-            # Non-recursive copy of directory does nothing.
-            return
         source_is_str = isinstance(path1, str)
+        paths = self.expand_path(path1, recursive=recursive)
+        if source_is_str and not recursive:
+            # Non-recursive glob does not copy directories
+            paths = [p for p in paths if not (trailing_sep(p) or self.isdir(p))]
+            if not paths:
+                return
 
         isdir = isinstance(path2, str) and (trailing_sep(path2) or self.isdir(path2))
         path2 = other_paths(
