@@ -217,7 +217,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             return self._items[key]
         elif key in self.zmetadata:
             return json.dumps(self.zmetadata[key]).encode()
-        elif "/" not in key:
+        elif "/" not in key or self._is_meta(key):
             raise KeyError(key)
         field, sub_key = key.split("/")
         record, _, _ = self._key_to_record(key)
@@ -302,6 +302,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
+        print("set", key, value)
         if "/" in key and not self._is_meta(key):
             field, chunk = key.split("/")
             record, _, _ = self._key_to_record(key)
@@ -312,12 +313,16 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         else:
             # metadata or top-level
             self._items[key] = value
+            self.zmetadata[key] = json.loads(
+                value.decode() if isinstance(value, bytes) else value
+            )
 
     @staticmethod
     def _is_meta(key):
         return key.startswith(".z") or "/.z" in key
 
     def __delitem__(self, key):
+        print("delete", key)
         if key in self._items:
             del self._items[key]
         elif key in self.zmetadata:
@@ -366,6 +371,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         raws = np.full(self.record_size, np.nan, dtype="O")
         zarray = json.loads(self[f"{field}/.zarray"])
         shape = np.array(zarray["shape"])
+        chunks = np.array(zarray["chunks"])
         nraw = 0
         npath = 0
         for key, data in partition.items():
@@ -373,9 +379,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             chunk_ints = [int(ch) for ch in chunk_id.split(".")]
             i = 0
             mult = 1
-            for chunk_int, sh in zip(chunk_ints[::-1], shape[::-1]):
+            for chunk_int, sh, ch in zip(chunk_ints[::-1], shape[::-1], chunks[::-1]):
                 i += chunk_int * mult
-                mult *= sh
+                mult *= sh // ch
             j = i % self.record_size
             # Make note if expected number of chunks differs from actual
             # number found in references
@@ -388,6 +394,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             else:
                 nraw += 1
                 raws[j] = kerchunk.df._proc_raw(data)
+        # TODO: only save needed columns
         df = pd.DataFrame(
             dict(
                 path=paths,
