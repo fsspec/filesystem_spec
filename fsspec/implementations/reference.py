@@ -302,7 +302,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
-        print("set", key, value)
         if "/" in key and not self._is_meta(key):
             field, chunk = key.split("/")
             record, _, _ = self._key_to_record(key)
@@ -322,7 +321,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return key.startswith(".z") or "/.z" in key
 
     def __delitem__(self, key):
-        print("delete", key)
         if key in self._items:
             del self._items[key]
         elif key in self.zmetadata:
@@ -474,8 +472,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def __iter__(self):
         # Caveat: Note that this generates all expected keys, but does not
         # account for reference keys that are missing.
-        yield from self.zmetadata
-        yield from self._items
+        metas = set(self.zmetadata)
+        metas.update(self._items)
+        yield from sorted(metas)
         for field in self.listdir():
             yield from self._keys_in_field(field)
 
