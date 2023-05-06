@@ -410,7 +410,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         df.to_parquet(
             fn,
             engine="fastparquet",
-            storage_options=storage_options,
+            storage_options=storage_options
+            or getattr(self.fs, "storage_options", None),
             compression="zstd",
             index=False,
             stats=False,
