@@ -157,8 +157,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 + [name for name in self.zmetadata if "/" not in name]
                 + [name for name in self._items if "/" not in name]
             )
-            others.update(dirnames)
             if detail is False:
+                others.update(dirnames)
                 return sorted(others)
             dirinfo = [
                 {"name": name, "type": "directory", "size": 0} for name in dirnames
@@ -302,6 +302,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
+        print(key, value)
         if "/" in key and not self._is_meta(key):
             field, chunk = key.split("/")
             record, _, _ = self._key_to_record(key)
@@ -429,10 +430,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             Location of the output
         """
         # write what we have so far and clear sub chunks
-        for field in self.listdir():
-            nchunks = self.np.product(self._get_chunk_sizes(field))
-            nrecs = int(self.np.ceil(nchunks / self.record_size))
-            for record in range(nrecs):
+        for thing in self._items:
+            if isinstance(thing, tuple):
+                field, record = thing
                 if self._items.get((record, field)):
                     self.write(
                         field,
@@ -474,9 +474,18 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # account for reference keys that are missing.
         metas = set(self.zmetadata)
         metas.update(self._items)
-        yield from sorted(metas)
+        for bit in metas:
+            if isinstance(bit, str):
+                yield bit
         for field in self.listdir():
             yield from self._keys_in_field(field)
+
+    def __contains__(self, item):
+        try:
+            self._load_one_key(item)
+            return True
+        except KeyError:
+            return False
 
     def _keys_in_field(self, field):
         """List key names in given field
@@ -998,6 +1007,8 @@ class ReferenceFileSystem(AsyncFileSystem):
     def isdir(self, path):  # overwrite auto-sync version
         if self.dircache:
             return path in self.dircache
+        elif isinstance(self.references, LazyReferenceMapper):
+            return path in self.references.listdir("")
         else:
             # this may be faster than building dircache for single calls, but
             # by looping will be slow for many calls; could cache it?
