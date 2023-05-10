@@ -119,11 +119,6 @@ Forward slashes are used for directory separators throughout.
 
 .. dropdown:: 1e. Directory to existing directory
 
-    .. warning::
-
-       ``maxdepth`` is not yet implemented for copying functions
-       (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
-
     .. code-block:: python
 
         cp("source/subdir/", "target/", recursive=True)
@@ -168,12 +163,21 @@ Forward slashes are used for directory separators throughout.
                 └── 📁 nesteddir
                     └── 📄 nestedfile
 
+    Again the depth of recursion can be controlled using the ``maxdepth`` keyword argument, for
+    example:
+
+    .. code-block:: python
+
+        cp("source/subdir", "target/", recursive=True, maxdepth=1)
+
+    results in::
+
+       📁 target
+        └── 📁 subdir
+            ├── 📄 subfile1
+            └── 📄 subfile2
+
 .. dropdown:: 1f. Directory to new directory
-
-    .. warning::
-
-       ``maxdepth`` is not yet implemented for copying functions
-       (`issue 1231 <https://github.com/fsspec/filesystem_spec/issues/1231>`_).
 
     .. code-block:: python
 
@@ -192,7 +196,18 @@ Forward slashes are used for directory separators throughout.
     They are recommended to explicitly indicate both are directories.
 
     The ``recursive=True`` keyword argument is required otherwise the call does nothing. The depth
-    of recursion can be controlled using the ``maxdepth`` keyword argument.
+    of recursion can be controlled using the ``maxdepth`` keyword argument, for example:
+
+    .. code-block:: python
+
+        cp("source/subdir/", "target/newdir/", recursive=True, maxdepth=1)
+
+    results in::
+
+       📁 target
+        └── 📁 newdir
+            ├── 📄 subfile1
+            └── 📄 subfile2
 
 .. dropdown:: 1g. Glob to existing directory
 
@@ -222,10 +237,20 @@ Forward slashes are used for directory separators throughout.
             └── 📁 nesteddir
                 └── 📄 nestedfile
 
-    The depth of recursion can be controlled by the ``maxdepth`` keyword argument.
-
     The trailing slash on ``"target/"`` is optional but recommended as it explicitly indicates that
     the target is a directory.
+
+    The depth of recursion can be controlled by the ``maxdepth`` keyword argument, for example:
+
+    .. code-block:: python
+
+        cp("source/subdir/*", "target/", recursive=True, maxdepth=1)
+
+    results in::
+
+       📁 target
+        ├── 📄 subfile1
+        └── 📄 subfile2
 
 .. dropdown:: 1h. Glob to new directory
 
@@ -257,10 +282,21 @@ Forward slashes are used for directory separators throughout.
                 └── 📁 nesteddir
                     └── 📄 nestedfile
 
-    The depth of recursion can be controlled by the ``maxdepth`` keyword argument.
-
     The trailing slash on the ``target`` is optional but recommended as it explicitly indicates that
     it is a directory.
+
+    The depth of recursion can be controlled by the ``maxdepth`` keyword argument, for example:
+
+    .. code-block:: python
+
+        cp("source/subdir/*", "target/newdir/", recursive=True, maxdepth=1)
+
+    results in::
+
+        📁 target
+        └── 📁 newdir
+            ├── 📄 subfile1
+            └── 📄 subfile2
 
     These calls fail if the ``target`` file system is not capable of creating the directory, for
     example if it is write-only or if ``auto_mkdir=False``. There is no command line equivalent of
