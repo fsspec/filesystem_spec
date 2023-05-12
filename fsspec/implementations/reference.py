@@ -302,7 +302,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
-        print(key, value)
         if "/" in key and not self._is_meta(key):
             field, chunk = key.split("/")
             record, _, _ = self._key_to_record(key)
