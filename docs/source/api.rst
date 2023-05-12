@@ -203,6 +203,7 @@ Other Known Implementations
 
 - `abfs`_ for Azure Blob service
 - `adl`_ for Azure DataLake storage
+- `boxfs`_ for access to Box file storage
 - `dropbox`_ for access to dropbox shares
 - `dvc`_ to access DVC/Git repository as a filesystem
 - `gcsfs`_ for Google Cloud Storage
@@ -216,6 +217,7 @@ Other Known Implementations
 
 .. _abfs: https://github.com/dask/adlfs
 .. _adl: https://github.com/dask/adlfs
+.. _boxfs: https://github.com/IBM/boxfs
 .. _dropbox: https://github.com/MarineChap/intake_dropbox
 .. _dvc: https://github.com/iterative/dvc
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
