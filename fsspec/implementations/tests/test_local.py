@@ -939,32 +939,24 @@ def test_cp_get_put_empty_directory(tmpdir, funcname):
     # cp/get/put without slash, target directory exists
     assert fs.isdir(target)
     func(empty, target)
-    assert fs.find(target, withdirs=True) == [
-        make_path_posix(os.path.join(target, "empty"))
-    ]
-
-    fs.rm(target + "/empty", recursive=True)
+    assert fs.find(target, withdirs=True) == []
 
     # cp/get/put with slash, target directory exists
     assert fs.isdir(target)
     func(empty + "/", target)
     assert fs.find(target, withdirs=True) == []
 
-    fs.rm(target, recursive=True)
+    fs.rmdir(target)
 
     # cp/get/put without slash, target directory doesn't exist
     assert not fs.isdir(target)
     func(empty, target)
-    assert fs.isdir(target)
-    assert fs.find(target, withdirs=True) == []
-
-    fs.rm(target, recursive=True)
+    assert not fs.isdir(target)
 
     # cp/get/put with slash, target directory doesn't exist
     assert not fs.isdir(target)
     func(empty + "/", target)
-    assert fs.isdir(target)
-    assert fs.find(target, withdirs=True) == []
+    assert not fs.isdir(target)
 
 
 def test_cp_two_files(tmpdir):

@@ -1,6 +1,28 @@
 Changelog
 =========
 
+2023.5.0
+--------
+
+Enhancements
+
+- #1236, allow writing ReferenceFS references directly to parquet
+
+Fixes
+
+- #1255, copy of glob to single output directory
+- #1254, non-recursive copy of directory (no-op)
+- #1253, cleanup fix on close of ZIP FS
+- #1250, ignore dirs when copying list of files
+- #1249, don't error on register without clobber is registering same thing again
+- #1245, special case for other_files and relative path
+
+Other
+
+- #1248, add test harness into released wheel package
+- #1247, docs and tests around common bulk file operations
+
+
 2023.4.0
 --------
 

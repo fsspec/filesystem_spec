@@ -885,7 +885,15 @@ class AbstractFileSystem(metaclass=_Cached):
                 if not isfilelike(lpath):
                     outfile.close()
 
-    def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get(
+        self,
+        rpath,
+        lpath,
+        recursive=False,
+        callback=_DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
+    ):
         """Copy file(s) to local.
 
         Copies a specific file or tree of files (if recursive=True). If lpath
@@ -895,19 +903,32 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls get_file for each source.
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
+        from .implementations.local import (
+            LocalFileSystem,
+            make_path_posix,
+            trailing_sep,
+            trailing_sep_maybe_asterisk,
+        )
+
+        source_is_str = isinstance(rpath, str)
+        rpaths = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
+        if source_is_str and (not recursive or maxdepth is not None):
+            # Non-recursive glob does not copy directories
+            rpaths = [p for p in rpaths if not (trailing_sep(p) or self.isdir(p))]
+            if not rpaths:
+                return
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
-        rpaths = self.expand_path(rpath, recursive=recursive)
         isdir = isinstance(lpath, str) and (
-            lpath.endswith("/") or LocalFileSystem().isdir(lpath)
+            trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
         )
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and isinstance(rpath, str) and not rpath.endswith("/"),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(rpath),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
 
         callback.set_size(len(lpaths))
@@ -935,7 +956,15 @@ class AbstractFileSystem(metaclass=_Cached):
                         segment_len = len(data)
                     callback.relative_update(segment_len)
 
-    def put(self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
+    def put(
+        self,
+        lpath,
+        rpath,
+        recursive=False,
+        callback=_DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
+    ):
         """Copy file(s) from local.
 
         Copies a specific file or tree of files (if recursive=True). If rpath
@@ -944,23 +973,36 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls put_file for each source.
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
+        from .implementations.local import (
+            LocalFileSystem,
+            make_path_posix,
+            trailing_sep,
+            trailing_sep_maybe_asterisk,
+        )
+
+        if isinstance(lpath, str):
+            lpath = make_path_posix(lpath)
+        fs = LocalFileSystem()
+        source_is_str = isinstance(lpath, str)
+        lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+        if source_is_str and (not recursive or maxdepth is not None):
+            # Non-recursive glob does not copy directories
+            lpaths = [p for p in lpaths if not (trailing_sep(p) or self.isdir(p))]
+            if not lpaths:
+                return
 
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
             else [self._strip_protocol(p) for p in rpath]
         )
-        if isinstance(lpath, str):
-            lpath = make_path_posix(lpath)
-        fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive)
-        isdir = isinstance(rpath, str) and (rpath.endswith("/") or self.isdir(rpath))
+        isdir = isinstance(rpath, str) and (trailing_sep(rpath) or self.isdir(rpath))
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
 
         callback.set_size(len(rpaths))
@@ -982,7 +1024,9 @@ class AbstractFileSystem(metaclass=_Cached):
     def cp_file(self, path1, path2, **kwargs):
         raise NotImplementedError
 
-    def copy(self, path1, path2, recursive=False, on_error=None, **kwargs):
+    def copy(
+        self, path1, path2, recursive=False, maxdepth=None, on_error=None, **kwargs
+    ):
         """Copy within two locations in the filesystem
 
         on_error : "raise", "ignore"
@@ -990,18 +1034,28 @@ class AbstractFileSystem(metaclass=_Cached):
             not-found exceptions will cause the path to be skipped; defaults to
             raise unless recursive is true, where the default is ignore
         """
+        from .implementations.local import trailing_sep, trailing_sep_maybe_asterisk
+
         if on_error is None and recursive:
             on_error = "ignore"
         elif on_error is None:
             on_error = "raise"
 
-        paths = self.expand_path(path1, recursive=recursive)
-        isdir = isinstance(path2, str) and (path2.endswith("/") or self.isdir(path2))
+        source_is_str = isinstance(path1, str)
+        paths = self.expand_path(path1, recursive=recursive, maxdepth=maxdepth)
+        if source_is_str and (not recursive or maxdepth is not None):
+            # Non-recursive glob does not copy directories
+            paths = [p for p in paths if not (trailing_sep(p) or self.isdir(p))]
+            if not paths:
+                return
+
+        isdir = isinstance(path2, str) and (trailing_sep(path2) or self.isdir(path2))
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
 
         for p1, p2 in zip(paths, path2):
@@ -1017,6 +1071,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         kwargs are passed to ``glob`` or ``find``, which may in turn call ``ls``
         """
+
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
@@ -1030,11 +1085,16 @@ class AbstractFileSystem(metaclass=_Cached):
                     bit = set(self.glob(p, **kwargs))
                     out |= bit
                     if recursive:
+                        # glob call above expanded one depth so if maxdepth is defined
+                        # then decrement it in expand_path call below. If it is zero
+                        # after decrementing then avoid expand_path call.
+                        if maxdepth is not None and maxdepth <= 1:
+                            continue
                         out |= set(
                             self.expand_path(
                                 list(bit),
                                 recursive=recursive,
-                                maxdepth=maxdepth,
+                                maxdepth=maxdepth - 1 if maxdepth is not None else None,
                                 **kwargs,
                             )
                         )
