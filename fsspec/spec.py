@@ -379,10 +379,12 @@ class AbstractFileSystem(metaclass=_Cached):
         and walk() will only recurse into the subdirectories whose names remain in dirs.
         Modifying dirs when topdown is False has no effect.
 
-        When topdown is True, the caller can modify the dirnames list in-place (perhaps using del or slice assignment),
-        and walk() will only recurse into the subdirectories whose names remain in dirnames;
+        When topdown is True, the caller can modify the dirnames list in-place (perhaps
+        using del or slice assignment), and walk() will
+        only recurse into the subdirectories whose names remain in dirnames;
         this can be used to prune the search, impose a specific order of visiting,
-        or even to inform walk() about directories the caller creates or renames before it resumes walk() again.
+        or even to inform walk() about directories the caller creates or renames before
+        it resumes walk() again.
         Modifying dirnames when topdown is False has no effect. (see os.walk)
 
         Note that the "files" outputted will include anything that is not

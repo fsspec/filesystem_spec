@@ -302,8 +302,8 @@ class TestAnyArchive:
             assert fs.find("deeply/") == fs.find("deeply")
 
     @pytest.mark.parametrize("topdown", [True, False])
-    @pytest.mark.parametrize("purne_nested", [True, False])
-    def test_walk(self, scenario: ArchiveTestScenario, topdown, purne_nested):
+    @pytest.mark.parametrize("prune_nested", [True, False])
+    def test_walk(self, scenario: ArchiveTestScenario, topdown, prune_nested):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             expected = [
@@ -311,7 +311,7 @@ class TestAnyArchive:
                 ("", ["deeply"], ["a", "b"]),
                 ("deeply", ["nested"], []),
             ]
-            if not topdown or not purne_nested:
+            if not topdown or not prune_nested:
                 expected.append(("deeply/nested", [], ["path"]))
             if not topdown:
                 expected.reverse()
@@ -320,10 +320,11 @@ class TestAnyArchive:
             for path, dirs, files in fs.walk("", topdown=topdown):
                 result.append((path, dirs.copy(), files))
                 # Bypass the "nested" dir
-                if purne_nested and "nested" in dirs:
+                if prune_nested and "nested" in dirs:
                     dirs.remove("nested")
 
-            # prior py3.10 zip() does not support strict=True, we need a manual len check here
+            # prior py3.10 zip() does not support strict=True, we need
+            # a manual len check here
             assert len(result) == len(expected)
             for lhs, rhs in zip(result, expected):
                 assert lhs[0] == rhs[0]

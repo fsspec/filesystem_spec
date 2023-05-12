@@ -441,7 +441,7 @@ def test_walk(m):
     with pytest.raises(ValueError):
         list(m.walk(dir1, maxdepth=0, topdown=False))
 
-    # purne dir111
+    # prune dir111
     def _walk(*args, **kwargs):
         for path, dirs, files in m.walk(*args, **kwargs):
             yield (path, dirs.copy(), files)
