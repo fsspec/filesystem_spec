@@ -869,7 +869,15 @@ class AbstractFileSystem(metaclass=_Cached):
                 if not isfilelike(lpath):
                     outfile.close()
 
-    def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get(
+        self,
+        rpath,
+        lpath,
+        recursive=False,
+        callback=_DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
+    ):
         """Copy file(s) to local.
 
         Copies a specific file or tree of files (if recursive=True). If lpath
@@ -887,8 +895,8 @@ class AbstractFileSystem(metaclass=_Cached):
         )
 
         source_is_str = isinstance(rpath, str)
-        rpaths = self.expand_path(rpath, recursive=recursive)
-        if source_is_str and not recursive:
+        rpaths = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
+        if source_is_str and (not recursive or maxdepth is not None):
             # Non-recursive glob does not copy directories
             rpaths = [p for p in rpaths if not (trailing_sep(p) or self.isdir(p))]
             if not rpaths:
@@ -932,7 +940,15 @@ class AbstractFileSystem(metaclass=_Cached):
                         segment_len = len(data)
                     callback.relative_update(segment_len)
 
-    def put(self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
+    def put(
+        self,
+        lpath,
+        rpath,
+        recursive=False,
+        callback=_DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
+    ):
         """Copy file(s) from local.
 
         Copies a specific file or tree of files (if recursive=True). If rpath
@@ -952,8 +968,8 @@ class AbstractFileSystem(metaclass=_Cached):
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
         source_is_str = isinstance(lpath, str)
-        lpaths = fs.expand_path(lpath, recursive=recursive)
-        if source_is_str and not recursive:
+        lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+        if source_is_str and (not recursive or maxdepth is not None):
             # Non-recursive glob does not copy directories
             lpaths = [p for p in lpaths if not (trailing_sep(p) or self.isdir(p))]
             if not lpaths:
@@ -992,7 +1008,9 @@ class AbstractFileSystem(metaclass=_Cached):
     def cp_file(self, path1, path2, **kwargs):
         raise NotImplementedError
 
-    def copy(self, path1, path2, recursive=False, on_error=None, **kwargs):
+    def copy(
+        self, path1, path2, recursive=False, maxdepth=None, on_error=None, **kwargs
+    ):
         """Copy within two locations in the filesystem
 
         on_error : "raise", "ignore"
@@ -1008,8 +1026,8 @@ class AbstractFileSystem(metaclass=_Cached):
             on_error = "raise"
 
         source_is_str = isinstance(path1, str)
-        paths = self.expand_path(path1, recursive=recursive)
-        if source_is_str and not recursive:
+        paths = self.expand_path(path1, recursive=recursive, maxdepth=maxdepth)
+        if source_is_str and (not recursive or maxdepth is not None):
             # Non-recursive glob does not copy directories
             paths = [p for p in paths if not (trailing_sep(p) or self.isdir(p))]
             if not paths:
@@ -1051,11 +1069,16 @@ class AbstractFileSystem(metaclass=_Cached):
                     bit = set(self.glob(p, **kwargs))
                     out |= bit
                     if recursive:
+                        # glob call above expanded one depth so if maxdepth is defined
+                        # then decrement it in expand_path call below. If it is zero
+                        # after decrementing then avoid expand_path call.
+                        if maxdepth is not None and maxdepth <= 1:
+                            continue
                         out |= set(
                             self.expand_path(
                                 list(bit),
                                 recursive=recursive,
-                                maxdepth=maxdepth,
+                                maxdepth=maxdepth - 1 if maxdepth is not None else None,
                                 **kwargs,
                             )
                         )
