@@ -194,6 +194,10 @@ known_implementations = {
         + " not referring to root directories",
     },
     "dir": {"class": "fsspec.implementations.dirfs.DirFileSystem"},
+    "box": {
+        "class": "boxfs.BoxFileSystem",
+        "err": "Please install boxfs to access BoxFileSystem",
+    }
 }
 
 
