@@ -8,6 +8,7 @@ class AbstractCopyTests:
         target = fs_join(fs_path, "target")
         fs.mkdir(target)
         if not self.supports_empty_directories():
+            # Force target directory to exist by adding a dummy file
             fs.touch(fs_join(target, "dummy"))
         assert fs.isdir(target)
 
@@ -84,6 +85,11 @@ class AbstractCopyTests:
 
         target = fs_join(fs_path, "target")
         fs.mkdir(target)
+        if not self.supports_empty_directories():
+            # Force target directory to exist by adding a dummy file
+            dummy = fs_join(target, "dummy")
+            fs.touch(dummy)
+        assert fs.isdir(target)
 
         for source_slash, target_slash in zip([False, True], [False, True]):
             s = fs_join(source, "subdir")
@@ -93,7 +99,7 @@ class AbstractCopyTests:
 
             # Without recursive does nothing
             fs.cp(s, t)
-            assert fs.ls(target) == []
+            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
             # With recursive
             fs.cp(s, t, recursive=True)
@@ -113,7 +119,7 @@ class AbstractCopyTests:
                 assert fs.isfile(fs_join(target, "subdir", "nesteddir", "nestedfile"))
 
                 fs.rm(fs_join(target, "subdir"), recursive=True)
-            assert fs.ls(target) == []
+            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
             # Limit recursive by maxdepth
             fs.cp(s, t, recursive=True, maxdepth=1)
@@ -131,7 +137,7 @@ class AbstractCopyTests:
                 assert not fs.exists(fs_join(target, "subdir", "nesteddir"))
 
                 fs.rm(fs_join(target, "subdir"), recursive=True)
-            assert fs.ls(target) == []
+            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
     def test_copy_directory_to_new_directory(
         self, fs, fs_join, fs_path, fs_scenario_cp
