@@ -3,6 +3,7 @@ import collections
 import io
 import itertools
 import logging
+import math
 import os
 from functools import lru_cache
 
@@ -58,7 +59,7 @@ class RefsValuesView(collections.abc.ValuesView):
         yield from self._mapping._items.values()
         for field in self._mapping.listdir():
             chunk_sizes = self._mapping._get_chunk_sizes(field)
-            if chunk_sizes.size == 0:
+            if len(chunk_sizes) == 0:
                 yield self._mapping[field + "/0"]
                 continue
             yield from self._mapping._generate_all_records(field)
@@ -67,6 +68,15 @@ class RefsValuesView(collections.abc.ValuesView):
 class RefsItemsView(collections.abc.ItemsView):
     def __iter__(self):
         return zip(self._mapping.keys(), self._mapping.values())
+
+
+def ravel_multi_index(idx, sizes):
+    val = 0
+    mult = 1
+    for i, s in zip(idx[::-1], sizes[::-1]):
+        val += i * mult
+        mult *= s
+    return val
 
 
 class LazyReferenceMapper(collections.abc.MutableMapping):
@@ -249,26 +259,27 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # URL, offset, size
         return selection[:3]
 
+    @lru_cache(4096)
     def _key_to_record(self, key):
         """Details needed to construct a reference for one key"""
         field, chunk = key.split("/")
         chunk_sizes = self._get_chunk_sizes(field)
-        if chunk_sizes.size == 0:
+        if len(chunk_sizes) == 0:
             return 0, 0, 0
-        chunk_idx = self.np.array([int(c) for c in chunk.split(".")])
-        chunk_number = self.np.ravel_multi_index(chunk_idx, chunk_sizes)
+        chunk_idx = [int(c) for c in chunk.split(".")]
+        chunk_number = ravel_multi_index(chunk_idx, chunk_sizes)
         record = chunk_number // self.record_size
         ri = chunk_number % self.record_size
-        return record, ri, chunk_sizes.size
+        return record, ri, len(chunk_sizes)
 
     def _get_chunk_sizes(self, field):
         """The number of chunks along each axis for a given field"""
         if field not in self.chunk_sizes:
             zarray = self.zmetadata[f"{field}/.zarray"]
-            size_ratio = self.np.array(zarray["shape"]) / self.np.array(
-                zarray["chunks"]
-            )
-            self.chunk_sizes[field] = self.np.ceil(size_ratio).astype(int)
+            size_ratio = [
+                math.ceil(s / c) for s, c in zip(zarray["shape"], zarray["chunks"])
+            ]
+            self.chunk_sizes[field] = size_ratio
         return self.chunk_sizes[field]
 
     def _generate_record(self, field, record):
@@ -287,8 +298,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def _generate_all_records(self, field):
         """Load all the references within a field by iterating over the parquet files"""
-        chunk_size = self._get_chunk_sizes(field)
-        nrec = int(self.np.ceil(self.np.product(chunk_size) / self.record_size))
+        nrec = 1
+        for ch in self._get_chunk_sizes(field):
+            nrec *= ch
+        nrec = math.ceil(nrec / self.record_size)
         for record in range(nrec):
             yield from self._generate_record(field, record)
 
@@ -298,6 +311,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def items(self):
         return RefsItemsView(self)
 
+    def __hash__(self):
+        return id(self)
+
+    @lru_cache(20)
     def __getitem__(self, key):
         return self._load_one_key(key)
 
@@ -337,14 +354,12 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 # metadata or top-level
                 self._items[key] = None
 
+    @lru_cache(4096)
     def _output_size(self, field, record):
-        np = self.np
-
         zarray = json.loads(self[f"{field}/.zarray"])
-        chunk_sizes = np.ceil(np.array(zarray["shape"]) / np.array(zarray["chunks"]))
-        if chunk_sizes.size == 0:
-            chunk_sizes = np.array([0])
-        nchunks = int(np.product(chunk_sizes))
+        nchunks = 1
+        for s, ch in zip(zarray["shape"], zarray["chunks"]):
+            nchunks *= math.ceil(s / ch)
         nrec = nchunks // self.record_size
         rem = nchunks % self.record_size
         if rem != 0:
@@ -493,7 +508,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         Produces strings like "field/x.y" appropriate from the chunking of the array
         """
         chunk_sizes = self._get_chunk_sizes(field)
-        if chunk_sizes.size == 0:
+        if len(chunk_sizes) == 0:
             yield field + "/0"
             return
         inds = self.np.ndindex(*chunk_sizes)
