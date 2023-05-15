@@ -197,7 +197,7 @@ known_implementations = {
     "box": {
         "class": "boxfs.BoxFileSystem",
         "err": "Please install boxfs to access BoxFileSystem",
-    }
+    },
 }
 
 

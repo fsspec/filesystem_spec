@@ -5,7 +5,7 @@ from fsspec.tests.abstract import AbstractFixtures
 
 
 class MemoryFixtures(AbstractFixtures):
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def fs(self):
         m = filesystem("memory")
         m.store.clear()
