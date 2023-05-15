@@ -133,12 +133,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             """cached parquet file loader"""
             path = self.url.format(field=field, record=record)
             with self.fs.open(path) as f:
+                # TODO: since all we do is iterate, is arrow without pandas
+                #  better here?
                 df = self.pd.read_parquet(f, engine="fastparquet")
             refs = {c: df[c].values for c in df.columns}
-            # Return both df and dict of views because the former is
-            # more convenient for iterating sequentially while the latter
-            # is faster for random access.
-            return df, refs
+            return refs
 
         self.open_refs = open_refs
 
@@ -243,7 +242,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             record, ri, chunk_size = self._key_to_record(key)
             if chunk_size == 0:
                 return b""
-            _, refs = self.open_refs(field, record)
+            refs = self.open_refs(field, record)
         except (ValueError, TypeError, FileNotFoundError):
             raise KeyError(key)
         columns = ["path", "offset", "size", "raw"]
@@ -284,14 +283,14 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def _generate_record(self, field, record):
         """The references for a given parquet file of a given field"""
-        df, _ = self.open_refs(field, record)
-        it = df.itertuples(name=None, index=False)
-        if df.columns.size == 3:
+        refs = self.open_refs(field, record)
+        it = iter(zip(refs.values()))
+        if len(refs) == 3:
             # All urls
             return (list(t) for t in it)
-        elif df.columns.size == 1:
+        elif len(refs) == 1:
             # All raws
-            return (t[0] for t in it)
+            return refs["raw"]
         else:
             # Mix of urls and raws
             return (list(t[:3]) if not t[3] else t[3] for t in it)
@@ -408,6 +407,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 nraw += 1
                 raws[j] = kerchunk.df._proc_raw(data)
         # TODO: only save needed columns
+        # TODO: maybe categorize paths column
         df = pd.DataFrame(
             dict(
                 path=paths,
@@ -511,7 +511,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if len(chunk_sizes) == 0:
             yield field + "/0"
             return
-        inds = self.np.ndindex(*chunk_sizes)
+        inds = itertools.product(*(range(i) for i in chunk_sizes))
         for ind in inds:
             yield field + "/" + ".".join([str(c) for c in ind])
 
