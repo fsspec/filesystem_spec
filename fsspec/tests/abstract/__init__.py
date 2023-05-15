@@ -9,9 +9,8 @@ from fsspec.tests.abstract.put import AbstractPutTests  # noqa
 
 
 class AbstractFixtures:
-    @staticmethod
     @pytest.fixture
-    def fs_join():
+    def fs_join(self):
         """
         Return a function that joins its arguments together into a path.
 
@@ -25,25 +24,22 @@ class AbstractFixtures:
         """Scenario on remote filesystem that is used for many cp/get/put tests."""
         return self.scenario_cp(fs, fs_join, fs_path)
 
-    @staticmethod
     @pytest.fixture
-    def local_fs():
+    def local_fs(self):
         # Maybe need an option for auto_mkdir=False?  This is only relevant
         # for certain implementations.
         return LocalFileSystem(auto_mkdir=True)
 
-    @staticmethod
     @pytest.fixture
-    def local_join():
+    def local_join(self):
         """
         Return a function that joins its arguments together into a path, on
         the local filesystem.
         """
         return os.path.join
 
-    @staticmethod
     @pytest.fixture
-    def local_path(tmpdir):
+    def local_path(self, tmpdir):
         return tmpdir
 
     def supports_empty_directories(self):

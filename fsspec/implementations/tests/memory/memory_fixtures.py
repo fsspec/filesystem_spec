@@ -5,9 +5,8 @@ from fsspec.tests.abstract import AbstractFixtures
 
 
 class MemoryFixtures(AbstractFixtures):
-    @staticmethod
     @pytest.fixture
-    def fs():
+    def fs(self):
         m = filesystem("memory")
         m.store.clear()
         m.pseudo_dirs.clear()
@@ -19,12 +18,10 @@ class MemoryFixtures(AbstractFixtures):
             m.pseudo_dirs.clear()
             m.pseudo_dirs.append("")
 
-    @staticmethod
     @pytest.fixture
-    def fs_join():
+    def fs_join(self):
         return lambda *args: "/".join(args)
 
-    @staticmethod
     @pytest.fixture
-    def fs_path():
+    def fs_path(self):
         return ""

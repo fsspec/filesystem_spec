@@ -7,8 +7,6 @@ class AbstractGetTests:
 
         target = local_join(local_path, "target")
         local_fs.mkdir(target)
-        if not self.supports_empty_directories():
-            local_fs.touch(local_join(target, "dummy"))
         assert local_fs.isdir(target)
 
         target_file2 = local_join(target, "file2")
