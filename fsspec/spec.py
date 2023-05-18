@@ -7,6 +7,7 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
+from typing import ClassVar, Tuple, Union
 
 from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -101,7 +102,7 @@ class AbstractFileSystem(metaclass=_Cached):
     _cached = False
     blocksize = 2**22
     sep = "/"
-    protocol = "abstract"
+    protocol: ClassVar[Union[str, Tuple[str, ...]]] = "abstract"
     _latest = None
     async_impl = False
     mirror_sync_methods = False

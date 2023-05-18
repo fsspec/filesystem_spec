@@ -81,7 +81,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
         self._fo_ref = fo
         self.fo = fo  # the whole instance is a context
-        self.tar: tarfile.TarFile = tarfile.TarFile(fileobj=self.fo)
+        self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
         self.index_store = index_store

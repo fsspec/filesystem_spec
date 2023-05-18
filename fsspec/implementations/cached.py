@@ -7,6 +7,7 @@ import pickle
 import tempfile
 import time
 from shutil import rmtree
+from typing import ClassVar, Tuple, Union
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -39,7 +40,7 @@ class CachingFileSystem(AbstractFileSystem):
       allowed, for testing
     """
 
-    protocol = ("blockcache", "cached")
+    protocol: ClassVar[Union[str, Tuple[str, ...]]] = ("blockcache", "cached")
 
     def __init__(
         self,

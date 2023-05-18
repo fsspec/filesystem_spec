@@ -2,8 +2,9 @@ import configparser
 import json
 import os
 import warnings
+from typing import Any, Dict
 
-conf = {}
+conf: Dict[str, Dict[str, Any]] = {}
 default_conf_dir = os.path.join(os.path.expanduser("~"), ".config/fsspec")
 conf_dir = os.environ.get("FSSPEC_CONFIG_DIR", default_conf_dir)
 

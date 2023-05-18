@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from errno import ENOTEMPTY
 from io import BytesIO
+from typing import Any, ClassVar, Dict
 
 from fsspec import AbstractFileSystem
 
@@ -17,7 +18,7 @@ class MemoryFileSystem(AbstractFileSystem):
     in memory filesystem.
     """
 
-    store = {}  # global, do not overwrite!
+    store: ClassVar[Dict[str, Any]] = {}  # global, do not overwrite!
     pseudo_dirs = [""]  # global, do not overwrite!
     protocol = "memory"
     root_marker = "/"

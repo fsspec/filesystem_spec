@@ -1,11 +1,12 @@
 import importlib
 import types
 import warnings
+from typing import Dict, Type
 
 __all__ = ["registry", "get_filesystem_class", "default"]
 
 # internal, mutable
-_registry = {}
+_registry: Dict[str, Type] = {}
 
 # external, immutable
 registry = types.MappingProxyType(_registry)

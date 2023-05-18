@@ -9,7 +9,7 @@ import re
 import threading
 from contextlib import contextmanager
 from glob import has_magic
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
@@ -154,13 +154,18 @@ def get_loop():
     return loop[0]
 
 
-try:
+if TYPE_CHECKING:
     import resource
-except ImportError:
-    resource = None
-    ResourceError = OSError
+
+    ResourceError = resource.error
 else:
-    ResourceError = getattr(resource, "error", IOError)
+    try:
+        import resource
+    except ImportError:
+        resource = None
+        ResourceError = OSError
+    else:
+        ResourceError = getattr(resource, "error", IOError)
 
 _DEFAULT_BATCH_SIZE = 128
 _NOFILES_DEFAULT_BATCH_SIZE = 1280

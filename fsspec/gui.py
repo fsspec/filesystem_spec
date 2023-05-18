@@ -3,6 +3,7 @@ import contextlib
 import logging
 import os
 import re
+from typing import ClassVar, Sequence
 
 import panel as pn
 
@@ -25,9 +26,11 @@ class SigSlot(object):
     By default, all signals emit a DEBUG logging statement.
     """
 
-    signals = []  # names of signals that this class may emit
-    # each of which must be set by _register for any new instance
-    slots = []  # names of actions that this class may respond to
+    # names of signals that this class may emit each of which must be
+    # set by _register for any new instance
+    signals: ClassVar[Sequence[str]] = []
+    # names of actions that this class may respond to
+    slots: ClassVar[Sequence[str]] = []
 
     # each of which must be a method name
 
