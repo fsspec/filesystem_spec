@@ -68,6 +68,22 @@ jobs:
       - uses: actions/setup-python@main
       - uses: pre-commit/action@main
 
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup conda
+        uses: mamba-org/provision-with-micromamba@main
+        with:
+          environment-file: ci/environment-typecheck.yml
+
+      - name: mypy
+        shell: bash -l {0}
+        run: |
+          mypy fsspec
+
   downstream:
     name: downstream
     runs-on: ubuntu-latest
