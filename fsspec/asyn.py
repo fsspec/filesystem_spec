@@ -13,6 +13,12 @@ from typing import Iterable
 
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
+from .implementations.local import (
+    LocalFileSystem,
+    make_path_posix,
+    trailing_sep,
+    trailing_sep_maybe_asterisk,
+)
 from .spec import AbstractBufferedFile, AbstractFileSystem
 from .utils import is_exception, other_paths
 
@@ -331,8 +337,6 @@ class AsyncFileSystem(AbstractFileSystem):
         batch_size=None,
         **kwargs,
     ):
-        from .implementations.local import trailing_sep, trailing_sep_maybe_asterisk
-
         if on_error is None and recursive:
             on_error = "ignore"
         elif on_error is None:
@@ -492,13 +496,6 @@ class AsyncFileSystem(AbstractFileSystem):
         constructor, or for all instances by setting the "gather_batch_size" key
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
-        from .implementations.local import (
-            LocalFileSystem,
-            make_path_posix,
-            trailing_sep,
-            trailing_sep_maybe_asterisk,
-        )
-
         source_is_str = isinstance(lpath, str)
         if source_is_str:
             lpath = make_path_posix(lpath)
@@ -565,13 +562,6 @@ class AsyncFileSystem(AbstractFileSystem):
         constructor, or for all instances by setting the "gather_batch_size" key
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
-        from .implementations.local import (
-            LocalFileSystem,
-            make_path_posix,
-            trailing_sep,
-            trailing_sep_maybe_asterisk,
-        )
-
         source_is_str = isinstance(rpath, str)
         # First check for rpath trailing slash as _strip_protocol removes it.
         source_not_trailing_sep = source_is_str and not trailing_sep_maybe_asterisk(
