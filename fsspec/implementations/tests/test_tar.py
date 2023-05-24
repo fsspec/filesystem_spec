@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import os
 import shutil
 import tarfile
 import tempfile
 from io import BytesIO
 from pathlib import Path
-from typing import Dict
 
 import pytest
 
@@ -210,7 +211,7 @@ def test_ls_with_folders(compression: str, tmp_path: Path):
     but make sure that the reading filesystem is still able to resolve the
     intermediate folders, like the ZipFileSystem.
     """
-    tar_data: Dict[str, bytes] = {
+    tar_data: dict[str, bytes] = {
         "a.pdf": b"Hello A!",
         "b/c.pdf": b"Hello C!",
         "d/e/f.pdf": b"Hello F!",

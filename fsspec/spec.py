@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import logging
 import os
@@ -7,7 +9,7 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import ClassVar, Tuple, Union
+from typing import ClassVar
 
 from .callbacks import _DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -102,7 +104,7 @@ class AbstractFileSystem(metaclass=_Cached):
     _cached = False
     blocksize = 2**22
     sep = "/"
-    protocol: ClassVar[Union[str, Tuple[str, ...]]] = "abstract"
+    protocol: ClassVar[str | tuple[str, ...]] = "abstract"
     _latest = None
     async_impl = False
     mirror_sync_methods = False

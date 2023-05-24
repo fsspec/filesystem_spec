@@ -1,10 +1,10 @@
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import, annotations, division, print_function
 
 import logging
 from datetime import datetime
 from errno import ENOTEMPTY
 from io import BytesIO
-from typing import Any, ClassVar, Dict
+from typing import Any, ClassVar
 
 from fsspec import AbstractFileSystem
 
@@ -18,7 +18,7 @@ class MemoryFileSystem(AbstractFileSystem):
     in memory filesystem.
     """
 
-    store: ClassVar[Dict[str, Any]] = {}  # global, do not overwrite!
+    store: ClassVar[dict[str, Any]] = {}  # global, do not overwrite!
     pseudo_dirs = [""]  # global, do not overwrite!
     protocol = "memory"
     root_marker = "/"

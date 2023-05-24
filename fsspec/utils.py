@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import math
 import os
@@ -8,7 +10,6 @@ from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
 from importlib.metadata import version
-from typing import Dict
 from urllib.parse import urlsplit
 
 DEFAULT_BLOCK_SIZE = 5 * 2**20
@@ -111,7 +112,7 @@ def update_storage_options(options, inherited=None):
 
 
 # Compression extensions registered via fsspec.compression.register_compression
-compressions: Dict[str, str] = {}
+compressions: dict[str, str] = {}
 
 
 def infer_compression(filename):
