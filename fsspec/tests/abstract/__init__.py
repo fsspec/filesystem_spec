@@ -8,16 +8,12 @@ from fsspec.tests.abstract.get import AbstractGetTests  # noqa
 from fsspec.tests.abstract.put import AbstractPutTests  # noqa
 
 
-class AbstractFixtures:
-    @pytest.fixture
-    def fs_join(self):
-        """
-        Return a function that joins its arguments together into a path.
-
-        Most fsspec implementations join paths in a platform-dependent way,
-        but some will override this to always use a forward slash.
-        """
-        return os.path.join
+class BaseAbstractFixtures:
+    """
+    Abstract base class containing fixtures that are used by but never need to
+    be overridden in derived filesystem-specific classes to run the abstract
+    tests on such filesystems.
+    """
 
     @pytest.fixture
     def fs_bulk_operations_scenario_0(self, fs, fs_join, fs_path):
@@ -42,23 +38,16 @@ class AbstractFixtures:
         if fs.exists(target):
             fs.rm(target, recursive=True)
 
-    @pytest.fixture(scope="class")
-    def local_fs(self):
-        # Maybe need an option for auto_mkdir=False?  This is only relevant
-        # for certain implementations.
-        return LocalFileSystem(auto_mkdir=True)
-
     @pytest.fixture
-    def local_join(self):
+    def local_bulk_operations_scenario_0(self, local_fs, local_join, local_path):
         """
-        Return a function that joins its arguments together into a path, on
-        the local filesystem.
-        """
-        return os.path.join
+        Scenario on local filesystem that is used for many cp/get/put tests.
 
-    @pytest.fixture
-    def local_path(self, tmpdir):
-        return tmpdir
+        Cleans up at the end of each test it which it is used.
+        """
+        source = self._bulk_operations_scenario_0(local_fs, local_join, local_path)
+        yield source
+        local_fs.rm(source, recursive=True)
 
     @pytest.fixture
     def local_target(self, local_fs, local_join, local_path):
@@ -71,23 +60,6 @@ class AbstractFixtures:
         yield target
         if local_fs.exists(target):
             local_fs.rm(target, recursive=True)
-
-    def supports_empty_directories(self):
-        """
-        Return whether this implementation supports empty directories.
-        """
-        return True
-
-    @pytest.fixture
-    def local_bulk_operations_scenario_0(self, local_fs, local_join, local_path):
-        """
-        Scenario on local filesystem that is used for many cp/get/put tests.
-
-        Cleans up at the end of each test it which it is used.
-        """
-        source = self._bulk_operations_scenario_0(local_fs, local_join, local_path)
-        yield source
-        local_fs.rm(source, recursive=True)
 
     def _bulk_operations_scenario_0(self, some_fs, some_join, some_path):
         """
@@ -113,3 +85,56 @@ class AbstractFixtures:
         some_fs.touch(some_join(subdir, "subfile2"))
         some_fs.touch(some_join(nesteddir, "nestedfile"))
         return source
+
+
+class AbstractFixtures(BaseAbstractFixtures):
+    """
+    Abstract base class containing fixtures that may be overridden in derived
+    filesystem-specific classes to run the abstract tests on such filesystems.
+
+    For any particular filesystem some of these fixtures must be overridden,
+    such as ``fs`` and ``fs_path``, and others may be overridden if the
+    default functions here are not appropriate, such as ``fs_join``.
+    """
+
+    @pytest.fixture
+    def fs(self):
+        raise NotImplementedError("This function must be overridden in derived classes")
+
+    @pytest.fixture
+    def fs_join(self):
+        """
+        Return a function that joins its arguments together into a path.
+
+        Most fsspec implementations join paths in a platform-dependent way,
+        but some will override this to always use a forward slash.
+        """
+        return os.path.join
+
+    @pytest.fixture
+    def fs_path(self):
+        raise NotImplementedError("This function must be overridden in derived classes")
+
+    @pytest.fixture(scope="class")
+    def local_fs(self):
+        # Maybe need an option for auto_mkdir=False?  This is only relevant
+        # for certain implementations.
+        return LocalFileSystem(auto_mkdir=True)
+
+    @pytest.fixture
+    def local_join(self):
+        """
+        Return a function that joins its arguments together into a path, on
+        the local filesystem.
+        """
+        return os.path.join
+
+    @pytest.fixture
+    def local_path(self, tmpdir):
+        return tmpdir
+
+    def supports_empty_directories(self):
+        """
+        Return whether this implementation supports empty directories.
+        """
+        return True
