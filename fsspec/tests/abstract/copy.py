@@ -1,9 +1,9 @@
 class AbstractCopyTests:
     def test_copy_file_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 1a
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -36,9 +36,11 @@ class AbstractCopyTests:
         fs.cp(fs_join(source, "subdir", "subfile1"), target + "/")
         assert fs.isfile(target_subfile1)
 
-    def test_copy_file_to_new_directory(self, fs, fs_join, fs_scenario_cp, fs_target):
+    def test_copy_file_to_new_directory(
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
+    ):
         # Copy scenario 1b
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -51,10 +53,10 @@ class AbstractCopyTests:
         assert fs.isfile(fs_join(target, "newdir", "subfile1"))
 
     def test_copy_file_to_file_in_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 1c
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -63,10 +65,10 @@ class AbstractCopyTests:
         assert fs.isfile(fs_join(target, "newfile"))
 
     def test_copy_file_to_file_in_new_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 1d
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -78,10 +80,10 @@ class AbstractCopyTests:
         assert fs.isfile(fs_join(target, "newdir", "newfile"))
 
     def test_copy_directory_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 1e
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -140,10 +142,10 @@ class AbstractCopyTests:
             assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
     def test_copy_directory_to_new_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 1f
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -184,10 +186,10 @@ class AbstractCopyTests:
             assert not fs.exists(fs_join(target, "newdir"))
 
     def test_copy_glob_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 1g
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -227,9 +229,11 @@ class AbstractCopyTests:
             fs.rm(fs.ls(target, detail=False), recursive=True)
             assert fs.ls(target) == []
 
-    def test_copy_glob_to_new_directory(self, fs, fs_join, fs_scenario_cp, fs_target):
+    def test_copy_glob_to_new_directory(
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
+    ):
         # Copy scenario 1h
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -278,10 +282,10 @@ class AbstractCopyTests:
             assert not fs.exists(fs_join(target, "newdir"))
 
     def test_copy_list_of_files_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 2a
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -309,10 +313,10 @@ class AbstractCopyTests:
             assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
     def test_copy_list_of_files_to_new_directory(
-        self, fs, fs_join, fs_scenario_cp, fs_target
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
     ):
         # Copy scenario 2b
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -329,10 +333,12 @@ class AbstractCopyTests:
         assert fs.isfile(fs_join(target, "newdir", "file2"))
         assert fs.isfile(fs_join(target, "newdir", "subfile1"))
 
-    def test_copy_two_files_new_directory(self, fs, fs_join, fs_scenario_cp, fs_target):
+    def test_copy_two_files_new_directory(
+        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
+    ):
         # This is a duplicate of test_copy_list_of_files_to_new_directory and
         # can eventually be removed.
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = fs_target
         assert not fs.exists(target)

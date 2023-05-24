@@ -5,10 +5,10 @@ class AbstractPutTests:
         fs_join,
         fs_target,
         local_join,
-        local_scenario_cp,
+        local_bulk_operations_scenario_0,
     ):
         # Copy scenario 1a
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -42,10 +42,10 @@ class AbstractPutTests:
         assert fs.isfile(target_subfile1)
 
     def test_put_file_to_new_directory(
-        self, fs, fs_join, fs_target, local_join, local_scenario_cp
+        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
     ):
         # Copy scenario 1b
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -58,10 +58,10 @@ class AbstractPutTests:
         assert fs.isfile(fs_join(target, "newdir", "subfile1"))
 
     def test_put_file_to_file_in_existing_directory(
-        self, fs, fs_join, fs_target, local_join, local_scenario_cp
+        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
     ):
         # Copy scenario 1c
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -70,10 +70,10 @@ class AbstractPutTests:
         assert fs.isfile(fs_join(target, "newfile"))
 
     def test_put_file_to_file_in_new_directory(
-        self, fs, fs_join, fs_target, local_join, local_scenario_cp
+        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
     ):
         # Copy scenario 1d
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -86,10 +86,10 @@ class AbstractPutTests:
         assert fs.isfile(fs_join(target, "newdir", "newfile"))
 
     def test_put_directory_to_existing_directory(
-        self, fs, fs_join, fs_target, local_scenario_cp
+        self, fs, fs_join, fs_target, local_bulk_operations_scenario_0
     ):
         # Copy scenario 1e
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -148,10 +148,10 @@ class AbstractPutTests:
             assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
     def test_put_directory_to_new_directory(
-        self, fs, fs_join, fs_target, local_scenario_cp
+        self, fs, fs_join, fs_target, local_bulk_operations_scenario_0
     ):
         # Copy scenario 1f
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -197,10 +197,10 @@ class AbstractPutTests:
             assert not fs.exists(fs_join(target, "newdir"))
 
     def test_put_glob_to_existing_directory(
-        self, fs, fs_join, fs_target, local_join, local_scenario_cp
+        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
     ):
         # Copy scenario 1g
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -246,10 +246,10 @@ class AbstractPutTests:
             assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
     def test_put_glob_to_new_directory(
-        self, fs, fs_join, fs_target, local_join, local_scenario_cp
+        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
     ):
         # Copy scenario 1h
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -303,10 +303,16 @@ class AbstractPutTests:
             assert not fs.exists(fs_join(target, "newdir"))
 
     def test_put_list_of_files_to_existing_directory(
-        self, fs, fs_join, fs_target, local_join, local_scenario_cp, fs_path
+        self,
+        fs,
+        fs_join,
+        fs_target,
+        local_join,
+        local_bulk_operations_scenario_0,
+        fs_path,
     ):
         # Copy scenario 2a
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
@@ -334,10 +340,10 @@ class AbstractPutTests:
             assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
 
     def test_put_list_of_files_to_new_directory(
-        self, fs, fs_join, fs_target, local_join, local_scenario_cp
+        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
     ):
         # Copy scenario 2b
-        source = local_scenario_cp
+        source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)

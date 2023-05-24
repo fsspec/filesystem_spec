@@ -1,9 +1,15 @@
 class AbstractGetTests:
     def test_get_file_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1a
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -34,10 +40,16 @@ class AbstractGetTests:
         assert local_fs.isfile(target_subfile1)
 
     def test_get_file_to_new_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1b
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -51,10 +63,17 @@ class AbstractGetTests:
         assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
 
     def test_get_file_to_file_in_existing_directory(
-        self, fs, fs_join, fs_path, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_path,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1c
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -63,10 +82,16 @@ class AbstractGetTests:
         assert local_fs.isfile(local_join(target, "newfile"))
 
     def test_get_file_to_file_in_new_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1d
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -79,10 +104,16 @@ class AbstractGetTests:
         assert local_fs.isfile(local_join(target, "newdir", "newfile"))
 
     def test_get_directory_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1e
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -130,10 +161,16 @@ class AbstractGetTests:
             # ERROR: maxdepth ignored here
 
     def test_get_directory_to_new_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1f
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -168,10 +205,16 @@ class AbstractGetTests:
             # ERROR: maxdepth ignored here
 
     def test_get_glob_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1g
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -192,10 +235,16 @@ class AbstractGetTests:
             # Limit by maxdepth
 
     def test_get_glob_to_new_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 1h
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -233,10 +282,16 @@ class AbstractGetTests:
             # ERROR: this is not correct
 
     def test_get_list_of_files_to_existing_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 2a
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)
@@ -259,10 +314,16 @@ class AbstractGetTests:
             assert local_fs.ls(target) == []
 
     def test_get_list_of_files_to_new_directory(
-        self, fs, fs_join, fs_scenario_cp, local_fs, local_join, local_target
+        self,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0,
+        local_fs,
+        local_join,
+        local_target,
     ):
         # Copy scenario 2b
-        source = fs_scenario_cp
+        source = fs_bulk_operations_scenario_0
 
         target = local_target
         local_fs.mkdir(target)

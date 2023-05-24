@@ -20,13 +20,13 @@ class AbstractFixtures:
         return os.path.join
 
     @pytest.fixture
-    def fs_scenario_cp(self, fs, fs_join, fs_path):
+    def fs_bulk_operations_scenario_0(self, fs, fs_join, fs_path):
         """
         Scenario on remote filesystem that is used for many cp/get/put tests.
 
         Cleans up at the end of each test it which it is used.
         """
-        source = self._scenario_cp(fs, fs_join, fs_path)
+        source = self._bulk_operations_scenario_0(fs, fs_join, fs_path)
         yield source
         fs.rm(source, recursive=True)
 
@@ -79,17 +79,17 @@ class AbstractFixtures:
         return True
 
     @pytest.fixture
-    def local_scenario_cp(self, local_fs, local_join, local_path):
+    def local_bulk_operations_scenario_0(self, local_fs, local_join, local_path):
         """
         Scenario on local filesystem that is used for many cp/get/put tests.
 
         Cleans up at the end of each test it which it is used.
         """
-        source = self._scenario_cp(local_fs, local_join, local_path)
+        source = self._bulk_operations_scenario_0(local_fs, local_join, local_path)
         yield source
         local_fs.rm(source, recursive=True)
 
-    def _scenario_cp(self, some_fs, some_join, some_path):
+    def _bulk_operations_scenario_0(self, some_fs, some_join, some_path):
         """
         Scenario that is used for many cp/get/put tests. Creates the following
         directory and file structure:
