@@ -28,6 +28,17 @@ def test_simple(server):  # noqa: F811
         assert f.read(2) == "he"
 
 
+def test_target_options(m):
+    m.pipe("data/0", b"hello")
+    refs = {"a": ["memory://data/0"]}
+    fn = "memory://refs.json.gz"
+    with fsspec.open(fn, "wt", compression="gzip") as f:
+        json.dump(refs, f)
+
+    fs = fsspec.filesystem("reference", fo=fn, target_options={"compression": "gzip"})
+    assert fs.cat("a") == b"hello"
+
+
 def test_ls(server):  # noqa: F811
     refs = {"a": b"data", "b": (realfile, 0, 5), "c/d": (realfile, 1, 6)}
     h = fsspec.filesystem("http")
