@@ -13,6 +13,12 @@ from typing import Iterable
 
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
+from .implementations.local import (
+    LocalFileSystem,
+    make_path_posix,
+    trailing_sep,
+    trailing_sep_maybe_asterisk,
+)
 from .spec import AbstractBufferedFile, AbstractFileSystem
 from .utils import is_exception, other_paths
 
@@ -336,15 +342,23 @@ class AsyncFileSystem(AbstractFileSystem):
         elif on_error is None:
             on_error = "raise"
 
+        source_is_str = isinstance(path1, str)
         paths = await self._expand_path(path1, maxdepth=maxdepth, recursive=recursive)
+        if source_is_str and (not recursive or maxdepth is not None):
+            # Non-recursive glob does not copy directories
+            paths = [p for p in paths if not (trailing_sep(p) or await self._isdir(p))]
+            if not paths:
+                return
+
         isdir = isinstance(path2, str) and (
-            path2.endswith("/") or await self._isdir(path2)
+            trailing_sep(path2) or await self._isdir(path2)
         )
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
         batch_size = batch_size or self.batch_size
         coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
@@ -466,6 +480,7 @@ class AsyncFileSystem(AbstractFileSystem):
         recursive=False,
         callback=_DEFAULT_CALLBACK,
         batch_size=None,
+        maxdepth=None,
         **kwargs,
     ):
         """Copy file(s) from local.
@@ -481,21 +496,27 @@ class AsyncFileSystem(AbstractFileSystem):
         constructor, or for all instances by setting the "gather_batch_size" key
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
-
-        rpath = self._strip_protocol(rpath)
-        if isinstance(lpath, str):
+        source_is_str = isinstance(lpath, str)
+        if source_is_str:
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive)
+        lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+        if source_is_str and (not recursive or maxdepth is not None):
+            # Non-recursive glob does not copy directories
+            lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
+            if not lpaths:
+                return
+
         isdir = isinstance(rpath, str) and (
-            rpath.endswith("/") or await self._isdir(rpath)
+            trailing_sep(rpath) or await self._isdir(rpath)
         )
+        rpath = self._strip_protocol(rpath)
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
+            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
             is_dir=isdir,
+            flatten=not source_is_str,
         )
 
         is_dir = {l: os.path.isdir(l) for l in lpaths}
@@ -519,7 +540,13 @@ class AsyncFileSystem(AbstractFileSystem):
         raise NotImplementedError
 
     async def _get(
-        self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs
+        self,
+        rpath,
+        lpath,
+        recursive=False,
+        callback=_DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
     ):
         """Copy file(s) to local.
 
@@ -535,21 +562,31 @@ class AsyncFileSystem(AbstractFileSystem):
         constructor, or for all instances by setting the "gather_batch_size" key
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
-        from fsspec.implementations.local import LocalFileSystem, make_path_posix
-
+        source_is_str = isinstance(rpath, str)
         # First check for rpath trailing slash as _strip_protocol removes it.
-        rpath_trailing_slash = isinstance(rpath, str) and rpath.endswith("/")
+        source_not_trailing_sep = source_is_str and not trailing_sep_maybe_asterisk(
+            rpath
+        )
         rpath = self._strip_protocol(rpath)
-        lpath = make_path_posix(lpath)
         rpaths = await self._expand_path(rpath, recursive=recursive)
+        if source_is_str and (not recursive or maxdepth is not None):
+            # Non-recursive glob does not copy directories
+            rpaths = [
+                p for p in rpaths if not (trailing_sep(p) or await self._isdir(p))
+            ]
+            if not rpaths:
+                return
+
+        lpath = make_path_posix(lpath)
         isdir = isinstance(lpath, str) and (
-            lpath.endswith("/") or LocalFileSystem().isdir(lpath)
+            trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
         )
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and not rpath_trailing_slash,
+            exists=isdir and source_not_trailing_sep,
             is_dir=isdir,
+            flatten=not source_is_str,
         )
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
         batch_size = kwargs.pop("batch_size", self.batch_size)
@@ -766,9 +803,16 @@ class AsyncFileSystem(AbstractFileSystem):
                     bit = set(await self._glob(p))
                     out |= bit
                     if recursive:
+                        # glob call above expanded one depth so if maxdepth is defined
+                        # then decrement it in expand_path call below. If it is zero
+                        # after decrementing then avoid expand_path call.
+                        if maxdepth is not None and maxdepth <= 1:
+                            continue
                         out |= set(
                             await self._expand_path(
-                                list(bit), recursive=recursive, maxdepth=maxdepth
+                                list(bit),
+                                recursive=recursive,
+                                maxdepth=maxdepth - 1 if maxdepth is not None else None,
                             )
                         )
                     continue
@@ -778,8 +822,6 @@ class AsyncFileSystem(AbstractFileSystem):
                 if p not in out and (recursive is False or (await self._exists(p))):
                     # should only check once, for the root
                     out.add(p)
-            # reduce depth on each recursion level unless None or 0
-            maxdepth = maxdepth if not maxdepth else maxdepth - 1
         if not out:
             raise FileNotFoundError(path)
         return list(sorted(out))

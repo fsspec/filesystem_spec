@@ -976,23 +976,23 @@ class AbstractFileSystem(metaclass=_Cached):
             trailing_sep_maybe_asterisk,
         )
 
-        if isinstance(lpath, str):
+        source_is_str = isinstance(lpath, str)
+        if source_is_str:
             lpath = make_path_posix(lpath)
         fs = LocalFileSystem()
-        source_is_str = isinstance(lpath, str)
         lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
         if source_is_str and (not recursive or maxdepth is not None):
             # Non-recursive glob does not copy directories
-            lpaths = [p for p in lpaths if not (trailing_sep(p) or self.isdir(p))]
+            lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
             if not lpaths:
                 return
 
+        isdir = isinstance(rpath, str) and (trailing_sep(rpath) or self.isdir(rpath))
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
             else [self._strip_protocol(p) for p in rpath]
         )
-        isdir = isinstance(rpath, str) and (trailing_sep(rpath) or self.isdir(rpath))
         rpaths = other_paths(
             lpaths,
             rpath,

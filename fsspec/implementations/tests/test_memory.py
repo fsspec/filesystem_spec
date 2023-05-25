@@ -23,19 +23,6 @@ def test_strip(m):
     assert m._strip_protocol("/b/c/") == "/b/c"
 
 
-def test_put_single(m, tmpdir):
-    fn = os.path.join(str(tmpdir), "dir")
-    os.mkdir(fn)
-    open(os.path.join(fn, "abc"), "w").write("text")
-    m.put(fn, "/test")  # no-op, no files
-    assert m.isdir("/test")
-    assert not m.exists("/test/abc")
-    assert not m.exists("/test/dir")
-    m.put(fn, "/test", recursive=True)
-    assert m.isdir("/test/dir")
-    assert m.cat("/test/dir/abc") == b"text"
-
-
 def test_ls(m):
     m.mkdir("/dir")
     m.mkdir("/dir/dir1")

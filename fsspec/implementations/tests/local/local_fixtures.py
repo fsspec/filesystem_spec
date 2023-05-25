@@ -5,12 +5,10 @@ from fsspec.tests.abstract import AbstractFixtures
 
 
 class LocalFixtures(AbstractFixtures):
-    @staticmethod
-    @pytest.fixture
-    def fs():
+    @pytest.fixture(scope="class")
+    def fs(self):
         return LocalFileSystem(auto_mkdir=True)
 
-    @staticmethod
     @pytest.fixture
-    def fs_path(tmpdir):
+    def fs_path(self, tmpdir):
         return str(tmpdir)
