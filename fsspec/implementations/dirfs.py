@@ -3,6 +3,13 @@ from ..asyn import AsyncFileSystem
 
 
 class DirFileSystem(AsyncFileSystem):
+    """Directory prefix filesystem
+
+    The DirFileSystem is a filesystem-wrapper. It assumes every path it is dealing with
+    is relative to the `path`. After performing the necessary paths operation it
+    delegates everything to the wrapped filesystem.
+    """
+
     def __init__(
         self,
         path=None,
