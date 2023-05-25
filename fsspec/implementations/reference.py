@@ -620,17 +620,18 @@ class ReferenceFileSystem(AsyncFileSystem):
             dic = dict(
                 **(ref_storage_args or target_options or {}), protocol=target_protocol
             )
-            ref_fs, fo = fsspec.core.url_to_fs(fo, **dic)
+            ref_fs, fo2 = fsspec.core.url_to_fs(fo, **dic)
             if ref_fs.isfile(fo):
                 # text JSON
-                with ref_fs.open(fo, "rb") as f:
+                with fsspec.open(fo, "rb", **dic) as f:
                     logger.info("Read reference from URL %s", fo)
                     text = json.load(f)
                 self._process_references(text, template_overrides)
             else:
                 # Lazy parquet refs
+                logger.info("Open lazy reference dict from URL %s", fo)
                 self.references = LazyReferenceMapper(
-                    fo,
+                    fo2,
                     fs=ref_fs,
                     cache_size=cache_size,
                 )
