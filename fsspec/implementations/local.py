@@ -164,8 +164,10 @@ class LocalFileSystem(AbstractFileSystem):
 
         for p in path:
             p = self._strip_protocol(p).rstrip("/")
-            if recursive and self.isdir(p):
-
+            if self.isdir(p):
+                if not recursive:
+                    raise ValueError(
+                        "Cannot delete directory, set recursive=True")
                 if osp.abspath(p) == os.getcwd():
                     raise ValueError("Cannot delete current working directory")
                 shutil.rmtree(p)

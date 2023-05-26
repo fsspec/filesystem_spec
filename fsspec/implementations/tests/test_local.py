@@ -751,6 +751,15 @@ def test_delete_cwd(tmpdir):
         os.chdir(cwd)
 
 
+def test_delete_non_recursive_dir_fails(tmpdir):
+    fs = LocalFileSystem()
+    subdir = os.path.join(tmpdir, "testdir")
+    fs.mkdir(subdir)
+    with pytest.raises(ValueError):
+        fs.rm(subdir)
+    fs.rm(subdir, recursive=True)
+
+
 @pytest.mark.parametrize(
     "opener, ext", [(bz2.open, ".bz2"), (gzip.open, ".gz"), (open, "")]
 )
