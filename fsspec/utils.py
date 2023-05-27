@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import math
 import os
@@ -110,7 +112,7 @@ def update_storage_options(options, inherited=None):
 
 
 # Compression extensions registered via fsspec.compression.register_compression
-compressions = {}
+compressions: dict[str, str] = {}
 
 
 def infer_compression(filename):

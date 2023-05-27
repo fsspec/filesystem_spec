@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib
 import types
 import warnings
@@ -5,7 +7,7 @@ import warnings
 __all__ = ["registry", "get_filesystem_class", "default"]
 
 # internal, mutable
-_registry = {}
+_registry: dict[str, type] = {}
 
 # external, immutable
 registry = types.MappingProxyType(_registry)

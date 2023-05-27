@@ -1,0 +1,13 @@
+name: test_env
+channels:
+  - conda-forge
+dependencies:
+  - mypy=1.3
+  - pyarrow
+  - python=3.8
+  - pip
+  - pip:
+    - types-paramiko
+    - types-requests
+    - types-tqdm
+    - types-ujson

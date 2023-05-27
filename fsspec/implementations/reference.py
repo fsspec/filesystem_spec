@@ -6,13 +6,15 @@ import logging
 import math
 import os
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 import fsspec.core
 
 try:
     import ujson as json
 except ImportError:
-    import json
+    if not TYPE_CHECKING:
+        import json
 
 from ..asyn import AsyncFileSystem
 from ..callbacks import _DEFAULT_CALLBACK
@@ -803,11 +805,11 @@ class ReferenceFileSystem(AsyncFileSystem):
                     urls.append(u)
                     starts.append(s)
                     ends.append(e)
-                except FileNotFoundError as e:
+                except FileNotFoundError as err:
                     if on_error == "raise":
                         raise
                     if on_error != "omit":
-                        out[p] = e
+                        out[p] = err
 
             # process references into form for merging
             urls2 = []
@@ -924,7 +926,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references.update(self._process_gen(references.get("gen", [])))
 
     def _process_templates(self, tmp):
-
         self.templates = {}
         if self.template_overrides is not None:
             tmp.update(self.template_overrides)
@@ -939,7 +940,6 @@ class ReferenceFileSystem(AsyncFileSystem):
                 self.templates[k] = v
 
     def _process_gen(self, gens):
-
         out = {}
         for gen in gens:
             dimension = {
