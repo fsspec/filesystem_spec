@@ -1,6 +1,5 @@
 import collections
 import functools
-import io
 import logging
 import math
 import os
@@ -74,12 +73,12 @@ class MMapCache(BaseCache):
                 fd = tempfile.TemporaryFile()
                 self.blocks = set()
             else:
-                fd = io.open(self.location, "wb+")
+                fd = open(self.location, "wb+")
             fd.seek(self.size - 1)
             fd.write(b"1")
             fd.flush()
         else:
-            fd = io.open(self.location, "rb+")
+            fd = open(self.location, "rb+")
 
         return mmap.mmap(fd.fileno(), self.size)
 
