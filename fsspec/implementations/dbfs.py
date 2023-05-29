@@ -442,16 +442,16 @@ class DatabricksFile(AbstractBufferedFile):
         return_buffer = b""
 
         total_length = end - start
-        for chunk_start, chunk_end in self._to_sized_blocks(total_length):
+        for chunk_start, chunk_end in self._to_sized_blocks(total_length, start):
             return_buffer += self.fs._get_data(
                 path=self.path, start=chunk_start, end=chunk_end
             )
 
         return return_buffer
 
-    def _to_sized_blocks(self, total_length):
+    def _to_sized_blocks(self, total_length, start=0):
         """Helper function to split a range from 0 to total_length into bloksizes"""
-        for data_chunk in range(0, total_length, self.blocksize):
+        for data_chunk in range(start, total_length, self.blocksize):
             data_start = data_chunk
             data_end = min(total_length, data_chunk + self.blocksize)
             yield data_start, data_end
