@@ -412,7 +412,7 @@ class AbstractFileSystem(metaclass=_Cached):
         detail = kwargs.pop("detail", False)
         try:
             listing = self.ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, IOError):
+        except (FileNotFoundError, OSError):
             if detail:
                 return path, {}, {}
             return path, [], []
@@ -687,7 +687,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """Is this entry directory-like?"""
         try:
             return self.info(path)["type"] == "directory"
-        except IOError:
+        except OSError:
             return False
 
     def isfile(self, path):

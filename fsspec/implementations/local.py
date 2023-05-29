@@ -108,7 +108,7 @@ class LocalFileSystem(AbstractFileSystem):
             try:
                 out2 = os.stat(path, follow_symlinks=True)
                 result["size"] = out2.st_size
-            except IOError:
+            except OSError:
                 result["size"] = 0
         return result
 

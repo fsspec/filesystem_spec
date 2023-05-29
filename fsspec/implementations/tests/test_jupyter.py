@@ -28,7 +28,7 @@ def jupyter(tmpdir):
                 r = requests.get("http://localhost:5566/?token=blah")
                 r.raise_for_status()
                 break
-            except (requests.exceptions.BaseHTTPError, IOError):
+            except (requests.exceptions.BaseHTTPError, OSError):
                 time.sleep(0.1)
                 timeout -= 0.1
                 if timeout < 0:

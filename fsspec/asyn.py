@@ -165,7 +165,7 @@ else:
         resource = None
         ResourceError = OSError
     else:
-        ResourceError = getattr(resource, "error", IOError)
+        ResourceError = getattr(resource, "error", OSError)
 
 _DEFAULT_BATCH_SIZE = 128
 _NOFILES_DEFAULT_BATCH_SIZE = 1280
@@ -614,7 +614,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _isdir(self, path):
         try:
             return (await self._info(path))["type"] == "directory"
-        except IOError:
+        except OSError:
             return False
 
     async def _size(self, path):
@@ -651,7 +651,7 @@ class AsyncFileSystem(AbstractFileSystem):
         detail = kwargs.pop("detail", False)
         try:
             listing = await self._ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, IOError):
+        except (FileNotFoundError, OSError):
             if detail:
                 yield path, {}, {}
             else:

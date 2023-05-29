@@ -119,7 +119,7 @@ class FUSEr(Operations):
         fn = "".join([self.root, path.lstrip("/")])
         try:
             self.fs.rm(fn, False)
-        except (IOError, FileNotFoundError):
+        except (OSError, FileNotFoundError):
             raise FuseOSError(EIO)
 
     def release(self, path, fh):
