@@ -83,6 +83,8 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         loop0 = asyncio.events.get_running_loop()
         if loop0 is loop:
             raise NotImplementedError("Calling sync() from within a running loop")
+    except NotImplementedError:
+        raise
     except RuntimeError:
         pass
     coro = func(*args, **kwargs)
