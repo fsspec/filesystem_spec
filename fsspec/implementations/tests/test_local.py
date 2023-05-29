@@ -73,7 +73,7 @@ def filetexts(d, open=open, mode="t"):
             if os.path.exists(filename):
                 try:
                     os.remove(filename)
-                except (IOError, OSError):
+                except OSError:
                     pass
     finally:
         os.chdir(odir)

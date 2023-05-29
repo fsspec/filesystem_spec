@@ -32,7 +32,7 @@ def tempzip(data=None):
     finally:
         try:
             os.remove(f)
-        except (IOError, OSError):
+        except OSError:
             pass
 
 
@@ -52,7 +52,7 @@ def temparchive(data=None):
     finally:
         try:
             os.remove(f)
-        except (IOError, OSError):
+        except OSError:
             pass
 
 
@@ -87,7 +87,7 @@ def temptar(data=None, mode="w", suffix=".tar"):
     finally:
         try:
             os.remove(fn)
-        except (IOError, OSError):
+        except OSError:
             pass
 
 
@@ -110,7 +110,7 @@ def temptargz(data=None, mode="w", suffix=".tar.gz"):
         finally:
             try:
                 os.remove(fn)
-            except (IOError, OSError):
+            except OSError:
                 pass
 
 
@@ -133,7 +133,7 @@ def temptarbz2(data=None, mode="w", suffix=".tar.bz2"):
         finally:
             try:
                 os.remove(fn)
-            except (IOError, OSError):
+            except OSError:
                 pass
 
 
@@ -156,7 +156,7 @@ def temptarxz(data=None, mode="w", suffix=".tar.xz"):
         finally:
             try:
                 os.remove(fn)
-            except (IOError, OSError):
+            except OSError:
                 pass
 
 

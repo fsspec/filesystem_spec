@@ -29,7 +29,7 @@ def tempzip(data={}):
     finally:
         try:
             os.remove(f)
-        except (IOError, OSError):
+        except OSError:
             pass
 
 

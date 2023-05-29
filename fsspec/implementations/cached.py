@@ -401,7 +401,7 @@ class CachingFileSystem(AbstractFileSystem):
             logger.debug("going to save")
             self.save_cache()
             logger.debug("saved")
-        except (IOError, OSError):
+        except OSError:
             logger.debug("Cache saving failed while closing file")
         except NameError:
             logger.debug("Cache save failed due to interpreter shutdown")
