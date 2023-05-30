@@ -99,11 +99,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return pd
 
     def __init__(
-        self,
-        root,
-        fs=None,
-        out_root=None,
-        cache_size=128,
+        self, root, fs=None, out_root=None, cache_size=128, categorical_threshold=10
     ):
         """
         Parameters
@@ -128,6 +124,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.zmetadata = met["metadata"]
         self.url = self.root + "/{field}/refs.{record}.parq"
         self.out_root = out_root or self.root
+        self.cat_thresh = categorical_threshold
 
         # Define function to open and decompress refs
         @lru_cache(maxsize=cache_size)
@@ -322,10 +319,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def __setitem__(self, key, value):
         if "/" in key and not self._is_meta(key):
             field, chunk = key.split("/")
-            record, _, _ = self._key_to_record(key)
+            record, i, _ = self._key_to_record(key)
             subdict = self._items.setdefault((field, record), {})
-            subdict[chunk] = value
-            if len(subdict) == self._output_size(field, record):
+            subdict[i] = value
+            if len(subdict) == self.record_size:
                 self.write(field, record)
         else:
             # metadata or top-level
@@ -349,23 +346,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 record, _, _ = self._key_to_record(key)
                 subdict = self._items.setdefault((field, record), {})
                 subdict[chunk] = None
-                if len(subdict) == self._output_size(field, record):
+                if len(subdict) == self.record_size:
                     self.write(field, record)
             else:
                 # metadata or top-level
                 self._items[key] = None
-
-    @lru_cache(4096)
-    def _output_size(self, field, record):
-        zarray = json.loads(self[f"{field}/.zarray"])
-        nchunks = 1
-        for s, ch in zip(zarray["shape"], zarray["chunks"]):
-            nchunks *= math.ceil(s / ch)
-        nrec = nchunks // self.record_size
-        rem = nchunks % self.record_size
-        if rem != 0:
-            nrec += 1
-        return self.record_size if record < nrec - 1 else rem
 
     def write(self, field, record, base_url=None, storage_options=None):
         # extra requirements if writing
@@ -376,29 +361,15 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # TODO: if the dict is incomplete, also load records and merge in
         partition = self._items[(field, record)]
         fn = f"{base_url or self.out_root}/{field}/refs.{record}.parq"
-        output_size = self._output_size(field, record)
 
         ####
         paths = np.full(self.record_size, np.nan, dtype="O")
         offsets = np.zeros(self.record_size, dtype="int64")
         sizes = np.zeros(self.record_size, dtype="int64")
         raws = np.full(self.record_size, np.nan, dtype="O")
-        zarray = json.loads(self[f"{field}/.zarray"])
-        shape = np.array(zarray["shape"])
-        chunks = np.array(zarray["chunks"])
         nraw = 0
         npath = 0
-        for key, data in partition.items():
-            chunk_id = key.rsplit("/", 1)[-1]
-            chunk_ints = [int(ch) for ch in chunk_id.split(".")]
-            i = 0
-            mult = 1
-            for chunk_int, sh, ch in zip(chunk_ints[::-1], shape[::-1], chunks[::-1]):
-                i += chunk_int * mult
-                mult *= sh // ch
-            j = i % self.record_size
-            # Make note if expected number of chunks differs from actual
-            # number found in references
+        for j, data in partition.items():
             if isinstance(data, list):
                 npath += 1
                 paths[j] = data[0]
@@ -409,7 +380,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 nraw += 1
                 raws[j] = kerchunk.df._proc_raw(data)
         # TODO: only save needed columns
-        # TODO: maybe categorize paths column
         df = pd.DataFrame(
             dict(
                 path=paths,
@@ -418,7 +388,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 raw=raws,
             ),
             copy=False,
-        )[:output_size]
+        )
+        if df.path.count() / (df.path.nunique() or 1) > self.cat_thresh:
+            df["path"] = df["path"].astype("category")
         object_encoding = dict(raw="bytes", path="utf8")
         has_nulls = ["path", "raw"]
 
@@ -447,16 +419,15 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             Location of the output
         """
         # write what we have so far and clear sub chunks
-        for thing in self._items:
+        for thing in list(self._items):
             if isinstance(thing, tuple):
                 field, record = thing
-                if self._items.get((record, field)):
-                    self.write(
-                        field,
-                        record,
-                        base_url=base_url,
-                        storage_options=storage_options,
-                    )
+                self.write(
+                    field,
+                    record,
+                    base_url=base_url,
+                    storage_options=storage_options,
+                )
 
         # gather .zmetadata from self._items and write that too
         for k in list(self._items):
