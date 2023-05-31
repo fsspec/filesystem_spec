@@ -129,6 +129,6 @@ def test_dbfs_write_and_read(dbfsFS):
     with dbfsFS.open("/FileStore/file.csv", "rb") as f:
         data = f.read()
         assert data == content
-    assert dbfsFS.cat_file("/FileStore/file.csv", start=8, end=14) == b'a test'
+    assert dbfsFS.cat_file("/FileStore/file.csv", start=8, end=14) == b"a test"
     dbfsFS.rm("/FileStore/file.csv")
     assert "/FileStore/file.csv" not in dbfsFS.ls("/FileStore/", detail=False)
