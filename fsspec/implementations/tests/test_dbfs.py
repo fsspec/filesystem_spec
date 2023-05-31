@@ -129,6 +129,18 @@ def test_dbfs_write_and_read(dbfsFS):
     with dbfsFS.open("/FileStore/file.csv", "rb") as f:
         data = f.read()
         assert data == content
-    assert dbfsFS.cat_file("/FileStore/file.csv", start=8, end=14) == b"a test"
     dbfsFS.rm("/FileStore/file.csv")
     assert "/FileStore/file.csv" not in dbfsFS.ls("/FileStore/", detail=False)
+
+
+@pytest.mark.vcr()
+def test_read_range_dbfs(dbfsFS):
+    dbfsFS.rm("/FileStore/file.txt")
+    assert "/FileStore/file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
+    content = b"This is a test\n"
+    with dbfsFS.open("/FileStore/file.txt", "wb") as f:
+        f.write(content)
+    assert "/FileStore/file.txt" in dbfsFS.ls("/FileStore", detail=False)
+    assert dbfsFS.cat_file("/FileStore/file.txt", start=8, end=14) == content[8:14]
+    dbfsFS.rm("/FileStore/file.txt")
+    assert "/FileStore/file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
