@@ -134,7 +134,7 @@ def test_dbfs_write_and_read(dbfsFS):
 
 
 @pytest.mark.vcr()
-def test_read_range_dbfs(dbfsFS):
+def test_dbfs_read_range(dbfsFS):
     dbfsFS.rm("/FileStore/file.txt")
     assert "/FileStore/file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
     content = b"This is a test\n"
