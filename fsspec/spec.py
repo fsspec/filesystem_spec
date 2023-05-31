@@ -861,11 +861,15 @@ class AbstractFileSystem(metaclass=_Cached):
         self, rpath, lpath, callback=_DEFAULT_CALLBACK, outfile=None, **kwargs
     ):
         """Copy single remote file to local"""
+        from .implementations.local import LocalFileSystem
+
         if isfilelike(lpath):
             outfile = lpath
         elif self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
             return None
+
+        LocalFileSystem(auto_mkdir=True).makedirs(self._parent(lpath), exist_ok=True)
 
         with self.open(rpath, "rb", **kwargs) as f1:
             if outfile is None:
