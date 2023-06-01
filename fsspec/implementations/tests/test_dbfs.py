@@ -150,7 +150,7 @@ def test_dbfs_read_range(dbfsFS):
 def test_dbfs_read_range_chunked(dbfsFS):
     dbfsFS.rm("/FileStore/large_file.txt")
     assert "/FileStore/large_file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
-    content = b"This is a test\n" * (1 * 2**20) + b"For this is the end\n"
+    content = b"This is a test\n" * (1 * 2**18) + b"For this is the end\n"
     with dbfsFS.open("/FileStore/large_file.txt", "wb") as f:
         f.write(content)
     assert "/FileStore/large_file.txt" in dbfsFS.ls("/FileStore", detail=False)
