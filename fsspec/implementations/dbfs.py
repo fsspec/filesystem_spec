@@ -427,7 +427,7 @@ class DatabricksFile(AbstractBufferedFile):
         data = self.buffer.getvalue()
 
         data_chunks = [
-            data[start:end] for start, end in self._to_sized_blocks(end=len(data))
+            data[start:end] for start, end in self._to_sized_blocks(len(data))
         ]
 
         for data_chunk in data_chunks:
@@ -440,15 +440,17 @@ class DatabricksFile(AbstractBufferedFile):
     def _fetch_range(self, start, end):
         """Internal function to download a block of data"""
         return_buffer = b""
-        for chunk_start, chunk_end in self._to_sized_blocks(start, end):
+        length = end - start
+        for chunk_start, chunk_end in self._to_sized_blocks(length, start):
             return_buffer += self.fs._get_data(
                 path=self.path, start=chunk_start, end=chunk_end
             )
 
         return return_buffer
 
-    def _to_sized_blocks(self, start=0, end=100):
+    def _to_sized_blocks(self, length, start=0):
         """Helper function to split a range from 0 to total_length into bloksizes"""
+        end = start + length
         for data_chunk in range(start, end, self.blocksize):
             data_start = data_chunk
             data_end = min(end, data_chunk + self.blocksize)
