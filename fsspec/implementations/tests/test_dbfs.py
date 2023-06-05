@@ -129,6 +129,31 @@ def test_dbfs_write_and_read(dbfsFS):
     with dbfsFS.open("/FileStore/file.csv", "rb") as f:
         data = f.read()
         assert data == content
-
     dbfsFS.rm("/FileStore/file.csv")
     assert "/FileStore/file.csv" not in dbfsFS.ls("/FileStore/", detail=False)
+
+
+@pytest.mark.vcr()
+def test_dbfs_read_range(dbfsFS):
+    dbfsFS.rm("/FileStore/file.txt")
+    assert "/FileStore/file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
+    content = b"This is a test\n"
+    with dbfsFS.open("/FileStore/file.txt", "wb") as f:
+        f.write(content)
+    assert "/FileStore/file.txt" in dbfsFS.ls("/FileStore", detail=False)
+    assert dbfsFS.cat_file("/FileStore/file.txt", start=8, end=14) == content[8:14]
+    dbfsFS.rm("/FileStore/file.txt")
+    assert "/FileStore/file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
+
+
+@pytest.mark.vcr()
+def test_dbfs_read_range_chunked(dbfsFS):
+    dbfsFS.rm("/FileStore/large_file.txt")
+    assert "/FileStore/large_file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
+    content = b"This is a test\n" * (1 * 2**18) + b"For this is the end\n"
+    with dbfsFS.open("/FileStore/large_file.txt", "wb") as f:
+        f.write(content)
+    assert "/FileStore/large_file.txt" in dbfsFS.ls("/FileStore", detail=False)
+    assert dbfsFS.cat_file("/FileStore/large_file.txt", start=8) == content[8:]
+    dbfsFS.rm("/FileStore/large_file.txt")
+    assert "/FileStore/large_file.txt" not in dbfsFS.ls("/FileStore/", detail=False)

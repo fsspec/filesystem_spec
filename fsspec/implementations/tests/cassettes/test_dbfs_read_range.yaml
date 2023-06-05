@@ -1,0 +1,381 @@
+interactions:
+- request:
+    body: '{"path": "/FileStore/file.txt", "recursive": false}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '51'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/delete
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6quBQAAAP//AwBDv6ajAgAAAA==
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '23'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6yPQQrCMBRE7/LXwba2lJoDeAGXIiFpEvwlMSH5dWHp3bWuFOpGuh2YN28msOhM
+        Bn6eIEq6Aofi+EpOFJIphqCEDU6bBAwwC40JOKXRsHdNZHwY4CUDHzRa7CVhuAlCv6QzW0Nm6aMz
+        QkuSuz7fP7hWuvwN7g6r5Krtmq5u6n1blj9WSKrl1VbSZHysNqRlEt6l8Sa0slkENZieNrT18R/X
+        y/wEAAD//wMAQdYzNA0CAAA=
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/file.txt", "overwrite": true}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '50'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/create
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6pWykjMS8lJVbIyNDIzsDQyNTc2MDMytDAzrgUAAAD//wMAPxgmPRsAAAA=
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"handle": 1260925730621863, "data": "VGhpcyBpcyBhIHRlc3QK"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '60'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/add-block
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6quBQAAAP//AwBDv6ajAgAAAA==
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"handle": 1260925730621863}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '28'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/close
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6quBQAAAP//AwBDv6ajAgAAAA==
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '22'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6yQTQ6CMBCF7zJrwj8EOYAXcGlMU2gbS1pK2sEYCXcX3IgRNsr2TeZ7X94AQiru
+        oDwP0FG8QgnBcUpOaCwP5puPdwQPpCNMWigFVY57ry/i5INDGWUeaMOkkDVFaVqCUs9xXmR5HGdx
+        EYbh6K3hG1MRYRTjdlGAtv/kh6v4DaSjulOcMIrUr91twf0WLw6r5Ek8LZI0ifNNcaTVPNp7lf+k
+        kesu2pHmkGhl+5awSjhiqobXuKOt7n5xvYxPAAAA//8DAPkC/ztsAgAA
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/file.txt", "offset": 8, "length": 7}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '57'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/read
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6pWSqosSS2OL0pNTFGyMtdRSkksSVSyUooMdjKIivAzcE63tVWqBQAAAP//AwA9
+        si7rJgAAAA==
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/file.txt", "recursive": false}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '51'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/delete
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6quBQAAAP//AwBDv6ajAgAAAA==
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '23'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6yPQQrCMBRE7/LXwba2lJoDeAGXIiFpEvwlMSH5dWHp3bWuFOpGuh2YN28msOhM
+        Bn6eIEq6Aofi+EpOFJIphqCEDU6bBAwwC40JOKXRsHdNZHwY4CUDHzRa7CVhuAlCv6QzW0Nm6aMz
+        QkuSuz7fP7hWuvwN7g6r5Krtmq5u6n1blj9WSKrl1VbSZHysNqRlEt6l8Sa0slkENZieNrT18R/X
+        y/wEAAD//wMAQdYzNA0CAAA=
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1
