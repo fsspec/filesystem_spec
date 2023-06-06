@@ -156,7 +156,7 @@ class LocalFileSystem(AbstractFileSystem):
         return os.path.islink(self._strip_protocol(path))
 
     def rm_file(self, path):
-        os.remove(path)
+        os.remove(self._strip_protocol(path))
 
     def rm(self, path, recursive=False, maxdepth=None):
         if not isinstance(path, list):
