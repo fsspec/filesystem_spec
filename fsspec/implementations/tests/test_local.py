@@ -366,51 +366,55 @@ def test_directories(tmpdir):
     assert fs.ls(fs.root_marker)
 
 
-def test_file_ops(tmpdir):
+@pytest.mark.parametrize("file_protocol", ["", "file://"])
+def test_file_ops(tmpdir, file_protocol):
     tmpdir = make_path_posix(str(tmpdir))
+    tmpdir_with_protocol = file_protocol + tmpdir
     fs = LocalFileSystem(auto_mkdir=True)
     with pytest.raises(FileNotFoundError):
-        fs.info(tmpdir + "/nofile")
-    fs.touch(tmpdir + "/afile")
-    i1 = fs.ukey(tmpdir + "/afile")
+        fs.info(tmpdir_with_protocol + "/nofile")
+    fs.touch(tmpdir_with_protocol + "/afile")
+    i1 = fs.ukey(tmpdir_with_protocol + "/afile")
 
-    assert tmpdir + "/afile" in fs.ls(tmpdir)
+    assert tmpdir + "/afile" in fs.ls(tmpdir_with_protocol)
 
-    with fs.open(tmpdir + "/afile", "wb") as f:
+    with fs.open(tmpdir_with_protocol + "/afile", "wb") as f:
         f.write(b"data")
-    i2 = fs.ukey(tmpdir + "/afile")
+    i2 = fs.ukey(tmpdir_with_protocol + "/afile")
     assert i1 != i2  # because file changed
 
-    fs.copy(tmpdir + "/afile", tmpdir + "/afile2")
-    assert tmpdir + "/afile2" in fs.ls(tmpdir)
+    fs.copy(tmpdir_with_protocol + "/afile", tmpdir_with_protocol + "/afile2")
+    assert tmpdir + "/afile2" in fs.ls(tmpdir_with_protocol)
 
-    fs.move(tmpdir + "/afile", tmpdir + "/afile3")
-    assert not fs.exists(tmpdir + "/afile")
+    fs.move(tmpdir_with_protocol + "/afile", tmpdir_with_protocol + "/afile3")
+    assert not fs.exists(tmpdir_with_protocol + "/afile")
 
-    fs.cp(tmpdir + "/afile3", tmpdir + "/deeply/nested/file")
-    assert fs.exists(tmpdir + "/deeply/nested/file")
+    fs.cp(
+        tmpdir_with_protocol + "/afile3", tmpdir_with_protocol + "/deeply/nested/file"
+    )
+    assert fs.exists(tmpdir_with_protocol + "/deeply/nested/file")
 
-    fs.rm(tmpdir + "/afile3", recursive=True)
-    assert not fs.exists(tmpdir + "/afile3")
+    fs.rm(tmpdir_with_protocol + "/afile3", recursive=True)
+    assert not fs.exists(tmpdir_with_protocol + "/afile3")
 
-    files = [tmpdir + "/afile4", tmpdir + "/afile5"]
+    files = [tmpdir_with_protocol + "/afile4", tmpdir_with_protocol + "/afile5"]
     [fs.touch(f) for f in files]
 
-    with pytest.raises(TypeError):
+    with pytest.raises(AttributeError):
         fs.rm_file(files)
     fs.rm(files)
     assert all(not fs.exists(f) for f in files)
 
-    fs.touch(tmpdir + "/afile6")
-    fs.rm_file(tmpdir + "/afile6")
-    assert not fs.exists(tmpdir + "/afile6")
+    fs.touch(tmpdir_with_protocol + "/afile6")
+    fs.rm_file(tmpdir_with_protocol + "/afile6")
+    assert not fs.exists(tmpdir_with_protocol + "/afile6")
 
     # IsADirectoryError raised on Linux, PermissionError on Windows
     with pytest.raises((IsADirectoryError, PermissionError)):
-        fs.rm_file(tmpdir)
+        fs.rm_file(tmpdir_with_protocol)
 
-    fs.rm(tmpdir, recursive=True)
-    assert not fs.exists(tmpdir)
+    fs.rm(tmpdir_with_protocol, recursive=True)
+    assert not fs.exists(tmpdir_with_protocol)
 
 
 def test_recursive_get_put(tmpdir):
