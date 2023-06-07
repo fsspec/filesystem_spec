@@ -24,6 +24,7 @@ class FTPFileSystem(AbstractFileSystem):
         block_size=None,
         tempdir=None,
         timeout=30,
+        encoding="utf-8",
         **kwargs,
     ):
         """
@@ -51,6 +52,8 @@ class FTPFileSystem(AbstractFileSystem):
             Directory on remote to put temporary files when in a transaction
         timeout: int
             Timeout of the ftp connection in seconds
+        encoding: str
+            Encoding to use for file names in FTP connection
         """
         super(FTPFileSystem, self).__init__(**kwargs)
         self.host = host
@@ -58,6 +61,7 @@ class FTPFileSystem(AbstractFileSystem):
         self.tempdir = tempdir or "/tmp"
         self.cred = username, password, acct
         self.timeout = timeout
+        self.encoding = encoding
         if block_size is not None:
             self.blocksize = block_size
         else:
@@ -66,6 +70,7 @@ class FTPFileSystem(AbstractFileSystem):
 
     def _connect(self):
         self.ftp = FTP(timeout=self.timeout)
+        self.ftp.encoding = self.encoding
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 
