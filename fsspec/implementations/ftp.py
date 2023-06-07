@@ -24,7 +24,7 @@ class FTPFileSystem(AbstractFileSystem):
         block_size=None,
         tempdir=None,
         timeout=30,
-        encoding='utf-8',
+        encoding="utf-8",
         **kwargs,
     ):
         """
