@@ -1,5 +1,7 @@
 import os
+import sys
 import uuid
+import warnings
 from ftplib import FTP, Error, error_perm
 from typing import Any
 
@@ -53,7 +55,7 @@ class FTPFileSystem(AbstractFileSystem):
         timeout: int
             Timeout of the ftp connection in seconds
         encoding: str
-            Encoding to use for file names in FTP connection
+            Encoding to use for directories and filenames in FTP connection
         """
         super(FTPFileSystem, self).__init__(**kwargs)
         self.host = host
@@ -69,8 +71,13 @@ class FTPFileSystem(AbstractFileSystem):
         self._connect()
 
     def _connect(self):
-        self.ftp = FTP(timeout=self.timeout)
-        self.ftp.encoding = self.encoding
+        if sys.version_info >= (3, 9):
+            self.ftp = FTP(timeout=self.timeout, encoding=self.encoding)
+        elif self.encoding:
+            warnings.warn("`encoding` not supported for python<3.9, ignoring")
+            self.ftp = FTP(timeout=self.timeout)
+        else:
+            self.ftp = FTP(timeout=self.timeout)
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 
