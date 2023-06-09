@@ -436,7 +436,7 @@ def open(
     - For implementations in separate packages see
       https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
-    return open_files(
+    out = open_files(
         urlpath=[urlpath],
         mode=mode,
         compression=compression,
@@ -446,7 +446,10 @@ def open(
         newline=newline,
         expand=False,
         **kwargs,
-    )[0]
+    )
+    if not out:
+        raise FileNotFoundError(urlpath)
+    return out[0]
 
 
 def open_local(url, mode="rb", **storage_options):
