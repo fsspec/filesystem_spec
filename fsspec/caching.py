@@ -144,7 +144,7 @@ class MMapCache(BaseCache):
         del state["cache"]
         return state
 
-    def __setstate__(self, state) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         # Restore instance attributes
         self.__dict__.update(state)
         self.cache = self._makefile()
@@ -278,7 +278,7 @@ class BlockCache(BaseCache):
         del state["_fetch_block_cached"]
         return state
 
-    def __setstate__(self, state) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         self._fetch_block_cached = functools.lru_cache(state["maxblocks"])(
             self._fetch_block
@@ -471,10 +471,6 @@ class AllBytes(BaseCache):
         self.data = data
 
     def _fetch(self, start: int | None, stop: int | None) -> bytes:
-        if start is None:
-            start = 0
-        if stop is None:
-            stop = len(self.data)
         return self.data[start:stop]
 
 

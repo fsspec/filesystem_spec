@@ -296,10 +296,7 @@ def read_block(
         length = end - start
 
     f.seek(offset)
-    if length is not None:
-        b = f.read(length)
-    else:
-        b = f.read()
+    b = f.read(length)  # type: ignore[arg-type]
     return b
 
 
@@ -348,14 +345,14 @@ def stringify_path(filepath: str | os.PathLike[str] | pathlib.Path) -> str:
     """
     if isinstance(filepath, str):
         return filepath
-    elif hasattr(filepath, "__fspath__") or isinstance(filepath, os.PathLike):
+    elif hasattr(filepath, "__fspath__"):
         return filepath.__fspath__()
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
     elif hasattr(filepath, "path"):
         return filepath.path
     else:
-        return filepath
+        return filepath  # type: ignore[return-value]
 
 
 def make_instance(
