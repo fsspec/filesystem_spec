@@ -1,6 +1,32 @@
 Changelog
 =========
 
+2023.6.0
+--------
+
+Enhancements
+
+- #1259, add maxdepth fo cp/get/put
+- #1263, allow dir modification during walk()
+- #1264, add boxfs to registry
+- #1266, optimise referenceFS lazy lookups, especially for writing parquet
+- #1287, 1288 "encoding" for FTP
+
+Fixes
+
+- #1273, (re)allow reading .zstd reference sets
+- #1275, resource.error for win32
+- #1278, range reads in dbfs
+- #1282, create parent directories in get_file
+- #1283, off-by-one in reference block writing
+- #1286, strip protocol in local rm_file
+
+Other
+
+- #1267, async bulk tests
+- #1268, types and mypy
+- #1277, 1279, drop outdated forms io.open, IOError
+
 2023.5.0
 --------
 
