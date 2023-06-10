@@ -53,7 +53,12 @@ class _DummyAsyncKlass:
         await asyncio.sleep(1)
         return True
 
+    async def _bad_multiple_sync(self):
+        fsspec.asyn.sync_wrapper(_DummyAsyncKlass._dummy_async_func)(self)
+        return True
+
     dummy_func = fsspec.asyn.sync_wrapper(_dummy_async_func)
+    bad_multiple_sync_func = fsspec.asyn.sync_wrapper(_bad_multiple_sync)
 
 
 def test_sync_wrapper_timeout_on_less_than_expected_wait_time_not_finish_function():
@@ -75,6 +80,12 @@ def test_sync_wrapper_timeout_none_will_wait_func_finished():
 def test_sync_wrapper_treat_timeout_0_as_none():
     test_obj = _DummyAsyncKlass()
     assert test_obj.dummy_func(timeout=0)
+
+
+def test_sync_wrapper_bad_multiple_sync():
+    test_obj = _DummyAsyncKlass()
+    with pytest.raises(NotImplementedError):
+        test_obj.bad_multiple_sync_func(timeout=5)
 
 
 def test_run_coros_in_chunks(monkeypatch):
