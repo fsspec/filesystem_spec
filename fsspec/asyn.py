@@ -305,7 +305,7 @@ class AsyncFileSystem(AbstractFileSystem):
     def __init__(self, *args, asynchronous=False, loop=None, batch_size=None, **kwargs):
         self.asynchronous = asynchronous
         self._pid = os.getpid()
-        if not asynchronous:
+        if asynchronous:
             self._loop = loop or get_loop()
         else:
             self._loop = None
