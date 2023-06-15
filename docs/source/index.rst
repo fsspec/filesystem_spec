@@ -80,7 +80,7 @@ Installation
    conda install -c conda-forge fsspec
 
 Not all filesystem implementations are available without installing extra
-dependencies. For example to be able to access data in S3, you can use the optional
+dependencies. For example to be able to access data in GCS, you can use the optional
 pip install syntax below, or install the specific package required
 
 .. code-block:: sh
