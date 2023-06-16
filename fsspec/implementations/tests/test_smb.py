@@ -16,6 +16,9 @@ pytest.importorskip("smbprotocol")
 
 # ! pylint: disable=redefined-outer-name,missing-function-docstring
 
+# Test standard and non-standard ports
+port_test = [445, 9999]
+
 
 def stop_docker(container):
     cmd = shlex.split('docker ps -a -q --filter "name=%s"' % container)
@@ -24,8 +27,8 @@ def stop_docker(container):
         subprocess.call(["docker", "rm", "-f", "-v", cid])
 
 
-@pytest.fixture(scope="module")
-def smb_params():
+@pytest.fixture(scope="module", params=port_test)
+def smb_params(request):
     try:
         pchk = ["docker", "run", "--name", "fsspec_test_smb", "hello-world"]
         subprocess.check_call(pchk)
@@ -37,15 +40,20 @@ def smb_params():
     # requires docker
     container = "fsspec_smb"
     stop_docker(container)
-    img = "docker run --name {} --detach -p 139:139 -p 446:445 dperson/samba"
+    img = "docker run --name {} --detach -p 139:139 -p {}:445 dperson/samba"
     cfg = " -p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
-    cmd = img.format(container) + cfg
+    cmd = img.format(container, request.param) + cfg
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
     logger = logging.getLogger("fsspec")
     logger.debug("Container: %s", cid)
     try:
         time.sleep(1)
-        yield dict(host="localhost", port=446, username="testuser", password="testpass")
+        yield dict(
+            host="localhost",
+            port=request.param,
+            username="testuser",
+            password="testpass",
+        )
     finally:
         import smbclient  # pylint: disable=import-outside-toplevel
 
