@@ -1,5 +1,4 @@
 """Helper functions for a standard streaming compression API"""
-from bz2 import BZ2File
 from zipfile import ZipFile
 
 import fsspec.utils
@@ -68,7 +67,13 @@ def unzip(infile, mode="rb", filename=None, **kwargs):
 
 
 register_compression("zip", unzip, "zip")
-register_compression("bz2", BZ2File, "bz2")
+
+try:
+    from bz2 import BZ2File
+except ImportError:
+    pass
+else:
+    register_compression("bz2", BZ2File, "bz2")
 
 try:  # pragma: no cover
     from isal import igzip
