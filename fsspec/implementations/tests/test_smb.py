@@ -37,7 +37,7 @@ def smb_params():
     # requires docker
     container = "fsspec_smb"
     stop_docker(container)
-    img = "docker run --name {} --detach -p 139:139 -p 445:445 dperson/samba"
+    img = "docker run --name {} --detach -p 139:139 -p 446:445 dperson/samba"
     cfg = " -p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
     cmd = img.format(container) + cfg
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
@@ -45,7 +45,7 @@ def smb_params():
     logger.debug("Container: %s", cid)
     try:
         time.sleep(1)
-        yield dict(host="localhost", port=445, username="testuser", password="testpass")
+        yield dict(host="localhost", port=446, username="testuser", password="testpass")
     finally:
         import smbclient  # pylint: disable=import-outside-toplevel
 
