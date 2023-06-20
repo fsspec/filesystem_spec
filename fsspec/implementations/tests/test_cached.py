@@ -8,6 +8,7 @@ import pytest
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
+from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
 
 from .test_ftp import FTPFileSystem
@@ -30,6 +31,30 @@ def local_filecache():
     )
 
     return data, original_file, cache_location, fs
+
+
+def test_mapper():
+    mapper0 = create_cache_mapper(True)
+    assert mapper0("/somedir/somefile") == "somefile"
+    assert mapper0("/otherdir/somefile") == "somefile"
+
+    mapper1 = create_cache_mapper(False)
+    assert (
+        mapper1("/somedir/somefile")
+        == "67a6956e5a5f95231263f03758c1fd9254fdb1c564d311674cec56b0372d2056"
+    )
+    assert (
+        mapper1("/otherdir/somefile")
+        == "f043dee01ab9b752c7f2ecaeb1a5e1b2d872018e2d0a1a26c43835ebf34e7d3e"
+    )
+
+    assert mapper0 != mapper1
+    assert create_cache_mapper(True) == mapper0
+    assert create_cache_mapper(False) == mapper1
+
+    assert hash(mapper0) != hash(mapper1)
+    assert hash(create_cache_mapper(True)) == hash(mapper0)
+    assert hash(create_cache_mapper(False)) == hash(mapper1)
 
 
 def test_idempotent():

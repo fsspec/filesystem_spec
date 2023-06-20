@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import inspect
 import logging
 import os
@@ -9,13 +8,14 @@ import pickle
 import tempfile
 import time
 from shutil import rmtree
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
 from fsspec.exceptions import BlocksizeMismatchError
+from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_compression
 
@@ -115,9 +115,7 @@ class CachingFileSystem(AbstractFileSystem):
         self.check_files = check_files
         self.expiry = expiry_time
         self.compression = compression
-        # TODO: same_names should allow for variable prefix, not only
-        #  to keep the basename
-        self.same_names = same_names
+        self._mapper = create_cache_mapper(same_names)
         self.target_protocol = (
             target_protocol
             if isinstance(target_protocol, str)
@@ -255,11 +253,11 @@ class CachingFileSystem(AbstractFileSystem):
 
         for path, detail in self.cached_files[-1].copy().items():
             if time.time() - detail["time"] > expiry_time:
-                if self.same_names:
-                    basename = os.path.basename(detail["original"])
-                    fn = os.path.join(self.storage[-1], basename)
-                else:
-                    fn = os.path.join(self.storage[-1], detail["fn"])
+                fn = getattr(detail, "fn", "")
+                if not fn:
+                    # fn should always be set, but be defensive here.
+                    fn = self._mapper(detail["original"])
+                fn = os.path.join(self.storage[-1], fn)
                 if os.path.exists(fn):
                     os.remove(fn)
                     self.cached_files[-1].pop(path)
@@ -339,7 +337,7 @@ class CachingFileSystem(AbstractFileSystem):
             # TODO: action where partial file exists in read-only cache
             logger.debug("Opening partially cached copy of %s" % path)
         else:
-            hash = self.hash_name(path, self.same_names)
+            hash = self._mapper(path)
             fn = os.path.join(self.storage[-1], hash)
             blocks = set()
             detail = {
@@ -385,8 +383,10 @@ class CachingFileSystem(AbstractFileSystem):
         self.save_cache()
         return f
 
-    def hash_name(self, path, same_name):
-        return hash_name(path, same_name=same_name)
+    def hash_name(self, path: str, *args: Any) -> str:
+        # Kept for backward compatibility with downstream libraries.
+        # Ignores extra arguments, previously same_name boolean.
+        return self._mapper(path)
 
     def close_and_update(self, f, close):
         """Called when a file is closing, so store the set of blocks"""
@@ -488,7 +488,7 @@ class CachingFileSystem(AbstractFileSystem):
             and self.check_files == other.check_files
             and self.expiry == other.expiry
             and self.compression == other.compression
-            and self.same_names == other.same_names
+            and self._mapper == other._mapper
             and self.target_protocol == other.target_protocol
         )
 
@@ -501,7 +501,7 @@ class CachingFileSystem(AbstractFileSystem):
             ^ hash(self.check_files)
             ^ hash(self.expiry)
             ^ hash(self.compression)
-            ^ hash(self.same_names)
+            ^ hash(self._mapper)
             ^ hash(self.target_protocol)
         )
 
@@ -546,7 +546,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         details = [self._check_file(sp) for sp in paths]
         downpath = [p for p, d in zip(paths, details) if not d]
         downfn0 = [
-            os.path.join(self.storage[-1], self.hash_name(p, self.same_names))
+            os.path.join(self.storage[-1], self._mapper(p))
             for p, d in zip(paths, details)
         ]  # keep these path names for opening later
         downfn = [fn for fn, d in zip(downfn0, details) if not d]
@@ -558,7 +558,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             newdetail = [
                 {
                     "original": path,
-                    "fn": self.hash_name(path, self.same_names),
+                    "fn": self._mapper(path),
                     "blocks": True,
                     "time": time.time(),
                     "uid": self.fs.ukey(path),
@@ -590,7 +590,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 pass
 
     def _make_local_details(self, path):
-        hash = self.hash_name(path, self.same_names)
+        hash = self._mapper(path)
         fn = os.path.join(self.storage[-1], hash)
         detail = {
             "original": path,
@@ -731,7 +731,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def _check_file(self, path):
         self._check_cache()
-        sha = self.hash_name(path, self.same_names)
+        sha = self._mapper(path)
         for storage in self.storage:
             fn = os.path.join(storage, sha)
             if os.path.exists(fn):
@@ -752,7 +752,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         if fn:
             return open(fn, mode)
 
-        sha = self.hash_name(path, self.same_names)
+        sha = self._mapper(path)
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache" % path)
         kwargs["mode"] = mode
@@ -836,14 +836,6 @@ class LocalTempFile:
 
     def __getattr__(self, item):
         return getattr(self.fh, item)
-
-
-def hash_name(path, same_name):
-    if same_name:
-        hash = os.path.basename(path)
-    else:
-        hash = hashlib.sha256(path.encode()).hexdigest()
-    return hash
 
 
 @contextlib.contextmanager
