@@ -30,14 +30,38 @@ class AbstractCacheMapper(abc.ABC):
 
 
 class BasenameCacheMapper(AbstractCacheMapper):
-    """Cache mapper that uses the basename of the remote URL.
+    """Cache mapper that uses the basename of the remote URL and a fixed number
+    of directory levels above this.
 
-    Different paths with the same basename will therefore have the same cached
-    basename.
+    The default is zero directory levels, meaning different paths with the same
+    basename will have the same cached basename.
     """
 
+    def __init__(self, directory_levels: int = 0):
+        if directory_levels < 0:
+            raise ValueError(
+                "BasenameCacheMapper requires zero or positive directory_levels"
+            )
+        self.directory_levels = directory_levels
+
+        # Separator for directories when encoded as strings.
+        self._separator = "_^_"
+
     def __call__(self, path: str) -> str:
-        return os.path.basename(path)
+        dirname, basename = os.path.split(path)
+
+        if self.directory_levels > 0:
+            dirs = dirname.split(os.sep)[-self.directory_levels :]
+            dirs.append(basename)
+            basename = self._separator.join(dirs)
+
+        return basename
+
+    def __eq__(self, other: Any) -> bool:
+        return super().__eq__(other) and self.directory_levels == other.directory_levels
+
+    def __hash__(self) -> int:
+        return super().__hash__() ^ hash(self.directory_levels)
 
 
 class HashCacheMapper(AbstractCacheMapper):

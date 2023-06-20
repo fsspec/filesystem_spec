@@ -8,7 +8,7 @@ import pickle
 import tempfile
 import time
 from shutil import rmtree
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -18,6 +18,9 @@ from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_compression
+
+if TYPE_CHECKING:
+    from fsspec.implementations.cache_mapper import AbstractCacheMapper
 
 logger = logging.getLogger("fsspec.cached")
 
@@ -53,8 +56,9 @@ class CachingFileSystem(AbstractFileSystem):
         expiry_time=604800,
         target_options=None,
         fs=None,
-        same_names=False,
+        same_names: bool | None = None,
         compression=None,
+        cache_mapper: AbstractCacheMapper | None = None,
         **kwargs,
     ):
         """
@@ -84,13 +88,19 @@ class CachingFileSystem(AbstractFileSystem):
         fs: filesystem instance
             The target filesystem to run against. Provide this or ``protocol``.
         same_names: bool (optional)
-            By default, target URLs are hashed, so that files from different backends
-            with the same basename do not conflict. If this is true, the original
-            basename is used.
+            By default, target URLs are hashed using a ``HashCacheMapper`` so
+            that files from different backends with the same basename do not
+            conflict. If this argument is ``true``, a ``BasenameCacheMapper``
+            is used instead. Other cache mapper options are available by using
+            the ``cache_mapper`` keyword argument. Only one of this and
+            ``cache_mapper`` should be specified.
         compression: str (optional)
             To decompress on download. Can be 'infer' (guess from the URL name),
             one of the entries in ``fsspec.compression.compr``, or None for no
             decompression.
+        cache_mapper: AbstractCacheMapper (optional)
+            The object use to map from original filenames to cached filenames.
+            Only one of this and ``same_names`` should be specified.
         """
         super().__init__(**kwargs)
         if fs is None and target_protocol is None:
@@ -115,7 +125,19 @@ class CachingFileSystem(AbstractFileSystem):
         self.check_files = check_files
         self.expiry = expiry_time
         self.compression = compression
-        self._mapper = create_cache_mapper(same_names)
+
+        if same_names is not None and cache_mapper is not None:
+            raise ValueError(
+                "Cannot specify both same_names and cache_mapper in "
+                "CachingFileSystem.__init__"
+            )
+        if cache_mapper is not None:
+            self._mapper = cache_mapper
+        else:
+            self._mapper = create_cache_mapper(
+                same_names if same_names is not None else False
+            )
+
         self.target_protocol = (
             target_protocol
             if isinstance(target_protocol, str)
