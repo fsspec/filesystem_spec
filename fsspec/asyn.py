@@ -641,7 +641,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _ls(self, path, detail=True, **kwargs):
         raise NotImplementedError
 
-    async def _walk(self, path, maxdepth=None, **kwargs):
+    async def _walk(self, path, maxdepth=None, onerror=None, **kwargs):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
@@ -653,7 +653,9 @@ class AsyncFileSystem(AbstractFileSystem):
         detail = kwargs.pop("detail", False)
         try:
             listing = await self._ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, OSError):
+        except (FileNotFoundError, OSError) as e:
+            if onerror is not None:
+                onerror(e)
             if detail:
                 yield path, {}, {}
             else:

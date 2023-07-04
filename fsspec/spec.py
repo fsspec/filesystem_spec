@@ -372,7 +372,7 @@ class AbstractFileSystem(metaclass=_Cached):
         except KeyError:
             pass
 
-    def walk(self, path, maxdepth=None, topdown=True, **kwargs):
+    def walk(self, path, maxdepth=None, topdown=True, onerror=None, **kwargs):
         """Return all files belows path
 
         List all files, recursing into subdirectories; output is iterator-style,
@@ -385,6 +385,11 @@ class AbstractFileSystem(metaclass=_Cached):
         or even to inform walk() about directories the caller creates or renames before
         it resumes walk() again.
         Modifying dirnames when topdown is False has no effect. (see os.walk)
+
+        If optional argument onerror is specified, it should be a function;
+        it will be called with one argument, an OSError instance.
+        It can report the error to continue with the walk,
+        or raise the exception to abort the walk.
 
         Note that the "files" outputted will include anything that is not
         a directory, such as links.
@@ -412,7 +417,9 @@ class AbstractFileSystem(metaclass=_Cached):
         detail = kwargs.pop("detail", False)
         try:
             listing = self.ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, OSError):
+        except (FileNotFoundError, OSError) as e:
+            if onerror is not None:
+                onerror(e)
             if detail:
                 return path, {}, {}
             return path, [], []
