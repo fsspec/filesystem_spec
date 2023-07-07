@@ -603,6 +603,11 @@ class AbstractFileSystem(metaclass=_Cached):
         )
         pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
         pattern = re.sub("[*]", "[^/]*", pattern)
+
+        # Replace \\[ with \[ and \\] with \], which ensures that user-specified
+        # escaped square brackets are matched literally and not as regexes.
+        pattern = re.sub(r"\\\\([\[\]])", r"\\\1", pattern)
+
         pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
         out = {
             p: allpaths[p]
