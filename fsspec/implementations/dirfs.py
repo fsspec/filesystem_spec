@@ -10,6 +10,8 @@ class DirFileSystem(AsyncFileSystem):
     delegates everything to the wrapped filesystem.
     """
 
+    protocol = 'dirfs'
+
     def __init__(
         self,
         path=None,
@@ -53,7 +55,7 @@ class DirFileSystem(AsyncFileSystem):
                 return path
             if not path:
                 return self.path
-            return self.fs.sep.join((self.path, path))
+            return self.fs.sep.join((self.path, self._strip_protocol(path)))
         return [self._join(_path) for _path in path]
 
     def _relpath(self, path):

@@ -372,6 +372,12 @@ def test_glob(dirfs):
     dirfs.fs.glob.assert_called_once_with(f"{PATH}/*", **KWARGS)
 
 
+def test_glob_with_protocol(dirfs):
+    dirfs.fs.glob.return_value = [f"{PATH}/one", f"{PATH}/two"]
+    assert dirfs.glob("dirfs://*", **KWARGS) == ["one", "two"]
+    dirfs.fs.glob.assert_called_once_with(f"{PATH}/*", **KWARGS)
+
+
 @pytest.mark.asyncio
 async def test_async_glob_detail(adirfs):
     adirfs.fs._glob.return_value = {
