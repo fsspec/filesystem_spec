@@ -62,6 +62,7 @@ class FSMap(MutableMapping):
 
     @cached_property
     def dirfs(self):
+        """dirfs instance that can be used with the same keys as the mapper"""
         from .implementations.dirfs import DirFileSystem
 
         return DirFileSystem(path=self._root_key_to_str, fs=self.fs)
