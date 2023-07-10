@@ -233,6 +233,16 @@ def get_filesystem_class(protocol):
     return cls
 
 
+s3_msg = """Your installed version of s3fs is very old. This can happen
+when you have an explicit dependence on botocore (e.g., from boto3),
+which forces the solver to pick a version of s3fs which did not yet
+depend on aiobotocore.
+
+To fix, you should specify a lower version bound on s3fs, or
+update the current installation.
+"""
+
+
 def _import_class(cls, minv=None):
     """Take a string FQP and return the imported class or identifier
 
@@ -240,13 +250,19 @@ def _import_class(cls, minv=None):
     """
     if ":" in cls:
         mod, name = cls.rsplit(":", 1)
+        s3 = mod == "s3fs"
         mod = importlib.import_module(mod)
+        if s3 and mod.__version__.split(".") < ["0", "5"]:
+            warnings.warn(s3_msg)
         for part in name.split("."):
             mod = getattr(mod, part)
         return mod
     else:
         mod, name = cls.rsplit(".", 1)
+        s3 = mod == "s3fs"
         mod = importlib.import_module(mod)
+        if s3 and mod.__version__.split(".") < ["0", "5"]:
+            warnings.warn(s3_msg)
         return getattr(mod, name)
 
 
