@@ -233,10 +233,8 @@ def get_filesystem_class(protocol):
     return cls
 
 
-s3_msg = """Your installed version of s3fs is very old. This can happen
-when you have an explicit dependence on botocore (e.g., from boto3),
-which forces the solver to pick a version of s3fs which did not yet
-depend on aiobotocore.
+s3_msg = """Your installed version of s3fs is very old and known to cause
+severe performance issues, see also https://github.com/dask/dask/issues/10276
 
 To fix, you should specify a lower version bound on s3fs, or
 update the current installation.
