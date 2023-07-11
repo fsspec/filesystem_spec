@@ -58,6 +58,44 @@ def test_directories(m):
     assert not m.store
 
 
+def test_exists_isdir_isfile(m):
+    m.mkdir("/root")
+    m.touch("/root/a")
+
+    assert m.exists("/root")
+    assert m.isdir("/root")
+    assert not m.isfile("/root")
+
+    assert m.exists("/root/a")
+    assert m.isfile("/root/a")
+    assert not m.isdir("/root/a")
+
+    assert not m.exists("/root/not-exists")
+    assert not m.isfile("/root/not-exists")
+    assert not m.isdir("/root/not-exists")
+
+    m.rm("/root/a")
+    m.rmdir("/root")
+
+    assert not m.exists("/root")
+
+    m.touch("/a/b")
+    assert m.isfile("/a/b")
+
+    assert m.exists("/a")
+    assert m.isdir("/a")
+    assert not m.isfile("/a")
+
+
+def test_touch(m):
+    m.touch("/root/a")
+    with pytest.raises(FileExistsError):
+        m.touch("/root/a/b")
+    with pytest.raises(FileExistsError):
+        m.touch("/root/a/b/c")
+    assert not m.exists("/root/a/b/")
+
+
 def test_mv_recursive(m):
     m.mkdir("src")
     m.touch("src/file.txt")

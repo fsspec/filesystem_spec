@@ -137,10 +137,6 @@ class MemoryFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError(path)
 
-    def exists(self, path, **kwargs):
-        path = self._strip_protocol(path)
-        return path in self.store or path in self.pseudo_dirs
-
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
         if path in self.pseudo_dirs or any(
@@ -191,11 +187,14 @@ class MemoryFileSystem(AbstractFileSystem):
                 return f
             else:
                 raise FileNotFoundError(path)
-        if mode == "wb":
+        elif mode == "wb":
             m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
                 m.commit()
             return m
+        else:
+            name = self.__class__.__name__
+            raise ValueError(f"unsupported file mode for {name}: {mode!r}")
 
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
