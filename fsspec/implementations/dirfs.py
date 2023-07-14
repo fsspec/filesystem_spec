@@ -10,7 +10,7 @@ class DirFileSystem(AsyncFileSystem):
     delegates everything to the wrapped filesystem.
     """
 
-    protocol = "dirfs"
+    protocol = "dir"
 
     def __init__(
         self,

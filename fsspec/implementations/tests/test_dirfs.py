@@ -374,7 +374,7 @@ def test_glob(dirfs):
 
 def test_glob_with_protocol(dirfs):
     dirfs.fs.glob.return_value = [f"{PATH}/one", f"{PATH}/two"]
-    assert dirfs.glob("dirfs://*", **KWARGS) == ["one", "two"]
+    assert dirfs.glob("dir://*", **KWARGS) == ["one", "two"]
     dirfs.fs.glob.assert_called_once_with(f"{PATH}/*", **KWARGS)
 
 
