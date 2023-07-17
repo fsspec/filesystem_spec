@@ -695,7 +695,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     data = f.read(block)
                     f2.write(data)
         else:
-            self.fs.get(path, fn)
+            self.fs.get_file(path, fn)
         self.save_cache()
         return self._open(path, mode)
 
@@ -775,7 +775,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                     data = f.read(block)
                     f2.write(data)
         else:
-            self.fs.get(path, fn)
+            self.fs.get_file(path, fn)
         return self._open(path, mode)
 
 

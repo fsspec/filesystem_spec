@@ -121,3 +121,14 @@ def test_filesystem_warning_arrow_hdfs_deprecated(clear_registry, clean_imports)
 
         with pytest.warns(DeprecationWarning):
             filesystem("arrow_hdfs")
+
+
+def test_old_s3(monkeypatch):
+    from fsspec.registry import _import_class
+
+    s3fs = pytest.importorskip("s3fs")
+    monkeypatch.setattr(s3fs, "__version__", "0.4.2")
+    with pytest.warns():
+        _import_class("s3fs:S3FileSystem")
+    with pytest.warns():
+        _import_class("s3fs.S3FileSystem")
