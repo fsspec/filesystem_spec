@@ -372,7 +372,7 @@ class AbstractFileSystem(metaclass=_Cached):
         except KeyError:
             pass
 
-    def walk(self, path, maxdepth=None, topdown=True, onerror=None, **kwargs):
+    def walk(self, path, maxdepth=None, topdown=True, on_error="omit", **kwargs):
         """Return all files belows path
 
         List all files, recursing into subdirectories; output is iterator-style,
@@ -385,11 +385,6 @@ class AbstractFileSystem(metaclass=_Cached):
         or even to inform walk() about directories the caller creates or renames before
         it resumes walk() again.
         Modifying dirnames when topdown is False has no effect. (see os.walk)
-
-        If optional argument onerror is specified, it should be a function;
-        it will be called with one argument, an OSError instance.
-        It can report the error to continue with the walk,
-        or raise the exception to abort the walk.
 
         Note that the "files" outputted will include anything that is not
         a directory, such as links.
@@ -404,6 +399,10 @@ class AbstractFileSystem(metaclass=_Cached):
         topdown: bool (True)
             Whether to walk the directory tree from the top downwards or from
             the bottom upwards.
+        on_error: "omit", "raise", a collable
+            if omit (default), path with exception will simply be empty;
+            If raise, an underlying exception will be raised;
+            if callable, it will be called with a single OSError instance as argument
         kwargs: passed to ``ls``
         """
         if maxdepth is not None and maxdepth < 1:
@@ -418,8 +417,10 @@ class AbstractFileSystem(metaclass=_Cached):
         try:
             listing = self.ls(path, detail=True, **kwargs)
         except (FileNotFoundError, OSError) as e:
-            if onerror is not None:
-                onerror(e)
+            if on_error == "raise":
+                raise
+            elif callable(on_error):
+                on_error(e)
             if detail:
                 return path, {}, {}
             return path, [], []
