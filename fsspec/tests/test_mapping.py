@@ -214,3 +214,11 @@ def test_fsmap_access_with_suffix(tmp_path):
         _ = m["b/"]
 
     assert m["b/a/"] == b"data"
+
+
+def test_fsmap_dirfs():
+    m = fsspec.get_mapper("memory://")
+
+    fs = m.dirfs
+    assert isinstance(fs, fsspec.implementations.dirfs.DirFileSystem)
+    assert fs.path == m.root
