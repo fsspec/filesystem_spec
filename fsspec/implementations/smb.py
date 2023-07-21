@@ -177,13 +177,13 @@ class SMBFileSystem(AbstractFileSystem):
         """Return the created timestamp of a file as a datetime.datetime"""
         wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath, port=self.port)
-        return datetime.datetime.utcfromtimestamp(stats.st_ctime)
+        return datetime.datetime.fromtimestamp(stats.st_ctime, tz=datetime.timezone.utc)
 
     def modified(self, path):
         """Return the modified timestamp of a file as a datetime.datetime"""
         wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath, port=self.port)
-        return datetime.datetime.utcfromtimestamp(stats.st_mtime)
+        return datetime.datetime.fromtimestamp(stats.st_mtime, tz=datetime.timezone.utc)
 
     def ls(self, path, detail=True, **kwargs):
         unc = _as_unc_path(self.host, path)

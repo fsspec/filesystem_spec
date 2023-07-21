@@ -196,11 +196,13 @@ class LocalFileSystem(AbstractFileSystem):
 
     def created(self, path):
         info = self.info(path=path)
-        return datetime.datetime.utcfromtimestamp(info["created"])
+        return datetime.datetime.fromtimestamp(
+            info["created"], tz=datetime.timezone.utc
+        )
 
     def modified(self, path):
         info = self.info(path=path)
-        return datetime.datetime.utcfromtimestamp(info["mtime"])
+        return datetime.datetime.fromtimestamp(info["mtime"], tz=datetime.timezone.utc)
 
     @classmethod
     def _parent(cls, path):

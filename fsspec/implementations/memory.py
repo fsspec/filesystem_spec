@@ -1,7 +1,7 @@
 from __future__ import absolute_import, annotations, division, print_function
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
 from typing import Any, ClassVar
@@ -268,8 +268,8 @@ class MemoryFile(BytesIO):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
-        self.created = datetime.utcnow()
-        self.modified = datetime.utcnow()
+        self.created = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=timezone.utc)
         if data:
             super().__init__(data)
             self.seek(0)
@@ -289,4 +289,4 @@ class MemoryFile(BytesIO):
 
     def commit(self):
         self.fs.store[self.path] = self
-        self.modified = datetime.utcnow()
+        self.modified = datetime.now(tz=timezone.utc)
