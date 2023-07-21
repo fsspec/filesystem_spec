@@ -23,10 +23,12 @@ def test_modified(fs: AbstractFileSystem, temp_file):
     try:
         fs.touch(temp_file)
         # created = fs.created(path=temp_file)
-        created = datetime.datetime.utcnow()  # pyarrow only have modified
+        created = datetime.datetime.now(
+            tz=datetime.timezone.utc
+        )  # pyarrow only have modified
         time.sleep(0.05)
         fs.touch(temp_file)
-        modified = fs.modified(path=temp_file).replace(tzinfo=None)
+        modified = fs.modified(path=temp_file)
         assert isinstance(modified, datetime.datetime)
         assert modified > created
     finally:
