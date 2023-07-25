@@ -360,6 +360,20 @@ def url_to_fs(url, **kwargs):
     urlpath : str
         The file-systems-specific URL for ``url``.
     """
+    # non-FS arguments that appear in fsspec.open()
+    # inspect could keep this in sync with open()'s signature
+    known_kwargs = {
+        "auto_mkdir",
+        "compression",
+        "encoding",
+        "errors",
+        "expand",
+        "mode",
+        "name_function",
+        "newline",
+        "num",
+    }
+    kwargs = {k: v for k, v in kwargs.items() if k not in known_kwargs}
     chain = _un_chain(url, kwargs)
     inkwargs = {}
     # Reverse iterate the chain, creating a nested target_* structure
