@@ -10,6 +10,7 @@ from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
+from fsspec.implementations.local import make_path_posix
 
 from .test_ftp import FTPFileSystem
 
@@ -70,18 +71,20 @@ def test_metadata(tmpdir, same_names):
         cache_storage=os.path.join(tmpdir, "cache"),
         same_names=same_names,
     )
+
     with fs.open(afile, "rb") as f:
         assert f.read(5) == b"test"
 
-    detail = fs.cached_files[0][afile]
+    afile_posix = make_path_posix(afile)
+    detail = fs.cached_files[0][afile_posix]
     assert sorted(detail.keys()) == ["blocks", "fn", "original", "time", "uid"]
     assert isinstance(detail["blocks"], bool)
     assert isinstance(detail["fn"], str)
     assert isinstance(detail["time"], float)
     assert isinstance(detail["uid"], str)
 
-    assert detail["original"] == afile
-    assert detail["fn"] == fs._mapper(afile)
+    assert detail["original"] == afile_posix
+    assert detail["fn"] == fs._mapper(afile_posix)
     if same_names:
         assert detail["fn"] == "afile"
 
