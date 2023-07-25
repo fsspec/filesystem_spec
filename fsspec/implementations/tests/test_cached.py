@@ -57,6 +57,35 @@ def test_mapper():
     assert hash(create_cache_mapper(False)) == hash(mapper1)
 
 
+@pytest.mark.parametrize("same_names", [False, True])
+def test_metadata(tmpdir, same_names):
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=os.path.join(tmpdir, "cache"),
+        same_names=same_names,
+    )
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    detail = fs.cached_files[0][afile]
+    assert sorted(detail.keys()) == ["blocks", "fn", "original", "time", "uid"]
+    assert isinstance(detail["blocks"], bool)
+    assert isinstance(detail["fn"], str)
+    assert isinstance(detail["time"], float)
+    assert isinstance(detail["uid"], str)
+
+    assert detail["original"] == afile
+    assert detail["fn"] == fs._mapper(afile)
+    if same_names:
+        assert detail["fn"] == "afile"
+
+
 def test_idempotent():
     fs = CachingFileSystem("file")
     fs2 = CachingFileSystem("file")
@@ -179,7 +208,7 @@ def test_clear():
 
 
 def test_clear_expired(tmp_path):
-    def __ager(cache_fn, fn):
+    def __ager(cache_fn, fn, del_fn=False):
         """
         Modify the cache file to virtually add time lag to selected files.
 
@@ -189,6 +218,8 @@ def test_clear_expired(tmp_path):
             cache path
         fn: str
             file name to be modified
+        del_fn: bool
+            whether or not to delete 'fn' from cache details
         """
         import pathlib
         import time
@@ -199,6 +230,8 @@ def test_clear_expired(tmp_path):
                 fn_posix = pathlib.Path(fn).as_posix()
                 cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
             assert os.access(cache_fn, os.W_OK), "Cache is not writable"
+            if del_fn:
+                del cached_files[fn_posix]["fn"]
             with open(cache_fn, "wb") as f:
                 pickle.dump(cached_files, f)
             time.sleep(1)
@@ -279,6 +312,22 @@ def test_clear_expired(tmp_path):
 
     fs.clear_expired_cache()
     assert not fs._check_file(str(f4))
+
+    # check cache metadata lacking 'fn' raises RuntimeError.
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=str(cache1),
+        same_names=True,
+        cache_check=1,
+    )
+    assert fs.cat(str(f1)) == data
+
+    cache_fn = os.path.join(fs.storage[-1], "cache")
+    __ager(cache_fn, f1, del_fn=True)
+
+    with pytest.raises(RuntimeError, match="Cache metadata does not contain 'fn' for"):
+        fs.clear_expired_cache()
 
 
 def test_pop():

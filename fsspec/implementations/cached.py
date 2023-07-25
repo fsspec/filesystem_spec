@@ -253,10 +253,11 @@ class CachingFileSystem(AbstractFileSystem):
 
         for path, detail in self.cached_files[-1].copy().items():
             if time.time() - detail["time"] > expiry_time:
-                fn = getattr(detail, "fn", "")
+                fn = detail.get("fn", "")
                 if not fn:
-                    # fn should always be set, but be defensive here.
-                    fn = self._mapper(detail["original"])
+                    raise RuntimeError(
+                        f"Cache metadata does not contain 'fn' for {path}"
+                    )
                 fn = os.path.join(self.storage[-1], fn)
                 if os.path.exists(fn):
                     os.remove(fn)
