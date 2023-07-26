@@ -4,6 +4,7 @@ import contextlib
 import os
 import pickle
 import tempfile
+from unittest.mock import Mock
 
 import pytest
 
@@ -480,3 +481,18 @@ def test_walk(m):
         (dir12, [], ["file121"]),
         (dir1, ["dir11", "dir12"], ["file11"]),
     ]
+
+    # on_error omit by default
+    assert list(m.walk("do_not_exist")) == []
+    # on_error omit
+    assert list(m.walk("do_not_exist", on_error="omit")) == []
+    # on_error raise
+    with pytest.raises(FileNotFoundError):
+        list(m.walk("do_not_exist", on_error="raise"))
+    # on_error callable function
+    mock = Mock()
+    assert list(m.walk("do_not_exist", on_error=mock.onerror)) == []
+    mock.onerror.assert_called()
+    assert mock.onerror.call_args.kwargs == {}
+    assert len(mock.onerror.call_args.args) == 1
+    assert isinstance(mock.onerror.call_args.args[0], FileNotFoundError)
