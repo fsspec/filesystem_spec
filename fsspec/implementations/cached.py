@@ -150,7 +150,7 @@ class CachingFileSystem(AbstractFileSystem):
             # acts as a method, since each instance has a difference target
             return self.fs._strip_protocol(type(self)._strip_protocol(path))
 
-        self._strip_protocol = _strip_protocol
+        self._strip_protocol = _strip_protocol  # type: ignore[method-assign]
 
     def _mkcache(self):
         os.makedirs(self.storage[-1], exist_ok=True)
