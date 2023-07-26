@@ -308,6 +308,7 @@ def test_chained_equivalent():
     #  since the parameters don't quite match. Also, the url understood by the two
     #  of s are not the same (path gets munged a bit differently)
     assert of.fs == of2.fs
+    assert hash(of.fs) == hash(of2.fs)
     assert of.open().read() == of2.open().read()
 
 

@@ -8,7 +8,9 @@ import pytest
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
+from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
+from fsspec.implementations.local import make_path_posix
 
 from .test_ftp import FTPFileSystem
 
@@ -30,6 +32,61 @@ def local_filecache():
     )
 
     return data, original_file, cache_location, fs
+
+
+def test_mapper():
+    mapper0 = create_cache_mapper(True)
+    assert mapper0("/somedir/somefile") == "somefile"
+    assert mapper0("/otherdir/somefile") == "somefile"
+
+    mapper1 = create_cache_mapper(False)
+    assert (
+        mapper1("/somedir/somefile")
+        == "67a6956e5a5f95231263f03758c1fd9254fdb1c564d311674cec56b0372d2056"
+    )
+    assert (
+        mapper1("/otherdir/somefile")
+        == "f043dee01ab9b752c7f2ecaeb1a5e1b2d872018e2d0a1a26c43835ebf34e7d3e"
+    )
+
+    assert mapper0 != mapper1
+    assert create_cache_mapper(True) == mapper0
+    assert create_cache_mapper(False) == mapper1
+
+    assert hash(mapper0) != hash(mapper1)
+    assert hash(create_cache_mapper(True)) == hash(mapper0)
+    assert hash(create_cache_mapper(False)) == hash(mapper1)
+
+
+@pytest.mark.parametrize("same_names", [False, True])
+def test_metadata(tmpdir, same_names):
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=os.path.join(tmpdir, "cache"),
+        same_names=same_names,
+    )
+
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    afile_posix = make_path_posix(afile)
+    detail = fs.cached_files[0][afile_posix]
+    assert sorted(detail.keys()) == ["blocks", "fn", "original", "time", "uid"]
+    assert isinstance(detail["blocks"], bool)
+    assert isinstance(detail["fn"], str)
+    assert isinstance(detail["time"], float)
+    assert isinstance(detail["uid"], str)
+
+    assert detail["original"] == afile_posix
+    assert detail["fn"] == fs._mapper(afile_posix)
+    if same_names:
+        assert detail["fn"] == "afile"
 
 
 def test_idempotent():
@@ -154,7 +211,7 @@ def test_clear():
 
 
 def test_clear_expired(tmp_path):
-    def __ager(cache_fn, fn):
+    def __ager(cache_fn, fn, del_fn=False):
         """
         Modify the cache file to virtually add time lag to selected files.
 
@@ -164,6 +221,8 @@ def test_clear_expired(tmp_path):
             cache path
         fn: str
             file name to be modified
+        del_fn: bool
+            whether or not to delete 'fn' from cache details
         """
         import pathlib
         import time
@@ -174,6 +233,8 @@ def test_clear_expired(tmp_path):
                 fn_posix = pathlib.Path(fn).as_posix()
                 cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
             assert os.access(cache_fn, os.W_OK), "Cache is not writable"
+            if del_fn:
+                del cached_files[fn_posix]["fn"]
             with open(cache_fn, "wb") as f:
                 pickle.dump(cached_files, f)
             time.sleep(1)
@@ -254,6 +315,22 @@ def test_clear_expired(tmp_path):
 
     fs.clear_expired_cache()
     assert not fs._check_file(str(f4))
+
+    # check cache metadata lacking 'fn' raises RuntimeError.
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=str(cache1),
+        same_names=True,
+        cache_check=1,
+    )
+    assert fs.cat(str(f1)) == data
+
+    cache_fn = os.path.join(fs.storage[-1], "cache")
+    __ager(cache_fn, f1, del_fn=True)
+
+    with pytest.raises(RuntimeError, match="Cache metadata does not contain 'fn' for"):
+        fs.clear_expired_cache()
 
 
 def test_pop():
