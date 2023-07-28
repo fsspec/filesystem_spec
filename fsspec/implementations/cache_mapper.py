@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import abc
 import hashlib
-import os
 from typing import TYPE_CHECKING
+
+from fsspec.implementations.local import make_path_posix
 
 if TYPE_CHECKING:
     from typing import Any
@@ -48,7 +49,8 @@ class BasenameCacheMapper(AbstractCacheMapper):
         self._separator = "_@_"
 
     def __call__(self, path: str) -> str:
-        prefix, *bits = path.rsplit(os.sep, self.directory_levels + 1)
+        path = make_path_posix(path)
+        prefix, *bits = path.rsplit("/", self.directory_levels + 1)
         if bits:
             return self._separator.join(bits)
         else:

@@ -78,7 +78,6 @@ def test_mapper():
         BasenameCacheMapper(-1)
 
     mapper2 = BasenameCacheMapper(1)
-    assert mapper2("somefile") == "somefile"
     assert mapper2("/somefile") == "somefile"
     assert mapper2("/somedir/somefile") == "somedir_@_somefile"
     assert mapper2("/otherdir/somefile") == "otherdir_@_somefile"
@@ -93,7 +92,6 @@ def test_mapper():
     assert hash(BasenameCacheMapper(1)) == hash(mapper2)
 
     mapper3 = BasenameCacheMapper(2)
-    assert mapper3("somefile") == "somefile"
     assert mapper3("/somefile") == "somefile"
     assert mapper3("/somedir/somefile") == "somedir_@_somefile"
     assert mapper3("/otherdir/somefile") == "otherdir_@_somefile"
