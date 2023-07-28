@@ -40,10 +40,20 @@ def local_filecache():
 
 def test_mapper():
     mapper0 = create_cache_mapper(True)
+    assert mapper0("somefile") == "somefile"
+    assert mapper0("/somefile") == "somefile"
     assert mapper0("/somedir/somefile") == "somefile"
     assert mapper0("/otherdir/somefile") == "somefile"
 
     mapper1 = create_cache_mapper(False)
+    assert (
+        mapper1("somefile")
+        == "dd00b9487898b02555b6a2d90a070586d63f93e80c70aaa60c992fa9e81a72fe"
+    )
+    assert (
+        mapper1("/somefile")
+        == "884c07bc2efe65c60fb9d280a620e7f180488718fb5d97736521b7f9cf5c8b37"
+    )
     assert (
         mapper1("/somedir/somefile")
         == "67a6956e5a5f95231263f03758c1fd9254fdb1c564d311674cec56b0372d2056"
@@ -68,20 +78,36 @@ def test_mapper():
         BasenameCacheMapper(-1)
 
     mapper2 = BasenameCacheMapper(1)
+    assert mapper2("somefile") == "somefile"
+    assert mapper2("/somefile") == "somefile"
     assert mapper2("/somedir/somefile") == "somedir_@_somefile"
     assert mapper2("/otherdir/somefile") == "otherdir_@_somefile"
-
-    mapper2 = BasenameCacheMapper(2)
-    assert mapper2("/somedir/somefile") == "_@_somedir_@_somefile"
-    assert mapper2("/otherdir/somefile") == "_@_otherdir_@_somefile"
+    assert mapper2("/dir1/dir2/dir3/somefile") == "dir3_@_somefile"
 
     assert mapper2 != mapper0
     assert mapper2 != mapper1
-    assert BasenameCacheMapper(2) == mapper2
+    assert BasenameCacheMapper(1) == mapper2
 
     assert hash(mapper2) != hash(mapper0)
     assert hash(mapper2) != hash(mapper1)
-    assert hash(BasenameCacheMapper(2)) == hash(mapper2)
+    assert hash(BasenameCacheMapper(1)) == hash(mapper2)
+
+    mapper3 = BasenameCacheMapper(2)
+    assert mapper3("somefile") == "somefile"
+    assert mapper3("/somefile") == "somefile"
+    assert mapper3("/somedir/somefile") == "somedir_@_somefile"
+    assert mapper3("/otherdir/somefile") == "otherdir_@_somefile"
+    assert mapper3("/dir1/dir2/dir3/somefile") == "dir2_@_dir3_@_somefile"
+
+    assert mapper3 != mapper0
+    assert mapper3 != mapper1
+    assert mapper3 != mapper2
+    assert BasenameCacheMapper(2) == mapper3
+
+    assert hash(mapper3) != hash(mapper0)
+    assert hash(mapper3) != hash(mapper1)
+    assert hash(mapper3) != hash(mapper2)
+    assert hash(BasenameCacheMapper(2)) == hash(mapper3)
 
 
 @pytest.mark.parametrize(

@@ -48,14 +48,11 @@ class BasenameCacheMapper(AbstractCacheMapper):
         self._separator = "_@_"
 
     def __call__(self, path: str) -> str:
-        dirname, basename = os.path.split(path)
-
-        if self.directory_levels > 0:
-            dirs = dirname.split(os.sep)[-self.directory_levels :]
-            dirs.append(basename)
-            basename = self._separator.join(dirs)
-
-        return basename
+        prefix, *bits = path.rsplit(os.sep, self.directory_levels + 1)
+        if bits:
+            return self._separator.join(bits)
+        else:
+            return prefix  # No separator found, simple filename
 
     def __eq__(self, other: Any) -> bool:
         return super().__eq__(other) and self.directory_levels == other.directory_levels
