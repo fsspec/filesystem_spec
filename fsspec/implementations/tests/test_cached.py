@@ -68,12 +68,12 @@ def test_mapper():
         BasenameCacheMapper(-1)
 
     mapper2 = BasenameCacheMapper(1)
-    assert mapper2("/somedir/somefile") == "somedir_^_somefile"
-    assert mapper2("/otherdir/somefile") == "otherdir_^_somefile"
+    assert mapper2("/somedir/somefile") == "somedir_@_somefile"
+    assert mapper2("/otherdir/somefile") == "otherdir_@_somefile"
 
     mapper2 = BasenameCacheMapper(2)
-    assert mapper2("/somedir/somefile") == "_^_somedir_^_somefile"
-    assert mapper2("/otherdir/somefile") == "_^_otherdir_^_somefile"
+    assert mapper2("/somedir/somefile") == "_@_somedir_@_somefile"
+    assert mapper2("/otherdir/somefile") == "_@_otherdir_@_somefile"
 
     assert mapper2 != mapper0
     assert mapper2 != mapper1
@@ -118,7 +118,7 @@ def test_metadata(tmpdir, cache_mapper):
         if cache_mapper.directory_levels == 0:
             assert detail["fn"] == "afile"
         else:
-            assert detail["fn"] == "source_^_afile"
+            assert detail["fn"] == "source_@_afile"
 
 
 def test_constructor_kwargs(tmpdir):

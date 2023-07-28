@@ -45,7 +45,7 @@ class BasenameCacheMapper(AbstractCacheMapper):
         self.directory_levels = directory_levels
 
         # Separator for directories when encoded as strings.
-        self._separator = "_^_"
+        self._separator = "_@_"
 
     def __call__(self, path: str) -> str:
         dirname, basename = os.path.split(path)
