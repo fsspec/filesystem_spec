@@ -8,7 +8,7 @@ import pickle
 import tempfile
 import time
 from shutil import rmtree
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -150,7 +150,7 @@ class CachingFileSystem(AbstractFileSystem):
             # acts as a method, since each instance has a difference target
             return self.fs._strip_protocol(type(self)._strip_protocol(path))
 
-        self._strip_protocol = _strip_protocol  # type: ignore[method-assign]
+        self._strip_protocol: Callable = _strip_protocol
 
     def _mkcache(self):
         os.makedirs(self.storage[-1], exist_ok=True)
