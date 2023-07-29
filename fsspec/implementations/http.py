@@ -195,7 +195,6 @@ class HTTPFileSystem(AsyncFileSystem):
             return list(sorted(out))
 
     async def _ls(self, url, detail=True, **kwargs):
-
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
@@ -841,7 +840,10 @@ async def _file_info(url, session, size_policy="head", **kwargs):
         #                 or 'Accept-Ranges': 'none' (not 'bytes')
         #  to mean streaming only, no random access => return None
         if "Content-Length" in r.headers:
-            info["size"] = int(r.headers["Content-Length"])
+            # Some servers may choose to ignore Accept-Encoding and return
+            # compressed content, in which case the returned size is unreliable.
+            if r.headers.get("Content-Encoding", "identity") == "identity":
+                info["size"] = int(r.headers["Content-Length"])
         elif "Content-Range" in r.headers:
             info["size"] = int(r.headers["Content-Range"].split("/")[1])
 

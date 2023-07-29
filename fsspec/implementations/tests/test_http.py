@@ -10,6 +10,7 @@ import pytest
 
 import fsspec.asyn
 import fsspec.utils
+from fsspec.implementations.http import HTTPStreamFile
 from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
 
 
@@ -277,6 +278,18 @@ def test_content_length_zero(server):
     url = server + "/index/realfile"
 
     with h.open(url, "rb") as f:
+        assert f.read() == data
+
+
+def test_content_encoding_gzip(server):
+    h = fsspec.filesystem(
+        "http", headers={"give_length": "true", "gzip_encoding": "true"}
+    )
+    url = server + "/index/realfile"
+
+    with h.open(url, "rb") as f:
+        assert isinstance(f, HTTPStreamFile)
+        assert f.size is None
         assert f.read() == data
 
 
