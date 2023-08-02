@@ -51,6 +51,8 @@ The following libraries use ``fsspec`` internally for path and file handling:
    for machine learning projects
 #. `Kedro`_, a Python framework for reproducible,
    maintainable and modular data science code
+#. `pyxet`_, a Python library for mounting and 
+   accessing very large datasets from Xethub
 
 ``fsspec`` filesystems are also supported by:
 
@@ -66,6 +68,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
 .. _zarr: https://zarr.readthedocs.io/
 .. _DVC: https://dvc.org/
 .. _kedro: https://kedro.readthedocs.io/en/stable/01_introduction/01_introduction.html
+.. _pyxet: https://github.com/xetdata/pyxet
 .. _pyarrow: https://arrow.apache.org/docs/python/
 .. _petl: https://petl.readthedocs.io/en/stable/io.html#petl.io.remotes.RemoteSource
 
