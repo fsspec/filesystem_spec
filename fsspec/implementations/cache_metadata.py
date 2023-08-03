@@ -31,7 +31,7 @@ class CacheMetadata:
         ----------
         storage: list[str]
             Directories containing cached files, must be at least one. Metadata
-            is stored in the last of these directores by convention.
+            is stored in the last of these directories by convention.
         """
         if not storage:
             raise ValueError("CacheMetadata expects at least one storage location")
