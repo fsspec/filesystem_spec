@@ -3,7 +3,7 @@ import logging
 
 from .asyn import AsyncFileSystem
 from .callbacks import _DEFAULT_CALLBACK
-from .core import filesystem, get_filesystem_class, split_protocol
+from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
 
 _generic_fs = {}
 logger = logging.getLogger("fsspec.generic")
@@ -29,7 +29,8 @@ def _resolve_fs(url, method=None, protocol=None, storage_options=None):
         cls = get_filesystem_class(protocol)
         return cls.current()
     if method == "options":
-        return filesystem(protocol, **storage_options.get(protocol, {}))
+        fs, _ = url_to_fs(url, **storage_options.get(protocol, {}))
+        return fs
     raise ValueError(f"Unknown FS resolution method: {method}")
 
 
