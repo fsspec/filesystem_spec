@@ -51,7 +51,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
    for machine learning projects
 #. `Kedro`_, a Python framework for reproducible,
    maintainable and modular data science code
-#. `pyxet`_, a Python library for mounting and 
+#. `pyxet`_, a Python library for mounting and
    accessing very large datasets from Xethub
 
 ``fsspec`` filesystems are also supported by:
