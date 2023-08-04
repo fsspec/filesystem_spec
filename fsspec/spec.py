@@ -1113,7 +1113,7 @@ class AbstractFileSystem(metaclass=_Cached):
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if has_magic(p):
-                    bit = set(self.glob(p, **kwargs))
+                    bit = set(self.glob(p, maxdepth=maxdepth, **kwargs))
                     out |= bit
                     if recursive:
                         # glob call above expanded one depth so if maxdepth is defined

@@ -467,13 +467,34 @@ class DummyTestFS(AbstractFileSystem):
                 "top_level/second_level/date=2019-10-04/a.parquet",
             ],
         ),
-        (("misc/foo.txt", "misc/*.txt"), ["misc/foo.txt"]),
+        (
+            ("top_level/**",),
+            [
+                "top_level",
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (
+            ("top_level/**/a.*",),
+            [
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        [("misc/foo.txt", "misc/*.txt"), ["misc/foo.txt"]],
         (
             ("",),
             DummyTestFS.get_test_paths() + [DummyTestFS.root_marker],
         ),
     ],
-    # ids=["all_second_level", "single_file"],
 )
 def test_expand_path_recursive(test_paths, expected):
     """Test a number of paths and then their combination which should all yield
@@ -489,36 +510,90 @@ def test_expand_path_recursive(test_paths, expected):
     paths = test_fs.expand_path(list(test_paths), recursive=True)
     assert sorted(paths) == sorted(expected)
 
-    # test with maxdepth
-    assert test_fs.expand_path("top_level", recursive=True, maxdepth=1) == [
-        "top_level",
-        "top_level/second_level",
-    ]
 
-    assert test_fs.expand_path("top_level", recursive=True, maxdepth=2) == [
-        "top_level",
-        "top_level/second_level",
-        "top_level/second_level/date=2019-10-01",
-        "top_level/second_level/date=2019-10-02",
-        "top_level/second_level/date=2019-10-04",
-    ]
+@pytest.mark.parametrize(
+    ("path", "maxdepth", "expected"),
+    [
+        ("top_level", 1, ["top_level", "top_level/second_level"]),
+        (
+            "top_level",
+            2,
+            [
+                "top_level",
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-04",
+            ],
+        ),
+        (
+            "top_level",
+            3,
+            [
+                "top_level",
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        ("top_level/*", 1, ["top_level/second_level"]),
+        (
+            "top_level/*",
+            2,
+            [
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-04",
+            ],
+        ),
+        ("top_level/**", 1, ["top_level", "top_level/second_level"]),
+        (
+            "top_level/**",
+            2,
+            [
+                "top_level",
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (
+            "top_level/**/second_level/date=2019-10-02",
+            2,
+            [
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+            ],
+        ),
+    ],
+)
+def test_expand_path_with_maxdepth(path, maxdepth, expected):
+    test_fs = DummyTestFS()
 
-    assert test_fs.expand_path("top_level", recursive=True, maxdepth=3) == [
-        "top_level",
-        "top_level/second_level",
-        "top_level/second_level/date=2019-10-01",
-        "top_level/second_level/date=2019-10-01/a.parquet",
-        "top_level/second_level/date=2019-10-01/b.parquet",
-        "top_level/second_level/date=2019-10-02",
-        "top_level/second_level/date=2019-10-02/a.parquet",
-        "top_level/second_level/date=2019-10-04",
-        "top_level/second_level/date=2019-10-04/a.parquet",
-    ]
+    output = test_fs.expand_path(path, recursive=True, maxdepth=maxdepth)
+    assert sorted(output) == sorted(expected)
+
+
+def test_expand_paths_with_wrong_maxdepth():
+    test_fs = DummyTestFS()
 
     with pytest.raises(ValueError):
         test_fs.expand_path("top_level", recursive=True, maxdepth=0)
     with pytest.raises(ValueError):
         test_fs.expand_path("top_level", maxdepth=0)
+    with pytest.raises(FileNotFoundError):
+        test_fs.expand_path("top_level/**/second_level/date=2019-10-02", maxdepth=1)
 
 
 @pytest.mark.xfail
