@@ -65,10 +65,6 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return [posixpath.join(path, f) for f in os.listdir(path)]
 
-    def glob(self, path, **kwargs):
-        path = self._strip_protocol(path)
-        return super().glob(path, **kwargs)
-
     def info(self, path, **kwargs):
         if isinstance(path, os.DirEntry):
             # scandir DirEntry
