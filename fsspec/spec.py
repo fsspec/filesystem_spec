@@ -486,6 +486,12 @@ class AbstractFileSystem(metaclass=_Cached):
         # TODO: allow equivalent of -name parameter
         path = self._strip_protocol(path)
         out = dict()
+
+        # Add the root directory if withdirs is requested
+        # This is needed for posix glob compliance
+        if withdirs and self.isdir(path):
+            out[path] = self.info(path)
+
         for _, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
                 files.update(dirs)
@@ -609,14 +615,20 @@ class AbstractFileSystem(metaclass=_Cached):
             )
             + "$"
         )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
+        pattern = re.sub("/[*]{2}", "=SLASH_DOUBLE_STARS=", pattern)
+        pattern = re.sub("[*]{2}", "=DOUBLE_STARS=", pattern)
         pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+        pattern = re.sub("=SLASH_DOUBLE_STARS=", "(|/.*)", pattern)
+        pattern = re.sub("=DOUBLE_STARS=", ".*", pattern)
+        pattern = re.compile(pattern)
+
         out = {
             p: allpaths[p]
             for p in sorted(allpaths)
             if pattern.match(p.replace("//", "/").rstrip("/"))
         }
+        if ends:
+            out = {k: v for k, v in out.items() if v["type"] == "directory"}
         if detail:
             return out
         else:
