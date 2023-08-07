@@ -616,7 +616,7 @@ class AbstractFileSystem(metaclass=_Cached):
             + "$"
         )
         pattern = re.sub("/[*]{2}", "=SLASH_DOUBLE_STARS=", pattern)
-        pattern = re.sub("[*]{2}", "=DOUBLE_STARS=", pattern)
+        pattern = re.sub("[*]{2}/?", "=DOUBLE_STARS=", pattern)
         pattern = re.sub("[*]", "[^/]*", pattern)
         pattern = re.sub("=SLASH_DOUBLE_STARS=", "(|/.*)", pattern)
         pattern = re.sub("=DOUBLE_STARS=", ".*", pattern)
