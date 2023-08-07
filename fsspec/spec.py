@@ -958,7 +958,6 @@ class AbstractFileSystem(metaclass=_Cached):
             rpaths,
             lpath,
             exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(rpath),
-            is_dir=isdir,
             flatten=not source_is_str,
         )
 
@@ -1032,7 +1031,6 @@ class AbstractFileSystem(metaclass=_Cached):
             lpaths,
             rpath,
             exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
-            is_dir=isdir,
             flatten=not source_is_str,
         )
 
@@ -1085,7 +1083,6 @@ class AbstractFileSystem(metaclass=_Cached):
             paths,
             path2,
             exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
-            is_dir=isdir,
             flatten=not source_is_str,
         )
 

@@ -364,7 +364,6 @@ class AsyncFileSystem(AbstractFileSystem):
             paths,
             path2,
             exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
-            is_dir=isdir,
             flatten=not source_is_str,
         )
         batch_size = batch_size or self.batch_size
@@ -522,7 +521,6 @@ class AsyncFileSystem(AbstractFileSystem):
             lpaths,
             rpath,
             exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
-            is_dir=isdir,
             flatten=not source_is_str,
         )
 
@@ -592,7 +590,6 @@ class AsyncFileSystem(AbstractFileSystem):
             rpaths,
             lpath,
             exists=isdir and source_not_trailing_sep,
-            is_dir=isdir,
             flatten=not source_is_str,
         )
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
