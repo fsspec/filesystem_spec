@@ -14,6 +14,352 @@ from fsspec.implementations.http import HTTPFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
+PATHS_FOR_GLOB_TESTS = (
+    {"name": "test0.json", "type": "file", "size": 100},
+    {"name": "test0.yaml", "type": "file", "size": 100},
+    {"name": "test0", "type": "directory", "size": 0},
+    {"name": "test0/test0.json", "type": "file", "size": 100},
+    {"name": "test0/test0.yaml", "type": "file", "size": 100},
+    {"name": "test0/test1", "type": "directory", "size": 0},
+    {"name": "test0/test1/test0.json", "type": "file", "size": 100},
+    {"name": "test0/test1/test0.yaml", "type": "file", "size": 100},
+    {"name": "test0/test1/test2", "type": "directory", "size": 0},
+    {"name": "test0/test1/test2/test0.json", "type": "file", "size": 100},
+    {"name": "test0/test1/test2/test0.yaml", "type": "file", "size": 100},
+    {"name": "test0/test2", "type": "directory", "size": 0},
+    {"name": "test0/test2/test0.json", "type": "file", "size": 100},
+    {"name": "test0/test2/test0.yaml", "type": "file", "size": 100},
+    {"name": "test0/test2/test1", "type": "directory", "size": 0},
+    {"name": "test0/test2/test1/test0.json", "type": "file", "size": 100},
+    {"name": "test0/test2/test1/test0.yaml", "type": "file", "size": 100},
+    {"name": "test0/test2/test1/test3", "type": "directory", "size": 0},
+    {"name": "test0/test2/test1/test3/test0.json", "type": "file", "size": 100},
+    {"name": "test0/test2/test1/test3/test0.yaml", "type": "file", "size": 100},
+    {"name": "test1.json", "type": "file", "size": 100},
+    {"name": "test1.yaml", "type": "file", "size": 100},
+    {"name": "test1", "type": "directory", "size": 0},
+    {"name": "test1/test0.json", "type": "file", "size": 100},
+    {"name": "test1/test0.yaml", "type": "file", "size": 100},
+    {"name": "test1/test0", "type": "directory", "size": 0},
+    {"name": "test1/test0/test0.json", "type": "file", "size": 100},
+    {"name": "test1/test0/test0.yaml", "type": "file", "size": 100},
+    {"name": "special_chars", "type": "directory", "size": 0},
+    {"name": "special_chars/f\\oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f.oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f+oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f(oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f)oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f|oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f^oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f$oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f{oo.txt", "type": "file", "size": 100},
+    {"name": "special_chars/f}oo.txt", "type": "file", "size": 100},
+)
+
+GLOB_POSIX_TESTS = [
+    ("nonexistent", []),
+    ("test0.json", ["test0.json"]),
+    ("test0/test[1-2]", ["test0/test1", "test0/test2"]),
+    ("test0/test[1-2]/", ["test0/test1", "test0/test2"]),
+    (
+        "test0/test[1-2]/*",
+        [
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test2/test0.json",
+            "test0/test2/test0.yaml",
+            "test0/test2/test1",
+        ],
+    ),
+    ("test0/test[1-2]/*.[j]*", ["test0/test1/test0.json", "test0/test2/test0.json"]),
+    ("special_chars/f\\oo.*", ["special_chars/f\\oo.txt"]),
+    ("special_chars/f.oo.*", ["special_chars/f.oo.txt"]),
+    ("special_chars/f+oo.*", ["special_chars/f+oo.txt"]),
+    ("special_chars/f(oo.*", ["special_chars/f(oo.txt"]),
+    ("special_chars/f)oo.*", ["special_chars/f)oo.txt"]),
+    ("special_chars/f|oo.*", ["special_chars/f|oo.txt"]),
+    ("special_chars/f^oo.*", ["special_chars/f^oo.txt"]),
+    ("special_chars/f$oo.*", ["special_chars/f$oo.txt"]),
+    ("special_chars/f{oo.*", ["special_chars/f{oo.txt"]),
+    ("special_chars/f}oo.*", ["special_chars/f}oo.txt"]),
+    (
+        "*",
+        [
+            "special_chars",
+            "test0.json",
+            "test0.yaml",
+            "test0",
+            "test1.json",
+            "test1.yaml",
+            "test1",
+        ],
+    ),
+    ("*.yaml", ["test0.yaml", "test1.yaml"]),
+    (
+        "**",
+        [
+            "special_chars",
+            "special_chars/f$oo.txt",
+            "special_chars/f(oo.txt",
+            "special_chars/f)oo.txt",
+            "special_chars/f+oo.txt",
+            "special_chars/f.oo.txt",
+            "special_chars/f\\oo.txt",
+            "special_chars/f^oo.txt",
+            "special_chars/f{oo.txt",
+            "special_chars/f|oo.txt",
+            "special_chars/f}oo.txt",
+            "test0.json",
+            "test0.yaml",
+            "test0",
+            "test0/test0.json",
+            "test0/test0.yaml",
+            "test0/test1",
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test1/test2/test0.json",
+            "test0/test1/test2/test0.yaml",
+            "test0/test2",
+            "test0/test2/test0.json",
+            "test0/test2/test0.yaml",
+            "test0/test2/test1",
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+            "test0/test2/test1/test3/test0.json",
+            "test0/test2/test1/test3/test0.yaml",
+            "test1.json",
+            "test1.yaml",
+            "test1",
+            "test1/test0.json",
+            "test1/test0.yaml",
+            "test1/test0",
+            "test1/test0/test0.json",
+            "test1/test0/test0.yaml",
+        ],
+    ),
+    ("*/", ["special_chars", "test0", "test1"]),
+    (
+        "**/",
+        [
+            "special_chars",
+            "test0",
+            "test0/test1",
+            "test0/test1/test2",
+            "test0/test2",
+            "test0/test2/test1",
+            "test0/test2/test1/test3",
+            "test1",
+            "test1/test0",
+        ],
+    ),
+    ("*/*.yaml", ["test0/test0.yaml", "test1/test0.yaml"]),
+    (
+        "**/*.yaml",
+        [
+            "test0.yaml",
+            "test0/test0.yaml",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2/test0.yaml",
+            "test0/test2/test0.yaml",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3/test0.yaml",
+            "test1.yaml",
+            "test1/test0.yaml",
+            "test1/test0/test0.yaml",
+        ],
+    ),
+    (
+        "*/test1/*",
+        ["test0/test1/test0.json", "test0/test1/test0.yaml", "test0/test1/test2"],
+    ),
+    ("*/test1/*.yaml", ["test0/test1/test0.yaml"]),
+    (
+        "**/test1/*",
+        [
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+            "test1/test0.json",
+            "test1/test0.yaml",
+            "test1/test0",
+        ],
+    ),
+    (
+        "**/test1/*.yaml",
+        ["test0/test1/test0.yaml", "test0/test2/test1/test0.yaml", "test1/test0.yaml"],
+    ),
+    ("*/test1/*/", ["test0/test1/test2"]),
+    ("**/test1/*/", ["test0/test1/test2", "test0/test2/test1/test3", "test1/test0"]),
+    (
+        "*/test1/**",
+        [
+            "test0/test1",
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test1/test2/test0.json",
+            "test0/test1/test2/test0.yaml",
+        ],
+    ),
+    (
+        "**/test1/**",
+        [
+            "test0/test1",
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test1/test2/test0.json",
+            "test0/test1/test2/test0.yaml",
+            "test0/test2/test1",
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+            "test0/test2/test1/test3/test0.json",
+            "test0/test2/test1/test3/test0.yaml",
+            "test1",
+            "test1/test0.json",
+            "test1/test0.yaml",
+            "test1/test0",
+            "test1/test0/test0.json",
+            "test1/test0/test0.yaml",
+        ],
+    ),
+    ("*/test1/**/", ["test0/test1", "test0/test1/test2"]),
+    (
+        "**/test1/**/",
+        [
+            "test0/test1",
+            "test0/test1/test2",
+            "test0/test2/test1",
+            "test0/test2/test1/test3",
+            "test1",
+            "test1/test0",
+        ],
+    ),
+    ("test0", ["test0"]),
+    ("test0/", ["test0"]),
+    ("test1/test0.yaml", ["test1/test0.yaml"]),
+    ("test0/*", ["test0/test0.json", "test0/test0.yaml", "test0/test1", "test0/test2"]),
+    ("test0/*.yaml", ["test0/test0.yaml"]),
+    (
+        "test0/**",
+        [
+            "test0",
+            "test0/test0.json",
+            "test0/test0.yaml",
+            "test0/test1",
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test1/test2/test0.json",
+            "test0/test1/test2/test0.yaml",
+            "test0/test2",
+            "test0/test2/test0.json",
+            "test0/test2/test0.yaml",
+            "test0/test2/test1",
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+            "test0/test2/test1/test3/test0.json",
+            "test0/test2/test1/test3/test0.yaml",
+        ],
+    ),
+    ("test0/*/", ["test0/test1", "test0/test2"]),
+    (
+        "test0/**/",
+        [
+            "test0",
+            "test0/test1",
+            "test0/test1/test2",
+            "test0/test2",
+            "test0/test2/test1",
+            "test0/test2/test1/test3",
+        ],
+    ),
+    ("test0/*/*.yaml", ["test0/test1/test0.yaml", "test0/test2/test0.yaml"]),
+    (
+        "test0/**/*.yaml",
+        [
+            "test0/test0.yaml",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2/test0.yaml",
+            "test0/test2/test0.yaml",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3/test0.yaml",
+        ],
+    ),
+    (
+        "test0/*/test1/*",
+        [
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+        ],
+    ),
+    ("test0/*/test1/*.yaml", ["test0/test2/test1/test0.yaml"]),
+    (
+        "test0/**/test1/*",
+        [
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+        ],
+    ),
+    (
+        "test0/**/test1/*.yaml",
+        ["test0/test1/test0.yaml", "test0/test2/test1/test0.yaml"],
+    ),
+    ("test0/*/test1/*/", ["test0/test2/test1/test3"]),
+    ("test0/**/test1/*/", ["test0/test1/test2", "test0/test2/test1/test3"]),
+    (
+        "test0/*/test1/**",
+        [
+            "test0/test2/test1",
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+            "test0/test2/test1/test3/test0.json",
+            "test0/test2/test1/test3/test0.yaml",
+        ],
+    ),
+    (
+        "test0/**/test1/**",
+        [
+            "test0/test1",
+            "test0/test1/test0.json",
+            "test0/test1/test0.yaml",
+            "test0/test1/test2",
+            "test0/test1/test2/test0.json",
+            "test0/test1/test2/test0.yaml",
+            "test0/test2/test1",
+            "test0/test2/test1/test0.json",
+            "test0/test2/test1/test0.yaml",
+            "test0/test2/test1/test3",
+            "test0/test2/test1/test3/test0.json",
+            "test0/test2/test1/test3/test0.yaml",
+        ],
+    ),
+    ("test0/*/test1/**/", ["test0/test2/test1", "test0/test2/test1/test3"]),
+    (
+        "test0/**/test1/**/",
+        [
+            "test0/test1",
+            "test0/test1/test2",
+            "test0/test2/test1",
+            "test0/test2/test1/test3",
+        ],
+    ),
+]
+
 
 class DummyTestFS(AbstractFileSystem):
     protocol = "mock"
@@ -46,16 +392,12 @@ class DummyTestFS(AbstractFileSystem):
         },
         {"name": "misc", "type": "directory"},
         {"name": "misc/foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test", "type": "directory", "size": 0},
-        {"name": "glob_test/hat", "type": "directory", "size": 0},
-        {"name": "glob_test/hat/^foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test/dollar", "type": "directory", "size": 0},
-        {"name": "glob_test/dollar/$foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test/lbrace", "type": "directory", "size": 0},
-        {"name": "glob_test/lbrace/{foo.txt", "type": "file", "size": 100},
-        {"name": "glob_test/rbrace", "type": "directory", "size": 0},
-        {"name": "glob_test/rbrace/}foo.txt", "type": "file", "size": 100},
     )
+
+    def __init__(self, fs_content=None, **kwargs):
+        if fs_content is not None:
+            self._fs_contents = fs_content
+        super().__init__(**kwargs)
 
     def __getitem__(self, name):
         for item in self._fs_contents:
@@ -107,64 +449,6 @@ class DummyTestFS(AbstractFileSystem):
             cache_options=cache_options,
             **kwargs,
         )
-
-
-@pytest.mark.parametrize(
-    "test_path, expected",
-    [
-        (
-            "mock://top_level/second_level/date=2019-10-01/a.parquet",
-            ["top_level/second_level/date=2019-10-01/a.parquet"],
-        ),
-        (
-            "mock://top_level/second_level/date=2019-10-01/*",
-            [
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-01/b.parquet",
-            ],
-        ),
-        ("mock://top_level/second_level/date=2019-10", []),
-        (
-            "mock://top_level/second_level/date=2019-10-0[1-4]",
-            [
-                "top_level/second_level/date=2019-10-01",
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-04",
-            ],
-        ),
-        (
-            "mock://top_level/second_level/date=2019-10-0[1-4]/*",
-            [
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-01/b.parquet",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-                "top_level/second_level/date=2019-10-04/a.parquet",
-            ],
-        ),
-        (
-            "mock://top_level/second_level/date=2019-10-0[1-4]/[a].*",
-            [
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-                "top_level/second_level/date=2019-10-04/a.parquet",
-            ],
-        ),
-        ("mock://glob_test/hat/^foo.*", ["glob_test/hat/^foo.txt"]),
-        ("mock://glob_test/dollar/$foo.*", ["glob_test/dollar/$foo.txt"]),
-        ("mock://glob_test/lbrace/{foo.*", ["glob_test/lbrace/{foo.txt"]),
-        ("mock://glob_test/rbrace/}foo.*", ["glob_test/rbrace/}foo.txt"]),
-    ],
-)
-def test_glob(test_path, expected):
-    test_fs = DummyTestFS()
-    res = test_fs.glob(test_path)
-    res = sorted(res)  # FIXME: py35 back-compat
-    assert res == expected
-    res = test_fs.glob(test_path, detail=True)
-    assert isinstance(res, dict)
-    assert sorted(res) == expected  # FIXME: py35 back-compat
-    for name, info in res.items():
-        assert info == test_fs[name]
 
 
 @pytest.mark.parametrize(
@@ -345,7 +629,6 @@ def tests_file_open_error(monkeypatch):
         ...
 
     class DummyBufferedFile(AbstractBufferedFile):
-
         can_initiate = False
 
         def _initiate_upload(self):
@@ -616,498 +899,254 @@ def test_dummy_callbacks_files_branched(tmpdir):
     callback.events.clear()
 
 
-# Temp location
-ALL_PATHS = [
-    "ab.json",
-    "ab.yaml",
-    "ab/ab.json",
-    "ab/ab.yaml",
-    "ab/cd/ab.json",
-    "ab/cd/ab.yaml",
-    "ab/cd/ef/ab.json",
-    "ab/cd/ef/ab.yaml",
-    "ab/ef/ab.json",
-    "ab/ef/ab.yaml",
-    "ab/ef/cd/ab.json",
-    "ab/ef/cd/ab.yaml",
-    "ab/ef/cd/gh/ab.json",
-    "ab/ef/cd/gh/ab.yaml",
-    "cd.json",
-    "cd.yaml",
-    "cd/ab.json",
-    "cd/ab.yaml",
-    "cd/ab/ab.json",
-    "cd/ab/ab.yaml",
-]
+def _clean_paths(paths, prefix=""):
+    """
+    Helper to cleanup paths results by doing the following:
+      - remove the prefix provided from all paths
+      - remove the trailing slashes from all paths
+      - remove duplicates paths
+      - remove empty paths after removing the prefix
+      - sort all paths
+    """
+    paths_list = paths
+    if isinstance(paths, dict):
+        paths_list = list(paths)
+    paths_list = [p.replace(prefix, "").strip("/") for p in paths_list]
+    paths_list = [p for p in sorted(set(paths_list)) if p]
+    if isinstance(paths, dict):
+        return {p: paths[p] for p in paths_list}
+    return paths_list
 
 
 @pytest.fixture(scope="function")
 def local_fake_dir(tmp_path):
     fs = LocalFileSystem(auto_mkdir=True)
-    for path in ALL_PATHS:
-        fs.touch(path=f"{str(tmp_path)}/{path}")
-    os.chdir(tmp_path)
+    for path_info in PATHS_FOR_GLOB_TESTS:
+        if path_info["type"] == "file":
+            fs.touch(path=f"{str(tmp_path)}/{path_info['name']}")
     return str(tmp_path)
 
 
+@pytest.fixture(scope="function")
+def glob_fs():
+    return DummyTestFS(fs_content=PATHS_FOR_GLOB_TESTS)
+
+
 @pytest.mark.parametrize(
     ("path", "expected"),
-    [
-        (
-            "*",
-            [
-                "ab.json",
-                "ab.yaml",
-                "ab",
-                "cd.json",
-                "cd.yaml",
-                "cd",
-            ],
-        ),
-        (
-            "*.yaml",
-            [
-                "ab.yaml",
-                "cd.yaml",
-            ],
-        ),
-        (
-            "**",
-            [
-                "ab.json",
-                "ab.yaml",
-                "ab",
-                "ab/ab.json",
-                "ab/ab.yaml",
-                "ab/cd",
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-                "ab/cd/ef/ab.json",
-                "ab/cd/ef/ab.yaml",
-                "ab/ef",
-                "ab/ef/ab.json",
-                "ab/ef/ab.yaml",
-                "ab/ef/cd",
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-                "ab/ef/cd/gh/ab.json",
-                "ab/ef/cd/gh/ab.yaml",
-                "cd.json",
-                "cd.yaml",
-                "cd",
-                "cd/ab.json",
-                "cd/ab.yaml",
-                "cd/ab",
-                "cd/ab/ab.json",
-                "cd/ab/ab.yaml",
-            ],
-        ),
-        (
-            "*/",
-            [
-                "ab",
-                "cd",
-            ],
-        ),
-        (
-            "**/",
-            [
-                "ab",
-                "ab/cd",
-                "ab/cd/ef",
-                "ab/ef",
-                "ab/ef/cd",
-                "ab/ef/cd/gh",
-                "cd",
-                "cd/ab",
-            ],
-        ),
-        (
-            "*/*.yaml",
-            [
-                "ab/ab.yaml",
-                "cd/ab.yaml",
-            ],
-        ),
-        (
-            "**/*.yaml",
-            [
-                "ab.yaml",
-                "ab/ab.yaml",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef/ab.yaml",
-                "ab/ef/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh/ab.yaml",
-                "cd.yaml",
-                "cd/ab.yaml",
-                "cd/ab/ab.yaml",
-            ],
-        ),
-        (
-            "*/cd/*",
-            [
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-            ],
-        ),
-        (
-            "*/cd/*.yaml",
-            [
-                "ab/cd/ab.yaml",
-            ],
-        ),
-        (
-            "**/cd/*",
-            [
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-                "cd/ab.json",
-                "cd/ab.yaml",
-                "cd/ab",
-            ],
-        ),
-        (
-            "**/cd/*.yaml",
-            [
-                "ab/cd/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-                "cd/ab.yaml",
-            ],
-        ),
-        (
-            "*/cd/*/",
-            [
-                "ab/cd/ef",
-            ],
-        ),
-        (
-            "**/cd/*/",
-            [
-                "ab/cd/ef",
-                "ab/ef/cd/gh",
-                "cd/ab",
-            ],
-        ),
-        (
-            "*/cd/**",
-            [
-                "ab/cd",
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-                "ab/cd/ef/ab.json",
-                "ab/cd/ef/ab.yaml",
-            ],
-        ),
-        (
-            "**/cd/**",
-            [
-                "ab/cd",
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-                "ab/cd/ef/ab.json",
-                "ab/cd/ef/ab.yaml",
-                "ab/ef/cd",
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-                "ab/ef/cd/gh/ab.json",
-                "ab/ef/cd/gh/ab.yaml",
-                "cd",
-                "cd/ab.json",
-                "cd/ab.yaml",
-                "cd/ab",
-                "cd/ab/ab.json",
-                "cd/ab/ab.yaml",
-            ],
-        ),
-        (
-            "*/cd/**/",
-            [
-                "ab/cd",
-                "ab/cd/ef",
-            ],
-        ),
-        (
-            "**/cd/**/",
-            [
-                "ab/cd",
-                "ab/cd/ef",
-                "ab/ef/cd",
-                "ab/ef/cd/gh",
-                "cd",
-                "cd/ab",
-            ],
-        ),
-        (
-            "ab/*",
-            [
-                "ab/ab.json",
-                "ab/ab.yaml",
-                "ab/cd",
-                "ab/ef",
-            ],
-        ),
-        (
-            "ab/*.yaml",
-            [
-                "ab/ab.yaml",
-            ],
-        ),
-        (
-            "ab/**",
-            [
-                "ab",
-                "ab/ab.json",
-                "ab/ab.yaml",
-                "ab/cd",
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-                "ab/cd/ef/ab.json",
-                "ab/cd/ef/ab.yaml",
-                "ab/ef",
-                "ab/ef/ab.json",
-                "ab/ef/ab.yaml",
-                "ab/ef/cd",
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-                "ab/ef/cd/gh/ab.json",
-                "ab/ef/cd/gh/ab.yaml",
-            ],
-        ),
-        (
-            "ab/*/",
-            [
-                "ab/cd",
-                "ab/ef",
-            ],
-        ),
-        (
-            "ab/**/",
-            [
-                "ab",
-                "ab/cd",
-                "ab/cd/ef",
-                "ab/ef",
-                "ab/ef/cd",
-                "ab/ef/cd/gh",
-            ],
-        ),
-        (
-            "ab/*/*.yaml",
-            [
-                "ab/cd/ab.yaml",
-                "ab/ef/ab.yaml",
-            ],
-        ),
-        (
-            "ab/**/*.yaml",
-            [
-                "ab/ab.yaml",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef/ab.yaml",
-                "ab/ef/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh/ab.yaml",
-            ],
-        ),
-        (
-            "ab/*/cd/*",
-            [
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-            ],
-        ),
-        (
-            "ab/*/cd/*.yaml",
-            [
-                "ab/ef/cd/ab.yaml",
-            ],
-        ),
-        (
-            "ab/**/cd/*",
-            [
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-            ],
-        ),
-        (
-            "ab/**/cd/*.yaml",
-            [
-                "ab/cd/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-            ],
-        ),
-        (
-            "ab/*/cd/*/",
-            [
-                "ab/ef/cd/gh",
-            ],
-        ),
-        (
-            "ab/**/cd/*/",
-            [
-                "ab/cd/ef",
-                "ab/ef/cd/gh",
-            ],
-        ),
-        (
-            "ab/*/cd/**",
-            [
-                "ab/ef/cd",
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-                "ab/ef/cd/gh/ab.json",
-                "ab/ef/cd/gh/ab.yaml",
-            ],
-        ),
-        (
-            "ab/**/cd/**",
-            [
-                "ab/cd",
-                "ab/cd/ab.json",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef",
-                "ab/cd/ef/ab.json",
-                "ab/cd/ef/ab.yaml",
-                "ab/ef/cd",
-                "ab/ef/cd/ab.json",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh",
-                "ab/ef/cd/gh/ab.json",
-                "ab/ef/cd/gh/ab.yaml",
-            ],
-        ),
-        (
-            "ab/*/cd/**/",
-            [
-                "ab/ef/cd",
-                "ab/ef/cd/gh",
-            ],
-        ),
-        (
-            "ab/**/cd/**/",
-            [
-                "ab/cd",
-                "ab/cd/ef",
-                "ab/ef/cd",
-                "ab/ef/cd/gh",
-            ],
-        ),
-    ],
+    GLOB_POSIX_TESTS,
 )
-def test_glob_is_posix_compliant(path, expected, local_fake_dir):
-    def clean_paths(paths):
-        paths = [p.replace(local_fake_dir, "").strip("/") for p in paths]
-        return [p for p in sorted(set(paths)) if p]
+def test_posix_tests(path, expected, local_fake_dir):
+    """
+    Tests against python glob and bash stat to check if our posix tests are accurate.
+    """
+    abs_path = f"{local_fake_dir}/{path}"
 
-    for path in [path, f"{local_fake_dir}/{path}"]:
-        # Test python glob
-        python_output = glob.glob(pathname=path, recursive=True)
-        assert clean_paths(python_output) == clean_paths(expected)
+    # Test python glob
+    python_output = glob.glob(pathname=abs_path, recursive=True)
+    assert _clean_paths(python_output, local_fake_dir) == _clean_paths(expected)
 
-        # Test bash glob
-        bash_output = subprocess.run(
-            ["bash", "-c", f"shopt -s globstar && stat -c %N {path}"],
-            capture_output=True,
-        )
-        bash_output = bash_output.stdout.decode("utf-8").replace("'", "").split("\n")
-        assert clean_paths(bash_output) == clean_paths(expected)
+    # Test bash glob
+    bash_abs_path = (
+        abs_path.replace("\\", "\\\\")
+        .replace("$", "\\$")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace("|", "\\|")
+    )
+    bash_output = subprocess.run(
+        ["bash", "-c", f"shopt -s globstar && stat -c %N {bash_abs_path}"],
+        capture_output=True,
+    )
+    bash_output = bash_output.stdout.decode("utf-8").replace("'", "").split("\n")
+    assert _clean_paths(bash_output, local_fake_dir) == _clean_paths(expected)
 
-        # Test local fs glob
-        fs = LocalFileSystem()
-        fs_output = fs.glob(path=path)
-        assert clean_paths(fs_output) == clean_paths(expected)
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    GLOB_POSIX_TESTS,
+)
+def test_glob_posix_compliance(path, expected, glob_fs):
+    output = glob_fs.glob(path=f"mock://{path}")
+    assert _clean_paths(output) == _clean_paths(expected)
+
+    detailed_output = glob_fs.glob(path=f"mock://{path}", detail=True)
+    for name, info in _clean_paths(detailed_output).items():
+        assert info == glob_fs[name]
 
 
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
+        (
+            "test1**",
+            [
+                "test1",
+                "test1.json",
+                "test1.yaml",
+                "test1/test0",
+                "test1/test0.json",
+                "test1/test0.yaml",
+                "test1/test0/test0.json",
+                "test1/test0/test0.yaml",
+            ],
+        ),
+        ("test1**/", ["test1", "test1/test0"]),
         (
             "**.yaml",
             [
-                "ab.yaml",
-                "ab/ab.yaml",
-                "ab/cd/ab.yaml",
-                "ab/cd/ef/ab.yaml",
-                "ab/ef/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh/ab.yaml",
-                "cd.yaml",
-                "cd/ab.yaml",
-                "cd/ab/ab.yaml",
+                "test0.yaml",
+                "test0/test0.yaml",
+                "test0/test1/test0.yaml",
+                "test0/test1/test2/test0.yaml",
+                "test0/test2/test0.yaml",
+                "test0/test2/test1/test0.yaml",
+                "test0/test2/test1/test3/test0.yaml",
+                "test1.yaml",
+                "test1/test0.yaml",
+                "test1/test0/test0.yaml",
+            ],
+        ),
+        ("**1/", ["test0/test1", "test0/test2/test1", "test1"]),
+        (
+            "**1/*.yaml",
+            [
+                "test0/test1/test0.yaml",
+                "test0/test2/test1/test0.yaml",
+                "test1/test0.yaml",
             ],
         ),
         (
-            "**d/",
+            "test0**1**.yaml",
             [
-                "ab/cd",
-                "ab/ef/cd",
-                "cd",
+                "test0/test1/test2/test0.yaml",
+                "test0/test1/test0.yaml",
+                "test0/test2/test1/test0.yaml",
+                "test0/test2/test1/test3/test0.yaml",
             ],
         ),
         (
-            "**d/*.yaml",
+            "test0/t**.yaml",
             [
-                "ab/cd/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-                "cd/ab.yaml",
+                "test0/test0.yaml",
+                "test0/test1/test0.yaml",
+                "test0/test1/test2/test0.yaml",
+                "test0/test2/test0.yaml",
+                "test0/test2/test1/test0.yaml",
+                "test0/test2/test1/test3/test0.yaml",
+            ],
+        ),
+        ("test0/t**1/", ["test0/test1", "test0/test2/test1"]),
+        (
+            "test0/t**1/*.yaml",
+            ["test0/test1/test0.yaml", "test0/test2/test1/test0.yaml"],
+        ),
+    ],
+)
+def test_glob_with_double_asterisks_without_slashes(path, expected, glob_fs):
+    output = glob_fs.glob(path=f"mock://{path}")
+    assert _clean_paths(output) == _clean_paths(expected)
+
+    detailed_output = glob_fs.glob(path=f"mock://{path}", detail=True)
+    for name, info in _clean_paths(detailed_output).items():
+        assert info == glob_fs[name]
+
+
+@pytest.mark.parametrize(
+    ("path", "maxdepth", "expected"),
+    [
+        (
+            "test0/**",
+            1,
+            [
+                "test0",
+                "test0/test0.json",
+                "test0/test0.yaml",
+                "test0/test1",
+                "test0/test2",
             ],
         ),
         (
-            "a**e**.yaml",
+            "test0/**",
+            2,
             [
-                "ab/cd/ef/ab.yaml",
-                "ab/ef/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh/ab.yaml",
+                "test0",
+                "test0/test0.json",
+                "test0/test0.yaml",
+                "test0/test1",
+                "test0/test1/test0.json",
+                "test0/test1/test0.yaml",
+                "test0/test1/test2",
+                "test0/test2",
+                "test0/test2/test0.json",
+                "test0/test2/test0.yaml",
+                "test0/test2/test1",
+            ],
+        ),
+        ("test0/**/test1/*", 1, []),
+        (
+            "test0/**/test1/*",
+            2,
+            ["test0/test1/test0.json", "test0/test1/test0.yaml", "test0/test1/test2"],
+        ),
+        ("test0/**/test1/**", 1, ["test0/test1"]),
+        (
+            "test0/**/test1/**",
+            2,
+            [
+                "test0/test1",
+                "test0/test1/test0.json",
+                "test0/test1/test0.yaml",
+                "test0/test1/test2",
+                "test0/test2/test1",
             ],
         ),
         (
-            "ab/e**.yaml",
+            "test0/test[1-2]/**",
+            1,
             [
-                "ab/ef/ab.yaml",
-                "ab/ef/cd/ab.yaml",
-                "ab/ef/cd/gh/ab.yaml",
+                "test0/test1",
+                "test0/test1/test0.yaml",
+                "test0/test1/test0.json",
+                "test0/test1/test2",
+                "test0/test2",
+                "test0/test2/test0.json",
+                "test0/test2/test0.yaml",
+                "test0/test2/test1",
             ],
         ),
         (
-            "ab/e**d/",
+            "test0/test[1-2]/**",
+            2,
             [
-                "ab/ef/cd",
-            ],
-        ),
-        (
-            "ab/e**d/*.yaml",
-            [
-                "ab/ef/cd/ab.yaml",
+                "test0/test1",
+                "test0/test1/test0.yaml",
+                "test0/test1/test0.json",
+                "test0/test1/test2",
+                "test0/test1/test2/test0.json",
+                "test0/test1/test2/test0.yaml",
+                "test0/test2",
+                "test0/test2/test0.json",
+                "test0/test2/test0.yaml",
+                "test0/test2/test1",
+                "test0/test2/test1/test0.yaml",
+                "test0/test2/test1/test0.json",
+                "test0/test2/test1/test3",
             ],
         ),
     ],
 )
-def test_glob_support_double_asterisks_without_slashes(path, expected, local_fake_dir):
-    def clean_paths(paths):
-        paths = [p.replace(local_fake_dir, "").strip("/") for p in paths]
-        return [p for p in sorted(set(paths)) if p]
+def test_glob_with_maxdepth(path, maxdepth, expected, glob_fs):
+    output = glob_fs.glob(path=f"mock://{path}", maxdepth=maxdepth)
+    assert _clean_paths(output) == _clean_paths(expected)
 
-    for path in [path, f"{local_fake_dir}/{path}"]:
-        fs = LocalFileSystem()
-        fs_output = fs.glob(path=path)
-        assert clean_paths(fs_output) == clean_paths(expected)
+    detailed_output = glob_fs.glob(
+        path=f"mock://{path}", maxdepth=maxdepth, detail=True
+    )
+    for name, info in _clean_paths(detailed_output).items():
+        assert info == glob_fs[name]
+
+
+def test_glob_with_wrong_maxdepth(glob_fs):
+    with pytest.raises(ValueError):
+        _ = glob_fs.glob(path="mock://test0/*", maxdepth=0)
