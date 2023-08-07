@@ -540,15 +540,16 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return sizes
 
-    def glob(self, path, **kwargs):
+    def glob(self, path, maxdepth=None, **kwargs):
         """
         Find files by glob-matching.
 
-        If the path ends with '/' and does not contain "*", it is essentially
-        the same as ``ls(path)``, returning only files.
+        If the path ends with '/', only folders are returned.
 
         We support ``"**"``,
         ``"?"`` and ``"[..]"``. We do not support ^ for pattern negation.
+
+        The `maxdepth` option is applied on the first `**` found in the path.
 
         Search path names that contain embedded characters special to this
         implementation of glob may not produce expected results;
@@ -556,24 +557,23 @@ class AbstractFileSystem(metaclass=_Cached):
 
         kwargs are passed to ``ls``.
         """
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
         import re
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+        idx_star = path.find("*") if path.find("*") >= 0 else len(path)
+        idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
+        idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        ind = min(indstar, indques, indbrace)
+        min_idx = min(idx_star, idx_qmark, idx_brace)
 
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif self.exists(path):
+            if self.exists(path):
                 if not detail:
                     return [path]
                 else:
@@ -583,13 +583,21 @@ class AbstractFileSystem(metaclass=_Cached):
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        elif "/" in path[:min_idx]:
+            min_idx = path[:min_idx].rindex("/")
+            root = path[: min_idx + 1]
+            depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+            depth = path[min_idx + 1 :].count("/") + 1
+
+        if "**" in path:
+            if maxdepth is not None:
+                idx_double_stars = path.find("**")
+                depth_double_stars = path[idx_double_stars:].count("/") + 1
+                depth = depth - depth_double_stars + maxdepth
+            else:
+                depth = None
 
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
         # Escape characters special to python regex, leaving our supported
