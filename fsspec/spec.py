@@ -635,8 +635,12 @@ class AbstractFileSystem(metaclass=_Cached):
             for p in sorted(allpaths)
             if pattern.match(p.replace("//", "/").rstrip("/"))
         }
+
+        # Return directories only when the glob end by a slash
+        # This is needed for posix glob compliance
         if ends:
             out = {k: v for k, v in out.items() if v["type"] == "directory"}
+
         if detail:
             return out
         else:
