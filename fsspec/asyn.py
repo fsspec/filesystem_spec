@@ -13,12 +13,7 @@ from typing import TYPE_CHECKING, Iterable
 
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
-from .implementations.local import (
-    LocalFileSystem,
-    make_path_posix,
-    trailing_sep,
-    trailing_sep_maybe_asterisk,
-)
+from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
 from .utils import is_exception, other_paths
 
@@ -357,13 +352,19 @@ class AsyncFileSystem(AbstractFileSystem):
             if not paths:
                 return
 
-        isdir = isinstance(path2, str) and (
+        source_is_file = len(paths) == 1
+        dest_is_dir = isinstance(path2, str) and (
             trailing_sep(path2) or await self._isdir(path2)
+        )
+
+        exists = source_is_str and (
+            (has_magic(path1) and source_is_file)
+            or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
         )
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
+            exists=exists,
             flatten=not source_is_str,
         )
         batch_size = batch_size or self.batch_size
@@ -513,14 +514,20 @@ class AsyncFileSystem(AbstractFileSystem):
             if not lpaths:
                 return
 
-        isdir = isinstance(rpath, str) and (
+        source_is_file = len(lpaths) == 1
+        dest_is_dir = isinstance(rpath, str) and (
             trailing_sep(rpath) or await self._isdir(rpath)
         )
+
         rpath = self._strip_protocol(rpath)
+        exists = source_is_str and (
+            (has_magic(lpath) and source_is_file)
+            or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
+        )
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
+            exists=exists,
             flatten=not source_is_str,
         )
 
@@ -569,9 +576,7 @@ class AsyncFileSystem(AbstractFileSystem):
         """
         source_is_str = isinstance(rpath, str)
         # First check for rpath trailing slash as _strip_protocol removes it.
-        source_not_trailing_sep = source_is_str and not trailing_sep_maybe_asterisk(
-            rpath
-        )
+        source_not_trailing_sep = source_is_str and not trailing_sep(rpath)
         rpath = self._strip_protocol(rpath)
         rpaths = await self._expand_path(rpath, recursive=recursive)
         if source_is_str and (not recursive or maxdepth is not None):
@@ -583,13 +588,19 @@ class AsyncFileSystem(AbstractFileSystem):
                 return
 
         lpath = make_path_posix(lpath)
-        isdir = isinstance(lpath, str) and (
+        source_is_file = len(rpaths) == 1
+        dest_is_dir = isinstance(lpath, str) and (
             trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
+        )
+
+        exists = source_is_str and (
+            (has_magic(rpath) and source_is_file)
+            or (not has_magic(rpath) and dest_is_dir and not source_not_trailing_sep)
         )
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and source_not_trailing_sep,
+            exists=exists,
             flatten=not source_is_str,
         )
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]

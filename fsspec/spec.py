@@ -938,7 +938,6 @@ class AbstractFileSystem(metaclass=_Cached):
             LocalFileSystem,
             make_path_posix,
             trailing_sep,
-            trailing_sep_maybe_asterisk,
         )
 
         source_is_str = isinstance(rpath, str)
@@ -951,13 +950,20 @@ class AbstractFileSystem(metaclass=_Cached):
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
-        isdir = isinstance(lpath, str) and (
+
+        source_is_file = len(rpaths) == 1
+        dest_is_dir = isinstance(lpath, str) and (
             trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
+        )
+
+        exists = source_is_str and (
+            (has_magic(rpath) and source_is_file)
+            or (not has_magic(rpath) and dest_is_dir and not trailing_sep(rpath))
         )
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(rpath),
+            exists=exists,
             flatten=not source_is_str,
         )
 
@@ -1007,7 +1013,6 @@ class AbstractFileSystem(metaclass=_Cached):
             LocalFileSystem,
             make_path_posix,
             trailing_sep,
-            trailing_sep_maybe_asterisk,
         )
 
         source_is_str = isinstance(lpath, str)
@@ -1021,16 +1026,24 @@ class AbstractFileSystem(metaclass=_Cached):
             if not lpaths:
                 return
 
-        isdir = isinstance(rpath, str) and (trailing_sep(rpath) or self.isdir(rpath))
+        source_is_file = len(lpaths) == 1
+        dest_is_dir = isinstance(rpath, str) and (
+            trailing_sep(rpath) or self.isdir(rpath)
+        )
+
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
             else [self._strip_protocol(p) for p in rpath]
         )
+        exists = source_is_str and (
+            (has_magic(lpath) and source_is_file)
+            or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
+        )
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
+            exists=exists,
             flatten=not source_is_str,
         )
 
@@ -1063,7 +1076,7 @@ class AbstractFileSystem(metaclass=_Cached):
             not-found exceptions will cause the path to be skipped; defaults to
             raise unless recursive is true, where the default is ignore
         """
-        from .implementations.local import trailing_sep, trailing_sep_maybe_asterisk
+        from .implementations.local import trailing_sep
 
         if on_error is None and recursive:
             on_error = "ignore"
@@ -1078,11 +1091,19 @@ class AbstractFileSystem(metaclass=_Cached):
             if not paths:
                 return
 
-        isdir = isinstance(path2, str) and (trailing_sep(path2) or self.isdir(path2))
+        source_is_file = len(paths) == 1
+        dest_is_dir = isinstance(path2, str) and (
+            trailing_sep(path2) or self.isdir(path2)
+        )
+
+        exists = source_is_str and (
+            (has_magic(path1) and source_is_file)
+            or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
+        )
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
+            exists=exists,
             flatten=not source_is_str,
         )
 
