@@ -59,6 +59,9 @@ PATHS_FOR_GLOB_TESTS = (
 GLOB_POSIX_TESTS = [
     ("nonexistent", []),
     ("test0.json", ["test0.json"]),
+    ("test0", ["test0"]),
+    ("test0/", ["test0"]),
+    ("test1/test0.yaml", ["test1/test0.yaml"]),
     ("test0/test[1-2]", ["test0/test1", "test0/test2"]),
     ("test0/test[1-2]/", ["test0/test1", "test0/test2"]),
     (
@@ -242,9 +245,6 @@ GLOB_POSIX_TESTS = [
             "test1/test0",
         ],
     ),
-    ("test0", ["test0"]),
-    ("test0/", ["test0"]),
-    ("test1/test0.yaml", ["test1/test0.yaml"]),
     ("test0/*", ["test0/test0.json", "test0/test0.yaml", "test0/test1", "test0/test2"]),
     ("test0/*.yaml", ["test0/test0.yaml"]),
     (
@@ -452,10 +452,17 @@ class DummyTestFS(AbstractFileSystem):
 
 
 @pytest.mark.parametrize(
-    ["test_paths", "expected"],
+    ["test_paths", "recursive", "maxdepth", "expected"],
     [
         (
-            ("top_level/second_level", "top_level/sec*", "top_level/*"),
+            (
+                "top_level/second_level",
+                "top_level/sec*",
+                "top_level/sec*vel",
+                "top_level/*",
+            ),
+            True,
+            None,
             [
                 "top_level/second_level",
                 "top_level/second_level/date=2019-10-01",
@@ -468,7 +475,98 @@ class DummyTestFS(AbstractFileSystem):
             ],
         ),
         (
+            (
+                "top_level/second_level",
+                "top_level/sec*",
+                "top_level/sec*vel",
+                "top_level/*",
+            ),
+            False,
+            None,
+            [
+                "top_level/second_level",
+            ],
+        ),
+        (
+            ("top_level/second_level",),
+            True,
+            1,
+            [
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-04",
+            ],
+        ),
+        (
+            ("top_level/second_level",),
+            True,
+            2,
+            [
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (
+            ("top_level/*", "top_level/sec*", "top_level/sec*vel", "top_level/*"),
+            True,
+            1,
+            ["top_level/second_level"],
+        ),
+        (
+            ("top_level/*", "top_level/sec*", "top_level/sec*vel", "top_level/*"),
+            True,
+            2,
+            [
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-04",
+            ],
+        ),
+        (
             ("top_level/**",),
+            False,
+            None,
+            [
+                "top_level",
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (
+            ("top_level/**",),
+            True,
+            None,
+            [
+                "top_level",
+                "top_level/second_level",
+                "top_level/second_level/date=2019-10-01",
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-01/b.parquet",
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (("top_level/**",), True, 1, ["top_level", "top_level/second_level"]),
+        (
+            ("top_level/**",),
+            True,
+            2,
             [
                 "top_level",
                 "top_level/second_level",
@@ -483,109 +581,75 @@ class DummyTestFS(AbstractFileSystem):
         ),
         (
             ("top_level/**/a.*",),
+            False,
+            None,
             [
                 "top_level/second_level/date=2019-10-01/a.parquet",
                 "top_level/second_level/date=2019-10-02/a.parquet",
                 "top_level/second_level/date=2019-10-04/a.parquet",
             ],
         ),
-        [("misc/foo.txt", "misc/*.txt"), ["misc/foo.txt"]],
+        (
+            ("top_level/**/a.*",),
+            True,
+            None,
+            [
+                "top_level/second_level/date=2019-10-01/a.parquet",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+                "top_level/second_level/date=2019-10-04/a.parquet",
+            ],
+        ),
+        (
+            ("top_level/**/second_level/date=2019-10-02",),
+            False,
+            2,
+            [
+                "top_level/second_level/date=2019-10-02",
+            ],
+        ),
+        (
+            ("top_level/**/second_level/date=2019-10-02",),
+            True,
+            2,
+            [
+                "top_level/second_level/date=2019-10-02",
+                "top_level/second_level/date=2019-10-02/a.parquet",
+            ],
+        ),
+        [("misc/foo.txt", "misc/*.txt"), False, None, ["misc/foo.txt"]],
+        [("misc/foo.txt", "misc/*.txt"), True, None, ["misc/foo.txt"]],
         (
             ("",),
+            False,
+            None,
+            [DummyTestFS.root_marker],
+        ),
+        (
+            ("",),
+            True,
+            None,
             DummyTestFS.get_test_paths() + [DummyTestFS.root_marker],
         ),
     ],
 )
-def test_expand_path_recursive(test_paths, expected):
+def test_expand_path(test_paths, recursive, maxdepth, expected):
     """Test a number of paths and then their combination which should all yield
     the same set of expanded paths"""
     test_fs = DummyTestFS()
 
     # test single query
     for test_path in test_paths:
-        paths = test_fs.expand_path(test_path, recursive=True)
+        paths = test_fs.expand_path(test_path, recursive=recursive, maxdepth=maxdepth)
         assert sorted(paths) == sorted(expected)
 
     # test with all queries
-    paths = test_fs.expand_path(list(test_paths), recursive=True)
+    paths = test_fs.expand_path(
+        list(test_paths), recursive=recursive, maxdepth=maxdepth
+    )
     assert sorted(paths) == sorted(expected)
 
 
-@pytest.mark.parametrize(
-    ("path", "maxdepth", "expected"),
-    [
-        ("top_level", 1, ["top_level", "top_level/second_level"]),
-        (
-            "top_level",
-            2,
-            [
-                "top_level",
-                "top_level/second_level",
-                "top_level/second_level/date=2019-10-01",
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-04",
-            ],
-        ),
-        (
-            "top_level",
-            3,
-            [
-                "top_level",
-                "top_level/second_level",
-                "top_level/second_level/date=2019-10-01",
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-01/b.parquet",
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-                "top_level/second_level/date=2019-10-04",
-                "top_level/second_level/date=2019-10-04/a.parquet",
-            ],
-        ),
-        ("top_level/*", 1, ["top_level/second_level"]),
-        (
-            "top_level/*",
-            2,
-            [
-                "top_level/second_level",
-                "top_level/second_level/date=2019-10-01",
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-04",
-            ],
-        ),
-        ("top_level/**", 1, ["top_level", "top_level/second_level"]),
-        (
-            "top_level/**",
-            2,
-            [
-                "top_level",
-                "top_level/second_level",
-                "top_level/second_level/date=2019-10-01",
-                "top_level/second_level/date=2019-10-01/a.parquet",
-                "top_level/second_level/date=2019-10-01/b.parquet",
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-                "top_level/second_level/date=2019-10-04",
-                "top_level/second_level/date=2019-10-04/a.parquet",
-            ],
-        ),
-        (
-            "top_level/**/second_level/date=2019-10-02",
-            2,
-            [
-                "top_level/second_level/date=2019-10-02",
-                "top_level/second_level/date=2019-10-02/a.parquet",
-            ],
-        ),
-    ],
-)
-def test_expand_path_with_maxdepth(path, maxdepth, expected):
-    test_fs = DummyTestFS()
-
-    output = test_fs.expand_path(path, recursive=True, maxdepth=maxdepth)
-    assert sorted(output) == sorted(expected)
-
-
-def test_expand_paths_with_wrong_maxdepth():
+def test_expand_paths_with_wrong_args():
     test_fs = DummyTestFS()
 
     with pytest.raises(ValueError):
@@ -594,6 +658,8 @@ def test_expand_paths_with_wrong_maxdepth():
         test_fs.expand_path("top_level", maxdepth=0)
     with pytest.raises(FileNotFoundError):
         test_fs.expand_path("top_level/**/second_level/date=2019-10-02", maxdepth=1)
+    with pytest.raises(FileNotFoundError):
+        test_fs.expand_path("nonexistent/*")
 
 
 @pytest.mark.xfail
@@ -1041,7 +1107,7 @@ def test_posix_tests(path, expected, local_fake_dir):
     ("path", "expected"),
     GLOB_POSIX_TESTS,
 )
-def test_glob_posix_compliance(path, expected, glob_fs):
+def test_glob_posix_rules(path, expected, glob_fs):
     output = glob_fs.glob(path=f"mock://{path}")
     assert _clean_paths(output) == _clean_paths(expected)
 
@@ -1051,10 +1117,11 @@ def test_glob_posix_compliance(path, expected, glob_fs):
 
 
 @pytest.mark.parametrize(
-    ("path", "expected"),
+    ("path", "maxdepth", "expected"),
     [
         (
             "test1**",
+            None,
             [
                 "test1",
                 "test1.json",
@@ -1066,9 +1133,10 @@ def test_glob_posix_compliance(path, expected, glob_fs):
                 "test1/test0/test0.yaml",
             ],
         ),
-        ("test1**/", ["test1", "test1/test0"]),
+        ("test1**/", None, ["test1", "test1/test0"]),
         (
             "**.yaml",
+            None,
             [
                 "test0.yaml",
                 "test0/test0.yaml",
@@ -1082,9 +1150,10 @@ def test_glob_posix_compliance(path, expected, glob_fs):
                 "test1/test0/test0.yaml",
             ],
         ),
-        ("**1/", ["test0/test1", "test0/test2/test1", "test1"]),
+        ("**1/", None, ["test0/test1", "test0/test2/test1", "test1"]),
         (
             "**1/*.yaml",
+            None,
             [
                 "test0/test1/test0.yaml",
                 "test0/test2/test1/test0.yaml",
@@ -1093,6 +1162,7 @@ def test_glob_posix_compliance(path, expected, glob_fs):
         ),
         (
             "test0**1**.yaml",
+            None,
             [
                 "test0/test1/test2/test0.yaml",
                 "test0/test1/test0.yaml",
@@ -1102,6 +1172,7 @@ def test_glob_posix_compliance(path, expected, glob_fs):
         ),
         (
             "test0/t**.yaml",
+            None,
             [
                 "test0/test0.yaml",
                 "test0/test1/test0.yaml",
@@ -1111,25 +1182,12 @@ def test_glob_posix_compliance(path, expected, glob_fs):
                 "test0/test2/test1/test3/test0.yaml",
             ],
         ),
-        ("test0/t**1/", ["test0/test1", "test0/test2/test1"]),
+        ("test0/t**1/", None, ["test0/test1", "test0/test2/test1"]),
         (
             "test0/t**1/*.yaml",
+            None,
             ["test0/test1/test0.yaml", "test0/test2/test1/test0.yaml"],
         ),
-    ],
-)
-def test_glob_with_double_asterisks_without_slashes(path, expected, glob_fs):
-    output = glob_fs.glob(path=f"mock://{path}")
-    assert _clean_paths(output) == _clean_paths(expected)
-
-    detailed_output = glob_fs.glob(path=f"mock://{path}", detail=True)
-    for name, info in _clean_paths(detailed_output).items():
-        assert info == glob_fs[name]
-
-
-@pytest.mark.parametrize(
-    ("path", "maxdepth", "expected"),
-    [
         (
             "test0/**",
             1,
@@ -1211,7 +1269,7 @@ def test_glob_with_double_asterisks_without_slashes(path, expected, glob_fs):
         ),
     ],
 )
-def test_glob_with_maxdepth(path, maxdepth, expected, glob_fs):
+def test_glob_non_posix_rules(path, maxdepth, expected, glob_fs):
     output = glob_fs.glob(path=f"mock://{path}", maxdepth=maxdepth)
     assert _clean_paths(output) == _clean_paths(expected)
 
@@ -1222,6 +1280,6 @@ def test_glob_with_maxdepth(path, maxdepth, expected, glob_fs):
         assert info == glob_fs[name]
 
 
-def test_glob_with_wrong_maxdepth(glob_fs):
+def test_glob_with_wrong_args(glob_fs):
     with pytest.raises(ValueError):
         _ = glob_fs.glob(path="mock://test0/*", maxdepth=0)
