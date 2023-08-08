@@ -64,6 +64,7 @@ def test_rsync(tmpdir, m):
     assert set(allfiles) == {
         f"file://{pos_tmpdir}{_}"
         for _ in [
+            "",
             "/deep",
             "/deep/path",
             "/deep/path/afile",
@@ -76,6 +77,7 @@ def test_rsync(tmpdir, m):
     assert set(allfiles2) == {
         f"file://{pos_tmpdir}{_}"
         for _ in [
+            "",
             "/deep",
             "/deep/path",
             "/deep/path/afile",

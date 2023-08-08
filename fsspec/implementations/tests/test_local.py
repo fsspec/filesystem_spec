@@ -323,7 +323,9 @@ def test_globfind_dirs(tmpdir):
         fs.glob(tmpdir + "/dir/*", detail=True)[tmpdir + "/dir/afile"]["type"] == "file"
     )
     assert [tmpdir + "/dir/afile"] == fs.find(tmpdir)
-    assert [tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(tmpdir, withdirs=True)
+    assert [tmpdir, tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(
+        tmpdir, withdirs=True
+    )
 
 
 def test_touch(tmpdir):
