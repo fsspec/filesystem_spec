@@ -578,7 +578,7 @@ class AsyncFileSystem(AbstractFileSystem):
         # First check for rpath trailing slash as _strip_protocol removes it.
         source_not_trailing_sep = source_is_str and not trailing_sep(rpath)
         rpath = self._strip_protocol(rpath)
-        rpaths = await self._expand_path(rpath, recursive=recursive)
+        rpaths = await self._expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
         if source_is_str and (not recursive or maxdepth is not None):
             # Non-recursive glob does not copy directories
             rpaths = [
@@ -595,7 +595,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
         exists = source_is_str and (
             (has_magic(rpath) and source_is_file)
-            or (not has_magic(rpath) and dest_is_dir and not source_not_trailing_sep)
+            or (not has_magic(rpath) and dest_is_dir and source_not_trailing_sep)
         )
         lpaths = other_paths(
             rpaths,
