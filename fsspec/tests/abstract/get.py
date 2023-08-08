@@ -1,3 +1,10 @@
+from itertools import product
+
+import pytest
+
+from fsspec.tests.abstract import GLOB_TESTS
+
+
 class AbstractGetTests:
     def test_get_file_to_existing_directory(
         self,
@@ -204,82 +211,44 @@ class AbstractGetTests:
             # Limit by maxdepth
             # ERROR: maxdepth ignored here
 
-    def test_get_glob_to_existing_directory(
+    @pytest.mark.parametrize(
+        ("path", "recursive", "maxdepth", "expected"),
+        GLOB_TESTS,
+    )
+    def test_get_glob(
         self,
+        path,
+        recursive,
+        maxdepth,
+        expected,
         fs,
         fs_join,
-        fs_bulk_operations_scenario_0,
+        fs_bulk_operations_scenario_0_glob,
         local_fs,
         local_join,
         local_target,
     ):
         # Copy scenario 1g
-        source = fs_bulk_operations_scenario_0
+        source = fs_bulk_operations_scenario_0_glob
 
         target = local_target
-        local_fs.mkdir(target)
 
-        # for target_slash in [False, True]:
-        for target_slash in [False]:
-            t = target + "/" if target_slash else target
+        for new_dir, target_slash in product([True, False], [True, False]):
+            local_fs.mkdir(target)
 
-            # Without recursive
-            fs.get(fs_join(source, "subdir", "*"), t)
-            assert local_fs.isfile(local_join(target, "subfile1"))
-            assert local_fs.isfile(local_join(target, "subfile2"))
-            # assert not local_fs.isdir(local_join(target, "nesteddir"))  # ERROR
-            assert not local_fs.isdir(local_join(target, "subdir"))
+            t = local_join(target, "newdir") if new_dir else target
+            t = t + "/" if target_slash else t
 
-            # With recursive
+            fs.get(fs_join(source, path), t, recursive=recursive, maxdepth=maxdepth)
 
-            # Limit by maxdepth
+            output = local_fs.find(target)
+            if new_dir:
+                prefixed_expected = [local_join(target, "newdir", p) for p in expected]
+            else:
+                prefixed_expected = [local_join(target, p) for p in expected]
+            assert sorted(output) == sorted(prefixed_expected)
 
-    def test_get_glob_to_new_directory(
-        self,
-        fs,
-        fs_join,
-        fs_bulk_operations_scenario_0,
-        local_fs,
-        local_join,
-        local_target,
-    ):
-        # Copy scenario 1h
-        source = fs_bulk_operations_scenario_0
-
-        target = local_target
-        local_fs.mkdir(target)
-
-        for target_slash in [False, True]:
-            t = fs_join(target, "newdir")
-            if target_slash:
-                t += "/"
-
-            # Without recursive
-            fs.get(fs_join(source, "subdir", "*"), t)
-            assert local_fs.isdir(local_join(target, "newdir"))
-            assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
-            assert local_fs.isfile(local_join(target, "newdir", "subfile2"))
-            # ERROR - do not copy empty directory
-            # assert not local_fs.exists(local_join(target, "newdir", "nesteddir"))
-
-            local_fs.rm(local_join(target, "newdir"), recursive=True)
-            assert local_fs.ls(target) == []
-
-            # With recursive
-            fs.get(fs_join(source, "subdir", "*"), t, recursive=True)
-            assert local_fs.isdir(local_join(target, "newdir"))
-            assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
-            assert local_fs.isfile(local_join(target, "newdir", "subfile2"))
-            assert local_fs.isdir(local_join(target, "newdir", "nesteddir"))
-            assert local_fs.isfile(
-                local_join(target, "newdir", "nesteddir", "nestedfile")
-            )
-
-            local_fs.rm(local_join(target, "newdir"), recursive=True)
-            assert local_fs.ls(target) == []
-
-            # Limit by maxdepth
-            # ERROR: this is not correct
+            local_fs.rm(target, recursive=True)
 
     def test_get_list_of_files_to_existing_directory(
         self,

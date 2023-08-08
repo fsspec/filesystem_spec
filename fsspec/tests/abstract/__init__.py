@@ -3,9 +3,186 @@ import os
 import pytest
 
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.tests.abstract.copy import AbstractCopyTests  # noqa
-from fsspec.tests.abstract.get import AbstractGetTests  # noqa
-from fsspec.tests.abstract.put import AbstractPutTests  # noqa
+
+GLOB_TESTS = [
+    ("fil?1", False, None, ["file1"]),
+    ("fil?1", True, None, ["file1"]),
+    ("file[1-2]", False, None, ["file1", "file2"]),
+    ("file[1-2]", True, None, ["file1", "file2"]),
+    ("*", False, None, ["file1", "file2"]),
+    (
+        "*",
+        True,
+        None,
+        [
+            "file1",
+            "file2",
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir0/nesteddir/nestedfile",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+            "subdir1/nesteddir/nestedfile",
+        ],
+    ),
+    ("*", True, 1, ["file1", "file2"]),
+    (
+        "*",
+        True,
+        2,
+        [
+            "file1",
+            "file2",
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+        ],
+    ),
+    ("*1", False, None, ["file1"]),
+    (
+        "*1",
+        True,
+        None,
+        [
+            "file1",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+            "subdir1/nesteddir/nestedfile",
+        ],
+    ),
+    ("*1", True, 2, ["file1", "subdir1/subfile1", "subdir1/subfile2"]),
+    (
+        "**",
+        False,
+        None,
+        [
+            "file1",
+            "file2",
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir0/nesteddir/nestedfile",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+            "subdir1/nesteddir/nestedfile",
+        ],
+    ),
+    (
+        "**",
+        True,
+        None,
+        [
+            "file1",
+            "file2",
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir0/nesteddir/nestedfile",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+            "subdir1/nesteddir/nestedfile",
+        ],
+    ),
+    ("**", True, 1, ["file1", "file2"]),
+    (
+        "**",
+        True,
+        2,
+        [
+            "file1",
+            "file2",
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir0/nesteddir/nestedfile",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+            "subdir1/nesteddir/nestedfile",
+        ],
+    ),
+    (
+        "**",
+        False,
+        2,
+        [
+            "file1",
+            "file2",
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+        ],
+    ),
+    ("**1", False, None, ["file1", "subdir0/subfile1", "subdir1/subfile1"]),
+    (
+        "**1",
+        True,
+        None,
+        [
+            "file1",
+            "subdir0/subfile1",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+            "subdir1/nesteddir/nestedfile",
+        ],
+    ),
+    ("**1", True, 1, ["file1"]),
+    (
+        "**1",
+        True,
+        2,
+        ["file1", "subdir0/subfile1", "subdir1/subfile1", "subdir1/subfile2"],
+    ),
+    ("**1", False, 2, ["file1", "subdir0/subfile1", "subdir1/subfile1"]),
+    ("**/subdir0", False, None, []),
+    ("**/subdir0", True, None, ["subfile1", "subfile2", "nesteddir/nestedfile"]),
+    ("**/subdir0/nested*", False, 2, []),
+    ("**/subdir0/nested*", True, 2, ["nestedfile"]),
+    ("subdir[1-2]", False, None, []),
+    ("subdir[1-2]", True, None, ["subfile1", "subfile2", "nesteddir/nestedfile"]),
+    ("subdir[1-2]", True, 2, ["subfile1", "subfile2"]),
+    ("subdir[0-1]", False, None, []),
+    (
+        "subdir[0-1]",
+        True,
+        None,
+        [
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir0/nesteddir/nestedfile",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+            "subdir1/nesteddir/nestedfile",
+        ],
+    ),
+    (
+        "subdir[0-1]/*fil[e]*",
+        False,
+        None,
+        [
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+        ],
+    ),
+    (
+        "subdir[0-1]/*fil[e]*",
+        True,
+        None,
+        [
+            "subdir0/subfile1",
+            "subdir0/subfile2",
+            "subdir1/subfile1",
+            "subdir1/subfile2",
+        ],
+    ),
+    # scenario 1g
+    ("subdir0/*", False, None, ["subfile1", "subfile2"]),
+    ("subdir0/*", True, None, ["subfile1", "subfile2", "nesteddir/nestedfile"]),
+    ("subdir0/*", True, 1, ["subfile1", "subfile2"]),
+    ("subdir0/**", False, None, ["subfile1", "subfile2", "nesteddir/nestedfile"]),
+    ("subdir0/**", True, None, ["subfile1", "subfile2", "nesteddir/nestedfile"]),
+    ("subdir0/**", True, 1, ["subfile1", "subfile2"]),
+]
 
 
 class BaseAbstractFixtures:
@@ -23,6 +200,17 @@ class BaseAbstractFixtures:
         Cleans up at the end of each test it which it is used.
         """
         source = self._bulk_operations_scenario_0(fs, fs_join, fs_path)
+        yield source
+        fs.rm(source, recursive=True)
+
+    @pytest.fixture
+    def fs_bulk_operations_scenario_0_glob(self, fs, fs_join, fs_path):
+        """
+        Scenario on remote filesystem that is used for many cp/get/put tests.
+
+        Cleans up at the end of each test it which it is used.
+        """
+        source = self._bulk_operations_scenario_0(fs, fs_join, fs_path, glob=True)
         yield source
         fs.rm(source, recursive=True)
 
@@ -50,6 +238,19 @@ class BaseAbstractFixtures:
         local_fs.rm(source, recursive=True)
 
     @pytest.fixture
+    def local_bulk_operations_scenario_0_glob(self, local_fs, local_join, local_path):
+        """
+        Scenario on local filesystem that is used for many cp/get/put tests.
+
+        Cleans up at the end of each test it which it is used.
+        """
+        source = self._bulk_operations_scenario_0(
+            local_fs, local_join, local_path, glob=True
+        )
+        yield source
+        local_fs.rm(source, recursive=True)
+
+    @pytest.fixture
     def local_target(self, local_fs, local_join, local_path):
         """
         Return name of local directory that does not yet exist to copy into.
@@ -61,7 +262,7 @@ class BaseAbstractFixtures:
         if local_fs.exists(target):
             local_fs.rm(target, recursive=True)
 
-    def _bulk_operations_scenario_0(self, some_fs, some_join, some_path):
+    def _bulk_operations_scenario_0(self, some_fs, some_join, some_path, glob=False):
         """
         Scenario that is used for many cp/get/put tests. Creates the following
         directory and file structure:
@@ -76,7 +277,10 @@ class BaseAbstractFixtures:
                 └── 📄 nestedfile
         """
         source = some_join(some_path, "source")
-        subdir = some_join(source, "subdir")
+        if glob:
+            subdir = some_join(source, "subdir0")
+        else:
+            subdir = some_join(source, "subdir")
         nesteddir = some_join(subdir, "nesteddir")
         some_fs.makedirs(nesteddir)
         some_fs.touch(some_join(source, "file1"))
@@ -84,6 +288,13 @@ class BaseAbstractFixtures:
         some_fs.touch(some_join(subdir, "subfile1"))
         some_fs.touch(some_join(subdir, "subfile2"))
         some_fs.touch(some_join(nesteddir, "nestedfile"))
+        if glob:
+            subdir = some_join(source, "subdir1")
+            nesteddir = some_join(subdir, "nesteddir")
+            some_fs.makedirs(nesteddir)
+            some_fs.touch(some_join(subdir, "subfile1"))
+            some_fs.touch(some_join(subdir, "subfile2"))
+            some_fs.touch(some_join(nesteddir, "nestedfile"))
         return source
 
 

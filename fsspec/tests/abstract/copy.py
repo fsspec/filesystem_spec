@@ -1,3 +1,10 @@
+from itertools import product
+
+import pytest
+
+from fsspec.tests.abstract import GLOB_TESTS
+
+
 class AbstractCopyTests:
     def test_copy_file_to_existing_directory(
         self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
@@ -185,101 +192,42 @@ class AbstractCopyTests:
             fs.rm(fs_join(target, "newdir"), recursive=True)
             assert not fs.exists(fs_join(target, "newdir"))
 
-    def test_copy_glob_to_existing_directory(
-        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
+    @pytest.mark.parametrize(
+        ("path", "recursive", "maxdepth", "expected"),
+        GLOB_TESTS,
+    )
+    def test_copy_glob(
+        self,
+        path,
+        recursive,
+        maxdepth,
+        expected,
+        fs,
+        fs_join,
+        fs_bulk_operations_scenario_0_glob,
+        fs_target,
     ):
         # Copy scenario 1g
-        source = fs_bulk_operations_scenario_0
+        source = fs_bulk_operations_scenario_0_glob
 
         target = fs_target
-        fs.mkdir(target)
 
-        for target_slash in [False, True]:
-            t = target + "/" if target_slash else target
+        for new_dir, target_slash in product([True, False], [True, False]):
+            fs.mkdir(target)
 
-            # Without recursive
-            fs.cp(fs_join(source, "subdir", "*"), t)
-            assert fs.isfile(fs_join(target, "subfile1"))
-            assert fs.isfile(fs_join(target, "subfile2"))
-            assert not fs.isdir(fs_join(target, "nesteddir"))
-            assert not fs.exists(fs_join(target, "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
+            t = fs_join(target, "newdir") if new_dir else target
+            t = t + "/" if target_slash else t
 
-            fs.rm(fs.ls(target, detail=False), recursive=True)
-            assert fs.ls(target) == []
+            fs.copy(fs_join(source, path), t, recursive=recursive, maxdepth=maxdepth)
 
-            # With recursive
-            fs.cp(fs_join(source, "subdir", "*"), t, recursive=True)
-            assert fs.isfile(fs_join(target, "subfile1"))
-            assert fs.isfile(fs_join(target, "subfile2"))
-            assert fs.isdir(fs_join(target, "nesteddir"))
-            assert fs.isfile(fs_join(target, "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
+            output = fs.find(target)
+            if new_dir:
+                prefixed_expected = [fs_join(target, "newdir", p) for p in expected]
+            else:
+                prefixed_expected = [fs_join(target, p) for p in expected]
+            assert sorted(output) == sorted(prefixed_expected)
 
-            fs.rm(fs.ls(target, detail=False), recursive=True)
-            assert fs.ls(target) == []
-
-            # Limit recursive by maxdepth
-            fs.cp(fs_join(source, "subdir", "*"), t, recursive=True, maxdepth=1)
-            assert fs.isfile(fs_join(target, "subfile1"))
-            assert fs.isfile(fs_join(target, "subfile2"))
-            assert not fs.exists(fs_join(target, "nesteddir"))
-            assert not fs.exists(fs_join(target, "subdir"))
-
-            fs.rm(fs.ls(target, detail=False), recursive=True)
-            assert fs.ls(target) == []
-
-    def test_copy_glob_to_new_directory(
-        self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target
-    ):
-        # Copy scenario 1h
-        source = fs_bulk_operations_scenario_0
-
-        target = fs_target
-        fs.mkdir(target)
-
-        for target_slash in [False, True]:
-            t = fs_join(target, "newdir")
-            if target_slash:
-                t += "/"
-
-            # Without recursive
-            fs.cp(fs_join(source, "subdir", "*"), t)
-            assert fs.isdir(fs_join(target, "newdir"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
-            assert not fs.exists(fs_join(target, "newdir", "nesteddir"))
-            assert not fs.exists(fs_join(target, "newdir", "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
-            assert not fs.exists(fs_join(target, "newdir", "subdir"))
-
-            fs.rm(fs_join(target, "newdir"), recursive=True)
-            assert not fs.exists(fs_join(target, "newdir"))
-
-            # With recursive
-            fs.cp(fs_join(source, "subdir", "*"), t, recursive=True)
-            assert fs.isdir(fs_join(target, "newdir"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
-            assert fs.isdir(fs_join(target, "newdir", "nesteddir"))
-            assert fs.isfile(fs_join(target, "newdir", "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
-            assert not fs.exists(fs_join(target, "newdir", "subdir"))
-
-            fs.rm(fs_join(target, "newdir"), recursive=True)
-            assert not fs.exists(fs_join(target, "newdir"))
-
-            # Limit recursive by maxdepth
-            fs.cp(fs_join(source, "subdir", "*"), t, recursive=True, maxdepth=1)
-            assert fs.isdir(fs_join(target, "newdir"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
-            assert not fs.exists(fs_join(target, "newdir", "nesteddir"))
-            assert not fs.exists(fs_join(target, "subdir"))
-            assert not fs.exists(fs_join(target, "newdir", "subdir"))
-
-            fs.rm(fs.ls(target, detail=False), recursive=True)
-            assert not fs.exists(fs_join(target, "newdir"))
+            fs.rm(target, recursive=True)
 
     def test_copy_list_of_files_to_existing_directory(
         self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target

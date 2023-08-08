@@ -1,3 +1,10 @@
+from itertools import product
+
+import pytest
+
+from fsspec.tests.abstract import GLOB_TESTS
+
+
 class AbstractPutTests:
     def test_put_file_to_existing_directory(
         self,
@@ -196,111 +203,43 @@ class AbstractPutTests:
             fs.rm(fs_join(target, "newdir"), recursive=True)
             assert not fs.exists(fs_join(target, "newdir"))
 
-    def test_put_glob_to_existing_directory(
-        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
+    @pytest.mark.parametrize(
+        ("path", "recursive", "maxdepth", "expected"),
+        GLOB_TESTS,
+    )
+    def test_get_glob(
+        self,
+        path,
+        recursive,
+        maxdepth,
+        expected,
+        fs,
+        fs_join,
+        fs_target,
+        local_bulk_operations_scenario_0_glob,
+        local_join,
     ):
         # Copy scenario 1g
-        source = local_bulk_operations_scenario_0
+        source = local_bulk_operations_scenario_0_glob
 
         target = fs_target
-        fs.mkdir(target)
-        if not self.supports_empty_directories():
-            # Force target directory to exist by adding a dummy file
-            dummy = fs_join(target, "dummy")
-            fs.touch(dummy)
-        assert fs.isdir(target)
 
-        for target_slash in [False, True]:
-            t = target + "/" if target_slash else target
+        for new_dir, target_slash in product([True, False], [True, False]):
+            fs.mkdir(target)
 
-            # Without recursive
-            fs.put(local_join(source, "subdir", "*"), t)
-            assert fs.isfile(fs_join(target, "subfile1"))
-            assert fs.isfile(fs_join(target, "subfile2"))
-            assert not fs.isdir(fs_join(target, "nesteddir"))
-            assert not fs.exists(fs_join(target, "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
+            t = fs_join(target, "newdir") if new_dir else target
+            t = t + "/" if target_slash else t
 
-            fs.rm(fs.ls(target, detail=False), recursive=True)
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
+            fs.put(local_join(source, path), t, recursive=recursive, maxdepth=maxdepth)
 
-            # With recursive
-            fs.put(local_join(source, "subdir", "*"), t, recursive=True)
-            assert fs.isfile(fs_join(target, "subfile1"))
-            assert fs.isfile(fs_join(target, "subfile2"))
-            assert fs.isdir(fs_join(target, "nesteddir"))
-            assert fs.isfile(fs_join(target, "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
+            output = fs.find(target)
+            if new_dir:
+                prefixed_expected = [fs_join(target, "newdir", p) for p in expected]
+            else:
+                prefixed_expected = [fs_join(target, p) for p in expected]
+            assert sorted(output) == sorted(prefixed_expected)
 
-            fs.rm(fs.ls(target, detail=False), recursive=True)
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
-
-            # Limit recursive by maxdepth
-            fs.put(local_join(source, "subdir", "*"), t, recursive=True, maxdepth=1)
-            assert fs.isfile(fs_join(target, "subfile1"))
-            assert fs.isfile(fs_join(target, "subfile2"))
-            assert not fs.exists(fs_join(target, "nesteddir"))
-            assert not fs.exists(fs_join(target, "subdir"))
-
-            fs.rm(fs.ls(target, detail=False), recursive=True)
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
-
-    def test_put_glob_to_new_directory(
-        self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0
-    ):
-        # Copy scenario 1h
-        source = local_bulk_operations_scenario_0
-
-        target = fs_target
-        fs.mkdir(target)
-        if not self.supports_empty_directories():
-            # Force target directory to exist by adding a dummy file
-            dummy = fs_join(target, "dummy")
-            fs.touch(dummy)
-        assert fs.isdir(target)
-
-        for target_slash in [False, True]:
-            t = fs_join(target, "newdir")
-            if target_slash:
-                t += "/"
-
-            # Without recursive
-            fs.put(local_join(source, "subdir", "*"), t)
-            assert fs.isdir(fs_join(target, "newdir"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
-            assert not fs.exists(fs_join(target, "newdir", "nesteddir"))
-            assert not fs.exists(fs_join(target, "newdir", "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
-            assert not fs.exists(fs_join(target, "newdir", "subdir"))
-
-            fs.rm(fs_join(target, "newdir"), recursive=True)
-            assert not fs.exists(fs_join(target, "newdir"))
-
-            # With recursive
-            fs.put(local_join(source, "subdir", "*"), t, recursive=True)
-            assert fs.isdir(fs_join(target, "newdir"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
-            assert fs.isdir(fs_join(target, "newdir", "nesteddir"))
-            assert fs.isfile(fs_join(target, "newdir", "nesteddir", "nestedfile"))
-            assert not fs.exists(fs_join(target, "subdir"))
-            assert not fs.exists(fs_join(target, "newdir", "subdir"))
-
-            fs.rm(fs_join(target, "newdir"), recursive=True)
-            assert not fs.exists(fs_join(target, "newdir"))
-
-            # Limit recursive by maxdepth
-            fs.put(local_join(source, "subdir", "*"), t, recursive=True, maxdepth=1)
-            assert fs.isdir(fs_join(target, "newdir"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile1"))
-            assert fs.isfile(fs_join(target, "newdir", "subfile2"))
-            assert not fs.exists(fs_join(target, "newdir", "nesteddir"))
-            assert not fs.exists(fs_join(target, "subdir"))
-            assert not fs.exists(fs_join(target, "newdir", "subdir"))
-
-            fs.rm(fs_join(target, "newdir"), recursive=True)
-            assert not fs.exists(fs_join(target, "newdir"))
+            fs.rm(target, recursive=True)
 
     def test_put_list_of_files_to_existing_directory(
         self,
