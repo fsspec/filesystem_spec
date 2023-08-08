@@ -2,7 +2,7 @@ from itertools import product
 
 import pytest
 
-from fsspec.tests.abstract import GLOB_TESTS
+from fsspec.tests.conftest import GLOB_TESTS
 
 
 class AbstractCopyTests:

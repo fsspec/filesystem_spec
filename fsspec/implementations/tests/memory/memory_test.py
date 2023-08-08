@@ -1,16 +1,14 @@
+import fsspec.tests.abstract as abstract
 from fsspec.implementations.tests.memory.memory_fixtures import MemoryFixtures
-from fsspec.tests.abstract.copy import AbstractCopyTests
-from fsspec.tests.abstract.get import AbstractGetTests
-from fsspec.tests.abstract.put import AbstractPutTests
 
 
-class TestMemoryCopy(AbstractCopyTests, MemoryFixtures):
+class TestMemoryCopy(abstract.AbstractCopyTests, MemoryFixtures):
     pass
 
 
-class TestMemoryGet(AbstractGetTests, MemoryFixtures):
+class TestMemoryGet(abstract.AbstractGetTests, MemoryFixtures):
     pass
 
 
-class TestMemoryPut(AbstractPutTests, MemoryFixtures):
+class TestMemoryPut(abstract.AbstractPutTests, MemoryFixtures):
     pass
