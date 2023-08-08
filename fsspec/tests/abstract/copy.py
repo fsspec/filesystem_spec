@@ -227,7 +227,10 @@ class AbstractCopyTests:
                 prefixed_expected = [fs_join(target, p) for p in expected]
             assert sorted(output) == sorted(prefixed_expected)
 
-            fs.rm(target, recursive=True)
+            try:
+                fs.rm(target, recursive=True)
+            except FileNotFoundError:
+                pass
 
     def test_copy_list_of_files_to_existing_directory(
         self, fs, fs_join, fs_bulk_operations_scenario_0, fs_target

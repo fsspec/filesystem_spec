@@ -239,7 +239,10 @@ class AbstractPutTests:
                 prefixed_expected = [fs_join(target, p) for p in expected]
             assert sorted(output) == sorted(prefixed_expected)
 
-            fs.rm(target, recursive=True)
+            try:
+                fs.rm(target, recursive=True)
+            except FileNotFoundError:
+                pass
 
     def test_put_list_of_files_to_existing_directory(
         self,

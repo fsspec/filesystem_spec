@@ -248,7 +248,10 @@ class AbstractGetTests:
                 prefixed_expected = [local_join(target, p) for p in expected]
             assert sorted(output) == sorted(prefixed_expected)
 
-            local_fs.rm(target, recursive=True)
+            try:
+                local_fs.rm(target, recursive=True)
+            except FileNotFoundError:
+                pass
 
     def test_get_list_of_files_to_existing_directory(
         self,
