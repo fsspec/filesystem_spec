@@ -233,6 +233,7 @@ def test_ls_with_folders(compression: str, tmp_path: Path):
     with open(temp_archive_file, "rb") as fd:
         fs = TarFileSystem(fd)
         assert fs.find("/", withdirs=True) == [
+            "",
             "a.pdf",
             "b/",
             "b/c.pdf",
