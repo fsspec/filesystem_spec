@@ -157,7 +157,7 @@ jobs:
 
       - name: Clone
         shell: bash -l {0}
-        run: git clone https://github.com/fsspec/${{ matrix.FRIEND }}
+        run: git clone -b better-double-asterisk-support https://github.com/john-jam/${{ matrix.FRIEND }}
 
       - name: Install
         shell: bash -l {0}
