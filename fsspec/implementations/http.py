@@ -432,7 +432,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
         return {"name": url, "size": None, **info, "type": "file"}
 
-    async def _glob(self, path, **kwargs):
+    async def _glob(self, path, maxdepth=None, **kwargs):
         """
         Find files by glob-matching.
 
@@ -440,23 +440,21 @@ class HTTPFileSystem(AsyncFileSystem):
         but "?" is not considered as a character for globbing, because it is
         so common in URLs, often identifying the "query" part.
         """
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
         import re
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+        idx_star = path.find("*") if path.find("*") >= 0 else len(path)
+        idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        ind = min(indstar, indbrace)
+        min_idx = min(idx_star, idx_brace)
 
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif await self._exists(path):
+            if await self._exists(path):
                 if not detail:
                     return [path]
                 else:
@@ -466,13 +464,21 @@ class HTTPFileSystem(AsyncFileSystem):
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        elif "/" in path[:min_idx]:
+            min_idx = path[:min_idx].rindex("/")
+            root = path[: min_idx + 1]
+            depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+            depth = path[min_idx + 1 :].count("/") + 1
+
+        if "**" in path:
+            if maxdepth is not None:
+                idx_double_stars = path.find("**")
+                depth_double_stars = path[idx_double_stars:].count("/") + 1
+                depth = depth - depth_double_stars + maxdepth
+            else:
+                depth = None
 
         allpaths = await self._find(
             root, maxdepth=depth, withdirs=True, detail=True, **kwargs
@@ -499,14 +505,23 @@ class HTTPFileSystem(AsyncFileSystem):
             )
             + "$"
         )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
+        pattern = re.sub("/[*]{2}", "=SLASH_DOUBLE_STARS=", pattern)
+        pattern = re.sub("[*]{2}/?", "=DOUBLE_STARS=", pattern)
         pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+        pattern = re.sub("=SLASH_DOUBLE_STARS=", "(|/.*)", pattern)
+        pattern = re.sub("=DOUBLE_STARS=", ".*", pattern)
+        pattern = re.compile(pattern)
         out = {
             p: allpaths[p]
             for p in sorted(allpaths)
             if pattern.match(p.replace("//", "/").rstrip("/"))
         }
+
+        # Return directories only when the glob end by a slash
+        # This is needed for posix glob compliance
+        if ends:
+            out = {k: v for k, v in out.items() if v["type"] == "directory"}
+
         if detail:
             return out
         else:
