@@ -167,7 +167,11 @@ class AbstractCopyTests:
 
             # Without recursive does nothing
             fs.cp(s, t)
-            assert fs.ls(target) == []
+            if self.supports_empty_directories():
+                assert fs.ls(target) == []
+            else:
+                with pytest.raises(FileNotFoundError):
+                    fs.ls(target)
 
             # With recursive
             fs.cp(s, t, recursive=True)
