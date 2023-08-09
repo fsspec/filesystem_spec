@@ -3,6 +3,7 @@ import json
 import os
 import pickle
 import subprocess
+import sys
 from collections import defaultdict
 
 import numpy as np
@@ -1064,6 +1065,9 @@ def glob_fs():
     return DummyTestFS(fs_content=PATHS_FOR_GLOB_TESTS)
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("win"), reason="can't run bash tests on windows"
+)
 @pytest.mark.parametrize(
     ("path", "expected"),
     GLOB_POSIX_TESTS,
