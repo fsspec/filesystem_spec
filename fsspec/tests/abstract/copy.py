@@ -19,7 +19,7 @@ class AbstractCopyTests:
 
         target = fs_target
         fs.mkdir(target)
-        if supports_empty_directories:
+        if not supports_empty_directories:
             # Force target directory to exist by adding a dummy file
             fs.touch(fs_join(target, "dummy"))
         assert fs.isdir(target)
