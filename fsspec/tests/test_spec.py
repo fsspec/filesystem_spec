@@ -1060,15 +1060,6 @@ def _clean_paths(paths, prefix=""):
 
 
 @pytest.fixture(scope="function")
-def local_fake_dir(tmp_path):
-    fs = LocalFileSystem(auto_mkdir=True)
-    for path_info in PATHS_FOR_GLOB_TESTS:
-        if path_info["type"] == "file":
-            fs.touch(path=f"{str(tmp_path)}/{path_info['name']}")
-    return str(tmp_path)
-
-
-@pytest.fixture(scope="function")
 def glob_fs():
     return DummyTestFS(fs_content=PATHS_FOR_GLOB_TESTS)
 
@@ -1077,10 +1068,16 @@ def glob_fs():
     ("path", "expected"),
     GLOB_POSIX_TESTS,
 )
-def test_posix_tests(path, expected, local_fake_dir):
+def test_posix_tests(path, expected, tmp_path):
     """
     Tests against python glob and bash stat to check if our posix tests are accurate.
     """
+    local_fs = LocalFileSystem(auto_mkdir=True)
+    local_fake_dir = str(tmp_path)
+    for path_info in PATHS_FOR_GLOB_TESTS:
+        if path_info["type"] == "file":
+            local_fs.touch(path=f"{str(tmp_path)}/{path_info['name']}")
+
     abs_path = f"{local_fake_dir}/{path}"
 
     # Test python glob
