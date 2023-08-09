@@ -13,13 +13,14 @@ class AbstractPutTests:
         fs_target,
         local_join,
         local_bulk_operations_scenario_0,
+        supports_empty_directories,
     ):
         # Copy scenario 1a
         source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
-        if not self.supports_empty_directories():
+        if not supports_empty_directories:
             # Force target directory to exist by adding a dummy file
             fs.touch(fs_join(target, "dummy"))
         assert fs.isdir(target)
@@ -93,14 +94,19 @@ class AbstractPutTests:
         assert fs.isfile(fs_join(target, "newdir", "newfile"))
 
     def test_put_directory_to_existing_directory(
-        self, fs, fs_join, fs_target, local_bulk_operations_scenario_0
+        self,
+        fs,
+        fs_join,
+        fs_target,
+        local_bulk_operations_scenario_0,
+        supports_empty_directories,
     ):
         # Copy scenario 1e
         source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
-        if not self.supports_empty_directories():
+        if not supports_empty_directories:
             # Force target directory to exist by adding a dummy file
             dummy = fs_join(target, "dummy")
             fs.touch(dummy)
@@ -114,7 +120,7 @@ class AbstractPutTests:
 
             # Without recursive does nothing
             fs.put(s, t)
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
+            assert fs.ls(target) == [] if supports_empty_directories else [dummy]
 
             # With recursive
             fs.put(s, t, recursive=True)
@@ -134,7 +140,7 @@ class AbstractPutTests:
                 assert fs.isfile(fs_join(target, "subdir", "nesteddir", "nestedfile"))
 
                 fs.rm(fs_join(target, "subdir"), recursive=True)
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
+            assert fs.ls(target) == [] if supports_empty_directories else [dummy]
 
             # Limit recursive by maxdepth
             fs.put(s, t, recursive=True, maxdepth=1)
@@ -152,17 +158,22 @@ class AbstractPutTests:
                 assert not fs.exists(fs_join(target, "subdir", "nesteddir"))
 
                 fs.rm(fs_join(target, "subdir"), recursive=True)
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
+            assert fs.ls(target) == [] if supports_empty_directories else [dummy]
 
     def test_put_directory_to_new_directory(
-        self, fs, fs_join, fs_target, local_bulk_operations_scenario_0
+        self,
+        fs,
+        fs_join,
+        fs_target,
+        local_bulk_operations_scenario_0,
+        supports_empty_directories,
     ):
         # Copy scenario 1f
         source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
-        if not self.supports_empty_directories():
+        if not supports_empty_directories:
             # Force target directory to exist by adding a dummy file
             dummy = fs_join(target, "dummy")
             fs.touch(dummy)
@@ -178,7 +189,7 @@ class AbstractPutTests:
 
             # Without recursive does nothing
             fs.put(s, t)
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
+            assert fs.ls(target) == [] if supports_empty_directories else [dummy]
 
             # With recursive
             fs.put(s, t, recursive=True)
@@ -207,7 +218,7 @@ class AbstractPutTests:
         ("path", "recursive", "maxdepth", "expected"),
         GLOB_TESTS,
     )
-    def test_get_glob(
+    def test_put_glob(
         self,
         path,
         recursive,
@@ -218,6 +229,7 @@ class AbstractPutTests:
         fs_target,
         local_bulk_operations_scenario_0_glob,
         local_join,
+        fs_sanitize_path,
     ):
         # Copy scenario 1g
         source = local_bulk_operations_scenario_0_glob
@@ -234,9 +246,13 @@ class AbstractPutTests:
 
             output = fs.find(target)
             if new_dir:
-                prefixed_expected = [fs_join(target, "newdir", p) for p in expected]
+                prefixed_expected = [
+                    fs_sanitize_path(fs_join(target, "newdir", p)) for p in expected
+                ]
             else:
-                prefixed_expected = [fs_join(target, p) for p in expected]
+                prefixed_expected = [
+                    fs_sanitize_path(fs_join(target, p)) for p in expected
+                ]
             assert sorted(output) == sorted(prefixed_expected)
 
             try:
@@ -251,14 +267,14 @@ class AbstractPutTests:
         fs_target,
         local_join,
         local_bulk_operations_scenario_0,
-        fs_path,
+        supports_empty_directories,
     ):
         # Copy scenario 2a
         source = local_bulk_operations_scenario_0
 
         target = fs_target
         fs.mkdir(target)
-        if not self.supports_empty_directories():
+        if not supports_empty_directories:
             # Force target directory to exist by adding a dummy file
             dummy = fs_join(target, "dummy")
             fs.touch(dummy)
@@ -279,7 +295,7 @@ class AbstractPutTests:
             assert fs.isfile(fs_join(target, "subfile1"))
 
             fs.rm(fs.find(target))
-            assert fs.ls(target) == [] if self.supports_empty_directories() else [dummy]
+            assert fs.ls(target) == [] if supports_empty_directories else [dummy]
 
     def test_put_list_of_files_to_new_directory(
         self, fs, fs_join, fs_target, local_join, local_bulk_operations_scenario_0

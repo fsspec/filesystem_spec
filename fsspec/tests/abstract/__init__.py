@@ -167,8 +167,13 @@ class AbstractFixtures(BaseAbstractFixtures):
     def local_path(self, tmpdir):
         return tmpdir
 
+    @pytest.fixture
     def supports_empty_directories(self):
         """
         Return whether this implementation supports empty directories.
         """
         return True
+
+    @pytest.fixture
+    def fs_sanitize_path(self):
+        return lambda x: x

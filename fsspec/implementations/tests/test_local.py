@@ -954,12 +954,12 @@ def test_cp_get_put_empty_directory(tmpdir, funcname):
     # cp/get/put without slash, target directory exists
     assert fs.isdir(target)
     func(empty, target)
-    assert fs.find(target, withdirs=True) == [target]
+    assert fs.find(target, withdirs=True) == [make_path_posix(target)]
 
     # cp/get/put with slash, target directory exists
     assert fs.isdir(target)
     func(empty + "/", target)
-    assert fs.find(target, withdirs=True) == [target]
+    assert fs.find(target, withdirs=True) == [make_path_posix(target)]
 
     fs.rmdir(target)
 

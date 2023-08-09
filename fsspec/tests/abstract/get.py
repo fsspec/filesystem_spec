@@ -2,6 +2,7 @@ from itertools import product
 
 import pytest
 
+from fsspec.implementations.local import make_path_posix
 from fsspec.tests.conftest import GLOB_TESTS
 
 
@@ -243,9 +244,13 @@ class AbstractGetTests:
 
             output = local_fs.find(target)
             if new_dir:
-                prefixed_expected = [local_join(target, "newdir", p) for p in expected]
+                prefixed_expected = [
+                    make_path_posix(local_join(target, "newdir", p)) for p in expected
+                ]
             else:
-                prefixed_expected = [local_join(target, p) for p in expected]
+                prefixed_expected = [
+                    make_path_posix(local_join(target, p)) for p in expected
+                ]
             assert sorted(output) == sorted(prefixed_expected)
 
             try:
