@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 import os
 import pathlib
 import re
 import sys
-from contextlib import contextmanager
+import tempfile
 from functools import partial
 from hashlib import md5
 from importlib.metadata import version
@@ -481,7 +482,7 @@ def mirror_from(origin_name, methods):
     return wrapper
 
 
-@contextmanager
+@contextlib.contextmanager
 def nullcontext(obj):
     yield obj
 
@@ -556,3 +557,24 @@ def file_size(filelike):
         return filelike.seek(0, 2)
     finally:
         filelike.seek(pos)
+
+
+@contextlib.contextmanager
+def atomic_write(path: str, mode: str = "wb"):
+    """
+    A context manager that opens a temporary file next to `path` and, on exit,
+    replaces `path` with the temporary file, thereby updating `path`
+    atomically.
+    """
+    fd, fn = tempfile.mkstemp(
+        dir=os.path.dirname(path), prefix=os.path.basename(path) + "-"
+    )
+    try:
+        with open(fd, mode) as fp:
+            yield fp
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(fn)
+        raise
+    else:
+        os.replace(fn, path)

@@ -6,7 +6,7 @@ import os
 import tempfile
 import time
 from shutil import rmtree
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -20,7 +20,6 @@ from fsspec.utils import infer_compression
 
 if TYPE_CHECKING:
     from fsspec.implementations.cache_mapper import AbstractCacheMapper
-    from fsspec.implementations.cache_metadata import Detail
 
 logger = logging.getLogger("fsspec.cached")
 
