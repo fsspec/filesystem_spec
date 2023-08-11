@@ -143,19 +143,25 @@ class CacheMetadata:
         if c["blocks"] is not True and len(c["blocks"]) * f.blocksize >= f.size:
             c["blocks"] = True
 
-    def pop_file(self, path: str) -> None:
+    def pop_file(self, path: str) -> str | None:
+        """Remove metadata of cached file.
+
+        If path is in the cache, return the filename of the cached file,
+        otherwise return ``None``.  Caller is responsible for deleting the
+        cached file.
+        """
         details = self.check_file(path, None)
         if not details:
-            return
+            return None
         _, fn = details
         if fn.startswith(self._storage[-1]):
-            os.remove(fn)
             self.cached_files[-1].pop(path)
             self.save()
         else:
             raise PermissionError(
                 "Can only delete cached file in last, writable cache location"
             )
+        return fn
 
     def save(self) -> None:
         """Save metadata to disk"""

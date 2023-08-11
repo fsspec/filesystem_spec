@@ -230,7 +230,9 @@ class CachingFileSystem(AbstractFileSystem):
         raises PermissionError
         """
         path = self._strip_protocol(path)
-        self._metadata.pop_file(path)
+        fn = self._metadata.pop_file(path)
+        if fn is not None:
+            os.remove(fn)
 
     def _open(
         self,
