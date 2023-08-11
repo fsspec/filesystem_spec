@@ -90,12 +90,14 @@ class CacheMetadata:
                 return detail, fn
         return False
 
-    def clear_expired(self, expiry_time: int) -> Iterator[str]:
+    def clear_expired(self, expiry_time: int) -> tuple[list[str], bool]:
         """Remove expired metadata from the cache.
 
-        Yields names of files corresponding to expired metadata. Caller is
-        responsible for deleting these files.
+        Returns names of files corresponding to expired metadata and a boolean
+        flag indicating whether the writable cache is empty. Caller is
+        responsible for deleting the expired files.
         """
+        expired_files = []
         for path, detail in self.cached_files[-1].copy().items():
             if time.time() - detail["time"] > expiry_time:
                 fn = detail.get("fn", "")
@@ -104,7 +106,7 @@ class CacheMetadata:
                         f"Cache metadata does not contain 'fn' for {path}"
                     )
                 fn = os.path.join(self._storage[-1], fn)
-                yield fn
+                expired_files.append(fn)
                 self.cached_files[-1].pop(path)
 
         if self.cached_files[-1]:
@@ -112,9 +114,8 @@ class CacheMetadata:
             with atomic_write(cache_path) as fc:
                 pickle.dump(self.cached_files[-1], fc)
 
-    def empty(self) -> bool:
-        """Return ``True`` if metadata of the writable storage is empty"""
-        return not self.cached_files[-1]
+        writable_cache_empty = not self.cached_files[-1]
+        return expired_files, writable_cache_empty
 
     def load(self) -> None:
         """Load all metadata from disk and store in ``self.cached_files``"""

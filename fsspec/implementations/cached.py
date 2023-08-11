@@ -213,11 +213,12 @@ class CachingFileSystem(AbstractFileSystem):
 
         self._check_cache()
 
-        for fn in self._metadata.clear_expired(expiry_time):
+        expired_files, writable_cache_empty = self._metadata.clear_expired(expiry_time)
+        for fn in expired_files:
             if os.path.exists(fn):
                 os.remove(fn)
 
-        if self._metadata.empty():
+        if writable_cache_empty:
             rmtree(self.storage[-1])
             self.load_cache()
 
