@@ -112,16 +112,6 @@ class CacheMetadata:
             with atomic_write(cache_path) as fc:
                 pickle.dump(self.cached_files[-1], fc)
 
-    def close_file(self, f: Any, path: str) -> None:
-        """Perform side-effect actions when closing a cached file.
-
-        The actual closing of the file is the responsibility of the caller.
-        """
-        # File must be writeble, so in self.cached_files[-1]
-        c = self.cached_files[-1][path]
-        if c["blocks"] is not True and len(c["blocks"]) * f.blocksize >= f.size:
-            c["blocks"] = True
-
     def empty(self) -> bool:
         """Return ``True`` if metadata of the writable storage is empty"""
         return not self.cached_files[-1]
@@ -141,6 +131,16 @@ class CacheMetadata:
             else:
                 cached_files.append({})
         self.cached_files = cached_files or [{}]
+
+    def on_close_cached_file(self, f: Any, path: str) -> None:
+        """Perform side-effect actions on closing a cached file.
+
+        The actual closing of the file is the responsibility of the caller.
+        """
+        # File must be writeble, so in self.cached_files[-1]
+        c = self.cached_files[-1][path]
+        if c["blocks"] is not True and len(c["blocks"]) * f.blocksize >= f.size:
+            c["blocks"] = True
 
     def pop_file(self, path: str) -> None:
         details = self.check_file(path, None)

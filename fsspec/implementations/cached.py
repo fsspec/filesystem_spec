@@ -332,7 +332,7 @@ class CachingFileSystem(AbstractFileSystem):
         if f.closed:
             return
         path = self._strip_protocol(f.path)
-        self._metadata.close_file(f, path)
+        self._metadata.on_close_cached_file(f, path)
         try:
             logger.debug("going to save")
             self.save_cache()
