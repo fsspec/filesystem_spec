@@ -6,7 +6,7 @@ import os
 import tempfile
 import time
 from shutil import rmtree
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -183,13 +183,7 @@ class CachingFileSystem(AbstractFileSystem):
         """Is path in cache and still valid"""
         path = self._strip_protocol(path)
         self._check_cache()
-
-        def ignore(detail: Detail) -> bool:
-            return (self.check_files and detail["uid"] != self.fs.ukey(path)) or (
-                self.expiry and time.time() - detail["time"] > self.expiry
-            )
-
-        return self._metadata.check_file(path, ignore)
+        return self._metadata.check_file(path, self)
 
     def clear_cache(self):
         """Remove all files and metadata from the cache

@@ -8,9 +8,11 @@ import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, Iterator, Literal
+    from typing import Any, Dict, Iterator, Literal
 
     from typing_extensions import TypeAlias
+
+    from .cached import CachingFileSystem
 
     Detail: TypeAlias = Dict[str, Any]
 
@@ -62,19 +64,27 @@ class CacheMetadata:
             yield os.path.join(storage, "cache"), storage, writable
 
     def check_file(
-        self, path: str, ignore: Callable[[Detail], bool] | None
+        self, path: str, cfs: CachingFileSystem | None
     ) -> Literal[False] | tuple[Detail, str]:
         """If path is in cache return its details, otherwise return ``False``.
 
-        Takes an optional callback so that the caller can choose to ignore
-        possible matches if, for example, they are too old.
+        If the optional CachingFileSystem is specified then it is used to
+        perform extra checks to reject possible matches, such as if they are
+        too old.
         """
         for (fn, base, _), cache in zip(self._scan_locations(), self.cached_files):
             if path not in cache:
                 continue
             detail = cache[path].copy()
-            if ignore is not None and ignore(detail):
-                continue
+
+            if cfs is not None:
+                if cfs.check_files and detail["uid"] != cfs.fs.ukey(path):
+                    # Wrong file as determined by hash of file properties
+                    continue
+                if cfs.expiry and time.time() - detail["time"] > cfs.expiry:
+                    # Cached file has expired
+                    continue
+
             fn = os.path.join(base, detail["fn"])
             if os.path.exists(fn):
                 return detail, fn
