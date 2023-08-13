@@ -1091,6 +1091,10 @@ def glob_files_folder(tmp_path):
     return local_fake_dir
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="no need to run python glob posix tests on windows",
+)
 @pytest.mark.parametrize(
     GLOB_POSIX_TESTS["argnames"],
     GLOB_POSIX_TESTS["argvalues"],
@@ -1106,7 +1110,8 @@ def test_posix_tests_python_glob(path, expected, glob_files_folder):
 
 
 @pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="no need to run bash posix tests on windows"
+    sys.platform.startswith("win"),
+    reason="no need to run bash stat posix tests on windows",
 )
 @pytest.mark.parametrize(
     GLOB_POSIX_TESTS["argnames"],
