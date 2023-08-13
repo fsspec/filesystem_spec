@@ -1081,30 +1081,50 @@ def glob_fs():
     return DummyTestFS(fs_content=PATHS_FOR_GLOB_TESTS)
 
 
-@pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="can't run bash tests on windows"
-)
-@pytest.mark.parametrize(
-    GLOB_POSIX_TESTS["argnames"],
-    GLOB_POSIX_TESTS["argvalues"],
-)
-def test_posix_tests(path, expected, tmp_path):
-    """
-    Tests against python glob and bash stat to check if our posix tests are accurate.
-    """
+@pytest.fixture(scope="function")
+def glob_files_folder(tmp_path):
     local_fs = LocalFileSystem(auto_mkdir=True)
     local_fake_dir = str(tmp_path)
     for path_info in PATHS_FOR_GLOB_TESTS:
         if path_info["type"] == "file":
             local_fs.touch(path=f"{str(tmp_path)}/{path_info['name']}")
+    return local_fake_dir
 
-    abs_path = f"{local_fake_dir}/{path}"
 
-    # Test python glob
+@pytest.mark.parametrize(
+    GLOB_POSIX_TESTS["argnames"],
+    GLOB_POSIX_TESTS["argvalues"],
+)
+def test_posix_tests_python_glob(path, expected, glob_files_folder):
+    """
+    Tests against python glob to check if our posix tests are accurate.
+    """
+    abs_path = f"{glob_files_folder}/{path}"
+
     python_output = glob.glob(pathname=abs_path, recursive=True)
-    assert _clean_paths(python_output, local_fake_dir) == _clean_paths(expected)
+    assert _clean_paths(python_output, glob_files_folder) == _clean_paths(expected)
 
-    # Test bash glob
+
+@pytest.mark.skipif(
+    sys.platform.startswith("win"), reason="no need to run bash posix tests on windows"
+)
+@pytest.mark.parametrize(
+    GLOB_POSIX_TESTS["argnames"],
+    GLOB_POSIX_TESTS["argvalues"],
+)
+def test_posix_tests_bash_stat(path, expected, glob_files_folder):
+    """
+    Tests against bash stat to check if our posix tests are accurate.
+    """
+    try:
+        subprocess.check_output(["bash", "-c", "shopt -s globstar"])
+    except FileNotFoundError:
+        pytest.skip("bash is not available")
+    except subprocess.CalledProcessError:
+        pytest.skip("globstar option is not available")
+
+    abs_path = f"{glob_files_folder}/{path}"
+
     bash_abs_path = (
         abs_path.replace("\\", "\\\\")
         .replace("$", "\\$")
@@ -1117,7 +1137,7 @@ def test_posix_tests(path, expected, tmp_path):
         capture_output=True,
     )
     bash_output = bash_output.stdout.decode("utf-8").replace("'", "").split("\n")
-    assert _clean_paths(bash_output, local_fake_dir) == _clean_paths(expected)
+    assert _clean_paths(bash_output, glob_files_folder) == _clean_paths(expected)
 
 
 @pytest.mark.parametrize(
