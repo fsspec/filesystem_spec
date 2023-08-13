@@ -27,13 +27,13 @@ class BaseAbstractFixtures:
         fs.rm(source, recursive=True)
 
     @pytest.fixture
-    def fs_bulk_operations_scenario_0_glob(self, fs, fs_join, fs_path):
+    def fs_glob_edge_cases_files(self, fs, fs_join, fs_path):
         """
-        Scenario on remote filesystem that is used for many cp/get/put tests.
+        Scenario on remote filesystem that is used for glob edge cases cp/get/put tests.
 
         Cleans up at the end of each test it which it is used.
         """
-        source = self._bulk_operations_scenario_0(fs, fs_join, fs_path, glob=True)
+        source = self._glob_edge_cases_files(fs, fs_join, fs_path)
         yield source
         fs.rm(source, recursive=True)
 
@@ -61,15 +61,13 @@ class BaseAbstractFixtures:
         local_fs.rm(source, recursive=True)
 
     @pytest.fixture
-    def local_bulk_operations_scenario_0_glob(self, local_fs, local_join, local_path):
+    def local_glob_edge_cases_files(self, local_fs, local_join, local_path):
         """
-        Scenario on local filesystem that is used for many cp/get/put tests.
+        Scenario on local filesystem that is used for glob edge cases cp/get/put tests.
 
         Cleans up at the end of each test it which it is used.
         """
-        source = self._bulk_operations_scenario_0(
-            local_fs, local_join, local_path, glob=True
-        )
+        source = self._glob_edge_cases_files(local_fs, local_join, local_path)
         yield source
         local_fs.rm(source, recursive=True)
 
@@ -85,7 +83,40 @@ class BaseAbstractFixtures:
         if local_fs.exists(target):
             local_fs.rm(target, recursive=True)
 
-    def _bulk_operations_scenario_0(self, some_fs, some_join, some_path, glob=False):
+    def _glob_edge_cases_files(self, some_fs, some_join, some_path):
+        """
+        Scenario that is used for glob edge cases cp/get/put tests.
+        Creates the following directory and file structure:
+
+        📁 source
+        ├── 📄 file1
+        ├── 📄 file2
+        ├── 📁 subdir0
+        │   ├── 📄 subfile1
+        │   ├── 📄 subfile2
+        │   └── 📁 nesteddir
+        │       └── 📄 nestedfile
+        └── 📁 subdir1
+            ├── 📄 subfile1
+            ├── 📄 subfile2
+            └── 📁 nesteddir
+                └── 📄 nestedfile
+        """
+        source = some_join(some_path, "source")
+        some_fs.touch(some_join(source, "file1"))
+        some_fs.touch(some_join(source, "file2"))
+
+        for subdir_idx in range(2):
+            subdir = some_join(source, f"subdir{subdir_idx}")
+            nesteddir = some_join(subdir, "nesteddir")
+            some_fs.makedirs(nesteddir)
+            some_fs.touch(some_join(subdir, "subfile1"))
+            some_fs.touch(some_join(subdir, "subfile2"))
+            some_fs.touch(some_join(nesteddir, "nestedfile"))
+
+        return source
+
+    def _bulk_operations_scenario_0(self, some_fs, some_join, some_path):
         """
         Scenario that is used for many cp/get/put tests. Creates the following
         directory and file structure:
@@ -100,10 +131,7 @@ class BaseAbstractFixtures:
                 └── 📄 nestedfile
         """
         source = some_join(some_path, "source")
-        if glob:
-            subdir = some_join(source, "subdir0")
-        else:
-            subdir = some_join(source, "subdir")
+        subdir = some_join(source, "subdir")
         nesteddir = some_join(subdir, "nesteddir")
         some_fs.makedirs(nesteddir)
         some_fs.touch(some_join(source, "file1"))
@@ -111,13 +139,6 @@ class BaseAbstractFixtures:
         some_fs.touch(some_join(subdir, "subfile1"))
         some_fs.touch(some_join(subdir, "subfile2"))
         some_fs.touch(some_join(nesteddir, "nestedfile"))
-        if glob:
-            subdir = some_join(source, "subdir1")
-            nesteddir = some_join(subdir, "nesteddir")
-            some_fs.makedirs(nesteddir)
-            some_fs.touch(some_join(subdir, "subfile1"))
-            some_fs.touch(some_join(subdir, "subfile2"))
-            some_fs.touch(some_join(nesteddir, "nestedfile"))
         return source
 
 
