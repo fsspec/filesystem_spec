@@ -13,6 +13,7 @@ from fsspec.core import (
     _expand_paths,
     expand_paths_if_needed,
     get_compression,
+    get_fs_token_paths,
     open_files,
     open_local,
 )
@@ -73,6 +74,11 @@ def test_expand_paths_if_needed_in_read_mode(create_files, path, out):
 def test_expand_error():
     with pytest.raises(ValueError):
         _expand_paths("*.*", None, 1)
+
+
+@pytest.mark.parametrize("mode", ["w", "w+", "x", "x+"])
+def test_expand_fs_token_paths(mode):
+    assert len(get_fs_token_paths("path", mode, num=2, expand=True)[-1]) == 2
 
 
 def test_openfile_api(m):
