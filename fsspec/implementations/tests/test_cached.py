@@ -8,7 +8,11 @@ import pytest
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
-from fsspec.implementations.cache_mapper import create_cache_mapper
+from fsspec.implementations.cache_mapper import (
+    BasenameCacheMapper,
+    HashCacheMapper,
+    create_cache_mapper,
+)
 from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
 from fsspec.implementations.local import make_path_posix
 
@@ -36,10 +40,20 @@ def local_filecache():
 
 def test_mapper():
     mapper0 = create_cache_mapper(True)
+    assert mapper0("somefile") == "somefile"
+    assert mapper0("/somefile") == "somefile"
     assert mapper0("/somedir/somefile") == "somefile"
     assert mapper0("/otherdir/somefile") == "somefile"
 
     mapper1 = create_cache_mapper(False)
+    assert (
+        mapper1("somefile")
+        == "dd00b9487898b02555b6a2d90a070586d63f93e80c70aaa60c992fa9e81a72fe"
+    )
+    assert (
+        mapper1("/somefile")
+        == "884c07bc2efe65c60fb9d280a620e7f180488718fb5d97736521b7f9cf5c8b37"
+    )
     assert (
         mapper1("/somedir/somefile")
         == "67a6956e5a5f95231263f03758c1fd9254fdb1c564d311674cec56b0372d2056"
@@ -57,9 +71,47 @@ def test_mapper():
     assert hash(create_cache_mapper(True)) == hash(mapper0)
     assert hash(create_cache_mapper(False)) == hash(mapper1)
 
+    with pytest.raises(
+        ValueError,
+        match="BasenameCacheMapper requires zero or positive directory_levels",
+    ):
+        BasenameCacheMapper(-1)
 
-@pytest.mark.parametrize("same_names", [False, True])
-def test_metadata(tmpdir, same_names):
+    mapper2 = BasenameCacheMapper(1)
+    assert mapper2("/somefile") == "somefile"
+    assert mapper2("/somedir/somefile") == "somedir_@_somefile"
+    assert mapper2("/otherdir/somefile") == "otherdir_@_somefile"
+    assert mapper2("/dir1/dir2/dir3/somefile") == "dir3_@_somefile"
+
+    assert mapper2 != mapper0
+    assert mapper2 != mapper1
+    assert BasenameCacheMapper(1) == mapper2
+
+    assert hash(mapper2) != hash(mapper0)
+    assert hash(mapper2) != hash(mapper1)
+    assert hash(BasenameCacheMapper(1)) == hash(mapper2)
+
+    mapper3 = BasenameCacheMapper(2)
+    assert mapper3("/somefile") == "somefile"
+    assert mapper3("/somedir/somefile") == "somedir_@_somefile"
+    assert mapper3("/otherdir/somefile") == "otherdir_@_somefile"
+    assert mapper3("/dir1/dir2/dir3/somefile") == "dir2_@_dir3_@_somefile"
+
+    assert mapper3 != mapper0
+    assert mapper3 != mapper1
+    assert mapper3 != mapper2
+    assert BasenameCacheMapper(2) == mapper3
+
+    assert hash(mapper3) != hash(mapper0)
+    assert hash(mapper3) != hash(mapper1)
+    assert hash(mapper3) != hash(mapper2)
+    assert hash(BasenameCacheMapper(2)) == hash(mapper3)
+
+
+@pytest.mark.parametrize(
+    "cache_mapper", [BasenameCacheMapper(), BasenameCacheMapper(1), HashCacheMapper()]
+)
+def test_metadata(tmpdir, cache_mapper):
     source = os.path.join(tmpdir, "source")
     afile = os.path.join(source, "afile")
     os.mkdir(source)
@@ -69,7 +121,7 @@ def test_metadata(tmpdir, same_names):
         "filecache",
         target_protocol="file",
         cache_storage=os.path.join(tmpdir, "cache"),
-        same_names=same_names,
+        cache_mapper=cache_mapper,
     )
 
     with fs.open(afile, "rb") as f:
@@ -85,8 +137,33 @@ def test_metadata(tmpdir, same_names):
 
     assert detail["original"] == afile_posix
     assert detail["fn"] == fs._mapper(afile_posix)
-    if same_names:
-        assert detail["fn"] == "afile"
+
+    if isinstance(cache_mapper, BasenameCacheMapper):
+        if cache_mapper.directory_levels == 0:
+            assert detail["fn"] == "afile"
+        else:
+            assert detail["fn"] == "source_@_afile"
+
+
+def test_constructor_kwargs(tmpdir):
+    fs = fsspec.filesystem("filecache", target_protocol="file", same_names=True)
+    assert isinstance(fs._mapper, BasenameCacheMapper)
+
+    fs = fsspec.filesystem("filecache", target_protocol="file", same_names=False)
+    assert isinstance(fs._mapper, HashCacheMapper)
+
+    fs = fsspec.filesystem("filecache", target_protocol="file")
+    assert isinstance(fs._mapper, HashCacheMapper)
+
+    with pytest.raises(
+        ValueError, match="Cannot specify both same_names and cache_mapper"
+    ):
+        fs = fsspec.filesystem(
+            "filecache",
+            target_protocol="file",
+            cache_mapper=HashCacheMapper(),
+            same_names=True,
+        )
 
 
 def test_idempotent():
