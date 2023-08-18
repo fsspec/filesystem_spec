@@ -537,14 +537,15 @@ def test_metadata_save_blocked(ftp_writable, caplog):
         raise NameError
 
     try:
-
+        # To simulate an interpreter shutdown we temporarily set an open function in the
+        # cache_metadata module which is used on the next attempt to save metadata.
         with caplog.at_level(logging.DEBUG):
             with fs.open("/one", block_size=20) as f:
-                fsspec.implementations.cached.open = open_raise
+                fsspec.implementations.cache_metadata.open = open_raise
                 f.seek(21)
                 assert f.read(1)
     finally:
-        fsspec.implementations.cached.__dict__.pop("open", None)
+        fsspec.implementations.cache_metadata.__dict__.pop("open", None)
     assert "Cache save failed due to interpreter shutdown" in caplog.text
 
 
