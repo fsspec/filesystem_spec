@@ -362,7 +362,19 @@ class CachingFileSystem(AbstractFileSystem):
                 )
         else:
             detail["blocksize"] = f.blocksize
-        f.cache = MMapCache(f.blocksize, f._fetch_range, f.size, fn, blocks)
+
+        def _fetch_ranges(ranges):
+            return self.fs.cat_ranges(
+                [path] * len(ranges),
+                [r[0] for r in ranges],
+                [r[1] for r in ranges],
+                **kwargs,
+            )
+
+        multi_fetcher = None if self.compression else _fetch_ranges
+        f.cache = MMapCache(
+            f.blocksize, f._fetch_range, f.size, fn, blocks, multi_fetcher=multi_fetcher
+        )
         close = f.close
         f.close = lambda: self.close_and_update(f, close)
         self.save_cache()

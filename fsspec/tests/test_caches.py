@@ -6,6 +6,7 @@ import pytest
 from fsspec.caching import (
     BlockCache,
     FirstChunkCache,
+    MMapCache,
     ReadAheadCache,
     caches,
     register_cache,
@@ -147,6 +148,10 @@ def letters_fetcher(start, end):
     return string.ascii_letters[start:end].encode()
 
 
+def multi_letters_fetcher(ranges):
+    return [string.ascii_letters[start:end].encode() for start, end in ranges]
+
+
 not_parts_caches = {k: v for k, v in caches.items() if k != "parts"}
 
 
@@ -172,6 +177,38 @@ def test_cache_pickleable(Cache_imp):
     assert unpickled.blocksize == blocksize
     assert unpickled.size == size
     assert unpickled._fetch(0, 10) == b"0" * 10
+
+
+def test_first_cache():
+    c = FirstChunkCache(5, letters_fetcher, 52)
+    assert c.cache is None
+    assert c._fetch(12, 15) == letters_fetcher(12, 15)
+    assert c.cache is None
+    assert c._fetch(3, 10) == letters_fetcher(3, 10)
+    assert c.cache == letters_fetcher(0, 5)
+    c.fetcher = None
+    assert c._fetch(1, 4) == letters_fetcher(1, 4)
+
+
+def test_mmap_cache(mocker):
+    fetcher = mocker.Mock(wraps=letters_fetcher)
+    c = MMapCache(5, fetcher, 52)
+    assert c._fetch(6, 8) == letters_fetcher(6, 8)
+    assert fetcher.call_count == 1
+    assert c._fetch(17, 22) == letters_fetcher(17, 22)
+    assert fetcher.call_count == 2
+    assert c._fetch(1, 38) == letters_fetcher(1, 38)
+    assert fetcher.call_count == 5
+
+    multi_fetcher = mocker.Mock(wraps=multi_letters_fetcher)
+    m = MMapCache(5, fetcher, size=52, multi_fetcher=multi_fetcher)
+    assert m._fetch(6, 8) == letters_fetcher(6, 8)
+    assert multi_fetcher.call_count == 1
+    assert m._fetch(17, 22) == letters_fetcher(17, 22)
+    assert multi_fetcher.call_count == 2
+    assert m._fetch(1, 38) == letters_fetcher(1, 38)
+    assert multi_fetcher.call_count == 3
+    assert fetcher.call_count == 5
 
 
 @pytest.mark.parametrize(
