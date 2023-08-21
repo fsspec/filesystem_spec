@@ -1102,7 +1102,6 @@ def test_posix_tests_python_glob(path, expected, glob_files_folder):
     Tests against python glob to check if our posix tests are accurate.
     """
     os.chdir(glob_files_folder)
-    # abs_path = f"{glob_files_folder}/{path}"
 
     python_output = glob.glob(pathname=path, recursive=True)
     assert _clean_paths(python_output, glob_files_folder) == _clean_paths(expected)
