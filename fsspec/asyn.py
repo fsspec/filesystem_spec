@@ -812,7 +812,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
         # Add the root directory if withdirs is requested
         # This is needed for posix glob compliance
-        if withdirs and await self._isdir(path):
+        if withdirs and path != "" and await self._isdir(path):
             out[path] = await self._info(path)
 
         # async for?

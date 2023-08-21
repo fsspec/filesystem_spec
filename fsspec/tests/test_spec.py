@@ -1063,14 +1063,12 @@ def _clean_paths(paths, prefix=""):
       - remove the prefix provided from all paths
       - remove the trailing slashes from all paths
       - remove duplicates paths
-      - remove empty paths after removing the prefix
       - sort all paths
     """
     paths_list = paths
     if isinstance(paths, dict):
         paths_list = list(paths)
-    paths_list = [p.replace(prefix, "").strip("/") for p in paths_list]
-    paths_list = [p for p in sorted(set(paths_list)) if p]
+    paths_list = [p.replace(prefix, "").strip("/") for p in sorted(set(paths_list))]
     if isinstance(paths, dict):
         return {p: paths[p] for p in paths_list}
     return paths_list
@@ -1103,9 +1101,10 @@ def test_posix_tests_python_glob(path, expected, glob_files_folder):
     """
     Tests against python glob to check if our posix tests are accurate.
     """
-    abs_path = f"{glob_files_folder}/{path}"
+    os.chdir(glob_files_folder)
+    # abs_path = f"{glob_files_folder}/{path}"
 
-    python_output = glob.glob(pathname=abs_path, recursive=True)
+    python_output = glob.glob(pathname=path, recursive=True)
     assert _clean_paths(python_output, glob_files_folder) == _clean_paths(expected)
 
 
@@ -1128,20 +1127,23 @@ def test_posix_tests_bash_stat(path, expected, glob_files_folder):
     except subprocess.CalledProcessError:
         pytest.skip("globstar option is not available")
 
-    abs_path = f"{glob_files_folder}/{path}"
-
-    bash_abs_path = (
-        abs_path.replace("\\", "\\\\")
+    bash_path = (
+        path.replace("\\", "\\\\")
         .replace("$", "\\$")
         .replace("(", "\\(")
         .replace(")", "\\)")
         .replace("|", "\\|")
     )
     bash_output = subprocess.run(
-        ["bash", "-c", f"shopt -s globstar && stat -c %N {bash_abs_path}"],
+        [
+            "bash",
+            "-c",
+            f"cd {glob_files_folder} && shopt -s globstar && stat -c %N {bash_path}",
+        ],
         capture_output=True,
     )
-    bash_output = bash_output.stdout.decode("utf-8").replace("'", "").split("\n")
+    # Remove the last element always empty
+    bash_output = bash_output.stdout.decode("utf-8").replace("'", "").split("\n")[:-1]
     assert _clean_paths(bash_output, glob_files_folder) == _clean_paths(expected)
 
 

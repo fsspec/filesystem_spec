@@ -489,7 +489,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         # Add the root directory if withdirs is requested
         # This is needed for posix glob compliance
-        if withdirs and self.isdir(path):
+        if withdirs and path != "" and self.isdir(path):
             out[path] = self.info(path)
 
         for _, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):

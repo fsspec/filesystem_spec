@@ -291,7 +291,6 @@ class TestAnyArchive:
 
             assert fs.find("") == ["a", "b", "deeply/nested/path"]
             assert fs.find("", withdirs=True) == [
-                "",
                 "a",
                 "b",
                 "deeply/",

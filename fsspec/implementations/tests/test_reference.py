@@ -47,7 +47,7 @@ def test_ls(server):  # noqa: F811
     assert fs.ls("", detail=False) == ["a", "b", "c"]
     assert {"name": "c", "type": "directory", "size": 0} in fs.ls("", detail=True)
     assert fs.find("") == ["a", "b", "c/d"]
-    assert fs.find("", withdirs=True) == ["", "a", "b", "c", "c/d"]
+    assert fs.find("", withdirs=True) == ["a", "b", "c", "c/d"]
     assert fs.find("c", detail=True) == {
         "c/d": {"name": "c/d", "size": 6, "type": "file"}
     }
