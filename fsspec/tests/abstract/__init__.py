@@ -38,6 +38,18 @@ class BaseAbstractFixtures:
         fs.rm(source, recursive=True)
 
     @pytest.fixture
+    def fs_dir_and_file_with_same_name_prefix(self, fs, fs_join, fs_path):
+        """
+        Scenario on remote filesystem that is used to check cp/get/put on directory
+        and file with the same name prefixes.
+
+        Cleans up at the end of each test it which it is used.
+        """
+        source = self._dir_and_file_with_same_name_prefix(fs, fs_join, fs_path)
+        yield source
+        fs.rm(source, recursive=True)
+
+    @pytest.fixture
     def fs_target(self, fs, fs_join, fs_path):
         """
         Return name of remote directory that does not yet exist to copy into.
@@ -68,6 +80,22 @@ class BaseAbstractFixtures:
         Cleans up at the end of each test it which it is used.
         """
         source = self._glob_edge_cases_files(local_fs, local_join, local_path)
+        yield source
+        local_fs.rm(source, recursive=True)
+
+    @pytest.fixture
+    def local_dir_and_file_with_same_name_prefix(
+        self, local_fs, local_join, local_path
+    ):
+        """
+        Scenario on local filesystem that is used to check cp/get/put on directory
+        and file with the same name prefixes.
+
+        Cleans up at the end of each test it which it is used.
+        """
+        source = self._dir_and_file_with_same_name_prefix(
+            local_fs, local_join, local_path
+        )
         yield source
         local_fs.rm(source, recursive=True)
 
@@ -139,6 +167,25 @@ class BaseAbstractFixtures:
         some_fs.touch(some_join(subdir, "subfile1"))
         some_fs.touch(some_join(subdir, "subfile2"))
         some_fs.touch(some_join(nesteddir, "nestedfile"))
+        return source
+
+    def _dir_and_file_with_same_name_prefix(self, some_fs, some_join, some_path):
+        """
+        Scenario that is used to check cp/get/put on directory and file with
+        the same name prefixes. Creates the following directory and file structure:
+
+        📁 source
+        ├── 📄 subdir.txt
+        └── 📁 subdir
+            └── 📄 subfile.txt
+        """
+        source = some_join(some_path, "source")
+        subdir = some_join(source, "subdir")
+        file = some_join(source, "subdir.txt")
+        subfile = some_join(subdir, "subfile.txt")
+        some_fs.makedirs(subdir)
+        some_fs.touch(file)
+        some_fs.touch(subfile)
         return source
 
 

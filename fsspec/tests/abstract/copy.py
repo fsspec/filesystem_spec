@@ -487,3 +487,18 @@ class AbstractCopyTests:
         assert fs.isdir(target)
         assert fs.isfile(fs_join(target, "file1"))
         assert fs.isfile(fs_join(target, "file2"))
+
+    def test_copy_directory_without_files_with_same_name_prefix(
+        self,
+        fs,
+        fs_join,
+        fs_target,
+        fs_dir_and_file_with_same_name_prefix,
+    ):
+        # Create the test dirs
+        source = fs_dir_and_file_with_same_name_prefix
+
+        fs.cp(fs_join(source, "subdir"), fs_target, recursive=True)
+
+        assert fs.isfile(fs_join(fs_target, "subfile.txt"))
+        assert not fs.isfile(fs_join(fs_target, "subdir.txt"))
