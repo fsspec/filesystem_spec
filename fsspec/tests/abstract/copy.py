@@ -502,3 +502,10 @@ class AbstractCopyTests:
 
         assert fs.isfile(fs_join(fs_target, "subfile.txt"))
         assert not fs.isfile(fs_join(fs_target, "subdir.txt"))
+
+        # Test if glob still works though
+        # (maybe not the best place for this test)
+        test = fs.glob(fs_join(source, "subdir*"))
+        assert sorted(test) == sorted(
+            [fs_join(source, "subdir"), fs_join(source, "subdir.txt")]
+        )
