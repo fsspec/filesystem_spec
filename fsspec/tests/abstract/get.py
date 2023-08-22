@@ -3,7 +3,7 @@ from itertools import product
 import pytest
 
 from fsspec.implementations.local import make_path_posix
-from fsspec.tests.conftest import GLOB_EDGE_CASES_TESTS
+from fsspec.tests.abstract.common import GLOB_EDGE_CASES_TESTS
 
 
 class AbstractGetTests:
