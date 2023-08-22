@@ -117,3 +117,8 @@ or write mode (create names). Critically, the file on the backend system is not 
             print(line)
             if "KENYA" in line:
                 break
+
+.. raw:: html
+
+    <script data-goatcounter="https://distdatacats.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
