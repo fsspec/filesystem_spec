@@ -268,3 +268,8 @@ Utilities
    fsspec.utils.read_block
 
 .. autofunction:: fsspec.utils.read_block
+
+.. raw:: html
+
+    <script data-goatcounter="https://distdatacats.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
