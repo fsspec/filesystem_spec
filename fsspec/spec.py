@@ -486,6 +486,12 @@ class AbstractFileSystem(metaclass=_Cached):
         # TODO: allow equivalent of -name parameter
         path = self._strip_protocol(path)
         out = dict()
+
+        # Add the root directory if withdirs is requested
+        # This is needed for posix glob compliance
+        if withdirs and path != "" and self.isdir(path):
+            out[path] = self.info(path)
+
         for _, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
                 files.update(dirs)
@@ -534,15 +540,16 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return sizes
 
-    def glob(self, path, **kwargs):
+    def glob(self, path, maxdepth=None, **kwargs):
         """
         Find files by glob-matching.
 
-        If the path ends with '/' and does not contain "*", it is essentially
-        the same as ``ls(path)``, returning only files.
+        If the path ends with '/', only folders are returned.
 
         We support ``"**"``,
         ``"?"`` and ``"[..]"``. We do not support ^ for pattern negation.
+
+        The `maxdepth` option is applied on the first `**` found in the path.
 
         Search path names that contain embedded characters special to this
         implementation of glob may not produce expected results;
@@ -550,24 +557,23 @@ class AbstractFileSystem(metaclass=_Cached):
 
         kwargs are passed to ``ls``.
         """
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
         import re
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+        idx_star = path.find("*") if path.find("*") >= 0 else len(path)
+        idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
+        idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        ind = min(indstar, indques, indbrace)
+        min_idx = min(idx_star, idx_qmark, idx_brace)
 
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif self.exists(path):
+            if self.exists(path):
                 if not detail:
                     return [path]
                 else:
@@ -577,13 +583,21 @@ class AbstractFileSystem(metaclass=_Cached):
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        elif "/" in path[:min_idx]:
+            min_idx = path[:min_idx].rindex("/")
+            root = path[: min_idx + 1]
+            depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+            depth = path[min_idx + 1 :].count("/") + 1
+
+        if "**" in path:
+            if maxdepth is not None:
+                idx_double_stars = path.find("**")
+                depth_double_stars = path[idx_double_stars:].count("/") + 1
+                depth = depth - depth_double_stars + maxdepth
+            else:
+                depth = None
 
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
         # Escape characters special to python regex, leaving our supported
@@ -609,14 +623,24 @@ class AbstractFileSystem(metaclass=_Cached):
             )
             + "$"
         )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
+        pattern = re.sub("/[*]{2}", "=SLASH_DOUBLE_STARS=", pattern)
+        pattern = re.sub("[*]{2}/?", "=DOUBLE_STARS=", pattern)
         pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+        pattern = re.sub("=SLASH_DOUBLE_STARS=", "(|/.*)", pattern)
+        pattern = re.sub("=DOUBLE_STARS=", ".*", pattern)
+        pattern = re.compile(pattern)
+
         out = {
             p: allpaths[p]
             for p in sorted(allpaths)
             if pattern.match(p.replace("//", "/").rstrip("/"))
         }
+
+        # Return directories only when the glob end by a slash
+        # This is needed for posix glob compliance
+        if ends:
+            out = {k: v for k, v in out.items() if v["type"] == "directory"}
+
         if detail:
             return out
         else:
@@ -918,7 +942,6 @@ class AbstractFileSystem(metaclass=_Cached):
             LocalFileSystem,
             make_path_posix,
             trailing_sep,
-            trailing_sep_maybe_asterisk,
         )
 
         source_is_str = isinstance(rpath, str)
@@ -931,14 +954,20 @@ class AbstractFileSystem(metaclass=_Cached):
 
         if isinstance(lpath, str):
             lpath = make_path_posix(lpath)
-        isdir = isinstance(lpath, str) and (
+
+        source_is_file = len(rpaths) == 1
+        dest_is_dir = isinstance(lpath, str) and (
             trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
+        )
+
+        exists = source_is_str and (
+            (has_magic(rpath) and source_is_file)
+            or (not has_magic(rpath) and dest_is_dir and not trailing_sep(rpath))
         )
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(rpath),
-            is_dir=isdir,
+            exists=exists,
             flatten=not source_is_str,
         )
 
@@ -988,7 +1017,6 @@ class AbstractFileSystem(metaclass=_Cached):
             LocalFileSystem,
             make_path_posix,
             trailing_sep,
-            trailing_sep_maybe_asterisk,
         )
 
         source_is_str = isinstance(lpath, str)
@@ -1002,17 +1030,24 @@ class AbstractFileSystem(metaclass=_Cached):
             if not lpaths:
                 return
 
-        isdir = isinstance(rpath, str) and (trailing_sep(rpath) or self.isdir(rpath))
+        source_is_file = len(lpaths) == 1
+        dest_is_dir = isinstance(rpath, str) and (
+            trailing_sep(rpath) or self.isdir(rpath)
+        )
+
         rpath = (
             self._strip_protocol(rpath)
             if isinstance(rpath, str)
             else [self._strip_protocol(p) for p in rpath]
         )
+        exists = source_is_str and (
+            (has_magic(lpath) and source_is_file)
+            or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
+        )
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
-            is_dir=isdir,
+            exists=exists,
             flatten=not source_is_str,
         )
 
@@ -1045,7 +1080,7 @@ class AbstractFileSystem(metaclass=_Cached):
             not-found exceptions will cause the path to be skipped; defaults to
             raise unless recursive is true, where the default is ignore
         """
-        from .implementations.local import trailing_sep, trailing_sep_maybe_asterisk
+        from .implementations.local import trailing_sep
 
         if on_error is None and recursive:
             on_error = "ignore"
@@ -1060,12 +1095,19 @@ class AbstractFileSystem(metaclass=_Cached):
             if not paths:
                 return
 
-        isdir = isinstance(path2, str) and (trailing_sep(path2) or self.isdir(path2))
+        source_is_file = len(paths) == 1
+        dest_is_dir = isinstance(path2, str) and (
+            trailing_sep(path2) or self.isdir(path2)
+        )
+
+        exists = source_is_str and (
+            (has_magic(path1) and source_is_file)
+            or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
+        )
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
-            is_dir=isdir,
+            exists=exists,
             flatten=not source_is_str,
         )
 
@@ -1093,7 +1135,7 @@ class AbstractFileSystem(metaclass=_Cached):
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if has_magic(p):
-                    bit = set(self.glob(p, **kwargs))
+                    bit = set(self.glob(p, maxdepth=maxdepth, **kwargs))
                     out |= bit
                     if recursive:
                         # glob call above expanded one depth so if maxdepth is defined

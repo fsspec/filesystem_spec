@@ -255,27 +255,25 @@ def test_common_prefix(paths, out):
 
 
 @pytest.mark.parametrize(
-    "paths, other, is_dir, exists, expected",
+    "paths, other, exists, expected",
     (
-        (["/path1"], "/path2", False, False, ["/path2"]),
-        (["/path1"], "/path2", True, True, ["/path2/path1"]),
-        (["/path1"], "/path2", None, False, ["/path2"]),
-        (["/path1"], "/path2/", True, True, ["/path2/path1"]),
-        (["/path1"], ["/path2"], True, False, ["/path2"]),
-        (["/path1"], ["/path2"], True, True, ["/path2"]),
-        (["/path1", "/path2"], "/path2", True, False, ["/path2/path1", "/path2/path2"]),
-        (["/path1", "/path2"], "/path2", True, True, ["/path2/path1", "/path2/path2"]),
+        (["/path1"], "/path2", False, ["/path2"]),
+        (["/path1"], "/path2", True, ["/path2/path1"]),
+        (["/path1"], "/path2", False, ["/path2"]),
+        (["/path1"], "/path2/", True, ["/path2/path1"]),
+        (["/path1"], ["/path2"], False, ["/path2"]),
+        (["/path1"], ["/path2"], True, ["/path2"]),
+        (["/path1", "/path2"], "/path2", False, ["/path2/path1", "/path2/path2"]),
+        (["/path1", "/path2"], "/path2", True, ["/path2/path1", "/path2/path2"]),
         (
             ["/more/path1", "/more/path2"],
             "/path2",
-            True,
             False,
             ["/path2/path1", "/path2/path2"],
         ),
         (
             ["/more/path1", "/more/path2"],
             "/path2",
-            True,
             True,
             ["/path2/more/path1", "/path2/more/path2"],
         ),
@@ -283,56 +281,49 @@ def test_common_prefix(paths, out):
             ["/more/path1", "/more/path2"],
             "/path2",
             False,
-            False,
             ["/path2/path1", "/path2/path2"],
         ),
         (
             ["/more/path1", "/more/path2"],
             "/path2",
-            False,
             True,
             ["/path2/more/path1", "/path2/more/path2"],
         ),
         (
             ["/more/path1", "/more/path2"],
             "/path2/",
-            None,
             False,
             ["/path2/path1", "/path2/path2"],
         ),
         (
             ["/more/path1", "/more/path2"],
             "/path2/",
-            None,
             True,
             ["/path2/more/path1", "/path2/more/path2"],
         ),
         (
             ["/more/path1", "/diff/path2"],
             "/path2/",
-            None,
             False,
             ["/path2/more/path1", "/path2/diff/path2"],
         ),
         (
             ["/more/path1", "/diff/path2"],
             "/path2/",
-            None,
             True,
             ["/path2/more/path1", "/path2/diff/path2"],
         ),
-        (["a", "b/", "b/c"], "dest/", True, False, ["dest/a", "dest/b/", "dest/b/c"]),
+        (["a", "b/", "b/c"], "dest/", False, ["dest/a", "dest/b/", "dest/b/c"]),
         (
             ["/a", "/b/", "/b/c"],
             "dest/",
-            True,
             False,
             ["dest/a", "dest/b/", "dest/b/c"],
         ),
     ),
 )
-def test_other_paths(paths, other, is_dir, exists, expected):
-    assert other_paths(paths, other, is_dir, exists) == expected
+def test_other_paths(paths, other, exists, expected):
+    assert other_paths(paths, other, exists) == expected
 
 
 def test_log():

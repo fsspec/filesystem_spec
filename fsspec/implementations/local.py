@@ -65,10 +65,6 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return [posixpath.join(path, f) for f in os.listdir(path)]
 
-    def glob(self, path, **kwargs):
-        path = self._strip_protocol(path)
-        return super().glob(path, **kwargs)
-
     def info(self, path, **kwargs):
         if isinstance(path, os.DirEntry):
             # scandir DirEntry
@@ -285,21 +281,6 @@ def trailing_sep(path):
     # always be a forward slash, simplifying this function.
     # See https://github.com/fsspec/filesystem_spec/pull/1250
     return path.endswith(os.sep) or (os.altsep is not None and path.endswith(os.altsep))
-
-
-def trailing_sep_maybe_asterisk(path):
-    """Return True if the path ends with a path separator and optionally an
-    asterisk.
-
-    A forward slash is always considered a path separator, even on Operating
-    Systems that normally use a backslash.
-    """
-    # TODO: if all incoming paths were posix-compliant then separator would
-    # always be a forward slash, simplifying this function.
-    # See https://github.com/fsspec/filesystem_spec/pull/1250
-    return path.endswith((os.sep, os.sep + "*")) or (
-        os.altsep is not None and path.endswith((os.altsep, os.altsep + "*"))
-    )
 
 
 class LocalFileOpener(io.IOBase):

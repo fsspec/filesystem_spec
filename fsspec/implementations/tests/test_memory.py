@@ -316,12 +316,12 @@ def test_cp_empty_directory(m):
     # cp without slash, target directory exists
     assert m.isdir(target)
     m.cp(empty, target)
-    assert m.find(target, withdirs=True) == []
+    assert m.find(target, withdirs=True) == [target]
 
     # cp with slash, target directory exists
     assert m.isdir(target)
     m.cp(empty + "/", target)
-    assert m.find(target, withdirs=True) == []
+    assert m.find(target, withdirs=True) == [target]
 
     m.rmdir(target)
 

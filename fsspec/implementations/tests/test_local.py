@@ -323,7 +323,9 @@ def test_globfind_dirs(tmpdir):
         fs.glob(tmpdir + "/dir/*", detail=True)[tmpdir + "/dir/afile"]["type"] == "file"
     )
     assert [tmpdir + "/dir/afile"] == fs.find(tmpdir)
-    assert [tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(tmpdir, withdirs=True)
+    assert [tmpdir, tmpdir + "/dir", tmpdir + "/dir/afile"] == fs.find(
+        tmpdir, withdirs=True
+    )
 
 
 def test_touch(tmpdir):
@@ -952,12 +954,12 @@ def test_cp_get_put_empty_directory(tmpdir, funcname):
     # cp/get/put without slash, target directory exists
     assert fs.isdir(target)
     func(empty, target)
-    assert fs.find(target, withdirs=True) == []
+    assert fs.find(target, withdirs=True) == [make_path_posix(target)]
 
     # cp/get/put with slash, target directory exists
     assert fs.isdir(target)
     func(empty + "/", target)
-    assert fs.find(target, withdirs=True) == []
+    assert fs.find(target, withdirs=True) == [make_path_posix(target)]
 
     fs.rmdir(target)
 

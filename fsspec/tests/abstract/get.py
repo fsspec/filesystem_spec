@@ -1,3 +1,11 @@
+from itertools import product
+
+import pytest
+
+from fsspec.implementations.local import make_path_posix
+from fsspec.tests.conftest import GLOB_EDGE_CASES_TESTS
+
+
 class AbstractGetTests:
     def test_get_file_to_existing_directory(
         self,
@@ -66,7 +74,6 @@ class AbstractGetTests:
         self,
         fs,
         fs_join,
-        fs_path,
         fs_bulk_operations_scenario_0,
         local_fs,
         local_join,
@@ -117,6 +124,7 @@ class AbstractGetTests:
 
         target = local_target
         local_fs.mkdir(target)
+        assert local_fs.isdir(target)
 
         for source_slash, target_slash in zip([False, True], [False, True]):
             s = fs_join(source, "subdir")
@@ -125,9 +133,8 @@ class AbstractGetTests:
             t = target + "/" if target_slash else target
 
             # Without recursive does nothing
-            # ERROR: erroneously creates new directory
-            # fs.get(s, t)
-            # assert fs.ls(target) == []
+            fs.get(s, t)
+            assert local_fs.ls(target) == []
 
             # With recursive
             fs.get(s, t, recursive=True)
@@ -136,6 +143,7 @@ class AbstractGetTests:
                 assert local_fs.isfile(local_join(target, "subfile2"))
                 assert local_fs.isdir(local_join(target, "nesteddir"))
                 assert local_fs.isfile(local_join(target, "nesteddir", "nestedfile"))
+                assert not local_fs.exists(local_join(target, "subdir"))
 
                 local_fs.rm(
                     [
@@ -157,8 +165,29 @@ class AbstractGetTests:
                 local_fs.rm(local_join(target, "subdir"), recursive=True)
             assert local_fs.ls(target) == []
 
-            # Limit by maxdepth
-            # ERROR: maxdepth ignored here
+            # Limit recursive by maxdepth
+            fs.get(s, t, recursive=True, maxdepth=1)
+            if source_slash:
+                assert local_fs.isfile(local_join(target, "subfile1"))
+                assert local_fs.isfile(local_join(target, "subfile2"))
+                assert not local_fs.exists(local_join(target, "nesteddir"))
+                assert not local_fs.exists(local_join(target, "subdir"))
+
+                local_fs.rm(
+                    [
+                        local_join(target, "subfile1"),
+                        local_join(target, "subfile2"),
+                    ],
+                    recursive=True,
+                )
+            else:
+                assert local_fs.isdir(local_join(target, "subdir"))
+                assert local_fs.isfile(local_join(target, "subdir", "subfile1"))
+                assert local_fs.isfile(local_join(target, "subdir", "subfile2"))
+                assert not local_fs.exists(local_join(target, "subdir", "nesteddir"))
+
+                local_fs.rm(local_join(target, "subdir"), recursive=True)
+            assert local_fs.ls(target) == []
 
     def test_get_directory_to_new_directory(
         self,
@@ -184,9 +213,8 @@ class AbstractGetTests:
                 t += "/"
 
             # Without recursive does nothing
-            # ERROR: erroneously creates new directory
-            # fs.get(s, t)
-            # assert fs.ls(target) == []
+            fs.get(s, t)
+            assert local_fs.ls(target) == []
 
             # With recursive
             fs.get(s, t, recursive=True)
@@ -197,12 +225,21 @@ class AbstractGetTests:
             assert local_fs.isfile(
                 local_join(target, "newdir", "nesteddir", "nestedfile")
             )
+            assert not local_fs.exists(local_join(target, "subdir"))
 
             local_fs.rm(local_join(target, "newdir"), recursive=True)
             assert local_fs.ls(target) == []
 
-            # Limit by maxdepth
-            # ERROR: maxdepth ignored here
+            # Limit recursive by maxdepth
+            fs.get(s, t, recursive=True, maxdepth=1)
+            assert local_fs.isdir(local_join(target, "newdir"))
+            assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
+            assert local_fs.isfile(local_join(target, "newdir", "subfile2"))
+            assert not local_fs.exists(local_join(target, "newdir", "nesteddir"))
+            assert not local_fs.exists(local_join(target, "subdir"))
+
+            local_fs.rm(local_join(target, "newdir"), recursive=True)
+            assert not local_fs.exists(local_join(target, "newdir"))
 
     def test_get_glob_to_existing_directory(
         self,
@@ -219,20 +256,62 @@ class AbstractGetTests:
         target = local_target
         local_fs.mkdir(target)
 
-        # for target_slash in [False, True]:
-        for target_slash in [False]:
+        for target_slash in [False, True]:
             t = target + "/" if target_slash else target
 
             # Without recursive
             fs.get(fs_join(source, "subdir", "*"), t)
             assert local_fs.isfile(local_join(target, "subfile1"))
             assert local_fs.isfile(local_join(target, "subfile2"))
-            # assert not local_fs.isdir(local_join(target, "nesteddir"))  # ERROR
-            assert not local_fs.isdir(local_join(target, "subdir"))
+            assert not local_fs.isdir(local_join(target, "nesteddir"))
+            assert not local_fs.exists(local_join(target, "nesteddir", "nestedfile"))
+            assert not local_fs.exists(local_join(target, "subdir"))
+
+            local_fs.rm(
+                [
+                    local_join(target, "subfile1"),
+                    local_join(target, "subfile2"),
+                ],
+                recursive=True,
+            )
+            assert local_fs.ls(target) == []
 
             # With recursive
+            for glob, recursive in zip(["*", "**"], [True, False]):
+                fs.get(fs_join(source, "subdir", glob), t, recursive=recursive)
+                assert local_fs.isfile(local_join(target, "subfile1"))
+                assert local_fs.isfile(local_join(target, "subfile2"))
+                assert local_fs.isdir(local_join(target, "nesteddir"))
+                assert local_fs.isfile(local_join(target, "nesteddir", "nestedfile"))
+                assert not local_fs.exists(local_join(target, "subdir"))
 
-            # Limit by maxdepth
+                local_fs.rm(
+                    [
+                        local_join(target, "subfile1"),
+                        local_join(target, "subfile2"),
+                        local_join(target, "nesteddir"),
+                    ],
+                    recursive=True,
+                )
+                assert local_fs.ls(target) == []
+
+                # Limit recursive by maxdepth
+                fs.get(
+                    fs_join(source, "subdir", glob), t, recursive=recursive, maxdepth=1
+                )
+                assert local_fs.isfile(local_join(target, "subfile1"))
+                assert local_fs.isfile(local_join(target, "subfile2"))
+                assert not local_fs.exists(local_join(target, "nesteddir"))
+                assert not local_fs.exists(local_join(target, "subdir"))
+
+                local_fs.rm(
+                    [
+                        local_join(target, "subfile1"),
+                        local_join(target, "subfile2"),
+                    ],
+                    recursive=True,
+                )
+                assert local_fs.ls(target) == []
 
     def test_get_glob_to_new_directory(
         self,
@@ -259,27 +338,91 @@ class AbstractGetTests:
             assert local_fs.isdir(local_join(target, "newdir"))
             assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
             assert local_fs.isfile(local_join(target, "newdir", "subfile2"))
-            # ERROR - do not copy empty directory
-            # assert not local_fs.exists(local_join(target, "newdir", "nesteddir"))
+            assert not local_fs.exists(local_join(target, "newdir", "nesteddir"))
+            assert not local_fs.exists(
+                local_join(target, "newdir", "nesteddir", "nestedfile")
+            )
+            assert not local_fs.exists(local_join(target, "subdir"))
+            assert not local_fs.exists(local_join(target, "newdir", "subdir"))
 
             local_fs.rm(local_join(target, "newdir"), recursive=True)
             assert local_fs.ls(target) == []
 
             # With recursive
-            fs.get(fs_join(source, "subdir", "*"), t, recursive=True)
-            assert local_fs.isdir(local_join(target, "newdir"))
-            assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
-            assert local_fs.isfile(local_join(target, "newdir", "subfile2"))
-            assert local_fs.isdir(local_join(target, "newdir", "nesteddir"))
-            assert local_fs.isfile(
-                local_join(target, "newdir", "nesteddir", "nestedfile")
-            )
+            for glob, recursive in zip(["*", "**"], [True, False]):
+                fs.get(fs_join(source, "subdir", glob), t, recursive=recursive)
+                assert local_fs.isdir(local_join(target, "newdir"))
+                assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
+                assert local_fs.isfile(local_join(target, "newdir", "subfile2"))
+                assert local_fs.isdir(local_join(target, "newdir", "nesteddir"))
+                assert local_fs.isfile(
+                    local_join(target, "newdir", "nesteddir", "nestedfile")
+                )
+                assert not local_fs.exists(local_join(target, "subdir"))
+                assert not local_fs.exists(local_join(target, "newdir", "subdir"))
 
-            local_fs.rm(local_join(target, "newdir"), recursive=True)
-            assert local_fs.ls(target) == []
+                local_fs.rm(local_join(target, "newdir"), recursive=True)
+                assert not local_fs.exists(local_join(target, "newdir"))
 
-            # Limit by maxdepth
-            # ERROR: this is not correct
+                # Limit recursive by maxdepth
+                fs.get(
+                    fs_join(source, "subdir", glob), t, recursive=recursive, maxdepth=1
+                )
+                assert local_fs.isdir(local_join(target, "newdir"))
+                assert local_fs.isfile(local_join(target, "newdir", "subfile1"))
+                assert local_fs.isfile(local_join(target, "newdir", "subfile2"))
+                assert not local_fs.exists(local_join(target, "newdir", "nesteddir"))
+                assert not local_fs.exists(local_join(target, "subdir"))
+                assert not local_fs.exists(local_join(target, "newdir", "subdir"))
+
+                local_fs.rm(local_fs.ls(target, detail=False), recursive=True)
+                assert not local_fs.exists(local_join(target, "newdir"))
+
+    @pytest.mark.parametrize(
+        GLOB_EDGE_CASES_TESTS["argnames"],
+        GLOB_EDGE_CASES_TESTS["argvalues"],
+    )
+    def test_get_glob_edge_cases(
+        self,
+        path,
+        recursive,
+        maxdepth,
+        expected,
+        fs,
+        fs_join,
+        fs_glob_edge_cases_files,
+        local_fs,
+        local_join,
+        local_target,
+    ):
+        # Copy scenario 1g
+        source = fs_glob_edge_cases_files
+
+        target = local_target
+
+        for new_dir, target_slash in product([True, False], [True, False]):
+            local_fs.mkdir(target)
+
+            t = local_join(target, "newdir") if new_dir else target
+            t = t + "/" if target_slash else t
+
+            fs.get(fs_join(source, path), t, recursive=recursive, maxdepth=maxdepth)
+
+            output = local_fs.find(target)
+            if new_dir:
+                prefixed_expected = [
+                    make_path_posix(local_join(target, "newdir", p)) for p in expected
+                ]
+            else:
+                prefixed_expected = [
+                    make_path_posix(local_join(target, p)) for p in expected
+                ]
+            assert sorted(output) == sorted(prefixed_expected)
+
+            try:
+                local_fs.rm(target, recursive=True)
+            except FileNotFoundError:
+                pass
 
     def test_get_list_of_files_to_existing_directory(
         self,
@@ -310,7 +453,14 @@ class AbstractGetTests:
             assert local_fs.isfile(local_join(target, "file2"))
             assert local_fs.isfile(local_join(target, "subfile1"))
 
-            local_fs.rm(local_fs.find(target))
+            local_fs.rm(
+                [
+                    local_join(target, "file1"),
+                    local_join(target, "file2"),
+                    local_join(target, "subfile1"),
+                ],
+                recursive=True,
+            )
             assert local_fs.ls(target) == []
 
     def test_get_list_of_files_to_new_directory(
@@ -358,13 +508,13 @@ class AbstractGetTests:
             fs.get(src, target, recursive=True)
             assert local_fs.isdir(target)
 
-        if loop == 0:
-            assert local_fs.isfile(local_join(target, "file"))
-            assert not local_fs.exists(local_join(target, "src"))
-        else:
-            assert local_fs.isfile(local_join(target, "file"))
-            assert local_fs.isdir(local_join(target, "src"))
-            assert local_fs.isfile(local_join(target, "src", "file"))
+            if loop == 0:
+                assert local_fs.isfile(local_join(target, "file"))
+                assert not local_fs.exists(local_join(target, "src"))
+            else:
+                assert local_fs.isfile(local_join(target, "file"))
+                assert local_fs.isdir(local_join(target, "src"))
+                assert local_fs.isfile(local_join(target, "src", "file"))
 
         local_fs.rm(target, recursive=True)
 

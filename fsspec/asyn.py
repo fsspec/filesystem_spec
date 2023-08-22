@@ -13,12 +13,7 @@ from typing import TYPE_CHECKING, Iterable
 
 from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
-from .implementations.local import (
-    LocalFileSystem,
-    make_path_posix,
-    trailing_sep,
-    trailing_sep_maybe_asterisk,
-)
+from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
 from .utils import is_exception, other_paths
 
@@ -357,14 +352,19 @@ class AsyncFileSystem(AbstractFileSystem):
             if not paths:
                 return
 
-        isdir = isinstance(path2, str) and (
+        source_is_file = len(paths) == 1
+        dest_is_dir = isinstance(path2, str) and (
             trailing_sep(path2) or await self._isdir(path2)
+        )
+
+        exists = source_is_str and (
+            (has_magic(path1) and source_is_file)
+            or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
         )
         path2 = other_paths(
             paths,
             path2,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(path1),
-            is_dir=isdir,
+            exists=exists,
             flatten=not source_is_str,
         )
         batch_size = batch_size or self.batch_size
@@ -514,15 +514,20 @@ class AsyncFileSystem(AbstractFileSystem):
             if not lpaths:
                 return
 
-        isdir = isinstance(rpath, str) and (
+        source_is_file = len(lpaths) == 1
+        dest_is_dir = isinstance(rpath, str) and (
             trailing_sep(rpath) or await self._isdir(rpath)
         )
+
         rpath = self._strip_protocol(rpath)
+        exists = source_is_str and (
+            (has_magic(lpath) and source_is_file)
+            or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
+        )
         rpaths = other_paths(
             lpaths,
             rpath,
-            exists=isdir and source_is_str and not trailing_sep_maybe_asterisk(lpath),
-            is_dir=isdir,
+            exists=exists,
             flatten=not source_is_str,
         )
 
@@ -571,11 +576,9 @@ class AsyncFileSystem(AbstractFileSystem):
         """
         source_is_str = isinstance(rpath, str)
         # First check for rpath trailing slash as _strip_protocol removes it.
-        source_not_trailing_sep = source_is_str and not trailing_sep_maybe_asterisk(
-            rpath
-        )
+        source_not_trailing_sep = source_is_str and not trailing_sep(rpath)
         rpath = self._strip_protocol(rpath)
-        rpaths = await self._expand_path(rpath, recursive=recursive)
+        rpaths = await self._expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
         if source_is_str and (not recursive or maxdepth is not None):
             # Non-recursive glob does not copy directories
             rpaths = [
@@ -585,14 +588,19 @@ class AsyncFileSystem(AbstractFileSystem):
                 return
 
         lpath = make_path_posix(lpath)
-        isdir = isinstance(lpath, str) and (
+        source_is_file = len(rpaths) == 1
+        dest_is_dir = isinstance(lpath, str) and (
             trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
+        )
+
+        exists = source_is_str and (
+            (has_magic(rpath) and source_is_file)
+            or (not has_magic(rpath) and dest_is_dir and source_not_trailing_sep)
         )
         lpaths = other_paths(
             rpaths,
             lpath,
-            exists=isdir and source_not_trailing_sep,
-            is_dir=isdir,
+            exists=exists,
             flatten=not source_is_str,
         )
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
@@ -695,25 +703,24 @@ class AsyncFileSystem(AbstractFileSystem):
             ):
                 yield _
 
-    async def _glob(self, path, **kwargs):
+    async def _glob(self, path, maxdepth=None, **kwargs):
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
         import re
 
         ends = path.endswith("/")
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+        idx_star = path.find("*") if path.find("*") >= 0 else len(path)
+        idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
+        idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        ind = min(indstar, indques, indbrace)
+        min_idx = min(idx_star, idx_qmark, idx_brace)
 
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif await self._exists(path):
+            if await self._exists(path):
                 if not detail:
                     return [path]
                 else:
@@ -723,13 +730,21 @@ class AsyncFileSystem(AbstractFileSystem):
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        elif "/" in path[:min_idx]:
+            min_idx = path[:min_idx].rindex("/")
+            root = path[: min_idx + 1]
+            depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+            depth = path[min_idx + 1 :].count("/") + 1
+
+        if "**" in path:
+            if maxdepth is not None:
+                idx_double_stars = path.find("**")
+                depth_double_stars = path[idx_double_stars:].count("/") + 1
+                depth = depth - depth_double_stars + maxdepth
+            else:
+                depth = None
 
         allpaths = await self._find(
             root, maxdepth=depth, withdirs=True, detail=True, **kwargs
@@ -757,14 +772,23 @@ class AsyncFileSystem(AbstractFileSystem):
             )
             + "$"
         )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
+        pattern = re.sub("/[*]{2}", "=SLASH_DOUBLE_STARS=", pattern)
+        pattern = re.sub("[*]{2}/?", "=DOUBLE_STARS=", pattern)
         pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+        pattern = re.sub("=SLASH_DOUBLE_STARS=", "(|/.*)", pattern)
+        pattern = re.sub("=DOUBLE_STARS=", ".*", pattern)
+        pattern = re.compile(pattern)
         out = {
             p: allpaths[p]
             for p in sorted(allpaths)
             if pattern.match(p.replace("//", "/").rstrip("/"))
         }
+
+        # Return directories only when the glob end by a slash
+        # This is needed for posix glob compliance
+        if ends:
+            out = {k: v for k, v in out.items() if v["type"] == "directory"}
+
         if detail:
             return out
         else:
@@ -785,6 +809,12 @@ class AsyncFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         out = dict()
         detail = kwargs.pop("detail", False)
+
+        # Add the root directory if withdirs is requested
+        # This is needed for posix glob compliance
+        if withdirs and path != "" and await self._isdir(path):
+            out[path] = await self._info(path)
+
         # async for?
         async for _, dirs, files in self._walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
@@ -811,7 +841,7 @@ class AsyncFileSystem(AbstractFileSystem):
             path = [self._strip_protocol(p) for p in path]
             for p in path:  # can gather here
                 if has_magic(p):
-                    bit = set(await self._glob(p))
+                    bit = set(await self._glob(p, maxdepth=maxdepth))
                     out |= bit
                     if recursive:
                         # glob call above expanded one depth so if maxdepth is defined

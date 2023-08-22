@@ -343,7 +343,7 @@ def common_prefix(paths):
     return "/".join(parts[0][:i])
 
 
-def other_paths(paths, path2, is_dir=None, exists=False, flatten=False):
+def other_paths(paths, path2, exists=False, flatten=False):
     """In bulk file operations, construct a new file tree from a list of files
 
     Parameters
@@ -353,10 +353,6 @@ def other_paths(paths, path2, is_dir=None, exists=False, flatten=False):
     path2: str or list of str
         Root to construct the new list in. If this is already a list of str, we just
         assert it has the right number of elements.
-    is_dir: bool (optional)
-        For the special case where the input in one element, whether to regard the value
-        as the target path, or as a directory to put a file path within. If None, a
-        directory is inferred if the path ends in '/'
     exists: bool (optional)
         For a str destination, it is already exists (and is a dir), files should
         end up inside.
@@ -370,7 +366,6 @@ def other_paths(paths, path2, is_dir=None, exists=False, flatten=False):
     """
 
     if isinstance(path2, str):
-        is_dir = is_dir or path2.endswith("/")
         path2 = path2.rstrip("/")
 
         if flatten:
