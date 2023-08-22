@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import abc
 import hashlib
-import os
 from typing import TYPE_CHECKING
+
+from fsspec.implementations.local import make_path_posix
 
 if TYPE_CHECKING:
     from typing import Any
@@ -30,14 +31,36 @@ class AbstractCacheMapper(abc.ABC):
 
 
 class BasenameCacheMapper(AbstractCacheMapper):
-    """Cache mapper that uses the basename of the remote URL.
+    """Cache mapper that uses the basename of the remote URL and a fixed number
+    of directory levels above this.
 
-    Different paths with the same basename will therefore have the same cached
-    basename.
+    The default is zero directory levels, meaning different paths with the same
+    basename will have the same cached basename.
     """
 
+    def __init__(self, directory_levels: int = 0):
+        if directory_levels < 0:
+            raise ValueError(
+                "BasenameCacheMapper requires zero or positive directory_levels"
+            )
+        self.directory_levels = directory_levels
+
+        # Separator for directories when encoded as strings.
+        self._separator = "_@_"
+
     def __call__(self, path: str) -> str:
-        return os.path.basename(path)
+        path = make_path_posix(path)
+        prefix, *bits = path.rsplit("/", self.directory_levels + 1)
+        if bits:
+            return self._separator.join(bits)
+        else:
+            return prefix  # No separator found, simple filename
+
+    def __eq__(self, other: Any) -> bool:
+        return super().__eq__(other) and self.directory_levels == other.directory_levels
+
+    def __hash__(self) -> int:
+        return super().__hash__() ^ hash(self.directory_levels)
 
 
 class HashCacheMapper(AbstractCacheMapper):

@@ -760,3 +760,8 @@ Version 0.6.0
   HTTP server responds with an (incorrect) content-length of 0 (:pr:`163`)
 * Added a ``detail=True`` parameter to :meth:`fsspec.spec.AbstractFileSystem.ls` (:pr:`168`)
 * Fixed handling of UNC/DFS paths (:issue:`154`)
+
+.. raw:: html
+
+    <script data-goatcounter="https://distdatacats.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>

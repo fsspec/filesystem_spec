@@ -147,3 +147,8 @@ available as the attribute ``.loop``.
 .. autofunction:: fsspec.asyn.sync
 
 .. autofunction:: fsspec.asyn.sync_wrapper
+
+.. raw:: html
+
+    <script data-goatcounter="https://distdatacats.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>

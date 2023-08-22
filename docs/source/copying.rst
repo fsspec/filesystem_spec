@@ -341,3 +341,8 @@ Forward slashes are used for directory separators throughout.
 
     The trailing slash is required on the new directory otherwise it is interpreted as a filename
     rather than a directory.
+
+.. raw:: html
+
+    <script data-goatcounter="https://distdatacats.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>

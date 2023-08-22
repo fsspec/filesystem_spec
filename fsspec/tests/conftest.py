@@ -1,4 +1,5 @@
 import contextlib
+import gzip
 import json
 import os
 import threading
@@ -252,7 +253,14 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             if "use_206" in self.headers:
                 status = 206
         if "give_length" in self.headers:
-            response_headers = {"Content-Length": len(file_data)}
+            if "gzip_encoding" in self.headers:
+                file_data = gzip.compress(file_data)
+                response_headers = {
+                    "Content-Length": len(file_data),
+                    "Content-Encoding": "gzip",
+                }
+            else:
+                response_headers = {"Content-Length": len(file_data)}
             self._respond(status, response_headers, file_data)
         elif "give_range" in self.headers:
             self._respond(status, {"Content-Range": content_range}, file_data)
@@ -299,6 +307,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             response_headers = {"Content-Length": len(file_data)}
             if "zero_length" in self.headers:
                 response_headers["Content-Length"] = 0
+            elif "gzip_encoding" in self.headers:
+                file_data = gzip.compress(file_data)
+                response_headers["Content-Encoding"] = "gzip"
+                response_headers["Content-Length"] = len(file_data)
 
             self._respond(200, response_headers)
         elif "give_range" in self.headers:

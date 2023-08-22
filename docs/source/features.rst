@@ -403,3 +403,8 @@ backends.
 See the docstrings in the callbacks module for further details.
 ``fsspec.callbacks.TqdmCallback`` can be used to display a progress bar using
 tqdm.
+
+.. raw:: html
+
+    <script data-goatcounter="https://distdatacats.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
