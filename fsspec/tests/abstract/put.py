@@ -2,7 +2,7 @@ from itertools import product
 
 import pytest
 
-from fsspec.tests.conftest import GLOB_EDGE_CASES_TESTS
+from fsspec.tests.abstract.common import GLOB_EDGE_CASES_TESTS
 
 
 class AbstractPutTests:
