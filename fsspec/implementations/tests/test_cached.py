@@ -128,7 +128,7 @@ def test_metadata(tmpdir, cache_mapper):
         assert f.read(5) == b"test"
 
     afile_posix = make_path_posix(afile)
-    detail = fs.cached_files[0][afile_posix]
+    detail = fs._metadata.cached_files[0][afile_posix]
     assert sorted(detail.keys()) == ["blocks", "fn", "original", "time", "uid"]
     assert isinstance(detail["blocks"], bool)
     assert isinstance(detail["fn"], str)
@@ -225,9 +225,9 @@ def test_workflow(ftp_writable, impl):
     with fs.open("/out") as f:
         assert os.listdir(fs.storage[-1])
         assert f.read() == b"test"
-        assert fs.cached_files[-1]["/out"]["blocks"]
+        assert fs._metadata.cached_files[-1]["/out"]["blocks"]
     assert fs.cat("/out") == b"test"
-    assert fs.cached_files[-1]["/out"]["blocks"] is True
+    assert fs._metadata.cached_files[-1]["/out"]["blocks"] is True
 
     with fs.open("/out", "wb") as f:
         f.write(b"changed")
@@ -499,13 +499,13 @@ def test_blockcache_multiinstance(ftp_writable):
         skip_instance_cache=True,
         cache_storage=fs.storage,
     )
-    assert fs2.cached_files  # loaded from metadata for "one"
+    assert fs2._metadata.cached_files  # loaded from metadata for "one"
     with fs2.open("/two", block_size=20) as f:
         assert f.read(1) == b"t"
-    assert "/two" in fs2.cached_files[-1]
+    assert "/two" in fs2._metadata.cached_files[-1]
     fs.save_cache()
-    assert list(fs.cached_files[-1]) == ["/one", "/two"]
-    assert list(fs2.cached_files[-1]) == ["/one", "/two"]
+    assert list(fs._metadata.cached_files[-1]) == ["/one", "/two"]
+    assert list(fs2._metadata.cached_files[-1]) == ["/one", "/two"]
 
 
 def test_metadata_save_blocked(ftp_writable, caplog):
@@ -537,14 +537,15 @@ def test_metadata_save_blocked(ftp_writable, caplog):
         raise NameError
 
     try:
-
+        # To simulate an interpreter shutdown we temporarily set an open function in the
+        # cache_metadata module which is used on the next attempt to save metadata.
         with caplog.at_level(logging.DEBUG):
             with fs.open("/one", block_size=20) as f:
-                fsspec.implementations.cached.open = open_raise
+                fsspec.implementations.cache_metadata.open = open_raise
                 f.seek(21)
                 assert f.read(1)
     finally:
-        fsspec.implementations.cached.__dict__.pop("open", None)
+        fsspec.implementations.cache_metadata.__dict__.pop("open", None)
     assert "Cache save failed due to interpreter shutdown" in caplog.text
 
 
@@ -611,7 +612,7 @@ def test_local_filecache_basic(local_filecache):
     assert "cache" in os.listdir(cache_location)
 
     # the file in the location contains the right data
-    fn = list(fs.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = list(fs._metadata.cached_files[-1].values())[0]["fn"]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == data
@@ -656,7 +657,7 @@ def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
         assert f.read() == new_data
 
     # the file in the location contains the right data
-    fn = list(fs.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = list(fs._metadata.cached_files[-1].values())[0]["fn"]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == new_data
@@ -679,7 +680,9 @@ def test_local_filecache_with_new_cache_location_makes_a_new_copy(local_filecach
         assert f.read() == data
 
     # the file in the location contains the right data
-    fn = list(new_fs.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = list(new_fs._metadata.cached_files[-1].values())[0][
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(old_cache_location)
     assert fn in os.listdir(new_cache_location)
 
@@ -815,7 +818,7 @@ def test_add_file_to_cache_after_save(local_filecache):
     fs.save_cache()
 
     fs.cat(original_file)
-    assert len(fs.cached_files[-1]) == 1
+    assert len(fs._metadata.cached_files[-1]) == 1
 
     fs.save_cache()
 
@@ -825,7 +828,7 @@ def test_add_file_to_cache_after_save(local_filecache):
         cache_storage=cache_location,
         do_not_use_cache_for_this_instance=True,  # cache is masking the issue
     )
-    assert len(fs2.cached_files[-1]) == 1
+    assert len(fs2._metadata.cached_files[-1]) == 1
 
 
 def test_cached_open_close_read(ftp_writable):
@@ -844,7 +847,7 @@ def test_cached_open_close_read(ftp_writable):
     with fs.open("/out_block", block_size=1024) as f:
         assert f.read(1) == b"t"
     # Regression test for <https://github.com/fsspec/filesystem_spec/issues/845>
-    assert fs.cached_files[-1]["/out_block"]["blocks"] == {0}
+    assert fs._metadata.cached_files[-1]["/out_block"]["blocks"] == {0}
 
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache"])
@@ -1017,7 +1020,7 @@ def test_expiry():
     # get file
     assert fs._check_file(fn0) is False
     assert fs.open(fn0, mode="rb").read() == data
-    start_time = fs.cached_files[-1][fn]["time"]
+    start_time = fs._metadata.cached_files[-1][fn]["time"]
 
     # cache time..
     assert fs.last_cache - start_time < 0.19

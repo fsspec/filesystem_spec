@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import contextlib
 import inspect
 import logging
 import os
-import pickle
 import tempfile
 import time
 from shutil import rmtree
@@ -16,6 +14,7 @@ from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
 from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
+from fsspec.implementations.cache_metadata import CacheMetadata
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_compression
 
@@ -143,6 +142,7 @@ class CachingFileSystem(AbstractFileSystem):
             if isinstance(target_protocol, str)
             else (fs.protocol if isinstance(fs.protocol, str) else fs.protocol[0])
         )
+        self._metadata = CacheMetadata(self.storage)
         self.load_cache()
         self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
 
@@ -157,61 +157,14 @@ class CachingFileSystem(AbstractFileSystem):
 
     def load_cache(self):
         """Read set of stored blocks from file"""
-        cached_files = []
-        for storage in self.storage:
-            fn = os.path.join(storage, "cache")
-            if os.path.exists(fn):
-                with open(fn, "rb") as f:
-                    # TODO: consolidate blocks here
-                    loaded_cached_files = pickle.load(f)
-                    for c in loaded_cached_files.values():
-                        if isinstance(c["blocks"], list):
-                            c["blocks"] = set(c["blocks"])
-                    cached_files.append(loaded_cached_files)
-            else:
-                cached_files.append({})
+        self._metadata.load()
         self._mkcache()
-        self.cached_files = cached_files or [{}]
         self.last_cache = time.time()
 
     def save_cache(self):
         """Save set of stored blocks from file"""
-        fn = os.path.join(self.storage[-1], "cache")
-        # TODO: a file lock could be used to ensure file does not change
-        #  between re-read and write; but occasional duplicated reads ok.
-        cache = self.cached_files[-1]
-        if os.path.exists(fn):
-            with open(fn, "rb") as f:
-                cached_files = pickle.load(f)
-            for k, c in cached_files.items():
-                if k in cache:
-                    if c["blocks"] is True or cache[k]["blocks"] is True:
-                        c["blocks"] = True
-                    else:
-                        # self.cached_files[*][*]["blocks"] must continue to
-                        # point to the same set object so that updates
-                        # performed by MMapCache are propagated back to
-                        # self.cached_files.
-                        blocks = cache[k]["blocks"]
-                        blocks.update(c["blocks"])
-                        c["blocks"] = blocks
-                    c["time"] = max(c["time"], cache[k]["time"])
-                    c["uid"] = cache[k]["uid"]
-
-            # Files can be added to cache after it was written once
-            for k, c in cache.items():
-                if k not in cached_files:
-                    cached_files[k] = c
-        else:
-            cached_files = cache
-        cache = {k: v.copy() for k, v in cached_files.items()}
-        for c in cache.values():
-            if isinstance(c["blocks"], set):
-                c["blocks"] = list(c["blocks"])
         self._mkcache()
-        with atomic_write(fn) as f:
-            pickle.dump(cache, f)
-        self.cached_files[-1] = cached_files
+        self._metadata.save()
         self.last_cache = time.time()
 
     def _check_cache(self):
@@ -228,25 +181,11 @@ class CachingFileSystem(AbstractFileSystem):
     def _check_file(self, path):
         """Is path in cache and still valid"""
         path = self._strip_protocol(path)
-
         self._check_cache()
-        for storage, cache in zip(self.storage, self.cached_files):
-            if path not in cache:
-                continue
-            detail = cache[path].copy()
-            if self.check_files:
-                if detail["uid"] != self.fs.ukey(path):
-                    continue
-            if self.expiry:
-                if time.time() - detail["time"] > self.expiry:
-                    continue
-            fn = os.path.join(storage, detail["fn"])
-            if os.path.exists(fn):
-                return detail, fn
-        return False
+        return self._metadata.check_file(path, self)
 
     def clear_cache(self):
-        """Remove all files and metadat from the cache
+        """Remove all files and metadata from the cache
 
         In the case of multiple cache locations, this clears only the last one,
         which is assumed to be the read/write one.
@@ -273,23 +212,12 @@ class CachingFileSystem(AbstractFileSystem):
 
         self._check_cache()
 
-        for path, detail in self.cached_files[-1].copy().items():
-            if time.time() - detail["time"] > expiry_time:
-                fn = detail.get("fn", "")
-                if not fn:
-                    raise RuntimeError(
-                        f"Cache metadata does not contain 'fn' for {path}"
-                    )
-                fn = os.path.join(self.storage[-1], fn)
-                if os.path.exists(fn):
-                    os.remove(fn)
-                    self.cached_files[-1].pop(path)
+        expired_files, writable_cache_empty = self._metadata.clear_expired(expiry_time)
+        for fn in expired_files:
+            if os.path.exists(fn):
+                os.remove(fn)
 
-        if self.cached_files[-1]:
-            cache_path = os.path.join(self.storage[-1], "cache")
-            with atomic_write(cache_path) as fc:
-                pickle.dump(self.cached_files[-1], fc)
-        else:
+        if writable_cache_empty:
             rmtree(self.storage[-1])
             self.load_cache()
 
@@ -301,19 +229,9 @@ class CachingFileSystem(AbstractFileSystem):
         raises PermissionError
         """
         path = self._strip_protocol(path)
-        details = self._check_file(path)
-        if not details:
-            return
-        _, fn = details
-        if fn.startswith(self.storage[-1]):
-            # is in in writable cache
+        fn = self._metadata.pop_file(path)
+        if fn is not None:
             os.remove(fn)
-            self.cached_files[-1].pop(path)
-            self.save_cache()
-        else:
-            raise PermissionError(
-                "Can only delete cached file in last, writable cache location"
-            )
 
     def _open(
         self,
@@ -370,7 +288,7 @@ class CachingFileSystem(AbstractFileSystem):
                 "time": time.time(),
                 "uid": self.fs.ukey(path),
             }
-            self.cached_files[-1][path] = detail
+            self._metadata.update_file(path, detail)
             logger.debug("Creating local sparse file for %s" % path)
 
         # call target filesystems open
@@ -416,10 +334,7 @@ class CachingFileSystem(AbstractFileSystem):
         if f.closed:
             return
         path = self._strip_protocol(f.path)
-
-        c = self.cached_files[-1][path]
-        if c["blocks"] is not True and len(c["blocks"]) * f.blocksize >= f.size:
-            c["blocks"] = True
+        self._metadata.on_close_cached_file(f, path)
         try:
             logger.debug("going to save")
             self.save_cache()
@@ -588,9 +503,8 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 }
                 for path in downpath
             ]
-            self.cached_files[-1].update(
-                {path: detail for path, detail in zip(downpath, newdetail)}
-            )
+            for path, detail in zip(downpath, newdetail):
+                self._metadata.update_file(path, detail)
             self.save_cache()
 
         def firstpart(fn):
@@ -622,7 +536,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             "time": time.time(),
             "uid": self.fs.ukey(path),
         }
-        self.cached_files[-1][path] = detail
+        self._metadata.update_file(path, detail)
         logger.debug("Copying %s to local cache" % path)
         return fn
 
@@ -750,7 +664,6 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         for storage in self.storage:
             if not os.path.exists(storage):
                 os.makedirs(storage, exist_ok=True)
-        self.cached_files = [{}]
 
     def _check_file(self, path):
         self._check_cache()
@@ -859,24 +772,3 @@ class LocalTempFile:
 
     def __getattr__(self, item):
         return getattr(self.fh, item)
-
-
-@contextlib.contextmanager
-def atomic_write(path, mode="wb"):
-    """
-    A context manager that opens a temporary file next to `path` and, on exit,
-    replaces `path` with the temporary file, thereby updating `path`
-    atomically.
-    """
-    fd, fn = tempfile.mkstemp(
-        dir=os.path.dirname(path), prefix=os.path.basename(path) + "-"
-    )
-    try:
-        with open(fd, mode) as fp:
-            yield fp
-    except BaseException:
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(fn)
-        raise
-    else:
-        os.replace(fn, path)
