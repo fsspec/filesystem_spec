@@ -763,5 +763,5 @@ Version 0.6.0
 
 .. raw:: html
 
-    <script data-goatcounter="https://distdatacats.goatcounter.com/count"
+    <script data-goatcounter="https://fsspec.goatcounter.com/count"
         async src="//gc.zgo.at/count.js"></script>
