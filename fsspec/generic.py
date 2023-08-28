@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import inspect
 import logging
 import os
@@ -315,11 +317,15 @@ class GenericFileSystem(AsyncFileSystem):
         self,
         url: list[str],
         url2: list[str],
+        recursive=False,
+        on_error=None,
+        maxdepth=None,
+        batch_size=None,
         tempdir=None,
-        batch_size=20,
-        on_error="ignore",
         **kwargs,
     ):
+        if recursive:
+            raise NotImplementedError
         fs = _resolve_fs(url[0], self.method)
         fs2 = _resolve_fs(url2[0], self.method)
         # not expanding paths atm., assume call is from rsync()
