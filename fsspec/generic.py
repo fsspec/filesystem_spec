@@ -1,7 +1,10 @@
 import inspect
 import logging
+import os
+import shutil
+import uuid
 
-from .asyn import AsyncFileSystem
+from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import _DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
 
@@ -79,8 +82,8 @@ def rsync(
         to make downstream file system instances from paths.
     """
     fs = fs or GenericFileSystem(**(inst_kwargs or {}))
-    source = fs._strip_protocol(source)
-    destination = fs._strip_protocol(destination)
+    source = fs._strip_protocol(source).rstrip("/")
+    destination = fs._strip_protocol(destination).rstrip("/")
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
         raise ValueError("Can only rsync on a directory")
@@ -91,9 +94,10 @@ def rsync(
         if v["type"] == "directory" and a.replace(source, destination) not in otherfiles
     ]
     logger.debug(f"{len(dirs)} directories to create")
-    for dirn in dirs:
-        # no async
-        fs.mkdirs(dirn.replace(source, destination), exist_ok=True)
+    if dirs:
+        fs.make_many_dirs(
+            [dirn.replace(source, destination) for dirn in dirs], exist_ok=True
+        )
     allfiles = {a: v for a, v in allfiles.items() if v["type"] == "file"}
     logger.debug(f"{len(allfiles)} files to consider for copy")
     to_delete = [
@@ -116,12 +120,12 @@ def rsync(
         else:
             # file not in target yet
             allfiles[k] = otherfile
+    logger.debug(f"{len(allfiles)} files to copy")
     if allfiles:
         source_files, target_files = zip(*allfiles.items())
-        logger.debug(f"{len(source_files)} files to copy")
         fs.cp(source_files, target_files, **kwargs)
+    logger.debug(f"{len(to_delete)} files to delete")
     if delete_missing:
-        logger.debug(f"{len(to_delete)} files to delete")
         fs.rm(to_delete)
 
 
@@ -239,6 +243,7 @@ class GenericFileSystem(AsyncFileSystem):
             fs.rm(url, **kwargs)
 
     async def _makedirs(self, path, exist_ok=False):
+        logger.debug("Make dir %s", path)
         fs = _resolve_fs(path, self.method)
         if fs.async_impl:
             await fs._makedirs(path, exist_ok=exist_ok)
@@ -294,6 +299,78 @@ class GenericFileSystem(AsyncFileSystem):
             except NameError:
                 # fail while opening f1 or f2
                 pass
+
+    async def _make_many_dirs(self, urls, exist_ok=True):
+        fs = _resolve_fs(urls[0], self.method)
+        if fs.async_impl:
+            coros = [fs._makedirs(u, exist_ok=exist_ok) for u in urls]
+            await _run_coros_in_chunks(coros)
+        else:
+            for u in urls:
+                fs.makedirs(u, exist_ok=exist_ok)
+
+    make_many_dirs = sync_wrapper(_make_many_dirs)
+
+    async def _copy(
+        self,
+        url: list[str],
+        url2: list[str],
+        tempdir=None,
+        batch_size=20,
+        on_error="ignore",
+        **kwargs,
+    ):
+        fs = _resolve_fs(url[0], self.method)
+        fs2 = _resolve_fs(url2[0], self.method)
+        # not expanding paths atm., assume call is from rsync()
+        if fs is fs2:
+            # pure remote
+            if fs.async_impl:
+                return await fs._copy(url, url2, **kwargs)
+            else:
+                return fs.copy(url, url2, **kwargs)
+        await copy_file_op(fs, url, fs2, url2, tempdir, batch_size, on_error=on_error)
+
+
+async def copy_file_op(
+    fs1, url1, fs2, url2, tempdir=None, batch_size=20, on_error="ignore"
+):
+    import tempfile
+
+    tempdir = tempdir or tempfile.mkdtemp()
+    try:
+        coros = [
+            _copy_file_op(
+                fs1,
+                u1,
+                fs2,
+                u2,
+                os.path.join(tempdir, uuid.uuid4().hex),
+                on_error=on_error,
+            )
+            for u1, u2 in zip(url1, url2)
+        ]
+        await _run_coros_in_chunks(coros, batch_size=batch_size)
+    finally:
+        shutil.rmtree(tempdir)
+
+
+async def _copy_file_op(fs1, url1, fs2, url2, local, on_error="ignore"):
+    ex = () if on_error == "raise" else Exception
+    logger.debug("Copy %s -> %s", url1, url2)
+    try:
+        if fs1.async_impl:
+            await fs1._get_file(url1, local)
+        else:
+            fs1.get_file(url1, local)
+        if fs2.async_impl:
+            await fs2._put_file(local, url2)
+        else:
+            fs2.put_file(local, url2)
+        os.unlink(local)
+        logger.debug("Copy %s -> %s; done", url1, url2)
+    except ex as e:
+        logger.debug("ignoring cp exception for %s: %s", url1, e)
 
 
 async def maybe_await(cor):
