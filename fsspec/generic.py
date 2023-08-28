@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import uuid
+from typing import Optional
 
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import _DEFAULT_CALLBACK
@@ -57,19 +58,23 @@ def rsync(
     Parameters
     ----------
     source: str
-        Root of the directory tree to take files from.
+        Root of the directory tree to take files from. This must be a directory, but
+        do not include any terminating "/" character
     destination: str
         Root path to copy into. The contents of this location should be
-        identical to the contents of ``source`` when done.
+        identical to the contents of ``source`` when done. This will be made a
+        directory, and the terminal "/" should not be included.
     delete_missing: bool
         If there are paths in the destination that don't exist in the
         source and this is True, delete them. Otherwise, leave them alone.
-    source_field: str
+    source_field: str | callable
         If ``update_field`` is "different", this is the key in the info
-        of source files to consider for difference.
-    dest_field: str
+        of source files to consider for difference. Maybe a function of the
+        info dict.
+    dest_field: str | callable
         If ``update_field`` is "different", this is the key in the info
-        of destination files to consider for difference.
+        of destination files to consider for difference. May be a function of
+        the info dict.
     update_cond: "different"|"always"|"never"
         If "always", every file is copied, regardless of whether it exists in
         the destination. If "never", files that exist in the destination are
@@ -113,7 +118,10 @@ def rsync(
             if update_cond == "always":
                 allfiles[k] = otherfile
             elif update_cond == "different":
-                if v[source_field] != otherfiles[otherfile][dest_field]:
+                inf1 = source_field(v) if callable(source_field) else v[source_field]
+                v2 = otherfiles[otherfile]
+                inf2 = dest_field(v2) if callable(dest_field) else v2[dest_field]
+                if inf1 != inf2:
                     # details mismatch, make copy
                     allfiles[k] = otherfile
                 else:
@@ -315,27 +323,29 @@ class GenericFileSystem(AsyncFileSystem):
 
     async def _copy(
         self,
-        url: list[str],
-        url2: list[str],
-        recursive=False,
-        on_error=None,
-        maxdepth=None,
-        batch_size=None,
-        tempdir=None,
+        path1: list[str],
+        path2: list[str],
+        recursive: bool = False,
+        on_error: str = "ignore",
+        maxdepth: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        tempdir: Optional[str] = None,
         **kwargs,
     ):
         if recursive:
             raise NotImplementedError
-        fs = _resolve_fs(url[0], self.method)
-        fs2 = _resolve_fs(url2[0], self.method)
+        fs = _resolve_fs(path1[0], self.method)
+        fs2 = _resolve_fs(path2[0], self.method)
         # not expanding paths atm., assume call is from rsync()
         if fs is fs2:
             # pure remote
             if fs.async_impl:
-                return await fs._copy(url, url2, **kwargs)
+                return await fs._copy(path1, path2, **kwargs)
             else:
-                return fs.copy(url, url2, **kwargs)
-        await copy_file_op(fs, url, fs2, url2, tempdir, batch_size, on_error=on_error)
+                return fs.copy(path1, path2, **kwargs)
+        await copy_file_op(
+            fs, path1, fs2, path2, tempdir, batch_size, on_error=on_error
+        )
 
 
 async def copy_file_op(
