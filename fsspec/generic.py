@@ -84,8 +84,8 @@ def rsync(
         to make downstream file system instances from paths.
     """
     fs = fs or GenericFileSystem(**(inst_kwargs or {}))
-    source = fs._strip_protocol(source).rstrip("/")
-    destination = fs._strip_protocol(destination).rstrip("/")
+    source = fs._strip_protocol(source)
+    destination = fs._strip_protocol(destination)
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
         raise ValueError("Can only rsync on a directory")

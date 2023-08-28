@@ -29,7 +29,7 @@ def test_touch_rm(m):
 def test_cp_async_to_sync(server, m):
     fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("generic", default_method="current")
-    fs.cp(server + "/index/realfile", "memory://realfile")
+    fs.cp([server + "/index/realfile"], ["memory://realfile"])
     assert m.cat("realfile") == data
 
     fs.rm("memory://realfile")
