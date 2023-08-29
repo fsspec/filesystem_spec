@@ -200,6 +200,10 @@ known_implementations = {
         "class": "boxfs.BoxFileSystem",
         "err": "Please install boxfs to access BoxFileSystem",
     },
+    "lakefs": {
+        "class": "lakefs_spec.LakeFSFileSystem",
+        "err": "Please install lakefs-spec to access LakeFSFileSystem",
+    },
 }
 
 
