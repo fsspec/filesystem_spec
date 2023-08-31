@@ -211,6 +211,7 @@ Other Known Implementations
 - `huggingface_hub`_ to access the Hugging Face Hub filesystem, with protocol "hf://"
 - `lakefs`_ for lakeFS data lakes
 - `ocifs`_ for access to Oracle Cloud Object Storage
+- `ocilake`_ for OCI Lake storage
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
 - `s3fs`_ for Amazon S3 and other compatible stores
 - `wandbfs`_ to access Wandb run data (experimental)
@@ -226,6 +227,7 @@ Other Known Implementations
 .. _huggingface_hub: https://huggingface.co/docs/huggingface_hub/main/en/guides/hf_file_system
 .. _lakefs: https://github.com/appliedAI-Initiative/lakefs-spec
 .. _ocifs: https://pypi.org/project/ocifs
+.. _ocilake: https://github.com/oracle/ocifs
 .. _ossfs: https://github.com/fsspec/ossfs
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
