@@ -121,7 +121,7 @@ known_implementations = {
     },
     "ocilake": {
         "class": "ocifs.OCIFileSystem",
-        "err": "Install ocifs to access OCI Lake",
+        "err": "Install ocifs to access OCI Data Lake",
     },
     "asynclocal": {
         "class": "morefs.asyn_local.AsyncLocalFileSystem",
