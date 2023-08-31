@@ -525,3 +525,32 @@ class AbstractGetTests:
             assert local_fs.isdir(target)
             assert local_fs.isfile(local_join(target, "file"))
             assert not local_fs.exists(local_join(target, "src"))
+
+    def test_get_directory_without_files_with_same_name_prefix(
+        self,
+        fs,
+        fs_join,
+        local_fs,
+        local_join,
+        local_target,
+        fs_dir_and_file_with_same_name_prefix,
+    ):
+        # Create the test dirs
+        source = fs_dir_and_file_with_same_name_prefix
+        target = local_target
+
+        # Test without glob
+        fs.get(fs_join(source, "subdir"), target, recursive=True)
+
+        assert local_fs.isfile(local_join(target, "subfile.txt"))
+        assert not local_fs.isfile(local_join(target, "subdir.txt"))
+
+        local_fs.rm([local_join(target, "subfile.txt")])
+        assert local_fs.ls(target) == []
+
+        # Test with glob
+        fs.get(fs_join(source, "subdir*"), target, recursive=True)
+
+        assert local_fs.isdir(local_join(target, "subdir"))
+        assert local_fs.isfile(local_join(target, "subdir", "subfile.txt"))
+        assert local_fs.isfile(local_join(target, "subdir.txt"))

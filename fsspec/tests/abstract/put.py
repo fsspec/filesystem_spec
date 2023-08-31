@@ -520,3 +520,35 @@ class AbstractPutTests:
             assert fs.isdir(target)
             assert fs.isfile(fs_join(target, "file"))
             assert not fs.exists(fs_join(target, "src"))
+
+    def test_put_directory_without_files_with_same_name_prefix(
+        self,
+        fs,
+        fs_join,
+        fs_target,
+        local_join,
+        local_dir_and_file_with_same_name_prefix,
+        supports_empty_directories,
+    ):
+        # Create the test dirs
+        source = local_dir_and_file_with_same_name_prefix
+        target = fs_target
+
+        # Test without glob
+        fs.put(local_join(source, "subdir"), fs_target, recursive=True)
+
+        assert fs.isfile(fs_join(fs_target, "subfile.txt"))
+        assert not fs.isfile(fs_join(fs_target, "subdir.txt"))
+
+        fs.rm([fs_join(target, "subfile.txt")])
+        if supports_empty_directories:
+            assert fs.ls(target) == []
+        else:
+            assert not fs.exists(target)
+
+        # Test with glob
+        fs.put(local_join(source, "subdir*"), fs_target, recursive=True)
+
+        assert fs.isdir(fs_join(fs_target, "subdir"))
+        assert fs.isfile(fs_join(fs_target, "subdir", "subfile.txt"))
+        assert fs.isfile(fs_join(fs_target, "subdir.txt"))
