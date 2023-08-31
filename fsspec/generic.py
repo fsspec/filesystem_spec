@@ -180,11 +180,11 @@ class GenericFileSystem(AsyncFileSystem):
         fs = _resolve_fs(path, self.method)
         if fs.async_impl:
             out = await fs._find(
-                path, maxdepth=maxdepth, withdirs=withdirs, detail=detail, **kwargs
+                path, maxdepth=maxdepth, withdirs=withdirs, detail=True, **kwargs
             )
         else:
             out = fs.find(
-                path, maxdepth=maxdepth, withdirs=withdirs, detail=detail, **kwargs
+                path, maxdepth=maxdepth, withdirs=withdirs, detail=True, **kwargs
             )
         result = {}
         for k, v in out.items():
