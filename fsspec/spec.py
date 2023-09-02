@@ -938,38 +938,44 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls get_file for each source.
         """
-        from .implementations.local import (
-            LocalFileSystem,
-            make_path_posix,
-            trailing_sep,
-        )
+        if isinstance(lpath, list) and isinstance(rpath, list):
+            # No need to expand paths when both source and destination
+            # are provided as string
+            rpaths = rpath
+            lpaths = lpath
+        else:
+            from .implementations.local import (
+                LocalFileSystem,
+                make_path_posix,
+                trailing_sep,
+            )
 
-        source_is_str = isinstance(rpath, str)
-        rpaths = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
-        if source_is_str and (not recursive or maxdepth is not None):
-            # Non-recursive glob does not copy directories
-            rpaths = [p for p in rpaths if not (trailing_sep(p) or self.isdir(p))]
-            if not rpaths:
-                return
+            source_is_str = isinstance(rpath, str)
+            rpaths = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                rpaths = [p for p in rpaths if not (trailing_sep(p) or self.isdir(p))]
+                if not rpaths:
+                    return
 
-        if isinstance(lpath, str):
-            lpath = make_path_posix(lpath)
+            if isinstance(lpath, str):
+                lpath = make_path_posix(lpath)
 
-        source_is_file = len(rpaths) == 1
-        dest_is_dir = isinstance(lpath, str) and (
-            trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
-        )
+            source_is_file = len(rpaths) == 1
+            dest_is_dir = isinstance(lpath, str) and (
+                trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
+            )
 
-        exists = source_is_str and (
-            (has_magic(rpath) and source_is_file)
-            or (not has_magic(rpath) and dest_is_dir and not trailing_sep(rpath))
-        )
-        lpaths = other_paths(
-            rpaths,
-            lpath,
-            exists=exists,
-            flatten=not source_is_str,
-        )
+            exists = source_is_str and (
+                (has_magic(rpath) and source_is_file)
+                or (not has_magic(rpath) and dest_is_dir and not trailing_sep(rpath))
+            )
+            lpaths = other_paths(
+                rpaths,
+                lpath,
+                exists=exists,
+                flatten=not source_is_str,
+            )
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
@@ -1013,43 +1019,49 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls put_file for each source.
         """
-        from .implementations.local import (
-            LocalFileSystem,
-            make_path_posix,
-            trailing_sep,
-        )
+        if isinstance(lpath, list) and isinstance(rpath, list):
+            # No need to expand paths when both source and destination
+            # are provided as string
+            rpaths = rpath
+            lpaths = lpath
+        else:
+            from .implementations.local import (
+                LocalFileSystem,
+                make_path_posix,
+                trailing_sep,
+            )
 
-        source_is_str = isinstance(lpath, str)
-        if source_is_str:
-            lpath = make_path_posix(lpath)
-        fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
-        if source_is_str and (not recursive or maxdepth is not None):
-            # Non-recursive glob does not copy directories
-            lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
-            if not lpaths:
-                return
+            source_is_str = isinstance(lpath, str)
+            if source_is_str:
+                lpath = make_path_posix(lpath)
+            fs = LocalFileSystem()
+            lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
+                if not lpaths:
+                    return
 
-        source_is_file = len(lpaths) == 1
-        dest_is_dir = isinstance(rpath, str) and (
-            trailing_sep(rpath) or self.isdir(rpath)
-        )
+            source_is_file = len(lpaths) == 1
+            dest_is_dir = isinstance(rpath, str) and (
+                trailing_sep(rpath) or self.isdir(rpath)
+            )
 
-        rpath = (
-            self._strip_protocol(rpath)
-            if isinstance(rpath, str)
-            else [self._strip_protocol(p) for p in rpath]
-        )
-        exists = source_is_str and (
-            (has_magic(lpath) and source_is_file)
-            or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
-        )
-        rpaths = other_paths(
-            lpaths,
-            rpath,
-            exists=exists,
-            flatten=not source_is_str,
-        )
+            rpath = (
+                self._strip_protocol(rpath)
+                if isinstance(rpath, str)
+                else [self._strip_protocol(p) for p in rpath]
+            )
+            exists = source_is_str and (
+                (has_magic(lpath) and source_is_file)
+                or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
+            )
+            rpaths = other_paths(
+                lpaths,
+                rpath,
+                exists=exists,
+                flatten=not source_is_str,
+            )
 
         callback.set_size(len(rpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
@@ -1080,38 +1092,44 @@ class AbstractFileSystem(metaclass=_Cached):
             not-found exceptions will cause the path to be skipped; defaults to
             raise unless recursive is true, where the default is ignore
         """
-        from .implementations.local import trailing_sep
-
         if on_error is None and recursive:
             on_error = "ignore"
         elif on_error is None:
             on_error = "raise"
 
-        source_is_str = isinstance(path1, str)
-        paths = self.expand_path(path1, recursive=recursive, maxdepth=maxdepth)
-        if source_is_str and (not recursive or maxdepth is not None):
-            # Non-recursive glob does not copy directories
-            paths = [p for p in paths if not (trailing_sep(p) or self.isdir(p))]
-            if not paths:
-                return
+        if isinstance(path1, list) and isinstance(path2, list):
+            # No need to expand paths when both source and destination
+            # are provided as string
+            paths1 = path1
+            paths2 = path2
+        else:
+            from .implementations.local import trailing_sep
 
-        source_is_file = len(paths) == 1
-        dest_is_dir = isinstance(path2, str) and (
-            trailing_sep(path2) or self.isdir(path2)
-        )
+            source_is_str = isinstance(path1, str)
+            paths1 = self.expand_path(path1, recursive=recursive, maxdepth=maxdepth)
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                paths1 = [p for p in paths1 if not (trailing_sep(p) or self.isdir(p))]
+                if not paths1:
+                    return
 
-        exists = source_is_str and (
-            (has_magic(path1) and source_is_file)
-            or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
-        )
-        path2 = other_paths(
-            paths,
-            path2,
-            exists=exists,
-            flatten=not source_is_str,
-        )
+            source_is_file = len(paths1) == 1
+            dest_is_dir = isinstance(path2, str) and (
+                trailing_sep(path2) or self.isdir(path2)
+            )
 
-        for p1, p2 in zip(paths, path2):
+            exists = source_is_str and (
+                (has_magic(path1) and source_is_file)
+                or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
+            )
+            paths2 = other_paths(
+                paths1,
+                path2,
+                exists=exists,
+                flatten=not source_is_str,
+            )
+
+        for p1, p2 in zip(paths1, paths2):
             try:
                 self.cp_file(p1, p2, **kwargs)
             except FileNotFoundError:
