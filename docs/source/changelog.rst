@@ -1,6 +1,37 @@
 Changelog
 =========
 
+2023.9.0
+--------
+
+Enhancements
+
+- #1346, add ocilake protocol
+- #1345, implement async-sync and async-async generic cp and rsync
+- #1344, add lakefs protocol
+- #1337 add goatcounter to docs
+- #1323, 1328, add xethub protocol
+- #1320, in HTTP, check content-encoding when getting length
+- #1303, add on_error in walk
+- #1302, add dirfs attribute to mappers
+- #1293, configure port for smb
+
+Fixes
+
+- #1349, don't reorder paths in bulk ops if source and dest are both lists
+- #1333, allow mode="x" in get_fs_token_paths
+- #1324, allow generic to work with complex URLs
+- #1316, exclude bytes-cache kwargs in url_to_fs
+- #1314, remote utcnow/utcfromtimestamp
+- #1311, dirFS's protocol
+- #1305, use get_file rather than get in file caching
+- #1295, allow bz2 to be optional
+
+Other
+
+- #1340, 1339, 1329 more bulk ops testing
+- #1326, 1296 separate out classes in file caching for future enhancements
+
 2023.6.0
 --------
 
