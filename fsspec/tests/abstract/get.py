@@ -1,3 +1,4 @@
+from hashlib import md5
 from itertools import product
 
 import pytest
@@ -554,3 +555,33 @@ class AbstractGetTests:
         assert local_fs.isdir(local_join(target, "subdir"))
         assert local_fs.isfile(local_join(target, "subdir", "subfile.txt"))
         assert local_fs.isfile(local_join(target, "subdir.txt"))
+
+    def test_get_with_source_and_destination_as_list(
+        self,
+        fs,
+        fs_join,
+        local_fs,
+        local_join,
+        local_target,
+        fs_10_files_with_hashed_names,
+    ):
+        # Create the test dir
+        source = fs_10_files_with_hashed_names
+        target = local_target
+
+        # Create list of files for source and destination
+        source_files = []
+        destination_files = []
+        for i in range(10):
+            hashed_i = md5(str(i).encode("utf-8")).hexdigest()
+            source_files.append(fs_join(source, f"{hashed_i}.txt"))
+            destination_files.append(
+                make_path_posix(local_join(target, f"{hashed_i}.txt"))
+            )
+
+        # Copy and assert order was kept
+        fs.get(rpath=source_files, lpath=destination_files)
+
+        for i in range(10):
+            file_content = local_fs.cat(destination_files[i]).decode("utf-8")
+            assert file_content == str(i)
