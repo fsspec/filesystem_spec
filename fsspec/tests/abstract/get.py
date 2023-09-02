@@ -575,7 +575,9 @@ class AbstractGetTests:
         for i in range(10):
             hashed_i = md5(str(i).encode("utf-8")).hexdigest()
             source_files.append(fs_join(source, f"{hashed_i}.txt"))
-            destination_files.append(local_join(target, f"{hashed_i}.txt"))
+            destination_files.append(
+                make_path_posix(local_join(target, f"{hashed_i}.txt"))
+            )
 
         # Copy and assert order was kept
         fs.get(rpath=source_files, lpath=destination_files)
