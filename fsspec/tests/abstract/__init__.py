@@ -1,4 +1,5 @@
 import os
+from hashlib import md5
 
 import pytest
 
@@ -50,6 +51,18 @@ class BaseAbstractFixtures:
         fs.rm(source, recursive=True)
 
     @pytest.fixture
+    def fs_10_files_with_hashed_names(self, fs, fs_join, fs_path):
+        """
+        Scenario on remote filesystem that is used to check cp/get/put files order
+        when source and destination are lists.
+
+        Cleans up at the end of each test it which it is used.
+        """
+        source = self._10_files_with_hashed_names(fs, fs_join, fs_path)
+        yield source
+        fs.rm(source, recursive=True)
+
+    @pytest.fixture
     def fs_target(self, fs, fs_join, fs_path):
         """
         Return name of remote directory that does not yet exist to copy into.
@@ -96,6 +109,18 @@ class BaseAbstractFixtures:
         source = self._dir_and_file_with_same_name_prefix(
             local_fs, local_join, local_path
         )
+        yield source
+        local_fs.rm(source, recursive=True)
+
+    @pytest.fixture
+    def local_10_files_with_hashed_names(self, local_fs, local_join, local_path):
+        """
+        Scenario on local filesystem that is used to check cp/get/put files order
+        when source and destination are lists.
+
+        Cleans up at the end of each test it which it is used.
+        """
+        source = self._10_files_with_hashed_names(local_fs, local_join, local_path)
         yield source
         local_fs.rm(source, recursive=True)
 
@@ -186,6 +211,21 @@ class BaseAbstractFixtures:
         some_fs.makedirs(subdir)
         some_fs.touch(file)
         some_fs.touch(subfile)
+        return source
+
+    def _10_files_with_hashed_names(self, some_fs, some_join, some_path):
+        """
+        Scenario that is used to check cp/get/put files order when source and
+        destination are lists. Creates the following directory and file structure:
+
+        📁 source
+        └── 📄 {hashed([0-9])}.txt
+        """
+        source = some_join(some_path, "source")
+        for i in range(10):
+            hashed_i = md5(str(i).encode("utf-8")).hexdigest()
+            path = some_join(source, f"{hashed_i}.txt")
+            some_fs.pipe(path=path, value=f"{i}".encode("utf-8"))
         return source
 
 
