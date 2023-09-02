@@ -940,7 +940,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         if isinstance(lpath, list) and isinstance(rpath, list):
             # No need to expand paths when both source and destination
-            # are provided as string
+            # are provided as lists
             rpaths = rpath
             lpaths = lpath
         else:
@@ -1021,7 +1021,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         if isinstance(lpath, list) and isinstance(rpath, list):
             # No need to expand paths when both source and destination
-            # are provided as string
+            # are provided as lists
             rpaths = rpath
             lpaths = lpath
         else:
@@ -1099,7 +1099,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         if isinstance(path1, list) and isinstance(path2, list):
             # No need to expand paths when both source and destination
-            # are provided as string
+            # are provided as lists
             paths1 = path1
             paths2 = path2
         else:
