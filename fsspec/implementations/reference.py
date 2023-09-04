@@ -150,7 +150,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         """List top-level directories"""
         if self.dirs is None:
             dirs = [p.split("/", 1)[0] for p in self.zmetadata]
-            self.dirs = set(sorted(p for p in dirs if p and not p.startswith(".")))
+            self.dirs = {p for p in dirs if p and not p.startswith(".")}
         listing = self.dirs
         if basename:
             listing = [os.path.basename(path) for path in listing]
@@ -381,17 +381,17 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 raws[j] = kerchunk.df._proc_raw(data)
         # TODO: only save needed columns
         df = pd.DataFrame(
-            dict(
-                path=paths,
-                offset=offsets,
-                size=sizes,
-                raw=raws,
-            ),
+            {
+                "path": paths,
+                "offset": offsets,
+                "size": sizes,
+                "raw": raws,
+            },
             copy=False,
         )
         if df.path.count() / (df.path.nunique() or 1) > self.cat_thresh:
             df["path"] = df["path"].astype("category")
-        object_encoding = dict(raw="bytes", path="utf8")
+        object_encoding = {"raw": "bytes", "path": "utf8"}
         has_nulls = ["path", "raw"]
 
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)

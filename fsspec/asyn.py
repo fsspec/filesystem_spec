@@ -833,7 +833,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
     async def _find(self, path, maxdepth=None, withdirs=False, **kwargs):
         path = self._strip_protocol(path)
-        out = dict()
+        out = {}
         detail = kwargs.pop("detail", False)
 
         # Add the root directory if withdirs is requested
@@ -891,7 +891,7 @@ class AsyncFileSystem(AbstractFileSystem):
                     out.add(p)
         if not out:
             raise FileNotFoundError(path)
-        return list(sorted(out))
+        return sorted(out)
 
     async def _mkdir(self, path, create_parents=True, **kwargs):
         pass  # not necessary to implement, may not have directories

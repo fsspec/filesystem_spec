@@ -180,12 +180,17 @@ def test_blockcache_workflow(ftp_writable, tmp_path):
     with fs.open("/out", "wb") as f:
         f.write(b"test\n" * 4096)
 
-    fs_kwargs = dict(
-        skip_instance_cache=True,
-        cache_storage=str(tmp_path),
-        target_protocol="ftp",
-        target_options={"host": host, "port": port, "username": user, "password": pw},
-    )
+    fs_kwargs = {
+        "skip_instance_cache": True,
+        "cache_storage": str(tmp_path),
+        "target_protocol": "ftp",
+        "target_options": {
+            "host": host,
+            "port": port,
+            "username": user,
+            "password": pw,
+        },
+    }
 
     # Open the blockcache and read a little bit of the data
     fs = fsspec.filesystem("blockcache", **fs_kwargs)
@@ -865,7 +870,7 @@ def test_with_compression(impl, compression):
         "%s::%s" % (impl, fn),
         "rb",
         compression=compression,
-        **{impl: dict(same_names=True, cache_storage=cachedir)},
+        **{impl: {"same_names": True, "cache_storage": cachedir}},
     ) as f:
         # stores original compressed file, uncompress on read
         assert f.read() == data
@@ -878,7 +883,11 @@ def test_with_compression(impl, compression):
         "%s::%s" % (impl, fn),
         "rb",
         **{
-            impl: dict(same_names=True, compression=compression, cache_storage=cachedir)
+            impl: {
+                "same_names": True,
+                "compression": compression,
+                "cache_storage": cachedir,
+            }
         },
     ) as f:
         # stores uncompressed data

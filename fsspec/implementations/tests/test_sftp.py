@@ -51,7 +51,12 @@ def ssh():
         subprocess.call(["docker", "exec", cid] + shlex.split(cmd))
     try:
         time.sleep(1)
-        yield dict(host="localhost", port=9200, username="root", password="pass")
+        yield {
+            "host": "localhost",
+            "port": 9200,
+            "username": "root",
+            "password": "pass",
+        }
     finally:
         stop_docker(name)
 

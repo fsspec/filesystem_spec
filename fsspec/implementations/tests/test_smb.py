@@ -48,12 +48,12 @@ def smb_params(request):
     logger.debug("Container: %s", cid)
     try:
         time.sleep(1)
-        yield dict(
-            host="localhost",
-            port=request.param,
-            username="testuser",
-            password="testpass",
-        )
+        yield {
+            "host": "localhost",
+            "port": request.param,
+            "username": "testuser",
+            "password": "testpass",
+        }
     finally:
         import smbclient  # pylint: disable=import-outside-toplevel
 

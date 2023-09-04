@@ -485,7 +485,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         # TODO: allow equivalent of -name parameter
         path = self._strip_protocol(path)
-        out = dict()
+        out = {}
 
         # Add the root directory if withdirs is requested
         # This is needed for posix glob compliance
@@ -1182,7 +1182,7 @@ class AbstractFileSystem(metaclass=_Cached):
                     out.add(p)
         if not out:
             raise FileNotFoundError(path)
-        return list(sorted(out))
+        return sorted(out)
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """Move file(s) from one location to another"""

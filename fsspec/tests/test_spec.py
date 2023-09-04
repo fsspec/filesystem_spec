@@ -765,11 +765,11 @@ def test_cache_options():
 
     # TODO: dummy buffered file
     f = AbstractBufferedFile(
-        fs, "misc/foo.txt", cache_type="bytes", cache_options=dict(trim=False)
+        fs, "misc/foo.txt", cache_type="bytes", cache_options={"trim": False}
     )
     assert f.cache.trim is False
 
-    f = fs.open("misc/foo.txt", cache_type="bytes", cache_options=dict(trim=False))
+    f = fs.open("misc/foo.txt", cache_type="bytes", cache_options={"trim": False})
     assert f.cache.trim is False
 
 
@@ -831,7 +831,7 @@ def test_pickle_multiple():
 
     result = pickle.loads(y)
     assert result.storage_args == (2,)
-    assert result.storage_options == dict(bar=1)
+    assert result.storage_options == {"bar": 1}
 
 
 def test_json():
