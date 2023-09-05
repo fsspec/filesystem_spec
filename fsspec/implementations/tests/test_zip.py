@@ -26,7 +26,7 @@ def test_fsspec_get_mapper():
         mapping = fsspec.get_mapper(f"zip::{z}")
 
         assert isinstance(mapping, collections.abc.Mapping)
-        keys = sorted(list(mapping.keys()))
+        keys = sorted(mapping.keys())
         assert keys == ["a", "b", "deeply/nested/path"]
 
         # mapping.getitems() will call FSMap.fs.cat()

@@ -101,7 +101,7 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
 def test_known(sort, strict):
     parts = {(10, 20): b"1" * 10, (20, 30): b"2" * 10, (0, 10): b"0" * 10}
     if sort:
-        parts = {k: v for k, v in sorted(parts.items())}
+        parts = dict(sorted(parts.items()))
     c = caches["parts"](None, None, 100, parts, strict=strict)
     assert (0, 30) in c.data  # got consolidated
     assert c._fetch(5, 15) == b"0" * 5 + b"1" * 5

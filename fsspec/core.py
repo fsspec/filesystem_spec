@@ -625,7 +625,7 @@ def get_fs_token_paths(
         pchains = [
             _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
         ]
-        if len(set(pc[1] for pc in pchains)) > 1:
+        if len({pc[1] for pc in pchains}) > 1:
             raise ValueError("Protocol mismatch getting fs from %s", urlpath)
         paths = [pc[0] for pc in pchains]
     else:

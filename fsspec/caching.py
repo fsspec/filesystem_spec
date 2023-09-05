@@ -456,7 +456,7 @@ class KnownPartsOfAFile(BaseCache):
 
         # simple consolidation of contiguous blocks
         if data:
-            old_offsets = sorted(list(data.keys()))
+            old_offsets = sorted(data.keys())
             offsets = [old_offsets[0]]
             blocks = [data.pop(old_offsets[0])]
             for start, stop in old_offsets[1:]:

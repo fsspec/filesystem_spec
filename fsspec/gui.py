@@ -257,7 +257,7 @@ class FileSelector(SigSlot):
             width_policy="max",
         )
         self.protocol = pn.widgets.Select(
-            options=list(sorted(known_implementations)),
+            options=sorted(known_implementations),
             value=self.init_protocol,
             name="protocol",
             align="center",

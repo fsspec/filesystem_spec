@@ -10,7 +10,7 @@ from s3fs.tests.test_s3fs import (  # noqa: E402,F401
     test_bucket_name,
 )
 
-so = dict(anon=False, client_kwargs={"endpoint_url": endpoint_uri})
+so = {"anon": False, "client_kwargs": {"endpoint_url": endpoint_uri}}
 
 
 def test_pandas(s3):

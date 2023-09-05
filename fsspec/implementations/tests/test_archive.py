@@ -336,7 +336,7 @@ class TestAnyArchive:
         # https://github.com/Suor/funcy/blob/1.15/funcy/colls.py#L243-L245
         def project(mapping, keys):
             """Leaves only given keys in mapping."""
-            return dict((k, mapping[k]) for k in keys if k in mapping)
+            return {k: mapping[k] for k in keys if k in mapping}
 
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)

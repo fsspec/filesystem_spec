@@ -192,7 +192,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 for u in out
             ]
         else:
-            return list(sorted(out))
+            return sorted(out)
 
     async def _ls(self, url, detail=True, **kwargs):
         if self.use_listings_cache and url in self.dircache:
