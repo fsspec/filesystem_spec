@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import shutil
@@ -111,7 +112,8 @@ def test_mapper():
 @pytest.mark.parametrize(
     "cache_mapper", [BasenameCacheMapper(), BasenameCacheMapper(1), HashCacheMapper()]
 )
-def test_metadata(tmpdir, cache_mapper):
+@pytest.mark.parametrize("force_save_pickle", [True, False])
+def test_metadata(tmpdir, cache_mapper, force_save_pickle):
     source = os.path.join(tmpdir, "source")
     afile = os.path.join(source, "afile")
     os.mkdir(source)
@@ -123,6 +125,7 @@ def test_metadata(tmpdir, cache_mapper):
         cache_storage=os.path.join(tmpdir, "cache"),
         cache_mapper=cache_mapper,
     )
+    fs._metadata._force_save_pickle = force_save_pickle
 
     with fs.open(afile, "rb") as f:
         assert f.read(5) == b"test"
@@ -143,6 +146,42 @@ def test_metadata(tmpdir, cache_mapper):
             assert detail["fn"] == "afile"
         else:
             assert detail["fn"] == "source_@_afile"
+
+
+def test_metadata_replace_pickle_with_json(tmpdir):
+    # For backward compatibility will allow reading of old pickled metadata.
+    # When the metadata is next saved, it is in json format.
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    # Save metadata in pickle format, to simulate old metadata
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=os.path.join(tmpdir, "cache"),
+    )
+    fs._metadata._force_save_pickle = True
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    # Confirm metadata is in pickle format
+    cache_fn = os.path.join(fs.storage[-1], "cache")
+    with open(cache_fn, "rb") as f:
+        metadata = pickle.load(f)
+    assert list(metadata.keys()) == [afile]
+
+    # Force rewrite of metadata, now in json format
+    fs._metadata._force_save_pickle = False
+    fs.pop_from_cache(afile)
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    # Confirm metadata is in json format
+    with open(cache_fn, "r") as f:
+        metadata = json.load(f)
+    assert list(metadata.keys()) == [afile]
 
 
 def test_constructor_kwargs(tmpdir):
@@ -292,7 +331,8 @@ def test_clear():
     assert len(os.listdir(cache1)) < 2
 
 
-def test_clear_expired(tmp_path):
+@pytest.mark.parametrize("force_save_pickle", [True, False])
+def test_clear_expired(tmp_path, force_save_pickle):
     def __ager(cache_fn, fn, del_fn=False):
         """
         Modify the cache file to virtually add time lag to selected files.
@@ -310,15 +350,23 @@ def test_clear_expired(tmp_path):
         import time
 
         if os.path.exists(cache_fn):
-            with open(cache_fn, "rb") as f:
-                cached_files = pickle.load(f)
-                fn_posix = pathlib.Path(fn).as_posix()
-                cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
+            if force_save_pickle:
+                with open(cache_fn, "rb") as f:
+                    cached_files = pickle.load(f)
+            else:
+                with open(cache_fn, "r") as f:
+                    cached_files = json.load(f)
+            fn_posix = pathlib.Path(fn).as_posix()
+            cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
             assert os.access(cache_fn, os.W_OK), "Cache is not writable"
             if del_fn:
                 del cached_files[fn_posix]["fn"]
-            with open(cache_fn, "wb") as f:
-                pickle.dump(cached_files, f)
+            if force_save_pickle:
+                with open(cache_fn, "wb") as f:
+                    pickle.dump(cached_files, f)
+            else:
+                with open(cache_fn, "w") as f:
+                    json.dump(cached_files, f)
             time.sleep(1)
 
     origin = tmp_path.joinpath("origin")
@@ -350,6 +398,7 @@ def test_clear_expired(tmp_path):
     fs = fsspec.filesystem(
         "filecache", target_protocol="file", cache_storage=str(cache1), cache_check=1
     )
+    fs._metadata._force_save_pickle = force_save_pickle
     assert fs.cat(str(f1)) == data
 
     # populates "last" cache if file not found in first one
@@ -359,6 +408,7 @@ def test_clear_expired(tmp_path):
         cache_storage=[str(cache1), str(cache2)],
         cache_check=1,
     )
+    fs._metadata._force_save_pickle = force_save_pickle
     assert fs.cat(str(f2)) == data
     assert fs.cat(str(f3)) == data
     assert len(os.listdir(cache2)) == 3
@@ -390,6 +440,7 @@ def test_clear_expired(tmp_path):
         same_names=True,
         cache_check=1,
     )
+    fs._metadata._force_save_pickle = force_save_pickle
     assert fs.cat(str(f4)) == data
 
     cache_fn = os.path.join(fs.storage[-1], "cache")
@@ -406,6 +457,7 @@ def test_clear_expired(tmp_path):
         same_names=True,
         cache_check=1,
     )
+    fs._metadata._force_save_pickle = force_save_pickle
     assert fs.cat(str(f1)) == data
 
     cache_fn = os.path.join(fs.storage[-1], "cache")
