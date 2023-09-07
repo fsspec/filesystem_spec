@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import time
+import weakref
 from shutil import rmtree
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
@@ -111,7 +112,9 @@ class CachingFileSystem(AbstractFileSystem):
                 "Both filesystems (fs) and target_protocol may not be both given."
             )
         if cache_storage == "TMP":
-            storage = [tempfile.mkdtemp()]
+            tempdir = tempfile.mkdtemp()
+            storage = [tempdir]
+            weakref.finalize(self, self._remove_tempdir, tempdir)
         else:
             if isinstance(cache_storage, str):
                 storage = [cache_storage]
@@ -151,6 +154,13 @@ class CachingFileSystem(AbstractFileSystem):
             return self.fs._strip_protocol(type(self)._strip_protocol(path))
 
         self._strip_protocol: Callable = _strip_protocol
+
+    @staticmethod
+    def _remove_tempdir(tempdir):
+        try:
+            rmtree(tempdir)
+        except Exception:
+            pass
 
     def _mkcache(self):
         os.makedirs(self.storage[-1], exist_ok=True)

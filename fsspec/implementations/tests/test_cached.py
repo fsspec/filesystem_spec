@@ -1115,3 +1115,49 @@ def test_getitems_errors(tmpdir):
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
     with pytest.raises(FileNotFoundError):
         m.getitems(["afile", "bfile"])
+
+
+def task_cache_dir_auto_deleted(tmpdir, cache_storage, queue):
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=cache_storage,
+    )
+
+    cache_dir = fs.storage[-1]
+
+    # Force cache to be created
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    # Confirm cache exists
+    local = fsspec.filesystem("file")
+    assert local.exists(cache_dir)
+
+    queue.put(cache_dir)
+
+
+@pytest.mark.parametrize("temp_cache", [False, True])
+def test_cache_dir_auto_deleted(temp_cache, tmpdir):
+    # Run cache creation in separate process to ensure it is deleted
+    import multiprocessing as mp
+
+    queue = mp.SimpleQueue()
+    cache_storage = "TMP" if temp_cache else os.path.join(tmpdir, "cache")
+    process = mp.Process(
+        target=task_cache_dir_auto_deleted, args=(tmpdir, cache_storage, queue)
+    )
+    process.start()
+    process.join()
+
+    cache_dir = queue.get()
+    local = fsspec.filesystem("file")
+    if temp_cache:
+        assert not local.exists(cache_dir)
+    else:
+        assert local.exists(cache_dir)
