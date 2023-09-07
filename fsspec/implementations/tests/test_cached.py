@@ -213,7 +213,8 @@ def test_idempotent():
     assert fs3.storage == fs.storage
 
 
-def test_blockcache_workflow(ftp_writable, tmp_path):
+@pytest.mark.parametrize("force_save_pickle", [True, False])
+def test_blockcache_workflow(ftp_writable, tmp_path, force_save_pickle):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out", "wb") as f:
@@ -233,6 +234,7 @@ def test_blockcache_workflow(ftp_writable, tmp_path):
 
     # Open the blockcache and read a little bit of the data
     fs = fsspec.filesystem("blockcache", **fs_kwargs)
+    fs._metadata._force_save_pickle = force_save_pickle
     with fs.open("/out", "rb", block_size=5) as f:
         assert f.read(5) == b"test\n"
 
@@ -241,13 +243,18 @@ def test_blockcache_workflow(ftp_writable, tmp_path):
     del fs
 
     # Check that cache file only has the first two blocks
-    with open(tmp_path / "cache", "rb") as f:
-        cache = pickle.load(f)
-        assert "/out" in cache
-        assert cache["/out"]["blocks"] == [0, 1]
+    if force_save_pickle:
+        with open(tmp_path / "cache", "rb") as f:
+            cache = pickle.load(f)
+    else:
+        with open(tmp_path / "cache", "r") as f:
+            cache = json.load(f)
+    assert "/out" in cache
+    assert cache["/out"]["blocks"] == [0, 1]
 
     # Reopen the same cache and read some more...
     fs = fsspec.filesystem("blockcache", **fs_kwargs)
+    fs._metadata._force_save_pickle = force_save_pickle
     with fs.open("/out", block_size=5) as f:
         assert f.read(5) == b"test\n"
         f.seek(30)
