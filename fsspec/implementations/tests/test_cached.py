@@ -170,7 +170,7 @@ def test_metadata_replace_pickle_with_json(tmpdir):
     cache_fn = os.path.join(fs.storage[-1], "cache")
     with open(cache_fn, "rb") as f:
         metadata = pickle.load(f)
-    assert list(metadata.keys()) == [afile]
+    assert list(metadata.keys()) == [make_path_posix(afile)]
 
     # Force rewrite of metadata, now in json format
     fs._metadata._force_save_pickle = False
@@ -181,7 +181,7 @@ def test_metadata_replace_pickle_with_json(tmpdir):
     # Confirm metadata is in json format
     with open(cache_fn, "r") as f:
         metadata = json.load(f)
-    assert list(metadata.keys()) == [afile]
+    assert list(metadata.keys()) == [make_path_posix(afile)]
 
 
 def test_constructor_kwargs(tmpdir):
