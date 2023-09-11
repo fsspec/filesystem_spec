@@ -306,3 +306,8 @@ def test_chained_url(ftp_writable):
         url += f"::ftp://{username}:{password}@{host}:{port}/archive.zip"
         with fsspec.open(url, "rb") as f:
             assert f.read() == data["afile"]
+
+
+def test_automkdir_local():
+    fs, _ = fsspec.core.url_to_fs("file://", auto_mkdir=True)
+    assert fs.auto_mkdir is True
