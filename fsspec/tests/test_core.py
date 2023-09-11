@@ -150,10 +150,10 @@ def test_pathobject(tmpdir):
 
 def test_automkdir(tmpdir):
     dir = os.path.join(str(tmpdir), "a")
-    of = fsspec.open(os.path.join(dir, "afile"), "w")
-    with of:
-        pass
-    assert "afile" in os.listdir(dir)
+    of = fsspec.open(os.path.join(dir, "afile"), "w", auto_mkdir=False)
+    with pytest.raises(IOError):
+        with of:
+            pass
 
     dir = os.path.join(str(tmpdir), "b")
     of = fsspec.open(os.path.join(dir, "bfile"), "w", auto_mkdir=True)
