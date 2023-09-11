@@ -210,7 +210,6 @@ def open_files(
     num=1,
     protocol=None,
     newline=None,
-    auto_mkdir=True,
     expand=True,
     **kwargs,
 ):
@@ -249,9 +248,6 @@ def open_files(
     newline: bytes or None
         Used for line terminator in text mode. If None, uses system default;
         if blank, uses no translation.
-    auto_mkdir: bool (True)
-        If in write mode, this will ensure the target directory exists before
-        writing, by calling ``fs.mkdirs(exist_ok=True)``.
     expand: bool
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
@@ -288,9 +284,6 @@ def open_files(
         protocol=protocol,
         expand=expand,
     )
-    if "r" not in mode and auto_mkdir:
-        parents = {fs._parent(path) for path in paths}
-        [fs.makedirs(parent, exist_ok=True) for parent in parents]
     return OpenFiles(
         [
             OpenFile(
@@ -363,7 +356,6 @@ def url_to_fs(url, **kwargs):
     # non-FS arguments that appear in fsspec.open()
     # inspect could keep this in sync with open()'s signature
     known_kwargs = {
-        "auto_mkdir",
         "compression",
         "encoding",
         "errors",
