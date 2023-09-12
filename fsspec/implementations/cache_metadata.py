@@ -58,7 +58,7 @@ class CacheMetadata:
         try:
             with open(fn, "r") as f:
                 return json.load(f)
-        except Exception:
+        except ValueError:
             with open(fn, "rb") as f:
                 return pickle.load(f)
 
