@@ -262,7 +262,9 @@ class FileSelector(SigSlot):
             name="protocol",
             align="center",
         )
-        self.kwargs = pn.widgets.TextInput(name="kwargs", value=self.init_kwargs, align="center")
+        self.kwargs = pn.widgets.TextInput(
+            name="kwargs", value=self.init_kwargs, align="center"
+        )
         self.go = pn.widgets.Button(name="⇨", align="end", width=45)
         self.main = SingleSelect(size=10)
         self.home = pn.widgets.Button(name="🏠", width=40, height=30, align="end")

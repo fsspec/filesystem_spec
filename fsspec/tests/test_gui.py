@@ -11,10 +11,9 @@ def test_basic():
 
 
 def test_kwargs(tmpdir):
-    """ confirm kwargs are passed to the filesystem instance"""
+    """confirm kwargs are passed to the filesystem instance"""
     import fsspec.gui
 
-    gui = fsspec.gui.FileSelector(f"file://{tmpdir}", 
-                                  kwargs="{'auto_mkdir': True}")
-    
+    gui = fsspec.gui.FileSelector(f"file://{tmpdir}", kwargs="{'auto_mkdir': True}")
+
     assert gui.fs.auto_mkdir
