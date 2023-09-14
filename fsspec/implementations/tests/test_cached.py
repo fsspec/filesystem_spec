@@ -1115,3 +1115,40 @@ def test_getitems_errors(tmpdir):
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
     with pytest.raises(FileNotFoundError):
         m.getitems(["afile", "bfile"])
+
+
+@pytest.mark.parametrize("temp_cache", [False, True])
+def test_cache_dir_auto_deleted(temp_cache, tmpdir):
+    import gc
+
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage="TMP" if temp_cache else os.path.join(tmpdir, "cache"),
+        skip_instance_cache=True,  # Important to avoid fs itself being cached
+    )
+
+    cache_dir = fs.storage[-1]
+
+    # Force cache to be created
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    # Confirm cache exists
+    local = fsspec.filesystem("file")
+    assert local.exists(cache_dir)
+
+    # Delete file system
+    del fs
+    gc.collect()
+
+    # Ensure cache has been deleted, if it is temporary
+    if temp_cache:
+        assert not local.exists(cache_dir)
+    else:
+        assert local.exists(cache_dir)
