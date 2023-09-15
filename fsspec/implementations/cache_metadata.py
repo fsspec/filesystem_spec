@@ -7,6 +7,12 @@ from typing import TYPE_CHECKING
 
 from fsspec.utils import atomic_write
 
+try:
+    import ujson as json
+except ImportError:
+    if not TYPE_CHECKING:
+        import json
+
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterator, Literal
 
@@ -23,7 +29,9 @@ class CacheMetadata:
     All reading and writing of cache metadata is performed by this class,
     accessing the cached files and blocks is not.
 
-    Metadata is stored in a single file per storage directory, pickled.
+    Metadata is stored in a single file per storage directory in JSON format.
+    For backward compatibility, also reads metadata stored in pickle format
+    which is converted to JSON when next saved.
     """
 
     def __init__(self, storage: list[str]):
@@ -40,6 +48,28 @@ class CacheMetadata:
 
         self._storage = storage
         self.cached_files: list[Detail] = [{}]
+
+        # Private attribute to force saving of metadata in pickle format rather than
+        # JSON for use in tests to confirm can read both pickle and JSON formats.
+        self._force_save_pickle = False
+
+    def _load(self, fn: str) -> Detail:
+        """Low-level function to load metadata from specific file"""
+        try:
+            with open(fn, "r") as f:
+                return json.load(f)
+        except ValueError:
+            with open(fn, "rb") as f:
+                return pickle.load(f)
+
+    def _save(self, metadata_to_save: Detail, fn: str) -> None:
+        """Low-level function to save metadata to specific file"""
+        if self._force_save_pickle:
+            with atomic_write(fn) as f:
+                pickle.dump(metadata_to_save, f)
+        else:
+            with atomic_write(fn, mode="w") as f:
+                json.dump(metadata_to_save, f)
 
     def _scan_locations(
         self, writable_only: bool = False
@@ -111,8 +141,7 @@ class CacheMetadata:
 
         if self.cached_files[-1]:
             cache_path = os.path.join(self._storage[-1], "cache")
-            with atomic_write(cache_path) as fc:
-                pickle.dump(self.cached_files[-1], fc)
+            self._save(self.cached_files[-1], cache_path)
 
         writable_cache_empty = not self.cached_files[-1]
         return expired_files, writable_cache_empty
@@ -122,13 +151,12 @@ class CacheMetadata:
         cached_files = []
         for fn, _, _ in self._scan_locations():
             if os.path.exists(fn):
-                with open(fn, "rb") as f:
-                    # TODO: consolidate blocks here
-                    loaded_cached_files = pickle.load(f)
-                    for c in loaded_cached_files.values():
-                        if isinstance(c["blocks"], list):
-                            c["blocks"] = set(c["blocks"])
-                    cached_files.append(loaded_cached_files)
+                # TODO: consolidate blocks here
+                loaded_cached_files = self._load(fn)
+                for c in loaded_cached_files.values():
+                    if isinstance(c["blocks"], list):
+                        c["blocks"] = set(c["blocks"])
+                cached_files.append(loaded_cached_files)
             else:
                 cached_files.append({})
         self.cached_files = cached_files or [{}]
@@ -170,8 +198,7 @@ class CacheMetadata:
                 continue
 
             if os.path.exists(fn):
-                with open(fn, "rb") as f:
-                    cached_files = pickle.load(f)
+                cached_files = self._load(fn)
                 for k, c in cached_files.items():
                     if k in cache:
                         if c["blocks"] is True or cache[k]["blocks"] is True:
@@ -197,8 +224,7 @@ class CacheMetadata:
             for c in cache.values():
                 if isinstance(c["blocks"], set):
                     c["blocks"] = list(c["blocks"])
-            with atomic_write(fn) as f:
-                pickle.dump(cache, f)
+            self._save(cache, fn)
             self.cached_files[-1] = cached_files
 
     def update_file(self, path: str, detail: Detail) -> None:
