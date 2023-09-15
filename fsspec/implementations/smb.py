@@ -81,7 +81,7 @@ class SMBFileSystem(AbstractFileSystem):
         ----------
         host: str
             The remote server name/ip to connect to
-        port: int
+        port: int or None
             Port to connect with. Usually 445, sometimes 139.
         username: str or None
             Username to connect with. Required if Kerberos auth is not being used.
@@ -114,12 +114,16 @@ class SMBFileSystem(AbstractFileSystem):
         self.share_access = share_access
         self._connect()
 
+    @property
+    def _port(self):
+        return 445 if self.port is None else self.port
+
     def _connect(self):
         smbclient.register_session(
             self.host,
             username=self.username,
             password=self.password,
-            port=445 if self.port is None else self.port,
+            port=self._port,
             encrypt=self.encrypt,
             connection_timeout=self.timeout,
         )
@@ -139,23 +143,23 @@ class SMBFileSystem(AbstractFileSystem):
     def mkdir(self, path, create_parents=True, **kwargs):
         wpath = _as_unc_path(self.host, path)
         if create_parents:
-            smbclient.makedirs(wpath, exist_ok=False, port=self.port, **kwargs)
+            smbclient.makedirs(wpath, exist_ok=False, port=self._port, **kwargs)
         else:
-            smbclient.mkdir(wpath, port=self.port, **kwargs)
+            smbclient.mkdir(wpath, port=self._port, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
         if _share_has_path(path):
             wpath = _as_unc_path(self.host, path)
-            smbclient.makedirs(wpath, exist_ok=exist_ok, port=self.port)
+            smbclient.makedirs(wpath, exist_ok=exist_ok, port=self._port)
 
     def rmdir(self, path):
         if _share_has_path(path):
             wpath = _as_unc_path(self.host, path)
-            smbclient.rmdir(wpath, port=self.port)
+            smbclient.rmdir(wpath, port=self._port)
 
     def info(self, path, **kwargs):
         wpath = _as_unc_path(self.host, path)
-        stats = smbclient.stat(wpath, port=self.port, **kwargs)
+        stats = smbclient.stat(wpath, port=self._port, **kwargs)
         if S_ISDIR(stats.st_mode):
             stype = "directory"
         elif S_ISLNK(stats.st_mode):
@@ -176,18 +180,18 @@ class SMBFileSystem(AbstractFileSystem):
     def created(self, path):
         """Return the created timestamp of a file as a datetime.datetime"""
         wpath = _as_unc_path(self.host, path)
-        stats = smbclient.stat(wpath, port=self.port)
+        stats = smbclient.stat(wpath, port=self._port)
         return datetime.datetime.fromtimestamp(stats.st_ctime, tz=datetime.timezone.utc)
 
     def modified(self, path):
         """Return the modified timestamp of a file as a datetime.datetime"""
         wpath = _as_unc_path(self.host, path)
-        stats = smbclient.stat(wpath, port=self.port)
+        stats = smbclient.stat(wpath, port=self._port)
         return datetime.datetime.fromtimestamp(stats.st_mtime, tz=datetime.timezone.utc)
 
     def ls(self, path, detail=True, **kwargs):
         unc = _as_unc_path(self.host, path)
-        listed = smbclient.listdir(unc, port=self.port, **kwargs)
+        listed = smbclient.listdir(unc, port=self._port, **kwargs)
         dirs = ["/".join([path.rstrip("/"), p]) for p in listed]
         if detail:
             dirs = [self.info(d) for d in dirs]
@@ -218,14 +222,14 @@ class SMBFileSystem(AbstractFileSystem):
         if "w" in mode and autocommit is False:
             temp = _as_temp_path(self.host, path, self.temppath)
             return SMBFileOpener(
-                wpath, temp, mode, port=self.port, block_size=bls, **kwargs
+                wpath, temp, mode, port=self._port, block_size=bls, **kwargs
             )
         return smbclient.open_file(
             wpath,
             mode,
             buffering=bls,
             share_access=share_access,
-            port=self.port,
+            port=self._port,
             **kwargs,
         )
 
@@ -233,21 +237,21 @@ class SMBFileSystem(AbstractFileSystem):
         """Copy within two locations in the same filesystem"""
         wpath1 = _as_unc_path(self.host, path1)
         wpath2 = _as_unc_path(self.host, path2)
-        smbclient.copyfile(wpath1, wpath2, port=self.port, **kwargs)
+        smbclient.copyfile(wpath1, wpath2, port=self._port, **kwargs)
 
     def _rm(self, path):
         if _share_has_path(path):
             wpath = _as_unc_path(self.host, path)
-            stats = smbclient.stat(wpath, port=self.port)
+            stats = smbclient.stat(wpath, port=self._port)
             if S_ISDIR(stats.st_mode):
-                smbclient.rmdir(wpath, port=self.port)
+                smbclient.rmdir(wpath, port=self._port)
             else:
-                smbclient.remove(wpath, port=self.port)
+                smbclient.remove(wpath, port=self._port)
 
     def mv(self, path1, path2, **kwargs):
         wpath1 = _as_unc_path(self.host, path1)
         wpath2 = _as_unc_path(self.host, path2)
-        smbclient.rename(wpath1, wpath2, port=self.port, **kwargs)
+        smbclient.rename(wpath1, wpath2, port=self._port, **kwargs)
 
 
 def _as_unc_path(host, path):

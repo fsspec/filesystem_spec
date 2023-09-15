@@ -17,7 +17,8 @@ pytest.importorskip("smbprotocol")
 # ! pylint: disable=redefined-outer-name,missing-function-docstring
 
 # Test standard and non-standard ports
-port_test = [445, 9999]
+default_port = 445
+port_test = [None, default_port, 9999]
 
 
 def stop_docker(container):
@@ -40,9 +41,12 @@ def smb_params(request):
     # requires docker
     container = "fsspec_smb"
     stop_docker(container)
-    img = "docker run --name {} --detach -p 139:139 -p {}:445 dperson/samba"
-    cfg = " -p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
-    cmd = img.format(container, request.param) + cfg
+    cfg = "-p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
+    port = request.param if request.param is not None else default_port
+    img = (
+        f"docker run --name {container} --detach -p 139:139 -p {port}:445 dperson/samba"
+    )
+    cmd = f"{img} {cfg}"
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
     logger = logging.getLogger("fsspec")
     logger.debug("Container: %s", cid)
@@ -78,7 +82,10 @@ def test_simple(smb_params):
 
 
 def test_with_url(smb_params):
-    smb_url = "smb://{username}:{password}@{host}:{port}/home/someuser.txt"
+    if smb_params["port"] is None:
+        smb_url = "smb://{username}:{password}@{host}/home/someuser.txt"
+    else:
+        smb_url = "smb://{username}:{password}@{host}:{port}/home/someuser.txt"
     fwo = fsspec.open(smb_url.format(**smb_params), "wb")
     with fwo as fwr:
         fwr.write(b"hello")
