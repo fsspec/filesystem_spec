@@ -43,7 +43,8 @@ def smb_params(request):
     stop_docker(container)
     cfg = "-p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
     port = request.param if request.param is not None else default_port
-    cmd = f"docker run --name {container} --detach -p 139:139 -p {port}:445 dperson/samba {cfg}"
+    img = f"docker run --name {container} --detach -p 139:139 -p {port}:445 dperson/samba"
+    cmd = f"{img} {cfg}"
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
     logger = logging.getLogger("fsspec")
     logger.debug("Container: %s", cid)
