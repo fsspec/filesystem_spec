@@ -1,6 +1,24 @@
 Changelog
 =========
 
+2023.9.1
+--------
+
+Enhancements
+
+- #1353, save file cache metadata in JSON
+- #1352, remove some unnecessary list iterations
+
+Fixes
+
+- #1361, re-allow None for default port for SMB
+- #1360, initialising GUI widget FS with kwargs
+- #1358, pass auto_mkdir vi url_to_fs again
+
+Other
+
+- #1354, auto delete temp cache directory
+
 2023.9.0
 --------
 
