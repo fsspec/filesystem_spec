@@ -59,7 +59,7 @@ not be required for some backends where directories are emulated.
 Note that not all of the methods need to be implemented: for example,
 some implementations may be read-only, in which case things like ``pipe``,
 ``put``, ``touch``, ``rm``, etc., can be left as not-implemented
-(or you might implement them are raise PermissionError, OSError 30 or some
+(or you might implement them and raise PermissionError, OSError 30 or some
 read-only exception).
 
 We may eventually refactor ``AbstractFileSystem`` to split the default implementation,
@@ -114,7 +114,7 @@ well as Docker. Most implementation-specific tests should skip if their requirem
 not met.
 
 Development happens by submitting pull requests (PRs) on github.
-This repo adheres for flake8 and black coding conventions. You may wish to install
+This repo adheres to flake8 and black coding conventions. You may wish to install
 commit hooks if you intend to make PRs, as linting is done as part of the CI.
 
 Docs use sphinx and the numpy docstring style. Please add an entry to the changelog
