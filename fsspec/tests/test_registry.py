@@ -55,6 +55,22 @@ def test_register_cls(clear_registry):
     cls = get_filesystem_class("test")
     assert cls is AbstractFileSystem
 
+    # no exception for the implementation class already registered
+    register_implementation("test", AbstractFileSystem, clobber=False)
+
+    # exception will be raised for another class of the same name
+    class SomeFileSystem(AbstractFileSystem):
+        pass
+
+    with pytest.raises(ValueError):
+        register_implementation("test", SomeFileSystem, clobber=False)
+
+    # no exception when clobber=True
+    register_implementation("test", SomeFileSystem, clobber=True)
+
+    cls = get_filesystem_class("test")
+    assert cls is SomeFileSystem
+
 
 def test_register_str(clear_registry):
     with pytest.raises(ValueError):
