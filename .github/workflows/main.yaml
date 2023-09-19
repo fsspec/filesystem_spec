@@ -28,7 +28,8 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ci/environment-py38.yml
-          extra-specs: python=${{ matrix.PY }}
+          create-args: >-
+            python=${{ matrix.PY }}
 
       - name: Run Tests
         shell: bash -l {0}
