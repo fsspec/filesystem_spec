@@ -64,7 +64,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
 .. _Dask: https://dask.org/
 .. _Intake: https://intake.readthedocs.io/
 .. _pandas: https://pandas.pydata.org/
-.. _xarray: http://xarray.pydata.org/
+.. _xarray: https://docs.xarray.dev/
 .. _zarr: https://zarr.readthedocs.io/
 .. _DVC: https://dvc.org/
 .. _kedro: https://kedro.readthedocs.io/en/stable/01_introduction/01_introduction.html
