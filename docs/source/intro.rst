@@ -25,9 +25,9 @@ of each implementation with the generic usage that Dask demanded. People may fin
 `code`_ which parses URLs and creates file-system
 instances interesting.
 
-.. _Dask: http://dask.pydata.org/en/latest/
-.. _docs: http://dask.pydata.org/en/latest/remote-data-services.html
-.. _code: https://github.com/dask/dask/blob/master/dask/bytes/core.py#L266
+.. _Dask: https://dask.pydata.org/en/latest/
+.. _docs: https://dask.pydata.org/en/latest/how-to/connect-to-remote-data.html
+.. _code: https://github.com/fsspec/filesystem_spec/blob/4f0eb48/fsspec/core.py#L525
 
 At the same time, the Apache `Arrow`_ project was also concerned with a similar problem,
 particularly a common interface to local and HDFS files, for example the
@@ -63,7 +63,7 @@ to look:
 
 .. _os: https://docs.python.org/3/library/os.html
 .. _path: https://docs.python.org/3/library/os.path.html
-.. _gcsfs: http://gcsfs.readthedocs.io/en/latest/api.html#gcsfs.core.GCSFileSystem
+.. _gcsfs: https://gcsfs.readthedocs.io/en/latest/api.html#gcsfs.core.GCSFileSystem
 .. _pyfilesystems: https://docs.pyfilesystem.org/en/latest/index.html
 
 Other similar work
