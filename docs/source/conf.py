@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # fsspec documentation build configuration file, created by
 # sphinx-quickstart on Mon Jan 15 18:11:02 2018.
 #
