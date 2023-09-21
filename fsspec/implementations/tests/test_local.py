@@ -56,7 +56,7 @@ def filetexts(d, open=open, mode="t"):
     try:
         os.chdir(dirname)
         for filename, text in d.items():
-            f = open(filename, "w" + mode)
+            f = open(filename, f"w{mode}")
             try:
                 f.write(text)
             finally:
@@ -79,7 +79,7 @@ def filetexts(d, open=open, mode="t"):
 
 def test_urlpath_inference_strips_protocol(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
-    paths = ["/".join([tmpdir, "test.%02d.csv" % i]) for i in range(20)]
+    paths = ["/".join([tmpdir, f"test.{i:02d}.csv"]) for i in range(20)]
 
     for path in paths:
         with open(path, "wb") as f:
@@ -221,7 +221,7 @@ def test_isfile():
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
-            assert fs.isfile("file://" + f)
+            assert fs.isfile(f"file://{f}")
         assert not fs.isfile("not-a-file")
         assert not fs.isfile("file://not-a-file")
 
@@ -293,7 +293,7 @@ def test_abs_paths(tmpdir):
 def test_glob_weird_characters(tmpdir, sep, chars):
     tmpdir = make_path_posix(str(tmpdir))
 
-    subdir = tmpdir + sep + "test" + chars + "x"
+    subdir = f"{tmpdir}{sep}test{chars}x"
     try:
         os.makedirs(subdir, exist_ok=True)
     except OSError as e:
@@ -425,11 +425,11 @@ def test_recursive_get_put(tmpdir):
     fs.touch(tmpdir + "/a1/a2/a3/afile")
     fs.touch(tmpdir + "/a1/afile")
 
-    fs.get("file://{0}/a1".format(tmpdir), tmpdir + "/b1", recursive=True)
+    fs.get(f"file://{tmpdir}/a1", tmpdir + "/b1", recursive=True)
     assert fs.isfile(tmpdir + "/b1/afile")
     assert fs.isfile(tmpdir + "/b1/a2/a3/afile")
 
-    fs.put(tmpdir + "/b1", "file://{0}/c1".format(tmpdir), recursive=True)
+    fs.put(tmpdir + "/b1", f"file://{tmpdir}/c1", recursive=True)
     assert fs.isfile(tmpdir + "/c1/afile")
     assert fs.isfile(tmpdir + "/c1/a2/a3/afile")
 
@@ -652,7 +652,7 @@ def test_iterable(tmpdir):
     fn = os.path.join(tmpdir, "test")
     with open(fn, "wb") as f:
         f.write(data)
-    of = fsspec.open("file://%s" % fn, "rb")
+    of = fsspec.open(f"file://{fn}", "rb")
     with of as f:
         out = list(f)
     assert b"".join(out) == data

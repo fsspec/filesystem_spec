@@ -98,7 +98,7 @@ class LocalFileSystem(AbstractFileSystem):
             "islink": link,
         }
         for field in ["mode", "uid", "gid", "mtime", "ino", "nlink"]:
-            result[field] = getattr(out, "st_" + field)
+            result[field] = getattr(out, f"st_{field}")
         if result["islink"]:
             result["destination"] = os.readlink(path)
             try:
@@ -240,7 +240,7 @@ def make_path_posix(path, sep=os.sep):
             return path
         if path.startswith("./"):
             path = path[2:]
-        return os.getcwd() + "/" + path
+        return os.getcwd() + f"/{path}"
     if (
         (sep not in path and "/" not in path)
         or (sep == "/" and not path.startswith("/"))
@@ -251,7 +251,7 @@ def make_path_posix(path, sep=os.sep):
             # abspath made some more '\\' separators
             return make_path_posix(osp.abspath(path))
         else:
-            return os.getcwd() + "/" + path
+            return os.getcwd() + f"/{path}"
     if path.startswith("file://"):
         path = path[7:]
     if re.match("/[A-Za-z]:", path):

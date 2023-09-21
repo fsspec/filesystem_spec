@@ -70,7 +70,7 @@ class SigSlot:
             same name.
         """
         if name not in self.signals:
-            raise ValueError("Attempt to assign an undeclared signal: %s" % name)
+            raise ValueError(f"Attempt to assign an undeclared signal: {name}")
         self._sigs[name] = {
             "widget": widget,
             "callbacks": [],
@@ -141,7 +141,7 @@ class SigSlot:
 
         Calling of callbacks will halt whenever one returns False.
         """
-        logger.log(self._sigs[sig]["log"], "{}: {}".format(sig, value))
+        logger.log(self._sigs[sig]["log"], f"{sig}: {value}")
         for callback in self._sigs[sig]["callbacks"]:
             if isinstance(callback, str):
                 self._emit(callback)
@@ -153,8 +153,7 @@ class SigSlot:
                         break
                 except Exception as e:
                     logger.exception(
-                        "Exception (%s) while executing callback for signal: %s"
-                        "" % (e, sig)
+                        f"Exception ({e}) while executing callback for signal: {sig}"
                     )
 
     def show(self, threads=False):
@@ -319,7 +318,7 @@ class FileSelector(SigSlot):
     def urlpath(self):
         """URL of currently selected item"""
         return (
-            (self.protocol.value + "://" + self.main.value[0])
+            (f"{self.protocol.value}://{self.main.value[0]}")
             if self.main.value
             else None
         )

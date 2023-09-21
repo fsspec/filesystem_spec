@@ -20,7 +20,7 @@ def hdfs_cluster():
     except FileNotFoundError:
         pytest.skip("htcluster not found")
     except subprocess.CalledProcessError as ex:
-        pytest.skip("htcluster failed: " + ex.output.decode())
+        pytest.skip(f"htcluster failed: {ex.output.decode()}")
     cmd1 = shlex.split("htcluster startup --image base")
     subprocess.check_output(cmd1)
     try:

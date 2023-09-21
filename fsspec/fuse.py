@@ -275,7 +275,7 @@ def main(args):
     for item in args.option or []:
         key, sep, value = item.partition("=")
         if not sep:
-            parser.error(message="Wrong option: {!r}".format(item))
+            parser.error(message=f"Wrong option: {item!r}")
         val = value.lower()
         if val.endswith("[int]"):
             value = int(value[: -len("[int]")])
