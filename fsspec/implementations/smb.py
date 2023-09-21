@@ -274,7 +274,7 @@ def _share_has_path(path):
     return parts > 1
 
 
-class SMBFileOpener(object):
+class SMBFileOpener:
     """writes to remote temporary file, move on commit"""
 
     def __init__(self, path, temp, mode, port=445, block_size=-1, **kwargs):

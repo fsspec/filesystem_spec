@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 logger = logging.getLogger("fsspec")
 
 
-class BaseCache(object):
+class BaseCache:
     """Pass-though cache: doesn't keep anything, calls every time
 
     Acts as base class for other cachers

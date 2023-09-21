@@ -14,7 +14,7 @@ pn.extension()
 logger = logging.getLogger("fsspec.gui")
 
 
-class SigSlot(object):
+class SigSlot:
     """Signal-slot mixin, for Panel event passing
 
     Include this class in a widget manager's superclasses to be able to
