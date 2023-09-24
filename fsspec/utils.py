@@ -573,3 +573,108 @@ def atomic_write(path: str, mode: str = "wb"):
         raise
     else:
         os.replace(fn, path)
+
+
+def _translate_char_set(stuff):
+    # Copied from: https://github.com/python/cpython/pull/106703.
+    if "-" not in stuff:
+        stuff = stuff.replace("\\", r"\\")
+    else:
+        chunks = []
+        i = 0
+        k = 2 if stuff[0] == "!" else 1
+        while True:
+            k = stuff.find("-", k)
+            if k < 0:
+                break
+            chunks.append(stuff[i:k])
+            i = k + 1
+            k = k + 3
+        chunk = stuff[i:]
+        if chunk:
+            chunks.append(chunk)
+        else:
+            chunks[-1] += "-"
+        # Remove empty ranges -- invalid in RE.
+        for k in range(len(chunks) - 1, 0, -1):
+            if chunks[k - 1][-1] > chunks[k][0]:
+                chunks[k - 1] = chunks[k - 1][:-1] + chunks[k][1:]
+                del chunks[k]
+        # Escape backslashes and hyphens for set difference (--).
+        # Hyphens that create ranges shouldn't be escaped.
+        stuff = "-".join(s.replace("\\", r"\\").replace("-", r"\-") for s in chunks)
+    # Escape set operations (&&, ~~ and ||).
+    stuff = re.sub(r"([&~|])", r"\\\1", stuff)
+    if not stuff:
+        # Empty range: never match.
+        return "(?!)"
+    elif stuff == "!":
+        # Negated empty range: match any character.
+        return "."
+    else:
+        if stuff[0] == "!":
+            stuff = "^" + stuff[1:]
+        elif stuff[0] in ("^", "["):
+            stuff = "\\" + stuff
+        return f"[{stuff}]"
+
+
+def glob_translate(pat: str) -> str:
+    # Copied from: https://github.com/python/cpython/pull/106703.
+    # Modified to fix the keyword parameter' values:
+    # recursive=True, include_hidden=True, seps=None
+    if os.path.altsep:
+        seps = [os.path.sep, os.path.altsep]
+    else:
+        seps = os.path.sep
+    escaped_seps = "".join(re.escape(sep) for sep in seps)
+    any_sep = f"[{escaped_seps}]" if len(seps) > 1 else escaped_seps
+    not_sep = f"[^{escaped_seps}]"
+    res = []
+    add = res.append
+    i, n = 0, len(pat)
+    while i < n:
+        c = pat[i]
+        i = i + 1
+        if c == "*":
+            h = i - 1
+            while i < n and pat[i] == "*":
+                i = i + 1
+            star_count = i - h
+            is_segment = (h == 0 or pat[h - 1] in seps) and (i == n or pat[i] in seps)
+            if star_count == 1:
+                if is_segment:
+                    add(f"{not_sep}+")
+                else:
+                    add(f"{not_sep}*")
+            elif star_count == 2 and is_segment:
+                if i == n:
+                    add(".*")
+                else:
+                    add(f"(?:.+{any_sep})?")
+                    i = i + 1
+            else:
+                raise ValueError(
+                    "Invalid pattern: '**' can only be an entire path component"
+                )
+        elif c in seps:
+            add(any_sep)
+        elif c == "?":
+            add(not_sep)
+        elif c == "[":
+            j = i
+            if j < n and pat[j] == "!":
+                j = j + 1
+            if j < n and pat[j] == "]":
+                j = j + 1
+            while j < n and pat[j] != "]":
+                j = j + 1
+            if j >= n:
+                add("\\[")
+            else:
+                add(_translate_char_set(pat[i:j]))
+                i = j + 1
+        else:
+            add(re.escape(c))
+    res = "".join(res)
+    return rf"(?s:{res})\Z"
