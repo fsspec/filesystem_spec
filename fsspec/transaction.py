@@ -1,4 +1,4 @@
-class Transaction(object):
+class Transaction:
     """Filesystem transaction write context
 
     Gathers files for deferred commit or discard, so that several write
@@ -41,7 +41,7 @@ class Transaction(object):
         self.fs._intrans = False
 
 
-class FileActor(object):
+class FileActor:
     def __init__(self):
         self.files = []
 

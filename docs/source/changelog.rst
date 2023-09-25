@@ -1,6 +1,18 @@
 Changelog
 =========
 
+2023.9.2
+--------
+
+Fixes
+
+- revert #1358: auto_mkdir in open() (#1365)
+
+Other
+
+- code style updates (#1373, 1372, 1371, 1370, 1369, 1364)
+- update CI setup (#1386)
+
 2023.9.1
 --------
 

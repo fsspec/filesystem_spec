@@ -61,7 +61,7 @@ setup(
     description="File-system specification",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="http://github.com/fsspec/filesystem_spec",
+    url="https://github.com/fsspec/filesystem_spec",
     project_urls={
         "Changelog": "https://filesystem-spec.readthedocs.io/en/latest/changelog.html",
         "Documentation": "https://filesystem-spec.readthedocs.io/en/latest/",

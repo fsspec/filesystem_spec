@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Test SMBFileSystem class using a docker container
 """

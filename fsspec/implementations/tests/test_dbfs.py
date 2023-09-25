@@ -41,7 +41,7 @@ def vcr_config():
     We also delete the date as it is likely to change
     (and will make git diffs harder).
     If the DBFS_TOKEN env variable is set, we record with VCR.
-    If not, we only replay (to not accidentely record with a wrong URL).
+    If not, we only replay (to not accidentally record with a wrong URL).
     """
 
     def before_record_response(response):

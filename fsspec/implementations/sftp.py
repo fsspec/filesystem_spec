@@ -36,7 +36,7 @@ class SFTPFileSystem(AbstractFileSystem):
             Location on the server to put files, when within a transaction
         ssh_kwargs: dict
             Parameters passed on to connection. See details in
-            http://docs.paramiko.org/en/2.4/api/client.html#paramiko.client.SSHClient.connect
+            https://docs.paramiko.org/en/3.3/api/client.html#paramiko.client.SSHClient.connect
             May include port, username, password...
         """
         if self._cached:
