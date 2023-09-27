@@ -707,7 +707,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                 return fn
 
     def save_cache(self):
-        self._cache_size = None
+        pass
 
     def load_cache(self):
         pass
