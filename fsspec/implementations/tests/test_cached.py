@@ -1216,6 +1216,9 @@ def test_cache_dir_auto_deleted(temp_cache, tmpdir):
 
 @pytest.mark.parametrize("protocol", ["filecache", "blockcache", "simplecache"])
 def test_cache_size(tmpdir, protocol):
+    if win and protocol == "blockcache":
+        pytest.skip("Windows file locking affects blockcache size tests")
+
     source = os.path.join(tmpdir, "source")
     afile = os.path.join(source, "afile")
     os.mkdir(source)
