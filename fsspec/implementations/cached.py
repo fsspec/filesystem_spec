@@ -128,6 +128,11 @@ class CachingFileSystem(AbstractFileSystem):
         self.expiry = expiry_time
         self.compression = compression
 
+        # Size of cache in bytes. If None then the size is unknown and will be
+        # recalculated the next time cache_size() is called. On writes to the
+        # cache this is reset to None.
+        self._cache_size = None
+
         if same_names is not None and cache_mapper is not None:
             raise ValueError(
                 "Cannot specify both same_names and cache_mapper in "
@@ -165,6 +170,17 @@ class CachingFileSystem(AbstractFileSystem):
     def _mkcache(self):
         os.makedirs(self.storage[-1], exist_ok=True)
 
+    def cache_size(self):
+        """Return size of cache in bytes.
+
+        If more than one cache directory is in use, only the size of the last
+        one (the writable cache directory) is returned.
+        """
+        if self._cache_size is None:
+            cache_dir = self.storage[-1]
+            self._cache_size = filesystem("file").du(cache_dir, withdirs=True)
+        return self._cache_size
+
     def load_cache(self):
         """Read set of stored blocks from file"""
         self._metadata.load()
@@ -176,6 +192,7 @@ class CachingFileSystem(AbstractFileSystem):
         self._mkcache()
         self._metadata.save()
         self.last_cache = time.time()
+        self._cache_size = None
 
     def _check_cache(self):
         """Reload caches if time elapsed or any disappeared"""
@@ -202,6 +219,7 @@ class CachingFileSystem(AbstractFileSystem):
         """
         rmtree(self.storage[-1])
         self.load_cache()
+        self._cache_size = None
 
     def clear_expired_cache(self, expiry_time=None):
         """Remove all expired files and metadata from the cache
@@ -231,6 +249,8 @@ class CachingFileSystem(AbstractFileSystem):
             rmtree(self.storage[-1])
             self.load_cache()
 
+        self._cache_size = None
+
     def pop_from_cache(self, path):
         """Remove cached version of given file
 
@@ -242,6 +262,7 @@ class CachingFileSystem(AbstractFileSystem):
         fn = self._metadata.pop_file(path)
         if fn is not None:
             os.remove(fn)
+        self._cache_size = None
 
     def _open(
         self,
@@ -389,6 +410,7 @@ class CachingFileSystem(AbstractFileSystem):
             "__hash__",
             "__eq__",
             "to_json",
+            "cache_size",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -535,6 +557,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 os.remove(f.name)
             except FileNotFoundError:
                 pass
+        self._cache_size = None
 
     def _make_local_details(self, path):
         hash = self._mapper(path)
@@ -704,6 +727,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         kwargs["mode"] = mode
 
         self._mkcache()
+        self._cache_size = None
         if self.compression:
             with self.fs._open(path, **kwargs) as f, open(fn, "wb") as f2:
                 if isinstance(f, AbstractBufferedFile):
