@@ -1211,3 +1211,36 @@ def test_cache_dir_auto_deleted(temp_cache, tmpdir):
         assert not local.exists(cache_dir)
     else:
         assert local.exists(cache_dir)
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "blockcache", "simplecache"])
+def test_cache_size(tmpdir, protocol):
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(protocol, target_protocol="file")
+    empty_cache_size = fs.cache_size()
+
+    # Create cache
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+    single_file_cache_size = fs.cache_size()
+    assert single_file_cache_size > empty_cache_size
+
+    # Remove cached file but leave cache metadata file
+    fs.pop_from_cache(afile)
+    if protocol != "simplecache":
+        assert empty_cache_size < fs.cache_size() < single_file_cache_size
+    else:
+        # simplecache never stores metadata
+        assert fs.cache_size() == single_file_cache_size
+
+    # Completely remove cache
+    fs.clear_cache()
+    if protocol != "simplecache":
+        assert fs.cache_size() == empty_cache_size
+    else:
+        # Whole cache directory has been deleted
+        assert fs.cache_size() == 0
