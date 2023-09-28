@@ -251,7 +251,7 @@ def make_path_posix(path, sep=os.sep):
             # abspath made some more '\\' separators
             return make_path_posix(osp.abspath(path))
         else:
-            return os.getcwd() + f"/{path}"
+            return f"{os.getcwd()}/{path}"
     if path.startswith("file://"):
         path = path[7:]
     if re.match("/[A-Za-z]:", path):
