@@ -240,7 +240,7 @@ def make_path_posix(path, sep=os.sep):
             return path
         if path.startswith("./"):
             path = path[2:]
-        return os.getcwd() + f"/{path}"
+        return f"{os.getcwd()}/{path}"
     if (
         (sep not in path and "/" not in path)
         or (sep == "/" and not path.startswith("/"))
