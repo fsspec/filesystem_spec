@@ -96,7 +96,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "content": None,
             "type": "directory",
         }
-        self.session.put(self.url + f"/{path}", json=json)
+        self.session.put(f"{self.url}/{path}", json=json)
 
     def _rm(self, path):
         path = self._strip_protocol(path)
