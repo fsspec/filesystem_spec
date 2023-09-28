@@ -153,7 +153,8 @@ class SigSlot:
                         break
                 except Exception as e:
                     logger.exception(
-                        f"Exception ({e}) while executing callback for signal: {sig}"
+                        "Exception (%s) while executing callback for signal: %s"
+                        "" % (e, sig)
                     )
 
     def show(self, threads=False):

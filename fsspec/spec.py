@@ -1187,7 +1187,7 @@ class AbstractFileSystem(metaclass=_Cached):
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """Move file(s) from one location to another"""
         if path1 == path2:
-            logger.debug(f"{self} mv: The paths are the same, so no files were moved.")
+            logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
             self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
             self.rm(path1, recursive=recursive)
@@ -1849,7 +1849,7 @@ class AbstractBufferedFile(io.IOBase):
             length = self.size - self.loc
         if self.closed:
             raise ValueError("I/O operation on closed file.")
-        logger.debug(f"{self} read: {self.loc} - {self.loc + length}")
+        logger.debug("%s read: %i - %i", self, self.loc, self.loc + length)
         if length == 0:
             # don't even bother calling fetch
             return b""

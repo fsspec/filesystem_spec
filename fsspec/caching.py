@@ -284,7 +284,7 @@ class BlockCache(BaseCache):
 
         start = block_number * self.blocksize
         end = start + self.blocksize
-        logger.info(f"BlockCache fetching block {block_number}")
+        logger.info("BlockCache fetching block %d", block_number)
         block_contents = super()._fetch(start, end)
         return block_contents
 
@@ -726,7 +726,7 @@ class BackgroundBlockCache(BaseCache):
 
         start = block_number * self.blocksize
         end = start + self.blocksize
-        logger.info(f"BlockCache fetching block ({log_info}) {block_number}")
+        logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
         block_contents = super()._fetch(start, end)
         return block_contents
 

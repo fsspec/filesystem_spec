@@ -283,10 +283,10 @@ class CachingFileSystem(AbstractFileSystem):
             hash, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 # stored file is complete
-                logger.debug(f"Opening local copy of {path}")
+                logger.debug("Opening local copy of %s", path)
                 return open(fn, mode)
             # TODO: action where partial file exists in read-only cache
-            logger.debug(f"Opening partially cached copy of {path}")
+            logger.debug("Opening partially cached copy of %s", path)
         else:
             hash = self._mapper(path)
             fn = os.path.join(self.storage[-1], hash)
@@ -299,7 +299,7 @@ class CachingFileSystem(AbstractFileSystem):
                 "uid": self.fs.ukey(path),
             }
             self._metadata.update_file(path, detail)
-            logger.debug(f"Creating local sparse file for {path}")
+            logger.debug("Creating local sparse file for %s", path)
 
         # call target filesystems open
         self._mkcache()
@@ -547,7 +547,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             "uid": self.fs.ukey(path),
         }
         self._metadata.update_file(path, detail)
-        logger.debug(f"Copying {path} to local cache")
+        logger.debug("Copying %s to local cache", path)
         return fn
 
     def cat(
@@ -604,7 +604,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             detail, fn = detail
             _, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
-                logger.debug(f"Opening local copy of {path}")
+                logger.debug("Opening local copy of %s", path)
 
                 # In order to support downstream filesystems to be able to
                 # infer the compression from the original filename, like
@@ -700,7 +700,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
         sha = self._mapper(path)
         fn = os.path.join(self.storage[-1], sha)
-        logger.debug(f"Copying {path} to local cache")
+        logger.debug("Copying %s to local cache", path)
         kwargs["mode"] = mode
 
         self._mkcache()

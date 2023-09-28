@@ -831,7 +831,7 @@ async def _file_info(url, session, size_policy="head", **kwargs):
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
     """
-    logger.debug(f"Retrieve file size for {url}")
+    logger.debug("Retrieve file size for %s", url)
     kwargs = kwargs.copy()
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
