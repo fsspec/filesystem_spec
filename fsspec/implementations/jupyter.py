@@ -100,7 +100,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
 
     def _rm(self, path):
         path = self._strip_protocol(path)
-        self.session.delete(self.url + f"/{path}")
+        self.session.delete(f"{self.url}/{path}")
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
