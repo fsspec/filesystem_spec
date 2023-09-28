@@ -88,7 +88,7 @@ class SFTPFileSystem(AbstractFileSystem):
                 self.ftp.mkdir(path, mode)
 
     def rmdir(self, path):
-        logger.debug(f"Removing folder {path}")
+        logger.debug(f"Removing folder %s", path)
         self.ftp.rmdir(path)
 
     def info(self, path):
