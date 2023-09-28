@@ -83,7 +83,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "format": "base64",
             "type": "file",
         }
-        self.session.put(self.url + f"/{path}", json=json)
+        self.session.put(f"{self.url}/{path}", json=json)
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
