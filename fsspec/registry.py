@@ -61,6 +61,7 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
 # updated with register_implementation
 known_implementations = {
     "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
+    "local": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
     "dropbox": {
         "class": "dropboxdrivefs.DropboxDriveFileSystem",
