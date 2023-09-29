@@ -651,8 +651,7 @@ def _translate(pat, STAR, QUESTION_MARK):
 
 def glob_translate(pat: str) -> str:
     # Copied from: https://github.com/python/cpython/pull/106703.
-
-    # Modified to fix the keyword parameters' values:
+    # The keyword parameters' values are fixed to:
     # recursive=True, include_hidden=True, seps=None
     """Translate a pathname with shell wildcards to a regular expression."""
     if os.path.altsep:
