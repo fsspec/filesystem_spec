@@ -29,7 +29,7 @@ class LocalFileSystem(AbstractFileSystem):
     """
 
     root_marker = "/"
-    protocol = "file"
+    protocol = "file", "local"
     local_file = True
 
     def __init__(self, auto_mkdir=False, **kwargs):
