@@ -735,9 +735,12 @@ class AsyncFileSystem(AbstractFileSystem):
 
         import re
 
-        ends_with_slash = path.endswith("/")  # _strip_protocol strips trailing slash
+        seps = (os.path.sep, os.path.altsep) if os.path.altsep else (os.path.sep,)
+        ends_with_sep = path.endswith(seps)  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
-        append_slash_to_dirname = ends_with_slash or path.endswith("/**")
+        append_slash_to_dirname = ends_with_sep or path.endswith(
+            tuple(sep + "**" for sep in seps)
+        )
         idx_star = path.find("*") if path.find("*") >= 0 else len(path)
         idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
         idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
@@ -777,7 +780,7 @@ class AsyncFileSystem(AbstractFileSystem):
             root, maxdepth=depth, withdirs=True, detail=True, **kwargs
         )
 
-        pattern = glob_translate(path + ("/" if ends_with_slash else ""))
+        pattern = glob_translate(path + ("/" if ends_with_sep else ""))
         pattern = re.compile(pattern)
 
         out = {
