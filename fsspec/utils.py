@@ -649,7 +649,7 @@ def _translate(pat, STAR, QUESTION_MARK):
     return res
 
 
-def glob_translate(pat: str) -> str:
+def glob_translate(pat):
     # Copied from: https://github.com/python/cpython/pull/106703.
     # The keyword parameters' values are fixed to:
     # recursive=True, include_hidden=True, seps=None
