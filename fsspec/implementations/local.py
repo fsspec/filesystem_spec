@@ -215,6 +215,10 @@ class LocalFileSystem(AbstractFileSystem):
             path = path[7:]
         elif path.startswith("file:"):
             path = path[5:]
+        elif path.startswith("local://"):
+            path = path[8:]
+        elif path.startswith("local:"):
+            path = path[6:]
         return make_path_posix(path).rstrip("/") or cls.root_marker
 
     def _isfilestore(self):
