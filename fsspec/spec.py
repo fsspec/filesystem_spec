@@ -553,7 +553,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Search path names that contain embedded characters special to this
         implementation of glob may not produce expected results;
-        e.g., 'foo/bar/*starredfilename*'.
+        e.g., ``foo/bar/*starredfilename*``.
 
         kwargs are passed to ``ls``.
         """
