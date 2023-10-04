@@ -171,7 +171,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 l = l[1]
             if l.startswith("/") and len(l) > 1:
                 # absolute URL on this server
-                l = parts.scheme + "://" + parts.netloc + l
+                l = f"{parts.scheme}://{parts.netloc}{l}"
             if l.startswith("http"):
                 if self.same_schema and l.startswith(url.rstrip("/") + "/"):
                     out.add(l)
@@ -639,8 +639,8 @@ class HTTPFile(AbstractBufferedFile):
         logger.debug(f"Fetch range for {self}: {start}-{end}")
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
-        headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-        logger.debug(str(self.url) + " : " + headers["Range"])
+        headers["Range"] = f"bytes={start}-{end - 1}"
+        logger.debug(f"{self.url} : {headers['Range']}")
         r = await self.session.get(
             self.fs.encode_url(self.url), headers=headers, **kwargs
         )
@@ -796,7 +796,7 @@ async def get_range(session, url, start, end, file=None, **kwargs):
     # explicit get a range when we know it must be safe
     kwargs = kwargs.copy()
     headers = kwargs.pop("headers", {}).copy()
-    headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+    headers["Range"] = f"bytes={start}-{end - 1}"
     r = await session.get(url, headers=headers, **kwargs)
     r.raise_for_status()
     async with r:
@@ -815,7 +815,7 @@ async def _file_info(url, session, size_policy="head", **kwargs):
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
     """
-    logger.debug("Retrieve file size for %s" % url)
+    logger.debug("Retrieve file size for %s", url)
     kwargs = kwargs.copy()
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
@@ -828,7 +828,7 @@ async def _file_info(url, session, size_policy="head", **kwargs):
     elif size_policy == "get":
         r = await session.get(url, allow_redirects=ar, **kwargs)
     else:
-        raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
+        raise TypeError(f'size_policy must be "head" or "get", got {size_policy}')
     async with r:
         r.raise_for_status()
 

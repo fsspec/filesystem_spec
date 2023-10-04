@@ -1163,9 +1163,7 @@ class AbstractFileSystem(metaclass=_Cached):
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """Move file(s) from one location to another"""
         if path1 == path2:
-            logger.debug(
-                "%s mv: The paths are the same, so no files were moved." % (self)
-            )
+            logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
             self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
             self.rm(path1, recursive=recursive)
@@ -1720,7 +1718,7 @@ class AbstractBufferedFile(io.IOBase):
         elif whence == 2:
             nloc = self.size + loc
         else:
-            raise ValueError("invalid whence (%s, should be 0, 1 or 2)" % whence)
+            raise ValueError(f"invalid whence ({whence}, should be 0, 1 or 2)")
         if nloc < 0:
             raise ValueError("Seek before start of file")
         self.loc = nloc
@@ -1827,7 +1825,7 @@ class AbstractBufferedFile(io.IOBase):
             length = self.size - self.loc
         if self.closed:
             raise ValueError("I/O operation on closed file.")
-        logger.debug("%s read: %i - %i" % (self, self.loc, self.loc + length))
+        logger.debug("%s read: %i - %i", self, self.loc, self.loc + length)
         if length == 0:
             # don't even bother calling fetch
             return b""
@@ -1942,7 +1940,7 @@ class AbstractBufferedFile(io.IOBase):
             self.close()
 
     def __str__(self):
-        return "<File-like object %s, %s>" % (type(self.fs).__name__, self.path)
+        return f"<File-like object {type(self.fs).__name__}, {self.path}>"
 
     __repr__ = __str__
 

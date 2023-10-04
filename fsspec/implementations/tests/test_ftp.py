@@ -33,7 +33,7 @@ def test_basic(ftp):
     host, port = ftp
     fs = FTPFileSystem(host, port)
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
-    out = fs.cat("/" + os.path.basename(__file__))
+    out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
 
 
@@ -77,10 +77,10 @@ def test_write_small(ftp_writable):
 
 def test_with_url(ftp_writable):
     host, port, user, pw = ftp_writable
-    fo = fsspec.open("ftp://{}:{}@{}:{}/out".format(user, pw, host, port), "wb")
+    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out", "wb")
     with fo as f:
         f.write(b"hello")
-    fo = fsspec.open("ftp://{}:{}@{}:{}/out".format(user, pw, host, port), "rb")
+    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out", "rb")
     with fo as f:
         assert f.read() == b"hello"
 

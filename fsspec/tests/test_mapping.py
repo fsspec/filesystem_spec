@@ -17,13 +17,13 @@ def test_mapping_prefix(tmpdir):
     open(os.path.join(tmpdir, "afile"), "w").write("test")
     open(os.path.join(tmpdir, "afolder", "anotherfile"), "w").write("test2")
 
-    m = fsspec.get_mapper("file://" + tmpdir)
+    m = fsspec.get_mapper(f"file://{tmpdir}")
     assert "afile" in m
     assert m["afolder/anotherfile"] == b"test2"
 
     fs = fsspec.filesystem("file")
     m2 = fs.get_mapper(tmpdir)
-    m3 = fs.get_mapper("file://" + tmpdir)
+    m3 = fs.get_mapper(f"file://{tmpdir}")
 
     assert m == m2 == m3
 
@@ -33,13 +33,13 @@ def test_getitems_errors(tmpdir):
     os.makedirs(os.path.join(tmpdir, "afolder"))
     open(os.path.join(tmpdir, "afile"), "w").write("test")
     open(os.path.join(tmpdir, "afolder", "anotherfile"), "w").write("test2")
-    m = fsspec.get_mapper("file://" + tmpdir)
+    m = fsspec.get_mapper(f"file://{tmpdir}")
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
     with pytest.raises(KeyError):
         m.getitems(["afile", "bfile"])
     out = m.getitems(["afile", "bfile"], on_error="return")
     assert isinstance(out["bfile"], KeyError)
-    m = fsspec.get_mapper("file://" + tmpdir, missing_exceptions=())
+    m = fsspec.get_mapper(f"file://{tmpdir}", missing_exceptions=())
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
     with pytest.raises(FileNotFoundError):
         m.getitems(["afile", "bfile"])

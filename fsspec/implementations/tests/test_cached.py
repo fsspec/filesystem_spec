@@ -16,6 +16,7 @@ from fsspec.implementations.cache_mapper import (
 )
 from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
 from fsspec.implementations.local import make_path_posix
+from fsspec.tests.conftest import win
 
 from .test_ftp import FTPFileSystem
 
@@ -306,7 +307,7 @@ def test_glob(ftp_writable, impl):
 def test_write():
     tmp = str(tempfile.mkdtemp())
     fn = tmp + "afile"
-    url = "simplecache::file://" + fn
+    url = f"simplecache::file://{fn}"
     with fsspec.open(url, "wb") as f:
         f.write(b"hello")
         assert fn not in f.name
@@ -511,7 +512,7 @@ def test_pop():
 def test_write_pickle_context():
     tmp = str(tempfile.mkdtemp())
     fn = tmp + "afile"
-    url = "simplecache::file://" + fn
+    url = f"simplecache::file://{fn}"
     with fsspec.open(url, "wb") as f:
         pickle.loads(pickle.dumps(f))
         f.write(b"hello ")
@@ -926,7 +927,7 @@ def test_with_compression(impl, compression):
     f.close()
 
     with fsspec.open(
-        "%s::%s" % (impl, fn),
+        f"{impl}::{fn}",
         "rb",
         compression=compression,
         **{impl: {"same_names": True, "cache_storage": cachedir}},
@@ -939,7 +940,7 @@ def test_with_compression(impl, compression):
     cachedir = tempfile.mkdtemp()
 
     with fsspec.open(
-        "%s::%s" % (impl, fn),
+        f"{impl}::{fn}",
         "rb",
         **{
             impl: {
@@ -1156,11 +1157,11 @@ def test_getitems_errors(tmpdir):
     os.makedirs(os.path.join(tmpdir, "afolder"))
     open(os.path.join(tmpdir, "afile"), "w").write("test")
     open(os.path.join(tmpdir, "afolder", "anotherfile"), "w").write("test2")
-    m = fsspec.get_mapper("file://" + tmpdir)
+    m = fsspec.get_mapper(f"file://{tmpdir}")
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
 
     # my code
-    m2 = fsspec.get_mapper("simplecache::file://" + tmpdir)
+    m2 = fsspec.get_mapper(f"simplecache::file://{tmpdir}")
     assert m2.getitems(["afile"], on_error="omit") == {"afile": b"test"}  # works
     assert m2.getitems(["afile", "bfile"], on_error="omit") == {
         "afile": b"test"
@@ -1170,7 +1171,7 @@ def test_getitems_errors(tmpdir):
         m.getitems(["afile", "bfile"])
     out = m.getitems(["afile", "bfile"], on_error="return")
     assert isinstance(out["bfile"], KeyError)
-    m = fsspec.get_mapper("file://" + tmpdir, missing_exceptions=())
+    m = fsspec.get_mapper(f"file://{tmpdir}", missing_exceptions=())
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
     with pytest.raises(FileNotFoundError):
         m.getitems(["afile", "bfile"])
@@ -1211,3 +1212,41 @@ def test_cache_dir_auto_deleted(temp_cache, tmpdir):
         assert not local.exists(cache_dir)
     else:
         assert local.exists(cache_dir)
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "blockcache", "simplecache"])
+def test_cache_size(tmpdir, protocol):
+    if win and protocol == "blockcache":
+        pytest.skip("Windows file locking affects blockcache size tests")
+
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(protocol, target_protocol="file")
+    empty_cache_size = fs.cache_size()
+
+    # Create cache
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+    single_file_cache_size = fs.cache_size()
+    assert single_file_cache_size > empty_cache_size
+
+    # Remove cached file but leave cache metadata file
+    fs.pop_from_cache(afile)
+    if win and protocol == "filecache":
+        empty_cache_size < fs.cache_size()
+    elif protocol != "simplecache":
+        assert empty_cache_size < fs.cache_size() < single_file_cache_size
+    else:
+        # simplecache never stores metadata
+        assert fs.cache_size() == single_file_cache_size
+
+    # Completely remove cache
+    fs.clear_cache()
+    if protocol != "simplecache":
+        assert fs.cache_size() == empty_cache_size
+    else:
+        # Whole cache directory has been deleted
+        assert fs.cache_size() == 0

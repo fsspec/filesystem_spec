@@ -12,7 +12,7 @@ pytest.importorskip("paramiko")
 
 
 def stop_docker(name):
-    cmd = shlex.split('docker ps -a -q --filter "name=%s"' % name)
+    cmd = shlex.split(f'docker ps -a -q --filter "name={name}"')
     cid = subprocess.check_output(cmd).strip().decode()
     if cid:
         subprocess.call(["docker", "rm", "-f", cid])
@@ -45,7 +45,7 @@ def ssh():
     ]
     name = "fsspec_sftp"
     stop_docker(name)
-    cmd = "docker run -d -p 9200:22 --name {} ubuntu:16.04 sleep 9000".format(name)
+    cmd = f"docker run -d -p 9200:22 --name {name} ubuntu:16.04 sleep 9000"
     cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
     for cmd in cmds:
         subprocess.call(["docker", "exec", cid] + shlex.split(cmd))
@@ -128,11 +128,11 @@ def netloc(ssh):
     host = ssh.get("host")
     port = ssh.get("port")
     userpass = (
-        username + ((":" + password) if password is not None else "") + "@"
+        f"{username}:{password if password is not None else ''}@"
         if username is not None
         else ""
     )
-    netloc = host + ((":" + str(port)) if port is not None else "")
+    netloc = f"{host}:{port if port is not None else ''}"
     return userpass + netloc
 
 
@@ -153,13 +153,13 @@ def test_simple_with_tar(ssh, netloc, tmp_path, root_path):
     tar_filename = make_tarfile(files_to_pack, tmp_path)
 
     f = fsspec.get_filesystem_class("sftp")(**ssh)
-    f.mkdirs(root_path + "deeper", exist_ok=True)
+    f.mkdirs(f"{root_path}deeper", exist_ok=True)
     try:
-        remote_tar_filename = root_path + "deeper/somefile.tar"
+        remote_tar_filename = f"{root_path}deeper/somefile.tar"
         with f.open(remote_tar_filename, mode="wb") as wfd:
             with open(tar_filename, mode="rb") as rfd:
                 wfd.write(rfd.read())
-        fs = fsspec.open("tar::ssh://" + netloc + remote_tar_filename).fs
+        fs = fsspec.open(f"tar::ssh://{netloc}{remote_tar_filename}").fs
         files = fs.find("/")
         assert files == files_to_pack
     finally:
