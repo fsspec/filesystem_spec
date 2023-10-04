@@ -408,7 +408,7 @@ def test_fss_has_defaults(m):
 
     fs = fsspec.filesystem("reference", fs={"memory": m}, fo={})
     assert fs.fss["memory"] is m
-    assert fs.fss[None].protocol == "file"
+    assert fs.fss[None].protocol == ("file", "local")
 
     fs = fsspec.filesystem("reference", fs={None: m}, fo={})
     assert fs.fss[None] is m
