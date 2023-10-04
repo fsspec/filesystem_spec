@@ -79,9 +79,7 @@ class GithubFileSystem(AbstractFileSystem):
         List of string
         """
         r = requests.get(
-            "https://api.github.com/{part}/{org}/repos".format(
-                part=["users", "orgs"][is_org], org=org_or_user
-            )
+            f"https://api.github.com/{['users', 'orgs'][is_org]}/{org_or_user}/repos"
         )
         r.raise_for_status()
         return [repo["name"] for repo in r.json()]
@@ -90,8 +88,7 @@ class GithubFileSystem(AbstractFileSystem):
     def tags(self):
         """Names of tags in the repo"""
         r = requests.get(
-            "https://api.github.com/repos/{org}/{repo}/tags"
-            "".format(org=self.org, repo=self.repo),
+            f"https://api.github.com/repos/{self.org}/{self.repo}/tags",
             **self.kw,
         )
         r.raise_for_status()
@@ -101,8 +98,7 @@ class GithubFileSystem(AbstractFileSystem):
     def branches(self):
         """Names of branches in the repo"""
         r = requests.get(
-            "https://api.github.com/repos/{org}/{repo}/branches"
-            "".format(org=self.org, repo=self.repo),
+            f"https://api.github.com/repos/{self.org}/{self.repo}/branches",
             **self.kw,
         )
         r.raise_for_status()

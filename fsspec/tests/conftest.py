@@ -11,7 +11,7 @@ import pytest
 requests = pytest.importorskip("requests")
 port = 9898
 data = b"\n".join([b"some test data"] * 1000)
-realfile = "http://127.0.0.1:%i/index/realfile" % port
+realfile = f"http://127.0.0.1:{port}/index/realfile"
 index = b'<a href="%s">Link</a>' % realfile.encode()
 listing = open(
     os.path.join(os.path.dirname(__file__), "data", "listing.html"), "rb"
@@ -61,7 +61,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             return self._respond(404)
 
         status = 200
-        content_range = "bytes 0-%i/%i" % (len(file_data) - 1, len(file_data))
+        content_range = f"bytes 0-{len(file_data) - 1}/{len(file_data)}"
         if ("Range" in self.headers) and ("ignore_range" not in self.headers):
             ran = self.headers["Range"]
             b, ran = ran.split("=")
@@ -139,7 +139,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(200, response_headers)
         elif "give_range" in self.headers:
             self._respond(
-                200, {"Content-Range": "0-%i/%i" % (len(file_data) - 1, len(file_data))}
+                200, {"Content-Range": f"0-{len(file_data) - 1}/{len(file_data)}"}
             )
         elif "give_etag" in self.headers:
             self._respond(200, {"ETag": "xxx"})
@@ -155,7 +155,7 @@ def serve():
     th.daemon = True
     th.start()
     try:
-        yield "http://127.0.0.1:%i" % port
+        yield f"http://127.0.0.1:{port}"
     finally:
         httpd.socket.close()
         httpd.shutdown()

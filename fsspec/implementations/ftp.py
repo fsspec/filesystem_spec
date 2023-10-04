@@ -156,7 +156,7 @@ class FTPFileSystem(AbstractFileSystem):
             outfile.write(x)
 
         self.ftp.retrbinary(
-            "RETR %s" % rpath,
+            f"RETR {rpath}",
             blocksize=self.blocksize,
             callback=cb,
         )
@@ -172,7 +172,7 @@ class FTPFileSystem(AbstractFileSystem):
             out.append(x)
 
         self.ftp.retrbinary(
-            "RETR %s" % path,
+            f"RETR {path}",
             blocksize=self.blocksize,
             rest=start,
             callback=cb,
@@ -321,7 +321,7 @@ class FTPFile(AbstractBufferedFile):
 
         try:
             self.fs.ftp.retrbinary(
-                "RETR %s" % self.path,
+                f"RETR {self.path}",
                 blocksize=self.blocksize,
                 rest=start,
                 callback=callback,
@@ -339,7 +339,7 @@ class FTPFile(AbstractBufferedFile):
     def _upload_chunk(self, final=False):
         self.buffer.seek(0)
         self.fs.ftp.storbinary(
-            "STOR " + self.path, self.buffer, blocksize=self.blocksize, rest=self.offset
+            f"STOR {self.path}", self.buffer, blocksize=self.blocksize, rest=self.offset
         )
         return True
 

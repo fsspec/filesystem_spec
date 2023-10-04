@@ -38,20 +38,20 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
         if name in known_implementations and clobber is False:
             if cls != known_implementations[name]["class"]:
                 raise ValueError(
-                    "Name (%s) already in the known_implementations and clobber "
-                    "is False" % name
+                    f"Name ({name}) already in the known_implementations and clobber "
+                    f"is False"
                 )
         else:
             known_implementations[name] = {
                 "class": cls,
-                "err": errtxt or "%s import failed for protocol %s" % (cls, name),
+                "err": errtxt or f"{cls} import failed for protocol {name}",
             }
 
     else:
         if name in registry and clobber is False:
             if _registry[name] is not cls:
                 raise ValueError(
-                    "Name (%s) already in the registry and clobber is False" % name
+                    f"Name ({name}) already in the registry and clobber is False"
                 )
         else:
             _registry[name] = cls
@@ -229,7 +229,7 @@ def get_filesystem_class(protocol):
 
     if protocol not in registry:
         if protocol not in known_implementations:
-            raise ValueError("Protocol not known: %s" % protocol)
+            raise ValueError(f"Protocol not known: {protocol}")
         bit = known_implementations[protocol]
         try:
             register_implementation(protocol, _import_class(bit["class"]))

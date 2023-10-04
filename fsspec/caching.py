@@ -222,8 +222,9 @@ class BlockCache(BaseCache):
         self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
 
     def __repr__(self):
-        return "<BlockCache blocksize={}, size={}, nblocks={}>".format(
-            self.blocksize, self.size, self.nblocks
+        return (
+            f"<BlockCache blocksize={self.blocksize}, "
+            f"size={self.size}, nblocks={self.nblocks}>"
         )
 
     def cache_info(self):
@@ -277,9 +278,8 @@ class BlockCache(BaseCache):
         """
         if block_number > self.nblocks:
             raise ValueError(
-                "'block_number={}' is greater than the number of blocks ({})".format(
-                    block_number, self.nblocks
-                )
+                f"'block_number={block_number}' is greater than "
+                f"the number of blocks ({self.nblocks})"
             )
 
         start = block_number * self.blocksize
@@ -606,8 +606,9 @@ class BackgroundBlockCache(BaseCache):
         self._fetch_future_lock = threading.Lock()
 
     def __repr__(self):
-        return "<BackgroundBlockCache blocksize={}, size={}, nblocks={}>".format(
-            self.blocksize, self.size, self.nblocks
+        return (
+            f"<BackgroundBlockCache blocksize={self.blocksize}, "
+            f"size={self.size}, nblocks={self.nblocks}>"
         )
 
     def cache_info(self):
@@ -719,9 +720,8 @@ class BackgroundBlockCache(BaseCache):
         """
         if block_number > self.nblocks:
             raise ValueError(
-                "'block_number={}' is greater than the number of blocks ({})".format(
-                    block_number, self.nblocks
-                )
+                f"'block_number={block_number}' is greater than "
+                f"the number of blocks ({self.nblocks})"
             )
 
         start = block_number * self.blocksize

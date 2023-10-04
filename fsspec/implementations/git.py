@@ -81,7 +81,7 @@ class GitFileSystem(AbstractFileSystem):
                             "type": "directory",
                             "name": "/".join([path, obj.name]).lstrip("/"),
                             "hex": obj.hex,
-                            "mode": "%o" % obj.filemode,
+                            "mode": f"{obj.filemode:o}",
                             "size": 0,
                         }
                     )
@@ -91,7 +91,7 @@ class GitFileSystem(AbstractFileSystem):
                             "type": "file",
                             "name": "/".join([path, obj.name]).lstrip("/"),
                             "hex": obj.hex,
-                            "mode": "%o" % obj.filemode,
+                            "mode": f"{obj.filemode:o}",
                             "size": obj.size,
                         }
                     )
@@ -102,7 +102,7 @@ class GitFileSystem(AbstractFileSystem):
                     "type": "file",
                     "name": obj.name,
                     "hex": obj.hex,
-                    "mode": "%o" % obj.filemode,
+                    "mode": f"{obj.filemode:o}",
                     "size": obj.size,
                 }
             ]

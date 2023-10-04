@@ -122,8 +122,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
             files = open_files(fo, protocol=target_protocol, **(target_options or {}))
             if len(files) != 1:
                 raise ValueError(
-                    'Path "{}" did not resolve to exactly'
-                    'one file: "{}"'.format(fo, files)
+                    f'Path "{fo}" did not resolve to exactly one file: "{files}"'
                 )
             fo = files[0]
         self.of = fo

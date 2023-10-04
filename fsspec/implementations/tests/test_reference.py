@@ -338,8 +338,8 @@ def test_multi_fs_provided(m, tmpdir):
     # local URLs are file:// by default
     refs = {
         "a": b"data",
-        "b": ("file://" + str(real), 0, 5),
-        "c/d": ("file://" + str(real), 1, 6),
+        "b": (f"file://{real}", 0, 5),
+        "c/d": (f"file://{real}", 1, 6),
         "c/e": ["memory://afile"],
     }
 
@@ -361,8 +361,8 @@ def test_multi_fs_created(m, tmpdir):
     # local URLs are file:// by default
     refs = {
         "a": b"data",
-        "b": ("file://" + str(real), 0, 5),
-        "c/d": ("file://" + str(real), 1, 6),
+        "b": (f"file://{real}", 0, 5),
+        "c/d": (f"file://{real}", 1, 6),
         "c/e": ["memory://afile"],
     }
 

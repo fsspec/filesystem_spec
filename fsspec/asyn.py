@@ -426,7 +426,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 end = ""
             if isinstance(end, numbers.Integral):
                 end -= 1  # bytes range is inclusive
-        return "bytes=%s-%s" % (start, end)
+        return f"bytes={start}-{end}"
 
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         raise NotImplementedError

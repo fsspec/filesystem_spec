@@ -89,9 +89,7 @@ class WebHDFS(AbstractFileSystem):
         if self._cached:
             return
         super().__init__(**kwargs)
-        self.url = "{protocol}://{host}:{port}/webhdfs/v1".format(
-            protocol="https" if use_https else "http", host=host, port=port
-        )
+        self.url = f"{'https' if use_https else 'http'}://{host}:{port}/webhdfs/v1"
         self.kerb = kerberos
         self.kerb_kwargs = kerb_kwargs or {}
         self.pars = {}
@@ -115,7 +113,7 @@ class WebHDFS(AbstractFileSystem):
             )
         self._connect()
 
-        self._fsid = "webhdfs_" + tokenize(host, port)
+        self._fsid = f"webhdfs_{tokenize(host, port)}"
 
     @property
     def fsid(self):

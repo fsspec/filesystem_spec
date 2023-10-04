@@ -92,7 +92,7 @@ class OpenFile:
         )
 
     def __repr__(self):
-        return "<OpenFile '{}'>".format(self.path)
+        return f"<OpenFile '{self.path}'>"
 
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
@@ -195,7 +195,7 @@ class OpenFiles(list):
         return out
 
     def __repr__(self):
-        return "<List of %s OpenFile instances>" % len(self)
+        return f"<List of {len(self)} OpenFile instances>"
 
 
 def open_files(
@@ -498,7 +498,7 @@ def get_compression(urlpath, compression):
     if compression == "infer":
         compression = infer_compression(urlpath)
     if compression is not None and compression not in compr:
-        raise ValueError("Compression type %s not supported" % compression)
+        raise ValueError(f"Compression type {compression} not supported")
     return compression
 
 

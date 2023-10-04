@@ -13,7 +13,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
     """
 
     def __str__(self):
-        return "<Archive-like object %s at %s>" % (type(self).__name__, id(self))
+        return f"<Archive-like object {type(self).__name__} at {id(self)}>"
 
     __repr__ = __str__
 
