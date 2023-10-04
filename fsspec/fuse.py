@@ -231,7 +231,7 @@ def main(args):
 
     class RawDescriptionArgumentParser(argparse.ArgumentParser):
         def format_help(self):
-            usage = super(RawDescriptionArgumentParser, self).format_help()
+            usage = super().format_help()
             parts = usage.split("\n\n")
             parts[1] = self.description.rstrip()
             return "\n\n".join(parts)

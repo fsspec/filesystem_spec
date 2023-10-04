@@ -41,7 +41,7 @@ class SFTPFileSystem(AbstractFileSystem):
         """
         if self._cached:
             return
-        super(SFTPFileSystem, self).__init__(**ssh_kwargs)
+        super().__init__(**ssh_kwargs)
         self.temppath = ssh_kwargs.pop("temppath", "/tmp")  # remote temp directory
         self.host = host
         self.ssh_kwargs = ssh_kwargs

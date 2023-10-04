@@ -451,7 +451,7 @@ class KnownPartsOfAFile(BaseCache):
     name = "parts"
 
     def __init__(self, blocksize, fetcher, size, data={}, strict=True, **_):
-        super(KnownPartsOfAFile, self).__init__(blocksize, fetcher, size)
+        super().__init__(blocksize, fetcher, size)
         self.strict = strict
 
         # simple consolidation of contiguous blocks

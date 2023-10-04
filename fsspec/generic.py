@@ -169,7 +169,7 @@ class GenericFileSystem(AsyncFileSystem):
             - "current": takes the most recently instantiated version of each FS
         """
         self.method = default_method
-        super(GenericFileSystem, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def _strip_protocol(self, path):
         # normalization only

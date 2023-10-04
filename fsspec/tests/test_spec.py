@@ -935,7 +935,7 @@ class DummyOpenFS(DummyTestFS):
 class BasicCallback(fsspec.Callback):
     def __init__(self, **kwargs):
         self.events = []
-        super(BasicCallback, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def set_size(self, size):
         self.events.append(("set_size", size))
@@ -1009,7 +1009,7 @@ def test_dummy_callbacks_files(tmpdir):
 
 class BranchableCallback(BasicCallback):
     def __init__(self, source, dest=None, events=None, **kwargs):
-        super(BranchableCallback, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         if dest:
             self.key = source, dest
         else:
