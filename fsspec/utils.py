@@ -507,14 +507,14 @@ def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=Tru
     starts = [s or 0 for s in starts]
     # Sort by paths and then ranges if `sort=True`
     if sort:
-        paths, starts, ends = [
+        paths, starts, ends = (
             list(v)
             for v in zip(
                 *sorted(
                     zip(paths, starts, ends),
                 )
             )
-        ]
+        )
 
     if paths:
         # Loop through the coupled `paths`, `starts`, and
@@ -528,7 +528,7 @@ def merge_offset_ranges(paths, starts, ends, max_gap=0, max_block=None, sort=Tru
             elif (
                 paths[i] != paths[i - 1]
                 or ((starts[i] - new_ends[-1]) > max_gap)
-                or ((max_block is not None and (ends[i] - new_starts[-1]) > max_block))
+                or (max_block is not None and (ends[i] - new_starts[-1]) > max_block)
             ):
                 # Cannot merge with previous block.
                 # Add new `paths`, `starts`, and `ends` elements
