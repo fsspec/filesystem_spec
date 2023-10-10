@@ -48,10 +48,15 @@ def process_entries():
                 specs = eps.select(group="fsspec.specs")
             else:
                 specs = eps.get("fsspec.specs", [])
+            registered_names = {}
             for spec in specs:
                 err_msg = f"Unable to load filesystem from {spec}"
+                name = spec.name
+                if name in registered_names:
+                    continue
+                registered_names[name] = True
                 register_implementation(
-                    spec.name,
+                    name,
                     spec.value.replace(":", "."),
                     errtxt=err_msg,
                     # We take our implementations as the ones to overload with if
