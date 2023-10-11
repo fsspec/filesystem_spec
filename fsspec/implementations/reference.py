@@ -84,9 +84,9 @@ def ravel_multi_index(idx, sizes):
 class LazyReferenceMapper(collections.abc.MutableMapping):
     """This interface can be used to read/write references from Parquet stores.
     It is not intended for other types of references.
-    It can be used Kerchunk's MultiZarrToZarr method to combine 
-    references into a parquet store. 
-    Examples of this use can be found here:
+    It can be used with Kerchunk's MultiZarrToZarr method to combine
+    references into a parquet store.
+    Examples of this use-case can be found here:
     https://fsspec.github.io/kerchunk/advanced.html?highlight=parquet#parquet-storage"""
 
     # import is class level to prevent numpy dep requirement for fsspec
