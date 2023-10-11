@@ -57,7 +57,7 @@ class FTPFileSystem(AbstractFileSystem):
         encoding: str
             Encoding to use for directories and filenames in FTP connection
         """
-        super(FTPFileSystem, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.host = host
         self.port = port
         self.tempdir = tempdir or "/tmp"
@@ -252,7 +252,7 @@ class FTPFileSystem(AbstractFileSystem):
             self.dircache.clear()
         else:
             self.dircache.pop(path, None)
-        super(FTPFileSystem, self).invalidate_cache(path)
+        super().invalidate_cache(path)
 
 
 class TransferDone(Exception):

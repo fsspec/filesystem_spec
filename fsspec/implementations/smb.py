@@ -103,7 +103,7 @@ class SMBFileSystem(AbstractFileSystem):
             - 'w': Allow other handles to be opened with write access.
             - 'd': Allow other handles to be opened with delete access.
         """
-        super(SMBFileSystem, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.host = host
         self.port = port
         self.username = username
