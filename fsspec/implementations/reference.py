@@ -115,8 +115,12 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         cache_size : int, default=128
             Maximum size of LRU cache, where cache_size*record_size denotes
             the total number of references that can be loaded in memory at once.
-        categorical_threshold : int, default=10
-            Input categorical_threshold. Defaults to 10
+        categorical_threshold : int
+            Encode urls as pandas.Categorical to reduce memory footprint if the ratio
+            of the number of unique urls to total number of refs for each variable
+            is greater than or equal to this number. (default 10)
+
+
         """
         self.root = root
         self.chunk_sizes = {}
