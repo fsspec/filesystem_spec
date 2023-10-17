@@ -10,6 +10,7 @@ import time
 import pytest
 
 import fsspec
+import fsspec.implementations.smb
 
 pytest.importorskip("smbprotocol")
 
@@ -118,3 +119,11 @@ def test_makedirs_exist_ok(smb_params):
     fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
     fsmb.makedirs("/home/a/b/c")
     fsmb.makedirs("/home/a/b/c", exist_ok=True)
+
+
+def test_rename_from_upath(smb_params):
+    fsmb: fsspec.implementations.smb.SMBFileSystem = fsspec.get_filesystem_class("smb")(
+        **smb_params
+    )
+    fsmb.makedirs("/home/a/b/c", exist_ok=True)
+    fsmb.mv("/home/a/b/c", "/home/a/b/d", recursive=False, maxdepth=None)

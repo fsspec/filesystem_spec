@@ -251,6 +251,8 @@ class SMBFileSystem(AbstractFileSystem):
     def mv(self, path1, path2, **kwargs):
         wpath1 = _as_unc_path(self.host, path1)
         wpath2 = _as_unc_path(self.host, path2)
+        kwargs.pop("recursive", None)
+        kwargs.pop("maxdepth", None)
         smbclient.rename(wpath1, wpath2, port=self._port, **kwargs)
 
 
