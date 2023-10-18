@@ -296,7 +296,10 @@ def read_block(
         length = end - start
 
     f.seek(offset)
-    b = f.read(length)  # type: ignore[arg-type]
+
+    # TODO: allow length to be None and read to the end of the file?
+    assert length is not None
+    b = f.read(length)
     return b
 
 
