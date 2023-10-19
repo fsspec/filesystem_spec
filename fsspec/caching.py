@@ -93,7 +93,7 @@ class MMapCache(BaseCache):
         self.location = location
         self.cache = self._makefile()
 
-    def _makefile(self) -> bytearray | mmap.mmap:
+    def _makefile(self) -> mmap.mmap:
         import mmap
         import tempfile
 
@@ -166,7 +166,7 @@ class ReadAheadCache(BaseCache):
         self.start = 0
         self.end = 0
 
-    def _fetch(self, start, end: int | None) -> bytes:
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
             start = 0
         if end is None or end > self.size:
