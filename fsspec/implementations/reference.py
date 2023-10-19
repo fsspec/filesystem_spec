@@ -117,8 +117,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self._items = {}
         self.dirs = None
         self.fs = fsspec.filesystem("file") if fs is None else fs
-        with self.fs.open("/".join([self.root, ".zmetadata"]), "rb") as f:
-            self._items[".zmetadata"] = f.read()
+        self._items[".zmetadata"] = self.fs.cat_file(
+            "/".join([self.root, ".zmetadata"])
+        )
         met = json.loads(self._items[".zmetadata"])
         self.record_size = met["record_size"]
         self.zmetadata = met["metadata"]
@@ -131,10 +132,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         def open_refs(field, record):
             """cached parquet file loader"""
             path = self.url.format(field=field, record=record)
-            with self.fs.open(path) as f:
-                # TODO: since all we do is iterate, is arrow without pandas
-                #  better here?
-                df = self.pd.read_parquet(f, engine="fastparquet")
+            data = io.BytesIO(self.fs.cat_file(path))
+            df = self.pd.read_parquet(data, engine="fastparquet")
             refs = {c: df[c].values for c in df.columns}
             return refs
 
