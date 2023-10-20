@@ -50,14 +50,37 @@ class MMapCache(BaseCache):
     Ensure there is enough disc space in the temporary location.
 
     This cache method might only work on posix
+
+    Parameters
+    ----------
+    blocksize: int
+        How far to read ahead in numbers of bytes
+    fetcher: func
+        Function of the form f(start, end) which gets bytes from remote as
+        specified
+    size: int
+        How big this file is
+    location: str
+        Where to create the temporary file. If None, a temporary file is
+        created using tempfile.TemporaryFile().
+    blocks: set
+        Set of block numbers that have already been fetched. If None, an empty
+        set is created.
+    multi_fetcher: func
+        Function of the form f([(start, end)]) which gets bytes from remote
+        as specified. This function is used to fetch multiple blocks at once.
+        If not specified, the fetcher function is used instead.
     """
 
     name = "mmap"
 
-    def __init__(self, blocksize, fetcher, size, location=None, blocks=None):
+    def __init__(
+        self, blocksize, fetcher, size, location=None, blocks=None, multi_fetcher=None
+    ):
         super().__init__(blocksize, fetcher, size)
         self.blocks = set() if blocks is None else blocks
         self.location = location
+        self.multi_fetcher = multi_fetcher
         self.cache = self._makefile()
 
     def _makefile(self):
@@ -93,15 +116,29 @@ class MMapCache(BaseCache):
         start_block = start // self.blocksize
         end_block = end // self.blocksize
         need = [i for i in range(start_block, end_block + 1) if i not in self.blocks]
+        ranges = []
         while need:
             # TODO: not a for loop so we can consolidate blocks later to
-            # make fewer fetch calls; this could be parallel
+            # make fewer fetch calls
             i = need.pop(0)
             sstart = i * self.blocksize
             send = min(sstart + self.blocksize, self.size)
-            logger.debug(f"MMap get block #{i} ({sstart}-{send}")
-            self.cache[sstart:send] = self.fetcher(sstart, send)
+            ranges.append((sstart, send))
             self.blocks.add(i)
+
+        if not ranges:
+            return self.cache[start:end]
+
+        if self.multi_fetcher:
+            logger.debug(f"MMap get blocks {ranges}")
+            for idx, r in enumerate(self.multi_fetcher(ranges)):
+                (sstart, send) = ranges[idx]
+                logger.debug(f"MMap copy block ({sstart}-{send}")
+                self.cache[sstart:send] = r
+        else:
+            for (sstart, send) in ranges:
+                logger.debug(f"MMap get block ({sstart}-{send}")
+                self.cache[sstart:send] = self.fetcher(sstart, send)
 
         return self.cache[start:end]
 
