@@ -93,7 +93,7 @@ class MMapCache(BaseCache):
         self.location = location
         self.cache = self._makefile()
 
-    def _makefile(self) -> mmap.mmap:
+    def _makefile(self) -> mmap.mmap | bytearray:
         import mmap
         import tempfile
 
