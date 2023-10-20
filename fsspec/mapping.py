@@ -1,18 +1,18 @@
 from __future__ import annotations
-from typing import (
-    TYPE_CHECKING,
-    MutableMapping,
-    Literal,
-    Iterable,
-    Iterator,
-    overload,
-    TypeVar,
-)
 
 import array
 import posixpath
 import warnings
 from functools import cached_property
+from typing import (
+    TYPE_CHECKING,
+    Iterable,
+    Iterator,
+    Literal,
+    MutableMapping,
+    TypeVar,
+    overload,
+)
 
 from .core import url_to_fs
 
@@ -114,7 +114,7 @@ class FSMap(MutableMapping[str, bytes]):
         self,
         keys: Iterable[str],
         on_error: Literal["raise", "omit", "return"] = "raise",
-        ) -> dict[str, bytes | Exception] | dict[str, bytes]:
+    ) -> dict[str, bytes | Exception] | dict[str, bytes]:
         """Fetch multiple items from the store
 
         If the backend is async-able, this might proceed concurrently

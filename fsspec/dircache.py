@@ -1,8 +1,8 @@
 from __future__ import annotations
-import time
-from typing import MutableMapping, List, TypedDict, Iterator, Any
 
+import time
 from functools import lru_cache
+from typing import Any, Iterator, List, MutableMapping, TypedDict
 
 
 class DirEntry(TypedDict):
