@@ -1,13 +1,29 @@
+from __future__ import annotations
+from typing import (
+    TYPE_CHECKING,
+    MutableMapping,
+    Literal,
+    Iterable,
+    Iterator,
+    overload,
+    TypeVar,
+)
+
 import array
 import posixpath
 import warnings
-from collections.abc import MutableMapping
 from functools import cached_property
 
 from .core import url_to_fs
 
+if TYPE_CHECKING:
+    from .spec import AbstractFileSystem
+    from .implementations.dirfs import DirFileSystem
 
-class FSMap(MutableMapping):
+    T = TypeVar("T")
+
+
+class FSMap(MutableMapping[str, bytes]):
     """Wrap a FileSystem instance as a mutable wrapping.
 
     The keys of the mapping become files under the given root, and the
@@ -35,7 +51,14 @@ class FSMap(MutableMapping):
     b'Hello World'
     """
 
-    def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
+    def __init__(
+        self,
+        root: str,
+        fs: AbstractFileSystem,
+        check: bool = False,
+        create: bool = False,
+        missing_exceptions: tuple[type[Exception], ...] | None = None,
+    ):
         self.fs = fs
         self.root = fs._strip_protocol(root).rstrip("/")
         self._root_key_to_str = fs._strip_protocol(posixpath.join(root, "x"))[:-1]
@@ -61,13 +84,13 @@ class FSMap(MutableMapping):
             self.fs.rm(root + "/a")
 
     @cached_property
-    def dirfs(self):
+    def dirfs(self) -> DirFileSystem:
         """dirfs instance that can be used with the same keys as the mapper"""
         from .implementations.dirfs import DirFileSystem
 
         return DirFileSystem(path=self._root_key_to_str, fs=self.fs)
 
-    def clear(self):
+    def clear(self) -> None:
         """Remove all keys below root - empties out mapping"""
         try:
             self.fs.rm(self.root, True)
@@ -75,14 +98,30 @@ class FSMap(MutableMapping):
         except:  # noqa: E722
             pass
 
-    def getitems(self, keys, on_error="raise"):
+    @overload
+    def getitems(
+        self, keys: Iterable[str], on_error: Literal["raise", "omit"] = ...
+    ) -> dict[str, bytes]:
+        pass
+
+    @overload
+    def getitems(
+        self, keys: Iterable[str], on_error: Literal["return"]
+    ) -> dict[str, bytes | Exception]:
+        pass
+
+    def getitems(
+        self,
+        keys: Iterable[str],
+        on_error: Literal["raise", "omit", "return"] = "raise",
+        ) -> dict[str, bytes | Exception] | dict[str, bytes]:
         """Fetch multiple items from the store
 
         If the backend is async-able, this might proceed concurrently
 
         Parameters
         ----------
-        keys: list(str)
+        keys: iterable(str)
             They keys to be fetched
         on_error : "raise", "omit", "return"
             If raise, an underlying exception will be raised (converted to KeyError
@@ -113,7 +152,7 @@ class FSMap(MutableMapping):
             if on_error == "return" or not isinstance(out[k2], BaseException)
         }
 
-    def setitems(self, values_dict):
+    def setitems(self, values_dict: dict[str, bytes]) -> None:
         """Set the values of multiple items in the store
 
         Parameters
@@ -123,11 +162,11 @@ class FSMap(MutableMapping):
         values = {self._key_to_str(k): maybe_convert(v) for k, v in values_dict.items()}
         self.fs.pipe(values)
 
-    def delitems(self, keys):
+    def delitems(self, keys: Iterable[str]) -> None:
         """Remove multiple keys from the store"""
         self.fs.rm([self._key_to_str(k) for k in keys])
 
-    def _key_to_str(self, key):
+    def _key_to_str(self, key: str) -> str:
         """Generate full path for the key"""
         if not isinstance(key, str):
             # raise TypeError("key must be of type `str`, got `{type(key).__name__}`"
@@ -140,11 +179,11 @@ class FSMap(MutableMapping):
             key = str(key)
         return f"{self._root_key_to_str}{key}"
 
-    def _str_to_key(self, s):
+    def _str_to_key(self, s: str) -> str:
         """Strip path of to leave key name"""
         return s[len(self.root) :].lstrip("/")
 
-    def __getitem__(self, key, default=None):
+    def __getitem__(self, key: str, default: bytes | None = None) -> bytes:
         """Retrieve data"""
         k = self._key_to_str(key)
         try:
@@ -155,7 +194,7 @@ class FSMap(MutableMapping):
             raise KeyError(key)
         return result
 
-    def pop(self, key, default=None):
+    def pop(self, key: str, default: bytes | None = None) -> bytes:  # type: ignore[override]
         """Pop data"""
         result = self.__getitem__(key, default)
         try:
@@ -164,26 +203,26 @@ class FSMap(MutableMapping):
             pass
         return result
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: bytes) -> None:
         """Store value in key"""
         key = self._key_to_str(key)
         self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
         self.fs.pipe_file(key, maybe_convert(value))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         return (self._str_to_key(x) for x in self.fs.find(self.root))
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.fs.find(self.root))
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> None:
         """Remove key"""
         try:
             self.fs.rm(self._key_to_str(key))
         except:  # noqa: E722
             raise KeyError
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:  # type: ignore[override]
         """Does key exist in mapping?"""
         path = self._key_to_str(key)
         return self.fs.exists(path) and self.fs.isfile(path)
@@ -204,13 +243,13 @@ def maybe_convert(value):
 
 
 def get_mapper(
-    url="",
-    check=False,
-    create=False,
-    missing_exceptions=None,
-    alternate_root=None,
+    url: str = "",
+    check: bool = False,
+    create: bool = False,
+    missing_exceptions: tuple[type[Exception], ...] | None = None,
+    alternate_root: str | None = None,
     **kwargs,
-):
+) -> FSMap:
     """Create key-value interface for given URL and options
 
     The URL will be of the form "protocol://location" and point to the root
