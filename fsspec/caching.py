@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 import functools
 import logging
@@ -5,9 +7,33 @@ import math
 import os
 import threading
 import warnings
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Generic,
+    NamedTuple,
+    OrderedDict,
+    TypeVar,
+)
+
+if TYPE_CHECKING:
+    import mmap
+
+    from typing_extensions import ParamSpec
+
+    P = ParamSpec("P")
+else:
+    P = TypeVar("P")
+
+T = TypeVar("T")
+
 
 logger = logging.getLogger("fsspec")
+
+Fetcher = Callable[[int, int], bytes]  # Maps (start, end) to bytes
 
 
 class BaseCache:
@@ -26,14 +52,14 @@ class BaseCache:
         How big this file is
     """
 
-    name = "none"
+    name: ClassVar[str] = "none"
 
-    def __init__(self, blocksize, fetcher, size):
+    def __init__(self, blocksize: int, fetcher: Fetcher, size: int) -> None:
         self.blocksize = blocksize
         self.fetcher = fetcher
         self.size = size
 
-    def _fetch(self, start, stop):
+    def _fetch(self, start: int | None, stop: int | None) -> bytes:
         if start is None:
             start = 0
         if stop is None:
@@ -54,13 +80,20 @@ class MMapCache(BaseCache):
 
     name = "mmap"
 
-    def __init__(self, blocksize, fetcher, size, location=None, blocks=None):
+    def __init__(
+        self,
+        blocksize: int,
+        fetcher: Fetcher,
+        size: int,
+        location: str | None = None,
+        blocks: set[int] | None = None,
+    ) -> None:
         super().__init__(blocksize, fetcher, size)
         self.blocks = set() if blocks is None else blocks
         self.location = location
         self.cache = self._makefile()
 
-    def _makefile(self):
+    def _makefile(self) -> mmap.mmap | bytearray:
         import mmap
         import tempfile
 
@@ -82,7 +115,7 @@ class MMapCache(BaseCache):
 
         return mmap.mmap(fd.fileno(), self.size)
 
-    def _fetch(self, start, end):
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
         logger.debug(f"MMap cache fetching {start}-{end}")
         if start is None:
             start = 0
@@ -105,13 +138,13 @@ class MMapCache(BaseCache):
 
         return self.cache[start:end]
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
         del state["cache"]
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         # Restore instance attributes
         self.__dict__.update(state)
         self.cache = self._makefile()
@@ -127,13 +160,13 @@ class ReadAheadCache(BaseCache):
 
     name = "readahead"
 
-    def __init__(self, blocksize, fetcher, size):
+    def __init__(self, blocksize: int, fetcher: Fetcher, size: int) -> None:
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
         self.start = 0
         self.end = 0
 
-    def _fetch(self, start, end):
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
             start = 0
         if end is None or end > self.size:
@@ -168,11 +201,11 @@ class FirstChunkCache(BaseCache):
 
     name = "first"
 
-    def __init__(self, blocksize, fetcher, size):
+    def __init__(self, blocksize: int, fetcher: Fetcher, size: int) -> None:
         super().__init__(blocksize, fetcher, size)
-        self.cache = None
+        self.cache: bytes | None = None
 
-    def _fetch(self, start, end):
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
         start = start or 0
         end = end or self.size
         if start < self.blocksize:
@@ -215,13 +248,15 @@ class BlockCache(BaseCache):
 
     name = "blockcache"
 
-    def __init__(self, blocksize, fetcher, size, maxblocks=32):
+    def __init__(
+        self, blocksize: int, fetcher: Fetcher, size: int, maxblocks: int = 32
+    ) -> None:
         super().__init__(blocksize, fetcher, size)
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
         self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"<BlockCache blocksize={self.blocksize}, "
             f"size={self.size}, nblocks={self.nblocks}>"
@@ -238,18 +273,18 @@ class BlockCache(BaseCache):
         """
         return self._fetch_block_cached.cache_info()
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__
         del state["_fetch_block_cached"]
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         self._fetch_block_cached = functools.lru_cache(state["maxblocks"])(
             self._fetch_block
         )
 
-    def _fetch(self, start, end):
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
             start = 0
         if end is None:
@@ -272,7 +307,7 @@ class BlockCache(BaseCache):
             end_block_number=end_block_number,
         )
 
-    def _fetch_block(self, block_number):
+    def _fetch_block(self, block_number: int) -> bytes:
         """
         Fetch the block of data for `block_number`.
         """
@@ -288,7 +323,9 @@ class BlockCache(BaseCache):
         block_contents = super()._fetch(start, end)
         return block_contents
 
-    def _read_cache(self, start, end, start_block_number, end_block_number):
+    def _read_cache(
+        self, start: int, end: int, start_block_number: int, end_block_number: int
+    ) -> bytes:
         """
         Read from our block cache.
 
@@ -303,7 +340,7 @@ class BlockCache(BaseCache):
         end_pos = end % self.blocksize
 
         if start_block_number == end_block_number:
-            block = self._fetch_block_cached(start_block_number)
+            block: bytes = self._fetch_block_cached(start_block_number)
             return block[start_pos:end_pos]
 
         else:
@@ -336,16 +373,18 @@ class BytesCache(BaseCache):
         we are more than a blocksize ahead of it.
     """
 
-    name = "bytes"
+    name: ClassVar[str] = "bytes"
 
-    def __init__(self, blocksize, fetcher, size, trim=True):
+    def __init__(
+        self, blocksize: int, fetcher: Fetcher, size: int, trim: bool = True
+    ) -> None:
         super().__init__(blocksize, fetcher, size)
         self.cache = b""
-        self.start = None
-        self.end = None
+        self.start: int | None = None
+        self.end: int | None = None
         self.trim = trim
 
-    def _fetch(self, start, end):
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
         # TODO: only set start/end after fetch, in case it fails?
         # is this where retry logic might go?
         if start is None:
@@ -378,23 +417,27 @@ class BytesCache(BaseCache):
             # First read, or extending both before and after
             self.cache = self.fetcher(start, bend)
             self.start = start
-        elif start < self.start:
-            if self.end - end > self.blocksize:
-                self.cache = self.fetcher(start, bend)
-                self.start = start
-            else:
-                new = self.fetcher(start, self.start)
-                self.start = start
-                self.cache = new + self.cache
-        elif bend > self.end:
-            if self.end > self.size:
-                pass
-            elif end - self.end > self.blocksize:
-                self.cache = self.fetcher(start, bend)
-                self.start = start
-            else:
-                new = self.fetcher(self.end, bend)
-                self.cache = self.cache + new
+        else:
+            assert self.start is not None
+            assert self.end is not None
+
+            if start < self.start:
+                if self.end is None or self.end - end > self.blocksize:
+                    self.cache = self.fetcher(start, bend)
+                    self.start = start
+                else:
+                    new = self.fetcher(start, self.start)
+                    self.start = start
+                    self.cache = new + self.cache
+            elif self.end is not None and bend > self.end:
+                if self.end > self.size:
+                    pass
+                elif end - self.end > self.blocksize:
+                    self.cache = self.fetcher(start, bend)
+                    self.start = start
+                else:
+                    new = self.fetcher(self.end, bend)
+                    self.cache = self.cache + new
 
         self.end = self.start + len(self.cache)
         offset = start - self.start
@@ -406,23 +449,29 @@ class BytesCache(BaseCache):
                 self.cache = self.cache[self.blocksize * num :]
         return out
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.cache)
 
 
 class AllBytes(BaseCache):
     """Cache entire contents of the file"""
 
-    name = "all"
+    name: ClassVar[str] = "all"
 
-    def __init__(self, blocksize=None, fetcher=None, size=None, data=None):
-        super().__init__(blocksize, fetcher, size)
+    def __init__(
+        self,
+        blocksize: int | None = None,
+        fetcher: Fetcher | None = None,
+        size: int | None = None,
+        data: bytes | None = None,
+    ) -> None:
+        super().__init__(blocksize, fetcher, size)  # type: ignore[arg-type]
         if data is None:
             data = self.fetcher(0, self.size)
         self.data = data
 
-    def _fetch(self, start, end):
-        return self.data[start:end]
+    def _fetch(self, start: int | None, stop: int | None) -> bytes:
+        return self.data[start:stop]
 
 
 class KnownPartsOfAFile(BaseCache):
@@ -448,9 +497,17 @@ class KnownPartsOfAFile(BaseCache):
         begin outside a known byte-range.
     """
 
-    name = "parts"
+    name: ClassVar[str] = "parts"
 
-    def __init__(self, blocksize, fetcher, size, data={}, strict=True, **_):
+    def __init__(
+        self,
+        blocksize: int,
+        fetcher: Fetcher,
+        size: int,
+        data: dict[tuple[int, int], bytes] = {},
+        strict: bool = True,
+        **_: Any,
+    ):
         super().__init__(blocksize, fetcher, size)
         self.strict = strict
 
@@ -472,7 +529,12 @@ class KnownPartsOfAFile(BaseCache):
         else:
             self.data = data
 
-    def _fetch(self, start, stop):
+    def _fetch(self, start: int | None, stop: int | None) -> bytes:
+        if start is None:
+            start = 0
+        if stop is None:
+            stop = self.size
+
         out = b""
         for (loc0, loc1), data in self.data.items():
             # If self.strict=False, use zero-padded data
@@ -510,33 +572,37 @@ class KnownPartsOfAFile(BaseCache):
         return out + super()._fetch(start, stop)
 
 
-class UpdatableLRU:
+class UpdatableLRU(Generic[P, T]):
     """
     Custom implementation of LRU cache that allows updating keys
 
     Used by BackgroudBlockCache
     """
 
-    CacheInfo = collections.namedtuple(
-        "CacheInfo", ["hits", "misses", "maxsize", "currsize"]
-    )
+    class CacheInfo(NamedTuple):
+        hits: int
+        misses: int
+        maxsize: int
+        currsize: int
 
-    def __init__(self, func, max_size=128):
-        self._cache = collections.OrderedDict()
+    def __init__(self, func: Callable[P, T], max_size: int = 128) -> None:
+        self._cache: OrderedDict[Any, T] = collections.OrderedDict()
         self._func = func
         self._max_size = max_size
         self._hits = 0
         self._misses = 0
         self._lock = threading.Lock()
 
-    def __call__(self, *args):
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
+        if kwargs:
+            raise TypeError(f"Got unexpected keyword argument {kwargs.keys()}")
         with self._lock:
             if args in self._cache:
                 self._cache.move_to_end(args)
                 self._hits += 1
                 return self._cache[args]
 
-        result = self._func(*args)
+        result = self._func(*args, **kwargs)
 
         with self._lock:
             self._cache[args] = result
@@ -546,17 +612,17 @@ class UpdatableLRU:
 
         return result
 
-    def is_key_cached(self, *args):
+    def is_key_cached(self, *args: Any) -> bool:
         with self._lock:
             return args in self._cache
 
-    def add_key(self, result, *args):
+    def add_key(self, result: T, *args: Any) -> None:
         with self._lock:
             self._cache[args] = result
             if len(self._cache) > self._max_size:
                 self._cache.popitem(last=False)
 
-    def cache_info(self):
+    def cache_info(self) -> UpdatableLRU.CacheInfo:
         with self._lock:
             return self.CacheInfo(
                 maxsize=self._max_size,
@@ -592,26 +658,28 @@ class BackgroundBlockCache(BaseCache):
         use for this cache is then ``blocksize * maxblocks``.
     """
 
-    name = "background"
+    name: ClassVar[str] = "background"
 
-    def __init__(self, blocksize, fetcher, size, maxblocks=32):
+    def __init__(
+        self, blocksize: int, fetcher: Fetcher, size: int, maxblocks: int = 32
+    ) -> None:
         super().__init__(blocksize, fetcher, size)
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
         self._fetch_block_cached = UpdatableLRU(self._fetch_block, maxblocks)
 
         self._thread_executor = ThreadPoolExecutor(max_workers=1)
-        self._fetch_future_block_number = None
-        self._fetch_future = None
+        self._fetch_future_block_number: int | None = None
+        self._fetch_future: Future[bytes] | None = None
         self._fetch_future_lock = threading.Lock()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"<BackgroundBlockCache blocksize={self.blocksize}, "
             f"size={self.size}, nblocks={self.nblocks}>"
         )
 
-    def cache_info(self):
+    def cache_info(self) -> UpdatableLRU.CacheInfo:
         """
         The statistics on the block cache.
 
@@ -622,7 +690,7 @@ class BackgroundBlockCache(BaseCache):
         """
         return self._fetch_block_cached.cache_info()
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__
         del state["_fetch_block_cached"]
         del state["_thread_executor"]
@@ -631,7 +699,7 @@ class BackgroundBlockCache(BaseCache):
         del state["_fetch_future_lock"]
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state) -> None:
         self.__dict__.update(state)
         self._fetch_block_cached = UpdatableLRU(self._fetch_block, state["maxblocks"])
         self._thread_executor = ThreadPoolExecutor(max_workers=1)
@@ -639,7 +707,7 @@ class BackgroundBlockCache(BaseCache):
         self._fetch_future = None
         self._fetch_future_lock = threading.Lock()
 
-    def _fetch(self, start, end):
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
             start = 0
         if end is None:
@@ -656,6 +724,7 @@ class BackgroundBlockCache(BaseCache):
         with self._fetch_future_lock:
             # Background thread is running. Check we we can or must join it.
             if self._fetch_future is not None:
+                assert self._fetch_future_block_number is not None
                 if self._fetch_future.done():
                     logger.info("BlockCache joined background fetch without waiting.")
                     self._fetch_block_cached.add_key(
@@ -714,7 +783,7 @@ class BackgroundBlockCache(BaseCache):
             end_block_number=end_block_number,
         )
 
-    def _fetch_block(self, block_number, log_info="sync"):
+    def _fetch_block(self, block_number: int, log_info: str = "sync") -> bytes:
         """
         Fetch the block of data for `block_number`.
         """
@@ -730,7 +799,9 @@ class BackgroundBlockCache(BaseCache):
         block_contents = super()._fetch(start, end)
         return block_contents
 
-    def _read_cache(self, start, end, start_block_number, end_block_number):
+    def _read_cache(
+        self, start: int, end: int, start_block_number: int, end_block_number: int
+    ) -> bytes:
         """
         Read from our block cache.
 
@@ -765,13 +836,13 @@ class BackgroundBlockCache(BaseCache):
             return b"".join(out)
 
 
-caches = {
+caches: dict[str | None, type[BaseCache]] = {
     # one custom case
     None: BaseCache,
 }
 
 
-def register_cache(cls, clobber=False):
+def register_cache(cls: type[BaseCache], clobber: bool = False) -> None:
     """'Register' cache implementation.
 
     Parameters
