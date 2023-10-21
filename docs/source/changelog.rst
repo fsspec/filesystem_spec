@@ -1,6 +1,27 @@
 Changelog
 =========
 
+2023.10.0
+---------
+
+Enhancements
+
+- alias "local://" to "file://" (#1381)
+- get size of file cache (#1377)
+
+Fixes
+
+- stop unexpected kwargs for SMB (#1391)
+- dos formatting (#1383)
+
+Other
+
+- small optimisations in referenceFS (#1393)
+- define ordering behaviour for entrypoints (#1389)
+- style (#1387, 1386, 1385)
+- add LazyReferenceMapper to API docs (#1378)
+- add PyPI badge to README (#1376)
+
 2023.9.2
 --------
 
