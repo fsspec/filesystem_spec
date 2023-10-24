@@ -82,8 +82,12 @@ def ravel_multi_index(idx, sizes):
 
 
 class LazyReferenceMapper(collections.abc.MutableMapping):
-    """Interface to read parquet store as if it were a standard kerchunk
-    references dict."""
+    """This interface can be used to read/write references from Parquet stores.
+    It is not intended for other types of references.
+    It can be used with Kerchunk's MultiZarrToZarr method to combine
+    references into a parquet store.
+    Examples of this use-case can be found here:
+    https://fsspec.github.io/kerchunk/advanced.html?highlight=parquet#parquet-storage"""
 
     # import is class level to prevent numpy dep requirement for fsspec
     @property
@@ -108,17 +112,24 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             Root of parquet store
         fs : fsspec.AbstractFileSystem
             fsspec filesystem object, default is local filesystem.
-        cache_size : int
+        cache_size : int, default=128
             Maximum size of LRU cache, where cache_size*record_size denotes
             the total number of references that can be loaded in memory at once.
+        categorical_threshold : int
+            Encode urls as pandas.Categorical to reduce memory footprint if the ratio
+            of the number of unique urls to total number of refs for each variable
+            is greater than or equal to this number. (default 10)
+
+
         """
         self.root = root
         self.chunk_sizes = {}
         self._items = {}
         self.dirs = None
         self.fs = fsspec.filesystem("file") if fs is None else fs
-        with self.fs.open("/".join([self.root, ".zmetadata"]), "rb") as f:
-            self._items[".zmetadata"] = f.read()
+        self._items[".zmetadata"] = self.fs.cat_file(
+            "/".join([self.root, ".zmetadata"])
+        )
         met = json.loads(self._items[".zmetadata"])
         self.record_size = met["record_size"]
         self.zmetadata = met["metadata"]
@@ -131,10 +142,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         def open_refs(field, record):
             """cached parquet file loader"""
             path = self.url.format(field=field, record=record)
-            with self.fs.open(path) as f:
-                # TODO: since all we do is iterate, is arrow without pandas
-                #  better here?
-                df = self.pd.read_parquet(f, engine="fastparquet")
+            data = io.BytesIO(self.fs.cat_file(path))
+            df = self.pd.read_parquet(data, engine="fastparquet")
             refs = {c: df[c].values for c in df.columns}
             return refs
 

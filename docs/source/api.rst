@@ -124,6 +124,7 @@ Built-in Implementations
    fsspec.implementations.local.LocalFileSystem
    fsspec.implementations.memory.MemoryFileSystem
    fsspec.implementations.reference.ReferenceFileSystem
+   fsspec.implementations.reference.LazyReferenceMapper
    fsspec.implementations.sftp.SFTPFileSystem
    fsspec.implementations.smb.SMBFileSystem
    fsspec.implementations.tar.TarFileSystem
@@ -179,6 +180,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.reference.ReferenceFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.reference.LazyReferenceMapper
    :members: __init__
 
 .. autoclass:: fsspec.implementations.sftp.SFTPFileSystem

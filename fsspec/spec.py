@@ -196,7 +196,7 @@ class AbstractFileSystem(metaclass=_Cached):
         # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
-    def unstrip_protocol(self, name):
+    def unstrip_protocol(self, name: str) -> str:
         """Format FS-specific path to generic, including protocol"""
         protos = (self.protocol,) if isinstance(self.protocol, str) else self.protocol
         for protocol in protos:
