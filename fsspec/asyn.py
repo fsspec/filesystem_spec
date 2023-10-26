@@ -467,6 +467,16 @@ class AsyncFileSystem(AbstractFileSystem):
         on_error="return",
         **kwargs,
     ):
+        """Get the contents of byte ranges from one or more files
+
+        Parameters
+        ----------
+        paths: list
+            A list of of filepaths on this filesystems
+        starts, ends: int or list
+            Bytes limits of the read. If using a single int, the same value will be
+            used to read all the specified files.
+        """
         # TODO: on_error
         if max_gap is not None:
             # use utils.merge_offset_ranges
@@ -476,7 +486,7 @@ class AsyncFileSystem(AbstractFileSystem):
         if not isinstance(starts, Iterable):
             starts = [starts] * len(paths)
         if not isinstance(ends, Iterable):
-            ends = [starts] * len(paths)
+            ends = [ends] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
         coros = [
