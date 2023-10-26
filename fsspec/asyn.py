@@ -467,7 +467,7 @@ class AsyncFileSystem(AbstractFileSystem):
         on_error="return",
         **kwargs,
     ):
-        """Get the contents of multiple files
+        """Get the contents of byte ranges from one or more files
 
         Parameters
         ----------
