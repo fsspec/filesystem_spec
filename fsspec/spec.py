@@ -836,7 +836,7 @@ class AbstractFileSystem(metaclass=_Cached):
             A list of of filepaths on this filesystems
         starts, ends: int or list
             Bytes limits of the read. If using a single int, the same value will be
-            used to read all the specified files.    
+            used to read all the specified files.
         """
         if max_gap is not None:
             raise NotImplementedError
