@@ -15,7 +15,7 @@ from .callbacks import _DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
 from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
-from .utils import is_exception, other_paths
+from .utils import glob_translate, is_exception, other_paths
 
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
@@ -745,8 +745,12 @@ class AsyncFileSystem(AbstractFileSystem):
 
         import re
 
-        ends = path.endswith("/")
+        seps = (os.path.sep, os.path.altsep) if os.path.altsep else (os.path.sep,)
+        ends_with_sep = path.endswith(seps)  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
+        append_slash_to_dirname = ends_with_sep or path.endswith(
+            tuple(sep + "**" for sep in seps)
+        )
         idx_star = path.find("*") if path.find("*") >= 0 else len(path)
         idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
         idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
@@ -785,45 +789,21 @@ class AsyncFileSystem(AbstractFileSystem):
         allpaths = await self._find(
             root, maxdepth=depth, withdirs=True, detail=True, **kwargs
         )
-        # Escape characters special to python regex, leaving our supported
-        # special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
-        # for shell globbing details.
-        pattern = (
-            "^"
-            + (
-                path.replace("\\", r"\\")
-                .replace(".", r"\.")
-                .replace("+", r"\+")
-                .replace("//", "/")
-                .replace("(", r"\(")
-                .replace(")", r"\)")
-                .replace("|", r"\|")
-                .replace("^", r"\^")
-                .replace("$", r"\$")
-                .replace("{", r"\{")
-                .replace("}", r"\}")
-                .rstrip("/")
-                .replace("?", ".")
-            )
-            + "$"
-        )
-        pattern = re.sub("/[*]{2}", "=SLASH_DOUBLE_STARS=", pattern)
-        pattern = re.sub("[*]{2}/?", "=DOUBLE_STARS=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.sub("=SLASH_DOUBLE_STARS=", "(|/.*)", pattern)
-        pattern = re.sub("=DOUBLE_STARS=", ".*", pattern)
-        pattern = re.compile(pattern)
-        out = {
-            p: allpaths[p]
-            for p in sorted(allpaths)
-            if pattern.match(p.replace("//", "/").rstrip("/"))
-        }
 
-        # Return directories only when the glob end by a slash
-        # This is needed for posix glob compliance
-        if ends:
-            out = {k: v for k, v in out.items() if v["type"] == "directory"}
+        pattern = glob_translate(path + ("/" if ends_with_sep else ""))
+        pattern = re.compile(pattern)
+
+        out = {
+            p: info
+            for p, info in sorted(allpaths.items())
+            if pattern.match(
+                (
+                    p + "/"
+                    if append_slash_to_dirname and info["type"] == "directory"
+                    else p
+                )
+            )
+        }
 
         if detail:
             return out
