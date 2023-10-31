@@ -21,7 +21,7 @@ class WebHDFS(AbstractFileSystem):
     """
     Interface to HDFS over HTTP using the WebHDFS API. Supports also HttpFS gateways.
 
-    Three auth mechanisms are supported:
+    Four auth mechanisms are supported:
 
     insecure: no auth is done, and the user is assumed to be whoever they
         say they are (parameter ``user``), or a predefined value such as
@@ -34,6 +34,8 @@ class WebHDFS(AbstractFileSystem):
         service. Indeed, this client can also generate such tokens when
         not insecure. Note that tokens expire, but can be renewed (by a
         previously specified user) and may allow for proxying.
+    basic-auth: used when both parameter ``user`` and parameter ``password``
+        are provided.
 
     """
 
