@@ -108,7 +108,7 @@ class WebHDFS(AbstractFileSystem):
                     " token"
                 )
             self.pars["delegation"] = token
-        if self.user = user
+        self.user = user
         if password is not None:
             if self.user is None:
                 raise ValueError(
