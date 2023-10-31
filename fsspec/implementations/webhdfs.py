@@ -139,6 +139,11 @@ class WebHDFS(AbstractFileSystem):
 
             self.session.auth = HTTPKerberosAuth(**self.kerb_kwargs)
 
+        if "user.name" in self.pars and "password" in self.pars:
+            from requests.auth import HTTPBasicAuth
+
+            self.session.auth = HTTPBasicAuth(self.pars["user.name"], self.pars["password"])
+
     def _call(self, op, method="get", path=None, data=None, redirect=True, **kwargs):
         url = self.url + quote(path or "")
         args = kwargs.copy()
