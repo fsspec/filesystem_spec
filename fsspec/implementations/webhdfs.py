@@ -108,15 +108,14 @@ class WebHDFS(AbstractFileSystem):
                     " token"
                 )
             self.pars["delegation"] = token
-        if user is not None:
-            self.pars["user.name"] = user
+        if self.user = user
         if password is not None:
-            if user is None:
+            if self.user is None:
                 raise ValueError(
                     "If passing a password, the user must also be"
                     "set in order to set up the basic-auth"
                 )
-            self.pars["password"] = password
+            self.password = password
         if proxy_to is not None:
             self.pars["doas"] = proxy_to
         if kerberos and user is not None:
@@ -139,11 +138,11 @@ class WebHDFS(AbstractFileSystem):
 
             self.session.auth = HTTPKerberosAuth(**self.kerb_kwargs)
 
-        if "user.name" in self.pars and "password" in self.pars:
+        if self.user is not None and self.password is not None:
             from requests.auth import HTTPBasicAuth
 
             self.session.auth = HTTPBasicAuth(
-                self.pars["user.name"], self.pars["password"]
+                self.user, self.password
             )
 
     def _call(self, op, method="get", path=None, data=None, redirect=True, **kwargs):
