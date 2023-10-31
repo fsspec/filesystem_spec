@@ -49,6 +49,7 @@ class WebHDFS(AbstractFileSystem):
         kerberos=False,
         token=None,
         user=None,
+        password=None,
         proxy_to=None,
         kerb_kwargs=None,
         data_proxy=None,
@@ -70,6 +71,9 @@ class WebHDFS(AbstractFileSystem):
             given
         user: str or None
             If given, assert the user name to connect with
+        password: str or None
+            If given, assert the password to use for basic auth. If password
+            is provided, user must be provided also
         proxy_to: str or None
             If given, the user has the authority to proxy, and this value is
             the user in who's name actions are taken
