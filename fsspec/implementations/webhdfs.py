@@ -146,7 +146,7 @@ class WebHDFS(AbstractFileSystem):
             )
 
     def _call(self, op, method="get", path=None, data=None, redirect=True, **kwargs):
-        url = self.url + quote(path or "")
+        url = self._apply_proxy(self.url) + quote(path or "")
         args = kwargs.copy()
         args.update(self.pars)
         args["op"] = op.upper()
