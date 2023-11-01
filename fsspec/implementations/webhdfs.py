@@ -109,6 +109,7 @@ class WebHDFS(AbstractFileSystem):
                 )
             self.pars["delegation"] = token
         self.user = user
+
         if password is not None:
             if self.user is None:
                 raise ValueError(
@@ -116,6 +117,10 @@ class WebHDFS(AbstractFileSystem):
                     "set in order to set up the basic-auth"
                 )
             self.password = password
+        else:
+            if user is not None:
+                self.pars["user.name"] = user
+
         if proxy_to is not None:
             self.pars["doas"] = proxy_to
         if kerberos and user is not None:
