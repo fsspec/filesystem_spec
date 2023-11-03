@@ -272,7 +272,7 @@ class WebHDFS(AbstractFileSystem):
         """Checksum info of file, giving method and result"""
         out = self._call("GETFILECHECKSUM", path=path, redirect=False)
         if "Location" in out.headers:
-            location = out.headers["Location"]
+            location = self._apply_proxy(out.headers["Location"])
             out2 = self.session.get(location)
             out2.raise_for_status()
             return out2.json()["FileChecksum"]
@@ -435,7 +435,7 @@ class WebHDFile(AbstractBufferedFile):
             op, method = "CREATE", "PUT"
             kwargs["overwrite"] = "true"
         out = self.fs._call(op, method, self.path, redirect=False, **kwargs)
-        location = out.headers["Location"]
+        location = self.fs._apply_proxy(out.headers["Location"])
         if "w" in self.mode:
             # create empty file to append to
             out2 = self.fs.session.put(
@@ -444,7 +444,7 @@ class WebHDFile(AbstractBufferedFile):
             out2.raise_for_status()
             # after creating empty file, change location to append to
             out2 = self.fs._call("APPEND", "POST", self.path, redirect=False, **kwargs)
-            self.location = out2.headers["Location"]
+            self.location = self.fs._apply_proxy(out2.headers["Location"])
 
     def _fetch_range(self, start, end):
         start = max(start, 0)
@@ -457,7 +457,7 @@ class WebHDFile(AbstractBufferedFile):
         out.raise_for_status()
         if "Location" in out.headers:
             location = out.headers["Location"]
-            out2 = self.fs.session.get(location)
+            out2 = self.fs.session.get(self.fs._apply_proxy(location))
             return out2.content
         else:
             return out.content
