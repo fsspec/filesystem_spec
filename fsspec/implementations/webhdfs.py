@@ -109,14 +109,14 @@ class WebHDFS(AbstractFileSystem):
                 )
             self.pars["delegation"] = token
         self.user = user
+        self.password = password
 
         if password is not None:
-            if self.user is None:
+            if user is None:
                 raise ValueError(
                     "If passing a password, the user must also be"
                     "set in order to set up the basic-auth"
                 )
-            self.password = password
         else:
             if user is not None:
                 self.pars["user.name"] = user
