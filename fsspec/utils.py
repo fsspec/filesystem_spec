@@ -709,7 +709,7 @@ def glob_translate(pat):
     # recursive=True, include_hidden=True, seps=None
     """Translate a pathname with shell wildcards to a regular expression."""
     if os.path.altsep:
-        seps = (os.path.sep, os.path.altsep)
+        seps = os.path.sep + os.path.altsep
     else:
         seps = os.path.sep
     escaped_seps = "".join(map(re.escape, seps))
