@@ -10,4 +10,6 @@ dependencies:
     - types-paramiko
     - types-requests
     - types-tqdm
+    - types-paramiko
+    - types-PyYAML
     - types-ujson
