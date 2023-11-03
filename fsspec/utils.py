@@ -320,7 +320,7 @@ def tokenize(*args: Any, **kwargs: Any) -> str:
         h = md5(str(args).encode())
     except ValueError:
         # FIPS systems: https://github.com/fsspec/filesystem_spec/issues/380
-        h = md5(str(args).encode(), usedforsecurity=False)  # type: ignore[call-arg]
+        h = md5(str(args).encode(), usedforsecurity=False)
     return h.hexdigest()
 
 
@@ -631,7 +631,7 @@ def atomic_write(path: str, mode: str = "wb"):
 
 def _translate(pat, STAR, QUESTION_MARK):
     # Copied from: https://github.com/python/cpython/pull/106703.
-    res = []
+    res: list[str] = []
     add = res.append
     i, n = 0, len(pat)
     while i < n:
