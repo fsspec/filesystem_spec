@@ -171,6 +171,10 @@ class GenericFileSystem(AsyncFileSystem):
         self.method = default_method
         super().__init__(**kwargs)
 
+    def _parent(self, path):
+        fs = _resolve_fs(path, self.method)
+        return fs.unstrip_protocol(fs._parent(path))
+
     def _strip_protocol(self, path):
         # normalization only
         fs = _resolve_fs(path, self.method)

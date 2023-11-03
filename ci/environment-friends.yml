@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python=3.9
   - pytest
-  - pytest-asyncio
+  - pytest-asyncio !=0.22.0
   - pytest-benchmark
   - pytest-cov
   - pytest-mock
