@@ -146,9 +146,7 @@ class WebHDFS(AbstractFileSystem):
         if self.user is not None and self.password is not None:
             from requests.auth import HTTPBasicAuth
 
-            self.session.auth = HTTPBasicAuth(
-                self.user, self.password
-            )
+            self.session.auth = HTTPBasicAuth(self.user, self.password)
 
     def _call(self, op, method="get", path=None, data=None, redirect=True, **kwargs):
         url = self._apply_proxy(self.url + quote(path or ""))
