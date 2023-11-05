@@ -21,7 +21,7 @@ class WebHDFS(AbstractFileSystem):
     """
     Interface to HDFS over HTTP using the WebHDFS API. Supports also HttpFS gateways.
 
-    Three auth mechanisms are supported:
+    Four auth mechanisms are supported:
 
     insecure: no auth is done, and the user is assumed to be whoever they
         say they are (parameter ``user``), or a predefined value such as
@@ -34,6 +34,8 @@ class WebHDFS(AbstractFileSystem):
         service. Indeed, this client can also generate such tokens when
         not insecure. Note that tokens expire, but can be renewed (by a
         previously specified user) and may allow for proxying.
+    basic-auth: used when both parameter ``user`` and parameter ``password``
+        are provided.
 
     """
 
@@ -47,6 +49,7 @@ class WebHDFS(AbstractFileSystem):
         kerberos=False,
         token=None,
         user=None,
+        password=None,
         proxy_to=None,
         kerb_kwargs=None,
         data_proxy=None,
@@ -68,6 +71,9 @@ class WebHDFS(AbstractFileSystem):
             given
         user: str or None
             If given, assert the user name to connect with
+        password: str or None
+            If given, assert the password to use for basic auth. If password
+            is provided, user must be provided also
         proxy_to: str or None
             If given, the user has the authority to proxy, and this value is
             the user in who's name actions are taken
@@ -102,8 +108,19 @@ class WebHDFS(AbstractFileSystem):
                     " token"
                 )
             self.pars["delegation"] = token
-        if user is not None:
-            self.pars["user.name"] = user
+        self.user = user
+        self.password = password
+
+        if password is not None:
+            if user is None:
+                raise ValueError(
+                    "If passing a password, the user must also be"
+                    "set in order to set up the basic-auth"
+                )
+        else:
+            if user is not None:
+                self.pars["user.name"] = user
+
         if proxy_to is not None:
             self.pars["doas"] = proxy_to
         if kerberos and user is not None:
@@ -126,8 +143,13 @@ class WebHDFS(AbstractFileSystem):
 
             self.session.auth = HTTPKerberosAuth(**self.kerb_kwargs)
 
+        if self.user is not None and self.password is not None:
+            from requests.auth import HTTPBasicAuth
+
+            self.session.auth = HTTPBasicAuth(self.user, self.password)
+
     def _call(self, op, method="get", path=None, data=None, redirect=True, **kwargs):
-        url = self.url + quote(path or "")
+        url = self._apply_proxy(self.url + quote(path or ""))
         args = kwargs.copy()
         args.update(self.pars)
         args["op"] = op.upper()
