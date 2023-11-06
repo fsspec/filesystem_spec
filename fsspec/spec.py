@@ -887,7 +887,8 @@ class AbstractFileSystem(metaclass=_Cached):
             os.makedirs(lpath, exist_ok=True)
             return None
 
-        LocalFileSystem(auto_mkdir=True).makedirs(self._parent(lpath), exist_ok=True)
+        fs = LocalFileSystem(auto_mkdir=True)
+        fs.makedirs(fs._parent(lpath), exist_ok=True)
 
         with self.open(rpath, "rb", **kwargs) as f1:
             if outfile is None:

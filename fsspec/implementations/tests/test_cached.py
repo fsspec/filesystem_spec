@@ -14,8 +14,13 @@ from fsspec.implementations.cache_mapper import (
     HashCacheMapper,
     create_cache_mapper,
 )
-from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
+from fsspec.implementations.cached import (
+    CachingFileSystem,
+    LocalTempFile,
+    WholeFileCacheFileSystem,
+)
 from fsspec.implementations.local import make_path_posix
+from fsspec.implementations.zip import ZipFileSystem
 from fsspec.tests.conftest import win
 
 from .test_ftp import FTPFileSystem
@@ -1250,3 +1255,20 @@ def test_cache_size(tmpdir, protocol):
     else:
         # Whole cache directory has been deleted
         assert fs.cache_size() == 0
+
+
+def test_spurious_directory_issue1410(tmpdir):
+    import zipfile
+
+    os.chdir(tmpdir)
+    zipfile.ZipFile("dir.zip", mode="w").open("file.txt", "w").write(b"hello")
+    fs = WholeFileCacheFileSystem(fs=ZipFileSystem("dir.zip"))
+
+    assert len(os.listdir()) == 1
+    with fs.open("/file.txt", "rb"):
+        pass
+
+    # There was a bug reported in issue #1410 in which a directory
+    # would be created and the next assertion would fail.
+    assert len(os.listdir()) == 1
+    assert fs._parent("/any/path") == "any"  # correct for ZIP, which has no leading /
