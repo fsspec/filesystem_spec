@@ -355,6 +355,9 @@ class CachingFileSystem(AbstractFileSystem):
         self.save_cache()
         return f
 
+    def _parent(self, path):
+        return self.fs._parent(path)
+
     def hash_name(self, path: str, *args: Any) -> str:
         # Kept for backward compatibility with downstream libraries.
         # Ignores extra arguments, previously same_name boolean.

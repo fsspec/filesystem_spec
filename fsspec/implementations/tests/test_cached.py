@@ -1271,3 +1271,4 @@ def test_spurious_directory_issue1410(tmpdir):
     # There was a bug reported in issue #1410 in which a directory
     # would be created and the next assertion would fail.
     assert len(os.listdir()) == 1
+    assert fs._parent("/any/path") == "any"  # correct for ZIP, which has no leading /
