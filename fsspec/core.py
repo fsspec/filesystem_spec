@@ -290,7 +290,11 @@ def open_files(
         fs.auto_mkdir = auto_mkdir
     elif "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
-        [fs.makedirs(parent, exist_ok=True) for parent in parents]
+        for parent in parents:
+            try:
+                fs.makedirs(parent, exist_ok=True)
+            except PermissionError:
+                pass
     return OpenFiles(
         [
             OpenFile(
