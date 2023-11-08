@@ -113,6 +113,7 @@ Built-in Implementations
    fsspec.implementations.cached.SimpleCacheFileSystem
    fsspec.implementations.cached.WholeFileCacheFileSystem
    fsspec.implementations.dask.DaskWorkerFileSystem
+   fsspec.implementations.data.DataFileSystem
    fsspec.implementations.dbfs.DatabricksFileSystem
    fsspec.implementations.dirfs.DirFileSystem
    fsspec.implementations.ftp.FTPFileSystem
@@ -147,6 +148,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.dask.DaskWorkerFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.data.DataFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.dbfs.DatabricksFileSystem

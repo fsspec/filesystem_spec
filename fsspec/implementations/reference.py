@@ -152,6 +152,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     @staticmethod
     def create(record_size, root, fs, **kwargs):
         met = {"metadata": {}, "record_size": record_size}
+        fs.makedirs(root, exist_ok=True)
         fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
 
@@ -292,7 +293,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def _generate_record(self, field, record):
         """The references for a given parquet file of a given field"""
         refs = self.open_refs(field, record)
-        it = iter(zip(refs.values()))
+        it = iter(zip(*refs.values()))
         if len(refs) == 3:
             # All urls
             return (list(t) for t in it)
@@ -650,6 +651,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     self.fss[protocol] = fs
         if remote_protocol is None:
             # get single protocol from references
+            # TODO: warning here, since this can be very expensive?
             for ref in self.references.values():
                 if callable(ref):
                     ref = ref()
