@@ -414,6 +414,8 @@ class CachingFileSystem(AbstractFileSystem):
             "__eq__",
             "to_json",
             "cache_size",
+            "pipe_file",
+            "pipe",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -422,6 +424,9 @@ class CachingFileSystem(AbstractFileSystem):
             )
         if item in ["__reduce_ex__"]:
             raise AttributeError
+        if item in ["transaction"]:
+            # property
+            return type(self).transaction.__get__(self)
         if item in ["_cache"]:
             # class attributes
             return getattr(type(self), item)
@@ -715,11 +720,27 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     def load_cache(self):
         pass
 
+    def pipe_file(self, path, value=None, **kwargs):
+        if self._intrans:
+            with self.open(path, "wb") as f:
+                f.write(value)
+        else:
+            super().pipe_file(path, value)
+
+    def pipe(self, path, value=None, **kwargs):
+        if isinstance(path, str):
+            self.pipe_file(self._strip_protocol(path), value, **kwargs)
+        elif isinstance(path, dict):
+            for k, v in path.items():
+                self.pipe_file(self._strip_protocol(k), v, **kwargs)
+        else:
+            raise ValueError("path must be str or dict")
+
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
 
         if "r" not in mode:
-            return LocalTempFile(self, path, mode=mode)
+            return LocalTempFile(self, path, mode=mode, autocommit=not self._intrans)
         fn = self._check_file(path)
         if fn:
             return open(fn, mode)
@@ -796,12 +817,19 @@ class LocalTempFile:
         os.remove(self.fn)
 
     def commit(self):
-        self.fs.put(self.fn, self.path)
-        try:
-            os.remove(self.fn)
-        except (PermissionError, FileNotFoundError):
-            # file path may be held by new version of the file on windows
-            pass
+        if self.fs._intrans:
+            files = self.fs._transaction.files
+            if files:
+                self.fs.put([f.fn for f in files], [f.path for f in files])
+                [os.remove(f.fn) for f in files]
+                files.clear()
+        else:
+            self.fs.put(self.fn, self.path)
+            try:
+                os.remove(self.fn)
+            except (PermissionError, FileNotFoundError):
+                # file path may be held by new version of the file on windows
+                pass
 
     @property
     def name(self):
