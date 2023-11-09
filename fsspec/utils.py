@@ -436,6 +436,7 @@ def isfilelike(f: Any) -> TypeGuard[IO[bytes]]:
 
 
 def get_protocol(url: str) -> str:
+    url = stringify_path(url)
     parts = re.split(r"(\:\:|\://)", url, 1)
     if len(parts) > 1:
         return parts[0]
