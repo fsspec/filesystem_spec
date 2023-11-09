@@ -474,7 +474,7 @@ def open(
 
 def open_local(
     url: str | list[str] | Path | list[Path],
-    mode: str,
+    mode: str = "rb",
     **storage_options: dict,
 ) -> str | list[str]:
     """Open file(s) which can be resolved to local
