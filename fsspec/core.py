@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import io
 import logging
 import os
 import re
 from glob import has_magic
 from pathlib import Path
-from typing import Any, Literal, Optional
 
 # for backwards compat, we export cache things from here too
 from .caching import (  # noqa: F401
@@ -473,8 +474,8 @@ def open(
 
 def open_local(
     url: str | list[str] | Path | list[Path],
-    mode: Optional[Literal["rb"]] = "rb",
-    **storage_options: Optional[Any],
+    mode: str,
+    **storage_options: dict,
 ) -> str | list[str]:
     """Open file(s) which can be resolved to local
 
