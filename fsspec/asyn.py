@@ -106,7 +106,7 @@ def sync(loop, func, *args, timeout=None, **kwargs):
 
 
 def sync_wrapper(func, obj=None):
-    """Given a function, make so can be called in async or blocking contexts
+    """Given a function, make so can be called in blocking contexts
 
     Leave obj=None if defining within a class. Pass the instance if attaching
     as an attribute of the instance.
