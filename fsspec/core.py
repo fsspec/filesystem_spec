@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import io
 import logging
 import os
 import re
 from glob import has_magic
+from pathlib import Path
 
 # for backwards compat, we export cache things from here too
 from .caching import (  # noqa: F401
@@ -469,7 +472,11 @@ def open(
     return out[0]
 
 
-def open_local(url, mode="rb", **storage_options):
+def open_local(
+    url: str | list[str] | Path | list[Path],
+    mode: str = "rb",
+    **storage_options: dict,
+) -> str | list[str]:
     """Open file(s) which can be resolved to local
 
     For files which either are local, or get downloaded upon open
@@ -493,7 +500,7 @@ def open_local(url, mode="rb", **storage_options):
         )
     with of as files:
         paths = [f.name for f in files]
-    if isinstance(url, str) and not has_magic(url):
+    if (isinstance(url, str) and not has_magic(url)) or isinstance(url, Path):
         return paths[0]
     return paths
 

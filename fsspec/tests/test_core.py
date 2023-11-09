@@ -3,6 +3,7 @@ import pickle
 import tempfile
 import zipfile
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -101,7 +102,7 @@ def test_openfile_open(m):
     assert m.size("somepath") == 5
 
 
-def test_open_local():
+def test_open_local_w_cache():
     d1 = str(tempfile.mkdtemp())
     f1 = os.path.join(d1, "f1")
     open(f1, "w").write("test1")
@@ -110,6 +111,45 @@ def test_open_local():
     assert isinstance(fn, str)
     assert open(fn).read() == "test1"
     assert d2 in fn
+
+
+def test_open_local_w_magic():
+    d1 = str(tempfile.mkdtemp())
+    f1 = os.path.join(d1, "f1")
+    open(f1, "w").write("test1")
+    fn = open_local(os.path.join(d1, "f*"))
+    assert len(fn) == 1
+    assert isinstance(fn, list)
+
+
+def test_open_local_w_list_of_str():
+    d1 = str(tempfile.mkdtemp())
+    f1 = os.path.join(d1, "f1")
+    open(f1, "w").write("test1")
+    fn = open_local([f1, f1])
+    assert len(fn) == 2
+    assert isinstance(fn, list)
+    assert all(isinstance(elem, str) for elem in fn)
+
+
+def test_open_local_w_path():
+    d1 = str(tempfile.mkdtemp())
+    f1 = os.path.join(d1, "f1")
+    open(f1, "w").write("test1")
+    p = Path(f1)
+    fn = open_local(p)
+    assert isinstance(fn, str)
+
+
+def test_open_local_w_list_of_path():
+    d1 = str(tempfile.mkdtemp())
+    f1 = os.path.join(d1, "f1")
+    open(f1, "w").write("test1")
+    p = Path(f1)
+    fn = open_local([p, p])
+    assert len(fn) == 2
+    assert isinstance(fn, list)
+    assert all(isinstance(elem, str) for elem in fn)
 
 
 def test_xz_lzma_compressions():
