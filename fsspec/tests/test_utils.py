@@ -1,6 +1,5 @@
 import io
 import sys
-from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -9,7 +8,6 @@ import fsspec.utils
 from fsspec.utils import (
     can_be_local,
     common_prefix,
-    get_protocol,
     infer_storage_options,
     merge_offset_ranges,
     mirror_from,
@@ -338,31 +336,12 @@ def test_log():
 @pytest.mark.parametrize(
     "par",
     [
-        ("afile", "file"),
-        ("file://afile", "file"),
-        ("noproto://afile", "noproto"),
-        ("noproto::stuff", "noproto"),
-        ("simplecache::stuff", "simplecache"),
-        ("simplecache://stuff", "simplecache"),
-        ("s3://afile", "s3"),
-        (Path("afile"), "file"),
-    ],
-)
-def test_get_protocol(par):
-    url, outcome = par
-    assert get_protocol(url) == outcome
-
-
-@pytest.mark.parametrize(
-    "par",
-    [
         ("afile", True),
         ("file://afile", True),
         ("noproto://afile", False),
         ("noproto::stuff", False),
         ("simplecache::stuff", True),
         ("simplecache://stuff", True),
-        (Path("afile"), True),
     ],
 )
 def test_can_local(par):
