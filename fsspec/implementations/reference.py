@@ -150,8 +150,28 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.open_refs = open_refs
 
     @staticmethod
-    def create(record_size, root, fs, **kwargs):
+    def create(root, storage_options=None, fs=None, record_size=10000, **kwargs):
+        """Make empty parquet reference set
+
+        Parameters
+        ----------
+        root: str
+            Directory to contain the output; will be created
+        storage_options: dict | None
+            For making the filesystem to use for writing is fs is None
+        fs: FileSystem | None
+            Filesystem for writing
+        record_size: int
+            Number of references per parquet file
+        kwargs: passed to __init__
+
+        Returns
+        -------
+        LazyReferenceMapper instance
+        """
         met = {"metadata": {}, "record_size": record_size}
+        if fs is None:
+            fs, root = fsspec.core.url_to_fs(root, **(storage_options or {}))
         fs.makedirs(root, exist_ok=True)
         fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
