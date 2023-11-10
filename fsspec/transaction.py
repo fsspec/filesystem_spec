@@ -1,3 +1,6 @@
+from collections import deque
+
+
 class Transaction:
     """Filesystem transaction write context
 
@@ -13,10 +16,11 @@ class Transaction:
         fs: FileSystem instance
         """
         self.fs = fs
-        self.files = []
+        self.files = deque()
 
     def __enter__(self):
         self.start()
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """End transaction and commit, if exit is not due to exception"""
@@ -27,17 +31,17 @@ class Transaction:
 
     def start(self):
         """Start a transaction on this FileSystem"""
-        self.files = []  # clean up after previous failed completions
+        self.files = deque()  # clean up after previous failed completions
         self.fs._intrans = True
 
     def complete(self, commit=True):
         """Finish transaction: commit or discard all deferred files"""
-        for f in self.files:
+        while self.files:
+            f = self.files.popleft()
             if commit:
                 f.commit()
             else:
                 f.discard()
-        self.files = []
         self.fs._intrans = False
 
 
