@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import time
 from functools import lru_cache
-from typing import Any, Iterator, List, MutableMapping, TypedDict
+from typing import Any, Iterator, MutableMapping, TypedDict, TypeAlias, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # TODO: consider a more-precise type using TypedDict
+    DirEntry: TypeAlias = dict[str, Any]
 
 
-class DirEntry(TypedDict):
-    name: str
-    size: int
-    type: str
-
-
-class DirCache(MutableMapping[str, List[DirEntry]]):
+class DirCache(MutableMapping[str, list[DirEntry]]):
     """
     Caching of directory listings, in a structure like::
 
@@ -91,7 +89,7 @@ class DirCache(MutableMapping[str, List[DirEntry]]):
         if self.listings_expiry_time is not None:
             self._times[key] = time.time()
 
-    def __delitem__(self, key) -> None:
+    def __delitem__(self, key: str) -> None:
         del self._cache[key]
 
     def __iter__(self) -> Iterator[str]:
