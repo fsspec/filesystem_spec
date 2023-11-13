@@ -175,7 +175,7 @@ class MemoryFileSystem(AbstractFileSystem):
             parent = self._parent(parent)
             if self.isfile(parent):
                 raise FileExistsError(parent)
-        if mode in ["rb", "ab", "rb+"]:
+        if mode in ["rb", "ab", "r+b"]:
             if path in self.store:
                 f = self.store[path]
                 if mode == "ab":

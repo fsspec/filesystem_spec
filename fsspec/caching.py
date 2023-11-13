@@ -111,7 +111,7 @@ class MMapCache(BaseCache):
             fd.write(b"1")
             fd.flush()
         else:
-            fd = open(self.location, "rb+")
+            fd = open(self.location, "r+b")
 
         return mmap.mmap(fd.fileno(), self.size)
 

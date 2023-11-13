@@ -802,7 +802,7 @@ async def get_range(session, url, start, end, file=None, **kwargs):
     async with r:
         out = await r.read()
     if file:
-        with open(file, "rb+") as f:
+        with open(file, "r+b") as f:
             f.seek(start)
             f.write(out)
     else:
