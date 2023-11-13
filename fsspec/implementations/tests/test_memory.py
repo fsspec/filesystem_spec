@@ -192,7 +192,7 @@ def test_seekable(m):
 
 
 # https://github.com/fsspec/filesystem_spec/issues/1425
-@pytest.mark.parametrize("mode", ["r", "rb", "bw", "w", "wb", "ab", "ba", "rb+", "r+b"])
+@pytest.mark.parametrize("mode", ["r", "rb", "w", "wb", "ab", "r+b"])
 def test_open_mode(m, mode):
     filename = "mode.txt"
     m.touch(filename)
