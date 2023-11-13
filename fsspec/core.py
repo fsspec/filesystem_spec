@@ -99,6 +99,8 @@ class OpenFile:
 
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
+        sorting_order = {"r": 0, "w": 1, "a": 2, "b": 3, "+": 4}
+        mode = "".join(sorted(mode, key=lambda c: sorting_order.get(c, float("inf"))))
 
         f = self.fs.open(self.path, mode=mode)
 
