@@ -191,6 +191,15 @@ def test_seekable(m):
     assert f.tell() == 2
 
 
+# https://github.com/fsspec/filesystem_spec/issues/1425
+@pytest.mark.parametrize("mode", ["r", "rb", "bw", "w", "wb", "ab", "ba", "rb+", "r+b"])
+def test_open_mode(m, mode):
+    filename = "mode.txt"
+    m.touch(filename)
+    with m.open(filename, mode=mode) as _:
+        pass
+
+
 def test_remove_all(m):
     m.touch("afile")
     m.rm("/", recursive=True)
