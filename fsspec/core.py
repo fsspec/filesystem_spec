@@ -62,14 +62,14 @@ class OpenFile:
     """
 
     def __init__(
-        self,
-        fs,
-        path,
-        mode="rb",
-        compression=None,
-        encoding=None,
-        errors=None,
-        newline=None,
+            self,
+            fs,
+            path,
+            mode="rb",
+            compression=None,
+            encoding=None,
+            errors=None,
+            newline=None,
     ):
         self.fs = fs
         self.path = path
@@ -99,8 +99,6 @@ class OpenFile:
 
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
-        sorting_order = {"r": 0, "w": 1, "a": 2, "b": 3, "+": 4}
-        mode = "".join(sorted(mode, key=lambda c: sorting_order.get(c, float("inf"))))
 
         f = self.fs.open(self.path, mode=mode)
 
@@ -204,18 +202,18 @@ class OpenFiles(list):
 
 
 def open_files(
-    urlpath,
-    mode="rb",
-    compression=None,
-    encoding="utf8",
-    errors=None,
-    name_function=None,
-    num=1,
-    protocol=None,
-    newline=None,
-    auto_mkdir=True,
-    expand=True,
-    **kwargs,
+        urlpath,
+        mode="rb",
+        compression=None,
+        encoding="utf8",
+        errors=None,
+        name_function=None,
+        num=1,
+        protocol=None,
+        newline=None,
+        auto_mkdir=True,
+        expand=True,
+        **kwargs,
 ):
     """Given a path or paths, return a list of ``OpenFile`` objects.
 
@@ -339,8 +337,8 @@ def _un_chain(path, kwargs):
         kw = dict(**extra_kwargs, **kws)
         bit = cls._strip_protocol(bit)
         if (
-            protocol in {"blockcache", "filecache", "simplecache"}
-            and "target_protocol" not in kw
+                protocol in {"blockcache", "filecache", "simplecache"}
+                and "target_protocol" not in kw
         ):
             bit = previous_bit
         out.append((bit, protocol, kw))
@@ -399,14 +397,14 @@ def url_to_fs(url, **kwargs):
 
 
 def open(
-    urlpath,
-    mode="rb",
-    compression=None,
-    encoding="utf8",
-    errors=None,
-    protocol=None,
-    newline=None,
-    **kwargs,
+        urlpath,
+        mode="rb",
+        compression=None,
+        encoding="utf8",
+        errors=None,
+        protocol=None,
+        newline=None,
+        **kwargs,
 ):
     """Given a path or paths, return one ``OpenFile`` object.
 
@@ -475,9 +473,9 @@ def open(
 
 
 def open_local(
-    url: str | list[str] | Path | list[Path],
-    mode: str = "rb",
-    **storage_options: dict,
+        url: str | list[str] | Path | list[Path],
+        mode: str = "rb",
+        **storage_options: dict,
 ) -> str | list[str]:
     """Open file(s) which can be resolved to local
 
@@ -583,13 +581,13 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
 
 
 def get_fs_token_paths(
-    urlpath,
-    mode="rb",
-    num=1,
-    name_function=None,
-    storage_options=None,
-    protocol=None,
-    expand=True,
+        urlpath,
+        mode="rb",
+        num=1,
+        name_function=None,
+        storage_options=None,
+        protocol=None,
+        expand=True,
 ):
     """Filesystem, deterministic token, and paths from a urlpath and options.
 
@@ -697,13 +695,13 @@ class PickleableTextIOWrapper(io.TextIOWrapper):
     """
 
     def __init__(
-        self,
-        buffer,
-        encoding=None,
-        errors=None,
-        newline=None,
-        line_buffering=False,
-        write_through=False,
+            self,
+            buffer,
+            encoding=None,
+            errors=None,
+            newline=None,
+            line_buffering=False,
+            write_through=False,
     ):
         self.args = buffer, encoding, errors, newline, line_buffering, write_through
         super().__init__(*self.args)
