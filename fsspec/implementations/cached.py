@@ -771,10 +771,10 @@ class LocalTempFile:
         self.autocommit = autocommit
 
     def __reduce__(self):
-        # always open in rb+ to allow continuing writing at a location
+        # always open in r+b to allow continuing writing at a location
         return (
             LocalTempFile,
-            (self.fs, self.path, self.fn, "rb+", self.autocommit, self.tell()),
+            (self.fs, self.path, self.fn, "r+b", self.autocommit, self.tell()),
         )
 
     def __enter__(self):
