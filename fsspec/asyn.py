@@ -672,9 +672,9 @@ class AsyncFileSystem(AbstractFileSystem):
             [self._size(p) for p in paths], batch_size=batch_size
         )
 
-    async def _exists(self, path):
+    async def _exists(self, path, **kwargs):
         try:
-            await self._info(path)
+            await self._info(path, **kwargs)
             return True
         except FileNotFoundError:
             return False
@@ -760,11 +760,11 @@ class AsyncFileSystem(AbstractFileSystem):
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            if await self._exists(path):
+            if await self._exists(path, **kwargs):
                 if not detail:
                     return [path]
                 else:
-                    return {path: await self._info(path)}
+                    return {path: await self._info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty

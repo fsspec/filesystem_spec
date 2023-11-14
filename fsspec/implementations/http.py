@@ -458,11 +458,11 @@ class HTTPFileSystem(AsyncFileSystem):
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            if await self._exists(path):
+            if await self._exists(path, **kwargs):
                 if not detail:
                     return [path]
                 else:
-                    return {path: await self._info(path)}
+                    return {path: await self._info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty

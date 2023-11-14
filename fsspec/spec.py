@@ -575,11 +575,11 @@ class AbstractFileSystem(metaclass=_Cached):
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            if self.exists(path):
+            if self.exists(path, **kwargs):
                 if not detail:
                     return [path]
                 else:
-                    return {path: self.info(path)}
+                    return {path: self.info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
