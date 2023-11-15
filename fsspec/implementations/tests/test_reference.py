@@ -621,3 +621,30 @@ def test_mapping_getitems(m):
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
     mapping = fs.get_mapper("")
     assert mapping.getitems(["b", "a"]) == {"a": b"A", "b": b"B"}
+
+
+def test_cached(m, tmpdir):
+    fn = f"{tmpdir}/ref.json"
+
+    m.pipe({"a": b"A", "b": b"B"})
+    m.pipe("ref.json", b"""{"a": ["a"], "b": ["b"]}""")
+
+    fs = fsspec.filesystem(
+        "reference",
+        fo="simplecache::memory://ref.json",
+        fs=m,
+        target_options={"cache_storage": str(tmpdir), "same_names": True},
+    )
+    assert fs.cat("a") == b"A"
+    assert os.path.exists(fn)
+
+    # truncate original file to show we are loading from the cached version
+    m.pipe("ref.json", b"")
+    fs = fsspec.filesystem(
+        "reference",
+        fo="simplecache::memory://ref.json",
+        fs=m,
+        target_options={"cache_storage": str(tmpdir), "same_names": True},
+        skip_instance_cache=True,
+    )
+    assert fs.cat("a") == b"A"
