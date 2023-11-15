@@ -393,6 +393,7 @@ class CachingFileSystem(AbstractFileSystem):
             "open",
             "cat",
             "cat_file",
+            "cat_ranges",
             "get",
             "read_block",
             "tail",
@@ -714,6 +715,17 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def load_cache(self):
         pass
+
+    def cat_ranges(
+        self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
+    ):
+        lpaths = [self._check_file(p) for p in paths]
+        rpaths = [p for l, p in zip(lpaths, paths) if l is False]
+        lpaths = [l for l, p in zip(lpaths, paths) if l is False]
+        self.fs.get(rpaths, lpaths)
+        return super().cat_ranges(
+            paths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
+        )
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)

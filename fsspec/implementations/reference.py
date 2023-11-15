@@ -624,7 +624,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 **(ref_storage_args or target_options or {}), protocol=target_protocol
             )
             ref_fs, fo2 = fsspec.core.url_to_fs(fo, **dic)
-            if ref_fs.isfile(fo):
+            if ref_fs.isfile(fo2):
                 # text JSON
                 with fsspec.open(fo, "rb", **dic) as f:
                     logger.info("Read reference from URL %s", fo)
