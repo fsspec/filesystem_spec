@@ -10,7 +10,6 @@ from fsspec.tests.conftest import data, realfile, reset_files, server, win  # no
 
 
 def test_simple(server):  # noqa: F811
-
     refs = {
         "a": b"data",
         "b": (realfile, 0, 5),
@@ -51,6 +50,16 @@ def test_ls(server):  # noqa: F811
     assert fs.find("c", detail=True) == {
         "c/d": {"name": "c/d", "size": 6, "type": "file"}
     }
+
+
+def test_nested_dirs_ls():
+    # issue #1430
+    refs = {"a": "A", "B/C/b": "B", "B/C/d": "d", "B/_": "_"}
+    fs = fsspec.filesystem("reference", fo=refs)
+    assert len(fs.ls("")) == 2
+    assert set(e["name"] for e in fs.ls("")) == set(["a", "B"])
+    assert len(fs.ls("B")) == 2
+    assert set(e["name"] for e in fs.ls("B")) == set(["B/C", "B/_"])
 
 
 def test_info(server):  # noqa: F811
