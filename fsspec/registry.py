@@ -57,9 +57,10 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
             _registry[name] = cls
 
 
-# protocols mapped to the class which implements them. This dict can
+# protocols mapped to the class which implements them. This dict can be
 # updated with register_implementation
 known_implementations = {
+    "data": {"class": "fsspec.implementations.data.DataFileSystem"},
     "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "local": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},

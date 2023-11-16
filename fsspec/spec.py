@@ -110,6 +110,7 @@ class AbstractFileSystem(metaclass=_Cached):
     async_impl = False
     mirror_sync_methods = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
+    transaction_type = Transaction
 
     #: Extra *class attributes* that should be considered when hashing.
     _extra_tokenize_attributes = ()
@@ -236,13 +237,13 @@ class AbstractFileSystem(metaclass=_Cached):
         for the normal and exception cases.
         """
         if self._transaction is None:
-            self._transaction = Transaction(self)
+            self._transaction = self.transaction_type(self)
         return self._transaction
 
     def start_transaction(self):
         """Begin write transaction for deferring files, non-context version"""
         self._intrans = True
-        self._transaction = Transaction(self)
+        self._transaction = self.transaction_type(self)
         return self.transaction
 
     def end_transaction(self):
@@ -574,11 +575,11 @@ class AbstractFileSystem(metaclass=_Cached):
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            if self.exists(path):
+            if self.exists(path, **kwargs):
                 if not detail:
                     return [path]
                 else:
-                    return {path: self.info(path)}
+                    return {path: self.info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty

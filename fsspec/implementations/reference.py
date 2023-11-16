@@ -150,8 +150,29 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.open_refs = open_refs
 
     @staticmethod
-    def create(record_size, root, fs, **kwargs):
+    def create(root, storage_options=None, fs=None, record_size=10000, **kwargs):
+        """Make empty parquet reference set
+
+        Parameters
+        ----------
+        root: str
+            Directory to contain the output; will be created
+        storage_options: dict | None
+            For making the filesystem to use for writing is fs is None
+        fs: FileSystem | None
+            Filesystem for writing
+        record_size: int
+            Number of references per parquet file
+        kwargs: passed to __init__
+
+        Returns
+        -------
+        LazyReferenceMapper instance
+        """
         met = {"metadata": {}, "record_size": record_size}
+        if fs is None:
+            fs, root = fsspec.core.url_to_fs(root, **(storage_options or {}))
+        fs.makedirs(root, exist_ok=True)
         fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
 
@@ -292,7 +313,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def _generate_record(self, field, record):
         """The references for a given parquet file of a given field"""
         refs = self.open_refs(field, record)
-        it = iter(zip(refs.values()))
+        it = iter(zip(*refs.values()))
         if len(refs) == 3:
             # All urls
             return (list(t) for t in it)
@@ -603,7 +624,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 **(ref_storage_args or target_options or {}), protocol=target_protocol
             )
             ref_fs, fo2 = fsspec.core.url_to_fs(fo, **dic)
-            if ref_fs.isfile(fo):
+            if ref_fs.isfile(fo2):
                 # text JSON
                 with fsspec.open(fo, "rb", **dic) as f:
                     logger.info("Read reference from URL %s", fo)
@@ -650,6 +671,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     self.fss[protocol] = fs
         if remote_protocol is None:
             # get single protocol from references
+            # TODO: warning here, since this can be very expensive?
             for ref in self.references.values():
                 if callable(ref):
                     ref = ref()
