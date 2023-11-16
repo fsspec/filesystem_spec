@@ -985,16 +985,24 @@ class ReferenceFileSystem(AsyncFileSystem):
             elif len(part) == 1:
                 size = None
             else:
-                _, start, size = part
+                _, _, size = part
             par = path.rsplit("/", 1)[0] if "/" in path else ""
             par0 = par
+            subdirs = [par0]
             while par0 and par0 not in self.dircache:
-                # build parent directories
-                self.dircache[par0] = []
-                self.dircache.setdefault(
-                    par0.rsplit("/", 1)[0] if "/" in par0 else "", []
-                ).append({"name": par0, "type": "directory", "size": 0})
+                # collect parent directories
                 par0 = self._parent(par0)
+                subdirs.append(par0)
+
+            subdirs = subdirs[::-1]
+            for parent, child in zip(subdirs, subdirs[1:]):
+                # register newly discovered directories
+                assert child not in self.dircache
+                assert parent in self.dircache
+                self.dircache[parent].append(
+                    {"name": child, "type": "directory", "size": 0}
+                )
+                self.dircache[child] = []
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
 
