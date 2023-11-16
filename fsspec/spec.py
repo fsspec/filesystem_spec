@@ -250,7 +250,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """Finish write transaction, non-context version"""
         self.transaction.complete()
         self._transaction = None
-        # The invalid cache must be cleared after the transcation is completed.
+        # The invalid cache must be cleared after the transaction is completed.
         for path in self._invalidated_caches_in_transaction:
             self.invalidate_cache(path)
         self._invalidated_caches_in_transaction.clear()
