@@ -17,12 +17,23 @@ from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cache_metadata import CacheMetadata
 from fsspec.spec import AbstractBufferedFile
+from fsspec.transaction import Transaction
 from fsspec.utils import infer_compression
 
 if TYPE_CHECKING:
     from fsspec.implementations.cache_mapper import AbstractCacheMapper
 
 logger = logging.getLogger("fsspec.cached")
+
+
+class WriteCachedTransaction(Transaction):
+    def complete(self, commit=True):
+        rpaths = [f.path for f in self.files]
+        lpaths = [f.fn for f in self.files]
+        if commit:
+            self.fs.put(lpaths, rpaths)
+        # else remove?
+        self.fs._intrans = False
 
 
 class CachingFileSystem(AbstractFileSystem):
@@ -417,6 +428,8 @@ class CachingFileSystem(AbstractFileSystem):
             "cache_size",
             "pipe_file",
             "pipe",
+            "start_transaction",
+            "end_transaction",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -428,7 +441,7 @@ class CachingFileSystem(AbstractFileSystem):
         if item in ["transaction"]:
             # property
             return type(self).transaction.__get__(self)
-        if item in ["_cache"]:
+        if item in ["_cache", "transaction_type"]:
             # class attributes
             return getattr(type(self), item)
         if item == "__class__":
@@ -517,7 +530,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             self._mkcache()
         else:
             return [
-                LocalTempFile(self.fs, path, mode=open_files.mode) for path in paths
+                LocalTempFile(
+                    self.fs,
+                    path,
+                    mode=open_files.mode,
+                    fn=os.path.join(self.storage[-1], self._mapper(path)),
+                )
+                for path in paths
             ]
 
         if self.compression:
@@ -630,7 +649,8 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         if "r" not in mode:
-            return LocalTempFile(self, path, mode=mode)
+            fn = self._make_local_details(path)
+            return LocalTempFile(self, path, mode=mode, fn=fn)
         detail = self._check_file(path)
         if detail:
             detail, fn = detail
@@ -697,6 +717,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     protocol = "simplecache"
     local_file = True
+    transaction_type = WriteCachedTransaction
 
     def __init__(self, **kwargs):
         kw = kwargs.copy()
@@ -750,14 +771,17 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
+        sha = self._mapper(path)
 
         if "r" not in mode:
-            return LocalTempFile(self, path, mode=mode, autocommit=not self._intrans)
+            fn = os.path.join(self.storage[-1], sha)
+            return LocalTempFile(
+                self, path, mode=mode, autocommit=not self._intrans, fn=fn
+            )
         fn = self._check_file(path)
         if fn:
             return open(fn, mode)
 
-        sha = self._mapper(path)
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache", path)
         kwargs["mode"] = mode
@@ -788,13 +812,9 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 class LocalTempFile:
     """A temporary local file, which will be uploaded on commit"""
 
-    def __init__(self, fs, path, fn=None, mode="wb", autocommit=True, seek=0):
-        if fn:
-            self.fn = fn
-            self.fh = open(fn, mode)
-        else:
-            fd, self.fn = tempfile.mkstemp()
-            self.fh = open(fd, mode)
+    def __init__(self, fs, path, fn, mode="wb", autocommit=True, seek=0):
+        self.fn = fn
+        self.fh = open(fn, mode)
         self.mode = mode
         if seek:
             self.fh.seek(seek)
@@ -829,19 +849,12 @@ class LocalTempFile:
         os.remove(self.fn)
 
     def commit(self):
-        if self.fs._intrans:
-            files = self.fs._transaction.files
-            if files:
-                self.fs.put([f.fn for f in files], [f.path for f in files])
-                [os.remove(f.fn) for f in files]
-                files.clear()
-        else:
-            self.fs.put(self.fn, self.path)
-            try:
-                os.remove(self.fn)
-            except (PermissionError, FileNotFoundError):
-                # file path may be held by new version of the file on windows
-                pass
+        self.fs.put(self.fn, self.path)
+        try:
+            os.remove(self.fn)
+        except (PermissionError, FileNotFoundError):
+            # file path may be held by new version of the file on windows
+            pass
 
     @property
     def name(self):

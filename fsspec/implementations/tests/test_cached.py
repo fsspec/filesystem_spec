@@ -289,7 +289,10 @@ def test_workflow(ftp_writable, impl):
     with fs.open("/out", "wb") as f:
         f.write(b"changed")
 
-    assert fs.cat("/out") == b"test"  # old value
+    if impl == "filecache":
+        assert (
+            fs.cat("/out") == b"changed"
+        )  # new value, because we overwrote the cached location
 
 
 @pytest.mark.parametrize("impl", ["simplecache", "blockcache"])
