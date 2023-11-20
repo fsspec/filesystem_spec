@@ -17,12 +17,23 @@ from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cache_metadata import CacheMetadata
 from fsspec.spec import AbstractBufferedFile
+from fsspec.transaction import Transaction
 from fsspec.utils import infer_compression
 
 if TYPE_CHECKING:
     from fsspec.implementations.cache_mapper import AbstractCacheMapper
 
 logger = logging.getLogger("fsspec.cached")
+
+
+class WriteCachedTransaction(Transaction):
+    def complete(self, commit=True):
+        rpaths = [f.path for f in self.files]
+        lpaths = [f.fn for f in self.files]
+        if commit:
+            self.fs.put(lpaths, rpaths)
+        # else remove?
+        self.fs._intrans = False
 
 
 class CachingFileSystem(AbstractFileSystem):
@@ -415,6 +426,10 @@ class CachingFileSystem(AbstractFileSystem):
             "__eq__",
             "to_json",
             "cache_size",
+            "pipe_file",
+            "pipe",
+            "start_transaction",
+            "end_transaction",
         ]:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -423,7 +438,10 @@ class CachingFileSystem(AbstractFileSystem):
             )
         if item in ["__reduce_ex__"]:
             raise AttributeError
-        if item in ["_cache"]:
+        if item in ["transaction"]:
+            # property
+            return type(self).transaction.__get__(self)
+        if item in ["_cache", "transaction_type"]:
             # class attributes
             return getattr(type(self), item)
         if item == "__class__":
@@ -512,7 +530,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             self._mkcache()
         else:
             return [
-                LocalTempFile(self.fs, path, mode=open_files.mode) for path in paths
+                LocalTempFile(
+                    self.fs,
+                    path,
+                    mode=open_files.mode,
+                    fn=os.path.join(self.storage[-1], self._mapper(path)),
+                )
+                for path in paths
             ]
 
         if self.compression:
@@ -625,7 +649,8 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         if "r" not in mode:
-            return LocalTempFile(self, path, mode=mode)
+            fn = self._make_local_details(path)
+            return LocalTempFile(self, path, mode=mode, fn=fn)
         detail = self._check_file(path)
         if detail:
             detail, fn = detail
@@ -692,6 +717,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     protocol = "simplecache"
     local_file = True
+    transaction_type = WriteCachedTransaction
 
     def __init__(self, **kwargs):
         kw = kwargs.copy()
@@ -716,6 +742,22 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     def load_cache(self):
         pass
 
+    def pipe_file(self, path, value=None, **kwargs):
+        if self._intrans:
+            with self.open(path, "wb") as f:
+                f.write(value)
+        else:
+            super().pipe_file(path, value)
+
+    def pipe(self, path, value=None, **kwargs):
+        if isinstance(path, str):
+            self.pipe_file(self._strip_protocol(path), value, **kwargs)
+        elif isinstance(path, dict):
+            for k, v in path.items():
+                self.pipe_file(self._strip_protocol(k), v, **kwargs)
+        else:
+            raise ValueError("path must be str or dict")
+
     def cat_ranges(
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
@@ -729,14 +771,17 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
+        sha = self._mapper(path)
 
         if "r" not in mode:
-            return LocalTempFile(self, path, mode=mode)
+            fn = os.path.join(self.storage[-1], sha)
+            return LocalTempFile(
+                self, path, mode=mode, autocommit=not self._intrans, fn=fn
+            )
         fn = self._check_file(path)
         if fn:
             return open(fn, mode)
 
-        sha = self._mapper(path)
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache", path)
         kwargs["mode"] = mode
@@ -767,13 +812,9 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 class LocalTempFile:
     """A temporary local file, which will be uploaded on commit"""
 
-    def __init__(self, fs, path, fn=None, mode="wb", autocommit=True, seek=0):
-        if fn:
-            self.fn = fn
-            self.fh = open(fn, mode)
-        else:
-            fd, self.fn = tempfile.mkstemp()
-            self.fh = open(fd, mode)
+    def __init__(self, fs, path, fn, mode="wb", autocommit=True, seek=0):
+        self.fn = fn
+        self.fh = open(fn, mode)
         self.mode = mode
         if seek:
             self.fh.seek(seek)

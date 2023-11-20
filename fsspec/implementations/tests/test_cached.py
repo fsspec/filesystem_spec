@@ -289,7 +289,10 @@ def test_workflow(ftp_writable, impl):
     with fs.open("/out", "wb") as f:
         f.write(b"changed")
 
-    assert fs.cat("/out") == b"test"  # old value
+    if impl == "filecache":
+        assert (
+            fs.cat("/out") == b"changed"
+        )  # new value, because we overwrote the cached location
 
 
 @pytest.mark.parametrize("impl", ["simplecache", "blockcache"])
@@ -1272,3 +1275,26 @@ def test_spurious_directory_issue1410(tmpdir):
     # would be created and the next assertion would fail.
     assert len(os.listdir()) == 1
     assert fs._parent("/any/path") == "any"  # correct for ZIP, which has no leading /
+
+
+def test_write_transaction(tmpdir, m, monkeypatch):
+    called = [0]
+    orig = m.put
+
+    def patched_put(*args, **kwargs):
+        called[0] += 1
+        orig(*args, **kwargs)
+
+    monkeypatch.setattr(m, "put", patched_put)
+    tmpdir = str(tmpdir)
+    fs, _ = fsspec.core.url_to_fs("simplecache::memory://", cache_storage=tmpdir)
+    with fs.transaction:
+        fs.pipe("myfile", b"1")
+        fs.pipe("otherfile", b"2")
+        with fs.open("blarh", "wb") as f:
+            f.write(b"ff")
+        assert not m.find("")
+
+    assert m.cat("myfile") == b"1"
+    assert m.cat("otherfile") == b"2"
+    assert called[0] == 1  # copy was done in one go
