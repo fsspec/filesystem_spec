@@ -449,6 +449,7 @@ def test_merging(m):
 def test_cat_file_ranges(m):
     other = b"other test data"
     m.pipe("/b", other)
+
     fs = fsspec.filesystem(
         "reference",
         fo={
@@ -467,15 +468,26 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
 
 
-def test_cat_missing(m):
+@pytest.mark.parametrize(
+    "fo",
+    [
+        {
+            "c": ["memory://b"],
+            "d": ["memory://unknown", 4, 6],
+        },
+        {
+            "c": ["memory://b"],
+            "d": ["//unknown", 4, 6],
+        },
+    ],
+    ids=["memory protocol", "mixed protocols: memory and unspecified"],
+)
+def test_cat_missing(m, fo):
     other = b"other test data"
     m.pipe("/b", other)
     fs = fsspec.filesystem(
         "reference",
-        fo={
-            "c": ["memory://b"],
-            "d": ["memory://unknown", 4, 6],
-        },
+        fo=fo,
     )
     with pytest.raises(FileNotFoundError):
         fs.cat("notafile")
@@ -506,6 +518,11 @@ def test_cat_missing(m):
         mapper.getitems(["c", "d"])
 
     out = mapper.getitems(["c", "d"], on_error="return")
+    assert isinstance(out["d"], ReferenceNotReachable)
+
+    out = fs.cat(["notone", "c", "d"], on_error="return")
+    assert isinstance(out["notone"], FileNotFoundError)
+    assert out["c"] == other
     assert isinstance(out["d"], ReferenceNotReachable)
 
     out = mapper.getitems(["c", "d"], on_error="omit")
