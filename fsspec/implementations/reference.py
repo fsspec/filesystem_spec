@@ -804,15 +804,15 @@ class ReferenceFileSystem(AsyncFileSystem):
                 # found and on_error is "raise"
                 try:
                     u, s, e = self._cat_common(p)
-                    urls.append(u)
-                    starts.append(s)
-                    ends.append(e)
                 except FileNotFoundError as err:
                     if on_error == "raise":
                         raise
                     if on_error != "omit":
                         out[p] = err
                 else:
+                    urls.append(u)
+                    starts.append(s)
+                    ends.append(e)
                     valid_paths.append(p)
 
             # process references into form for merging
