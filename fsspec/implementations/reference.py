@@ -798,20 +798,22 @@ class ReferenceFileSystem(AsyncFileSystem):
         out = {}
         for proto, paths in proto_dict.items():
             fs = self.fss[proto]
-            urls, starts, ends = [], [], []
+            urls, starts, ends, valid_paths = [], [], [], []
             for p in paths:
                 # find references or label not-found. Early exit if any not
                 # found and on_error is "raise"
                 try:
                     u, s, e = self._cat_common(p)
-                    urls.append(u)
-                    starts.append(s)
-                    ends.append(e)
                 except FileNotFoundError as err:
                     if on_error == "raise":
                         raise
                     if on_error != "omit":
                         out[p] = err
+                else:
+                    urls.append(u)
+                    starts.append(s)
+                    ends.append(e)
+                    valid_paths.append(p)
 
             # process references into form for merging
             urls2 = []
@@ -819,7 +821,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             ends2 = []
             paths2 = []
             whole_files = set()
-            for u, s, e, p in zip(urls, starts, ends, paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths):
                 if isinstance(u, bytes):
                     # data
                     out[p] = u
@@ -831,7 +833,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     starts2.append(s)
                     ends2.append(e)
                     paths2.append(p)
-            for u, s, e, p in zip(urls, starts, ends, paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths):
                 # second run to account for files that are to be loaded whole
                 if s is not None and u not in whole_files:
                     urls2.append(u)
@@ -851,7 +853,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
 
             # unbundle from merged bytes - simple approach
-            for u, s, e, p in zip(urls, starts, ends, paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths):
                 if p in out:
                     continue  # was bytes, already handled
                 for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
