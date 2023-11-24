@@ -794,6 +794,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             raise NotImplementedError
         if isinstance(path, list) and (recursive or any("*" in p for p in path)):
             raise NotImplementedError
+        # TODO: if references is lazy, pre-fetch all paths in batch before access
         proto_dict = _protocol_groups(path, self.references)
         out = {}
         for proto, paths in proto_dict.items():

@@ -242,7 +242,7 @@ class FileSelector(SigSlot):
         else:
             self.init_protocol, url = "file", os.getcwd()
         self.init_url = url
-        self.init_kwargs = kwargs or "{}"
+        self.init_kwargs = (kwargs if isinstance(kwargs, str) else str(kwargs)) or "{}"
         self.filters = filters
         self.ignore = [re.compile(i) for i in ignore or []]
         self._fs = None

@@ -17,3 +17,7 @@ def test_kwargs(tmpdir):
     gui = fsspec.gui.FileSelector(f"file://{tmpdir}", kwargs="{'auto_mkdir': True}")
 
     assert gui.fs.auto_mkdir
+
+    gui = fsspec.gui.FileSelector(f"file://{tmpdir}", kwargs={"auto_mkdir": True})
+
+    assert gui.fs.auto_mkdir
