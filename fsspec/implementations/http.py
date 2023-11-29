@@ -839,7 +839,10 @@ async def _file_info(url, session, size_policy="head", **kwargs):
         if "Content-Length" in r.headers:
             # Some servers may choose to ignore Accept-Encoding and return
             # compressed content, in which case the returned size is unreliable.
-            if r.headers.get("Content-Encoding", "identity") == "identity":
+            if "Content-Encoding" not in r.headers or r.headers["Content-Encoding"] in [
+                "identity",
+                "",
+            ]:
                 info["size"] = int(r.headers["Content-Length"])
         elif "Content-Range" in r.headers:
             info["size"] = int(r.headers["Content-Range"].split("/")[1])
