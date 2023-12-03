@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 This module contains SMBFileSystem class responsible for handling access to
 Windows Samba network shares by using package smbprotocol
