@@ -1,6 +1,35 @@
 Changelog
 =========
 
+2023.12.0
+---------
+
+Enhancements
+
+- allow HTTP size guess in more circumstances (#1440)
+- allow kwargs passed to GUI to be dict (#1437)
+- transaction support for writing via a cache FS (#1434)
+- make cached FSs work better with async backends (#1429)
+- allow FSs to set their transaction implementation (#1424)
+- add dataFS (#1421, 1415)
+- allow basic auth in webHDFS (#1409)
+
+Fixes
+
+- in referenceFS, maintain order when some keys are omitted in cat (#1436)
+- nested subdirectory listing in referenceFS (#1433)
+- allow "=" in webHDF paths (#1428)
+- fix file mode to consistent "r+b" format (#1426)
+- pass on kwargs in HTTP glob (#1422)
+- allow Path in can_be_local and open_local (#1419, #1418)
+- fix parent for cachedFS (#1413)
+- "ends" list in _cat_ranges was incorrect (#1402)
+
+Other
+
+- smarter handling of exceptions when doing auto_mkdir (#1406)
+
+
 2023.10.0
 ---------
 
