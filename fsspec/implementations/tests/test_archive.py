@@ -276,10 +276,10 @@ class TestAnyArchive:
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
 
-            assert fs.ls("", detail=False) == ["a", "b", "deeply/"]
+            assert fs.ls("", detail=False) == ["a", "b", "deeply"]
             assert fs.ls("/") == fs.ls("")
 
-            assert fs.ls("deeply", detail=False) == ["deeply/nested/"]
+            assert fs.ls("deeply", detail=False) == ["deeply/nested"]
             assert fs.ls("deeply/") == fs.ls("deeply")
 
             assert fs.ls("deeply/nested", detail=False) == ["deeply/nested/path"]
@@ -293,8 +293,8 @@ class TestAnyArchive:
             assert fs.find("", withdirs=True) == [
                 "a",
                 "b",
-                "deeply/",
-                "deeply/nested/",
+                "deeply",
+                "deeply/nested",
                 "deeply/nested/path",
             ]
 
@@ -347,7 +347,7 @@ class TestAnyArchive:
             # Iterate over all directories.
             for d in fs._all_dirnames(archive_data.keys()):
                 lhs = project(fs.info(d), ["name", "size", "type"])
-                expected = {"name": f"{d}/", "size": 0, "type": "directory"}
+                expected = {"name": f"{d}", "size": 0, "type": "directory"}
                 assert lhs == expected
 
             # Iterate over all files.

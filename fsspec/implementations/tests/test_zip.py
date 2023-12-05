@@ -46,8 +46,8 @@ def test_not_cached():
 def test_root_info():
     with tempzip(archive_data) as z:
         fs = fsspec.filesystem("zip", fo=z)
-        assert fs.info("/") == {"name": "/", "type": "directory", "size": 0}
-        assert fs.info("") == {"name": "/", "type": "directory", "size": 0}
+        assert fs.info("/") == {"name": "", "type": "directory", "size": 0}
+        assert fs.info("") == {"name": "", "type": "directory", "size": 0}
 
 
 def test_write_seek(m):

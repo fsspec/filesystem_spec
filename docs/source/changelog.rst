@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2023.12.1
+---------
+
+Fixes
+
+- Remove trailing "/" from directory names in zipFS (#1445)
+
 2023.12.0
 ---------
 
