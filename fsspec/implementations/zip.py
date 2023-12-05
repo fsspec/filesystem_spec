@@ -83,7 +83,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             # not read from the file.
             files = self.zip.infolist()
             self.dir_cache = {
-                dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                dirname: {"name": dirname, "size": 0, "type": "directory"}
                 for dirname in self._all_dirnames(self.zip.namelist())
             }
             for z in files:

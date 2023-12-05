@@ -83,3 +83,14 @@ def test_mapper(m):
         # fails because this is write mode and we cannot also read
         mapper["a"]
     assert "a" in mapper  # but be can list
+
+
+def test_zip_glob_star(m):
+    with fsspec.open(
+        "zip://adir/afile::memory://out.zip", mode="wb", zip={"mode": "w"}
+    ) as f:
+        f.write(b"data")
+
+    fs, _ = fsspec.core.url_to_fs("zip::memory://out.zip")
+    outfiles = fs.glob("*")
+    assert len(outfiles) == 1
