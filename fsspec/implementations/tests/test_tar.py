@@ -26,7 +26,7 @@ def test_info():
             lhs = fs.info(d)
             del lhs["chksum"]
             expected = {
-                "name": f"{d}/",
+                "name": f"{d}",
                 "size": 0,
                 "type": "directory",
                 "devmajor": 0,
@@ -234,10 +234,10 @@ def test_ls_with_folders(compression: str, tmp_path: Path):
         fs = TarFileSystem(fd)
         assert fs.find("/", withdirs=True) == [
             "a.pdf",
-            "b/",
+            "b",
             "b/c.pdf",
-            "d/",
-            "d/e/",
+            "d",
+            "d/e",
             "d/e/f.pdf",
             "d/g.pdf",
         ]
