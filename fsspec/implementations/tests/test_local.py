@@ -993,3 +993,20 @@ def test_cp_two_files(tmpdir):
         make_path_posix(os.path.join(target, "file0")),
         make_path_posix(os.path.join(target, "file1")),
     ]
+
+
+def test_issue_1447():
+    files_with_colons = {
+        ".local:file:with:colons.txt": b"content1",
+        ".colons-after-extension.txt:after": b"content3",
+        ".colons-after-extension/file:colon.txt:before/after": b"content2",
+    }
+    with filetexts(files_with_colons, mode="b"):
+        for file, contents in files_with_colons.items():
+            with fsspec.filesystem("file").open(file, "rb") as f:
+                assert f.read() == contents
+
+            fs, urlpath = fsspec.core.url_to_fs(file)
+            assert isinstance(fs, fsspec.implementations.local.LocalFileSystem)
+            with fs.open(urlpath, "rb") as f:
+                assert f.read() == contents
