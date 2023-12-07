@@ -386,7 +386,7 @@ class LocalFileOpener(io.IOBase):
     def close(self):
         return self.f.close()
 
-    def truncate(self, size: int | None = None) -> int:
+    def truncate(self, size=None) -> int:
         return self.f.truncate(size)
 
     @property
