@@ -49,8 +49,12 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             raise ValueError(f"mode '{mode}' no understood")
         self.mode = mode
         if isinstance(fo, str):
+            if mode == "a":
+                m = "r+b"
+            else:
+                m = mode + "b"
             fo = fsspec.open(
-                fo, mode=mode + "b", protocol=target_protocol, **(target_options or {})
+                fo, mode=m, protocol=target_protocol, **(target_options or {})
             )
         self.of = fo
         self.fo = fo.__enter__()  # the whole instance is a context
