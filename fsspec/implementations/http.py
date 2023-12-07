@@ -307,7 +307,7 @@ class HTTPFileSystem(AsyncFileSystem):
             )
 
         meth = getattr(session, method)
-        async with meth(rpath, data=gen_chunks(), **kw) as resp:
+        async with meth(self.encode_url(rpath), data=gen_chunks(), **kw) as resp:
             self._raise_not_found_for_status(resp, rpath)
 
     async def _exists(self, path, **kwargs):
