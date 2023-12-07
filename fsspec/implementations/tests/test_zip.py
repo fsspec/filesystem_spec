@@ -94,3 +94,29 @@ def test_zip_glob_star(m):
     fs, _ = fsspec.core.url_to_fs("zip::memory://out.zip")
     outfiles = fs.glob("*")
     assert len(outfiles) == 1
+
+
+def test_append(m, tmpdir):
+    fs = fsspec.filesystem("zip", fo="memory://out.zip", mode="w")
+    with fs.open("afile", "wb") as f:
+        f.write(b"data")
+    fs.close()
+
+    fs = fsspec.filesystem("zip", fo="memory://out.zip", mode="a")
+    with fs.open("bfile", "wb") as f:
+        f.write(b"data")
+    fs.close()
+
+    assert len(fsspec.open_files("zip://*::memory://out.zip")) == 2
+
+    fs = fsspec.filesystem("zip", fo=f"{tmpdir}/out.zip", mode="w")
+    with fs.open("afile", "wb") as f:
+        f.write(b"data")
+    fs.close()
+
+    fs = fsspec.filesystem("zip", fo=f"{tmpdir}/out.zip", mode="a")
+    with fs.open("bfile", "wb") as f:
+        f.write(b"data")
+    fs.close()
+
+    assert len(fsspec.open_files("zip://*::memory://out.zip")) == 2
