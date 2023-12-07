@@ -33,7 +33,6 @@ files = {
     ),
 }
 
-
 csv_files = {
     ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
     ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
@@ -56,6 +55,8 @@ def filetexts(d, open=open, mode="t"):
     try:
         os.chdir(dirname)
         for filename, text in d.items():
+            if dirname := os.path.dirname(filename):
+                os.makedirs(dirname, exist_ok=True)
             f = open(filename, f"w{mode}")
             try:
                 f.write(text)
@@ -991,3 +992,21 @@ def test_cp_two_files(tmpdir):
         make_path_posix(os.path.join(target, "file0")),
         make_path_posix(os.path.join(target, "file1")),
     ]
+
+
+@pytest.mark.skipif(WIN, reason="Windows does not support colons in filenames")
+def test_issue_1447():
+    files_with_colons = {
+        ".local:file:with:colons.txt": b"content1",
+        ".colons-after-extension.txt:after": b"content2",
+        ".colons-after-extension/file:colon.txt:before/after": b"content3",
+    }
+    with filetexts(files_with_colons, mode="b"):
+        for file, contents in files_with_colons.items():
+            with fsspec.filesystem("file").open(file, "rb") as f:
+                assert f.read() == contents
+
+            fs, urlpath = fsspec.core.url_to_fs(file)
+            assert isinstance(fs, fsspec.implementations.local.LocalFileSystem)
+            with fs.open(urlpath, "rb") as f:
+                assert f.read() == contents
