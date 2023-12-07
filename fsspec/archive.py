@@ -70,4 +70,4 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
             out = sorted(paths.values(), key=lambda _: _["name"])
             return out
         else:
-            return list(out)
+            return sorted(paths)
