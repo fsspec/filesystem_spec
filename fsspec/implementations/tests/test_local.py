@@ -56,6 +56,8 @@ def filetexts(d, open=open, mode="t"):
     try:
         os.chdir(dirname)
         for filename, text in d.items():
+            if dirname := os.path.dirname(filename):
+                os.makedirs(dirname, exist_ok=True)
             f = open(filename, f"w{mode}")
             try:
                 f.write(text)
