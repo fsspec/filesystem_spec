@@ -521,7 +521,7 @@ def split_protocol(urlpath):
         if len(protocol) > 1:
             # excludes Windows paths
             return protocol, path
-    if ":" in urlpath and urlpath.find(":") > 1:
+    if urlpath.startswith("data:"):
         return urlpath.split(":", 1)
     return None, urlpath
 
