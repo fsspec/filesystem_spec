@@ -254,12 +254,11 @@ class GenericFileSystem(AsyncFileSystem):
         urls = url
         if isinstance(urls, str):
             urls = [urls]
-        for url in urls:
-            fs = _resolve_fs(url, self.method)
-            if fs.async_impl:
-                await fs._rm(url, **kwargs)
-            else:
-                fs.rm(url, **kwargs)
+        fs = _resolve_fs(url[0], self.method)
+        if fs.async_impl:
+            await fs._rm(url, **kwargs)
+        else:
+            fs.rm(url, **kwargs)
 
     async def _makedirs(self, path, exist_ok=False):
         logger.debug("Make dir %s", path)
