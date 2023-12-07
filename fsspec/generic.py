@@ -253,9 +253,9 @@ class GenericFileSystem(AsyncFileSystem):
         urls = url
         if isinstance(urls, str):
             urls = [urls]
-        fs = _resolve_fs(url[0], self.method)
+        fs = _resolve_fs(urls[0], self.method)
         if fs.async_impl:
-            await fs._rm(url, **kwargs)
+            await fs._rm(urls, **kwargs)
         else:
             fs.rm(url, **kwargs)
 
