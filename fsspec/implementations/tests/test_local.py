@@ -33,7 +33,6 @@ files = {
     ),
 }
 
-
 csv_files = {
     ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
     ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
@@ -995,11 +994,12 @@ def test_cp_two_files(tmpdir):
     ]
 
 
+@pytest.mark.skipif(WIN, reason="Windows does not support colons in filenames")
 def test_issue_1447():
     files_with_colons = {
         ".local:file:with:colons.txt": b"content1",
-        ".colons-after-extension.txt:after": b"content3",
-        ".colons-after-extension/file:colon.txt:before/after": b"content2",
+        ".colons-after-extension.txt:after": b"content2",
+        ".colons-after-extension/file:colon.txt:before/after": b"content3",
     }
     with filetexts(files_with_colons, mode="b"):
         for file, contents in files_with_colons.items():
