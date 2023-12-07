@@ -200,27 +200,32 @@ def test_transaction(ssh, root_path):
         f.rm(root_path, recursive=True)
 
 
-def test_mkdir_create_parent(ssh):
+@pytest.mark.parametrize("path", ["/a/b/c", "a/b/c"])
+def test_mkdir_create_parent(ssh, path):
     f = fsspec.get_filesystem_class("sftp")(**ssh)
 
     with pytest.raises(FileNotFoundError):
-        f.mkdir("/a/b/c")
+        f.mkdir(path)
 
-    f.mkdir("/a/b/c", create_parents=True)
-    assert f.exists("/a/b/c")
+    f.mkdir(path, create_parents=True)
+    assert f.exists(path)
 
-    with pytest.raises(FileExistsError, match="/a/b/c"):
-        f.mkdir("/a/b/c")
+    with pytest.raises(FileExistsError, match=path):
+        f.mkdir(path)
 
-    f.rm("/a/b/c", recursive=True)
+    f.rm(path, recursive=True)
+    assert not f.exists(path)
 
 
-def test_makedirs_exist_ok(ssh):
+@pytest.mark.parametrize("path", ["/a/b/c", "a/b/c"])
+def test_makedirs_exist_ok(ssh, path):
     f = fsspec.get_filesystem_class("sftp")(**ssh)
 
-    f.makedirs("/a/b/c")
+    f.makedirs(path)
 
-    with pytest.raises(FileExistsError, match="/a/b/c"):
-        f.makedirs("/a/b/c", exist_ok=False)
+    with pytest.raises(FileExistsError, match=path):
+        f.makedirs(path, exist_ok=False)
 
-    f.makedirs("/a/b/c", exist_ok=True)
+    f.makedirs(path, exist_ok=True)
+    f.rm(path, recursive=True)
+    assert not f.exists(path)

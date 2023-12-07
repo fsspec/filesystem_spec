@@ -80,12 +80,13 @@ class SFTPFileSystem(AbstractFileSystem):
             raise FileExistsError(f"File exists: {path}")
 
         parts = path.split("/")
-        path = ""
+        new_path = "/" if path[:1] == "/" else ""
 
         for part in parts:
-            path += f"/{part}"
-            if not self.exists(path):
-                self.ftp.mkdir(path, mode)
+            if part:
+                new_path = f"{new_path}/{part}" if new_path else part
+                if not self.exists(new_path):
+                    self.ftp.mkdir(new_path, mode)
 
     def rmdir(self, path):
         logger.debug("Removing folder %s", path)
