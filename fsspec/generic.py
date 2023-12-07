@@ -136,7 +136,8 @@ def rsync(
         fs.cp(source_files, target_files, **kwargs)
     logger.debug(f"{len(to_delete)} files to delete")
     if delete_missing:
-        fs.rm(to_delete)
+        for file in to_delete:
+            fs.rm(file)
 
 
 class GenericFileSystem(AsyncFileSystem):
