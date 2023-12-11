@@ -1,4 +1,5 @@
 import collections.abc
+import os.path
 
 import pytest
 
@@ -92,6 +93,17 @@ def test_zip_glob_star(m):
         f.write(b"data")
 
     fs, _ = fsspec.core.url_to_fs("zip::memory://out.zip")
+    outfiles = fs.glob("*")
+    assert len(outfiles) == 1
+
+    fs = fsspec.filesystem("zip", fo="memory://out.zip", mode="w")
+    fs.mkdir("adir")
+    fs.pipe("adir/afile", b"data")
+    outfiles = fs.glob("*")
+    assert len(outfiles) == 1
+
+    fn = f"{os.path.dirname(os.path.abspath((__file__)))}/out.zip"
+    fs = fsspec.filesystem("zip", fo=fn, mode="r")
     outfiles = fs.glob("*")
     assert len(outfiles) == 1
 
