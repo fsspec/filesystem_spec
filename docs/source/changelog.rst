@@ -1,12 +1,24 @@
 Changelog
 =========
 
+2023.12.2
+---------
+
+Fixes
+
+- top-level glob in ZIP (#1454)
+- append mode on local ZIP files/truncate (#1449)
+- restrict ":" as protocol marker to data: (#1452)
+- sftp relative paths (#1451)
+- http encoding in HTTP FS put_file (#1450)
+
+
 2023.12.1
 ---------
 
 Fixes
 
-- Remove trailing "/" from directory names in zipFS (#1445)
+- Remove trailing "/" from directory names in zipFS/archive (#1445)
 
 2023.12.0
 ---------
