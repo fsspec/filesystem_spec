@@ -25,6 +25,43 @@ class Callback:
         self.hooks = hooks or {}
         self.kw = kwargs
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_args):
+        self.close()
+
+    def close(self):
+        """Close callback."""
+
+    def branched(self, path_1, path_2, kwargs):
+        """
+        Return callback for child transfers
+
+        If this callback is operating at a higher level, e.g., put, which may
+        trigger transfers that can also be monitored. The function returns a callback
+        that has to be passed to the child method, e.g., put_file, as `callback=` argument.
+
+        This function should be preferred over `branch`.
+
+        Parameters
+        ----------
+        path_1: str
+            Child's source path
+        path_2: str
+            Child's destination path
+        kwargs: dict
+            arguments passed to child method, e.g., put_file.
+
+        Returns
+        -------
+        callback: Callback
+            A callback instance to be passed to the child method
+        """
+        self.branch(path_1, path_2, kwargs)
+        # mutate kwargs so that we can force the caller to pass "callback=" explicitly
+        return kwargs.pop("callback", _DEFAULT_CALLBACK)
+
     def set_size(self, size):
         """
         Set the internal maximum size attribute

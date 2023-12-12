@@ -967,8 +967,8 @@ class AbstractFileSystem(metaclass=_Cached):
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            callback.branch(rpath, lpath, kwargs)
-            self.get_file(rpath, lpath, **kwargs)
+            with callback.branched(rpath, lpath, kwargs) as child:
+                self.get_file(rpath, lpath, callback=child, **kwargs)
 
     def put_file(self, lpath, rpath, callback=_DEFAULT_CALLBACK, **kwargs):
         """Copy single file to remote"""
@@ -1053,8 +1053,8 @@ class AbstractFileSystem(metaclass=_Cached):
 
         callback.set_size(len(rpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            callback.branch(lpath, rpath, kwargs)
-            self.put_file(lpath, rpath, **kwargs)
+            with callback.branched(lpath, rpath, kwargs) as child:
+                self.put_file(lpath, rpath, callback=child, **kwargs)
 
     def head(self, path, size=1024):
         """Get the first ``size`` bytes from file"""
