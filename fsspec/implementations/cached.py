@@ -524,7 +524,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     protocol = "filecache"
     local_file = True
 
-    def open_many(self, open_files):
+    def open_many(self, open_files, **kwargs):
         paths = [of.path for of in open_files]
         if "r" in open_files.mode:
             self._mkcache()
@@ -535,6 +535,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     path,
                     mode=open_files.mode,
                     fn=os.path.join(self.storage[-1], self._mapper(path)),
+                    **kwargs,
                 )
                 for path in paths
             ]
@@ -650,7 +651,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         path = self._strip_protocol(path)
         if "r" not in mode:
             fn = self._make_local_details(path)
-            return LocalTempFile(self, path, mode=mode, fn=fn)
+            user_specified_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                # those kwargs were added by open(), we don't want them
+                if k not in ["autocommit", "block_size", "cache_options"]
+            }
+            return LocalTempFile(self, path, mode=mode, fn=fn, **user_specified_kwargs)
         detail = self._check_file(path)
         if detail:
             detail, fn = detail
@@ -775,8 +782,18 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
         if "r" not in mode:
             fn = os.path.join(self.storage[-1], sha)
+            user_specified_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in ["autocommit", "block_size", "cache_options"]
+            }  # those were added by open()
             return LocalTempFile(
-                self, path, mode=mode, autocommit=not self._intrans, fn=fn
+                self,
+                path,
+                mode=mode,
+                autocommit=not self._intrans,
+                fn=fn,
+                **user_specified_kwargs,
             )
         fn = self._check_file(path)
         if fn:
@@ -812,7 +829,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 class LocalTempFile:
     """A temporary local file, which will be uploaded on commit"""
 
-    def __init__(self, fs, path, fn, mode="wb", autocommit=True, seek=0):
+    def __init__(self, fs, path, fn, mode="wb", autocommit=True, seek=0, **kwargs):
         self.fn = fn
         self.fh = open(fn, mode)
         self.mode = mode
@@ -822,6 +839,7 @@ class LocalTempFile:
         self.fs = fs
         self.closed = False
         self.autocommit = autocommit
+        self.kwargs = kwargs
 
     def __reduce__(self):
         # always open in r+b to allow continuing writing at a location
@@ -849,7 +867,7 @@ class LocalTempFile:
         os.remove(self.fn)
 
     def commit(self):
-        self.fs.put(self.fn, self.path)
+        self.fs.put(self.fn, self.path, **self.kwargs)
         try:
             os.remove(self.fn)
         except (PermissionError, FileNotFoundError):
