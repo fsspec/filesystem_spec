@@ -1,5 +1,6 @@
 from functools import wraps
 
+
 class Callback:
     """
     Base class and interface for callback mechanism
@@ -42,7 +43,8 @@ class Callback:
 
         If this callback is operating at a higher level, e.g., put, which may
         trigger transfers that can also be monitored. The function returns a callback
-        that has to be passed to the child method, e.g., put_file, as `callback=` argument.
+        that has to be passed to the child method, e.g., put_file,
+        as `callback=` argument.
 
         This function should be preferred over `branch`.
 
@@ -69,6 +71,7 @@ class Callback:
         Wraps a coroutine, and pass a new child callback to it.
         When the coroutine completes, we increment the parent callback by 1.
         """
+
         @wraps(fn)
         async def func(path1, path2: str, **kwargs):
             with self.branched(path1, path2, kwargs) as child:
