@@ -568,8 +568,8 @@ class AsyncFileSystem(AbstractFileSystem):
         coros = []
         callback.set_size(len(file_pairs))
         for lfile, rfile in file_pairs:
-            callback.branch(lfile, rfile, kwargs)
-            coros.append(self._put_file(lfile, rfile, **kwargs))
+            put_file = callback.wrap_and_branch_coro(self._put_file)
+            coros.append(put_file(lfile, rfile, **kwargs))
 
         return await _run_coros_in_chunks(
             coros, batch_size=batch_size, callback=callback
@@ -645,8 +645,8 @@ class AsyncFileSystem(AbstractFileSystem):
         coros = []
         callback.set_size(len(lpaths))
         for lpath, rpath in zip(lpaths, rpaths):
-            callback.branch(rpath, lpath, kwargs)
-            coros.append(self._get_file(rpath, lpath, **kwargs))
+            get_file = callback.wrap_and_branch_coro(self._get_file)
+            coros.append(get_file(rpath, lpath, **kwargs))
         return await _run_coros_in_chunks(
             coros, batch_size=batch_size, callback=callback
         )
