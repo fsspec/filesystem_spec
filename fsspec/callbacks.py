@@ -66,7 +66,7 @@ class Callback:
         # mutate kwargs so that we can force the caller to pass "callback=" explicitly
         return kwargs.pop("callback", _DEFAULT_CALLBACK)
 
-    def wrap_and_branch_coro(self, fn):
+    def branch_coro(self, fn):
         """
         Wraps a coroutine, and pass a new child callback to it.
         When the coroutine completes, we increment the parent callback by 1.
@@ -75,9 +75,7 @@ class Callback:
         @wraps(fn)
         async def func(path1, path2: str, **kwargs):
             with self.branched(path1, path2, kwargs) as child:
-                res = await fn(path1, path2, callback=child, **kwargs)
-                self.relative_update()
-                return res
+                return await fn(path1, path2, callback=child, **kwargs)
 
         return func
 

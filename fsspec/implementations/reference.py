@@ -1123,7 +1123,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references[path] = data
         self.dircache.clear()  # this is a bit heavy handed
 
-    async def _put_file(self, lpath, rpath):
+    async def _put_file(self, lpath, rpath, **kwargs):
         # puts binary
         with open(lpath, "rb") as f:
             self.references[rpath] = f.read()
