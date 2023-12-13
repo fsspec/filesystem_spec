@@ -231,7 +231,8 @@ class TqdmCallback(Callback):
         self.tqdm.update(inc)
 
     def __del__(self):
-        self.tqdm.close()
+        if hasattr(self.tqdm, "close"):
+            self.tqdm.close()
         self.tqdm = None
 
 
