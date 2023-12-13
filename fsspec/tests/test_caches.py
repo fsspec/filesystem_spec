@@ -4,6 +4,7 @@ import string
 import pytest
 
 from fsspec.caching import BlockCache, FirstChunkCache, caches, register_cache
+from fsspec.implementations.cached import WholeFileCacheFileSystem
 
 
 def test_cache_getitem(Cache_imp):
@@ -145,3 +146,19 @@ def test_register_cache():
     with pytest.raises(ValueError):
         register_cache(BlockCache)
     register_cache(BlockCache, clobber=True)
+
+
+def test_cache_kwargs(mocker):
+    # test that kwargs are passed to the underlying filesystem after cache commit
+
+    fs = WholeFileCacheFileSystem(target_protocol="memory")
+    fs.touch("test")
+    fs.fs.put = mocker.MagicMock()
+
+    with fs.open("test", "wb", overwrite=True) as file_handle:
+        file_handle.write(b"foo")
+
+    # We don't care about the first parameter, just retrieve its expected value.
+    # It is a random location that cannot be predicted.
+    # The important thing is the 'overwrite' kwarg
+    fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], "/test", overwrite=True)
