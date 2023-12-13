@@ -124,6 +124,12 @@ class DirFileSystem(AsyncFileSystem):
     def pipe(self, path, *args, **kwargs):
         return self.fs.pipe(self._join(path), *args, **kwargs)
 
+    async def _pipe_file(self, path, *args, **kwargs):
+        return await self.fs._pipe_file(self._join(path), *args, **kwargs)
+
+    def pipe_file(self, path, *args, **kwargs):
+        return self.fs.pipe_file(self._join(path), *args, **kwargs)
+
     async def _cat_file(self, path, *args, **kwargs):
         return await self.fs._cat_file(self._join(path), *args, **kwargs)
 
