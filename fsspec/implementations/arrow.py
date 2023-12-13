@@ -62,6 +62,20 @@ class ArrowFSWrapper(AbstractFileSystem):
         return "hdfs_" + tokenize(self.fs.host, self.fs.port)
 
     @classmethod
+    def from_fs(cls, fs, **kwargs):
+        override = {"local": "file"}
+        type_name = override.get(fs.type_name, fs.type_name)
+
+        try:
+            fs.from_uri(f"{type_name}:///")
+            root_marker = "/"
+        except BaseException:
+            root_marker = ""
+
+        wrapper = type(cls.__name__, (cls,), {"root_marker": root_marker})
+        return wrapper(fs, **kwargs)
+
+    @classmethod
     def _strip_protocol(cls, path):
         ops = infer_storage_options(path)
         path = ops["path"]
