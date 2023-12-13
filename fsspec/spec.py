@@ -1691,6 +1691,8 @@ class AbstractBufferedFile(io.IOBase):
 
     def __eq__(self, other):
         """Files are equal if they have the same checksum, only in read mode"""
+        if self is other:
+            return True
         return self.mode == "rb" and other.mode == "rb" and hash(self) == hash(other)
 
     def commit(self):
