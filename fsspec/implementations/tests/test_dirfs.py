@@ -163,6 +163,17 @@ def test_pipe(dirfs):
 
 
 @pytest.mark.asyncio
+async def test_async_pipe_file(adirfs):
+    await adirfs._pipe_file("file", *ARGS, **KWARGS)
+    adirfs.fs._pipe_file.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+def test_pipe_file(dirfs):
+    dirfs.pipe_file("file", *ARGS, **KWARGS)
+    dirfs.fs.pipe_file.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+@pytest.mark.asyncio
 async def test_async_cat_file(adirfs):
     assert (
         await adirfs._cat_file("file", *ARGS, **KWARGS)
