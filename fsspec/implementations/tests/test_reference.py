@@ -5,7 +5,11 @@ import pytest
 
 import fsspec
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.implementations.reference import ReferenceFileSystem, ReferenceNotReachable
+from fsspec.implementations.reference import (
+    LazyReferenceMapper,
+    ReferenceFileSystem,
+    ReferenceNotReachable,
+)
 from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
 
 
@@ -674,3 +678,42 @@ def test_cached(m, tmpdir):
         skip_instance_cache=True,
     )
     assert fs.cat("a") == b"A"
+
+
+@pytest.fixture()
+def lazy_refs(m):
+    zarr = pytest.importorskip("zarr")
+    l = LazyReferenceMapper.create("memory://refs", fs=m)
+    g = zarr.open(l, mode="w")
+    g.create_dataset(name="data", shape=(100,), chunks=(10,), dtype="int64")
+    return l
+
+
+def test_append_parquet(lazy_refs, m):
+    with pytest.raises(KeyError):
+        lazy_refs["data/0"]
+    lazy_refs["data/0"] = b"data"
+    assert lazy_refs["data/0"] == b"data"
+    lazy_refs.flush()
+
+    lazy2 = LazyReferenceMapper("memory://refs", fs=m)
+    assert lazy2["data/0"] == b"data"
+    with pytest.raises(KeyError):
+        lazy_refs["data/1"]
+    lazy2["data/1"] = b"Bdata"
+    assert lazy2["data/1"] == b"Bdata"
+    lazy2.flush()
+
+    lazy2 = LazyReferenceMapper("memory://refs", fs=m)
+    assert lazy2["data/0"] == b"data"
+    assert lazy2["data/1"] == b"Bdata"
+    lazy2["data/1"] = b"Adata"
+    del lazy2["data/0"]
+    assert lazy2["data/1"] == b"Adata"
+    assert "data/0" not in lazy2
+    lazy2.flush()
+
+    lazy2 = LazyReferenceMapper("memory://refs", fs=m)
+    with pytest.raises(KeyError):
+        lazy2["data/0"]
+    assert lazy2["data/1"] == b"Adata"
