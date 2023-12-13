@@ -211,6 +211,7 @@ Other Known Implementations
 
 - `abfs`_ for Azure Blob service
 - `adl`_ for Azure DataLake storage
+- `alluxiofs`_ to access fsspec implemented filesystem with Alluxio distributed cache
 - `boxfs`_ for access to Box file storage
 - `dropbox`_ for access to dropbox shares
 - `dvc`_ to access DVC/Git repository as a filesystem
@@ -227,6 +228,7 @@ Other Known Implementations
 
 .. _abfs: https://github.com/dask/adlfs
 .. _adl: https://github.com/dask/adlfs
+.. _alluxiofs: https://github.com/fsspec/alluxiofs
 .. _boxfs: https://github.com/IBM/boxfs
 .. _dropbox: https://github.com/MarineChap/intake_dropbox
 .. _dvc: https://github.com/iterative/dvc
