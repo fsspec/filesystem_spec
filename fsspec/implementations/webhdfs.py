@@ -54,6 +54,8 @@ class WebHDFS(AbstractFileSystem):
         kerb_kwargs=None,
         data_proxy=None,
         use_https=False,
+        session_cert=None,
+        session_verify=True,
         **kwargs,
     ):
         """
@@ -90,12 +92,19 @@ class WebHDFS(AbstractFileSystem):
             ``url->data_proxy(url)``.
         use_https: bool
             Whether to connect to the Name-node using HTTPS instead of HTTP
+        session_cert: str or Tuple[str, str] or None
+            Path to a certificate file, or tuple of (cert, key) files to use
+            for the requests.Session
+        session_verify: str, bool or None
+            Path to a certificate file to use for verifying the requests.Session.
         kwargs
         """
         if self._cached:
             return
         super().__init__(**kwargs)
-        self.url = f"{'https' if use_https else 'http'}://{host}:{port}/webhdfs/v1"
+        self.url = (
+            f"{'https' if use_https else 'http'}://{host}:{port}/webhdfs/v1"  # noqa
+        )
         self.kerb = kerberos
         self.kerb_kwargs = kerb_kwargs or {}
         self.pars = {}
@@ -128,6 +137,10 @@ class WebHDFS(AbstractFileSystem):
                 "If using Kerberos auth, do not specify the "
                 "user, this is handled by kinit."
             )
+
+        self.session_cert = session_cert
+        self.session_verify = session_verify
+
         self._connect()
 
         self._fsid = f"webhdfs_{tokenize(host, port)}"
@@ -138,6 +151,12 @@ class WebHDFS(AbstractFileSystem):
 
     def _connect(self):
         self.session = requests.Session()
+
+        if self.session_cert:
+            self.session.cert = self.session_cert
+
+        self.session.verify = self.session_verify
+
         if self.kerb:
             from requests_kerberos import HTTPKerberosAuth
 
