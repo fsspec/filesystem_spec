@@ -5,6 +5,7 @@ import pickle
 import subprocess
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -647,6 +648,12 @@ class DummyTestFS(AbstractFileSystem):
             None,
             DummyTestFS.get_test_paths() + [DummyTestFS.root_marker],
         ),
+        [
+            (Path("misc/foo.txt"),),
+            False,
+            None,
+            [f"misc{os.sep}foo.txt"],
+        ],
     ],
 )
 def test_expand_path(test_paths, recursive, maxdepth, expected):

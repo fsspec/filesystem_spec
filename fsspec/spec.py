@@ -1134,7 +1134,7 @@ class AbstractFileSystem(metaclass=_Cached):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
-        if isinstance(path, str):
+        if isinstance(path, (str, os.PathLike)):
             out = self.expand_path([path], recursive, maxdepth)
         else:
             out = set()
