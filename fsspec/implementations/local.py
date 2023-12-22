@@ -3,7 +3,6 @@ import io
 import logging
 import os
 import os.path as osp
-import posixpath
 import re
 import shutil
 import stat
@@ -59,11 +58,16 @@ class LocalFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
-        if detail:
+        info = self.info(path)
+        if info["type"] == "directory":
             with os.scandir(path) as it:
-                return [self.info(f) for f in it]
+                infos = [self.info(f) for f in it]
         else:
-            return [posixpath.join(path, f) for f in os.listdir(path)]
+            infos = [info]
+
+        if not detail:
+            return [i["name"] for i in infos]
+        return infos
 
     def info(self, path, **kwargs):
         if isinstance(path, os.DirEntry):
