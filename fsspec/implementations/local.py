@@ -35,6 +35,8 @@ class LocalFileSystem(AbstractFileSystem):
     def __init__(self, auto_mkdir=False, **kwargs):
         super().__init__(**kwargs)
         self.auto_mkdir = auto_mkdir
+        if os.name == "nt":
+            self.root_marker = ""
 
     @property
     def fsid(self):
@@ -112,8 +114,8 @@ class LocalFileSystem(AbstractFileSystem):
         return osp.lexists(path)
 
     def cp_file(self, path1, path2, **kwargs):
-        path1 = self._strip_protocol(path1).rstrip("/")
-        path2 = self._strip_protocol(path2).rstrip("/")
+        path1 = self._strip_protocol(path1, remove_trailing_slash=True)
+        path2 = self._strip_protocol(path2, remove_trailing_slash=True)
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
         if self.isfile(path1):
@@ -134,8 +136,8 @@ class LocalFileSystem(AbstractFileSystem):
         return self.cp_file(path1, path2, **kwargs)
 
     def mv_file(self, path1, path2, **kwargs):
-        path1 = self._strip_protocol(path1).rstrip("/")
-        path2 = self._strip_protocol(path2).rstrip("/")
+        path1 = self._strip_protocol(path1, remove_trailing_slash=True)
+        path2 = self._strip_protocol(path2, remove_trailing_slash=True)
         shutil.move(path1, path2)
 
     def link(self, src, dst, **kwargs):
@@ -159,7 +161,7 @@ class LocalFileSystem(AbstractFileSystem):
             path = [path]
 
         for p in path:
-            p = self._strip_protocol(p).rstrip("/")
+            p = self._strip_protocol(p, remove_trailing_slash=True)
             if self.isdir(p):
                 if not recursive:
                     raise ValueError("Cannot delete directory, set recursive=True")
@@ -175,6 +177,8 @@ class LocalFileSystem(AbstractFileSystem):
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
+        if path.endswith("/"):
+            raise IsADirectoryError(path)
         if self.auto_mkdir and "w" in mode:
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
@@ -202,14 +206,23 @@ class LocalFileSystem(AbstractFileSystem):
 
     @classmethod
     def _parent(cls, path):
-        path = cls._strip_protocol(path).rstrip("/")
+        path = cls._strip_protocol(path, remove_trailing_slash=True).rsplit("/", 1)[0]
+        if os.name == "nt":
+            if path in [".", ""]:
+                path = posixpath(os.getcwd())
+            if len(path) == 2 and path[1] == ":":
+                return path + "/"
+            if len(path) == 3 and path[1] == ":":
+                return path
+            if "/" not in path:
+                raise IOError(f"Invalid path {path}")
         if "/" in path:
-            return path.rsplit("/", 1)[0]
+            return path
         else:
             return cls.root_marker
 
     @classmethod
-    def _strip_protocol(cls, path):
+    def _strip_protocol(cls, path, remove_trailing_slash=False):
         path = stringify_path(path)
         if path.startswith("file://"):
             path = path[7:]
@@ -219,7 +232,10 @@ class LocalFileSystem(AbstractFileSystem):
             path = path[8:]
         elif path.startswith("local:"):
             path = path[6:]
-        return make_path_posix(path).rstrip("/") or cls.root_marker
+        return (
+            make_path_posix(path, remove_trailing_slash=remove_trailing_slash)
+            or cls.root_marker
+        )
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)
@@ -232,10 +248,20 @@ class LocalFileSystem(AbstractFileSystem):
         return os.chmod(path, mode)
 
 
-def make_path_posix(path, sep=os.sep):
+def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
     """Make path generic"""
     if isinstance(path, (list, set, tuple)):
-        return type(path)(make_path_posix(p) for p in path)
+        return type(path)(
+            make_path_posix(p, remove_trailing_slash=remove_trailing_slash)
+            for p in path
+        )
+    path = _make_path_posix(path, sep)
+    if os.name == "nt" and len(path) == 3 and path[1] == ":":
+        return path  # windows root
+    return path.rstrip("/") if remove_trailing_slash else path
+
+
+def _make_path_posix(path, sep=os.sep):
     if "~" in path:
         path = osp.expanduser(path)
     if sep == "/":
