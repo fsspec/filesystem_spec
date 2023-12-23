@@ -462,6 +462,9 @@ def test_make_path_posix():
         drive = cwd[0]
         assert make_path_posix("/a/posix/path") == f"{drive}:/a/posix/path"
         assert make_path_posix("/posix") == f"{drive}:/posix"
+        # Windows drive requires trailing slash
+        assert make_path_posix("C:\\") == "C:/"
+        assert make_path_posix("C:\\", remove_trailing_slash=True) == "C:/"
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
@@ -630,7 +633,8 @@ def test_strip_protocol_expanduser():
     assert path != stripped
     assert "file://" not in stripped
     assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
-    assert not LocalFileSystem._strip_protocol("./").endswith("/")
+    path = LocalFileSystem._strip_protocol("./", remove_trailing_slash=True)
+    assert not path.endswith("/")
 
 
 def test_strip_protocol_no_authority():
