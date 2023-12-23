@@ -256,8 +256,8 @@ def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
             for p in path
         )
     path = _make_path_posix(path, sep)
-    if os.name == "nt" and len(path) == 3 and path[1] == ":":
-        return path  # windows root
+    if sep == "\\" and len(path) == 3 and path[1] == ":":
+        return path  # nt root (something like c:/)
     return path.rstrip("/") if remove_trailing_slash else path
 
 
