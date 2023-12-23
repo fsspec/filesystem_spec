@@ -28,15 +28,13 @@ class LocalFileSystem(AbstractFileSystem):
         code.
     """
 
-    root_marker = "/"
+    root_marker = "" if os.sep == "\\" else "/"
     protocol = "file", "local"
     local_file = True
 
     def __init__(self, auto_mkdir=False, **kwargs):
         super().__init__(**kwargs)
         self.auto_mkdir = auto_mkdir
-        if os.name == "nt":
-            self.root_marker = ""
 
     @property
     def fsid(self):
@@ -205,9 +203,9 @@ class LocalFileSystem(AbstractFileSystem):
         return datetime.datetime.fromtimestamp(info["mtime"], tz=datetime.timezone.utc)
 
     @classmethod
-    def _parent(cls, path):
+    def _parent(cls, path, sep=os.sep):
         path = cls._strip_protocol(path, remove_trailing_slash=True).rsplit("/", 1)[0]
-        if os.name == "nt":
+        if sep == "\\":
             if path in [".", ""]:
                 path = posixpath(os.getcwd())
             if len(path) == 2 and path[1] == ":":
