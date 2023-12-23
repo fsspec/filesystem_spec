@@ -465,6 +465,7 @@ def test_make_path_posix():
         # Windows drive requires trailing slash
         assert make_path_posix("C:\\") == "C:/"
         assert make_path_posix("C:\\", remove_trailing_slash=True) == "C:/"
+        assert LocalFileSystem._parent("C:\\") == "C:/"
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
@@ -484,7 +485,7 @@ def test_make_path_posix():
         )
         assert (
             make_path_posix(
-                r"\\SERVER\UserHomeFolder$\me\My Documents\project1\data\filen.csv"
+                "\\\\SERVER\\UserHomeFolder$\\me\\My Documents\\project1\\data\\filen.csv"
             )
             == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
         )
