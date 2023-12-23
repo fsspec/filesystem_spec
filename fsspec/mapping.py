@@ -138,7 +138,7 @@ class FSMap(MutableMapping):
             if isinstance(key, list):
                 key = tuple(key)
             key = str(key)
-        return f"{self._root_key_to_str}{key}"
+        return f"{self._root_key_to_str}{key}".rstrip("/")
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
