@@ -246,10 +246,7 @@ class LocalFileSystem(AbstractFileSystem):
 def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
     """Make path generic"""
     if not isinstance(path, str) and isinstance(path, (list, set, tuple)):
-        return type(path)(
-            make_path_posix(p, remove_trailing_slash=remove_trailing_slash)
-            for p in path
-        )
+        return type(path)(make_path_posix(p, sep, remove_trailing_slash) for p in path)
     if path.startswith("~"):
         path = osp.expanduser(path)
     if sep == "/":
@@ -264,7 +261,7 @@ def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
             return path.rstrip("/") or "/" if remove_trailing_slash else path
     else:
         if not path:
-            return make_path_posix(os.getcwd())
+            return make_path_posix(os.getcwd(), sep, remove_trailing_slash)
     if (
         (sep not in path and "/" not in path)
         or (sep == "/" and not path.startswith("/"))
@@ -273,7 +270,7 @@ def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
         # relative path like "path" or "rel\\path" (win) or rel/path"
         if os.sep == "\\":
             # abspath made some more '\\' separators
-            return make_path_posix(osp.abspath(path))
+            return make_path_posix(osp.abspath(path), sep, remove_trailing_slash)
         else:
             return f"{os.getcwd()}/{path}"
     if path[1:2] == ":":
@@ -290,7 +287,9 @@ def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
         return path.rstrip("/") if remove_trailing_slash else path
 
     if path.startswith("file://"):
-        return make_path_posix(path.removeprefix("file://").lstrip("/"))
+        return make_path_posix(
+            path.removeprefix("file://").lstrip("/"), sep, remove_trailing_slash
+        )
     else:
         raise NotImplementedError(path)
 
