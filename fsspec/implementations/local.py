@@ -204,13 +204,17 @@ class LocalFileSystem(AbstractFileSystem):
 
     @classmethod
     def _parent(cls, path, sep=os.sep):
-        path = cls._strip_protocol(path, remove_trailing_slash=True)
-        if sep == "\\":  # NT
-            if path[1:3] == ":/":  # Standard windows drive
-                if len(path) == 3:
-                    return path  # Root such as c:/
-            # More cases may be required here
+        path = cls._strip_protocol(path, sep=sep, remove_trailing_slash=True)
         path = path.rsplit("/", 1)[0]
+        if sep == "/":
+            # posix
+            if not path:
+                return "/"
+        else:
+            # NT
+            if path[1:2] == ":" and len(path) == 2:
+                return path + "/"  # Root such as c:/
+            # More cases may be required here
         return make_path_posix(path)
 
     @classmethod

@@ -465,7 +465,6 @@ def test_make_path_posix():
         # Windows drive requires trailing slash
         assert make_path_posix("C:\\") == "C:/"
         assert make_path_posix("C:\\", remove_trailing_slash=True) == "C:/"
-        assert LocalFileSystem._parent("C:\\") == "C:/"
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
@@ -493,6 +492,14 @@ def test_make_path_posix():
 
     pp = make_path_posix("./path")
     assert "./" not in pp and ".\\" not in pp
+
+
+def test_parent():
+    assert LocalFileSystem._parent("/file or folder", sep="/") == "/"
+    assert LocalFileSystem._parent("/", sep="/") == "/"
+    # NT
+    assert LocalFileSystem._parent("C:\\file or folder", sep="\\") == "C:/"
+    assert LocalFileSystem._parent("C:\\", sep="\\") == "C:/"
 
 
 def test_linked_files(tmpdir):
