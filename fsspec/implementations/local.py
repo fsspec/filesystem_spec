@@ -4,7 +4,6 @@ import logging
 import os
 import os.path as osp
 import posixpath
-import re
 import shutil
 import stat
 import tempfile
@@ -247,8 +246,13 @@ class LocalFileSystem(AbstractFileSystem):
 
 def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
     """Make path generic"""
-    if not isinstance(path, str) and isinstance(path, (list, set, tuple)):
-        return type(path)(make_path_posix(p, sep, remove_trailing_slash) for p in path)
+    if not isinstance(path, str):
+        if isinstance(path, (list, set, tuple)):
+            return type(path)(
+                make_path_posix(p, sep, remove_trailing_slash) for p in path
+            )
+        else:
+            path = str(path)
     if sep == "/":
         # Native posix
         if path.startswith("/"):
