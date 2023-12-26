@@ -213,27 +213,28 @@ class TqdmCallback(Callback):
 
     def __init__(self, tqdm_kwargs=None, *args, **kwargs):
         try:
-            import tqdm
+            from tqdm import tqdm
 
-            self._tqdm = tqdm
         except ImportError as exce:
             raise ImportError(
                 "Using TqdmCallback requires tqdm to be installed"
             ) from exce
 
+        self._tqdm_cls = tqdm
         self._tqdm_kwargs = tqdm_kwargs or {}
+        self.tqdm = None
         super().__init__(*args, **kwargs)
 
-    def set_size(self, size):
-        self.tqdm = self._tqdm.tqdm(total=size, **self._tqdm_kwargs)
-
-    def relative_update(self, inc=1):
-        self.tqdm.update(inc)
+    def call(self, *args, **kwargs):
+        if self.tqdm is None:
+            self.tqdm = self._tqdm_cls(total=self.size, **self._tqdm_kwargs)
+        self.tqdm.total = self.size
+        self.tqdm.update(self.value - self.tqdm.n)
 
     def __del__(self):
-        if hasattr(self.tqdm, "close"):
+        if self.tqdm is not None:
             self.tqdm.close()
-        self.tqdm = None
+            self.tqdm = None
 
 
 _DEFAULT_CALLBACK = NoOpCallback()
