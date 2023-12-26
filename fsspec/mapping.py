@@ -37,7 +37,10 @@ class FSMap(MutableMapping):
 
     def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
         self.fs = fs
-        self.root = fs._strip_protocol(root).rstrip("/")
+        try:
+            self.root = fs._strip_protocol(root, remove_trailing_slash=True)
+        except TypeError:
+            self.root = fs._strip_protocol(root).rstrip("/")
         self._root_key_to_str = fs._strip_protocol(posixpath.join(root, "x"))[:-1]
         if missing_exceptions is None:
             missing_exceptions = (
