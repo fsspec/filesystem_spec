@@ -472,26 +472,31 @@ def test_make_path_posix():
     assert make_path_posix("rel/path") == posixpath.join(
         make_path_posix(cwd), "rel/path"
     )
-    if WIN:
-        assert make_path_posix("C:\\path") == "C:/path"
-        assert make_path_posix("file://C:\\path\\file") == "C:/path/file"
-    if WIN:
-        assert (
-            make_path_posix(
-                "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet"
-            )
-            == "//windows-server/someshare/path/more/path/dir/foo.parquet"
+    # NT style
+    assert make_path_posix("C:\\path", sep="\\") == "C:/path"
+    assert make_path_posix("file://C:\\path\\file", sep="\\") == "C:/path/file"
+    assert (
+        make_path_posix(
+            "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet",
+            sep="\\",
         )
-        assert (
-            make_path_posix(
-                "\\\\SERVER\\UserHomeFolder$\\me\\My Documents\\project1\\data\\filen.csv"
-            )
-            == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
+        == "//windows-server/someshare/path/more/path/dir/foo.parquet"
+    )
+    assert (
+        make_path_posix(
+            "\\\\SERVER\\UserHomeFolder$\\me\\My Documents\\project1\\data\\filen.csv",
+            sep="\\",
         )
+        == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
+    )
     assert "/" in make_path_posix("rel\\path")
-
+    # Relative
     pp = make_path_posix("./path")
-    assert "./" not in pp and ".\\" not in pp
+    cd = make_path_posix(cwd)
+    assert pp == cd + "/path"
+    # Userpath
+    userpath = make_path_posix("~/path")
+    assert userpath.endswith("/path")
 
 
 def test_parent():
