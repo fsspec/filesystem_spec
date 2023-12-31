@@ -7,7 +7,6 @@ from copy import copy
 from urllib.parse import urlparse
 
 import aiohttp
-import requests
 import yarl
 
 from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
@@ -319,7 +318,7 @@ class HTTPFileSystem(AsyncFileSystem):
             r = await session.get(self.encode_url(path), **kw)
             async with r:
                 return r.status < 400
-        except (requests.HTTPError, aiohttp.ClientError):
+        except aiohttp.ClientError:
             return False
 
     async def _isfile(self, path, **kwargs):
@@ -529,7 +528,7 @@ class HTTPFile(AbstractBufferedFile):
     ----------
     url: str
         Full URL of the remote resource, including the protocol
-    session: requests.Session or None
+    session: aiohttp.ClientSession or None
         All calls will be made within this session, to avoid restarting
         connections where the server allows this
     block_size: int or None
