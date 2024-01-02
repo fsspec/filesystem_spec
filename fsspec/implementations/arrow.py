@@ -255,6 +255,7 @@ class HadoopFileSystem(ArrowFSWrapper):
         port=0,
         user=None,
         kerb_ticket=None,
+        replication=3,
         extra_conf=None,
         **kwargs,
     ):
@@ -280,6 +281,7 @@ class HadoopFileSystem(ArrowFSWrapper):
             port=port,
             user=user,
             kerb_ticket=kerb_ticket,
+            replication=replication,
             extra_conf=extra_conf,
         )
         super().__init__(fs=fs, **kwargs)
@@ -294,4 +296,6 @@ class HadoopFileSystem(ArrowFSWrapper):
             out["user"] = ops["username"]
         if ops.get("port", None):
             out["port"] = ops["port"]
+        if ops.get("replication", None):
+            out["replication"] = ops["replication"]
         return out
