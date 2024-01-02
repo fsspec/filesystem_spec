@@ -158,7 +158,7 @@ def test_mkdir(fs, remote_dir):
     assert fs.isdir(remote_dir + "dir/")
     assert len(fs.ls(remote_dir + "dir/")) == 0
 
-    fs.mkdir(remote_dir + "dir/sub", create_parents=False)
+    fs.mkdir(remote_dir + "dir/sub", create_parents=True)
     assert fs.isdir(remote_dir + "dir/sub")
 
 
