@@ -847,6 +847,11 @@ async def _file_info(url, session, size_policy="head", **kwargs):
         elif "Content-Range" in r.headers:
             info["size"] = int(r.headers["Content-Range"].split("/")[1])
 
+        if "Content-Type" in r.headers:
+            info["mime"] = r.headers["Content-Type"].partition(";")[0]
+
+        info["url"] = str(r.url)
+
         for checksum_field in ["ETag", "Content-MD5", "Digest"]:
             if r.headers.get(checksum_field):
                 info[checksum_field] = r.headers[checksum_field]
