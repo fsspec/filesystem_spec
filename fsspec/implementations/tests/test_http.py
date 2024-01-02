@@ -369,6 +369,14 @@ def test_info(server):
     info = fs.info(server + "/index/realfile")
     assert info["ETag"] == "xxx"
 
+    fs = fsspec.filesystem("http", headers={"give_mimetype": "true"})
+    info = fs.info(server + "/index/realfile")
+    assert info["mimetype"] == "text/html"
+
+    fs = fsspec.filesystem("http", headers={"redirect": "true"})
+    info = fs.info(server + "/redirectme")
+    assert info["url"] == server + "/index/realfile"
+
 
 @pytest.mark.parametrize("method", ["POST", "PUT"])
 def test_put_file(server, tmp_path, method, reset_files):
