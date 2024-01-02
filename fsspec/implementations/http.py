@@ -848,7 +848,7 @@ async def _file_info(url, session, size_policy="head", **kwargs):
             info["size"] = int(r.headers["Content-Range"].split("/")[1])
 
         if "Content-Type" in r.headers:
-            info["mime"] = r.headers["Content-Type"].partition(";")[0]
+            info["mimetype"] = r.headers["Content-Type"].partition(";")[0]
 
         info["url"] = str(r.url)
 
