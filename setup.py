@@ -21,7 +21,7 @@ extras_require = {
     "gs": ["gcsfs"],
     "hdfs": ["pyarrow >= 1"],
     "arrow": ["pyarrow >= 1"],
-    "http": ["requests", "aiohttp !=4.0.0a0, !=4.0.0a1"],
+    "http": ["aiohttp !=4.0.0a0, !=4.0.0a1"],
     "sftp": ["paramiko"],
     "s3": ["s3fs"],
     "oci": ["ocifs"],
