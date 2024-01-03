@@ -36,8 +36,11 @@ class GithubFileSystem(AbstractFileSystem):
     url = "https://api.github.com/repos/{org}/{repo}/git/trees/{sha}"
     rurl = "https://raw.githubusercontent.com/{org}/{repo}/{sha}/{path}"
     protocol = "github"
+    timeout = (60, 60)  # connect, read timeouts
 
-    def __init__(self, org, repo, sha=None, username=None, token=None, **kwargs):
+    def __init__(
+        self, org, repo, sha=None, username=None, token=None, timeout=None, **kwargs
+    ):
         super().__init__(**kwargs)
         self.org = org
         self.repo = repo
@@ -45,10 +48,14 @@ class GithubFileSystem(AbstractFileSystem):
             raise ValueError("Auth required both username and token")
         self.username = username
         self.token = token
+        if timeout is not None:
+            self.timeout = timeout
         if sha is None:
             # look up default branch (not necessarily "master")
             u = "https://api.github.com/repos/{org}/{repo}"
-            r = requests.get(u.format(org=org, repo=repo), **self.kw)
+            r = requests.get(
+                u.format(org=org, repo=repo), timeout=self.timeout, **self.kw
+            )
             r.raise_for_status()
             sha = r.json()["default_branch"]
 
@@ -79,7 +86,8 @@ class GithubFileSystem(AbstractFileSystem):
         List of string
         """
         r = requests.get(
-            f"https://api.github.com/{['users', 'orgs'][is_org]}/{org_or_user}/repos"
+            f"https://api.github.com/{['users', 'orgs'][is_org]}/{org_or_user}/repos",
+            timeout=cls.timeout,
         )
         r.raise_for_status()
         return [repo["name"] for repo in r.json()]
@@ -89,6 +97,7 @@ class GithubFileSystem(AbstractFileSystem):
         """Names of tags in the repo"""
         r = requests.get(
             f"https://api.github.com/repos/{self.org}/{self.repo}/tags",
+            timeout=self.timeout,
             **self.kw,
         )
         r.raise_for_status()
@@ -99,6 +108,7 @@ class GithubFileSystem(AbstractFileSystem):
         """Names of branches in the repo"""
         r = requests.get(
             f"https://api.github.com/repos/{self.org}/{self.repo}/branches",
+            timeout=self.timeout,
             **self.kw,
         )
         r.raise_for_status()
@@ -147,7 +157,9 @@ class GithubFileSystem(AbstractFileSystem):
                 _sha = out["sha"]
         if path not in self.dircache or sha not in [self.root, None]:
             r = requests.get(
-                self.url.format(org=self.org, repo=self.repo, sha=_sha), **self.kw
+                self.url.format(org=self.org, repo=self.repo, sha=_sha),
+                timeout=self.timeout,
+                **self.kw,
             )
             if r.status_code == 404:
                 raise FileNotFoundError(path)
@@ -208,7 +220,7 @@ class GithubFileSystem(AbstractFileSystem):
         url = self.rurl.format(
             org=self.org, repo=self.repo, path=path, sha=sha or self.root
         )
-        r = requests.get(url, **self.kw)
+        r = requests.get(url, timeout=self.timeout, **self.kw)
         if r.status_code == 404:
             raise FileNotFoundError(path)
         r.raise_for_status()

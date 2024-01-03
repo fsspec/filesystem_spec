@@ -316,7 +316,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             size_ratio = [
                 math.ceil(s / c) for s, c in zip(zarray["shape"], zarray["chunks"])
             ]
-            self.chunk_sizes[field] = size_ratio
+            self.chunk_sizes[field] = size_ratio or [1]
         return self.chunk_sizes[field]
 
     def _generate_record(self, field, record):

@@ -57,6 +57,9 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         file_data = self.files.get(file_path)
         if "give_path" in self.headers:
             return self._respond(200, data=json.dumps({"path": self.path}).encode())
+        if "redirect" in self.headers and file_path != "/index/realfile":
+            new_url = f"http://127.0.0.1:{port}/index/realfile"
+            return self._respond(301, {"Location": new_url})
         if file_data is None:
             return self._respond(404)
 
@@ -88,6 +91,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self._respond(status, response_headers, file_data)
         elif "give_range" in self.headers:
             self._respond(status, {"Content-Range": content_range}, file_data)
+        elif "give_mimetype" in self.headers:
+            self._respond(
+                status, {"Content-Type": "text/html; charset=utf-8"}, file_data
+            )
         else:
             self._respond(status, data=file_data)
 
