@@ -150,7 +150,7 @@ def test_mkdir(ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with pytest.raises(ftplib.error_perm):
-        fs.mkdir("/tmp/not/exist", create_parents=True)
+        fs.mkdir("/tmp/not/exist", create_parents=False)
     fs.mkdir("/tmp/not/exist")
     assert fs.exists("/tmp/not/exist")
     fs.makedirs("/tmp/not/exist", exist_ok=True)

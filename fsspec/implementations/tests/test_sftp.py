@@ -207,7 +207,7 @@ def test_mkdir_create_parent(ssh, path):
     with pytest.raises(FileNotFoundError):
         f.mkdir(path)
 
-    f.mkdir(path, create_parents=True)
+    f.mkdir(path)
     assert f.exists(path)
 
     with pytest.raises(FileExistsError, match=path):
