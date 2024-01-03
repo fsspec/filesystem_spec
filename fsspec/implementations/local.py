@@ -257,7 +257,7 @@ def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
                 make_path_posix(p, sep, remove_trailing_slash) for p in path
             )
         else:
-            path = str(path)
+            path = str(stringify_path(path))
     if sep == "/":
         # Native posix
         if path.startswith("/"):
