@@ -271,6 +271,8 @@ class HadoopFileSystem(ArrowFSWrapper):
             If given, connect as this username
         kerb_ticket: str or None
             If given, use this ticket for authentication
+        replication: int
+            set replication factor of file for write operations. default value is 3.
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
