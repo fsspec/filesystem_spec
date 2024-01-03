@@ -367,6 +367,16 @@ def test_directories(tmpdir):
     assert fs.ls(fs.root_marker)
 
 
+def test_ls_on_file(tmpdir):
+    tmpdir = make_path_posix(str(tmpdir))
+    fs = LocalFileSystem()
+    resource = tmpdir + "/a.json"
+    fs.touch(resource)
+    assert fs.exists(resource)
+    assert fs.ls(tmpdir) == fs.ls(resource)
+    assert fs.ls(resource, detail=True)[0] == fs.info(resource)
+
+
 @pytest.mark.parametrize("file_protocol", ["", "file://"])
 def test_file_ops(tmpdir, file_protocol):
     tmpdir = make_path_posix(str(tmpdir))
