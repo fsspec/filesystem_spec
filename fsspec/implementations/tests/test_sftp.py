@@ -224,7 +224,7 @@ def test_makedirs_exist_ok(ssh, path):
     f.makedirs(path, exist_ok=False)
 
     with pytest.raises(FileExistsError, match=path):
-        f.makedirs(path)
+        f.makedirs(path, exist_ok=False)
 
     f.makedirs(path, exist_ok=True)
     f.rm(path, recursive=True)
