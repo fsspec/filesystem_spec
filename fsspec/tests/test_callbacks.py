@@ -44,13 +44,13 @@ def test_callbacks_wrap():
 def test_tqdm_callback(tqdm_kwargs, mocker):
 
     callback = TqdmCallback(tqdm_kwargs=tqdm_kwargs)
-    mocker.patch.object(callback, "_tqdm")
+    mocker.patch.object(callback, "_tqdm_cls")
     callback.set_size(10)
     for _ in callback.wrap(range(10)):
         ...
 
-    assert callback.tqdm.update.call_count == 10
+    assert callback.tqdm.update.call_count == 11
     if not tqdm_kwargs:
-        callback._tqdm.tqdm.assert_called_with(total=10)
+        callback._tqdm_cls.assert_called_with(total=10)
     else:
-        callback._tqdm.tqdm.assert_called_with(total=10, **tqdm_kwargs)
+        callback._tqdm_cls.assert_called_with(total=10, **tqdm_kwargs)
