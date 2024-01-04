@@ -179,8 +179,6 @@ class LocalFileSystem(AbstractFileSystem):
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
-        if path.endswith("/"):
-            raise IsADirectoryError(path)
         if self.auto_mkdir and "w" in mode:
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
@@ -219,23 +217,20 @@ class LocalFileSystem(AbstractFileSystem):
                 if path_[1:2] == ":":
                     # nt root (something like c:/)
                     return path_[0] + ":/"
-                raise NotImplementedError(path)
             # More cases may be required here
             return path_
 
     @classmethod
     def _strip_protocol(cls, path, sep=os.sep, remove_trailing_slash=False):
         path = stringify_path(path)
-        if path.startswith("file://"):
-            path = path[7:]
+        if path.startswith("file:"):
+            path = path.removeprefix("file://").removeprefix("file:")
             if sep == "\\":
                 path = path.lstrip("/")
-        elif path.startswith("file:"):
-            path = path[5:]
-        elif path.startswith("local://"):
-            path = path[8:]
         elif path.startswith("local:"):
-            path = path[6:]
+            path = path.removeprefix("local://").removeprefix("local:")
+            if sep == "\\":
+                path = path.lstrip("/")
         return make_path_posix(path, sep, remove_trailing_slash)
 
     def _isfilestore(self):
@@ -280,15 +275,12 @@ def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
                     return path[0] + ":/"
                 path = path.replace("\\", "/").replace("//", "/")
                 return path.rstrip("/") if remove_trailing_slash else path
+            elif path[0] == "~":
+                return make_path_posix(osp.expanduser(path), sep, remove_trailing_slash)
             elif path.startswith("\\\\") or path.startswith("//"):
                 # windows UNC/DFS-style paths
                 path = "//" + path[2:].replace("\\", "/").replace("//", "/")
                 return path.rstrip("/") if remove_trailing_slash else path
-            elif path.startswith("file://"):
-                path = path.removeprefix("file://").lstrip("/")
-                return make_path_posix(path, sep, remove_trailing_slash)
-            elif path[0] == "~":
-                return make_path_posix(osp.expanduser(path), sep, remove_trailing_slash)
         return make_path_posix(osp.abspath(path), sep, remove_trailing_slash)
 
 

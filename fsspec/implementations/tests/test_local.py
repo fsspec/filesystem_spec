@@ -484,7 +484,6 @@ def test_make_path_posix():
     )
     # NT style
     assert make_path_posix("C:\\path", sep="\\") == "C:/path"
-    assert make_path_posix("file://C:\\path\\file", sep="\\") == "C:/path/file"
     assert (
         make_path_posix(
             "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet",
@@ -654,6 +653,7 @@ def test_strip_protocol_expanduser():
     path = "file://~\\foo\\bar" if WIN else "file://~/foo/bar"
     stripped = LocalFileSystem._strip_protocol(path)
     assert path != stripped
+    assert "~" not in stripped
     assert "file://" not in stripped
     assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
     path = LocalFileSystem._strip_protocol("./", remove_trailing_slash=True)

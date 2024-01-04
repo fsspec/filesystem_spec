@@ -213,7 +213,7 @@ def test_fsmap_access_with_suffix(tmp_path):
             PermissionError,
         )
     else:
-        None
+        missing_exceptions = None
     m = fsspec.get_mapper(f"file://{tmp_path}", missing_exceptions=missing_exceptions)
     with pytest.raises(KeyError):
         _ = m["b/"]
