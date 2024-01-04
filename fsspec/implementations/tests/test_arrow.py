@@ -241,3 +241,17 @@ def test_seekable(fs, remote_dir):
     with fs.open(remote_dir + "/a.txt", "rb", seekable=False) as file:
         with pytest.raises(OSError):
             file.seek(5)
+
+
+@pytest.mark.parametrize(
+    ["filesystem", "root_marker"],
+    [
+        (pyarrow_fs.LocalFileSystem(), "/"),
+        (pyarrow_fs.S3FileSystem(), ""),
+        (pyarrow_fs.GcsFileSystem(), ""),
+    ],
+)
+def test_from_fs(filesystem, root_marker):
+    wrapper = ArrowFSWrapper.from_fs(filesystem)
+    assert wrapper.root_marker == root_marker
+    assert wrapper.__class__.root_marker == root_marker
