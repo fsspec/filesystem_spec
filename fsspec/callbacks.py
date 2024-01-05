@@ -285,10 +285,13 @@ class TqdmCallback(Callback):
         self.tqdm.total = self.size
         self.tqdm.update(self.value - self.tqdm.n)
 
-    def __del__(self):
+    def close(self):
         if self.tqdm is not None:
             self.tqdm.close()
             self.tqdm = None
+
+    def __del__(self):
+        return self.close()
 
 
 _DEFAULT_CALLBACK = NoOpCallback()
