@@ -5,7 +5,7 @@ import secrets
 import shutil
 from contextlib import suppress
 from functools import cached_property, wraps
-
+from urllib.parse import parse_qs
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import (
     get_package_version_without_import,
@@ -298,6 +298,8 @@ class HadoopFileSystem(ArrowFSWrapper):
             out["user"] = ops["username"]
         if ops.get("port", None):
             out["port"] = ops["port"]
-        if ops.get("replication", None):
-            out["replication"] = ops["replication"]
+        if ops.get("url_query", None):
+            queries = parse_qs(ops["url_query"])
+            if queries.get("replication"):
+                out["replication"] = int(queries["replication"][0])
         return out

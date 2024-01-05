@@ -5,7 +5,7 @@ import pytest
 pyarrow_fs = pytest.importorskip("pyarrow.fs")
 FileSystem = pyarrow_fs.FileSystem
 
-from fsspec.implementations.arrow import ArrowFSWrapper  # noqa
+from fsspec.implementations.arrow import ArrowFSWrapper, HadoopFileSystem  # noqa
 
 
 @pytest.fixture(scope="function")
@@ -241,3 +241,17 @@ def test_seekable(fs, remote_dir):
     with fs.open(remote_dir + "/a.txt", "rb", seekable=False) as file:
         with pytest.raises(OSError):
             file.seek(5)
+
+
+def test_get_kwargs_from_urls_hadoop_fs():
+    kwargs = HadoopFileSystem._get_kwargs_from_urls("hdfs://user@localhost:8020/?replication=2")
+    assert kwargs["user"] == "user"
+    assert kwargs["host"] == "localhost"
+    assert kwargs["port"] == 8020
+    assert kwargs["replication"] == 2
+
+    kwargs = HadoopFileSystem._get_kwargs_from_urls("hdfs://user@localhost:8020/")
+    assert kwargs["user"] == "user"
+    assert kwargs["host"] == "localhost"
+    assert kwargs["port"] == 8020
+    assert "replication" not in kwargs
