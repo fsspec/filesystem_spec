@@ -301,6 +301,6 @@ class HadoopFileSystem(ArrowFSWrapper):
             out["port"] = ops["port"]
         if ops.get("url_query", None):
             queries = parse_qs(ops["url_query"])
-            if queries.get("replication"):
+            if queries.get("replication", None):
                 out["replication"] = int(queries["replication"][0])
         return out
