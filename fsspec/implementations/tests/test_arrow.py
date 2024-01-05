@@ -244,7 +244,9 @@ def test_seekable(fs, remote_dir):
 
 
 def test_get_kwargs_from_urls_hadoop_fs():
-    kwargs = HadoopFileSystem._get_kwargs_from_urls("hdfs://user@localhost:8020/?replication=2")
+    kwargs = HadoopFileSystem._get_kwargs_from_urls(
+        "hdfs://user@localhost:8020/?replication=2"
+    )
     assert kwargs["user"] == "user"
     assert kwargs["host"] == "localhost"
     assert kwargs["port"] == 8020
