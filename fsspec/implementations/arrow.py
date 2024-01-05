@@ -5,6 +5,7 @@ import secrets
 import shutil
 from contextlib import suppress
 from functools import cached_property, wraps
+from urllib.parse import parse_qs
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import (
@@ -255,6 +256,7 @@ class HadoopFileSystem(ArrowFSWrapper):
         port=0,
         user=None,
         kerb_ticket=None,
+        replication=3,
         extra_conf=None,
         **kwargs,
     ):
@@ -270,6 +272,8 @@ class HadoopFileSystem(ArrowFSWrapper):
             If given, connect as this username
         kerb_ticket: str or None
             If given, use this ticket for authentication
+        replication: int
+            set replication factor of file for write operations. default value is 3.
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
@@ -280,6 +284,7 @@ class HadoopFileSystem(ArrowFSWrapper):
             port=port,
             user=user,
             kerb_ticket=kerb_ticket,
+            replication=replication,
             extra_conf=extra_conf,
         )
         super().__init__(fs=fs, **kwargs)
@@ -294,4 +299,8 @@ class HadoopFileSystem(ArrowFSWrapper):
             out["user"] = ops["username"]
         if ops.get("port", None):
             out["port"] = ops["port"]
+        if ops.get("url_query", None):
+            queries = parse_qs(ops["url_query"])
+            if queries.get("replication", None):
+                out["replication"] = int(queries["replication"][0])
         return out
