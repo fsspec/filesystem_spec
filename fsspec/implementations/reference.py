@@ -355,19 +355,30 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return self._load_one_key(key)
 
     def __setitem__(self, key, value):
+        from rich import print
+        # print(f'Key : {key} + Value : {value}')
         if "/" in key and not self._is_meta(key):
+            # print(f"Key \'{key}\' contains a /")
             field, chunk = key.split("/")
             record, i, _ = self._key_to_record(key)
             subdict = self._items.setdefault((field, record), {})
             subdict[i] = value
+            # print(f"subdict : {subdict}")
             if len(subdict) == self.record_size:
                 self.write(field, record)
         else:
+            print(f"   Metadata or top level Key : \'{key}\' + Value : \'{value}\'")
             # metadata or top-level
             self._items[key] = value
-            self.zmetadata[key] = json.loads(
-                value.decode() if isinstance(value, bytes) else value
-            )
+            if "time" in key:
+                print(f"   [bold].Zmetadata for 'time' [red]before[/red][/bold] : {self.zmetadata.get('time/.zattrs', 'Not found')}")
+            # self.zmetadata[key] = json.loads(
+            #     value.decode() if isinstance(value, bytes) else value
+            # )
+            new_value = json.loads(value.decode() if isinstance(value, bytes) else value)
+            self.zmetadata[key] = {**self.zmetadata.get(key, {}), **new_value}
+            if "time" in key:
+                print(f"   [bold].Zmetadata for 'time' [green]after[/green][/bold] : {self.zmetadata.get('time/.zattrs', 'Not found')}")
 
     @staticmethod
     def _is_meta(key):
