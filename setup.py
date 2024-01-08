@@ -72,7 +72,6 @@ setup(
     keywords="file",
     packages=["fsspec", "fsspec.implementations", "fsspec.tests.abstract"],
     python_requires=">=3.8",
-    install_requires=open("requirements.txt").read().strip().split("\n"),
     extras_require=extras_require,
     zip_safe=False,
 )
