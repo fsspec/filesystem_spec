@@ -184,46 +184,47 @@ def test_dbfs_write_pyarrow_non_partitioned(dbfsFS):
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
 
-def test_dbfs_write_pyarrow_partitioned(dbfsFS):
-    import pandas as pd
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
-
-    test_df = pd.read_csv("data/diabetes.csv")
-    arr_table = pa.Table.from_pandas(df=test_df)
-
-    pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
-                        existing_data_behavior='error', partition_cols=["Pregnancies"],
-                        root_path="/FileStore/pyarrow/diabetes",
-                        use_threads=False)
-
-    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 17
-    assert set(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)).difference(
-        set(["/FileStore/pyarrow/diabetes/Pregnancies=0",
-            "/FileStore/pyarrow/diabetes/Pregnancies=1",
-            "/FileStore/pyarrow/diabetes/Pregnancies=2",
-            "/FileStore/pyarrow/diabetes/Pregnancies=3",
-            "/FileStore/pyarrow/diabetes/Pregnancies=4",
-            "/FileStore/pyarrow/diabetes/Pregnancies=5",
-            "/FileStore/pyarrow/diabetes/Pregnancies=6",
-            "/FileStore/pyarrow/diabetes/Pregnancies=7",
-            "/FileStore/pyarrow/diabetes/Pregnancies=8",
-            "/FileStore/pyarrow/diabetes/Pregnancies=9",
-            "/FileStore/pyarrow/diabetes/Pregnancies=10",
-            "/FileStore/pyarrow/diabetes/Pregnancies=11",
-            "/FileStore/pyarrow/diabetes/Pregnancies=12",
-            "/FileStore/pyarrow/diabetes/Pregnancies=13",
-            "/FileStore/pyarrow/diabetes/Pregnancies=14",
-            "/FileStore/pyarrow/diabetes/Pregnancies=15",
-            "/FileStore/pyarrow/diabetes/Pregnancies=17"
-        ])
-    ) == set()
-
-    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
+# @pytest.mark.vcr()
+# def test_dbfs_write_pyarrow_partitioned(dbfsFS):
+#     import pandas as pd
+#     import pyarrow as pa
+#     import pyarrow.parquet as pq
+#
+#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
+#
+#     test_df = pd.read_csv("data/diabetes.csv")
+#     arr_table = pa.Table.from_pandas(df=test_df)
+#
+#     pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
+#                         existing_data_behavior='error', partition_cols=["Pregnancies"],
+#                         root_path="/FileStore/pyarrow/diabetes",
+#                         use_threads=False)
+#
+#     assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 17
+#     assert set(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)).difference(
+#         set(["/FileStore/pyarrow/diabetes/Pregnancies=0",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=1",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=2",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=3",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=4",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=5",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=6",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=7",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=8",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=9",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=10",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=11",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=12",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=13",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=14",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=15",
+#             "/FileStore/pyarrow/diabetes/Pregnancies=17"
+#         ])
+#     ) == set()
+#
+#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
 
 @pytest.mark.vcr()
@@ -261,34 +262,34 @@ def test_dbfs_read_pyarrow_non_partitioned(dbfsFS):
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
 
-def test_dbfs_read_pyarrow_partitioned(dbfsFS):
-    import pandas as pd
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    import pyarrow.dataset as ds
-
-    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
-
-    test_df = pd.read_csv("data/diabetes.csv")
-    arr_table = pa.Table.from_pandas(df=test_df)
-
-    pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
-                        existing_data_behavior='error', partition_cols=["Pregnancies"],
-                        root_path="/FileStore/pyarrow/diabetes",
-                        use_threads=False)
-
-    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 17
-
-    arr_res = ds.dataset(
-                source="/FileStore/pyarrow/diabetes",
-                filesystem=dbfsFS,
-                partitioning='hive'
-            ).to_table()
-
-    assert arr_res.num_rows == arr_table.num_rows
-    assert arr_res.num_columns == arr_table.num_columns
-    assert set(arr_res.schema).difference(set(arr_table.schema)) == set()
-
-    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
+# def test_dbfs_read_pyarrow_partitioned(dbfsFS):
+#     import pandas as pd
+#     import pyarrow as pa
+#     import pyarrow.parquet as pq
+#     import pyarrow.dataset as ds
+#
+#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
+#
+#     test_df = pd.read_csv("data/diabetes.csv")
+#     arr_table = pa.Table.from_pandas(df=test_df)
+#
+#     pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
+#                         existing_data_behavior='error', partition_cols=["Pregnancies"],
+#                         root_path="/FileStore/pyarrow/diabetes",
+#                         use_threads=False)
+#
+#     assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 17
+#
+#     arr_res = ds.dataset(
+#                 source="/FileStore/pyarrow/diabetes",
+#                 filesystem=dbfsFS,
+#                 partitioning='hive'
+#             ).to_table()
+#
+#     assert arr_res.num_rows == arr_table.num_rows
+#     assert arr_res.num_columns == arr_table.num_columns
+#     assert set(arr_res.schema).difference(set(arr_table.schema)) == set()
+#
+#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)

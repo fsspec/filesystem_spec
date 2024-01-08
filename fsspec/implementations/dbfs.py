@@ -16,13 +16,12 @@ class DatabricksException(Exception):
     Helper class for exceptions raised in this module.
     """
 
-    def __init__(self, error_code, message, headers=None):
+    def __init__(self, error_code, message):
         """Create a new DatabricksException"""
         super().__init__(message)
 
         self.error_code = error_code
         self.message = message
-        self.headers = headers
 
 
 class DatabricksFileSystem(AbstractFileSystem):
@@ -226,7 +225,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         return DatabricksFile(self, path, mode=mode, block_size=block_size, **kwargs)
 
-    def retry_request(func, retries=5):
+    def retry_request(func, retries=3):
 
         RETRIABLE_EXCEPTIONS = (
             requests.exceptions.ChunkedEncodingError,
@@ -236,15 +235,16 @@ class DatabricksFileSystem(AbstractFileSystem):
             requests.exceptions.ProxyError,
             requests.exceptions.SSLError,
             requests.exceptions.ContentDecodingError,
-
             aiohttp.client_exceptions.ClientError,
         )
 
         def is_retriable(exception):
             """Returns True if this exception is retriable."""
             errs = list(range(500, 505)) + [
-                408,  # Request Timeout
-                429  # Too Many Requests
+                # Request Timeout
+                408,
+                # Too Many Requests
+                429,
             ]
             errs += [str(e) for e in errs]
             if type(exception) is requests.exceptions.HTTPError:
@@ -260,21 +260,18 @@ class DatabricksFileSystem(AbstractFileSystem):
                 except (
                         DatabricksException,
                         requests.exceptions.RequestException,
-                        requests.exceptions.HTTPError,
-                        Exception
+                        requests.exceptions.HTTPError
                 ) as exc:
+                    if (
+                        isinstance(exc, aiohttp.client_exceptions.ClientResponseError)
+                        and exc.status == 404
+                    ):
+                        raise exc
                     if is_retriable(exc):
                         if type(exc) is requests.exceptions.HTTPError:
                             time.sleep(int(exc.response.headers["Retry-After"]))
                         attempts += 1
-                        # logger.debug(f"{func.__name__} retrying after exception: {exc}")
                         continue
-                    if (isinstance(exc, aiohttp.client_exceptions.ClientResponseError)
-                        and exc.status == 404
-                    ):
-                        # logger.debug("Request returned 404, no retries.")
-                        raise exc
-                    # logger.exception(f"{func.__name__} non-retriable exception: {e}")
                     raise exc
 
         return retry_wrapper

@@ -13,7 +13,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -21,14 +21,26 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA4zLMQ5AQBBG4bv89Qr1HsAFlCKyGDFByMxsQ9ydaHSy7cv3Toy8kMLXJ/ZgEzzy
-        8imVbUJwYG0HFniTSO61rfJB8MXlvmMIFjrhftZMSONimrwaqaXjdU+2UUn+cXPdAAAA//8DAHlY
-        NJf+AAAA
+        H4sIAAAAAAAEA6zSSwrCMBAG4LvMumKSPmJzAC8guBEpsY042LQlmbqw9O5WXQjFTR+74Wf4YB4d
+        XLE0HtSpg0bTDRRs90NyoNoZCAB9VqADRa41wac38/g0oFgAti7wirkmrKuM0A4plyySIhQyZIz1
+        wc881mU7NEwG/yB+oVJo0heH+d1v3qU3tKLojG/LxaCtaPqQPBGMx0JG492TbeZoqYzDlMvd6JKt
+        N24OxxkLk0ikI+6xxmN8kVlnPPcvAAAA//8DABmaEXgDAwAA
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -56,7 +68,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -64,14 +76,26 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA4zLMQ5AQBBG4bv89Qr1HsAFlCKyGDFByMxsQ9ydaHSy7cv3Toy8kMLXJ/ZgEzzy
-        8imVbUJwYG0HFniTSO61rfJB8MXlvmMIFjrhftZMSONimrwaqaXjdU+2UUn+cXPdAAAA//8DAHlY
-        NJf+AAAA
+        H4sIAAAAAAAEA6zSSwrCMBAG4LvMumKSPmJzAC8guBEpsY042LQlmbqw9O5WXQjFTR+74Wf4YB4d
+        XLE0HtSpg0bTDRRs90NyoNoZCAB9VqADRa41wac38/g0oFgAti7wirkmrKuM0A4plyySIhQyZIz1
+        wc881mU7NEwG/yB+oVJo0heH+d1v3qU3tKLojG/LxaCtaPqQPBGMx0JG492TbeZoqYzDlMvd6JKt
+        N24OxxkLk0ikI+6xxmN8kVlnPPcvAAAA//8DABmaEXgDAwAA
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
