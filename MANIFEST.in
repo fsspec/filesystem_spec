@@ -3,4 +3,3 @@ include fsspec/_version.py
 
 include LICENSE
 include README.rst
-include requirements.txt
