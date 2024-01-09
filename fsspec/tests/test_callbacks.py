@@ -26,6 +26,48 @@ def test_callbacks_as_callback():
     assert real_callback.call("something", arg=2) == 4
 
 
+def test_callbacks_as_context_manager(mocker):
+    spy_enter = mocker.spy(Callback, "__enter__")
+    spy_exit = mocker.spy(Callback, "__exit__")
+    spy_close = mocker.spy(Callback, "close")
+
+    with Callback() as cb:
+        cb.relative_update()
+
+    spy_enter.assert_called_once()
+    spy_exit.assert_called_once()
+    spy_close.assert_called_once()
+
+
+def test_callbacks_branched():
+    with Callback() as cb:
+        kwargs = {"key": "value"}
+        with cb.branched("path_1", "path_2", kwargs) as branch:
+            assert branch is not cb
+            assert isinstance(branch, Callback)
+            assert kwargs == {"key": "value"}
+
+
+@pytest.mark.asyncio
+async def test_callbacks_branch_coro(mocker):
+    class IsCallback:
+        def __eq__(self, value):
+            return isinstance(value, Callback)
+
+    async_fn = mocker.AsyncMock(return_value=10)
+    callback = Callback()
+    wrapped_fn = callback.branch_coro(async_fn)
+    spy_branched = mocker.spy(callback, "branched")
+
+    assert await wrapped_fn("path_1", "path_2", key="value") == 10
+
+    spy_branched.assert_called_once_with("path_1", "path_2", {"key": "value"})
+    async_fn.assert_called_once_with(
+        "path_1", "path_2", callback=IsCallback(), key="value"
+    )
+    assert isinstance(spy_branched.spy_return, Callback)
+
+
 def test_callbacks_wrap():
     events = []
 
