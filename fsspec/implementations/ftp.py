@@ -177,8 +177,8 @@ class FTPFileSystem(AbstractFileSystem):
                 rest=start,
                 callback=cb,
             )
-        except (Error, error_perm):
-            raise FileNotFoundError(path)
+        except (Error, error_perm) as orig_exc:
+            raise FileNotFoundError(path) from orig_exc
         return b"".join(out)
 
     def _open(
