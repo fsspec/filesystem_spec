@@ -69,7 +69,6 @@ class Callback:
     def branch_coro(self, fn):
         """
         Wraps a coroutine, and pass a new child callback to it.
-        When the coroutine completes, we increment the parent callback by 1.
         """
 
         @wraps(fn)
