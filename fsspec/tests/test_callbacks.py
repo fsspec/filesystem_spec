@@ -50,22 +50,17 @@ def test_callbacks_branched():
 
 @pytest.mark.asyncio
 async def test_callbacks_branch_coro(mocker):
-    class IsCallback:
-        def __eq__(self, value):
-            return isinstance(value, Callback)
-
     async_fn = mocker.AsyncMock(return_value=10)
     callback = Callback()
     wrapped_fn = callback.branch_coro(async_fn)
-    spy_branched = mocker.spy(callback, "branched")
+    spy = mocker.spy(callback, "branched")
 
     assert await wrapped_fn("path_1", "path_2", key="value") == 10
 
-    spy_branched.assert_called_once_with("path_1", "path_2", {"key": "value"})
+    spy.assert_called_once_with("path_1", "path_2", {"key": "value"})
     async_fn.assert_called_once_with(
-        "path_1", "path_2", callback=IsCallback(), key="value"
+        "path_1", "path_2", callback=spy.spy_return, key="value"
     )
-    assert isinstance(spy_branched.spy_return, Callback)
 
 
 def test_callbacks_wrap():
