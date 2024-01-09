@@ -170,6 +170,7 @@ class FTPFileSystem(AbstractFileSystem):
 
         def cb(x):
             out.append(x)
+
         try:
             self.ftp.retrbinary(
                 f"RETR {path}",
