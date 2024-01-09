@@ -171,12 +171,15 @@ class FTPFileSystem(AbstractFileSystem):
         def cb(x):
             out.append(x)
 
-        self.ftp.retrbinary(
-            f"RETR {path}",
-            blocksize=self.blocksize,
-            rest=start,
-            callback=cb,
-        )
+        try:
+            self.ftp.retrbinary(
+                f"RETR {path}",
+                blocksize=self.blocksize,
+                rest=start,
+                callback=cb,
+            )
+        except (Error, error_perm) as orig_exc:
+            raise FileNotFoundError(path) from orig_exc
         return b"".join(out)
 
     def _open(
