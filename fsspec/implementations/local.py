@@ -15,7 +15,7 @@ from fsspec.utils import isfilelike, stringify_path
 
 logger = logging.getLogger("fsspec.local")
 
-if sys.version_info <= (3, 8):
+if sys.version_info < (3, 9):
     # Remove when Python 3.8 is no longer supported.
     def _remove_prefix(text: str, prefix: str):
         if text.startswith(prefix):
@@ -227,7 +227,7 @@ class LocalFileSystem(AbstractFileSystem):
             # More cases may be required here
             return path_
 
-    if sys.version_info <= (3, 8):
+    if sys.version_info < (3, 9):
         # Remove when Python 3.8 is no longer supported.
         @classmethod
         def _strip_protocol(cls, path, sep=os.sep, remove_trailing_slash=False):
