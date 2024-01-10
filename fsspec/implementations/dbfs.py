@@ -1,65 +1,12 @@
 import base64
-import logging
-import time
 import urllib
 
-import aiohttp.client_exceptions
 import requests
 import requests.exceptions
+from requests.adapters import HTTPAdapter, Retry
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
-import requests
-
-from requests.adapters import HTTPAdapter, Retry
-
-
-#
-# RETRIABLE_EXCEPTIONS = (
-#     requests.exceptions.ChunkedEncodingError,
-#     requests.exceptions.ConnectionError,
-#     requests.exceptions.ReadTimeout,
-#     requests.exceptions.Timeout,
-#     requests.exceptions.ProxyError,
-#     requests.exceptions.SSLError,
-#     requests.exceptions.ContentDecodingError
-# )
-
-
-# def retry_request(func, retries=3):
-#     def retry_wrapper(*args, **kwargs):
-#         attempts = 0
-#         while True:
-#             try:
-#                 return func(*args, **kwargs)
-#             except (
-#                     DatabricksException,
-#                     requests.exceptions.RequestException
-#             ) as exc:
-#                 if attempts < retries:
-#                     if is_retriable(exc):
-#                         if type(exc) is requests.exceptions.HTTPError:
-#                             time.sleep(int(exc.response.headers["Retry-After"]))
-#                         attempts += 1
-#                         continue
-#                 raise exc
-#
-#     return retry_wrapper
-#
-#
-# def is_retriable(exception):
-#     """Returns True if this exception is retriable."""
-#     if isinstance(exception, requests.exceptions.HTTPError):
-#         return exception.response.status_code in [
-#             "408",  # Request Timeout
-#             "429",  # Too Many Requests
-#             "500",  # Server Error
-#             "501",  # Not Implemented
-#             "502",  # Bad Gateway
-#             "503",  # Service Unavailable
-#             "504"]  # Gateway Timeout
-#
-#     return isinstance(exception, RETRIABLE_EXCEPTIONS)
 
 
 class DatabricksException(Exception):
@@ -278,7 +225,6 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         return DatabricksFile(self, path, mode=mode, block_size=block_size, **kwargs)
 
-    # @retry_request
     def _send_to_api(self, method, endpoint, json):
         """
         Send the given json to the DBFS API
@@ -444,15 +390,15 @@ class DatabricksFile(AbstractBufferedFile):
     DEFAULT_BLOCK_SIZE = 1 * 2 ** 20  # only allowed block size
 
     def __init__(
-            self,
-            fs,
-            path,
-            mode="rb",
-            block_size="default",
-            autocommit=True,
-            cache_type="readahead",
-            cache_options=None,
-            **kwargs,
+        self,
+        fs,
+        path,
+        mode="rb",
+        block_size="default",
+        autocommit=True,
+        cache_type="readahead",
+        cache_options=None,
+        **kwargs,
     ):
         """
         Create a new instance of the DatabricksFile.
@@ -463,7 +409,7 @@ class DatabricksFile(AbstractBufferedFile):
             block_size = self.DEFAULT_BLOCK_SIZE
 
         assert (
-                block_size == self.DEFAULT_BLOCK_SIZE
+            block_size == self.DEFAULT_BLOCK_SIZE
         ), f"Only the default block size is allowed, not {block_size}"
 
         super().__init__(
