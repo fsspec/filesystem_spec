@@ -8,7 +8,7 @@ import uuid
 from typing import Optional
 
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
-from .callbacks import _DEFAULT_CALLBACK
+from .callbacks import DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
 
 _generic_fs = {}
@@ -279,7 +279,7 @@ class GenericFileSystem(AsyncFileSystem):
         url,
         url2,
         blocksize=2**20,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         **kwargs,
     ):
         fs = _resolve_fs(url, self.method)

@@ -10,7 +10,7 @@ from shutil import rmtree
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 from fsspec import AbstractFileSystem, filesystem
-from fsspec.callbacks import _DEFAULT_CALLBACK
+from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
 from fsspec.exceptions import BlocksizeMismatchError
@@ -607,7 +607,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         path,
         recursive=False,
         on_error="raise",
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         **kwargs,
     ):
         paths = self.expand_path(

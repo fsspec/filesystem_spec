@@ -11,7 +11,7 @@ from glob import has_magic
 from hashlib import sha256
 from typing import ClassVar
 
-from .callbacks import _DEFAULT_CALLBACK
+from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
@@ -876,9 +876,7 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(
-        self, rpath, lpath, callback=_DEFAULT_CALLBACK, outfile=None, **kwargs
-    ):
+    def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, outfile=None, **kwargs):
         """Copy single remote file to local"""
         from .implementations.local import LocalFileSystem
 
@@ -913,7 +911,7 @@ class AbstractFileSystem(metaclass=_Cached):
         rpath,
         lpath,
         recursive=False,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         maxdepth=None,
         **kwargs,
     ):
@@ -970,7 +968,7 @@ class AbstractFileSystem(metaclass=_Cached):
             with callback.branched(rpath, lpath, kwargs) as child:
                 self.get_file(rpath, lpath, callback=child, **kwargs)
 
-    def put_file(self, lpath, rpath, callback=_DEFAULT_CALLBACK, **kwargs):
+    def put_file(self, lpath, rpath, callback=DEFAULT_CALLBACK, **kwargs):
         """Copy single file to remote"""
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
@@ -995,7 +993,7 @@ class AbstractFileSystem(metaclass=_Cached):
         lpath,
         rpath,
         recursive=False,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         maxdepth=None,
         **kwargs,
     ):
