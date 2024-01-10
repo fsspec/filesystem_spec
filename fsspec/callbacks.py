@@ -37,7 +37,7 @@ class Callback:
     def close(self):
         """Close callback."""
 
-    def branched(self, path_1, path_2, kwargs):
+    def branched(self, path_1, path_2, **kwargs):
         """
         Return callback for child transfers
 
@@ -58,8 +58,8 @@ class Callback:
             Child's source path
         path_2: str
             Child's destination path
-        kwargs: dict
-            arguments passed to child method, e.g., put_file.
+        **kwargs:
+            Arbitrary keyword arguments
 
         Returns
         -------
@@ -77,7 +77,7 @@ class Callback:
 
         @wraps(fn)
         async def func(path1, path2: str, **kwargs):
-            with self.branched(path1, path2, kwargs) as child:
+            with self.branched(path1, path2, **kwargs) as child:
                 return await fn(path1, path2, callback=child, **kwargs)
 
         return func
