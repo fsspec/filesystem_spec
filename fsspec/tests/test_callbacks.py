@@ -32,7 +32,7 @@ def test_callbacks_as_context_manager(mocker):
     spy_close = mocker.spy(Callback, "close")
 
     with Callback() as cb:
-        cb.relative_update()
+        assert isinstance(cb, Callback)
 
     spy_enter.assert_called_once()
     spy_exit.assert_called_once()
@@ -40,12 +40,14 @@ def test_callbacks_as_context_manager(mocker):
 
 
 def test_callbacks_branched():
-    with Callback() as cb:
-        kwargs = {"key": "value"}
-        with cb.branched("path_1", "path_2", kwargs) as branch:
-            assert branch is not cb
-            assert isinstance(branch, Callback)
-            assert kwargs == {"key": "value"}
+    callback = Callback()
+    kwargs = {"key": "value"}
+
+    branch = callback.branched("path_1", "path_2", kwargs)
+
+    assert branch is not callback
+    assert isinstance(branch, Callback)
+    assert kwargs == {"key": "value"}
 
 
 @pytest.mark.asyncio
