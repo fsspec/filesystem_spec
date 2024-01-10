@@ -46,7 +46,11 @@ class Callback:
         that has to be passed to the child method, e.g., put_file,
         as `callback=` argument.
 
-        This function should be preferred over `branch`.
+        The implementation uses `callback.branch` for compatibility.
+        When implementing callbacks, it is recommended to override this function instead
+        of `branch` and avoid calling `super().branched(...)`.
+
+        Prefer using this function over `branch`.
 
         Parameters
         ----------
