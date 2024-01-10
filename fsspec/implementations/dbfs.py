@@ -9,6 +9,57 @@ import requests.exceptions
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
+import requests
+
+from requests.adapters import HTTPAdapter, Retry
+
+
+#
+# RETRIABLE_EXCEPTIONS = (
+#     requests.exceptions.ChunkedEncodingError,
+#     requests.exceptions.ConnectionError,
+#     requests.exceptions.ReadTimeout,
+#     requests.exceptions.Timeout,
+#     requests.exceptions.ProxyError,
+#     requests.exceptions.SSLError,
+#     requests.exceptions.ContentDecodingError
+# )
+
+
+# def retry_request(func, retries=3):
+#     def retry_wrapper(*args, **kwargs):
+#         attempts = 0
+#         while True:
+#             try:
+#                 return func(*args, **kwargs)
+#             except (
+#                     DatabricksException,
+#                     requests.exceptions.RequestException
+#             ) as exc:
+#                 if attempts < retries:
+#                     if is_retriable(exc):
+#                         if type(exc) is requests.exceptions.HTTPError:
+#                             time.sleep(int(exc.response.headers["Retry-After"]))
+#                         attempts += 1
+#                         continue
+#                 raise exc
+#
+#     return retry_wrapper
+#
+#
+# def is_retriable(exception):
+#     """Returns True if this exception is retriable."""
+#     if isinstance(exception, requests.exceptions.HTTPError):
+#         return exception.response.status_code in [
+#             "408",  # Request Timeout
+#             "429",  # Too Many Requests
+#             "500",  # Server Error
+#             "501",  # Not Implemented
+#             "502",  # Bad Gateway
+#             "503",  # Service Unavailable
+#             "504"]  # Gateway Timeout
+#
+#     return isinstance(exception, RETRIABLE_EXCEPTIONS)
 
 
 class DatabricksException(Exception):
@@ -30,8 +81,6 @@ class DatabricksFileSystem(AbstractFileSystem):
     Can be used inside and outside of a databricks cluster.
     """
 
-    retries = 6
-
     def __init__(self, instance, token, **kwargs):
         """
         Create a new DatabricksFileSystem.
@@ -48,13 +97,17 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         self.instance = instance
         self.token = token
-
         self.session = requests.Session()
+        self.retries = Retry(total=10,
+                             backoff_factor=0.05,
+                             status_forcelist=[408, 429, 500, 502, 503, 504])
+
+        self.session.mount('https://', HTTPAdapter(max_retries=self.retries))
         self.session.headers.update({"Authorization": f"Bearer {self.token}"})
 
         super().__init__(**kwargs)
 
-    def ls(self, path, detail=True):
+    def ls(self, path, detail=True, **kwargs):
         """
         List the contents of the given path.
 
@@ -143,7 +196,7 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         self.mkdirs(path, **kwargs)
 
-    def rm(self, path, recursive=False):
+    def rm(self, path, recursive=False, **kwargs):
         """
         Remove the file or folder at the given absolute path.
 
@@ -172,7 +225,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             raise e
         self.invalidate_cache(self._parent(path))
 
-    def mv(self, source_path, destination_path, recursive=False, maxdepth=None):
+    def mv(self, source_path, destination_path, recursive=False, maxdepth=None, **kwargs):
         """
         Move a source to a destination path.
 
@@ -225,58 +278,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         return DatabricksFile(self, path, mode=mode, block_size=block_size, **kwargs)
 
-    def retry_request(func, retries=3):
-
-        RETRIABLE_EXCEPTIONS = (
-            requests.exceptions.ChunkedEncodingError,
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ReadTimeout,
-            requests.exceptions.Timeout,
-            requests.exceptions.ProxyError,
-            requests.exceptions.SSLError,
-            requests.exceptions.ContentDecodingError,
-            aiohttp.client_exceptions.ClientError,
-        )
-
-        def is_retriable(exception):
-            """Returns True if this exception is retriable."""
-            errs = list(range(500, 505)) + [
-                # Request Timeout
-                408,
-                # Too Many Requests
-                429,
-            ]
-            errs += [str(e) for e in errs]
-            if type(exception) is requests.exceptions.HTTPError:
-                return exception.response.status_code in errs
-
-            return isinstance(exception, RETRIABLE_EXCEPTIONS)
-
-        def retry_wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < retries:
-                try:
-                    return func(*args, **kwargs)
-                except (
-                        DatabricksException,
-                        requests.exceptions.RequestException,
-                        requests.exceptions.HTTPError
-                ) as exc:
-                    if (
-                        isinstance(exc, aiohttp.client_exceptions.ClientResponseError)
-                        and exc.status == 404
-                    ):
-                        raise exc
-                    if is_retriable(exc):
-                        if type(exc) is requests.exceptions.HTTPError:
-                            time.sleep(int(exc.response.headers["Retry-After"]))
-                        attempts += 1
-                        continue
-                    raise exc
-
-        return retry_wrapper
-
-    @retry_request
+    # @retry_request
     def _send_to_api(self, method, endpoint, json):
         """
         Send the given json to the DBFS API

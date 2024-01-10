@@ -23,6 +23,10 @@ you need to re-record the answers. This can be done as follows:
 import os
 from urllib.parse import urlparse
 
+import numpy
+import pyarrow as pa
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 import pytest
 
 import fsspec
@@ -78,10 +82,32 @@ def dbfsFS():
     fs = fsspec.filesystem(
         "dbfs",
         instance=INSTANCE,
-        token=TOKEN,
+        token=TOKEN
     )
 
     return fs
+
+
+@pytest.fixture
+def make_mock_diabetes_ds():
+
+    names = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction",
+             "Age", "Outcome"]
+    pregnancies = pa.array(numpy.random.randint(low=0, high=17, size=25))
+    glucose = pa.array(numpy.random.randint(low=0, high=199, size=25))
+    blood_pressure = pa.array(numpy.random.randint(low=0, high=122, size=25))
+    skin_thickness = pa.array(numpy.random.randint(low=0, high=99, size=25))
+    insulin = pa.array(numpy.random.randint(low=0, high=846, size=25))
+    bmi = pa.array(numpy.random.uniform(0.0, 67.1, size=25))
+    diabetes_pedigree_function = pa.array(numpy.random.uniform(0.08, 2.42, size=25))
+    age = pa.array(numpy.random.randint(low=21, high=81, size=25))
+    outcome = pa.array(numpy.random.randint(low=0, high=1, size=25))
+
+    return pa.Table.from_arrays(
+        arrays=[
+            pregnancies, glucose, blood_pressure, skin_thickness,
+            insulin, bmi, diabetes_pedigree_function, age, outcome],
+        names=names)
 
 
 @pytest.mark.vcr()
@@ -159,19 +185,14 @@ def test_dbfs_read_range_chunked(dbfsFS):
     assert "/FileStore/large_file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
 
 
-@pytest.mark.vcr()
-def test_dbfs_write_pyarrow_non_partitioned(dbfsFS):
-    import pandas as pd
-    import pyarrow as pa
+# @pytest.mark.vcr()
+def test_dbfs_write_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
     import pyarrow.parquet as pq
 
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
-    test_df = pd.read_csv("data/diabetes.csv")
-    arr_table = pa.Table.from_pandas(df=test_df)
-
-    pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
+    pq.write_to_dataset(make_mock_diabetes_ds, filesystem=dbfsFS, compression='none',
                         existing_data_behavior='error',
                         root_path="/FileStore/pyarrow/diabetes",
                         use_threads=False)
@@ -184,63 +205,12 @@ def test_dbfs_write_pyarrow_non_partitioned(dbfsFS):
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
 
-# @pytest.mark.vcr()
-# def test_dbfs_write_pyarrow_partitioned(dbfsFS):
-#     import pandas as pd
-#     import pyarrow as pa
-#     import pyarrow.parquet as pq
-#
-#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
-#
-#     test_df = pd.read_csv("data/diabetes.csv")
-#     arr_table = pa.Table.from_pandas(df=test_df)
-#
-#     pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
-#                         existing_data_behavior='error', partition_cols=["Pregnancies"],
-#                         root_path="/FileStore/pyarrow/diabetes",
-#                         use_threads=False)
-#
-#     assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 17
-#     assert set(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)).difference(
-#         set(["/FileStore/pyarrow/diabetes/Pregnancies=0",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=1",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=2",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=3",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=4",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=5",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=6",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=7",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=8",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=9",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=10",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=11",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=12",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=13",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=14",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=15",
-#             "/FileStore/pyarrow/diabetes/Pregnancies=17"
-#         ])
-#     ) == set()
-#
-#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
-
-
 @pytest.mark.vcr()
-def test_dbfs_read_pyarrow_non_partitioned(dbfsFS):
-    import pandas as pd
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    import pyarrow.dataset as ds
-
+def test_dbfs_read_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
-    test_df = pd.read_csv("data/diabetes.csv")
-    arr_table = pa.Table.from_pandas(df=test_df)
-
-    pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
+    pq.write_to_dataset(make_mock_diabetes_ds, filesystem=dbfsFS, compression='none',
                         existing_data_behavior='error',
                         root_path="/FileStore/pyarrow/diabetes",
                         use_threads=False)
@@ -250,46 +220,13 @@ def test_dbfs_read_pyarrow_non_partitioned(dbfsFS):
             ".parquet" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0])
 
     arr_res = ds.dataset(
-                source="/FileStore/pyarrow/diabetes",
-                filesystem=dbfsFS,
-            ).to_table()
+        source="/FileStore/pyarrow/diabetes",
+        filesystem=dbfsFS,
+    ).to_table()
 
-    assert arr_res.num_rows == arr_table.num_rows
-    assert arr_res.num_columns == arr_table.num_columns
-    assert set(arr_res.schema).difference(set(arr_table.schema)) == set()
+    assert arr_res.num_rows == make_mock_diabetes_ds.num_rows
+    assert arr_res.num_columns == make_mock_diabetes_ds.num_columns
+    assert set(arr_res.schema).difference(set(make_mock_diabetes_ds.schema)) == set()
 
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
-
-
-# def test_dbfs_read_pyarrow_partitioned(dbfsFS):
-#     import pandas as pd
-#     import pyarrow as pa
-#     import pyarrow.parquet as pq
-#     import pyarrow.dataset as ds
-#
-#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
-#
-#     test_df = pd.read_csv("data/diabetes.csv")
-#     arr_table = pa.Table.from_pandas(df=test_df)
-#
-#     pq.write_to_dataset(arr_table, filesystem=dbfsFS, compression='none',
-#                         existing_data_behavior='error', partition_cols=["Pregnancies"],
-#                         root_path="/FileStore/pyarrow/diabetes",
-#                         use_threads=False)
-#
-#     assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 17
-#
-#     arr_res = ds.dataset(
-#                 source="/FileStore/pyarrow/diabetes",
-#                 filesystem=dbfsFS,
-#                 partitioning='hive'
-#             ).to_table()
-#
-#     assert arr_res.num_rows == arr_table.num_rows
-#     assert arr_res.num_columns == arr_table.num_columns
-#     assert set(arr_res.schema).difference(set(arr_table.schema)) == set()
-#
-#     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
-#     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)

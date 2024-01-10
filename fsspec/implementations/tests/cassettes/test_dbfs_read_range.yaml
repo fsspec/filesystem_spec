@@ -68,11 +68,11 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA5ySQW7DIBBF7zJrV4FgBuwD9AJZRpU1DaShtYsFk02j3L3E3saVCsuReO8z/Buc
-        w+gz9McbzMQX6GH3WiYHjsnvHDGN9OWhgZAHFxL0nK6+WS4NOfx46EUDU3ThHE7EIX4PHKYylUa0
-        ClEs5948g4dpjolfMtNHjQClUKi1aoviueCTUq5IrjvUSlo0m+DyXj/WoNEohZ1Eu4mex8hVZGG1
-        bm1ZytY28oWSd8O1GMjVKYzVe/xDwfT+6NL/y7L+pem206+xS/61rlUKKXAvlrq83X8BAAD//wMA
-        J0kadvgCAAA=
+        H4sIAAAAAAAEA5yT0U7EIBBF/2Wea5aWMtB+gD/gozHNKKyLttLAbIxu9t/F9nUxER4n4dzLncsF
+        jn52CcbHC6zEJxjhcJ8nDxyiO1himundQQM+TdZHGDmeXbNdmpL/djCKBpZg/dG/EPvwMbFf8rTV
+        opeIYjvX5hbcL2uIfJeYXmsEsBUSlZJ9lrgt8EYxVThXAyrZGtRFcH6vm2vQqKXEoUVTRK9z4Cqy
+        MEr1JodSSmP9ohjDZ0UgeZVm6DuV0YWk04mis9M5uydbZ18b1eEf9pmef3v6/yLuPdFDOZnddva/
+        f4UqiVZgJ7YqPl1/AAAA//8DAGZk1YtUAwAA
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -123,7 +123,7 @@ interactions:
     uri: https://my_instance.com/api/2.0/dbfs/create
   response:
     body:
-      string: '{"handle":2535467078364020}'
+      string: '{"handle":2535466986447534}'
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -150,7 +150,7 @@ interactions:
       code: 200
       message: OK
 - request:
-    body: '{"handle": 2535467078364020, "data": "VGhpcyBpcyBhIHRlc3QK"}'
+    body: '{"handle": 2535466986447534, "data": "VGhpcyBpcyBhIHRlc3QK"}'
     headers:
       Accept:
       - '*/*'
@@ -197,7 +197,7 @@ interactions:
       code: 200
       message: OK
 - request:
-    body: '{"handle": 2535467078364020}'
+    body: '{"handle": 2535466986447534}'
     headers:
       Accept:
       - '*/*'
@@ -265,11 +265,11 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA5yT0U7EIBBF/4Xn6kIpA+0H+AM+GtOMlrq41DYwmxg3+++y7cuaLEbhcRLOubkM
-        JzY6byPrnk5sQdqzju0e0uSR5mB3AxJ6PFhWMRf7wQXWUTjaar3UR/dlWccrNs2DG90rkps/enJT
-        mgrNGwnA13OubsEv4nv6pCv4iD7+pAuVxetaStEmwW28m5Y50F0kfCvJD4JLUEo2WcE7hniV/a/F
-        qBaUFAZ0FpzqtL4EDVpKaAWYLHrxMxWRuVGqMamUXN1xj8EO/TEZcChTaKNq+EVB+HJZ1f/v4vaW
-        us2n32Kn/NtvKFIIDjVf1+X5/A0AAP//AwDx4s16VwMAAA==
+        H4sIAAAAAAAEA5yTTW7DIBCF78LaTcCYMfYBeoEuq8ia1rihsYsFE/Unyt1L7E0qhaqF5Uh87+nN
+        mxMb7GgCax9PbEbas5Zt7+PkgZw32x4JRzwYVjAbut561pI/mmL51AX7ZVjLCza53g72Gcm6t47s
+        FKei5pUE4Ms7F7fgF+ENfdAVfMAx/KQLlcTrpqp4GQVu4+00O093gfAlxz8ILkEpWSUFXtGHK+9/
+        DUY1oKTQUCfBMU4z5qChlhIaATqJnkdHWWSulap0DCUV9/yJ3rv3jEBiU+IqSxXRiVWGPXrTd8fo
+        Hvs8+7VWJfxin/Dpcgb/7/nak7pJJ7Pajv7XS8uSEBxKvlRxd/4GAAD//wMAqsC/0bMDAAA=
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -421,11 +421,11 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA5ySQW7DIBBF7zJrV4FgBuwD9AJZRpU1DaShtYsFk02j3L3E3saVCsuReO8z/Buc
-        w+gz9McbzMQX6GH3WiYHjsnvHDGN9OWhgZAHFxL0nK6+WS4NOfx46EUDU3ThHE7EIX4PHKYylUa0
-        ClEs5948g4dpjolfMtNHjQClUKi1aoviueCTUq5IrjvUSlo0m+DyXj/WoNEohZ1Eu4mex8hVZGG1
-        bm1ZytY28oWSd8O1GMjVKYzVe/xDwfT+6NL/y7L+pem206+xS/61rlUKKXAvlrq83X8BAAD//wMA
-        J0kadvgCAAA=
+        H4sIAAAAAAAEA5yT0U7EIBBF/2Wea5aWMtB+gD/gozHNKKyLttLAbIxu9t/F9nUxER4n4dzLncsF
+        jn52CcbHC6zEJxjhcJ8nDxyiO1himundQQM+TdZHGDmeXbNdmpL/djCKBpZg/dG/EPvwMbFf8rTV
+        opeIYjvX5hbcL2uIfJeYXmsEsBUSlZJ9lrgt8EYxVThXAyrZGtRFcH6vm2vQqKXEoUVTRK9z4Cqy
+        MEr1JodSSmP9ohjDZ0UgeZVm6DuV0YWk04mis9M5uydbZ18b1eEf9pmef3v6/yLuPdFDOZnddva/
+        f4UqiVZgJ7YqPl1/AAAA//8DAGZk1YtUAwAA
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
