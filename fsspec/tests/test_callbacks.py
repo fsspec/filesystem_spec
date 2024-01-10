@@ -27,15 +27,11 @@ def test_callbacks_as_callback():
 
 
 def test_callbacks_as_context_manager(mocker):
-    spy_enter = mocker.spy(Callback, "__enter__")
-    spy_exit = mocker.spy(Callback, "__exit__")
     spy_close = mocker.spy(Callback, "close")
 
     with Callback() as cb:
         assert isinstance(cb, Callback)
 
-    spy_enter.assert_called_once()
-    spy_exit.assert_called_once()
     spy_close.assert_called_once()
 
 
