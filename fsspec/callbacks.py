@@ -68,7 +68,7 @@ class Callback:
         """
         self.branch(path_1, path_2, kwargs)
         # mutate kwargs so that we can force the caller to pass "callback=" explicitly
-        return kwargs.pop("callback", _DEFAULT_CALLBACK)
+        return kwargs.pop("callback", DEFAULT_CALLBACK)
 
     def branch_coro(self, fn):
         """
@@ -197,10 +197,10 @@ class Callback:
 
         For the special value of ``None``, return the global instance of
         ``NoOpCallback``. This is an alternative to including
-        ``callback=_DEFAULT_CALLBACK`` directly in a method signature.
+        ``callback=DEFAULT_CALLBACK`` directly in a method signature.
         """
         if maybe_callback is None:
-            return _DEFAULT_CALLBACK
+            return DEFAULT_CALLBACK
         return maybe_callback
 
 
@@ -297,4 +297,4 @@ class TqdmCallback(Callback):
         return self.close()
 
 
-_DEFAULT_CALLBACK = NoOpCallback()
+DEFAULT_CALLBACK = _DEFAULT_CALLBACK = NoOpCallback()

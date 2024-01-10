@@ -17,7 +17,7 @@ except ImportError:
         import json
 
 from ..asyn import AsyncFileSystem
-from ..callbacks import _DEFAULT_CALLBACK
+from ..callbacks import DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
 from ..utils import isfilelike, merge_offset_ranges, other_paths
 
@@ -784,7 +784,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         with open(lpath, "wb") as f:
             f.write(data)
 
-    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, **kwargs):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)

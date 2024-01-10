@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from glob import has_magic
 from typing import TYPE_CHECKING, Iterable
 
-from .callbacks import _DEFAULT_CALLBACK
+from .callbacks import DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
 from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
@@ -205,7 +205,7 @@ def running_async() -> bool:
 async def _run_coros_in_chunks(
     coros,
     batch_size=None,
-    callback=_DEFAULT_CALLBACK,
+    callback=DEFAULT_CALLBACK,
     timeout=None,
     return_exceptions=False,
     nofiles=False,
@@ -245,7 +245,7 @@ async def _run_coros_in_chunks(
             asyncio.Task(asyncio.wait_for(c, timeout=timeout))
             for c in coros[start : start + batch_size]
         ]
-        if callback is not _DEFAULT_CALLBACK:
+        if callback is not DEFAULT_CALLBACK:
             [
                 t.add_done_callback(lambda *_, **__: callback.relative_update(1))
                 for t in chunk
@@ -506,7 +506,7 @@ class AsyncFileSystem(AbstractFileSystem):
         lpath,
         rpath,
         recursive=False,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         batch_size=None,
         maxdepth=None,
         **kwargs,
@@ -583,7 +583,7 @@ class AsyncFileSystem(AbstractFileSystem):
         rpath,
         lpath,
         recursive=False,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         maxdepth=None,
         **kwargs,
     ):
