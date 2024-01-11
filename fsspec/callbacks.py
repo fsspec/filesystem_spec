@@ -243,7 +243,9 @@ class TqdmCallback(Callback):
     tqdm_kwargs : dict, (optional)
         Any argument accepted by the tqdm constructor.
         See the `tqdm doc <https://tqdm.github.io/docs/tqdm/#__init__>`_.
-        Will be forwarded to tqdm.
+        Will be forwarded to `tqdm_cls`.
+    tqdm_cls: (optional)
+        subclass of `tqdm.tqdm`. If not passed, it will default to `tqdm.tqdm`.
 
     Examples
     --------
@@ -277,7 +279,7 @@ class TqdmCallback(Callback):
                 "Using TqdmCallback requires tqdm to be installed"
             ) from exce
 
-        self._tqdm_cls = tqdm
+        self._tqdm_cls = kwargs.pop("tqdm_cls", tqdm)
         self._tqdm_kwargs = tqdm_kwargs or {}
         self.tqdm = None
         super().__init__(*args, **kwargs)
