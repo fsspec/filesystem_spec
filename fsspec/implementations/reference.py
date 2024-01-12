@@ -365,9 +365,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         else:
             # metadata or top-level
             self._items[key] = value
-            self.zmetadata[key] = json.loads(
+            new_value = json.loads(
                 value.decode() if isinstance(value, bytes) else value
             )
+            self.zmetadata[key] = {**self.zmetadata.get(key, {}), **new_value}
 
     @staticmethod
     def _is_meta(key):
