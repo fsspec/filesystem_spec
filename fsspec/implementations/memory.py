@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 
 from fsspec import AbstractFileSystem
 
-logger = logging.Logger("fsspec.memoryfs")
+logger = logging.getLogger("fsspec.memoryfs")
 
 
 class MemoryFileSystem(AbstractFileSystem):
