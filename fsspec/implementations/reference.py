@@ -17,7 +17,7 @@ except ImportError:
         import json
 
 from ..asyn import AsyncFileSystem
-from ..callbacks import _DEFAULT_CALLBACK
+from ..callbacks import DEFAULT_CALLBACK
 from ..core import filesystem, open, split_protocol
 from ..utils import isfilelike, merge_offset_ranges, other_paths
 
@@ -365,9 +365,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         else:
             # metadata or top-level
             self._items[key] = value
-            self.zmetadata[key] = json.loads(
+            new_value = json.loads(
                 value.decode() if isinstance(value, bytes) else value
             )
+            self.zmetadata[key] = {**self.zmetadata.get(key, {}), **new_value}
 
     @staticmethod
     def _is_meta(key):
@@ -784,7 +785,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         with open(lpath, "wb") as f:
             f.write(data)
 
-    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, **kwargs):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
@@ -1123,7 +1124,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references[path] = data
         self.dircache.clear()  # this is a bit heavy handed
 
-    async def _put_file(self, lpath, rpath):
+    async def _put_file(self, lpath, rpath, **kwargs):
         # puts binary
         with open(lpath, "rb") as f:
             self.references[rpath] = f.read()

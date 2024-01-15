@@ -1,3 +1,6 @@
+from functools import wraps
+
+
 class Callback:
     """
     Base class and interface for callback mechanism
@@ -24,6 +27,60 @@ class Callback:
         self.value = value
         self.hooks = hooks or {}
         self.kw = kwargs
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_args):
+        self.close()
+
+    def close(self):
+        """Close callback."""
+
+    def branched(self, path_1, path_2, **kwargs):
+        """
+        Return callback for child transfers
+
+        If this callback is operating at a higher level, e.g., put, which may
+        trigger transfers that can also be monitored. The function returns a callback
+        that has to be passed to the child method, e.g., put_file,
+        as `callback=` argument.
+
+        The implementation uses `callback.branch` for compatibility.
+        When implementing callbacks, it is recommended to override this function instead
+        of `branch` and avoid calling `super().branched(...)`.
+
+        Prefer using this function over `branch`.
+
+        Parameters
+        ----------
+        path_1: str
+            Child's source path
+        path_2: str
+            Child's destination path
+        **kwargs:
+            Arbitrary keyword arguments
+
+        Returns
+        -------
+        callback: Callback
+            A callback instance to be passed to the child method
+        """
+        self.branch(path_1, path_2, kwargs)
+        # mutate kwargs so that we can force the caller to pass "callback=" explicitly
+        return kwargs.pop("callback", DEFAULT_CALLBACK)
+
+    def branch_coro(self, fn):
+        """
+        Wraps a coroutine, and pass a new child callback to it.
+        """
+
+        @wraps(fn)
+        async def func(path1, path2: str, **kwargs):
+            with self.branched(path1, path2, **kwargs) as child:
+                return await fn(path1, path2, callback=child, **kwargs)
+
+        return func
 
     def set_size(self, size):
         """
@@ -140,10 +197,10 @@ class Callback:
 
         For the special value of ``None``, return the global instance of
         ``NoOpCallback``. This is an alternative to including
-        ``callback=_DEFAULT_CALLBACK`` directly in a method signature.
+        ``callback=DEFAULT_CALLBACK`` directly in a method signature.
         """
         if maybe_callback is None:
-            return _DEFAULT_CALLBACK
+            return DEFAULT_CALLBACK
         return maybe_callback
 
 
@@ -231,10 +288,13 @@ class TqdmCallback(Callback):
         self.tqdm.total = self.size
         self.tqdm.update(self.value - self.tqdm.n)
 
-    def __del__(self):
+    def close(self):
         if self.tqdm is not None:
             self.tqdm.close()
             self.tqdm = None
 
+    def __del__(self):
+        return self.close()
 
-_DEFAULT_CALLBACK = NoOpCallback()
+
+DEFAULT_CALLBACK = _DEFAULT_CALLBACK = NoOpCallback()

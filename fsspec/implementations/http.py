@@ -10,7 +10,7 @@ import aiohttp
 import yarl
 
 from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
-from fsspec.callbacks import _DEFAULT_CALLBACK
+from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import (
@@ -234,7 +234,7 @@ class HTTPFileSystem(AsyncFileSystem):
         return out
 
     async def _get_file(
-        self, rpath, lpath, chunk_size=5 * 2**20, callback=_DEFAULT_CALLBACK, **kwargs
+        self, rpath, lpath, chunk_size=5 * 2**20, callback=DEFAULT_CALLBACK, **kwargs
     ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -268,7 +268,7 @@ class HTTPFileSystem(AsyncFileSystem):
         lpath,
         rpath,
         chunk_size=5 * 2**20,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         method="post",
         **kwargs,
     ):
