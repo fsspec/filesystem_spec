@@ -22,6 +22,29 @@ exclude = '''
 )
 '''
 
+[tool.ruff]
+exclude = [
+    ".tox",
+    "build",
+    "docs/source/conf.py",
+    "versioneer.py",
+    "fsspec/_version",
+]
+line-length = 88
+ignore = [
+    # Assigning lambda expression
+    "E731",
+    # Ambiguous variable names
+    "E741",
+    # line break before binary operator
+    # uncomment when implemented in ruff
+    # "W503",
+    # whitespace before :
+    "E203",
+    # redefs
+    "F811",
+]
+
 [tool.pytest.ini_options]
 # custom markers, need to be defined to avoid warnings
 markers = [
