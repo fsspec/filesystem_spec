@@ -2,12 +2,8 @@ from __future__ import annotations
 
 import abc
 import hashlib
-from typing import TYPE_CHECKING
 
 from fsspec.implementations.local import make_path_posix
-
-if TYPE_CHECKING:
-    from typing import Any
 
 
 class AbstractCacheMapper(abc.ABC):
@@ -19,7 +15,7 @@ class AbstractCacheMapper(abc.ABC):
     def __call__(self, path: str) -> str:
         ...
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         # Identity only depends on class. When derived classes have attributes
         # they will need to be included.
         return isinstance(other, type(self))
@@ -56,7 +52,7 @@ class BasenameCacheMapper(AbstractCacheMapper):
         else:
             return prefix  # No separator found, simple filename
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         return super().__eq__(other) and self.directory_levels == other.directory_levels
 
     def __hash__(self) -> int:
