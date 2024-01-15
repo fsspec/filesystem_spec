@@ -37,13 +37,11 @@ def test_callbacks_as_context_manager(mocker):
 
 def test_callbacks_branched():
     callback = Callback()
-    kwargs = {"key": "value"}
 
-    branch = callback.branched("path_1", "path_2", kwargs)
+    branch = callback.branched("path_1", "path_2")
 
     assert branch is not callback
     assert isinstance(branch, Callback)
-    assert kwargs == {"key": "value"}
 
 
 @pytest.mark.asyncio
@@ -55,7 +53,7 @@ async def test_callbacks_branch_coro(mocker):
 
     assert await wrapped_fn("path_1", "path_2", key="value") == 10
 
-    spy.assert_called_once_with("path_1", "path_2", {"key": "value"})
+    spy.assert_called_once_with("path_1", "path_2", key="value")
     async_fn.assert_called_once_with(
         "path_1", "path_2", callback=spy.spy_return, key="value"
     )
