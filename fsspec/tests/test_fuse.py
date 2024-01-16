@@ -123,7 +123,7 @@ def test_chmod(mount_local):
         ["cp", str(mount_dir / "text"), str(mount_dir / "new")],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        check=False,
+        check=True,
     )
 
     assert cp.stderr == b""
