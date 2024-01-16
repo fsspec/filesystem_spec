@@ -1147,7 +1147,7 @@ def test_posix_tests_bash_stat(path, expected, glob_files_folder):
             f"cd {glob_files_folder} && shopt -s globstar && stat -c %N {bash_path}",
         ],
         capture_output=True,
-        check=True,
+        check=False,
     )
     # Remove the last element always empty
     bash_output = bash_output.stdout.decode("utf-8").replace("'", "").split("\n")[:-1]
