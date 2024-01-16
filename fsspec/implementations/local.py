@@ -5,7 +5,6 @@ import os
 import os.path as osp
 import shutil
 import stat
-import sys
 import tempfile
 
 from fsspec import AbstractFileSystem
@@ -15,12 +14,11 @@ from fsspec.utils import isfilelike, stringify_path
 
 logger = logging.getLogger("fsspec.local")
 
-if sys.version_info < (3, 9):
-    # Remove when Python 3.8 is no longer supported.
-    def _remove_prefix(text: str, prefix: str):
-        if text.startswith(prefix):
-            return text[len(prefix) :]
-        return text
+
+def _remove_prefix(text: str, prefix: str):
+    if text.startswith(prefix):
+        return text[len(prefix) :]
+    return text
 
 
 class LocalFileSystem(AbstractFileSystem):
@@ -227,35 +225,18 @@ class LocalFileSystem(AbstractFileSystem):
             # More cases may be required here
             return path_
 
-    if sys.version_info < (3, 9):
-        # Remove when Python 3.8 is no longer supported.
-        @classmethod
-        def _strip_protocol(cls, path, sep=os.sep, remove_trailing_slash=False):
-            path = stringify_path(path)
-            if path.startswith("file:"):
-                path = _remove_prefix(_remove_prefix(path, "file://"), "file:")
-                if sep == "\\":
-                    path = path.lstrip("/")
-            elif path.startswith("local:"):
-                path = _remove_prefix(_remove_prefix(path, "local://"), "local:")
-                if sep == "\\":
-                    path = path.lstrip("/")
-            return make_path_posix(path, sep, remove_trailing_slash)
-
-    else:
-
-        @classmethod
-        def _strip_protocol(cls, path, sep=os.sep, remove_trailing_slash=False):
-            path = stringify_path(path)
-            if path.startswith("file:"):
-                path = path.removeprefix("file://").removeprefix("file:")
-                if sep == "\\":
-                    path = path.lstrip("/")
-            elif path.startswith("local:"):
-                path = path.removeprefix("local://").removeprefix("local:")
-                if sep == "\\":
-                    path = path.lstrip("/")
-            return make_path_posix(path, sep, remove_trailing_slash)
+    @classmethod
+    def _strip_protocol(cls, path, sep=os.sep, remove_trailing_slash=False):
+        path = stringify_path(path)
+        if path.startswith("file:"):
+            path = _remove_prefix(_remove_prefix(path, "file://"), "file:")
+            if sep == "\\":
+                path = path.lstrip("/")
+        elif path.startswith("local:"):
+            path = _remove_prefix(_remove_prefix(path, "local://"), "local:")
+            if sep == "\\":
+                path = path.lstrip("/")
+        return make_path_posix(path, sep, remove_trailing_slash)
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)
