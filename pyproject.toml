@@ -1,3 +1,6 @@
+[project]
+requires-python = ">=3.8"
+
 [tool.black]
 target_version = ['py310']
 line-length = 88
