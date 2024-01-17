@@ -24,9 +24,6 @@ import os
 from urllib.parse import urlparse
 
 import numpy
-import pyarrow as pa
-import pyarrow.dataset as ds
-import pyarrow.parquet as pq
 import pytest
 
 import fsspec
@@ -90,6 +87,7 @@ def dbfsFS():
 
 @pytest.fixture
 def make_mock_diabetes_ds():
+    pa = pytest.importorskip("pyarrow")
 
     names = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction",
              "Age", "Outcome"]
@@ -185,9 +183,10 @@ def test_dbfs_read_range_chunked(dbfsFS):
     assert "/FileStore/large_file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
 
 
-# @pytest.mark.vcr()
+@pytest.mark.vcr()
 def test_dbfs_write_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
-    import pyarrow.parquet as pq
+    ds = pytest.importorskip("pyarrow.dataset")
+    pq = pytest.importorskip("pyarrow.parquet")
 
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
@@ -207,6 +206,9 @@ def test_dbfs_write_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
 
 @pytest.mark.vcr()
 def test_dbfs_read_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
+    ds = pytest.importorskip("pyarrow.dataset")
+    pq = pytest.importorskip("pyarrow.parquet")
+
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 

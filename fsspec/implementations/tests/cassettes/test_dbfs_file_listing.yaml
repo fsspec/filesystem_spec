@@ -21,10 +21,10 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA6zSzQ6CMAwH8HfpecYNBgMewBcw8WIMQRixkQHZigcJ7y7qwYR44ePWNM0vafvv
-        ocRKO0jOPbQZ3SCB/WHsHKmxGhigSwu0kJDtNPvMpg6fGhLOwDQFlphnhE2dEpqxKxSXUSw9GXPO
-        B/YzT03VjQOzwT+IW6kUGWVXi/nd7d6l07ShaLXrqtWgqWn+kiL0uAg8Jf3J7cm0S7RYBX4sVDTR
-        OqftEk5w7ofSmwbjsUUwvsiiN16GFwAAAP//AwCQmTu6AwMAAA==
+        H4sIAAAAAAAEA6zSSwrCMBAG4LvMumLSpo3JAbyA4Eak1DbiYF8kExeW3t2qC6G46WM3/AwfzKOD
+        K5bGgT510GZ0Aw3b/ZAcqLEGAkCXFmhBk/Um+PSmDp8GNAugagq8Yp4RNnVKWA0pl0woxmMhGGN9
+        8DOPTemHhsngH8QtVIqMsovF/O4279IZWlG0xvlyMVjVNH1InoTD5kMpotHuqWrnaErGkeJyN9K8
+        M3YOxxmLEhGqEfdY4zG+yKwznvsXAAAA//8DAMDPrToDAwAA
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -76,10 +76,10 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA6zSzQ6CMAwH8HfpecYNBgMewBcw8WIMQRixkQHZigcJ7y7qwYR44ePWNM0vafvv
-        ocRKO0jOPbQZ3SCB/WHsHKmxGhigSwu0kJDtNPvMpg6fGhLOwDQFlphnhE2dEpqxKxSXUSw9GXPO
-        B/YzT03VjQOzwT+IW6kUGWVXi/nd7d6l07ShaLXrqtWgqWn+kiL0uAg8Jf3J7cm0S7RYBX4sVDTR
-        OqftEk5w7ofSmwbjsUUwvsiiN16GFwAAAP//AwCQmTu6AwMAAA==
+        H4sIAAAAAAAEA6zSSwrCMBAG4LvMumLSpo3JAbyA4Eak1DbiYF8kExeW3t2qC6G46WM3/AwfzKOD
+        K5bGgT510GZ0Aw3b/ZAcqLEGAkCXFmhBk/Um+PSmDp8GNAugagq8Yp4RNnVKWA0pl0woxmMhGGN9
+        8DOPTemHhsngH8QtVIqMsovF/O4279IZWlG0xvlyMVjVNH1InoTD5kMpotHuqWrnaErGkeJyN9K8
+        M3YOxxmLEhGqEfdY4zG+yKwznvsXAAAA//8DAMDPrToDAwAA
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
