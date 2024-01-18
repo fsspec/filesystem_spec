@@ -355,7 +355,7 @@ async def test_async_walk(adirfs, mocker):
 
     actual = []
     async for entry in adirfs._walk("root", *ARGS, **KWARGS):
-        actual.append(entry)
+        actual.append(entry)  # noqa: PERF402
     assert actual == [("root", ["foo", "bar"], ["baz", "qux"])]
     adirfs.fs._walk.assert_called_once_with(f"{PATH}/root", *ARGS, **KWARGS)
 

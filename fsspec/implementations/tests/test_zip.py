@@ -12,7 +12,7 @@ def test_info():
         fs = fsspec.filesystem("zip", fo=z)
 
         # Iterate over all files.
-        for f, v in archive_data.items():
+        for f in archive_data:
             lhs = fs.info(f)
 
             # Probe some specific fields of Zip archives.

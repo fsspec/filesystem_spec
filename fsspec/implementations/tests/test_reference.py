@@ -61,9 +61,9 @@ def test_nested_dirs_ls():
     refs = {"a": "A", "B/C/b": "B", "B/C/d": "d", "B/_": "_"}
     fs = fsspec.filesystem("reference", fo=refs)
     assert len(fs.ls("")) == 2
-    assert set(e["name"] for e in fs.ls("")) == set(["a", "B"])
+    assert {e["name"] for e in fs.ls("")} == {"a", "B"}
     assert len(fs.ls("B")) == 2
-    assert set(e["name"] for e in fs.ls("B")) == set(["B/C", "B/_"])
+    assert {e["name"] for e in fs.ls("B")} == {"B/C", "B/_"}
 
 
 def test_info(server):  # noqa: F811
