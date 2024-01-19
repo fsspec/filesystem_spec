@@ -416,6 +416,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             raws = np.full(self.record_size, np.nan, dtype="O")
         for j, data in partition.items():
             if isinstance(data, list):
+                if (
+                    str(paths.dtype) == "category"
+                    and data[0] not in paths.dtype.categories
+                ):
+                    paths = paths.add_categories(data[0])
                 paths[j] = data[0]
                 if len(data) > 1:
                     offsets[j] = data[1]

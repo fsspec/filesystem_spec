@@ -123,7 +123,7 @@ class HTTPFileSystem(AsyncFileSystem):
             try:
                 sync(loop, session.close, timeout=0.1)
                 return
-            except (TimeoutError, FSTimeoutError):
+            except (TimeoutError, FSTimeoutError, NotImplementedError):
                 pass
         connector = getattr(session, "_connector", None)
         if connector is not None:
