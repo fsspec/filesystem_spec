@@ -557,7 +557,7 @@ async def test_async_walk(server):
     # No maxdepth
     res = []
     async for a in fs._walk(server + "/index"):
-        res.append(a)
+        res.append(a)  # noqa: PERF402
     assert res == [(server + "/index", [], ["realfile"])]
 
     # maxdepth=0

@@ -965,7 +965,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            with callback.branched(rpath, lpath, kwargs) as child:
+            with callback.branched(rpath, lpath) as child:
                 self.get_file(rpath, lpath, callback=child, **kwargs)
 
     def put_file(self, lpath, rpath, callback=DEFAULT_CALLBACK, **kwargs):
@@ -1051,7 +1051,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         callback.set_size(len(rpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            with callback.branched(lpath, rpath, kwargs) as child:
+            with callback.branched(lpath, rpath) as child:
                 self.put_file(lpath, rpath, callback=child, **kwargs)
 
     def head(self, path, size=1024):
@@ -1398,7 +1398,9 @@ class AbstractFileSystem(metaclass=_Cached):
         )
         return json.dumps(
             dict(
-                **{"cls": cls, "protocol": proto, "args": self.storage_args},
+                cls=cls,
+                protocol=proto,
+                args=self.storage_args,
                 **self.storage_options,
             )
         )

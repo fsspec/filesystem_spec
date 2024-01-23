@@ -1022,7 +1022,7 @@ def test_multi_cache(protocol):
 def test_multi_cat(protocol, ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
-    for fn in {"/file0", "/file1"}:
+    for fn in ("/file0", "/file1"):
         with fs.open(fn, "wb") as f:
             f.write(b"hello")
 

@@ -131,10 +131,8 @@ def open_parquet_file(
         cache_type="parts",
         cache_options={
             **options,
-            **{
-                "data": data.get(fn, {}),
-                "strict": strict,
-            },
+            "data": data.get(fn, {}),
+            "strict": strict,
         },
         **kwargs,
     )
