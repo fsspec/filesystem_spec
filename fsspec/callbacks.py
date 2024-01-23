@@ -268,6 +268,28 @@ class TqdmCallback(Callback):
             recursive=True,
             callback=TqdmCallback(tqdm_kwargs={"desc": "Your tqdm description"}),
         )
+
+    You can also customize the progress bar by passing a subclass of `tqdm`.
+
+    .. code-block:: python
+
+        class TqdmFormat(tqdm):
+            '''Provides a `total_time` format parameter'''
+            @property
+            def format_dict(self):
+                d = super().format_dict
+                total_time = d["elapsed"] * (d["total"] or 0) / max(d["n"], 1)
+                d.update(total_time=self.format_interval(total_time) + " in total")
+                return d
+
+    >>> with TqdmCallback(
+            tqdm_kwargs={
+                "desc": "desc",
+                "bar_format": "{total_time}: {percentage:.0f}%|{bar}{r_bar}",
+            },
+            tqdm_cls=TqdmFormat,
+        ) as callback:
+            fs.upload(".", path2distant_data, recursive=True, callback=callback)
     """
 
     def __init__(self, tqdm_kwargs=None, *args, **kwargs):
