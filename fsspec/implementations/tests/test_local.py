@@ -483,21 +483,20 @@ def test_make_path_posix():
         make_path_posix(cwd), "rel/path"
     )
     # NT style
-    assert make_path_posix("C:\\path", sep="\\") == "C:/path"
-    assert (
-        make_path_posix(
-            "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet",
-            sep="\\",
+    if WIN:
+        assert make_path_posix("C:\\path") == "C:/path"
+        assert (
+            make_path_posix(
+                "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet",
+            )
+            == "//windows-server/someshare/path/more/path/dir/foo.parquet"
         )
-        == "//windows-server/someshare/path/more/path/dir/foo.parquet"
-    )
-    assert (
-        make_path_posix(
-            "\\\\SERVER\\UserHomeFolder$\\me\\My Documents\\project1\\data\\filen.csv",
-            sep="\\",
+        assert (
+            make_path_posix(
+                "\\\\SERVER\\UserHomeFolder$\\me\\My Documents\\proj\\data\\fname.csv",
+            )
+            == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
         )
-        == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
-    )
     assert "/" in make_path_posix("rel\\path")
     # Relative
     pp = make_path_posix("./path")
@@ -509,11 +508,12 @@ def test_make_path_posix():
 
 
 def test_parent():
-    assert LocalFileSystem._parent("/file or folder", sep="/") == "/"
-    assert LocalFileSystem._parent("/", sep="/") == "/"
-    # NT
-    assert LocalFileSystem._parent("C:\\file or folder", sep="\\") == "C:/"
-    assert LocalFileSystem._parent("C:\\", sep="\\") == "C:/"
+    if WIN:
+        assert LocalFileSystem._parent("C:\\file or folder") == "C:/"
+        assert LocalFileSystem._parent("C:\\") == "C:/"
+    else:
+        assert LocalFileSystem._parent("/file or folder") == "/"
+        assert LocalFileSystem._parent("/") == "/"
 
 
 def test_linked_files(tmpdir):

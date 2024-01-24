@@ -210,9 +210,9 @@ class LocalFileSystem(AbstractFileSystem):
         return datetime.datetime.fromtimestamp(info["mtime"], tz=datetime.timezone.utc)
 
     @classmethod
-    def _parent(cls, path, sep=os.sep):
-        path = cls._strip_protocol(path, sep=sep, remove_trailing_slash=True)
-        if sep == "/":
+    def _parent(cls, path):
+        path = cls._strip_protocol(path, remove_trailing_slash=True)
+        if os.sep == "/":
             # posix native
             return path.rsplit("/", 1)[0] or "/"
         else:
@@ -226,17 +226,17 @@ class LocalFileSystem(AbstractFileSystem):
             return path_
 
     @classmethod
-    def _strip_protocol(cls, path, sep=os.sep, remove_trailing_slash=False):
+    def _strip_protocol(cls, path, remove_trailing_slash=False):
         path = stringify_path(path)
         if path.startswith("file:"):
             path = _remove_prefix(_remove_prefix(path, "file://"), "file:")
-            if sep == "\\":
+            if os.sep == "\\":
                 path = path.lstrip("/")
         elif path.startswith("local:"):
             path = _remove_prefix(_remove_prefix(path, "local://"), "local:")
-            if sep == "\\":
+            if os.sep == "\\":
                 path = path.lstrip("/")
-        return make_path_posix(path, sep, remove_trailing_slash)
+        return make_path_posix(path, remove_trailing_slash)
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)
@@ -249,22 +249,20 @@ class LocalFileSystem(AbstractFileSystem):
         return os.chmod(path, mode)
 
 
-def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
-    """Make path generic"""
+def make_path_posix(path, remove_trailing_slash=False):
+    """Make path generic for current OS"""
     if not isinstance(path, str):
         if isinstance(path, (list, set, tuple)):
-            return type(path)(
-                make_path_posix(p, sep, remove_trailing_slash) for p in path
-            )
+            return type(path)(make_path_posix(p, remove_trailing_slash) for p in path)
         else:
             path = str(stringify_path(path))
-    if sep == "/":
+    if os.sep == "/":
         # Native posix
         if path.startswith("/"):
             # most common fast case for posix
             return path.rstrip("/") or "/" if remove_trailing_slash else path
         elif path.startswith("~"):
-            return make_path_posix(osp.expanduser(path), sep, remove_trailing_slash)
+            return make_path_posix(osp.expanduser(path), remove_trailing_slash)
         elif path.startswith("./"):
             path = path[2:]
             path = f"{os.getcwd()}/{path}"
@@ -281,12 +279,12 @@ def make_path_posix(path, sep=os.sep, remove_trailing_slash=False):
                 path = path.replace("\\", "/").replace("//", "/")
                 return path.rstrip("/") if remove_trailing_slash else path
             elif path[0] == "~":
-                return make_path_posix(osp.expanduser(path), sep, remove_trailing_slash)
+                return make_path_posix(osp.expanduser(path), remove_trailing_slash)
             elif path.startswith("\\\\") or path.startswith("//"):
                 # windows UNC/DFS-style paths
                 path = "//" + path[2:].replace("\\", "/").replace("//", "/")
                 return path.rstrip("/") if remove_trailing_slash else path
-        return make_path_posix(osp.abspath(path), sep, remove_trailing_slash)
+        return make_path_posix(osp.abspath(path), remove_trailing_slash)
 
 
 def trailing_sep(path):
