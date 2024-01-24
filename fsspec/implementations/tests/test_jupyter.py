@@ -6,6 +6,7 @@ import time
 import pytest
 
 import fsspec
+from fsspec.tests.test_utils import WIN
 
 pytest.importorskip("notebook")
 requests = pytest.importorskip("requests")
@@ -13,7 +14,6 @@ requests = pytest.importorskip("requests")
 
 @pytest.fixture()
 def jupyter(tmpdir):
-
     tmpdir = str(tmpdir)
     os.environ["JUPYTER_TOKEN"] = "blah"
     try:
@@ -38,6 +38,7 @@ def jupyter(tmpdir):
         P.terminate()
 
 
+@pytest.mark.skipif(WIN, reason="Subprocess gets stuck in a loop")
 def test_simple(jupyter):
     url, d = jupyter
     fs = fsspec.filesystem("jupyter", url=url)

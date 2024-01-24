@@ -495,7 +495,7 @@ def test_make_path_posix():
             make_path_posix(
                 "\\\\SERVER\\UserHomeFolder$\\me\\My Documents\\proj\\data\\fname.csv",
             )
-            == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
+            == "//SERVER/UserHomeFolder$/me/My Documents/proj/data/fname.csv"
         )
     assert "/" in make_path_posix("rel\\path")
     # Relative
