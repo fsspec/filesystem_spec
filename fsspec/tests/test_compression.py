@@ -59,6 +59,7 @@ def test_infer_uppercase_compression():
 def test_lzma_compression_name():
     pytest.importorskip("lzma")
     assert infer_compression("fn.xz") == "xz"
+    assert infer_compression("fn.lzma") == "lzma"
 
 
 def test_lz4_compression(tmpdir):
