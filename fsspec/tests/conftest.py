@@ -2,7 +2,9 @@ import contextlib
 import gzip
 import json
 import os
+import subprocess
 import threading
+import time
 from collections import ChainMap
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -173,3 +175,45 @@ def serve():
 def server():
     with serve() as s:
         yield s
+
+
+def _populate_test_dir(path):
+    path.joinpath("file1").write_text("file1")
+    path.joinpath("file2").write_text("file2")
+    f1 = path.joinpath("folder1")
+    f1.mkdir()
+    f2 = path.joinpath("folder2")
+    f2.mkdir()
+    f1.joinpath("file3.txt").write_text("file3")
+    f2.joinpath("file4.txt").write_text("file4")
+
+
+@pytest.fixture(scope="session")
+def stdlib_simple_http_server(tmp_path_factory):
+    requests = pytest.importorskip("requests")
+
+    path = tmp_path_factory.mktemp("http")
+    _populate_test_dir(path)
+
+    port = 9899
+    url = f"http://127.0.0.1:{port}"
+    pytest.importorskip("http.server")
+    proc = subprocess.Popen(
+        ["python", "-m", "http.server", "--directory", str(path), str(port)]
+    )
+    timeout = 10
+    try:
+        while True:
+            try:
+                r = requests.get(url, timeout=10)
+                if r.ok:
+                    break
+            except Exception as e:  # noqa: E722
+                timeout -= 1
+                if timeout < 0:
+                    raise SystemError from e
+                time.sleep(1)
+        yield url
+    finally:
+        proc.terminate()
+        proc.wait()
