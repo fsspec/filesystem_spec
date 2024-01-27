@@ -13,28 +13,34 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: POST
     uri: https://my_instance.com/api/2.0/dbfs/delete
   response:
     body:
-      string: !!binary |
-        H4sIAAAAAAAEA6quBQAAAP//AwBDv6ajAgAAAA==
+      string: '{}'
     headers:
-      content-encoding:
-      - gzip
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
-      transfer-encoding:
-      - chunked
-      vary:
-      - Accept-Encoding
       x-content-type-options:
       - nosniff
     status:
@@ -54,7 +60,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -62,14 +68,27 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA6pWSsvMSS1WsoquVipILMlQslLSdwOKBJfkF6XqpySWJOolF5cp6ShlFsenZBYp
-        WaUl5hSn6oB1xRdnVqUqWRmaGhgYGBnU6mAzoSQxCWQ8Qn9JUSmqdoPa2FoAAAAA//8DAKlY9LmG
-        AAAA
+        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsH6AW6rCJrWkhDaxcLJoraKHcvtbehUmE5Ev9/3nyu
+        cPSTSzA8X2EhPsEAu8c8eeIQ3c4S00QfDhrwabQ+wsDx7Jr10pj8t4NBNDAH64/+ldiHz5H9nKfS
+        iFYhivXcmnvifl5C5IfE9FZjgFIo1Fq12eK+wTvFVJFc96iV7NAUhfN73VQjjUYp7CV2RellClyl
+        LDqt2y5DKdFYvijGcKkAklfZC6nbMul0oujseM7pydbFN53e4x/xmV5+e/r/Im49MX2ZzBY759++
+        QpWFFLgXK6DD7QcAAP//AwD4cmNjVAMAAA==
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -97,7 +116,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -109,10 +128,21 @@ interactions:
         bx/uqsNgtQ/GjkE/737EC2YqJb7/xzC80krAAnMSmirLAbSnUgvwBp9YF1C3NnwTUvlQrXV4/gAA
         AP//AwA1MpptawAAAA==
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -140,28 +170,34 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: POST
     uri: https://my_instance.com/api/2.0/dbfs/mkdirs
   response:
     body:
-      string: !!binary |
-        H4sIAAAAAAAEA6quBQAAAP//AwBDv6ajAgAAAA==
+      string: '{}'
     headers:
-      content-encoding:
-      - gzip
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
-      transfer-encoding:
-      - chunked
-      vary:
-      - Accept-Encoding
       x-content-type-options:
       - nosniff
     status:
@@ -181,7 +217,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -189,14 +225,27 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA6pWSsvMSS1WsoquVipILMlQslLSdwOKBJfkF6XqpySWJOolF5cp6ShlFsenZBYp
-        WaUl5hSn6oB1xRdnVqUqWRmaGhgYGBnU6mAzIbcSSW9JUSmqVhyaShKTQG5CWIpFY2wtAAAA//8D
-        AHeEiBi7AAAA
+        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsHyAW6rCprWkhDaxcLJqrSKHcvtbehUmE5Ev8//nyu
+        cPSTSzA8XWEhPsEAu0OePHKIbmeJaaIPBw34NFofYeB4ds16aUz+28EgGpiD9Uf/SuzD58h+zlNp
+        RKsQxXpuzT1xPy8h8kNieqsxQCkUaq3abHHf4J1iqiDXPWolOzRF4fxeN9VIo1EKe4ldWfpSQZyz
+        7oXUWhdllylwFbDotG67nHUp5OVCMYaveuq2vMB0oujseM70ZOvwTaf3+Ac+08tv/f/f761+pi8n
+        s2Fn/u2HVVlIgXuxBvR8+wEAAP//AwAClX4HqwMAAA==
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -224,7 +273,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -233,12 +282,24 @@ interactions:
     body:
       string: !!binary |
         H4sIAAAAAAAEA6pWSsvMSS1WsoquVipILMlQslLSdwOKBJfkF6Xq51bqp2QWKekoZRbHgxhWJUWl
-        qTpgLfHFmVWpSlYGtbG1AAAAAP//AwCvhxWZRAAAAA==
+        qTpgLfHFmVWpSlYGOkq5+SmZaZnJiSWZ+XnxJZm5QFFDcwMTSwNDU1NTAwOD2thaAAAAAP//AwBB
+        Uh1WZgAAAA==
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -266,7 +327,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -275,12 +336,23 @@ interactions:
     body:
       string: !!binary |
         H4sIAAAAAAAEA6pWKkgsyVCyUtJ3y8xJDS7JL0rVz63UT8ksUtJRyiyOBzGsSopKU3WU0oAK4osz
-        q1KVrAxqAQAAAP//AwDWrNg4OAAAAA==
+        q1KVrAx0lHLzUzLTMpMTSzLz8+JLMnOBoobmBiaWBoampqYGBga1AAAAAP//AwA25IEBWgAAAA==
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -308,7 +380,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: POST
@@ -316,14 +388,25 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEAxTJQQrCMBAF0KsMs1ZiDbHWvUI3FuIBijRfCTSNTFIhiHc3bt/7MESijFN04BP3
-        w3i2drC84YCU7s8/XuOyFUyrJP8GOczIoPigpTrCKxdyvn6OUkg1baNbo3fGHDq9747q4mfc6kGF
-        wt8fAAAA//8DAKIFEH9wAAAA
+        H4sIAAAAAAAEAxTJQQrCMBAF0KsMs1YSqKHWvYIbC/EARZqvBJqOTKIQxLsbt+99GKqi0ywBfODz
+        OB29Hz1vOCHn2+OPF1m3ivmlOb5BAQsKSO60Nkd6lkohti+ilYxztuuH3jq3t7tusOYUF1zbwaTK
+        3x8AAAD//wMA6gtFJnAAAAA=
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -351,7 +434,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -359,14 +442,27 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA6pWSsvMSS1WsoquVipILMlQslLSdwOKBJfkF6XqpySWJOolF5cp6ShlFsenZBYp
-        WaUl5hSn6oB1xRdnVqUqWRmaGhgYGBnU6mAzIbcSSW9JUSmqVhyaShKTQG5CWIpFY2wtAAAA//8D
-        AHeEiBi7AAAA
+        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsHyAW6rCprWkhDaxcLJqrSKHcvtbehUmE5Ev8//nyu
+        cPSTSzA8XWEhPsEAu0OePHKIbmeJaaIPBw34NFofYeB4ds16aUz+28EgGpiD9Uf/SuzD58h+zlNp
+        RKsQxXpuzT1xPy8h8kNieqsxQCkUaq3abHHf4J1iqiDXPWolOzRF4fxeN9VIo1EKe4ldWfpSQZyz
+        7oXUWhdllylwFbDotG67nHUp5OVCMYaveuq2vMB0oujseM70ZOvwTaf3+Ac+08tv/f/f761+pi8n
+        s2Fn/u2HVVlIgXuxBvR8+wEAAP//AwAClX4HqwMAAA==
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
@@ -394,28 +490,34 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: POST
     uri: https://my_instance.com/api/2.0/dbfs/delete
   response:
     body:
-      string: !!binary |
-        H4sIAAAAAAAEA6quBQAAAP//AwBDv6ajAgAAAA==
+      string: '{}'
     headers:
-      content-encoding:
-      - gzip
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
-      transfer-encoding:
-      - chunked
-      vary:
-      - Accept-Encoding
       x-content-type-options:
       - nosniff
     status:
@@ -435,7 +537,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.25.1
+      - python-requests/2.31.0
       authorization:
       - DUMMY
     method: GET
@@ -443,14 +545,27 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA6pWSsvMSS1WsoquVipILMlQslLSdwOKBJfkF6XqpySWJOolF5cp6ShlFsenZBYp
-        WaUl5hSn6oB1xRdnVqUqWRmaGhgYGBnU6mAzoSQxCWQ8Qn9JUSmqdoPa2FoAAAAA//8DAKlY9LmG
-        AAAA
+        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsH6AW6rCJrWkhDaxcLJoraKHcvtbehUmE5Ev9/3nyu
+        cPSTSzA8X2EhPsEAu8c8eeIQ3c4S00QfDhrwabQ+wsDx7Jr10pj8t4NBNDAH64/+ldiHz5H9nKfS
+        iFYhivXcmnvifl5C5IfE9FZjgFIo1Fq12eK+wTvFVJFc96iV7NAUhfN73VQjjUYp7CV2RellClyl
+        LDqt2y5DKdFYvijGcKkAklfZC6nbMul0oujseM7pydbFN53e4x/xmV5+e/r/Im49MX2ZzBY759++
+        QpWFFLgXK6DD7QcAAP//AwD4cmNjVAMAAA==
     headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
       content-encoding:
       - gzip
       content-type:
       - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
       server:
       - databricks
       strict-transport-security:
