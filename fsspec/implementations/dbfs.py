@@ -45,11 +45,13 @@ class DatabricksFileSystem(AbstractFileSystem):
         self.instance = instance
         self.token = token
         self.session = requests.Session()
-        self.retries = Retry(total=10,
-                             backoff_factor=0.05,
-                             status_forcelist=[408, 429, 500, 502, 503, 504])
+        self.retries = Retry(
+            total=10,
+            backoff_factor=0.05,
+            status_forcelist=[408, 429, 500, 502, 503, 504],
+        )
 
-        self.session.mount('https://', HTTPAdapter(max_retries=self.retries))
+        self.session.mount("https://", HTTPAdapter(max_retries=self.retries))
         self.session.headers.update({"Authorization": f"Bearer {self.token}"})
 
         super().__init__(**kwargs)
@@ -172,7 +174,9 @@ class DatabricksFileSystem(AbstractFileSystem):
             raise e
         self.invalidate_cache(self._parent(path))
 
-    def mv(self, source_path, destination_path, recursive=False, maxdepth=None, **kwargs):
+    def mv(
+        self, source_path, destination_path, recursive=False, maxdepth=None, **kwargs
+    ):
         """
         Move a source to a destination path.
 
@@ -387,7 +391,7 @@ class DatabricksFile(AbstractBufferedFile):
     Helper class for files referenced in the DatabricksFileSystem.
     """
 
-    DEFAULT_BLOCK_SIZE = 1 * 2 ** 20  # only allowed block size
+    DEFAULT_BLOCK_SIZE = 1 * 2**20  # only allowed block size
 
     def __init__(
         self,

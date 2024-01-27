@@ -76,11 +76,7 @@ def vcr_config():
 
 @pytest.fixture
 def dbfsFS():
-    fs = fsspec.filesystem(
-        "dbfs",
-        instance=INSTANCE,
-        token=TOKEN
-    )
+    fs = fsspec.filesystem("dbfs", instance=INSTANCE, token=TOKEN)
 
     return fs
 
@@ -89,8 +85,17 @@ def dbfsFS():
 def make_mock_diabetes_ds():
     pa = pytest.importorskip("pyarrow")
 
-    names = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction",
-             "Age", "Outcome"]
+    names = [
+        "Pregnancies",
+        "Glucose",
+        "BloodPressure",
+        "SkinThickness",
+        "Insulin",
+        "BMI",
+        "DiabetesPedigreeFunction",
+        "Age",
+        "Outcome",
+    ]
     pregnancies = pa.array(numpy.random.randint(low=0, high=17, size=25))
     glucose = pa.array(numpy.random.randint(low=0, high=199, size=25))
     blood_pressure = pa.array(numpy.random.randint(low=0, high=122, size=25))
@@ -103,9 +108,18 @@ def make_mock_diabetes_ds():
 
     return pa.Table.from_arrays(
         arrays=[
-            pregnancies, glucose, blood_pressure, skin_thickness,
-            insulin, bmi, diabetes_pedigree_function, age, outcome],
-        names=names)
+            pregnancies,
+            glucose,
+            blood_pressure,
+            skin_thickness,
+            insulin,
+            bmi,
+            diabetes_pedigree_function,
+            age,
+            outcome,
+        ],
+        names=names,
+    )
 
 
 @pytest.mark.vcr()
@@ -174,7 +188,7 @@ def test_dbfs_read_range(dbfsFS):
 def test_dbfs_read_range_chunked(dbfsFS):
     dbfsFS.rm("/FileStore/large_file.txt")
     assert "/FileStore/large_file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
-    content = b"This is a test\n" * (1 * 2 ** 18) + b"For this is the end\n"
+    content = b"This is a test\n" * (1 * 2**18) + b"For this is the end\n"
     with dbfsFS.open("/FileStore/large_file.txt", "wb") as f:
         f.write(content)
     assert "/FileStore/large_file.txt" in dbfsFS.ls("/FileStore", detail=False)
@@ -185,20 +199,27 @@ def test_dbfs_read_range_chunked(dbfsFS):
 
 @pytest.mark.vcr()
 def test_dbfs_write_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
-    ds = pytest.importorskip("pyarrow.dataset")
+    pytest.importorskip("pyarrow.dataset")
     pq = pytest.importorskip("pyarrow.parquet")
 
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
-    pq.write_to_dataset(make_mock_diabetes_ds, filesystem=dbfsFS, compression='none',
-                        existing_data_behavior='error',
-                        root_path="/FileStore/pyarrow/diabetes",
-                        use_threads=False)
+    pq.write_to_dataset(
+        make_mock_diabetes_ds,
+        filesystem=dbfsFS,
+        compression="none",
+        existing_data_behavior="error",
+        root_path="/FileStore/pyarrow/diabetes",
+        use_threads=False,
+    )
 
-    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 1
-    assert ("/FileStore/pyarrow/diabetes" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0] and
-            ".parquet" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0])
+    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) == 1
+    assert (
+        "/FileStore/pyarrow/diabetes"
+        in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+        and ".parquet" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+    )
 
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
@@ -212,14 +233,21 @@ def test_dbfs_read_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
     dbfsFS.rm("/FileStore/pyarrow", recursive=True)
     assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
 
-    pq.write_to_dataset(make_mock_diabetes_ds, filesystem=dbfsFS, compression='none',
-                        existing_data_behavior='error',
-                        root_path="/FileStore/pyarrow/diabetes",
-                        use_threads=False)
+    pq.write_to_dataset(
+        make_mock_diabetes_ds,
+        filesystem=dbfsFS,
+        compression="none",
+        existing_data_behavior="error",
+        root_path="/FileStore/pyarrow/diabetes",
+        use_threads=False,
+    )
 
-    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) is 1
-    assert ("/FileStore/pyarrow/diabetes" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0] and
-            ".parquet" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0])
+    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) == 1
+    assert (
+        "/FileStore/pyarrow/diabetes"
+        in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+        and ".parquet" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+    )
 
     arr_res = ds.dataset(
         source="/FileStore/pyarrow/diabetes",
