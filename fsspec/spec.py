@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import io
 import logging
+import ntpath
 import os
+import posixpath
 import threading
 import warnings
 import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import ClassVar
+from typing import ClassVar, Iterable, Iterator, Optional, Sequence, Tuple
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -105,6 +107,7 @@ class AbstractFileSystem(metaclass=_Cached):
     _cached = False
     blocksize = 2**22
     sep = "/"
+    flavour = posixpath
     protocol: ClassVar[str | tuple[str, ...]] = "abstract"
     _latest = None
     async_impl = False
@@ -1563,6 +1566,137 @@ class AbstractFileSystem(metaclass=_Cached):
         # legacy fsspec-compatible filesystems and thus accepts fsspec
         # filesystems as well
         return False
+
+    def getcwd(self) -> str:
+        return self.root_marker
+
+    def chdir(self, path: str):
+        raise NotImplementedError("chdir is not implemented for this filesystem")
+
+    @classmethod
+    def join(cls, *parts: str) -> str:
+        return cls.flavour.join(*parts)
+
+    @classmethod
+    def split(cls, path: str) -> Tuple[str, str]:
+        return cls.flavour.split(path)
+
+    @classmethod
+    def splitext(cls, path: str) -> Tuple[str, str]:
+        return cls.flavour.splitext(path)
+
+    def normpath(self, path: str) -> str:
+        from urlparse import urlsplit, urlunsplit
+
+        if self.flavour == ntpath:
+            return self.flavour.normpath(path)
+
+        parts = list(urlsplit(path))
+        parts[2] = self.flavour.normpath(parts[2])
+        return urlunsplit(parts)
+
+    @classmethod
+    def isabs(cls, path: str) -> bool:
+        return cls.flavour.isabs(path)
+
+    def abspath(self, path: str) -> str:
+        if not self.isabs(path):
+            path = self.join(self.getcwd(), path)
+        return self.normpath(path)
+
+    @classmethod
+    def commonprefix(cls, paths: Sequence[str]) -> str:
+        return cls.flavour.commonprefix(paths)
+
+    @classmethod
+    def commonpath(cls, paths: Iterable[str]) -> str:
+        return cls.flavour.commonpath(list(paths))
+
+    @classmethod
+    def parts(cls, path: str) -> Tuple[str, ...]:
+        drive, path = cls.flavour.splitdrive(path.rstrip(cls.flavour.sep))
+
+        ret = []
+        while True:
+            path, part = cls.flavour.split(path)
+
+            if part:
+                ret.append(part)
+                continue
+
+            if path:
+                ret.append(path)
+
+            break
+
+        ret.reverse()
+
+        if drive:
+            ret = [drive, *ret]
+
+        return tuple(ret)
+
+    @classmethod
+    def parent(cls, path: str) -> str:
+        return cls.flavour.dirname(path)
+
+    @classmethod
+    def dirname(cls, path: str) -> str:
+        return cls.parent(path)
+
+    @classmethod
+    def parents(cls, path: str) -> Iterator[str]:
+        while True:
+            parent = cls.flavour.dirname(path)
+            if parent == path:
+                break
+            yield parent
+            path = parent
+
+    @classmethod
+    def name(cls, path: str) -> str:
+        return cls.flavour.basename(path)
+
+    @classmethod
+    def suffix(cls, path: str) -> str:
+        name = cls.name(path)
+        _, dot, suffix = name.partition(".")
+        return dot + suffix
+
+    @classmethod
+    def with_name(cls, path: str, name: str) -> str:
+        return cls.join(cls.parent(path), name)
+
+    @classmethod
+    def with_suffix(cls, path: str, suffix: str) -> str:
+        return cls.splitext(path)[0] + suffix
+
+    @classmethod
+    def isin(cls, left: str, right: str) -> bool:
+        if left == right:
+            return False
+        try:
+            common = cls.commonpath([left, right])
+        except ValueError:
+            # Paths don't have the same drive
+            return False
+        return common == right
+
+    @classmethod
+    def isin_or_eq(cls, left: str, right: str) -> bool:
+        return left == right or cls.isin(left, right)
+
+    @classmethod
+    def overlaps(cls, left: str, right: str) -> bool:
+        return cls.isin_or_eq(left, right) or cls.isin(right, left)
+
+    def relpath(self, path: str, start: Optional[str] = None) -> str:
+        if start is None:
+            start = "."
+        return self.flavour.relpath(self.abspath(path), start=self.abspath(start))
+
+    def relparts(self, path: str, start: Optional[str] = None) -> Tuple[str, ...]:
+        return self.parts(self.relpath(path, start=start))
 
 
 class AbstractBufferedFile(io.IOBase):
