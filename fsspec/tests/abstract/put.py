@@ -294,7 +294,7 @@ class AbstractPutTests:
                     ],
                     recursive=True,
                 )
-                assert fs.ls(target, detailed=False) == ([] if supports_empty_directories else [dummy])
+                assert fs.ls(target, detail=False) == ([] if supports_empty_directories else [dummy])
 
                 # Limit recursive by maxdepth
                 fs.put(
