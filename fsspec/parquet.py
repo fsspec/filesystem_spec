@@ -336,7 +336,7 @@ def _transfer_ranges(fs, blocks, paths, starts, ends):
 
 def _add_header_magic(data):
     # Add b"PAR1" to file headers
-    for i, path in enumerate(list(data.keys())):
+    for path in list(data.keys()):
         add_magic = True
         for k in data[path].keys():
             if k[0] == 0 and k[1] >= 4:
