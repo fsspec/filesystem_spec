@@ -132,7 +132,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.cat_thresh = categorical_threshold
         self.cache_size = cache_size
         self.dirs = None
-        self.url = f"{self.root}/{field}/refs.{record}.parq"
+        self.url = self.root + "/{field}/refs.{record}.parq"
         # TODO: derive fs from `root`
         self.fs = fsspec.filesystem("file") if fs is None else fs
 
