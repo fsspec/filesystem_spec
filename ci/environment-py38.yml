@@ -20,7 +20,7 @@ dependencies:
   - s3fs
   - pyftpdlib
   - cloudpickle
-  - pytest
+  - pytest <8
   - pytest-asyncio !=0.22.0
   - pytest-benchmark
   - pytest-cov

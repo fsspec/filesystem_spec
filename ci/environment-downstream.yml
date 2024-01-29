@@ -7,7 +7,7 @@ dependencies:
   - pandas
   - xarray
   - zarr
-  - pytest
+  - pytest<8
   - pytest-cov
   - pytest-rerunfailures
   - pytest-timeout

@@ -10,7 +10,7 @@ dependencies:
   - pytest-mock
   - pytest-vcr
   - pip
-  - pytest
+  - pytest<8
   - ujson
   - requests
   - decorator
