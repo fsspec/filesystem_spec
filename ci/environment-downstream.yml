@@ -7,13 +7,13 @@ dependencies:
   - pandas
   - xarray
   - zarr
-  - pytest
+  - pytest<8
   - pytest-cov
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
   - s3fs
   - requests
-  - moto
+  - moto <5
   - sqlalchemy<2
   - flask
