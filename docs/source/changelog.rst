@@ -1,6 +1,26 @@
 Changelog
 =========
 
+2024.2.0
+--------
+
+Enhancements
+
+- add 9P known implementation (#1513)
+- allow TqdmCallback subclassing (#1497)
+- callbacks/branching kwargs handling (#1496, 1495)
+
+Fixes
+
+- infer compression for .lzma files (#1514)
+- fix append to categorical/parquet references (#1510)
+- allow for FTP servers that list with leading "total" line (#1503)
+
+Other
+
+- don't read references in init for referenceFS (#1521)
+- code cleaning (#1518, 1502, 1499)
+
 2023.12.2
 ---------
 
