@@ -90,15 +90,15 @@ except ImportError:
 try:
     from lzma import LZMAFile
 
-    register_compression("lzma", LZMAFile, "xz")
-    register_compression("xz", LZMAFile, "xz", force=True)
+    register_compression("lzma", LZMAFile, "lzma")
+    register_compression("xz", LZMAFile, "xz")
 except ImportError:
     pass
 
 try:
     import lzmaffi
 
-    register_compression("lzma", lzmaffi.LZMAFile, "xz", force=True)
+    register_compression("lzma", lzmaffi.LZMAFile, "lzma", force=True)
     register_compression("xz", lzmaffi.LZMAFile, "xz", force=True)
 except ImportError:
     pass

@@ -23,6 +23,7 @@ you need to re-record the answers. This can be done as follows:
 import os
 from urllib.parse import urlparse
 
+import numpy
 import pytest
 
 import fsspec
@@ -75,13 +76,50 @@ def vcr_config():
 
 @pytest.fixture
 def dbfsFS():
-    fs = fsspec.filesystem(
-        "dbfs",
-        instance=INSTANCE,
-        token=TOKEN,
-    )
+    fs = fsspec.filesystem("dbfs", instance=INSTANCE, token=TOKEN)
 
     return fs
+
+
+@pytest.fixture
+def make_mock_diabetes_ds():
+    pa = pytest.importorskip("pyarrow")
+
+    names = [
+        "Pregnancies",
+        "Glucose",
+        "BloodPressure",
+        "SkinThickness",
+        "Insulin",
+        "BMI",
+        "DiabetesPedigreeFunction",
+        "Age",
+        "Outcome",
+    ]
+    pregnancies = pa.array(numpy.random.randint(low=0, high=17, size=25))
+    glucose = pa.array(numpy.random.randint(low=0, high=199, size=25))
+    blood_pressure = pa.array(numpy.random.randint(low=0, high=122, size=25))
+    skin_thickness = pa.array(numpy.random.randint(low=0, high=99, size=25))
+    insulin = pa.array(numpy.random.randint(low=0, high=846, size=25))
+    bmi = pa.array(numpy.random.uniform(0.0, 67.1, size=25))
+    diabetes_pedigree_function = pa.array(numpy.random.uniform(0.08, 2.42, size=25))
+    age = pa.array(numpy.random.randint(low=21, high=81, size=25))
+    outcome = pa.array(numpy.random.randint(low=0, high=1, size=25))
+
+    return pa.Table.from_arrays(
+        arrays=[
+            pregnancies,
+            glucose,
+            blood_pressure,
+            skin_thickness,
+            insulin,
+            bmi,
+            diabetes_pedigree_function,
+            age,
+            outcome,
+        ],
+        names=names,
+    )
 
 
 @pytest.mark.vcr()
@@ -157,3 +195,68 @@ def test_dbfs_read_range_chunked(dbfsFS):
     assert dbfsFS.cat_file("/FileStore/large_file.txt", start=8) == content[8:]
     dbfsFS.rm("/FileStore/large_file.txt")
     assert "/FileStore/large_file.txt" not in dbfsFS.ls("/FileStore/", detail=False)
+
+
+@pytest.mark.vcr()
+def test_dbfs_write_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
+    pytest.importorskip("pyarrow.dataset")
+    pq = pytest.importorskip("pyarrow.parquet")
+
+    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
+
+    pq.write_to_dataset(
+        make_mock_diabetes_ds,
+        filesystem=dbfsFS,
+        compression="none",
+        existing_data_behavior="error",
+        root_path="/FileStore/pyarrow/diabetes",
+        use_threads=False,
+    )
+
+    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) == 1
+    assert (
+        "/FileStore/pyarrow/diabetes"
+        in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+        and ".parquet" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+    )
+
+    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
+
+
+@pytest.mark.vcr()
+def test_dbfs_read_pyarrow_non_partitioned(dbfsFS, make_mock_diabetes_ds):
+    ds = pytest.importorskip("pyarrow.dataset")
+    pq = pytest.importorskip("pyarrow.parquet")
+
+    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)
+
+    pq.write_to_dataset(
+        make_mock_diabetes_ds,
+        filesystem=dbfsFS,
+        compression="none",
+        existing_data_behavior="error",
+        root_path="/FileStore/pyarrow/diabetes",
+        use_threads=False,
+    )
+
+    assert len(dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)) == 1
+    assert (
+        "/FileStore/pyarrow/diabetes"
+        in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+        and ".parquet" in dbfsFS.ls("/FileStore/pyarrow/diabetes", detail=False)[0]
+    )
+
+    arr_res = ds.dataset(
+        source="/FileStore/pyarrow/diabetes",
+        filesystem=dbfsFS,
+    ).to_table()
+
+    assert arr_res.num_rows == make_mock_diabetes_ds.num_rows
+    assert arr_res.num_columns == make_mock_diabetes_ds.num_columns
+    assert set(arr_res.schema).difference(set(make_mock_diabetes_ds.schema)) == set()
+
+    dbfsFS.rm("/FileStore/pyarrow", recursive=True)
+    assert "/FileStore/pyarrow" not in dbfsFS.ls("/FileStore/", detail=False)

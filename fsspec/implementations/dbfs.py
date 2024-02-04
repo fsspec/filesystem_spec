@@ -2,6 +2,8 @@ import base64
 import urllib
 
 import requests
+import requests.exceptions
+from requests.adapters import HTTPAdapter, Retry
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
@@ -42,13 +44,19 @@ class DatabricksFileSystem(AbstractFileSystem):
         """
         self.instance = instance
         self.token = token
-
         self.session = requests.Session()
+        self.retries = Retry(
+            total=10,
+            backoff_factor=0.05,
+            status_forcelist=[408, 429, 500, 502, 503, 504],
+        )
+
+        self.session.mount("https://", HTTPAdapter(max_retries=self.retries))
         self.session.headers.update({"Authorization": f"Bearer {self.token}"})
 
         super().__init__(**kwargs)
 
-    def ls(self, path, detail=True):
+    def ls(self, path, detail=True, **kwargs):
         """
         List the contents of the given path.
 
@@ -137,7 +145,7 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         self.mkdirs(path, **kwargs)
 
-    def rm(self, path, recursive=False):
+    def rm(self, path, recursive=False, **kwargs):
         """
         Remove the file or folder at the given absolute path.
 
@@ -166,7 +174,9 @@ class DatabricksFileSystem(AbstractFileSystem):
             raise e
         self.invalidate_cache(self._parent(path))
 
-    def mv(self, source_path, destination_path, recursive=False, maxdepth=None):
+    def mv(
+        self, source_path, destination_path, recursive=False, maxdepth=None, **kwargs
+    ):
         """
         Move a source to a destination path.
 
