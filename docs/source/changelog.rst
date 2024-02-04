@@ -1,6 +1,44 @@
 Changelog
 =========
 
+2024.2.0
+--------
+
+Enhancements
+
+- add 9P known implementation (#1513)
+- allow TqdmCallback subclassing (#1497, 1480)
+- callbacks/branching kwargs handling and scopes (#1496, 1495, 1460)
+- add aluuxioFS to known implementations (#1469)
+- implement pipe_file for dirFS (#1465)
+
+Fixes
+
+- infer compression for .lzma files (#1514)
+- fix append to categorical/parquet references (#1510)
+- allow for FTP servers that list with leading "total" line (#1503)
+- convert FTP failure to FileNotFound (#1494)
+- out of order reference fix (#1492)
+- retry "backoff" response for DBFS (#1491)
+- referenceFS case for scalar arrays (#1487)
+- fix create_parents for SFTP (#1484)
+- fix local .ls() on files (#1479)
+- allow Path and similar in _expand_path (#1475)
+- make lazy references editable (#1468)
+- fix eq for abstract buffered files (#1466)
+- fit tqdm cleanup (#1463)
+- fix passing kwargs from cached file to underlying FS (#1462)
+
+Other
+
+- fix tests for supports_empty_directories=False (#1512)
+- don't read references in init for referenceFS (#1521)
+- code cleaning (#1518, 1502, 1499, 1493, 1481)
+- pass through "replication" for HDFS (#1486)
+- record more info for HTTP info() (#1483)
+- add timeout argument to githubFS (#1473)
+- add more security pars to webHDFS (#1472)
+
 2023.12.2
 ---------
 
