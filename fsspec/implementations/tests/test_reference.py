@@ -690,6 +690,7 @@ def lazy_refs(m):
 
 
 def test_append_parquet(lazy_refs, m):
+    pytest.importorskip("kerchunk")
     with pytest.raises(KeyError):
         lazy_refs["data/0"]
     lazy_refs["data/0"] = b"data"
