@@ -22,6 +22,59 @@ exclude = '''
 )
 '''
 
+[tool.ruff]
+exclude = [
+    ".tox",
+    "build",
+    "docs/source/conf.py",
+    "versioneer.py",
+    "fsspec/_version",
+]
+select = [
+    # fix noqas in fsspec/implementations/http.py
+    "ASYNC",
+    # "B", enable in later PR
+    "C4",
+    "G",
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "PERF",
+    "PLC",
+    "PLE",
+    "PLR1722",
+    "PLW1510",
+    "PLW3301",
+    "PIE800",
+    "PIE804",
+    "PIE807",
+    "PIE810",
+    # "PT", enable in later PR
+    "PYI",
+    "RUF006",
+    "SLOT",
+    "SIM101",
+]
+line-length = 88
+ignore = [
+    # Assigning lambda expression
+    "E731",
+    # Ambiguous variable names
+    "E741",
+    # line break before binary operator
+    # uncomment when implemented in ruff
+    # "W503",
+    # whitespace before :
+    "E203",
+    # redefs
+    "F811",
+    # Fix these codes later
+    "G004",
+    "PERF203",
+    "PERF401",
+]
+
 [tool.pytest.ini_options]
 # custom markers, need to be defined to avoid warnings
 markers = [

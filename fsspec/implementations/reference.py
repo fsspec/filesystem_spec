@@ -128,22 +128,32 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         """
         self.root = root
         self.chunk_sizes = {}
-        self._items = {}
+        self.out_root = out_root or self.root
+        self.cat_thresh = categorical_threshold
+        self.cache_size = cache_size
         self.dirs = None
+        self.url = self.root + "/{field}/refs.{record}.parq"
         # TODO: derive fs from `root`
         self.fs = fsspec.filesystem("file") if fs is None else fs
+
+    def __getattr__(self, item):
+        if item in ("_items", "record_size", "zmetadata"):
+            self.setup()
+            # avoid possible recursion if setup fails somehow
+            return self.__dict__[item]
+        raise AttributeError(item)
+
+    def setup(self):
+        self._items = {}
         self._items[".zmetadata"] = self.fs.cat_file(
             "/".join([self.root, ".zmetadata"])
         )
         met = json.loads(self._items[".zmetadata"])
         self.record_size = met["record_size"]
         self.zmetadata = met["metadata"]
-        self.url = self.root + "/{field}/refs.{record}.parq"
-        self.out_root = out_root or self.root
-        self.cat_thresh = categorical_threshold
 
         # Define function to open and decompress refs
-        @lru_cache(maxsize=cache_size)
+        @lru_cache(maxsize=self.cache_size)
         def open_refs(field, record):
             """cached parquet file loader"""
             path = self.url.format(field=field, record=record)
@@ -417,6 +427,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             raws = np.full(self.record_size, np.nan, dtype="O")
         for j, data in partition.items():
             if isinstance(data, list):
+                if (
+                    str(paths.dtype) == "category"
+                    and data[0] not in paths.dtype.categories
+                ):
+                    paths = paths.add_categories(data[0])
                 paths[j] = data[0]
                 if len(data) > 1:
                     offsets[j] = data[1]

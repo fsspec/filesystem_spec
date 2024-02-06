@@ -42,7 +42,7 @@ def test_info():
             assert lhs == expected
 
         # Iterate over all files.
-        for f, v in archive_data.items():
+        for f in archive_data:
             lhs = fs.info(f)
 
             # Probe some specific fields of Tar archives.

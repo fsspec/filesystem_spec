@@ -10,7 +10,7 @@ dependencies:
   - pytest-mock
   - pytest-vcr
   - pip
-  - pytest
+  - pytest<8
   - ujson
   - requests
   - decorator
@@ -25,5 +25,5 @@ dependencies:
   - google-api-python-client
   - httpretty
   - aiobotocore
-  - "moto>=4"
+  - "moto >=4,<5"
   - flask

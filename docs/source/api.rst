@@ -222,6 +222,7 @@ Other Known Implementations
 - `ocifs`_ for access to Oracle Cloud Object Storage
 - `ocilake`_ for OCI Data Lake storage
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
+- `p9fs`_ for 9P (Plan 9 Filesystem Protocol) servers
 - `s3fs`_ for Amazon S3 and other compatible stores
 - `wandbfs`_ to access Wandb run data (experimental)
 - `webdav4`_ for WebDAV
@@ -239,6 +240,7 @@ Other Known Implementations
 .. _ocifs: https://pypi.org/project/ocifs
 .. _ocilake: https://github.com/oracle/ocifs
 .. _ossfs: https://github.com/fsspec/ossfs
+.. _p9fs: https://github.com/pbchekin/p9fs-py
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _webdav4: https://github.com/skshetry/webdav4
