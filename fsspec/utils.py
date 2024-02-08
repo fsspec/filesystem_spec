@@ -284,7 +284,7 @@ def read_block(
         found_end_delim = seek_delimiter(f, delimiter, 2**16)
         end = f.tell()
 
-        # Adjust split location to before delimiter iff seek found the
+        # Adjust split location to before delimiter if seek found the
         # delimiter sequence, not start or end of file.
         if found_start_delim and split_before:
             start -= len(delimiter)

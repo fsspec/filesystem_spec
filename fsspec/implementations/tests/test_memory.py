@@ -111,7 +111,7 @@ def test_mv_same_paths(m):
     assert m.exists("src/file.txt")
 
 
-def test_rm_no_psuedo_dir(m):
+def test_rm_no_pseudo_dir(m):
     m.touch("/dir1/dir2/file")
     m.rm("/dir1", recursive=True)
     assert not m.exists("/dir1/dir2/file")
