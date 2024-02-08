@@ -254,7 +254,7 @@ update the current installation.
 def _import_class(cls, minv=None):
     """Take a string FQP and return the imported class or identifier
 
-    clas is of the form "package.module.klass" or "package.module:subobject.klass"
+    cls is of the form "package.module.klass" or "package.module:subobject.klass"
     """
     if ":" in cls:
         mod, name = cls.rsplit(":", 1)
