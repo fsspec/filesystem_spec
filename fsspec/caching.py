@@ -56,8 +56,13 @@ class BaseCache:
 
     def __init__(self, blocksize: int, fetcher: Fetcher, size: int) -> None:
         self.blocksize = blocksize
+        self.nblocks = 0
         self.fetcher = fetcher
         self.size = size
+        self.hit_count = 0
+        self.miss_count = 0
+        # the bytes that we actually requested
+        self.total_requested_bytes = 0
 
     def _fetch(self, start: int | None, stop: int | None) -> bytes:
         if start is None:
@@ -67,6 +72,23 @@ class BaseCache:
         if start >= self.size or start >= stop:
             return b""
         return self.fetcher(start, stop)
+
+    def _reset_stats(self) -> None:
+        """Reset hit and miss counts for a more ganular report e.g. by file."""
+        self.hit_count = 0
+        self.miss_count = 0
+        self.total_requested_bytes = 0
+
+    def __repr__(self) -> str:
+        return f"""
+                cache type  :   {self.__class__.__name__} 
+                block size  :   {self.blocksize}
+                block count :   {self.nblocks}
+                cache size  :   {self.size}
+                cache hits  :   {self.hit_count}
+                cache misses:   {self.miss_count}
+                total requested bytes: {self.total_requested_bytes}
+                """
 
 
 class MMapCache(BaseCache):
@@ -126,13 +148,18 @@ class MMapCache(BaseCache):
         start_block = start // self.blocksize
         end_block = end // self.blocksize
         need = [i for i in range(start_block, end_block + 1) if i not in self.blocks]
+        hits = [i for i in range(start_block, end_block + 1) if i in self.blocks]
+        self.miss_count += len(need)
+        self.hit_count += len(hits)
         while need:
             # TODO: not a for loop so we can consolidate blocks later to
             # make fewer fetch calls; this could be parallel
             i = need.pop(0)
+
             sstart = i * self.blocksize
             send = min(sstart + self.blocksize, self.size)
-            logger.debug(f"MMap get block #{i} ({sstart}-{send}")
+            self.total_requested_bytes += send - sstart
+            logger.debug(f"MMap get block #{i} ({sstart}-{send})")
             self.cache[sstart:send] = self.fetcher(sstart, send)
             self.blocks.add(i)
 
@@ -176,16 +203,20 @@ class ReadAheadCache(BaseCache):
         l = end - start
         if start >= self.start and end <= self.end:
             # cache hit
+            self.hit_count += 1
             return self.cache[start - self.start : end - self.start]
         elif self.start <= start < self.end:
             # partial hit
+            self.miss_count += 1
             part = self.cache[start - self.start :]
             l -= len(part)
             start = self.end
         else:
             # miss
+            self.miss_count += 1
             part = b""
         end = min(self.size, end + self.blocksize)
+        self.total_requested_bytes += end - start
         self.cache = self.fetcher(start, end)  # new block replaces old
         self.start = start
         self.end = self.start + len(self.cache)
@@ -210,16 +241,20 @@ class FirstChunkCache(BaseCache):
         end = end or self.size
         if start < self.blocksize:
             if self.cache is None:
+                self.miss_count += 1
                 if end > self.blocksize:
+                    self.total_requested_bytes += end
                     data = self.fetcher(0, end)
                     self.cache = data[: self.blocksize]
                     return data[start:]
                 self.cache = self.fetcher(0, self.blocksize)
             part = self.cache[start:end]
             if end > self.blocksize:
+                self.total_requested_bytes += end - self.blocksize
                 part += self.fetcher(self.blocksize, end)
             return part
         else:
+            self.total_requested_bytes += end - start
             return self.fetcher(start, end)
 
 
@@ -255,12 +290,6 @@ class BlockCache(BaseCache):
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
         self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
-
-    def __repr__(self) -> str:
-        return (
-            f"<BlockCache blocksize={self.blocksize}, "
-            f"size={self.size}, nblocks={self.nblocks}>"
-        )
 
     def cache_info(self):
         """
@@ -319,6 +348,8 @@ class BlockCache(BaseCache):
 
         start = block_number * self.blocksize
         end = start + self.blocksize
+        self.total_requested_bytes += end - start
+        self.miss_count += 1
         logger.info("BlockCache fetching block %d", block_number)
         block_contents = super()._fetch(start, end)
         return block_contents
@@ -340,6 +371,7 @@ class BlockCache(BaseCache):
         end_pos = end % self.blocksize
 
         if start_block_number == end_block_number:
+            self.hit_count += 1
             block: bytes = self._fetch_block_cached(start_block_number)
             return block[start_pos:end_pos]
 
