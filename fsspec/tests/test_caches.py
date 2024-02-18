@@ -92,8 +92,8 @@ def test_first_cache():
 
 def test_readahead_cache():
     """
-    ReadAheadCache is a cache that reads ahead of the requested range
-    and if a reasd is not sequential it will be very inefficient.
+    ReadAheadCache is a cache that reads ahead of the requested range.
+    If the access pattern is not sequential it will be very inefficient.
     """
     cache = ReadAheadCache(5, letters_fetcher, len(string.ascii_letters))
     assert cache._fetch(12, 15) == letters_fetcher(12, 15)

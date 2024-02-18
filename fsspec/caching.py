@@ -80,6 +80,7 @@ class BaseCache:
         self.total_requested_bytes = 0
 
     def __repr__(self) -> str:
+        # TODO: use rich for better formatting
         return f"""
             cache type  :   {self.__class__.__name__} 
             block size  :   {self.blocksize}
