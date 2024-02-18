@@ -20,21 +20,39 @@ def test_block_cache_lru():
     cache._fetch(0, 2)
     assert cache.cache_info().misses == 1
     assert cache.cache_info().currsize == 1
+    assert cache.total_requested_bytes == 4
+    assert cache.size == 52
 
     # hit
     cache._fetch(0, 2)
     assert cache.cache_info().misses == 1
     assert cache.cache_info().currsize == 1
+    assert cache.total_requested_bytes == 4
+
+    # hit
+    cache._fetch(0, 2)
+    assert cache.cache_info().misses == 1
+    assert cache.cache_info().currsize == 1
+    # this works as a counter since all the reads are from the cache
+    assert cache.hit_count == 3
+    assert cache.miss_count == 1
+    # so far only 4 bytes have been read using range requests
+    assert cache.total_requested_bytes == 4
 
     # miss
     cache._fetch(4, 6)
     assert cache.cache_info().misses == 2
     assert cache.cache_info().currsize == 2
+    assert cache.total_requested_bytes == 8
 
     # miss & evict
     cache._fetch(12, 13)
     assert cache.cache_info().misses == 3
     assert cache.cache_info().currsize == 2
+    assert cache.hit_count == 5
+    assert cache.miss_count == 3
+    assert cache.total_requested_bytes == 12
+
 
 
 def _fetcher(start, end):
@@ -73,14 +91,32 @@ def test_cache_pickleable(Cache_imp):
 
 
 def test_first_cache():
-    c = FirstChunkCache(5, letters_fetcher, 52)
-    assert c.cache is None
-    assert c._fetch(12, 15) == letters_fetcher(12, 15)
-    assert c.cache is None
-    assert c._fetch(3, 10) == letters_fetcher(3, 10)
-    assert c.cache == letters_fetcher(0, 5)
-    c.fetcher = None
-    assert c._fetch(1, 4) == letters_fetcher(1, 4)
+    cache = FirstChunkCache(5, letters_fetcher, len(string.ascii_letters))
+    assert cache.cache is None
+    assert cache._fetch(12, 15) == letters_fetcher(12, 15)
+    assert cache.miss_count == 1
+    assert cache.hit_count == 0
+    assert cache.cache is None
+    assert cache.total_requested_bytes == 3
+
+    # because we overlap with the cache range, it will be cached
+    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
+    assert cache.miss_count == 2
+    assert cache.hit_count == 0
+    assert cache.total_requested_bytes == 13
+
+    # partial hit again
+    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
+    assert cache.miss_count == 2
+    assert cache.hit_count == 1
+    # we have the first 5 bytes cached
+    assert cache.total_requested_bytes == 18
+
+    assert cache.cache == letters_fetcher(0, 5)
+    assert cache._fetch(0, 4) == letters_fetcher(0, 4)
+    assert cache.hit_count == 2
+    assert cache.miss_count == 2
+    assert cache.total_requested_bytes == 18
 
 
 @pytest.mark.parametrize(

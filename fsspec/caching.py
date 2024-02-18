@@ -84,7 +84,7 @@ class BaseCache:
                 cache type  :   {self.__class__.__name__} 
                 block size  :   {self.blocksize}
                 block count :   {self.nblocks}
-                cache size  :   {self.size}
+                file size  :   {self.size}
                 cache hits  :   {self.hit_count}
                 cache misses:   {self.miss_count}
                 total requested bytes: {self.total_requested_bytes}
@@ -233,12 +233,20 @@ class FirstChunkCache(BaseCache):
     name = "first"
 
     def __init__(self, blocksize: int, fetcher: Fetcher, size: int) -> None:
+        if blocksize > size:
+            # this will buffer the whole thing
+            blocksize = size
         super().__init__(blocksize, fetcher, size)
         self.cache: bytes | None = None
 
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         start = start or 0
-        end = end or self.size
+        if start > self.size:
+            logger.debug("FirstChunkCache: requested start > file size")
+            return b""
+
+        end = min(end, self.size)
+
         if start < self.blocksize:
             if self.cache is None:
                 self.miss_count += 1
@@ -248,12 +256,15 @@ class FirstChunkCache(BaseCache):
                     self.cache = data[: self.blocksize]
                     return data[start:]
                 self.cache = self.fetcher(0, self.blocksize)
+                self.total_requested_bytes += self.blocksize
             part = self.cache[start:end]
             if end > self.blocksize:
                 self.total_requested_bytes += end - self.blocksize
                 part += self.fetcher(self.blocksize, end)
+            self.hit_count += 1
             return part
         else:
+            self.miss_count += 1
             self.total_requested_bytes += end - start
             return self.fetcher(start, end)
 
@@ -370,8 +381,8 @@ class BlockCache(BaseCache):
         start_pos = start % self.blocksize
         end_pos = end % self.blocksize
 
+        self.hit_count += 1
         if start_block_number == end_block_number:
-            self.hit_count += 1
             block: bytes = self._fetch_block_cached(start_block_number)
             return block[start_pos:end_pos]
 
