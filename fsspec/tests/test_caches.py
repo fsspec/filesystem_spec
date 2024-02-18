@@ -3,7 +3,7 @@ import string
 
 import pytest
 
-from fsspec.caching import BlockCache, FirstChunkCache, caches, register_cache
+from fsspec.caching import BlockCache, FirstChunkCache, ReadAheadCache, caches, register_cache
 from fsspec.implementations.cached import WholeFileCacheFileSystem
 
 
@@ -15,6 +15,9 @@ def test_cache_getitem(Cache_imp):
 
 
 def test_block_cache_lru():
+    """
+    BlockCache is a cache that stores blocks of data and uses LRU to evict
+    """
     cache = BlockCache(4, letters_fetcher, len(string.ascii_letters), maxblocks=2)
     # miss
     cache._fetch(0, 2)
@@ -54,6 +57,73 @@ def test_block_cache_lru():
     assert cache.total_requested_bytes == 12
 
 
+def test_first_cache():
+    """
+    FirstChunkCache is a cache that only caches the first chunk of data
+    when some of that first block is requested.
+    """
+    cache = FirstChunkCache(5, letters_fetcher, len(string.ascii_letters))
+    assert cache.cache is None
+    assert cache._fetch(12, 15) == letters_fetcher(12, 15)
+    assert cache.miss_count == 1
+    assert cache.hit_count == 0
+    assert cache.cache is None
+    assert cache.total_requested_bytes == 3
+
+    # because we overlap with the cache range, it will be cached
+    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
+    assert cache.miss_count == 2
+    assert cache.hit_count == 0
+    assert cache.total_requested_bytes == 13
+
+    # partial hit again
+    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
+    assert cache.miss_count == 2
+    assert cache.hit_count == 1
+    # we have the first 5 bytes cached
+    assert cache.total_requested_bytes == 18
+
+    assert cache.cache == letters_fetcher(0, 5)
+    assert cache._fetch(0, 4) == letters_fetcher(0, 4)
+    assert cache.hit_count == 2
+    assert cache.miss_count == 2
+    assert cache.total_requested_bytes == 18
+
+
+def test_readahead_cache():
+    """
+    ReadAheadCache is a cache that reads ahead of the requested range
+    and if a reasd is not sequential it will be very inefficient.
+    """
+    cache = ReadAheadCache(5, letters_fetcher, len(string.ascii_letters))
+    assert cache._fetch(12, 15) == letters_fetcher(12, 15)
+    assert cache.miss_count == 1
+    assert cache.hit_count == 0
+    assert cache.total_requested_bytes == (15-12) + 5
+
+    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
+    assert cache.miss_count == 2
+    assert cache.hit_count == 0
+    assert len(cache.cache) == 12
+    total_requested_bytes = (15-12) + 5 + (10-3) + 5
+    assert cache.total_requested_bytes == total_requested_bytes
+
+    # partial hit again
+    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
+    assert cache.miss_count == 2
+    assert cache.hit_count == 1
+    assert len(cache.cache) == 12
+    assert cache.total_requested_bytes ==  (15-12) + 5 + (10-3) + 5
+    assert cache.cache == letters_fetcher(3, 15)
+
+    # cache miss
+    assert cache._fetch(0, 4) == letters_fetcher(0, 4)
+    assert cache.hit_count == 1
+    assert cache.miss_count == 3
+    assert len(cache.cache) == 9
+    total_requested_bytes = (15-12) + 5 + (10-3) + 5 + (4-0) + 5
+    assert cache.total_requested_bytes ==total_requested_bytes
+
 
 def _fetcher(start, end):
     return b"0" * (end - start)
@@ -90,33 +160,7 @@ def test_cache_pickleable(Cache_imp):
     assert unpickled._fetch(0, 10) == b"0" * 10
 
 
-def test_first_cache():
-    cache = FirstChunkCache(5, letters_fetcher, len(string.ascii_letters))
-    assert cache.cache is None
-    assert cache._fetch(12, 15) == letters_fetcher(12, 15)
-    assert cache.miss_count == 1
-    assert cache.hit_count == 0
-    assert cache.cache is None
-    assert cache.total_requested_bytes == 3
 
-    # because we overlap with the cache range, it will be cached
-    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
-    assert cache.miss_count == 2
-    assert cache.hit_count == 0
-    assert cache.total_requested_bytes == 13
-
-    # partial hit again
-    assert cache._fetch(3, 10) == letters_fetcher(3, 10)
-    assert cache.miss_count == 2
-    assert cache.hit_count == 1
-    # we have the first 5 bytes cached
-    assert cache.total_requested_bytes == 18
-
-    assert cache.cache == letters_fetcher(0, 5)
-    assert cache._fetch(0, 4) == letters_fetcher(0, 4)
-    assert cache.hit_count == 2
-    assert cache.miss_count == 2
-    assert cache.total_requested_bytes == 18
 
 
 @pytest.mark.parametrize(

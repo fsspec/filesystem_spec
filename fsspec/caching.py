@@ -81,14 +81,14 @@ class BaseCache:
 
     def __repr__(self) -> str:
         return f"""
-                cache type  :   {self.__class__.__name__} 
-                block size  :   {self.blocksize}
-                block count :   {self.nblocks}
-                file size  :   {self.size}
-                cache hits  :   {self.hit_count}
-                cache misses:   {self.miss_count}
-                total requested bytes: {self.total_requested_bytes}
-                """
+            cache type  :   {self.__class__.__name__} 
+            block size  :   {self.blocksize}
+            block count :   {self.nblocks}
+            file size   :   {self.size}
+            cache hits  :   {self.hit_count}
+            cache misses:   {self.miss_count}
+            total requested bytes: {self.total_requested_bytes}
+        """
 
 
 class MMapCache(BaseCache):
@@ -444,6 +444,7 @@ class BytesCache(BaseCache):
         ):
             # cache hit: we have all the required data
             offset = start - self.start
+            self.hit_count += 1
             return self.cache[offset : offset + end - start]
 
         if self.blocksize:
@@ -458,17 +459,23 @@ class BytesCache(BaseCache):
             self.end is None or end > self.end
         ):
             # First read, or extending both before and after
+            self.total_requested_bytes += bend - start
+            self.miss_count += 1
             self.cache = self.fetcher(start, bend)
             self.start = start
         else:
             assert self.start is not None
             assert self.end is not None
+            self.miss_count += 1
 
             if start < self.start:
                 if self.end is None or self.end - end > self.blocksize:
+                    self.total_requested_bytes += bend - start
                     self.cache = self.fetcher(start, bend)
                     self.start = start
                 else:
+
+                    self.total_requested_bytes += self.start - start
                     new = self.fetcher(start, self.start)
                     self.start = start
                     self.cache = new + self.cache
@@ -476,9 +483,11 @@ class BytesCache(BaseCache):
                 if self.end > self.size:
                     pass
                 elif end - self.end > self.blocksize:
+                    self.total_requested_bytes += bend - start
                     self.cache = self.fetcher(start, bend)
                     self.start = start
                 else:
+                    self.total_requested_bytes += bend - self.end
                     new = self.fetcher(self.end, bend)
                     self.cache = self.cache + new
 
@@ -510,10 +519,13 @@ class AllBytes(BaseCache):
     ) -> None:
         super().__init__(blocksize, fetcher, size)  # type: ignore[arg-type]
         if data is None:
+            self.miss_count += 1
+            self.total_requested_bytes += self.size
             data = self.fetcher(0, self.size)
         self.data = data
 
     def _fetch(self, start: int | None, stop: int | None) -> bytes:
+        self.hit_count += 1
         return self.data[start:stop]
 
 
@@ -591,6 +603,7 @@ class KnownPartsOfAFile(BaseCache):
                     # are allowed to pad reads beyond the
                     # buffer with zero
                     out += b"\x00" * (stop - start - len(out))
+                    self.hit_count += 1
                     return out
                 else:
                     # The request ends outside a known range,
@@ -612,6 +625,8 @@ class KnownPartsOfAFile(BaseCache):
             f"IO/caching performance may be poor!"
         )
         logger.debug(f"KnownPartsOfAFile cache fetching {start}-{stop}")
+        self.total_requested_bytes += stop - start
+        self.miss_count += 1
         return out + super()._fetch(start, stop)
 
 
@@ -716,11 +731,6 @@ class BackgroundBlockCache(BaseCache):
         self._fetch_future: Future[bytes] | None = None
         self._fetch_future_lock = threading.Lock()
 
-    def __repr__(self) -> str:
-        return (
-            f"<BackgroundBlockCache blocksize={self.blocksize}, "
-            f"size={self.size}, nblocks={self.nblocks}>"
-        )
 
     def cache_info(self) -> UpdatableLRU.CacheInfo:
         """
@@ -839,6 +849,8 @@ class BackgroundBlockCache(BaseCache):
         start = block_number * self.blocksize
         end = start + self.blocksize
         logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
+        self.total_requested_bytes += end - start
+        self.miss_count += 1
         block_contents = super()._fetch(start, end)
         return block_contents
 
@@ -857,6 +869,9 @@ class BackgroundBlockCache(BaseCache):
         """
         start_pos = start % self.blocksize
         end_pos = end % self.blocksize
+
+        # kind of pointless to count this as a hit, but it is
+        self.hit_count += 1
 
         if start_block_number == end_block_number:
             block = self._fetch_block_cached(start_block_number)
