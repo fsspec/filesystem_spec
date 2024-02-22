@@ -1,5 +1,6 @@
 import base64
 import io
+from typing import Optional
 from urllib.parse import unquote
 
 from fsspec import AbstractFileSystem
@@ -49,7 +50,7 @@ class DataFileSystem(AbstractFileSystem):
         return io.BytesIO(self.cat_file(path))
 
     @staticmethod
-    def encode(data: bytes, mime: str | None = None):
+    def encode(data: bytes, mime: Optional[str] = None):
         """Format the given data into data-URL syntax
 
         This version always base64 encodes, even when the data is ascii/url-safe.
