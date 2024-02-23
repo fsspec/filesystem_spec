@@ -43,6 +43,7 @@ select = [
     "E7",
     "E9",
     "F",
+    "LOG",
     "PERF",
     "PLC",
     "PLE",

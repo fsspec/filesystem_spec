@@ -1,5 +1,6 @@
 import base64
 import io
+from typing import Optional
 from urllib.parse import unquote
 
 from fsspec import AbstractFileSystem
@@ -14,6 +15,7 @@ class DataFileSystem(AbstractFileSystem):
     ...     print(f.read())
     b"Hello, World!"
 
+    See https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URLs
     """
 
     protocol = "data"
@@ -46,3 +48,11 @@ class DataFileSystem(AbstractFileSystem):
         if "r" not in mode:
             raise ValueError("Read only filesystem")
         return io.BytesIO(self.cat_file(path))
+
+    @staticmethod
+    def encode(data: bytes, mime: Optional[str] = None):
+        """Format the given data into data-URL syntax
+
+        This version always base64 encodes, even when the data is ascii/url-safe.
+        """
+        return f"data:{mime or ''};base64,{base64.b64encode(data).decode()}"
