@@ -26,8 +26,10 @@ class Transaction:
         """End transaction and commit, if exit is not due to exception"""
         # only commit if there was no exception
         self.complete(commit=exc_type is None)
-        self.fs._intrans = False
-        self.fs._transaction = None
+        if self.fs:
+            self.fs._intrans = False
+            self.fs._transaction = None
+            self.fs = None
 
     def start(self):
         """Start a transaction on this FileSystem"""
