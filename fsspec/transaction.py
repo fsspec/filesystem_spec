@@ -45,6 +45,7 @@ class Transaction:
             else:
                 f.discard()
         self.fs._intrans = False
+        self.fs._transaction = None
         self.fs = None
 
 

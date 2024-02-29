@@ -34,6 +34,7 @@ class WriteCachedTransaction(Transaction):
             self.fs.put(lpaths, rpaths)
         self.files.clear()
         self.fs._intrans = False
+        self.fs._transaction = None
         self.fs = None  # break cycle
 
 
