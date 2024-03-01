@@ -280,7 +280,7 @@ def make_path_posix(path, remove_trailing_slash=False):
                 return path.rstrip("/") if remove_trailing_slash else path
             elif path[0] == "~":
                 return make_path_posix(osp.expanduser(path), remove_trailing_slash)
-            elif path.startswith("\\\\") or path.startswith("//"):
+            elif path.startswith(("\\\\", "//")):
                 # windows UNC/DFS-style paths
                 path = "//" + path[2:].replace("\\", "/").replace("//", "/")
                 return path.rstrip("/") if remove_trailing_slash else path
