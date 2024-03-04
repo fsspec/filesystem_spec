@@ -36,6 +36,7 @@ dependencies:
   - nomkl
   - jinja2
   - tqdm
+  - urllib3 <=1.26.18
   - pip:
     - hadoop-test-cluster
     - smbprotocol
