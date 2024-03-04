@@ -56,6 +56,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             fo = fsspec.open(
                 fo, mode=m, protocol=target_protocol, **(target_options or {})
             )
+        self.force_zip_64 = allowZip64
         self.of = fo
         self.fo = fo.__enter__()  # the whole instance is a context
         self.zip = zipfile.ZipFile(
@@ -125,7 +126,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             raise FileNotFoundError(path)
         if "r" in self.mode and "w" in mode:
             raise OSError("ZipFS can only be open for reading or writing, not both")
-        out = self.zip.open(path, mode.strip("b"))
+        out = self.zip.open(path, mode.strip("b"), force_zip64=self.force_zip_64)
         if "r" in mode:
             info = self.info(path)
             out.size = info["size"]
