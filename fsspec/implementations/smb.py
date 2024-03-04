@@ -118,14 +118,21 @@ class SMBFileSystem(AbstractFileSystem):
         return 445 if self.port is None else self.port
 
     def _connect(self):
-        smbclient.register_session(
-            self.host,
-            username=self.username,
-            password=self.password,
-            port=self._port,
-            encrypt=self.encrypt,
-            connection_timeout=self.timeout,
-        )
+        import time
+
+        for _ in range(5):
+            try:
+                smbclient.register_session(
+                    self.host,
+                    username=self.username,
+                    password=self.password,
+                    port=self._port,
+                    encrypt=self.encrypt,
+                    connection_timeout=self.timeout,
+                )
+                break
+            except Exception:
+                time.sleep(0.1)
 
     @classmethod
     def _strip_protocol(cls, path):

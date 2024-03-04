@@ -17,3 +17,4 @@ dependencies:
   - moto <5
   - sqlalchemy<2
   - flask
+  - dask-expr
