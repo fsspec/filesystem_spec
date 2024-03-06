@@ -247,7 +247,7 @@ def test_pickle_after_open_open():
 # Add tests for more file systems and for more glob magic later
 glob_magic_characters = ("[", "]", "!")
 
-# Unit tests for issue #1476 (expand arg ignored in open file)
+# === Start of unit tests for issue #1476 (expand arg ignored in open file) ===
 
 
 @pytest.mark.parametrize("char", glob_magic_characters)
@@ -257,15 +257,12 @@ def test_open_file_read_with_special_characters(tmp_path, char):
     file_path = tmp_path / file_name
     expected_content = "Hello, world!"
 
-    # Write some content to the file
     with open(file_path, "w") as f:
         f.write(expected_content)
 
-    # Try to open the file using fsspec
     with fsspec.open(file_path, "r") as f:
         actual_content = f.read()
 
-    # Assert that the content read matches the expected content
     assert actual_content == expected_content
 
 
@@ -276,15 +273,12 @@ def test_open_files_read_with_special_characters(tmp_path, char):
     file_path = tmp_path / file_name
     expected_content = "Hello, world!"
 
-    # Write some content to the file
     with open(file_path, "w") as f:
         f.write(expected_content)
 
-    # Try to open the file using fsspec
     with fsspec.open_files(file_path, "r")[0] as f:
         actual_content = f.read()
 
-    # Assert that the content read matches the expected content
     assert actual_content == expected_content
 
 
@@ -295,15 +289,12 @@ def test_open_file_write_with_special_characters(tmp_path, char):
     file_path = tmp_path / file_name
     expected_content = "Hello, world!"
 
-    # Write some content to the file
     with fsspec.open(file_path, "w") as f:
         f.write(expected_content)
 
-    # Try to open the file using fsspec
     with open(file_path, "r") as f:
         actual_content = f.read()
 
-    # Assert that the content read matches the expected content
     assert actual_content == expected_content
 
 
@@ -322,7 +313,6 @@ def test_open_files_read_with_special_characters(tmp_path, char):
     ] as f:
         actual_content = f.read()
 
-    # Assert that the content read matches the expected content
     assert actual_content == expected_content
 
 
@@ -333,18 +323,18 @@ def test_open_files_write_with_special_characters(tmp_path, char):
     file_path = tmp_path / file_name
     expected_content = "Hello, world!"
 
-    # Write some content to the file fsspec
     with fsspec.open_files(urlpath=[os.fspath(file_path)], mode="w", auto_mkdir=False)[
         0
     ] as f:
         f.write(expected_content)
 
-    # Try to open the file using fsspec
     with open(file_path, "r") as f:
         actual_content = f.read()
 
-    # Assert that the content read matches the expected content
     assert actual_content == expected_content
+
+
+# === End of upnit tests for issue #1476 (expand arg ignored in open file) ===
 
 
 def test_mismatch():
