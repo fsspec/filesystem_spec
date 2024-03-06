@@ -645,7 +645,7 @@ def get_fs_token_paths(
     if isinstance(paths, (list, tuple, set)):
         if expand:
             paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
-        else:
+        elif not isinstance(paths, list):
             paths = list(paths)
     else:
         if "w" in mode and expand:
