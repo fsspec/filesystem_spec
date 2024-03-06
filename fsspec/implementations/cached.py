@@ -898,8 +898,4 @@ class LocalTempFile:
         return f"LocalTempFile: {self.path}"
 
     def __getattr__(self, item):
-        try:
-            return getattr(self.fh, item)
-        except AttributeError:
-            pass
-        raise AttributeError(item)
+        return getattr(self.fh, item)
