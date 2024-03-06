@@ -343,7 +343,7 @@ def _un_chain(path, kwargs):
             bit = previous_bit
         out.append((bit, protocol, kw))
         previous_bit = bit
-    out = list(reversed(out))
+    out.reverse()
     return out
 
 

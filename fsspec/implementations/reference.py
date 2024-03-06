@@ -1035,7 +1035,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 par0 = self._parent(par0)
                 subdirs.append(par0)
 
-            subdirs = subdirs[::-1]
+            subdirs.reverse()
             for parent, child in zip(subdirs, subdirs[1:]):
                 # register newly discovered directories
                 assert child not in self.dircache
