@@ -245,7 +245,9 @@ def test_pickle_after_open_open():
 # Similarly, we're careful with '{', '}', and '@' as their special meaning is
 # context-specific and might not be considered special for filenames.
 # Add tests for more file systems and for more glob magic later
-glob_magic_characters = ("[", "]", "!") # ("*", "?") not valid on Windows 
+glob_magic_characters = ["[", "]", "!"]
+if os.name != "nt":
+    glob_magic_characters.extend(("*", "?"))  # not valid on Windows
 
 
 @pytest.mark.parametrize("char", glob_magic_characters)
