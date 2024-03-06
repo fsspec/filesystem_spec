@@ -245,9 +245,7 @@ def test_pickle_after_open_open():
 # Similarly, we're careful with '{', '}', and '@' as their special meaning is
 # context-specific and might not be considered special for filenames.
 # Add tests for more file systems and for more glob magic later
-glob_magic_characters = ("[", "]", "!")
-
-# === Start of unit tests for issue #1476 (expand arg ignored in open file) ===
+glob_magic_characters = ("[", "]", "!", "*", "?")
 
 
 @pytest.mark.parametrize("char", glob_magic_characters)
@@ -308,9 +306,9 @@ def test_open_files_read_with_special_characters(tmp_path, char):
     with open(file_path, "w") as f:
         f.write(expected_content)
 
-    with fsspec.open_files(urlpath=[os.fspath(file_path)], mode="r", auto_mkdir=False)[
-        0
-    ] as f:
+    with fsspec.open_files(
+        urlpath=[os.fspath(file_path)], mode="r", auto_mkdir=False, expand=False
+    )[0] as f:
         actual_content = f.read()
 
     assert actual_content == expected_content
@@ -323,18 +321,15 @@ def test_open_files_write_with_special_characters(tmp_path, char):
     file_path = tmp_path / file_name
     expected_content = "Hello, world!"
 
-    with fsspec.open_files(urlpath=[os.fspath(file_path)], mode="w", auto_mkdir=False)[
-        0
-    ] as f:
+    with fsspec.open_files(
+        urlpath=[os.fspath(file_path)], mode="w", auto_mkdir=False, expand=False
+    )[0] as f:
         f.write(expected_content)
 
     with open(file_path, "r") as f:
         actual_content = f.read()
 
     assert actual_content == expected_content
-
-
-# === End of upnit tests for issue #1476 (expand arg ignored in open file) ===
 
 
 def test_mismatch():
