@@ -239,6 +239,114 @@ def test_pickle_after_open_open():
     of2.close()
 
 
+# Define a list of special glob characters.
+# Note that we need to escape some characters and also consider file system limitations.
+# '*' and '?' are excluded because they are not valid for many file systems.
+# Similarly, we're careful with '{', '}', and '@' as their special meaning is
+# context-specific and might not be considered special for filenames.
+# Add tests for more file systems and for more glob magic later
+glob_magic_characters = ("[", "]", "!")
+
+# Unit tests for issue #1476 (expand arg ignored in open file)
+
+
+@pytest.mark.parametrize("char", glob_magic_characters)
+def test_open_file_read_with_special_characters(tmp_path, char):
+    # Create a filename incorporating the special character
+    file_name = f"test{char}.txt"
+    file_path = tmp_path / file_name
+    expected_content = "Hello, world!"
+
+    # Write some content to the file
+    with open(file_path, "w") as f:
+        f.write(expected_content)
+
+    # Try to open the file using fsspec
+    with fsspec.open(file_path, "r") as f:
+        actual_content = f.read()
+
+    # Assert that the content read matches the expected content
+    assert actual_content == expected_content
+
+
+@pytest.mark.parametrize("char", glob_magic_characters)
+def test_open_files_read_with_special_characters(tmp_path, char):
+    # Create a filename incorporating the special character
+    file_name = f"test{char}.txt"
+    file_path = tmp_path / file_name
+    expected_content = "Hello, world!"
+
+    # Write some content to the file
+    with open(file_path, "w") as f:
+        f.write(expected_content)
+
+    # Try to open the file using fsspec
+    with fsspec.open_files(file_path, "r")[0] as f:
+        actual_content = f.read()
+
+    # Assert that the content read matches the expected content
+    assert actual_content == expected_content
+
+
+@pytest.mark.parametrize("char", glob_magic_characters)
+def test_open_file_write_with_special_characters(tmp_path, char):
+    # Create a filename incorporating the special character
+    file_name = f"test{char}.txt"
+    file_path = tmp_path / file_name
+    expected_content = "Hello, world!"
+
+    # Write some content to the file
+    with fsspec.open(file_path, "w") as f:
+        f.write(expected_content)
+
+    # Try to open the file using fsspec
+    with open(file_path, "r") as f:
+        actual_content = f.read()
+
+    # Assert that the content read matches the expected content
+    assert actual_content == expected_content
+
+
+@pytest.mark.parametrize("char", glob_magic_characters)
+def test_open_files_read_with_special_characters(tmp_path, char):
+    # Create a filename incorporating the special character
+    file_name = f"test{char}.txt"
+    file_path = tmp_path / file_name
+    expected_content = "Hello, world!"
+
+    with open(file_path, "w") as f:
+        f.write(expected_content)
+
+    with fsspec.open_files(urlpath=[os.fspath(file_path)], mode="r", auto_mkdir=False)[
+        0
+    ] as f:
+        actual_content = f.read()
+
+    # Assert that the content read matches the expected content
+    assert actual_content == expected_content
+
+
+@pytest.mark.parametrize("char", glob_magic_characters)
+def test_open_files_write_with_special_characters(tmp_path, char):
+    # Create a filename incorporating the special character
+    file_name = f"test{char}.txt"
+    file_path = tmp_path / file_name
+    expected_content = "Hello, world!"
+
+    # Write some content to the file fsspec
+    with fsspec.open_files(urlpath=[os.fspath(file_path)], mode="w", auto_mkdir=False)[
+        0
+    ] as f:
+        f.write(expected_content)
+
+    # Try to open the file using fsspec
+    with open(file_path, "r") as f:
+        actual_content = f.read()
+
+    # Assert that the content read matches the expected content
+    assert actual_content == expected_content
+
+
 def test_mismatch():
     pytest.importorskip("s3fs")
     with pytest.raises(ValueError):
