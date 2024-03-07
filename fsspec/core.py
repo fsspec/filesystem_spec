@@ -343,7 +343,7 @@ def _un_chain(path, kwargs):
             bit = previous_bit
         out.append((bit, protocol, kw))
         previous_bit = bit
-    out = list(reversed(out))
+    out.reverse()
     return out
 
 
@@ -643,7 +643,10 @@ def get_fs_token_paths(
     else:
         paths = fs._strip_protocol(paths)
     if isinstance(paths, (list, tuple, set)):
-        paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
+        if expand:
+            paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
+        elif not isinstance(paths, list):
+            paths = list(paths)
     else:
         if "w" in mode and expand:
             paths = _expand_paths(paths, name_function, num)

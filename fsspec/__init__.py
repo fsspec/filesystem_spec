@@ -3,7 +3,7 @@ from importlib.metadata import entry_points
 from . import _version, caching
 from .callbacks import Callback
 from .compression import available_compressions
-from .core import get_fs_token_paths, open, open_files, open_local
+from .core import get_fs_token_paths, open, open_files, open_local, url_to_fs
 from .exceptions import FSTimeoutError
 from .mapping import FSMap, get_mapper
 from .registry import (
@@ -34,6 +34,7 @@ __all__ = [
     "Callback",
     "available_protocols",
     "available_compressions",
+    "url_to_fs",
 ]
 
 
