@@ -60,16 +60,81 @@ def register_implementation(name, cls, clobber=False, errtxt=None):
 # protocols mapped to the class which implements them. This dict can be
 # updated with register_implementation
 known_implementations = {
+    "abfs": {
+        "class": "adlfs.AzureBlobFileSystem",
+        "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
+    },
+    "adl": {
+        "class": "adlfs.AzureDatalakeFileSystem",
+        "err": "Install adlfs to access Azure Datalake Gen1",
+    },
+    "arrow_hdfs": {
+        "class": "fsspec.implementations.arrow.HadoopFileSystem",
+        "err": "pyarrow and local java libraries required for HDFS",
+    },
+    "asynclocal": {
+        "class": "morefs.asyn_local.AsyncLocalFileSystem",
+        "err": "Install 'morefs[asynclocalfs]' to use AsyncLocalFileSystem",
+    },
+    "az": {
+        "class": "adlfs.AzureBlobFileSystem",
+        "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
+    },
+    "blockcache": {"class": "fsspec.implementations.cached.CachingFileSystem"},
+    "box": {
+        "class": "boxfs.BoxFileSystem",
+        "err": "Please install boxfs to access BoxFileSystem",
+    },
+    "cached": {"class": "fsspec.implementations.cached.CachingFileSystem"},
+    "dask": {
+        "class": "fsspec.implementations.dask.DaskWorkerFileSystem",
+        "err": "Install dask distributed to access worker file system",
+    },
     "data": {"class": "fsspec.implementations.data.DataFileSystem"},
-    "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
-    "local": {"class": "fsspec.implementations.local.LocalFileSystem"},
-    "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
+    "dbfs": {
+        "class": "fsspec.implementations.dbfs.DatabricksFileSystem",
+        "err": "Install the requests package to use the DatabricksFileSystem",
+    },
+    "dir": {"class": "fsspec.implementations.dirfs.DirFileSystem"},
     "dropbox": {
         "class": "dropboxdrivefs.DropboxDriveFileSystem",
-        "err": (
-            'DropboxFileSystem requires "dropboxdrivefs",'
-            '"requests" and "dropbox" to be installed'
-        ),
+        "err": 'DropboxFileSystem requires "dropboxdrivefs","requests" and "dropbox" to be installed',
+    },
+    "dvc": {
+        "class": "dvc.api.DVCFileSystem",
+        "err": "Install dvc to access DVCFileSystem",
+    },
+    "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
+    "filecache": {"class": "fsspec.implementations.cached.WholeFileCacheFileSystem"},
+    "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
+    "gcs": {
+        "class": "gcsfs.GCSFileSystem",
+        "err": "Please install gcsfs to access Google Storage",
+    },
+    "gdrive": {
+        "class": "gdrivefs.GoogleDriveFileSystem",
+        "err": "Please install gdrivefs for access to Google Drive",
+    },
+    "generic": {"class": "fsspec.generic.GenericFileSystem"},
+    "git": {
+        "class": "fsspec.implementations.git.GitFileSystem",
+        "err": "Install pygit2 to browse local git repos",
+    },
+    "github": {
+        "class": "fsspec.implementations.github.GithubFileSystem",
+        "err": "Install the requests package to use the github FS",
+    },
+    "gs": {
+        "class": "gcsfs.GCSFileSystem",
+        "err": "Please install gcsfs to access Google Storage",
+    },
+    "hdfs": {
+        "class": "fsspec.implementations.arrow.HadoopFileSystem",
+        "err": "pyarrow and local java libraries required for HDFS",
+    },
+    "hf": {
+        "class": "huggingface_hub.HfFileSystem",
+        "err": "Install huggingface_hub to access HfFileSystem",
     },
     "http": {
         "class": "fsspec.implementations.http.HTTPFileSystem",
@@ -79,44 +144,24 @@ known_implementations = {
         "class": "fsspec.implementations.http.HTTPFileSystem",
         "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
-    "zip": {"class": "fsspec.implementations.zip.ZipFileSystem"},
-    "tar": {"class": "fsspec.implementations.tar.TarFileSystem"},
-    "gcs": {
-        "class": "gcsfs.GCSFileSystem",
-        "err": "Please install gcsfs to access Google Storage",
+    "jlab": {
+        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
+        "err": "Jupyter FS requires requests to be installed",
     },
-    "gs": {
-        "class": "gcsfs.GCSFileSystem",
-        "err": "Please install gcsfs to access Google Storage",
+    "jupyter": {
+        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
+        "err": "Jupyter FS requires requests to be installed",
     },
-    "gdrive": {
-        "class": "gdrivefs.GoogleDriveFileSystem",
-        "err": "Please install gdrivefs for access to Google Drive",
+    "lakefs": {
+        "class": "lakefs_spec.LakeFSFileSystem",
+        "err": "Please install lakefs-spec to access LakeFSFileSystem",
     },
-    "sftp": {
-        "class": "fsspec.implementations.sftp.SFTPFileSystem",
-        "err": 'SFTPFileSystem requires "paramiko" to be installed',
+    "libarchive": {
+        "class": "fsspec.implementations.libarchive.LibArchiveFileSystem",
+        "err": "LibArchive requires to be installed",
     },
-    "ssh": {
-        "class": "fsspec.implementations.sftp.SFTPFileSystem",
-        "err": 'SFTPFileSystem requires "paramiko" to be installed',
-    },
-    "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
-    "hdfs": {
-        "class": "fsspec.implementations.arrow.HadoopFileSystem",
-        "err": "pyarrow and local java libraries required for HDFS",
-    },
-    "arrow_hdfs": {
-        "class": "fsspec.implementations.arrow.HadoopFileSystem",
-        "err": "pyarrow and local java libraries required for HDFS",
-    },
-    "webhdfs": {
-        "class": "fsspec.implementations.webhdfs.WebHDFS",
-        "err": 'webHDFS access requires "requests" to be installed',
-    },
-    "s3": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
-    "s3a": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
-    "wandb": {"class": "wandbfs.WandbFS", "err": "Install wandbfs to access wandb"},
+    "local": {"class": "fsspec.implementations.local.LocalFileSystem"},
+    "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
     "oci": {
         "class": "ocifs.OCIFileSystem",
         "err": "Install ocifs to access OCI Object Storage",
@@ -125,91 +170,41 @@ known_implementations = {
         "class": "ocifs.OCIFileSystem",
         "err": "Install ocifs to access OCI Data Lake",
     },
-    "asynclocal": {
-        "class": "morefs.asyn_local.AsyncLocalFileSystem",
-        "err": "Install 'morefs[asynclocalfs]' to use AsyncLocalFileSystem",
-    },
-    "adl": {
-        "class": "adlfs.AzureDatalakeFileSystem",
-        "err": "Install adlfs to access Azure Datalake Gen1",
-    },
-    "abfs": {
-        "class": "adlfs.AzureBlobFileSystem",
-        "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
-    },
-    "az": {
-        "class": "adlfs.AzureBlobFileSystem",
-        "err": "Install adlfs to access Azure Datalake Gen2 and Azure Blob Storage",
-    },
-    "cached": {"class": "fsspec.implementations.cached.CachingFileSystem"},
-    "blockcache": {"class": "fsspec.implementations.cached.CachingFileSystem"},
-    "filecache": {"class": "fsspec.implementations.cached.WholeFileCacheFileSystem"},
-    "simplecache": {"class": "fsspec.implementations.cached.SimpleCacheFileSystem"},
-    "dask": {
-        "class": "fsspec.implementations.dask.DaskWorkerFileSystem",
-        "err": "Install dask distributed to access worker file system",
-    },
-    "dbfs": {
-        "class": "fsspec.implementations.dbfs.DatabricksFileSystem",
-        "err": "Install the requests package to use the DatabricksFileSystem",
-    },
-    "github": {
-        "class": "fsspec.implementations.github.GithubFileSystem",
-        "err": "Install the requests package to use the github FS",
-    },
-    "git": {
-        "class": "fsspec.implementations.git.GitFileSystem",
-        "err": "Install pygit2 to browse local git repos",
-    },
-    "smb": {
-        "class": "fsspec.implementations.smb.SMBFileSystem",
-        "err": 'SMB requires "smbprotocol" or "smbprotocol[kerberos]" installed',
-    },
-    "jupyter": {
-        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
-        "err": "Jupyter FS requires requests to be installed",
-    },
-    "jlab": {
-        "class": "fsspec.implementations.jupyter.JupyterFileSystem",
-        "err": "Jupyter FS requires requests to be installed",
-    },
-    "libarchive": {
-        "class": "fsspec.implementations.libarchive.LibArchiveFileSystem",
-        "err": "LibArchive requires to be installed",
-    },
-    "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
-    "generic": {"class": "fsspec.generic.GenericFileSystem"},
     "oss": {
         "class": "ossfs.OSSFileSystem",
         "err": "Install ossfs to access Alibaba Object Storage System",
     },
+    "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
+    "root": {
+        "class": "fsspec_xrootd.XRootDFileSystem",
+        "err": "Install fsspec-xrootd to access xrootd storage system. Note: 'root' is the protocol name for xrootd storage systems, not referring to root directories",
+    },
+    "s3": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
+    "s3a": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
+    "sftp": {
+        "class": "fsspec.implementations.sftp.SFTPFileSystem",
+        "err": 'SFTPFileSystem requires "paramiko" to be installed',
+    },
+    "simplecache": {"class": "fsspec.implementations.cached.SimpleCacheFileSystem"},
+    "smb": {
+        "class": "fsspec.implementations.smb.SMBFileSystem",
+        "err": 'SMB requires "smbprotocol" or "smbprotocol[kerberos]" installed',
+    },
+    "ssh": {
+        "class": "fsspec.implementations.sftp.SFTPFileSystem",
+        "err": 'SFTPFileSystem requires "paramiko" to be installed',
+    },
+    "tar": {"class": "fsspec.implementations.tar.TarFileSystem"},
+    "wandb": {"class": "wandbfs.WandbFS", "err": "Install wandbfs to access wandb"},
     "webdav": {
         "class": "webdav4.fsspec.WebdavFileSystem",
         "err": "Install webdav4 to access WebDAV",
     },
-    "dvc": {
-        "class": "dvc.api.DVCFileSystem",
-        "err": "Install dvc to access DVCFileSystem",
+    "webhdfs": {
+        "class": "fsspec.implementations.webhdfs.WebHDFS",
+        "err": 'webHDFS access requires "requests" to be installed',
     },
-    "hf": {
-        "class": "huggingface_hub.HfFileSystem",
-        "err": "Install huggingface_hub to access HfFileSystem",
-    },
-    "root": {
-        "class": "fsspec_xrootd.XRootDFileSystem",
-        "err": "Install fsspec-xrootd to access xrootd storage system."
-        + " Note: 'root' is the protocol name for xrootd storage systems,"
-        + " not referring to root directories",
-    },
-    "dir": {"class": "fsspec.implementations.dirfs.DirFileSystem"},
-    "box": {
-        "class": "boxfs.BoxFileSystem",
-        "err": "Please install boxfs to access BoxFileSystem",
-    },
-    "lakefs": {
-        "class": "lakefs_spec.LakeFSFileSystem",
-        "err": "Please install lakefs-spec to access LakeFSFileSystem",
-    },
+    "zip": {"class": "fsspec.implementations.zip.ZipFileSystem"},
 }
 
 
