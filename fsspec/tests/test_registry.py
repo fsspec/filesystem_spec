@@ -36,7 +36,7 @@ def clean_imports():
         sys.modules["fsspec"] = real_module
 
 
-def test_sorted_known_implementations(known_implementations):
+def test_sorted_known_implementations():
     expected = sorted(known_implementations.keys())
     actual = list(known_implementations.keys())
     assert actual == expected
