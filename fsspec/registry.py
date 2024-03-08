@@ -98,7 +98,10 @@ known_implementations = {
     "dir": {"class": "fsspec.implementations.dirfs.DirFileSystem"},
     "dropbox": {
         "class": "dropboxdrivefs.DropboxDriveFileSystem",
-        "err": 'DropboxFileSystem requires "dropboxdrivefs","requests" and "dropbox" to be installed',
+        "err": (
+            'DropboxFileSystem requires "dropboxdrivefs","requests" and "'
+            '"dropbox" to be installed'
+        ),
     },
     "dvc": {
         "class": "dvc.api.DVCFileSystem",
@@ -177,7 +180,11 @@ known_implementations = {
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
     "root": {
         "class": "fsspec_xrootd.XRootDFileSystem",
-        "err": "Install fsspec-xrootd to access xrootd storage system. Note: 'root' is the protocol name for xrootd storage systems, not referring to root directories",
+        "err": (
+            "Install fsspec-xrootd to access xrootd storage system. "
+            "Note: 'root' is the protocol name for xrootd storage systems, "
+            "not referring to root directories"
+        ),
     },
     "s3": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
     "s3a": {"class": "s3fs.S3FileSystem", "err": "Install s3fs to access S3"},
