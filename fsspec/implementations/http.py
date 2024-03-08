@@ -332,7 +332,6 @@ class HTTPFileSystem(AsyncFileSystem):
         autocommit=None,  # XXX: This differs from the base class.
         cache_type=None,
         cache_options=None,
-        size=None,
         **kwargs,
     ):
         """Make a file-like object
@@ -355,16 +354,14 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
-        size = size or self.info(path, **kwargs)["size"]
         session = sync(self.loop, self.set_session)
-        if block_size and size:
+        if block_size:
             return HTTPFile(
                 self,
                 path,
                 session=session,
                 block_size=block_size,
                 mode=mode,
-                size=size,
                 cache_type=cache_type or self.cache_type,
                 cache_options=cache_options or self.cache_options,
                 loop=self.loop,
@@ -549,7 +546,6 @@ class HTTPFile(AbstractBufferedFile):
         mode="rb",
         cache_type="bytes",
         cache_options=None,
-        size=None,
         loop=None,
         asynchronous=False,
         **kwargs,
@@ -559,7 +555,7 @@ class HTTPFile(AbstractBufferedFile):
         self.asynchronous = asynchronous
         self.url = url
         self.session = session
-        self.details = {"name": url, "size": size, "type": "file"}
+        self.details = {"name": url, "size": None, "type": "file"}
         super().__init__(
             fs=fs,
             path=url,
