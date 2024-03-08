@@ -6,7 +6,6 @@ import time
 import pytest
 
 import fsspec
-from fsspec.tests.test_utils import WIN
 
 pytest.importorskip("notebook")
 requests = pytest.importorskip("requests")
@@ -17,7 +16,7 @@ def jupyter(tmpdir):
     tmpdir = str(tmpdir)
     os.environ["JUPYTER_TOKEN"] = "blah"
     try:
-        cmd = f"jupyter notebook --notebook-dir={tmpdir} --no-browser --port=5566"
+        cmd = f'jupyter notebook --notebook-dir="{tmpdir}" --no-browser --port=5566'
         P = subprocess.Popen(shlex.split(cmd))
     except FileNotFoundError:
         pytest.skip("notebook not installed correctly")
@@ -38,7 +37,6 @@ def jupyter(tmpdir):
         P.terminate()
 
 
-@pytest.mark.skipif(WIN, reason="Subprocess gets stuck in a loop")
 def test_simple(jupyter):
     url, d = jupyter
     fs = fsspec.filesystem("jupyter", url=url)
