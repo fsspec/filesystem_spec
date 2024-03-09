@@ -75,7 +75,6 @@ ignore = [
     # Fix these codes later
     "G004",
     "PERF203",
-    "PERF401",
 ]
 
 [tool.pytest.ini_options]

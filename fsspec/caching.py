@@ -345,14 +345,17 @@ class BlockCache(BaseCache):
 
         else:
             # read from the initial
-            out = []
-            out.append(self._fetch_block_cached(start_block_number)[start_pos:])
+            out = [self._fetch_block_cached(start_block_number)[start_pos:]]
 
             # intermediate blocks
             # Note: it'd be nice to combine these into one big request. However
             # that doesn't play nicely with our LRU cache.
-            for block_number in range(start_block_number + 1, end_block_number):
-                out.append(self._fetch_block_cached(block_number))
+            out.extend(
+                map(
+                    self._fetch_block_cached,
+                    range(start_block_number + 1, end_block_number),
+                )
+            )
 
             # final block
             out.append(self._fetch_block_cached(end_block_number)[:end_pos])
@@ -821,14 +824,17 @@ class BackgroundBlockCache(BaseCache):
 
         else:
             # read from the initial
-            out = []
-            out.append(self._fetch_block_cached(start_block_number)[start_pos:])
+            out = [self._fetch_block_cached(start_block_number)[start_pos:]]
 
             # intermediate blocks
             # Note: it'd be nice to combine these into one big request. However
             # that doesn't play nicely with our LRU cache.
-            for block_number in range(start_block_number + 1, end_block_number):
-                out.append(self._fetch_block_cached(block_number))
+            out.extend(
+                map(
+                    self._fetch_block_cached,
+                    range(start_block_number + 1, end_block_number),
+                )
+            )
 
             # final block
             out.append(self._fetch_block_cached(end_block_number)[:end_pos])
