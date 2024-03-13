@@ -393,6 +393,9 @@ class CachingFileSystem(AbstractFileSystem):
         close()
         f.closed = True
 
+    def ls(self, path, detail=True):
+        return self.fs.ls(path, detail)
+
     def __getattribute__(self, item):
         if item in {
             "load_cache",
@@ -412,6 +415,7 @@ class CachingFileSystem(AbstractFileSystem):
             "tail",
             "head",
             "info",
+            "ls",
             "exists",
             "isfile",
             "isdir",
@@ -762,9 +766,37 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         else:
             super().pipe_file(path, value)
 
-    # def ls(self, path, detail=True, **kwargs):
-    #    details = super().ls(path, detail, **kwargs)
-    #    if self._intrans:
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path)
+        details = []
+        try:
+            details = self.fs.ls(
+                path, detail=True, **kwargs
+            ).copy()  # don't edit original!
+        except FileNotFoundError as e:
+            ex = e
+        else:
+            ex = None
+        if self._intrans:
+            path1 = path.rstrip("/") + "/"
+            for f in self.transaction.files:
+                if f.path == path:
+                    details.append(
+                        {"name": path, "size": f.size or f.tell(), "type": "file"}
+                    )
+                elif f.path.startswith(path1):
+                    if f.path.count("/") == path1.count("/"):
+                        details.append(
+                            {"name": f.path, "size": f.size or f.tell(), "type": "file"}
+                        )
+                    else:
+                        dname = "/".join(f.path.split("/")[: path1.count("/") + 1])
+                        details.append({"name": dname, "size": 0, "type": "directory"})
+        if ex is not None and not details:
+            raise ex
+        if detail:
+            return details
+        return sorted(_["name"] for _ in details)
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
