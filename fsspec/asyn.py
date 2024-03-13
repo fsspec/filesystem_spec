@@ -239,21 +239,19 @@ async def _run_coros_in_chunks(
         batch_size = len(coros)
 
     assert batch_size > 0
-    results = []
-    for start in range(0, len(coros), batch_size):
-        chunk = [
-            asyncio.Task(asyncio.wait_for(c, timeout=timeout))
-            for c in coros[start : start + batch_size]
-        ]
+    semaphore = asyncio.BoundedSemaphore(batch_size)
+
+    async def _worker(coro):
+        async with semaphore:
+            return await coro
+
+    tasks = []
+    for coro in coros:
+        task = asyncio.create_task(_worker(asyncio.wait_for(coro, timeout=timeout)))
         if callback is not DEFAULT_CALLBACK:
-            [
-                t.add_done_callback(lambda *_, **__: callback.relative_update(1))
-                for t in chunk
-            ]
-        results.extend(
-            await asyncio.gather(*chunk, return_exceptions=return_exceptions),
-        )
-    return results
+            task.add_done_callback(lambda *_, **__: callback.relative_update(1))
+        tasks.append(task)
+    return await asyncio.gather(*tasks, return_exceptions=return_exceptions)
 
 
 # these methods should be implemented as async by any async-able backend
