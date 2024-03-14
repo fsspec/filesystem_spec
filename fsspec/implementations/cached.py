@@ -438,6 +438,9 @@ class CachingFileSystem(AbstractFileSystem):
             "cache_size",
             "pipe_file",
             "pipe",
+            "isdir",
+            "isfile",
+            "exists",
             "start_transaction",
             "end_transaction",
         }:
@@ -804,6 +807,9 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             f = [_ for _ in self.transaction.files if _.path == path]
             if f:
                 return {"name": path, "size": f[0].size or f[0].tell(), "type": "file"}
+            f = any(_.path.startswith(path + "/") for _ in self.transaction.files)
+            if f:
+                return {"name": path, "size": 0, "type": "directory"}
         return self.fs.info(path, **kwargs)
 
     def pipe(self, path, value=None, **kwargs):
