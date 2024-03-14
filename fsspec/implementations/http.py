@@ -158,11 +158,14 @@ class HTTPFileSystem(AsyncFileSystem):
         session = await self.set_session()
         async with session.get(self.encode_url(url), **self.kwargs) as r:
             self._raise_not_found_for_status(r, url)
-            text = await r.text()
-        if self.simple_links:
-            links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
-        else:
-            links = [u[2] for u in ex.findall(text)]
+            try:
+                text = await r.text()
+                if self.simple_links:
+                    links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
+                else:
+                    links = [u[2] for u in ex.findall(text)]
+            except UnicodeDecodeError:
+                links = []  # binary, not HTML
         out = set()
         parts = urlparse(url)
         for l in links:
