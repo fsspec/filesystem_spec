@@ -240,36 +240,33 @@ async def _run_coros_in_chunks(
 
     assert batch_size > 0
 
-    async def _run_coro(coro):
+    async def _run_coro(coro, i):
         try:
-            return await asyncio.wait_for(coro, timeout=timeout)
+            return await asyncio.wait_for(coro, timeout=timeout), i
         except Exception as e:
             if not return_exceptions:
                 raise
-            return e
+            return e, i
         finally:
             callback.relative_update(1)
 
-    coros = iter(coros)
-    stop = False
+    i = 0
+    n = len(coros)
+    results = [None] * n
     pending = set()
-    results = []
 
-    while pending or not stop:
-        while len(pending) < batch_size and not stop:
-            try:
-                coro = next(coros)
-            except StopIteration:
-                stop = True
-            else:
-                pending.add(asyncio.ensure_future(_run_coro(coro)))
+    while pending or i < n:
+        while len(pending) < batch_size and i < n:
+            pending.add(asyncio.ensure_future(_run_coro(coros[i], i)))
+            i += 1
 
         if not pending:
             break
 
         done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
         while done:
-            results.append(await done.pop())
+            result, k = await done.pop()
+            results[k] = result
 
     return results
 
