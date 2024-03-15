@@ -433,7 +433,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 if policy == "get":
                     # If get failed, then raise a FileNotFoundError
                     raise FileNotFoundError(url) from exc
-                logger.debug(str(exc))
+                logger.debug("", exc_info=exc)
 
         return {"name": url, "size": None, **info, "type": "file"}
 
