@@ -19,7 +19,7 @@ Fixes
 Other
 
 - HTTP logging (#1547)
-- url_to_fs exposed in pakage root (#1540)
+- url_to_fs exposed in package root (#1540)
 - sort known_implementations (#1549)
 - code quality/stype (#1538, 1537, 1528, 1526)
 
