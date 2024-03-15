@@ -239,19 +239,39 @@ async def _run_coros_in_chunks(
         batch_size = len(coros)
 
     assert batch_size > 0
-    semaphore = asyncio.BoundedSemaphore(batch_size)
 
-    async def _worker(coro):
-        async with semaphore:
-            return await coro
+    async def _run_coro(coro):
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout)
+        except Exception as e:
+            if not return_exceptions:
+                raise
+            return e
+        finally:
+            callback.relative_update(1)
 
-    tasks = []
-    for coro in coros:
-        task = asyncio.create_task(_worker(asyncio.wait_for(coro, timeout=timeout)))
-        if callback is not DEFAULT_CALLBACK:
-            task.add_done_callback(lambda *_, **__: callback.relative_update(1))
-        tasks.append(task)
-    return await asyncio.gather(*tasks, return_exceptions=return_exceptions)
+    coros = iter(coros)
+    stop = False
+    pending = set()
+    results = []
+
+    while pending or not stop:
+        while len(pending) < batch_size and not stop:
+            try:
+                coro = next(coros)
+            except StopIteration:
+                stop = True
+            else:
+                pending.add(asyncio.ensure_future(_run_coro(coro)))
+
+        if not pending:
+            break
+
+        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        while done:
+            results.append(await done.pop())
+
+    return results
 
 
 # these methods should be implemented as async by any async-able backend
