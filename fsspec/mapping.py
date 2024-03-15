@@ -1,10 +1,13 @@
 import array
+import logging
 import posixpath
 import warnings
 from collections.abc import MutableMapping
 from functools import cached_property
 
-from .core import url_to_fs
+from fsspec.core import url_to_fs
+
+logger = logging.getLogger("fsspec.mapping")
 
 
 class FSMap(MutableMapping):
@@ -69,6 +72,7 @@ class FSMap(MutableMapping):
 
     def clear(self):
         """Remove all keys below root - empties out mapping"""
+        logger.info("Clear mapping at %s", self.root)
         try:
             self.fs.rm(self.root, True)
             self.fs.mkdir(self.root)
@@ -186,7 +190,7 @@ class FSMap(MutableMapping):
     def __contains__(self, key):
         """Does key exist in mapping?"""
         path = self._key_to_str(key)
-        return self.fs.exists(path) and self.fs.isfile(path)
+        return self.fs.isfile(path)
 
     def __reduce__(self):
         return FSMap, (self.root, self.fs, False, False, self.missing_exceptions)

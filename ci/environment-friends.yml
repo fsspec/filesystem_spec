@@ -21,6 +21,7 @@ dependencies:
   - flake8
   - black
   - google-cloud-core
+  - google-cloud-storage
   - google-api-core
   - google-api-python-client
   - httpretty

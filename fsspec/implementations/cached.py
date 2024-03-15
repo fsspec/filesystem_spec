@@ -32,8 +32,10 @@ class WriteCachedTransaction(Transaction):
         lpaths = [f.fn for f in self.files]
         if commit:
             self.fs.put(lpaths, rpaths)
-        # else remove?
+        self.files.clear()
         self.fs._intrans = False
+        self.fs._transaction = None
+        self.fs = None  # break cycle
 
 
 class CachingFileSystem(AbstractFileSystem):
@@ -391,8 +393,11 @@ class CachingFileSystem(AbstractFileSystem):
         close()
         f.closed = True
 
+    def ls(self, path, detail=True):
+        return self.fs.ls(path, detail)
+
     def __getattribute__(self, item):
-        if item in [
+        if item in {
             "load_cache",
             "_open",
             "save_cache",
@@ -409,6 +414,11 @@ class CachingFileSystem(AbstractFileSystem):
             "read_block",
             "tail",
             "head",
+            "info",
+            "ls",
+            "exists",
+            "isfile",
+            "isdir",
             "_check_file",
             "_check_cache",
             "_mkcache",
@@ -428,9 +438,12 @@ class CachingFileSystem(AbstractFileSystem):
             "cache_size",
             "pipe_file",
             "pipe",
+            "isdir",
+            "isfile",
+            "exists",
             "start_transaction",
             "end_transaction",
-        ]:
+        }:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
             return lambda *args, **kw: getattr(type(self), item).__get__(self)(
@@ -756,6 +769,49 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         else:
             super().pipe_file(path, value)
 
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path)
+        details = []
+        try:
+            details = self.fs.ls(
+                path, detail=True, **kwargs
+            ).copy()  # don't edit original!
+        except FileNotFoundError as e:
+            ex = e
+        else:
+            ex = None
+        if self._intrans:
+            path1 = path.rstrip("/") + "/"
+            for f in self.transaction.files:
+                if f.path == path:
+                    details.append(
+                        {"name": path, "size": f.size or f.tell(), "type": "file"}
+                    )
+                elif f.path.startswith(path1):
+                    if f.path.count("/") == path1.count("/"):
+                        details.append(
+                            {"name": f.path, "size": f.size or f.tell(), "type": "file"}
+                        )
+                    else:
+                        dname = "/".join(f.path.split("/")[: path1.count("/") + 1])
+                        details.append({"name": dname, "size": 0, "type": "directory"})
+        if ex is not None and not details:
+            raise ex
+        if detail:
+            return details
+        return sorted(_["name"] for _ in details)
+
+    def info(self, path, **kwargs):
+        path = self._strip_protocol(path)
+        if self._intrans:
+            f = [_ for _ in self.transaction.files if _.path == path]
+            if f:
+                return {"name": path, "size": f[0].size or f[0].tell(), "type": "file"}
+            f = any(_.path.startswith(path + "/") for _ in self.transaction.files)
+            if f:
+                return {"name": path, "size": 0, "type": "directory"}
+        return self.fs.info(path, **kwargs)
+
     def pipe(self, path, value=None, **kwargs):
         if isinstance(path, str):
             self.pipe_file(self._strip_protocol(path), value, **kwargs)
@@ -836,6 +892,7 @@ class LocalTempFile:
         if seek:
             self.fh.seek(seek)
         self.path = path
+        self.size = None
         self.fs = fs
         self.closed = False
         self.autocommit = autocommit
@@ -855,6 +912,7 @@ class LocalTempFile:
         self.close()
 
     def close(self):
+        self.size = self.fh.tell()
         if self.closed:
             return
         self.fh.close()
@@ -868,15 +926,14 @@ class LocalTempFile:
 
     def commit(self):
         self.fs.put(self.fn, self.path, **self.kwargs)
-        try:
-            os.remove(self.fn)
-        except (PermissionError, FileNotFoundError):
-            # file path may be held by new version of the file on windows
-            pass
+        # we do not delete local copy - it's still in the cache
 
     @property
     def name(self):
         return self.fn
+
+    def __repr__(self) -> str:
+        return f"LocalTempFile: {self.path}"
 
     def __getattr__(self, item):
         return getattr(self.fh, item)
