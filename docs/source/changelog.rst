@@ -12,6 +12,7 @@ Enhancements
 
 Fixes
 
+- Fixes bug (#1476) that made open_files ignore expand=False (#1536)
 - remove extra calling mapper contains (#1546)
 - connection retry for SMB (#1533)
 - zip64 should be on is allowZip64 is (#1532)
