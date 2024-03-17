@@ -387,18 +387,21 @@ class WebHDFS(AbstractFileSystem):
         self.rm(path)
 
     def cp_file(self, lpath, rpath, **kwargs):
-        with self.open(lpath) as lstream:
-            tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
-            # Perform an atomic copy (stream to a temporary file and
-            # move it to the actual destination).
-            try:
-                with self.open(tmp_fname, "wb") as rstream:
-                    shutil.copyfileobj(lstream, rstream)
-                self.mv(tmp_fname, rpath)
-            except BaseException:  # noqa
-                with suppress(FileNotFoundError):
-                    self.rm(tmp_fname)
-                raise
+        if self.isdir(lpath):
+            self.mkdir(rpath, exists_ok=True)
+        else:
+            with self.open(lpath) as lstream:
+                tmp_fname = "/".join([self._parent(rpath), f".tmp.{secrets.token_hex(16)}"])
+                # Perform an atomic copy (stream to a temporary file and
+                # move it to the actual destination).
+                try:
+                    with self.open(tmp_fname, "wb") as rstream:
+                        shutil.copyfileobj(lstream, rstream)
+                    self.mv(tmp_fname, rpath)
+                except BaseException:  # noqa
+                    with suppress(FileNotFoundError):
+                        self.rm(tmp_fname)
+                    raise
 
     def _apply_proxy(self, location):
         if self.proxy and callable(self.proxy):
