@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2024.3.1
+--------
+
+Fixes
+
+- allow override of expand in open() (#1549)
+- root handling in local file paths, fix for windows (#1477)
+
 2024.3.0
 --------
 
