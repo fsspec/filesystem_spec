@@ -456,6 +456,8 @@ def open(
     - For implementations in separate packages see
       https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
+    kw = {"expand": False}
+    kw.update(kwargs)
     out = open_files(
         urlpath=[urlpath],
         mode=mode,
@@ -464,8 +466,7 @@ def open(
         errors=errors,
         protocol=protocol,
         newline=newline,
-        expand=False,
-        **kwargs,
+        **kw,
     )
     if not out:
         raise FileNotFoundError(urlpath)
