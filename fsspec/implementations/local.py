@@ -127,6 +127,14 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError(path1)
 
+    def isfile(self, path):
+        path = self._strip_protocol(path)
+        return os.path.isfile(path)
+
+    def isdir(self, path):
+        path = self._strip_protocol(path)
+        return os.path.isdir(path)
+
     def get_file(self, path1, path2, callback=None, **kwargs):
         if isfilelike(path2):
             with open(path1, "rb") as f:
