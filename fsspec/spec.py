@@ -9,11 +9,11 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
-from .dircache import DirCache
+from .dircache import FileDirCache, MemoryDirCache, create_dircache, CacheType
 from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
@@ -115,7 +115,7 @@ class AbstractFileSystem(metaclass=_Cached):
     #: Extra *class attributes* that should be considered when hashing.
     _extra_tokenize_attributes = ()
 
-    def __init__(self, *args, **storage_options):
+    def __init__(self, listings_cache_options: Optional[bool, dict] = None,  *args, **storage_options):
         """Create and configure file-system instance
 
         Instances may be cachable, so if similar enough arguments are seen
@@ -128,10 +128,11 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Parameters
         ----------
-        use_listings_cache, listings_expiry_time, max_paths:
-            passed to ``DirCache``, if the implementation supports
-            directory listing caching. Pass use_listings_cache=False
-            to disable such caching.
+        listings_cache_options: bool or dict
+            If True, a default MemoryDirCache cache is created.
+            If dict of arguments, used to create a directory cache using
+            argument cache_type ("memory" or "file"), expiry_time, and
+            other arguments passed to ``MemoryDirCache`` or ``FileDirCache``.
         skip_instance_cache: bool
             If this is a cachable implementation, pass True here to force
             creating a new instance even if a matching instance exists, and prevent
@@ -146,7 +147,23 @@ class AbstractFileSystem(metaclass=_Cached):
         self._intrans = False
         self._transaction = None
         self._invalidated_caches_in_transaction = []
-        self.dircache = DirCache(**storage_options)
+        if not listings_cache_options:
+            listings_cache_options = {}
+        elif listings_cache_options is True:
+            listings_cache_options = {"cache_type": CacheType.MEMORY, "expiry_time": None}
+        else:
+            listings_cache_options = {"expiry_time": None} | listings_cache_options
+            cache_type = listings_cache_options.get("cache_type")
+            if cache_type:
+                if isinstance(cache_type, str):
+                    try:
+                        cache_type = CacheType[cache_type.upper()]
+                    except KeyError as e:
+                        raise ValueError(
+                            f"Cache type must be one of {', '.join(ct.name.lower() for ct in CacheType)}") from e
+                listings_cache_options["cache_type"] = cache_type
+        self.listings_cache_options = listings_cache_options
+        self.dircache = create_dircache(**listings_cache_options)
 
         if storage_options.pop("add_docs", None):
             warnings.warn("add_docs is no longer supported.", FutureWarning)

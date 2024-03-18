@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Dev
+--------
+
+Enhancements
+
+- add file-based listing cache using diskcache
+
 2024.3.1
 --------
 

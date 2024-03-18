@@ -22,6 +22,7 @@ from fsspec.utils import (
 )
 
 from ..caching import AllBytes
+from ..dircache import CacheType
 
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
@@ -58,6 +59,7 @@ class HTTPFileSystem(AsyncFileSystem):
         client_kwargs=None,
         get_client=get_client,
         encoded=False,
+        listings_cache_options=None,
         **storage_options,
     ):
         """
@@ -83,11 +85,13 @@ class HTTPFileSystem(AsyncFileSystem):
             A callable which takes keyword arguments and constructs
             an aiohttp.ClientSession. It's state will be managed by
             the HTTPFileSystem class.
+        listings_cache_options: dict
+            Options for the listings cache.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open
         """
-        super().__init__(self, asynchronous=asynchronous, loop=loop, **storage_options)
+        super().__init__(self, asynchronous=asynchronous, loop=loop, listings_cache_options=listings_cache_options, **storage_options)
         self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
         self.simple_links = simple_links
         self.same_schema = same_scheme
@@ -104,10 +108,6 @@ class HTTPFileSystem(AsyncFileSystem):
         # TODO: Maybe rename `self.kwargs` to `self.request_options` to make
         #       it clearer.
         request_options = copy(storage_options)
-        self.use_listings_cache = request_options.pop("use_listings_cache", False)
-        request_options.pop("listings_expiry_time", None)
-        request_options.pop("max_paths", None)
-        request_options.pop("skip_instance_cache", None)
         self.kwargs = request_options
 
     @property
@@ -201,11 +201,13 @@ class HTTPFileSystem(AsyncFileSystem):
             return sorted(out)
 
     async def _ls(self, url, detail=True, **kwargs):
-        if self.use_listings_cache and url in self.dircache:
+        listings_cache_disabled = self.dircache is None
+        if not listings_cache_disabled and url in self.dircache:
             out = self.dircache[url]
         else:
             out = await self._ls_real(url, detail=detail, **kwargs)
-            self.dircache[url] = out
+            if not listings_cache_disabled:
+                self.dircache[url] = out
         return out
 
     ls = sync_wrapper(_ls)
