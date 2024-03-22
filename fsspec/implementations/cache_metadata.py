@@ -57,7 +57,11 @@ class CacheMetadata:
         """Low-level function to load metadata from specific file"""
         try:
             with open(fn, "r") as f:
-                return json.load(f)
+                loaded = json.load(f)
+                for c in loaded.values():
+                    if isinstance(c.get("blocks"), list):
+                        c["blocks"] = set(c["blocks"])
+                return loaded
         except ValueError:
             with open(fn, "rb") as f:
                 return pickle.load(f)
@@ -152,11 +156,7 @@ class CacheMetadata:
         for fn, _, _ in self._scan_locations():
             if os.path.exists(fn):
                 # TODO: consolidate blocks here
-                loaded_cached_files = self._load(fn)
-                for c in loaded_cached_files.values():
-                    if isinstance(c["blocks"], list):
-                        c["blocks"] = set(c["blocks"])
-                cached_files.append(loaded_cached_files)
+                cached_files.append(self._load(fn))
             else:
                 cached_files.append({})
         self.cached_files = cached_files or [{}]
