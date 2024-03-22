@@ -58,13 +58,13 @@ class CacheMetadata:
         try:
             with open(fn, "r") as f:
                 loaded = json.load(f)
-                for c in loaded.values():
-                    if isinstance(c.get("blocks"), list):
-                        c["blocks"] = set(c["blocks"])
-                return loaded
         except ValueError:
             with open(fn, "rb") as f:
-                return pickle.load(f)
+                loaded = pickle.load(f)
+        for c in loaded.values():
+            if isinstance(c.get("blocks"), list):
+                c["blocks"] = set(c["blocks"])
+        return loaded
 
     def _save(self, metadata_to_save: Detail, fn: str) -> None:
         """Low-level function to save metadata to specific file"""
