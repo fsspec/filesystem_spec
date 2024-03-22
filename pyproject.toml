@@ -1,5 +1,85 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fsspec"
+dynamic = ["version"]
+description = "File-system specification"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+maintainers = [{ name = "Martin Durant", email = "mdurant@anaconda.com" }]
+keywords = ["file"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.optional-dependencies]
+abfs = ["adlfs"]
+adl = ["adlfs"]
+arrow = ["pyarrow >= 1"]
+dask = ["dask", "distributed"]
+dev = [ "black", "pre-commit"]
+test = ["pytest", "pytest-cov", "numpy", "pytest-mock", "requests", "aiohttp", "tqdm", "pytest-vcr", "urllib3 <=1.26.18", "fastparquet"]
+dropbox = ["dropbox", "dropboxdrivefs", "requests"]
+entrypoints = []
+full = [
+    "adlfs",
+    "aiohttp !=4.0.0a0, !=4.0.0a1",
+    "dask",
+    "distributed",
+    "dropbox",
+    "dropboxdrivefs",
+    "fusepy",
+    "gcsfs",
+    "libarchive-c",
+    "ocifs",
+    "panel",
+    "paramiko",
+    "pyarrow >= 1",
+    "pygit2",
+    "requests",
+    "s3fs",
+    "smbprotocol",
+    "tqdm",
+]
+fuse = ["fusepy"]
+gcs = ["gcsfs"]
+git = ["pygit2"]
+github = ["requests"]
+gs = ["gcsfs"]
+gui = ["panel"]
+hdfs = ["pyarrow >= 1"]
+http = ["aiohttp !=4.0.0a0, !=4.0.0a1"]
+libarchive = ["libarchive-c"]
+oci = ["ocifs"]
+s3 = ["s3fs"]
+sftp = ["paramiko"]
+smb = ["smbprotocol"]
+ssh = ["paramiko"]
+tqdm = ["tqdm"]
+
+[project.urls]
+Changelog = "https://filesystem-spec.readthedocs.io/en/latest/changelog.html"
+Documentation = "https://filesystem-spec.readthedocs.io/en/latest/"
+Homepage = "https://github.com/fsspec/filesystem_spec"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "fsspec/_version.py"
+
 [tool.black]
-target_version = ['py310']
+target_version = ["py310"]
 line-length = 88
 skip-string-normalization = false
 exclude = '''
@@ -18,7 +98,6 @@ exclude = '''
     | dist
   )/
   | fsspec/_version.py
-  | versioneer.py
 )
 '''
 
@@ -27,7 +106,6 @@ exclude = [
     ".tox",
     "build",
     "docs/source/conf.py",
-    "versioneer.py",
     "fsspec/_version",
 ]
 line-length = 88
@@ -79,7 +157,4 @@ ignore = [
 
 [tool.pytest.ini_options]
 # custom markers, need to be defined to avoid warnings
-markers = [
-    "asyncio",
-    "vcr",
-]
+markers = ["asyncio", "vcr"]

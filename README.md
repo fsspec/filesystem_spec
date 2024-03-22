@@ -46,6 +46,13 @@ in the "ci/" directory. Note that the main environment is called "py38",
 but it is expected that the version of python installed be adjustable at
 CI runtime. For local use, pick a version suitable for you.
 
+```bash
+ pip install -e ".[dev,test]"
+
+ ## Full test env
+ pip install -e ".[dev,test,full]"
+```
+
 ### Testing
 
 Tests can be run in the dev environment, if activated, via ``pytest fsspec``.
