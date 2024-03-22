@@ -60,6 +60,7 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
+          pip install -e .
           pytest -v
 
   lint:
