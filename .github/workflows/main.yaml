@@ -34,8 +34,8 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install -e .
-          pytest -v
+          pip install -e .[test]
+          pytest --reruns 5 --reruns-delay 1 -v
 
   win:
     name: pytest-win
@@ -58,7 +58,7 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install -e .
+          pip install -e .[test]
           pytest --reruns 5 --reruns-delay 1 -v
 
   lint:
