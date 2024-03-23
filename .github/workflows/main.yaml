@@ -115,7 +115,7 @@ jobs:
       - name: Run dask tests
         shell: bash -l {0}
         run: |
-          pytest -v dask/dask/bytes
+          pytest -v downstream/dask/dask/bytes
 
   fsspec_friends:
     name: ${{ matrix.FRIEND }}-pytest
