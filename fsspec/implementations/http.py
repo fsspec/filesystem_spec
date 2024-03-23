@@ -451,7 +451,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
         ends_with_slash = path.endswith("/")  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
-        append_slash_to_dirname = ends_with_slash or path.endswith("/**")
+        append_slash_to_dirname = ends_with_slash or path.endswith(("/**", "/*"))
         idx_star = path.find("*") if path.find("*") >= 0 else len(path)
         idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
@@ -494,15 +494,15 @@ class HTTPFileSystem(AsyncFileSystem):
         pattern = re.compile(pattern)
 
         out = {
-            p: info
+            (
+                p.rstrip("/")
+                if not append_slash_to_dirname
+                and info["type"] == "directory"
+                and p.endswith("/")
+                else p
+            ): info
             for p, info in sorted(allpaths.items())
-            if pattern.match(
-                (
-                    p + "/"
-                    if append_slash_to_dirname and info["type"] == "directory"
-                    else p
-                )
-            )
+            if pattern.match(p.rstrip("/"))
         }
 
         if detail:

@@ -11,7 +11,10 @@ import pytest
 import fsspec.asyn
 import fsspec.utils
 from fsspec.implementations.http import HTTPStreamFile
-from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import reset_files  # noqa: F401
+from fsspec.tests.conftest import server  # noqa: F401
+from fsspec.tests.conftest import stdlib_simple_http_server  # noqa: F401
+from fsspec.tests.conftest import data, win
 
 
 def test_list(server):
@@ -127,6 +130,17 @@ def test_list_cache_with_skip_instance_cache(server):
     h = fsspec.filesystem("http", use_listings_cache=True, skip_instance_cache=True)
     out = h.glob(server + "/index/*")
     assert out == [server + "/index/realfile"]
+
+
+def test_glob_return_subfolders(stdlib_simple_http_server):
+    h = fsspec.filesystem("http")
+    out = h.glob(stdlib_simple_http_server + "/*")
+    assert out == [
+        stdlib_simple_http_server + "/file1",
+        stdlib_simple_http_server + "/file2",
+        stdlib_simple_http_server + "/folder1/",
+        stdlib_simple_http_server + "/folder2/",
+    ]
 
 
 def test_isdir(server):
