@@ -28,7 +28,6 @@ adl = ["adlfs"]
 arrow = ["pyarrow >= 1"]
 dask = ["dask", "distributed"]
 dev = [ "black", "pre-commit"]
-test = ["pytest", "pytest-cov", "numpy", "pytest-mock", "requests", "aiohttp", "tqdm", "pytest-vcr", "urllib3 <=1.26.18", "fastparquet"]
 dropbox = ["dropbox", "dropboxdrivefs", "requests"]
 entrypoints = []
 full = [
@@ -65,6 +64,33 @@ s3 = ["s3fs"]
 sftp = ["paramiko"]
 smb = ["smbprotocol"]
 ssh = ["paramiko"]
+test = [
+    "aiohttp",
+    "fastparquet",
+    "numpy",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-vcr",
+    "pytest<8",
+    "requests",
+    "tqdm",
+    "urllib3 <=1.26.18",
+]
+test_downstream = [
+    "dask-expr",
+    "flask",
+    "flask_cors",
+    "moto >4,<5",
+    "pytest-cov",
+    "pytest-rerunfailures",
+    "pytest-timeout",
+    "pytest-xdist",
+    "pytest<8",
+    "requests",
+    "sqlalchemy<2",
+    "xarray",
+    "zarr",
+]
 tqdm = ["tqdm"]
 
 [project.urls]

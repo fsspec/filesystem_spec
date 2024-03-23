@@ -47,9 +47,14 @@ but it is expected that the version of python installed be adjustable at
 CI runtime. For local use, pick a version suitable for you.
 
 ```bash
+# For a new environment.
+mamba create -n fsspec -c conda-forge  python=3.9 -y
+conda activate fsspec
+
+# Standard dev test install.
  pip install -e ".[dev,test]"
 
- ## Full test env
+ ## Full test install.
  pip install -e ".[dev,test,full]"
 ```
 

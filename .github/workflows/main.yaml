@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: "*"
+    branches: ["*"]
   pull_request:
-    branches: master
+    branches: [master]
 
 jobs:
   linux:
@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -40,15 +40,13 @@ jobs:
   win:
     name: pytest-win
     runs-on: windows-2019
-    strategy:
-      fail-fast: false
 
     env:
       CIRUN: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -77,7 +75,7 @@ jobs:
 #    runs-on: ubuntu-latest
 #    steps:
 #      - name: Checkout
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Setup conda
 #        uses: mamba-org/setup-micromamba@v1
@@ -95,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -105,32 +103,12 @@ jobs:
           environment-file: ci/environment-downstream.yml
 
       - name: Local install
-        shell: bash -l {0}
-        run: |
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
-          git tag -a 3000 -m "fake"
-          pip install -e .
-
-      - name: Clone s3fs
-        shell: bash -l {0}
-        run: git clone https://github.com/fsspec/s3fs
-
-      - name: Install s3fs
-        shell: bash -l {0}
-        run: |
-          pip install -e ./s3fs --no-deps
+        shell: sh install_downstream_testmode.sh
 
       - name: Run fsspec tests
         shell: bash -l {0}
         run: |
           pytest -v fsspec/tests/test_downstream.py
-
-      - name: clone dask
-        shell: bash -l {0}
-        run: |
-          git clone https://github.com/dask/dask
-          pip install -e ./dask
 
       - name: Run dask tests
         shell: bash -l {0}
@@ -153,7 +131,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup conda
         uses: mamba-org/setup-micromamba@v1
