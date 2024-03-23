@@ -68,28 +68,27 @@ test = [
     "aiohttp",
     "fastparquet",
     "numpy",
+    "pytest",
     "pytest-cov",
     "pytest-mock",
     "pytest-vcr",
-    "pytest<8",
+    "pytest-rerunfailures",
+    "pytest-asyncio !=0.22.0",
+    "pyftpdlib",
     "requests",
     "tqdm",
     "urllib3 <=1.26.18",
 ]
 test_downstream = [
+    "dask[dataframe,test]",
     "dask-expr",
-    "flask",
-    "flask_cors",
-    "moto >4,<5",
-    "pytest-cov",
-    "pytest-rerunfailures",
+    "moto[server]>4,<5",
     "pytest-timeout",
-    "pytest-xdist",
-    "pytest<8",
-    "requests",
-    "sqlalchemy<2",
     "xarray",
     "zarr",
+    "aiobotocore>=2.5.4,<3.0.0",
+    "aiohttp!=4.0.0a0, !=4.0.0a1"
+
 ]
 tqdm = ["tqdm"]
 

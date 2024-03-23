@@ -52,10 +52,13 @@ mamba create -n fsspec -c conda-forge  python=3.9 -y
 conda activate fsspec
 
 # Standard dev test install.
- pip install -e ".[dev,test]"
+pip install -e ".[dev,test]"
 
- ## Full test install.
- pip install -e ".[dev,test,full]"
+# Downstream tests.
+## Full test install.
+sh install_s3fs.sh
+# windows powershell.
+install_s3fs.sh
 ```
 
 ### Testing
