@@ -34,7 +34,7 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          sh install_s3fs.sh
+          pip install s3fs --no-deps
           pip install -e .[test_full]
           pytest -v
 
