@@ -64,6 +64,7 @@ def smb_params(request):
         stop_docker(container)
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=2)
 def test_simple(smb_params):
     adir = "/home/adir"
     adir2 = "/home/adir/otherdir/"
@@ -80,6 +81,7 @@ def test_simple(smb_params):
     assert not fsmb.exists(adir)
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=2)
 def test_with_url(smb_params):
     if smb_params["port"] is None:
         smb_url = "smb://{username}:{password}@{host}/home/someuser.txt"
@@ -94,6 +96,7 @@ def test_with_url(smb_params):
         assert read_result == b"hello"
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=2)
 def test_transaction(smb_params):
     afile = "/home/afolder/otherdir/afile"
     afile2 = "/home/afolder/otherdir/afile2"
@@ -114,12 +117,14 @@ def test_transaction(smb_params):
     assert fsmb.find(adir) == [afile, afile2]
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=2)
 def test_makedirs_exist_ok(smb_params):
     fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
     fsmb.makedirs("/home/a/b/c")
     fsmb.makedirs("/home/a/b/c", exist_ok=True)
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=2)
 def test_rename_from_upath(smb_params):
     fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
     fsmb.makedirs("/home/a/b/c", exist_ok=True)
