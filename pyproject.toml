@@ -28,7 +28,7 @@ abfs = ["adlfs"]
 adl = ["adlfs"]
 arrow = ["pyarrow >= 1"]
 dask = ["dask", "distributed"]
-dev = ["black", "pre-commit"]
+dev = ["ruff", "pre-commit"]
 dropbox = ["dropbox", "dropboxdrivefs", "requests"]
 entrypoints = []
 full = [
@@ -138,30 +138,8 @@ source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "fsspec/_version.py"
 
-[tool.black]
-target_version = ["py310"]
-line-length = 88
-skip-string-normalization = false
-exclude = '''
-
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-  | fsspec/_version.py
-)
-'''
-
 [tool.ruff]
+target-version = "py38"
 exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version"]
 line-length = 88
 
@@ -169,7 +147,8 @@ line-length = 88
 select = [
     # fix noqas in fsspec/implementations/http.py
     "ASYNC",
-    # "B", enable in later PR
+    "B",
+    "I",    # isort
     "C4",
     "G",
     "E4",
@@ -187,7 +166,7 @@ select = [
     "PIE804",
     "PIE807",
     "PIE810",
-    # "PT", enable in later PR
+     "PT",
     "PYI",
     "RUF006",
     "SLOT",

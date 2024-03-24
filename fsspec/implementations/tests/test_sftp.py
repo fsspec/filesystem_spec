@@ -21,7 +21,9 @@ def stop_docker(name):
 @pytest.fixture(scope="module")
 def ssh():
     try:
-        subprocess.check_call(["docker", "run", "hello-world"])
+        pchk = ["docker", "run", "--name", "fsspec_test_sftp", "hello-world"]
+        subprocess.check_call(pchk)
+        stop_docker("fsspec_test_sftp")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("docker run not available")
         return
@@ -46,10 +48,10 @@ def ssh():
     name = "fsspec_sftp"
     stop_docker(name)
     cmd = f"docker run -d -p 9200:22 --name {name} ubuntu:16.04 sleep 9000"
-    cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
-    for cmd in cmds:
-        subprocess.call(["docker", "exec", cid] + shlex.split(cmd))
     try:
+        cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
+        for cmd in cmds:
+            subprocess.call(["docker", "exec", cid] + shlex.split(cmd))
         time.sleep(1)
         yield {
             "host": "localhost",
@@ -84,15 +86,15 @@ def test_simple(ssh, root_path):
 @pytest.mark.parametrize("protocol", ["sftp", "ssh"])
 def test_with_url(protocol, ssh):
     fo = fsspec.open(
-        protocol + "://{username}:{password}@{host}:{port}"
-        "/home/someuserout".format(**ssh),
+        protocol
+        + "://{username}:{password}@{host}:{port}/home/someuserout".format(**ssh),
         "wb",
     )
     with fo as f:
         f.write(b"hello")
     fo = fsspec.open(
-        protocol + "://{username}:{password}@{host}:{port}"
-        "/home/someuserout".format(**ssh),
+        protocol
+        + "://{username}:{password}@{host}:{port}/home/someuserout".format(**ssh),
         "rb",
     )
     with fo as f:
@@ -111,8 +113,10 @@ def test_get_dir(protocol, ssh, root_path, tmpdir):
     assert os.path.isfile(f"{path}/deeper/afile")
 
     f.get(
-        protocol + "://{username}:{password}@{host}:{port}"
-        "{root_path}".format(root_path=root_path, **ssh),
+        protocol
+        + "://{username}:{password}@{host}:{port}" "{root_path}".format(
+            root_path=root_path, **ssh
+        ),
         f"{path}/test2",
         recursive=True,
     )
@@ -137,7 +141,6 @@ def netloc(ssh):
 
 
 def test_put_file(ssh, tmp_path, root_path):
-
     tmp_file = tmp_path / "a.txt"
     with open(tmp_file, mode="w") as fd:
         fd.write("blabla")
@@ -147,7 +150,6 @@ def test_put_file(ssh, tmp_path, root_path):
 
 
 def test_simple_with_tar(ssh, netloc, tmp_path, root_path):
-
     files_to_pack = ["a.txt", "b.txt"]
 
     tar_filename = make_tarfile(files_to_pack, tmp_path)
