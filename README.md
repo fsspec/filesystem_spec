@@ -55,8 +55,11 @@ conda activate fsspec
 pip install -e ".[dev,test]"
 
 # Full tests except for downstream
-sh install_s3fs.sh
-pip install -e ".[dev,test_full]"
+pip install s3fs
+pip uninstall s3fs
+pip install -e .[dev,test_full]
+pip install s3fs --no-deps
+pytest -v
 
 # Downstream tests.
 sh install_s3fs.sh
