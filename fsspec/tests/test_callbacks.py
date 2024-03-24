@@ -75,7 +75,7 @@ def test_callbacks_wrap():
 
 @pytest.mark.parametrize("tqdm_kwargs", [{}, {"desc": "A custom desc"}])
 def test_tqdm_callback(tqdm_kwargs, mocker):
-    pytest.skip("tqdm")
+    pytest.importorskip("tqdm")
     callback = TqdmCallback(tqdm_kwargs=tqdm_kwargs)
     mocker.patch.object(callback, "_tqdm_cls")
     callback.set_size(10)

@@ -15,4 +15,4 @@ mv s3fs-2024.3.1 ./downstream/s3fs
 pip install --no-deps s3fs
 # s3fs is pinned to a specific version of fsspec
 pip install -e ./downstream/s3fs
-pip install -e .[test,test_downstream]
+pip install -e .

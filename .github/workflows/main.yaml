@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        PY: ["3.8", "3.9", "3.10", "3.11"]
+        PY: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     env:
       CIRUN: true
@@ -34,6 +34,7 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
+          sh install_s3fs.sh
           pip install -e .[test_full]
           pytest -v
 
@@ -106,6 +107,7 @@ jobs:
         shell: bash -l {0}
         run: |
           sh install_s3fs.sh
+          pip install -e .[test,test_downstream]
 
       - name: Run fsspec tests
         shell: bash -l {0}

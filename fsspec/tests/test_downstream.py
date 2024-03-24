@@ -3,12 +3,15 @@ import pytest
 pytest.importorskip("s3fs")
 pytest.importorskip("moto")
 
-from s3fs.tests.test_s3fs import (  # noqa: E402,F401
-    endpoint_uri,
-    s3,
-    s3_base,
-    test_bucket_name,
-)
+try:
+    from s3fs.tests.test_s3fs import (  # noqa: E402,F401
+        endpoint_uri,
+        s3,
+        s3_base,
+        test_bucket_name,
+    )
+except ImportError:
+    pytest.skip("s3 tests not available.")
 
 so = {"anon": False, "client_kwargs": {"endpoint_url": endpoint_uri}}
 
