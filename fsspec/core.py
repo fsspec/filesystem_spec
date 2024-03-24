@@ -334,7 +334,16 @@ def _un_chain(path, kwargs):
         kws = kwargs.pop(protocol, {})
         if bit is bits[0]:
             kws.update(kwargs)
-        kw = dict(**extra_kwargs, **kws)
+        if any(
+            k_1 == k_2 and v_1 != v_2
+            for k_1, v_1 in extra_kwargs.items()
+            for k_2, v_2 in kws.items()
+        ):
+            raise ValueError(
+                "Tried to merge dictionaries with same key and different values."
+            )
+        else:
+            kw = extra_kwargs | kws
         bit = cls._strip_protocol(bit)
         if (
             protocol in {"blockcache", "filecache", "simplecache"}
