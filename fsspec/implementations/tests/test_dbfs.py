@@ -21,6 +21,7 @@ you need to re-record the answers. This can be done as follows:
 5. Now execute the tests as normal. The results of the API calls will be recorded.
 6. Unset the environment variables and replay the tests.
 """
+
 import os
 import sys
 from urllib.parse import urlparse

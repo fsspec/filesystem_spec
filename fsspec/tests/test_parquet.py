@@ -42,7 +42,6 @@ def engine(request):
 def test_open_parquet_file(
     tmpdir, engine, columns, max_gap, max_block, footer_sample_size, range_index
 ):
-
     # Pandas required for this test
     pd = pytest.importorskip("pandas")
 

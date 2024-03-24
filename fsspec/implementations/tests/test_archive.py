@@ -66,7 +66,6 @@ def temptar(data=None, mode="w", suffix=".tar"):
     with tarfile.TarFile.open(fn, mode=mode) as t:
         touched = {}
         for name, data in data.items():
-
             # Create directory hierarchy.
             # https://bugs.python.org/issue22208#msg225558
             if "/" in name and name not in touched:
@@ -98,7 +97,6 @@ def temptargz(data=None, mode="w", suffix=".tar.gz"):
     """
 
     with temptar(data=data, mode=mode) as tarname:
-
         fn = tempfile.mkstemp(suffix=suffix)[1]
         with open(tarname, "rb") as tar:
             cf = gzip.GzipFile(filename=fn, mode=mode)
@@ -121,7 +119,6 @@ def temptarbz2(data=None, mode="w", suffix=".tar.bz2"):
     """
 
     with temptar(data=data, mode=mode) as tarname:
-
         fn = tempfile.mkstemp(suffix=suffix)[1]
         with open(tarname, "rb") as tar:
             cf = bz2.BZ2File(filename=fn, mode=mode)
@@ -144,7 +141,6 @@ def temptarxz(data=None, mode="w", suffix=".tar.xz"):
     """
 
     with temptar(data=data, mode=mode) as tarname:
-
         fn = tempfile.mkstemp(suffix=suffix)[1]
         with open(tarname, "rb") as tar:
             cf = lzma.open(filename=fn, mode=mode, format=lzma.FORMAT_XZ)
@@ -332,7 +328,6 @@ class TestAnyArchive:
                 assert sorted(lhs[2]) == sorted(rhs[2])
 
     def test_info(self, scenario: ArchiveTestScenario):
-
         # https://github.com/Suor/funcy/blob/1.15/funcy/colls.py#L243-L245
         def project(mapping, keys):
             """Leaves only given keys in mapping."""

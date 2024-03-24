@@ -34,8 +34,10 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install s3fs --no-deps
+          pip install s3fs
+          pip uninstall s3fs
           pip install -e .[test_full]
+          pip install s3fs --no-deps
           pytest -v
 
   win:
@@ -59,7 +61,10 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
+          pip install s3fs
+          pip uninstall s3fs
           pip install -e .[test]
+          pip install s3fs --no-deps
           pytest -v
 
   lint:
