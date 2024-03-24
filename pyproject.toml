@@ -72,7 +72,7 @@ test = [
     "pytest-benchmark",
     "pytest-cov",
     "pytest-mock",
-    "pytest-vcr",
+    "pytest-recording",
     "pytest-rerunfailures",
     "pytest-asyncio !=0.22.0",
 ]
@@ -107,7 +107,7 @@ test_full = [
     'pytest-cov',
     'pytest-mock',
     'pytest-rerunfailures',
-    'pytest-vcr',
+    'pytest-recording',
     'requests',
     'smbprotocol',
     'python-snappy',

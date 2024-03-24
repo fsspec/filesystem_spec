@@ -1,14 +1,15 @@
 """
 Test-Cases for the DataBricks Filesystem.
 This test case is somewhat special, as there is no "mock" databricks
-API available. We use the "vcr" package to record the requests and
-responses to the real databricks API and replay them on tests.
+API available. We use the [vcr(https://github.com/kevin1024/vcrpy)
+package to record the requests and responses to the real databricks API and
+replay them on tests.
 
 This however means, that when you change the tests (or when the API
 itself changes, which is very unlikely to occur as it is versioned),
 you need to re-record the answers. This can be done as follows:
 
-1. Delete all casettes files in the "./cassettes" folder
+1. Delete all casettes files in the "./cassettes/test_dbfs" folder
 2. Spin up a databricks cluster. For example,
    you can use an Azure Databricks instance for this.
 3. Take note of the instance details (the instance URL. For example for an Azure
@@ -21,12 +22,16 @@ you need to re-record the answers. This can be done as follows:
 6. Unset the environment variables and replay the tests.
 """
 import os
+import sys
 from urllib.parse import urlparse
 
 import numpy
 import pytest
 
 import fsspec
+
+if sys.version_info >= (3, 10):
+    pytest.skip("These tests need to be re-recorded.", allow_module_level=True)
 
 DUMMY_INSTANCE = "my_instance.com"
 INSTANCE = os.getenv("DBFS_INSTANCE", DUMMY_INSTANCE)
