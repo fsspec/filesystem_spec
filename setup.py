@@ -14,6 +14,7 @@ extras_require = {
     "abfs": ["adlfs"],
     "adl": ["adlfs"],
     "dask": ["dask", "distributed"],
+    "dircache": ["diskcache", "platformdirs"],
     "dropbox": ["dropboxdrivefs", "requests", "dropbox"],
     "gcs": ["gcsfs"],
     "git": ["pygit2"],

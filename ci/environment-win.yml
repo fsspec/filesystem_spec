@@ -25,3 +25,5 @@ dependencies:
   - nomkl
   - s3fs
   - tqdm
+  - diskcache
+  - platformdirs
