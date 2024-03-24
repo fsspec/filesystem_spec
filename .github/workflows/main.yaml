@@ -34,7 +34,7 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install -e .[test]
+          pip install -e .[test_full]
           pytest --reruns 5 --reruns-delay 1 -v
 
   win:
@@ -58,7 +58,7 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install -e .[test]
+          pip install -e .[test_full]
           pytest --reruns 5 --reruns-delay 1 -v
 
   lint:
@@ -115,7 +115,7 @@ jobs:
       - name: Run dask tests
         shell: bash -l {0}
         run: |
-          dask_test_path=$(  python -c "import dask.bytes;print(dask.bytes.__path__[0])")
+          dask_test_path=$(python -c "import dask.bytes;print(dask.bytes.__path__[0])")
           pytest -v $dask_test_path
 
   fsspec_friends:
