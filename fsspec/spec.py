@@ -1170,12 +1170,12 @@ class AbstractFileSystem(metaclass=_Cached):
             raise FileNotFoundError(path)
         return sorted(out)
 
-    def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
+    def mv(self, path1, path2, recursive=False, maxdepth=None, on_error=None, **kwargs):
         """Move file(s) from one location to another"""
         if path1 == path2:
             logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
-            self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
+            self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth, on_error)
             self.rm(path1, recursive=recursive)
 
     def rm_file(self, path):
