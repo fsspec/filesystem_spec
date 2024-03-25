@@ -283,17 +283,24 @@ def test_open_files_read_with_special_characters(tmp_path, char):
 
 
 @pytest.mark.parametrize("char", glob_magic_characters)
-def test_open_file_write_with_special_characters(tmp_path, char):
+def test_open_file_write_with_special_characters(tmp_path, char, monkeypatch):
     # Create a filename incorporating the special character
     file_name = f"test{char}.txt"
     file_path = tmp_path / file_name
     expected_content = "Hello, world!"
 
-    with fsspec.open(file_path, "w") as f:
+    with fsspec.open(file_path, "w", expand=False) as f:
         f.write(expected_content)
 
     with open(file_path, "r") as f:
         actual_content = f.read()
+
+    monkeypatch.setattr(fsspec.core, "DEFAULT_EXPAND", False)
+    with fsspec.open(file_path, "w") as f:
+        f.write(expected_content * 2)
+
+    with open(file_path, "r") as f:
+        f.read() == actual_content * 2
 
     assert actual_content == expected_content
 
