@@ -59,7 +59,6 @@ def test_expand_paths(path, name_function, num, out):
     ],
 )
 def test_expand_paths_if_needed_in_read_mode(create_files, path, out):
-
     d = str(tempfile.mkdtemp())
     for f in create_files:
         f = os.path.join(d, f)

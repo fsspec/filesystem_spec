@@ -162,7 +162,6 @@ def _get_parquet_byte_ranges(
 
     # Pass to specialized function if metadata is defined
     if metadata is not None:
-
         # Use the provided parquet metadata object
         # to avoid transferring/parsing footer metadata
         return _get_parquet_byte_ranges_from_metadata(
@@ -236,7 +235,6 @@ def _get_parquet_byte_ranges(
 
         # Calculate required byte ranges for each path
         for i, path in enumerate(paths):
-
             # Deal with small-file case.
             # Just include all remaining bytes of the file
             # in a single range.
@@ -347,7 +345,6 @@ def _add_header_magic(data):
 
 
 def _set_engine(engine_str):
-
     # Define a list of parquet engines to try
     if engine_str == "auto":
         try_engines = ("fastparquet", "pyarrow")
@@ -383,7 +380,6 @@ def _set_engine(engine_str):
 
 
 class FastparquetEngine:
-
     # The purpose of the FastparquetEngine class is
     # to check if fastparquet can be imported (on initialization)
     # and to define a `_parquet_byte_ranges` method. In the
@@ -406,7 +402,6 @@ class FastparquetEngine:
         footer=None,
         footer_start=None,
     ):
-
         # Initialize offset ranges and define ParqetFile metadata
         pf = metadata
         data_paths, data_starts, data_ends = [], [], []
@@ -440,7 +435,6 @@ class FastparquetEngine:
             # Skip this row-group if we are targeting
             # specific row-groups
             if row_group_indices is None or r in row_group_indices:
-
                 # Find the target parquet-file path for `row_group`
                 fn = self._row_group_filename(row_group, pf)
 
@@ -471,7 +465,6 @@ class FastparquetEngine:
 
 
 class PyarrowEngine:
-
     # The purpose of the PyarrowEngine class is
     # to check if pyarrow can be imported (on initialization)
     # and to define a `_parquet_byte_ranges` method. In the
@@ -494,7 +487,6 @@ class PyarrowEngine:
         footer=None,
         footer_start=None,
     ):
-
         if metadata is not None:
             raise ValueError("metadata input not supported for PyarrowEngine")
 

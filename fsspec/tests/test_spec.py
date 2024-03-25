@@ -787,11 +787,9 @@ def test_trim_kwarg_warns():
 
 
 def tests_file_open_error(monkeypatch):
-    class InitiateError(ValueError):
-        ...
+    class InitiateError(ValueError): ...
 
-    class UploadError(ValueError):
-        ...
+    class UploadError(ValueError): ...
 
     class DummyBufferedFile(AbstractBufferedFile):
         can_initiate = False
@@ -1048,9 +1046,7 @@ def test_dummy_callbacks_files_branched(tmpdir):
 
         base_keys = zip(make_path_posix(lpaths), make_path_posix(rpaths))
         assert set(callback.events.keys()) == {("top-level",), *base_keys}
-        assert callback.events[
-            "top-level",
-        ] == imitate_transfer(10, 10, file=False)
+        assert callback.events["top-level",] == imitate_transfer(10, 10, file=False)
 
         for key in base_keys:
             assert callback.events[key] == imitate_transfer(50, 5)

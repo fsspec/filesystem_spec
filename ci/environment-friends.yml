@@ -8,7 +8,6 @@ dependencies:
   - pytest-benchmark
   - pytest-cov
   - pytest-mock
-  - pytest-vcr
   - pip
   - pytest<8
   - ujson

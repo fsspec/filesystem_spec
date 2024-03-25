@@ -535,7 +535,7 @@ def test_cat_missing(m, fo):
 
 def test_df_single(m):
     pd = pytest.importorskip("pandas")
-    pytest.importorskip("pyarrow")
+    pytest.importorskip("fastparquet")
     data = b"data0data1data2"
     m.pipe({"data": data})
     df = pd.DataFrame(
@@ -581,7 +581,7 @@ def test_df_single(m):
 
 def test_df_multi(m):
     pd = pytest.importorskip("pandas")
-    pytest.importorskip("pyarrow")
+    pytest.importorskip("fastparquet")
     data = b"data0data1data2"
     m.pipe({"data": data})
     df0 = pd.DataFrame(

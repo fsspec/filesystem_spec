@@ -1,35 +1,147 @@
-[tool.black]
-target_version = ['py310']
-line-length = 88
-skip-string-normalization = false
-exclude = '''
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-  | fsspec/_version.py
-  | versioneer.py
-)
-'''
+[project]
+name = "fsspec"
+dynamic = ["version"]
+description = "File-system specification"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+maintainers = [{ name = "Martin Durant", email = "mdurant@anaconda.com" }]
+keywords = ["file"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+abfs = ["adlfs"]
+adl = ["adlfs"]
+arrow = ["pyarrow >= 1"]
+dask = ["dask", "distributed"]
+dev = ["ruff", "pre-commit"]
+dropbox = ["dropbox", "dropboxdrivefs", "requests"]
+entrypoints = []
+full = [
+    'adlfs',
+    'aiohttp !=4.0.0a0, !=4.0.0a1',
+    'dask',
+    'distributed',
+    'dropbox',
+    'dropboxdrivefs',
+    'fusepy',
+    'gcsfs',
+    'libarchive-c',
+    'ocifs',
+    'panel',
+    'paramiko',
+    'pyarrow >= 1',
+    'pygit2',
+    'requests',
+    's3fs',
+    'smbprotocol',
+    'tqdm',
+]
+fuse = ["fusepy"]
+gcs = ["gcsfs"]
+git = ["pygit2"]
+github = ["requests"]
+gs = ["gcsfs"]
+gui = ["panel"]
+hdfs = ["pyarrow >= 1"]
+http = ["aiohttp !=4.0.0a0, !=4.0.0a1"]
+libarchive = ["libarchive-c"]
+oci = ["ocifs"]
+s3 = ["s3fs"]
+sftp = ["paramiko"]
+smb = ["smbprotocol"]
+ssh = ["paramiko"]
+test = [
+    "aiohttp!=4.0.0a0, !=4.0.0a1",
+    "numpy",
+    "pytest",
+    "requests",
+    "pytest-benchmark",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-recording",
+    "pytest-rerunfailures",
+    "pytest-asyncio !=0.22.0",
+]
+test_full = [
+    'Jinja2',
+    'adlfs',
+    'aiohttp !=4.0.0a0, !=4.0.0a1',
+    'aiohttp!=4.0.0a0, !=4.0.0a1',
+    'cloudpickle',
+    'dask',
+    'distributed',
+    'dropbox',
+    'dropboxdrivefs',
+    'fastparquet',
+    'fusepy',
+    'gcsfs',
+    "kerchunk",
+    'libarchive-c',
+    'lz4',
+    'notebook',
+    'numpy',
+    'ocifs',
+    'pandas',
+    'panel',
+    'paramiko',
+    'pyarrow',
+    'pyarrow >= 1',
+    'pyftpdlib',
+    'pygit2',
+    'pytest',
+    'pytest-asyncio !=0.22.0',
+    'pytest-benchmark',
+    'pytest-cov',
+    'pytest-mock',
+    'pytest-rerunfailures',
+    'pytest-recording',
+    'requests',
+    'smbprotocol',
+    'python-snappy',
+    'tqdm',
+    'urllib3',
+    'zarr',
+    'zstandard',
+]
+test_downstream = [
+    "dask[dataframe,test]",
+    "dask-expr",
+    "moto[server]>4,<5",
+    "pytest-timeout",
+    "xarray",
+    "aiobotocore>=2.5.4,<3.0.0",
+]
+tqdm = ["tqdm"]
+
+[project.urls]
+Changelog = "https://filesystem-spec.readthedocs.io/en/latest/changelog.html"
+Documentation = "https://filesystem-spec.readthedocs.io/en/latest/"
+Homepage = "https://github.com/fsspec/filesystem_spec"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "fsspec/_version.py"
 
 [tool.ruff]
-exclude = [
-    ".tox",
-    "build",
-    "docs/source/conf.py",
-    "versioneer.py",
-    "fsspec/_version",
-]
+target-version = "py38"
+exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version"]
 line-length = 88
 
 [tool.ruff.lint]
@@ -37,6 +149,7 @@ select = [
     # fix noqas in fsspec/implementations/http.py
     "ASYNC",
     # "B", enable in later PR
+    "I",    # isort
     "C4",
     "G",
     "E4",
@@ -79,7 +192,4 @@ ignore = [
 
 [tool.pytest.ini_options]
 # custom markers, need to be defined to avoid warnings
-markers = [
-    "asyncio",
-    "vcr",
-]
+markers = ["asyncio", "vcr"]

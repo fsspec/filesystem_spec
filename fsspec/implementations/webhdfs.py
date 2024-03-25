@@ -102,9 +102,7 @@ class WebHDFS(AbstractFileSystem):
         if self._cached:
             return
         super().__init__(**kwargs)
-        self.url = (
-            f"{'https' if use_https else 'http'}://{host}:{port}/webhdfs/v1"  # noqa
-        )
+        self.url = f"{'https' if use_https else 'http'}://{host}:{port}/webhdfs/v1"  # noqa
         self.kerb = kerberos
         self.kerb_kwargs = kerb_kwargs or {}
         self.pars = {}

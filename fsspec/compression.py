@@ -1,4 +1,5 @@
 """Helper functions for a standard streaming compression API"""
+
 from zipfile import ZipFile
 
 import fsspec.utils

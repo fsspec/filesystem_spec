@@ -862,8 +862,13 @@ def test_symlink(tmpdir):
 
     fs = LocalFileSystem()
     fs.touch(target)
-
-    fs.symlink(target, link)
+    try:
+        fs.symlink(target, link)
+    except OSError as e:
+        if "[WinError 1314]" in str(e):
+            # Windows requires developer mode to be enabled to use symbolic links
+            return
+        raise
     assert fs.islink(link)
 
 

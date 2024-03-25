@@ -1,0 +1,458 @@
+interactions:
+- request:
+    body: '{"path": "/FileStore/file.txt", "recursive": false}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '51'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/delete
+  response:
+    body:
+      string: '{}'
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '23'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsH6AW6rCJrWkhDaxcLJoraKHcvtbehUmE5Ev9/3nyu
+        cPSTSzA8X2EhPsEAu8c8eeIQ3c4S00QfDhrwabQ+wsDx7Jr10pj8t4NBNDAH64/+ldiHz5H9nKfS
+        iFYhivXcmnvifl5C5IfE9FZjgFIo1Fq12eK+wTvFVJFc96iV7NAUhfN73VQjjUYp7CV2RellClyl
+        LDqt2y5DKdFYvijGcKkAklfZC6nbMul0oujseM7pydbFN53e4x/xmV5+e/r/Im49MX2ZzBY759++
+        QpWFFLgXK6DD7QcAAP//AwD4cmNjVAMAAA==
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/file.txt", "overwrite": true}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '50'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/create
+  response:
+    body:
+      string: '{"handle":2535467031369232}'
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '27'
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"handle": 2535467031369232, "data": "VGhpcyBpcyBhIHRlc3QK"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '60'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/add-block
+  response:
+    body:
+      string: '{}'
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"handle": 2535467031369232}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '28'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/close
+  response:
+    body:
+      string: '{}'
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '22'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA5yTy27DIBBF/4W1m0Aw48cH9Ae6rCJrWuOGBhcLJuojyr8X25tUClULy5E49+ow
+        nNlgrA6sfTyzCenAWra9j5MHcl5veyS0eNSsYCZ0vfGsJX/SxXKpC+ZLs5YXbHS9GcwzknFvHZkx
+        TkXFSwnAl3MpbsHn4A190BV8QBt+0oVK4hsulKpjwG28GSfn6S4QvuT0B8ElKCXLZMAr+nDV/a9i
+        VANKihqqJDjq1DYHDZWU0AhIS5msoywyr5Uq6yglpXv6RO/de4aQuCnzU5Zp0+GAXvfdKbbHPq9+
+        Vasd/FKf8Gn+Bv/f83VPqiZtZq0d+68/LStCcNjxRdD+8g0AAP//AwAGXIvvswMAAA==
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/file.txt", "offset": 8, "length": 7}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '57'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/read
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA6pWSqosSS2OL0pNTFGyMtdRSkksSVSyUooMdjKIivAzcE63tVWqBQAAAP//AwA9
+        si7rJgAAAA==
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/file.txt", "recursive": false}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '51'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/delete
+  response:
+    body:
+      string: '{}'
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '23'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsH6AW6rCJrWkhDaxcLJoraKHcvtbehUmE5Ev9/3nyu
+        cPSTSzA8X2EhPsEAu8c8eeIQ3c4S00QfDhrwabQ+wsDx7Jr10pj8t4NBNDAH64/+ldiHz5H9nKfS
+        iFYhivXcmnvifl5C5IfE9FZjgFIo1Fq12eK+wTvFVJFc96iV7NAUhfN73VQjjUYp7CV2RellClyl
+        LDqt2y5DKdFYvijGcKkAklfZC6nbMul0oujseM7pydbFN53e4x/xmV5+e/r/Im49MX2ZzBY759++
+        QpWFFLgXK6DD7QcAAP//AwD4cmNjVAMAAA==
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1
