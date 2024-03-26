@@ -358,8 +358,11 @@ class AbstractFileSystem(metaclass=_Cached):
         but contains nothing), None if not in cache.
         """
         parent = self._parent(path)
-        if path.rstrip("/") in self.dircache:
-            return self.dircache[path.rstrip("/")]
+        try:
+            cache_item = self.dircache[path.rstrip("/")]
+            return cache_item
+        except KeyError:
+            pass
         try:
             files = [
                 f
