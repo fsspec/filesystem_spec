@@ -359,8 +359,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         parent = self._parent(path)
         try:
-            cache_item = self.dircache[path.rstrip("/")]
-            return cache_item
+            return self.dircache[path.rstrip("/")]
         except KeyError:
             pass
         try:
