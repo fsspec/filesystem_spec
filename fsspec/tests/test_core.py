@@ -169,6 +169,18 @@ def test_list():
     assert [f.path for f in of] == plist
 
 
+def test_open_expand(m, monkeypatch):
+    m.pipe("/myfile", b"hello")
+    with pytest.raises(FileNotFoundError, match="expand=True"):
+        with fsspec.open("memory://my*", expand=False):
+            pass
+    with fsspec.open("memory://my*", expand=True) as f:
+        assert f.path == "/myfile"
+    monkeypatch.setattr(fsspec.core, "DEFAULT_EXPAND", True)
+    with fsspec.open("memory://my*") as f:
+        assert f.path == "/myfile"
+
+
 def test_pathobject(tmpdir):
     import pathlib
 

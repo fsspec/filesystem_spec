@@ -101,7 +101,18 @@ class OpenFile:
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
 
-        f = self.fs.open(self.path, mode=mode)
+        try:
+            f = self.fs.open(self.path, mode=mode)
+        except FileNotFoundError as e:
+            if has_magic(self.path):
+                raise FileNotFoundError(
+                    "%s not found. The URL contains glob characters: you maybe needed\n"
+                    "to pass expand=True in fsspec.open() or the storage_options of \n"
+                    "your library. You can also set the config value 'open_expand'\n"
+                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
+                    self.path,
+                ) from e
+            raise
 
         self.fobjects = [f]
 
@@ -397,7 +408,7 @@ def url_to_fs(url, **kwargs):
     return fs, urlpath
 
 
-DEFAULT_EXPAND = conf.get("open_expand", True)
+DEFAULT_EXPAND = conf.get("open_expand", False)
 
 
 def open(
