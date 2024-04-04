@@ -42,7 +42,7 @@ def test_simple_ver1(server):  # noqa: F811
             "c": (realfile, 1, 5),
             "d": b"base64:aGVsbG8=",
             "e": {"key": "value"},
-        }
+        },
     }
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=in_data, fs=h)
