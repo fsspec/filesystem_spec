@@ -113,6 +113,7 @@ jobs:
         run: |
           sh install_s3fs.sh
           pip install -e .[test,test_downstream]
+          pip list
 
       - name: Run fsspec tests
         shell: bash -l {0}
