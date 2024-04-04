@@ -1291,9 +1291,15 @@ def test_write_transaction(tmpdir, m, monkeypatch):
     with fs.transaction:
         fs.pipe("myfile", b"1")
         fs.pipe("otherfile", b"2")
+        fs.pipe("deep/dir/otherfile", b"3")
         with fs.open("blarh", "wb") as f:
             f.write(b"ff")
         assert not m.find("")
+
+        assert fs.info("otherfile")["size"] == 1
+        assert fs.info("deep")["type"] == "directory"
+        assert fs.isdir("deep")
+        assert fs.ls("deep", detail=False) == ["/deep/dir"]
 
     assert m.cat("myfile") == b"1"
     assert m.cat("otherfile") == b"2"

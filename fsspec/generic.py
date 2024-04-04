@@ -87,6 +87,10 @@ def rsync(
     fs: GenericFileSystem|None
         Instance to use if explicitly given. The instance defines how to
         to make downstream file system instances from paths.
+
+    Returns
+    -------
+    dict of the copy operations that were performed, {source: destination}
     """
     fs = fs or GenericFileSystem(**(inst_kwargs or {}))
     source = fs._strip_protocol(source)
@@ -137,6 +141,7 @@ def rsync(
     logger.debug(f"{len(to_delete)} files to delete")
     if delete_missing:
         fs.rm(to_delete)
+    return allfiles
 
 
 class GenericFileSystem(AsyncFileSystem):

@@ -277,7 +277,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             return json.dumps(self.zmetadata[key]).encode()
         elif "/" not in key or self._is_meta(key):
             raise KeyError(key)
-        field, sub_key = key.split("/")
+        field, _ = key.rsplit("/", 1)
         record, ri, chunk_size = self._key_to_record(key)
         maybe = self._items.get((field, record), {}).get(ri, False)
         if maybe is None:
@@ -309,7 +309,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     @lru_cache(4096)
     def _key_to_record(self, key):
         """Details needed to construct a reference for one key"""
-        field, chunk = key.split("/")
+        field, chunk = key.rsplit("/", 1)
         chunk_sizes = self._get_chunk_sizes(field)
         if len(chunk_sizes) == 0:
             return 0, 0, 0
@@ -366,7 +366,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def __setitem__(self, key, value):
         if "/" in key and not self._is_meta(key):
-            field, chunk = key.split("/")
+            field, chunk = key.rsplit("/", 1)
             record, i, _ = self._key_to_record(key)
             subdict = self._items.setdefault((field, record), {})
             subdict[i] = value
@@ -391,7 +391,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             del self.zmetadata[key]
         else:
             if "/" in key and not self._is_meta(key):
-                field, chunk = key.split("/")
+                field, _ = key.rsplit("/", 1)
                 record, i, _ = self._key_to_record(key)
                 subdict = self._items.setdefault((field, record), {})
                 subdict[i] = None
@@ -1035,7 +1035,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 par0 = self._parent(par0)
                 subdirs.append(par0)
 
-            subdirs = subdirs[::-1]
+            subdirs.reverse()
             for parent, child in zip(subdirs, subdirs[1:]):
                 # register newly discovered directories
                 assert child not in self.dircache

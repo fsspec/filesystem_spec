@@ -1,6 +1,37 @@
 Changelog
 =========
 
+2024.3.1
+--------
+
+Fixes
+
+- allow override of expand in open() (#1549)
+- root handling in local file paths, fix for windows (#1477)
+
+2024.3.0
+--------
+
+Enhancements
+
+- coroutines throttle to stream pool rather than batches (#1544)
+- write transactions in simplecache (#1531)
+- allow deep nested refs in referenceFS/parquet (#1530)
+
+Fixes
+
+- Fixes bug (#1476) that made open_files ignore expand=False (#1536)
+- remove extra calling mapper contains (#1546)
+- connection retry for SMB (#1533)
+- zip64 should be on is allowZip64 is (#1532)
+
+Other
+
+- HTTP logging (#1547)
+- url_to_fs exposed in package root (#1540)
+- sort known_implementations (#1549)
+- code quality/stype (#1538, 1537, 1528, 1526)
+
 2024.2.0
 --------
 

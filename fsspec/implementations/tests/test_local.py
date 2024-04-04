@@ -472,6 +472,9 @@ def test_make_path_posix():
         drive = cwd[0]
         assert make_path_posix("/a/posix/path") == f"{drive}:/a/posix/path"
         assert make_path_posix("/posix") == f"{drive}:/posix"
+        # Windows drive requires trailing slash
+        assert make_path_posix("C:\\") == "C:/"
+        assert make_path_posix("C:\\", remove_trailing_slash=True) == "C:/"
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
@@ -479,26 +482,38 @@ def test_make_path_posix():
     assert make_path_posix("rel/path") == posixpath.join(
         make_path_posix(cwd), "rel/path"
     )
+    # NT style
     if WIN:
         assert make_path_posix("C:\\path") == "C:/path"
-        assert make_path_posix("file://C:\\path\\file") == "C:/path/file"
-    if WIN:
         assert (
             make_path_posix(
-                "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet"
+                "\\\\windows-server\\someshare\\path\\more\\path\\dir\\foo.parquet",
             )
             == "//windows-server/someshare/path/more/path/dir/foo.parquet"
         )
         assert (
             make_path_posix(
-                r"\\SERVER\UserHomeFolder$\me\My Documents\project1\data\filen.csv"
+                "\\\\SERVER\\UserHomeFolder$\\me\\My Documents\\proj\\data\\fname.csv",
             )
-            == "//SERVER/UserHomeFolder$/me/My Documents/project1/data/filen.csv"
+            == "//SERVER/UserHomeFolder$/me/My Documents/proj/data/fname.csv"
         )
     assert "/" in make_path_posix("rel\\path")
-
+    # Relative
     pp = make_path_posix("./path")
-    assert "./" not in pp and ".\\" not in pp
+    cd = make_path_posix(cwd)
+    assert pp == cd + "/path"
+    # Userpath
+    userpath = make_path_posix("~/path")
+    assert userpath.endswith("/path")
+
+
+def test_parent():
+    if WIN:
+        assert LocalFileSystem._parent("C:\\file or folder") == "C:/"
+        assert LocalFileSystem._parent("C:\\") == "C:/"
+    else:
+        assert LocalFileSystem._parent("/file or folder") == "/"
+        assert LocalFileSystem._parent("/") == "/"
 
 
 def test_linked_files(tmpdir):
@@ -638,9 +653,11 @@ def test_strip_protocol_expanduser():
     path = "file://~\\foo\\bar" if WIN else "file://~/foo/bar"
     stripped = LocalFileSystem._strip_protocol(path)
     assert path != stripped
+    assert "~" not in stripped
     assert "file://" not in stripped
     assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
-    assert not LocalFileSystem._strip_protocol("./").endswith("/")
+    path = LocalFileSystem._strip_protocol("./", remove_trailing_slash=True)
+    assert not path.endswith("/")
 
 
 def test_strip_protocol_no_authority():
@@ -648,6 +665,10 @@ def test_strip_protocol_no_authority():
     stripped = LocalFileSystem._strip_protocol(path)
     assert "file:" not in stripped
     assert stripped.endswith("/foo/bar")
+    if WIN:
+        assert (
+            LocalFileSystem._strip_protocol("file://C:\\path\\file") == "C:/path/file"
+        )
 
 
 def test_mkdir_twice_faile(tmpdir):
