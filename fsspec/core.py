@@ -450,7 +450,7 @@ def open(
         paths which do embed such characters. If None (default), this argument
         takes its value from the DEFAULT_EXPAND module variable, which takes
         its initial value from the "open_expand" config value at startup, which will
-        be True if not set.
+        be False if not set.
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
