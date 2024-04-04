@@ -19,6 +19,7 @@ def test_simple(server):  # noqa: F811
         "b": (realfile, 0, 5),
         "c": (realfile, 1, 5),
         "d": b"base64:aGVsbG8=",
+        "e": {"key": "value"},
     }
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -27,6 +28,30 @@ def test_simple(server):  # noqa: F811
     assert fs.cat("b") == data[:5]
     assert fs.cat("c") == data[1 : 1 + 5]
     assert fs.cat("d") == b"hello"
+    assert fs.cat("e") == b'{"key": "value"}'
+    with fs.open("d", "rt") as f:
+        assert f.read(2) == "he"
+
+
+def test_simple_ver1(server):  # noqa: F811
+    in_data = {
+        "version": 1,
+        "refs": {
+            "a": b"data",
+            "b": (realfile, 0, 5),
+            "c": (realfile, 1, 5),
+            "d": b"base64:aGVsbG8=",
+            "e": {"key": "value"},
+        }
+    }
+    h = fsspec.filesystem("http")
+    fs = fsspec.filesystem("reference", fo=in_data, fs=h)
+
+    assert fs.cat("a") == b"data"
+    assert fs.cat("b") == data[:5]
+    assert fs.cat("c") == data[1 : 1 + 5]
+    assert fs.cat("d") == b"hello"
+    assert fs.cat("e") == b'{"key": "value"}'
     with fs.open("d", "rt") as f:
         assert f.read(2) == "he"
 
