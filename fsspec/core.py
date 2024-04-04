@@ -8,7 +8,7 @@ from glob import has_magic
 from pathlib import Path
 
 # for backwards compat, we export cache things from here too
-from .caching import (  # noqa: F401
+from fsspec.caching import (  # noqa: F401
     BaseCache,
     BlockCache,
     BytesCache,
@@ -16,9 +16,10 @@ from .caching import (  # noqa: F401
     ReadAheadCache,
     caches,
 )
-from .compression import compr
-from .registry import filesystem, get_filesystem_class
-from .utils import (
+from fsspec.compression import compr
+from fsspec.config import conf
+from fsspec.registry import filesystem, get_filesystem_class
+from fsspec.utils import (
     _unstrip_protocol,
     build_name_function,
     infer_compression,
@@ -100,7 +101,18 @@ class OpenFile:
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
 
-        f = self.fs.open(self.path, mode=mode)
+        try:
+            f = self.fs.open(self.path, mode=mode)
+        except FileNotFoundError as e:
+            if has_magic(self.path):
+                raise FileNotFoundError(
+                    "%s not found. The URL contains glob characters: you maybe needed\n"
+                    "to pass expand=True in fsspec.open() or the storage_options of \n"
+                    "your library. You can also set the config value 'open_expand'\n"
+                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
+                    self.path,
+                ) from e
+            raise
 
         self.fobjects = [f]
 
@@ -396,6 +408,9 @@ def url_to_fs(url, **kwargs):
     return fs, urlpath
 
 
+DEFAULT_EXPAND = conf.get("open_expand", False)
+
+
 def open(
     urlpath,
     mode="rb",
@@ -404,6 +419,7 @@ def open(
     errors=None,
     protocol=None,
     newline=None,
+    expand=None,
     **kwargs,
 ):
     """Given a path or paths, return one ``OpenFile`` object.
@@ -428,6 +444,13 @@ def open(
     newline: bytes or None
         Used for line terminator in text mode. If None, uses system default;
         if blank, uses no translation.
+    expand: bool or Nonw
+        Whether to regard file paths containing special glob characters as needing
+        expansion (finding the first match) or absolute. Setting False allows using
+        paths which do embed such characters. If None (default), this argument
+        takes its value from the DEFAULT_EXPAND module variable, which takes
+        its initial value from the "open_expand" config value at startup, which will
+        be False if not set.
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -456,8 +479,7 @@ def open(
     - For implementations in separate packages see
       https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
-    kw = {"expand": False}
-    kw.update(kwargs)
+    expand = DEFAULT_EXPAND if expand is None else expand
     out = open_files(
         urlpath=[urlpath],
         mode=mode,
@@ -466,7 +488,8 @@ def open(
         errors=errors,
         protocol=protocol,
         newline=newline,
-        **kw,
+        expand=expand,
+        **kwargs,
     )
     if not out:
         raise FileNotFoundError(urlpath)
