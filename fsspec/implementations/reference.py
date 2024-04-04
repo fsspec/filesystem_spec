@@ -964,6 +964,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                     else:
                         u = _render_jinja(u)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
+            elif isinstance(v, dict):
+                self.references[k] = json.dumps(v)
             else:
                 self.references[k] = v
         self.references.update(self._process_gen(references.get("gen", [])))
