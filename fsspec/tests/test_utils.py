@@ -371,7 +371,6 @@ def test_can_local(par):
 
 
 def test_mirror_from():
-
     mock = Mock()
     mock.attr = 1
 
@@ -403,7 +402,6 @@ def test_mirror_from():
 @pytest.mark.parametrize("max_gap", [0, 32])
 @pytest.mark.parametrize("max_block", [None, 128])
 def test_merge_offset_ranges(max_gap, max_block):
-
     # Input ranges
     # (Using out-of-order ranges for full coverage)
     paths = ["foo", "bar", "bar", "bar", "foo"]
@@ -411,7 +409,11 @@ def test_merge_offset_ranges(max_gap, max_block):
     ends = [32, 32, 1024, 256, 64]
 
     # Call merge_offset_ranges
-    (result_paths, result_starts, result_ends,) = merge_offset_ranges(
+    (
+        result_paths,
+        result_starts,
+        result_ends,
+    ) = merge_offset_ranges(
         paths,
         starts,
         ends,

@@ -3,18 +3,5 @@ channels:
   - conda-forge
 dependencies:
   - python=3.9
-  - dask
-  - pandas
-  - xarray
-  - zarr
-  - pytest<8
-  - pytest-cov
-  - pytest-rerunfailures
-  - pytest-timeout
-  - pytest-xdist
-  - s3fs
-  - requests
-  - moto <5
-  - sqlalchemy<2
-  - flask
-  - dask-expr
+  - pip:
+      - git+https://github.com/dask/dask

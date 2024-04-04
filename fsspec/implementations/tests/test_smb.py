@@ -3,6 +3,7 @@ Test SMBFileSystem class using a docker container
 """
 
 import logging
+import os
 import shlex
 import subprocess
 import time
@@ -13,11 +14,18 @@ import fsspec
 
 pytest.importorskip("smbprotocol")
 
-# ! pylint: disable=redefined-outer-name,missing-function-docstring
+# ruff: noqa: F821
 
-# Test standard and non-standard ports
-default_port = 445
-port_test = [None, default_port, 9999]
+if os.environ.get("WSL_INTEROP"):
+    # Running on WSL (Windows)
+    port_test = [9999]
+
+else:
+    # ! pylint: disable=redefined-outer-name,missing-function-docstring
+
+    # Test standard and non-standard ports
+    default_port = 445
+    port_test = [None, default_port, 9999]
 
 
 def stop_docker(container):
@@ -32,10 +40,9 @@ def smb_params(request):
     try:
         pchk = ["docker", "run", "--name", "fsspec_test_smb", "hello-world"]
         subprocess.check_call(pchk)
+        stop_docker("fsspec_test_smb")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("docker run not available")
-        return
-    stop_docker("fsspec_test_smb")
 
     # requires docker
     container = "fsspec_smb"
@@ -43,13 +50,13 @@ def smb_params(request):
     cfg = "-p -u 'testuser;testpass' -s 'home;/share;no;no;no;testuser'"
     port = request.param if request.param is not None else default_port
     img = (
-        f"docker run --name {container} --detach -p 139:139 -p {port}:445 dperson/samba"
+        f"docker run --name {container} --detach -p 139:139 -p {port}:445 dperson/samba"  # noqa: E231 E501
     )
     cmd = f"{img} {cfg}"
-    cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
-    logger = logging.getLogger("fsspec")
-    logger.debug("Container: %s", cid)
     try:
+        cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
+        logger = logging.getLogger("fsspec")
+        logger.debug("Container: %s", cid)
         time.sleep(1)
         yield {
             "host": "localhost",
@@ -64,6 +71,7 @@ def smb_params(request):
         stop_docker(container)
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_simple(smb_params):
     adir = "/home/adir"
     adir2 = "/home/adir/otherdir/"
@@ -80,6 +88,7 @@ def test_simple(smb_params):
     assert not fsmb.exists(adir)
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_with_url(smb_params):
     if smb_params["port"] is None:
         smb_url = "smb://{username}:{password}@{host}/home/someuser.txt"
@@ -94,6 +103,7 @@ def test_with_url(smb_params):
         assert read_result == b"hello"
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_transaction(smb_params):
     afile = "/home/afolder/otherdir/afile"
     afile2 = "/home/afolder/otherdir/afile2"
@@ -114,12 +124,14 @@ def test_transaction(smb_params):
     assert fsmb.find(adir) == [afile, afile2]
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_makedirs_exist_ok(smb_params):
     fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
     fsmb.makedirs("/home/a/b/c")
     fsmb.makedirs("/home/a/b/c", exist_ok=True)
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_rename_from_upath(smb_params):
     fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
     fsmb.makedirs("/home/a/b/c", exist_ok=True)

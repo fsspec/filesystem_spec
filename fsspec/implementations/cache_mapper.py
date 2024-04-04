@@ -12,8 +12,7 @@ class AbstractCacheMapper(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __call__(self, path: str) -> str:
-        ...
+    def __call__(self, path: str) -> str: ...
 
     def __eq__(self, other: object) -> bool:
         # Identity only depends on class. When derived classes have attributes

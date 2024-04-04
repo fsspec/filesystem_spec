@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: "*"
+    branches: ["*"]
   pull_request:
-    branches: master
+    branches: [master]
 
 jobs:
   linux:
@@ -13,14 +13,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        PY: ["3.8", "3.9", "3.10", "3.11"]
+        PY: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     env:
       CIRUN: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -34,20 +34,22 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
+          pip install s3fs
+          pip uninstall s3fs
+          pip install -e .[test_full]
+          pip install s3fs --no-deps
           pytest -v
 
   win:
     name: pytest-win
     runs-on: windows-2019
-    strategy:
-      fail-fast: false
 
     env:
       CIRUN: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -59,6 +61,10 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
+          pip install s3fs
+          pip uninstall s3fs
+          pip install -e .[test]
+          pip install s3fs --no-deps
           pytest -v
 
   lint:
@@ -75,7 +81,7 @@ jobs:
 #    runs-on: ubuntu-latest
 #    steps:
 #      - name: Checkout
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Setup conda
 #        uses: mamba-org/setup-micromamba@v1
@@ -93,7 +99,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -105,35 +111,20 @@ jobs:
       - name: Local install
         shell: bash -l {0}
         run: |
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
-          git tag -a 3000 -m "fake"
-          pip install -e .
-
-      - name: Clone s3fs
-        shell: bash -l {0}
-        run: git clone https://github.com/fsspec/s3fs
-
-      - name: Install s3fs
-        shell: bash -l {0}
-        run: |
-          pip install -e ./s3fs --no-deps
+          sh install_s3fs.sh
+          pip install -e .[test,test_downstream]
+          pip list
 
       - name: Run fsspec tests
         shell: bash -l {0}
         run: |
           pytest -v fsspec/tests/test_downstream.py
 
-      - name: clone dask
-        shell: bash -l {0}
-        run: |
-          git clone https://github.com/dask/dask
-          pip install -e ./dask
-
       - name: Run dask tests
         shell: bash -l {0}
         run: |
-          pytest -v dask/dask/bytes
+          dask_test_path=$(python -c "import dask.bytes;print(dask.bytes.__path__[0])")
+          pytest -v $dask_test_path
 
   fsspec_friends:
     name: ${{ matrix.FRIEND }}-pytest
@@ -151,7 +142,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup conda
         uses: mamba-org/setup-micromamba@v1

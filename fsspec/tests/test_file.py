@@ -1,4 +1,5 @@
 """Tests abstract buffered file API, using FTP implementation"""
+
 import pickle
 
 import pytest
