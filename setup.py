@@ -31,6 +31,7 @@ extras_require = {
     "libarchive": ["libarchive-c"],
     "gui": ["panel"],
     "tqdm": ["tqdm"],
+    "parquet": ["fastparquet"],
 }
 # To simplify full installation
 extras_require["full"] = sorted(set(sum(extras_require.values(), [])))
