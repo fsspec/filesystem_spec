@@ -464,7 +464,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
         df.to_parquet(
             fn,
-            engine="fastparquet",
+            engine="pyarrow",
             storage_options=storage_options
             or getattr(self.fs, "storage_options", None),
             compression="zstd",
