@@ -25,7 +25,9 @@ def test_block_cache_lru():
     BlockCache is a cache that stores blocks of data and uses LRU to evict
     """
     block_size = 4
-    cache = BlockCache(block_size, letters_fetcher, len(string.ascii_letters), maxblocks=2)
+    cache = BlockCache(
+        block_size, letters_fetcher, len(string.ascii_letters), maxblocks=2
+    )
     # miss
     cache._fetch(0, 2)
     assert cache.cache_info().misses == 1

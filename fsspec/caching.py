@@ -735,7 +735,6 @@ class BackgroundBlockCache(BaseCache):
         self._fetch_future: Future[bytes] | None = None
         self._fetch_future_lock = threading.Lock()
 
-
     def cache_info(self) -> UpdatableLRU.CacheInfo:
         """
         The statistics on the block cache.
