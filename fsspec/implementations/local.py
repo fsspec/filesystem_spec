@@ -116,8 +116,8 @@ class LocalFileSystem(AbstractFileSystem):
         return osp.lexists(path)
 
     def cp_file(self, path1, path2, **kwargs):
-        path1 = self._strip_protocol(path1).rstrip("/")
-        path2 = self._strip_protocol(path2).rstrip("/")
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
         if self.isfile(path1):
@@ -146,8 +146,8 @@ class LocalFileSystem(AbstractFileSystem):
         return self.cp_file(path1, path2, **kwargs)
 
     def mv_file(self, path1, path2, **kwargs):
-        path1 = self._strip_protocol(path1).rstrip("/")
-        path2 = self._strip_protocol(path2).rstrip("/")
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         shutil.move(path1, path2)
 
     def link(self, src, dst, **kwargs):
@@ -171,7 +171,7 @@ class LocalFileSystem(AbstractFileSystem):
             path = [path]
 
         for p in path:
-            p = self._strip_protocol(p).rstrip("/")
+            p = self._strip_protocol(p)
             if self.isdir(p):
                 if not recursive:
                     raise ValueError("Cannot delete directory, set recursive=True")
@@ -214,11 +214,8 @@ class LocalFileSystem(AbstractFileSystem):
 
     @classmethod
     def _parent(cls, path):
-        path = cls._strip_protocol(path).rstrip("/")
-        if "/" in path:
-            return path.rsplit("/", 1)[0]
-        else:
-            return cls.root_marker
+        path = cls._strip_protocol(path)
+        return osp.dirname(path) or cls.root_marker
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -231,7 +228,9 @@ class LocalFileSystem(AbstractFileSystem):
             path = path[8:]
         elif path.startswith("local:"):
             path = path[6:]
-        return make_path_posix(path).rstrip("/") or cls.root_marker
+        drive, path = osp.splitdrive(make_path_posix(path))
+        path = path.rstrip("/") or cls.root_marker
+        return drive + path
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)

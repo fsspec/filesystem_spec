@@ -474,7 +474,6 @@ def test_make_path_posix():
         assert make_path_posix("/posix") == f"{drive}:/posix"
         # Windows drive requires trailing slash
         assert make_path_posix("C:\\") == "C:/"
-        assert make_path_posix("C:\\", remove_trailing_slash=True) == "C:/"
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
@@ -656,7 +655,7 @@ def test_strip_protocol_expanduser():
     assert "~" not in stripped
     assert "file://" not in stripped
     assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
-    path = LocalFileSystem._strip_protocol("./", remove_trailing_slash=True)
+    path = LocalFileSystem._strip_protocol("./")
     assert not path.endswith("/")
 
 
