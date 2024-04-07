@@ -19,6 +19,13 @@ listing = open(
 win = os.name == "nt"
 
 
+def _make_listing(*paths):
+    return "\n".join(
+        f'<a href="http://127.0.0.1:{port}{f}">Link_{i}</a>'
+        for i, f in enumerate(paths)
+    ).encode()
+
+
 @pytest.fixture
 def reset_files():
     yield
@@ -34,6 +41,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         "/index/otherfile": data,
         "/index": index,
         "/data/20020401": listing,
+        "/simple/": _make_listing("/simple/file", "/simple/dir/"),
+        "/simple/file": data,
+        "/simple/dir/": _make_listing("/simple/dir/file"),
+        "/simple/dir/file": data,
     }
     dynamic_files = {}
 
@@ -53,7 +64,9 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
-        file_path = self.path.rstrip("/")
+        file_path = self.path
+        if file_path.endswith("/") and file_path.rstrip("/") in self.files:
+            file_path = file_path.rstrip("/")
         file_data = self.files.get(file_path)
         if "give_path" in self.headers:
             return self._respond(200, data=json.dumps({"path": self.path}).encode())
