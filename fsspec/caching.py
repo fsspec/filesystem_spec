@@ -478,7 +478,6 @@ class BytesCache(BaseCache):
                     self.cache = self.fetcher(start, bend)
                     self.start = start
                 else:
-
                     self.total_requested_bytes += self.start - start
                     new = self.fetcher(start, self.start)
                     self.start = start
