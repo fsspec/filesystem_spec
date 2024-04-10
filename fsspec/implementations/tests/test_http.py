@@ -129,6 +129,15 @@ def test_list_cache_with_skip_instance_cache(server):
     assert out == [server + "/index/realfile"]
 
 
+def test_glob_return_subfolders(server):
+    h = fsspec.filesystem("http")
+    out = h.glob(server + "/simple/*")
+    assert set(out) == {
+        server + "/simple/dir/",
+        server + "/simple/file",
+    }
+
+
 def test_isdir(server):
     h = fsspec.filesystem("http")
     assert h.isdir(server + "/index/")
