@@ -1847,13 +1847,11 @@ class AbstractBufferedFile(io.IOBase):
         out = self.cache._fetch(self.loc, self.loc + length)
 
         logger.debug(
-            "%s read: %i - %i, total: %i, cache hits: %i, cache misses: %i",
+            "%s read: %i - %i %s",
             self,
             self.loc,
             self.loc + length,
-            self.cache.total_requested_bytes,
-            self.cache.hit_count,
-            self.cache.miss_count,
+            self.cache._log_stats(),
         )
         self.loc += len(out)
         return out

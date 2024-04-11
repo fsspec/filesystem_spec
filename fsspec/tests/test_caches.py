@@ -21,9 +21,7 @@ def test_cache_getitem(Cache_imp):
 
 
 def test_block_cache_lru():
-    """
-    BlockCache is a cache that stores blocks of data and uses LRU to evict
-    """
+    # BlockCache is a cache that stores blocks of data and uses LRU to evict
     block_size = 4
     cache = BlockCache(
         block_size, letters_fetcher, len(string.ascii_letters), maxblocks=2

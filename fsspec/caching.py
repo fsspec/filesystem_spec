@@ -79,16 +79,28 @@ class BaseCache:
         self.miss_count = 0
         self.total_requested_bytes = 0
 
+    def _log_stats(self) -> str:
+        """Return a formatted string of the cache statistics."""
+        if self.hit_count == 0 and self.miss_count == 0:
+            # a cache that does nothing, this is for logs only
+            return ""
+        return " , %s: %d hits, %d misses, %d total requested bytes" % (
+            self.name,
+            self.hit_count,
+            self.miss_count,
+            self.total_requested_bytes,
+        )
+
     def __repr__(self) -> str:
         # TODO: use rich for better formatting
         return f"""
-            cache type  :   {self.__class__.__name__} 
+        <{self.__class__.__name__}:
             block size  :   {self.blocksize}
             block count :   {self.nblocks}
             file size   :   {self.size}
             cache hits  :   {self.hit_count}
             cache misses:   {self.miss_count}
-            total requested bytes: {self.total_requested_bytes}
+            total requested bytes: {self.total_requested_bytes}>
         """
 
 
