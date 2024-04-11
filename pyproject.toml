@@ -135,6 +135,7 @@ Homepage = "https://github.com/fsspec/filesystem_spec"
 
 [tool.hatch.version]
 source = "vcs"
+raw-options = {'version_scheme'='post-release'}
 
 [tool.hatch.build.hooks.vcs]
 version-file = "fsspec/_version.py"
