@@ -7,6 +7,7 @@ from io import BytesIO
 from typing import Any, ClassVar
 
 from fsspec import AbstractFileSystem
+from fsspec.utils import stringify_path
 
 logger = logging.getLogger("fsspec.memoryfs")
 
@@ -25,6 +26,7 @@ class MemoryFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
+        path = stringify_path(path)
         if path.startswith("memory://"):
             path = path[len("memory://") :]
         if "::" in path or "://" in path:
@@ -279,6 +281,10 @@ class MemoryFile(BytesIO):
     @property
     def size(self):
         return self.getbuffer().nbytes
+
+    @property
+    def name(self):
+        return self.path.split("/")[-1]
 
     def __enter__(self):
         return self
