@@ -284,7 +284,7 @@ class MemoryFile(BytesIO):
 
     @property
     def name(self):
-        return self.path.split("/")[-1]
+        return self.path.rsplit("/", 1)[-1]
 
     def __enter__(self):
         return self
