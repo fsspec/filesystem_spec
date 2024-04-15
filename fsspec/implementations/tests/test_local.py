@@ -648,26 +648,158 @@ def test_pickle(tmpdir):
         assert f2.read() == f.read()
 
 
-def test_strip_protocol_expanduser():
-    path = "file://~\\foo\\bar" if WIN else "file://~/foo/bar"
-    stripped = LocalFileSystem._strip_protocol(path)
-    assert path != stripped
-    assert "~" not in stripped
-    assert "file://" not in stripped
-    assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
-    path = LocalFileSystem._strip_protocol("./")
-    assert not path.endswith("/")
+@pytest.fixture()
+def cwd():
+    yield os.getcwd().replace("\\", "/")
 
 
-def test_strip_protocol_no_authority():
-    path = "file:\\foo\\bar" if WIN else "file:/foo/bar"
-    stripped = LocalFileSystem._strip_protocol(path)
-    assert "file:" not in stripped
-    assert stripped.endswith("/foo/bar")
-    if WIN:
-        assert (
-            LocalFileSystem._strip_protocol("file://C:\\path\\file") == "C:/path/file"
-        )
+@pytest.fixture()
+def current_drive(cwd):
+    drive = os.path.splitdrive(cwd)[0]
+    assert not drive or (len(drive) == 2 and drive.endswith(":"))
+    yield drive
+
+
+@pytest.fixture()
+def user_home():
+    pth = os.path.expanduser("~").replace("\\", "/")
+    assert not pth.endswith("/")
+    yield pth
+
+
+def winonly(*args):
+    return pytest.param(*args, marks=pytest.mark.skipif(not WIN, reason="Windows only"))
+
+
+def posixonly(*args):
+    return pytest.param(*args, marks=pytest.mark.skipif(WIN, reason="Posix only"))
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file://~/foo/bar", "{user_home}/foo/bar"),
+        ("~/foo/bar", "{user_home}/foo/bar"),
+        winonly("~\\foo\\bar", "{user_home}/foo/bar"),
+        winonly("file://~\\foo\\bar", "{user_home}/foo/bar"),
+    ],
+)
+def test_strip_protocol_expanduser(uri, expected, user_home):
+    expected = expected.format(user_home=user_home)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file://", "{cwd}"),
+        posixonly("file://.", "{cwd}/."),
+        winonly("file://.", "{cwd}"),
+        ("file://./", "{cwd}"),
+        ("./", "{cwd}"),
+        ("file:path", "{cwd}/path"),
+        ("file://path", "{cwd}/path"),
+        ("path", "{cwd}/path"),
+        ("./path", "{cwd}/path"),
+        winonly(".\\", "{cwd}"),
+        winonly("file://.\\path", "{cwd}/path"),
+    ],
+)
+def test_strip_protocol_relative_paths(uri, expected, cwd):
+    expected = expected.format(cwd=cwd)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        posixonly("file:/foo/bar", "/foo/bar"),
+        winonly("file:/foo/bar", "{current_drive}/foo/bar"),
+        winonly("file:\\foo\\bar", "{current_drive}/foo/bar"),
+        winonly("file://D:\\path\\file", "D:/path/file"),
+    ],
+)
+def test_strip_protocol_no_authority(uri, expected, cwd, current_drive):
+    expected = expected.format(cwd=cwd, current_drive=current_drive)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file:/path", "/path"),
+        ("file:///path", "/path"),
+        ("file:////path", "//path"),
+        ("local:/path", "/path"),
+        ("s3://bucket/key", "{cwd}/s3://bucket/key"),
+        ("/path", "/path"),
+        ("file:///", "/"),
+    ]
+    if not WIN
+    else [
+        ("file:c:/path", "c:/path"),
+        ("file:/c:/path", "c:/path"),
+        ("file:/C:/path", "C:/path"),
+        ("file://c:/path", "c:/path"),
+        ("file:///c:/path", "c:/path"),
+        ("local:/path", "{current_drive}/path"),
+        ("s3://bucket/key", "s3://bucket/key"),
+        ("c:/path", "c:/path"),
+        ("c:\\path", "c:/path"),
+        ("file:///", "{current_drive}/"),
+        pytest.param(
+            "file://localhost/c:/path",
+            "c:/path",
+            marks=pytest.mark.xfail(reason="not supported"),
+        ),
+    ],
+)
+def test_strip_protocol_absolute_paths(uri, expected, current_drive, cwd):
+    expected = expected.format(current_drive=current_drive, cwd=cwd)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file:c|/path", "c:/path"),
+        ("file:/D|/path", "D:/path"),
+        ("file:///C|/path", "C:/path"),
+    ],
+)
+@pytest.mark.skipif(not WIN, reason="Windows only")
+@pytest.mark.xfail(WIN, reason="not supported")
+def test_strip_protocol_legacy_dos_uris(uri, expected):
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, stripped",
+    [
+        ("file://remote/share/path", "{cwd}/remote/share/path"),
+        ("file:////remote/share/path", "//remote/share/path"),
+        (
+            "file://///remote/share/path",
+            "///remote/share/path",
+        ),
+        ("//remote/share/path", "//remote/share/path"),
+        ("\\\\remote\\share\\path", "//remote/share/path"),
+    ],
+)
+@pytest.mark.skipif(not WIN, reason="Windows only")
+def test_strip_protocol_windows_remote_shares(uri, stripped, cwd):
+    stripped = stripped.format(cwd=cwd)
+
+    assert LocalFileSystem._strip_protocol(uri) == stripped
 
 
 def test_mkdir_twice_faile(tmpdir):
