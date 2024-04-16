@@ -3,7 +3,7 @@ import os
 import pytest
 
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
-
+from pathlib import Path
 
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
@@ -363,3 +363,10 @@ def test_cp_two_files(m):
         "/target/file0",
         "/target/file1",
     ]
+
+def test_open_path(m):
+    with m.open("/myfile/foo/bar", "wb") as f:
+        f.write(b"some\nlines\nof\ntext")
+    
+    path = Path("/myfile/foo/bar")
+    assert m.read_text(path) == "some\nlines\nof\ntext"
