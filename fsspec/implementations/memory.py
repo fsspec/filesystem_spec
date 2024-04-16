@@ -29,8 +29,6 @@ class MemoryFileSystem(AbstractFileSystem):
         path = stringify_path(path)
         if "\\" in path:
             path = path.replace("\\", "/")
-        if "//" in path:
-            path = path.replace("//", "/")
         if path.startswith("memory://"):
             path = path[len("memory://") :]
         if "::" in path or "://" in path:
