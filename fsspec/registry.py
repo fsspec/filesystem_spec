@@ -110,6 +110,7 @@ known_implementations = {
     "file": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "filecache": {"class": "fsspec.implementations.cached.WholeFileCacheFileSystem"},
     "ftp": {"class": "fsspec.implementations.ftp.FTPFileSystem"},
+    "ftptls": {"class": "fsspec.implementations.ftp_tls.FTPTLSFileSystem"},
     "gcs": {
         "class": "gcsfs.GCSFileSystem",
         "err": "Please install gcsfs to access Google Storage",
