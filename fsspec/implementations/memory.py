@@ -284,10 +284,6 @@ class MemoryFile(BytesIO):
     def size(self):
         return self.getbuffer().nbytes
 
-    @property
-    def name(self):
-        return self.path.rsplit("/", 1)[-1]
-
     def __enter__(self):
         return self
 

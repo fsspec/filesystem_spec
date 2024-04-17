@@ -367,7 +367,6 @@ def test_cp_two_files(m):
 def test_open_path(m):
     with m.open("/myfile/foo/bar", "wb") as f:
         f.write(b"some\nlines\nof\ntext")
-        assert f.name
     
     path = Path("/myfile/foo/bar")
     assert m.read_text(path) == "some\nlines\nof\ntext"
