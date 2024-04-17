@@ -986,9 +986,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         out = {}
         for gen in gens:
             dimension = {
-                k: v
-                if isinstance(v, list)
-                else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                k: (
+                    v
+                    if isinstance(v, list)
+                    else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                )
                 for k, v in gen["dimensions"].items()
             }
             products = (

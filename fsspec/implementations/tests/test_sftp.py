@@ -113,10 +113,8 @@ def test_get_dir(protocol, ssh, root_path, tmpdir):
     assert os.path.isfile(f"{path}/deeper/afile")
 
     f.get(
-        protocol
-        + "://{username}:{password}@{host}:{port}" "{root_path}".format(
-            root_path=root_path, **ssh
-        ),
+        protocol + "://{username}:{password}@{host}:{port}"
+        "{root_path}".format(root_path=root_path, **ssh),
         f"{path}/test2",
         recursive=True,
     )
