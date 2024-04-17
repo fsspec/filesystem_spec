@@ -162,6 +162,9 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
    :members: __init__
 
+.. autoclass:: fsspec.implementations.ftp.FTPTLSFileSystem
+   :members: __init__
+
 .. autoclass:: fsspec.implementations.git.GitFileSystem
    :members: __init__
 
