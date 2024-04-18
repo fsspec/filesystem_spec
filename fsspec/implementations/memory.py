@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
 from typing import Any, ClassVar
-from pathlib import PurePosixPath
+from pathlib import PurePath, PureWindowsPath
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import LocalFileSystem
@@ -28,8 +28,11 @@ class MemoryFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        if isinstance(path, PurePosixPath):
-            path = stringify_path(path)
+        if isinstance(path, PurePath):
+            if isinstance(path, PureWindowsPath):
+                return LocalFileSystem._strip_protocol(path).lstrip("C:")
+            else:
+                path = stringify_path(path)
 
         if path.startswith("memory://"):
             path = path[len("memory://") :]

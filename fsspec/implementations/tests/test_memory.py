@@ -3,7 +3,7 @@ import os
 import pytest
 
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
-from pathlib import PurePosixPath
+from pathlib import PurePosixPath, PureWindowsPath
 
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
@@ -369,4 +369,7 @@ def test_open_path(m):
         f.write(b"some\nlines\nof\ntext")
     
     path = PurePosixPath("/myfile/foo/bar")
+    assert m.read_text(path) == "some\nlines\nof\ntext"
+
+    path = PureWindowsPath("C:\\myfile\\foo\\bar")
     assert m.read_text(path) == "some\nlines\nof\ntext"
