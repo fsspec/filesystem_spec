@@ -53,7 +53,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
    maintainable and modular data science code
 #. `pyxet`_, a Python library for mounting and
    accessing very large datasets from XetHub
-#. `Huggingface🤗 Datasets`_, a popular library to 
+#. `Huggingface🤗 Datasets`_, a popular library to
    load&manipulate data for Deep Learning models
 
 ``fsspec`` filesystems are also supported by:
