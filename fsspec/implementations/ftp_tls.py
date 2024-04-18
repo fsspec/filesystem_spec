@@ -27,6 +27,7 @@ class FTPTLSFileSystem(AbstractFileSystem):
         tempdir=None,
         timeout=30,
         encoding="utf-8",
+        prot_p=False,
         **kwargs,
     ):
         """
@@ -68,7 +69,10 @@ class FTPTLSFileSystem(AbstractFileSystem):
             self.blocksize = block_size
         else:
             self.blocksize = 2**16
+        self.prot_p = prot_p
         self._connect()
+        if self.prot_p:
+            self.ftp.prot_p()
 
     def _connect(self):
         if sys.version_info >= (3, 9):
@@ -80,7 +84,6 @@ class FTPTLSFileSystem(AbstractFileSystem):
             self.ftp = FTP_TLS(timeout=self.timeout)
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
-        self.ftp.prot_p()
 
     @classmethod
     def _strip_protocol(cls, path):
