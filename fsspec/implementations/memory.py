@@ -30,7 +30,7 @@ class MemoryFileSystem(AbstractFileSystem):
     def _strip_protocol(cls, path):
         if isinstance(path, PurePath):
             if isinstance(path, PureWindowsPath):
-                return LocalFileSystem._strip_protocol(path).lstrip("C:")
+                return LocalFileSystem._strip_protocol(path)
             else:
                 path = stringify_path(path)
 
