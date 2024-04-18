@@ -15,30 +15,29 @@ here = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture()
 def ftp():
-    pytest.importorskip("pyftpdlib")
     P = subprocess.Popen(
-        [sys.executable, "-m", "pyftpdlib", "-d", here],
+        [sys.executable, os.path.join(os.path.dirname(__file__), "ftp_tls.py")],
         stderr=subprocess.STDOUT,
         stdout=subprocess.PIPE,
     )
     try:
         time.sleep(1)
-        yield "localhost", 2121
+        yield "localhost", 2121, "user", "pass"
     finally:
         P.terminate()
         P.wait()
 
 
 def test_basic(ftp):
-    host, port = ftp
-    fs = FTPTLSFileSystem(host, port)
+    host, port, _, _ = ftp
+    fs = FTPTLSFileSystem(host, port, timeout=1)
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
 
 
 def test_basic_prot_p(ftp):
-    host, port = ftp
+    host, port, _, _ = ftp
     fs = FTPTLSFileSystem(host, port, prot_p=True)
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
@@ -46,19 +45,19 @@ def test_basic_prot_p(ftp):
 
 
 def test_not_cached(ftp):
-    host, port = ftp
+    host, port, _, _ = ftp
     fs = FTPTLSFileSystem(host, port)
     fs2 = FTPTLSFileSystem(host, port)
     assert fs is not fs2
 
 
 @pytest.mark.parametrize("cache_type", ["bytes", "mmap"])
-def test_complex(ftp_writable, cache_type):
+def test_complex(ftp, cache_type):
     from fsspec.core import BytesCache
 
-    host, port, user, pw = ftp_writable
+    host, port, user, pw = ftp
     files = open_files(
-        "ftp:///ou*",
+        "ftptls:///fsspec/implementations/tests/ou*",
         host=host,
         port=port,
         username=user,
@@ -75,29 +74,29 @@ def test_complex(ftp_writable, cache_type):
         assert fo.tell() == 12
 
 
-def test_write_small(ftp_writable):
-    host, port, user, pw = ftp_writable
+def test_write_small(ftp):
+    host, port, user, pw = ftp
     fs = FTPTLSFileSystem(host, port, user, pw)
-    with fs.open("/out2", "wb") as f:
+    with fs.open("/out_tls2", "wb") as f:
         f.write(b"oi")
-    assert fs.cat("/out2") == b"oi"
+    assert fs.cat("/out_tls2") == b"oi"
 
 
-def test_with_url(ftp_writable):
-    host, port, user, pw = ftp_writable
-    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out", "wb")
+def test_with_url(ftp):
+    host, port, user, pw = ftp
+    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out_tls", "wb")
     with fo as f:
         f.write(b"hello")
-    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out", "rb")
+    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out_tls", "rb")
     with fo as f:
         assert f.read() == b"hello"
 
 
 @pytest.mark.parametrize("cache_type", ["bytes", "mmap"])
-def test_write_big(ftp_writable, cache_type):
-    host, port, user, pw = ftp_writable
+def test_write_big(ftp, cache_type):
+    host, port, user, pw = ftp
     fs = FTPTLSFileSystem(host, port, user, pw, block_size=1000, cache_type=cache_type)
-    fn = "/bigger"
+    fn = "/bigger_tls"
     with fs.open(fn, "wb") as f:
         f.write(b"o" * 500)
         assert not fs.exists(fn)
@@ -111,11 +110,11 @@ def test_write_big(ftp_writable, cache_type):
     assert fs.cat(fn) == b"o" * 1700
 
 
-def test_transaction(ftp_writable):
-    host, port, user, pw = ftp_writable
+def test_transaction(ftp):
+    host, port, user, pw = ftp
     fs = FTPTLSFileSystem(host, port, user, pw)
-    fs.mkdir("/tmp")
-    fn = "/tr"
+    fs.mkdir("tmp_tls")
+    fn = "tr"
     with fs.transaction:
         with fs.open(fn, "wb") as f:
             f.write(b"not")
@@ -127,60 +126,60 @@ def test_transaction(ftp_writable):
     assert not fs.exists(fn)
 
 
-def test_transaction_with_cache(ftp_writable, tmpdir):
-    host, port, user, pw = ftp_writable
+def test_transaction_with_cache(ftp, tmpdir):
+    host, port, user, pw = ftp
     fs = FTPTLSFileSystem(host, port, user, pw)
-    fs.mkdir("/tmp")
-    fs.mkdir("/tmp/dir")
-    assert "dir" in fs.ls("/tmp", detail=False)
+    fs.mkdirs("tmp_tls", exist_ok=True)
+    fs.mkdir("tmp_tls/dir")
+    assert "dir" in fs.ls("tmp_tls", detail=False)
 
     with fs.transaction:
-        fs.rmdir("/tmp/dir")
+        fs.rmdir("tmp_tls/dir")
 
-    assert "dir" not in fs.ls("/tmp", detail=False)
-    assert not fs.exists("/tmp/dir")
+    assert "dir" not in fs.ls("tmp_tls", detail=False)
+    assert not fs.exists("tmp_tls/dir")
 
 
-def test_cat_get(ftp_writable, tmpdir):
-    host, port, user, pw = ftp_writable
+def test_cat_get(ftp, tmpdir):
+    host, port, user, pw = ftp
     fs = FTPTLSFileSystem(host, port, user, pw, block_size=500)
-    fs.mkdir("/tmp")
+    fs.mkdirs("tmp_tls", exist_ok=True)
     data = b"hello" * 500
-    fs.pipe("/tmp/myfile", data)
-    assert fs.cat_file("/tmp/myfile") == data
+    fs.pipe("tmp_tls/myfile_tls", data)
+    assert fs.cat_file("tmp_tls/myfile_tls") == data
 
     fn = os.path.join(tmpdir, "lfile")
-    fs.get_file("/tmp/myfile", fn)
+    fs.get_file("tmp_tls/myfile_tls", fn)
     assert open(fn, "rb").read() == data
 
 
-def test_mkdir(ftp_writable):
-    host, port, user, pw = ftp_writable
+def test_mkdir(ftp):
+    host, port, user, pw = ftp
     fs = FTPTLSFileSystem(host, port, user, pw)
     with pytest.raises(ftplib.error_perm):
-        fs.mkdir("/tmp/not/exist", create_parents=False)
-    fs.mkdir("/tmp/not/exist")
-    assert fs.exists("/tmp/not/exist")
-    fs.makedirs("/tmp/not/exist", exist_ok=True)
+        fs.mkdir("tmp_tls/not/exist_tls", create_parents=False)
+    fs.mkdir("tmp_tls/not/exist")
+    assert fs.exists("tmp_tls/not/exist")
+    fs.makedirs("tmp_tls/not/exist", exist_ok=True)
     with pytest.raises(FileExistsError):
-        fs.makedirs("/tmp/not/exist", exist_ok=False)
-    fs.makedirs("/tmp/not/exist/inner/inner")
-    assert fs.isdir("/tmp/not/exist/inner/inner")
+        fs.makedirs("tmp_tls/not/exist", exist_ok=False)
+    fs.makedirs("tmp_tls/not/exist/inner/inner")
+    assert fs.isdir("tmp_tls/not/exist/inner/inner")
 
 
-def test_rm_get_recursive(ftp_writable, tmpdir):
+def test_rm_get_recursive(ftp, tmpdir):
     tmpdir = str(tmpdir)
-    host, port, user, pw = ftp_writable
+    host, port, user, pw = ftp
     fs = FTPTLSFileSystem(host, port, user, pw)
-    fs.mkdir("/tmp/topdir")
-    fs.mkdir("/tmp/topdir/underdir")
-    fs.touch("/tmp/topdir/afile")
-    fs.touch("/tmp/topdir/underdir/afile")
+    fs.mkdir("tmp_tls/topdir")
+    fs.mkdir("tmp_tls/topdir/underdir")
+    fs.touch("tmp_tls/topdir/afile")
+    fs.touch("tmp_tls/topdir/underdir/afile")
 
-    fs.get("/tmp/topdir", tmpdir, recursive=True)
+    fs.get("tmp_tls/topdir", tmpdir, recursive=True)
 
     with pytest.raises(ftplib.error_perm):
-        fs.rmdir("/tmp/topdir")
+        fs.rmdir("tmp_tls/topdir")
 
-    fs.rm("/tmp/topdir", recursive=True)
-    assert not fs.exists("/tmp/topdir")
+    fs.rm("tmp_tls/topdir", recursive=True)
+    assert not fs.exists("tmp_tls/topdir")
