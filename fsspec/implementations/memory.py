@@ -4,8 +4,8 @@ import logging
 from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
-from typing import Any, ClassVar
 from pathlib import PurePath, PureWindowsPath
+from typing import Any, ClassVar
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import LocalFileSystem
