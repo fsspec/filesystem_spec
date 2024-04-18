@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
 from typing import Any, ClassVar
+from pathlib import PurePosixPath
 
 from fsspec import AbstractFileSystem
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
 logger = logging.getLogger("fsspec.memoryfs")
@@ -26,10 +28,9 @@ class MemoryFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        path = stringify_path(path)
-        if "\\" in path:
-            if isinstance(path, Path):
-                path = LocalFileSystem._strip_protocol(path)
+        if isinstance(path, PurePosixPath):
+            path = stringify_path(path)
+
         if path.startswith("memory://"):
             path = path[len("memory://") :]
         if "::" in path or "://" in path:
