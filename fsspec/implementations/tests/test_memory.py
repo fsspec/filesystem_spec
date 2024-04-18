@@ -5,6 +5,7 @@ import pytest
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from pathlib import PurePosixPath, PureWindowsPath
 
+
 def test_1(m):
     m.touch("/somefile")  # NB: is found with or without initial /
     m.touch("afiles/and/another")
@@ -364,12 +365,14 @@ def test_cp_two_files(m):
         "/target/file1",
     ]
 
+
 def test_open_path_posix(m):
     path = PurePosixPath("/myfile/foo/bar")
     with m.open(path, "wb") as f:
         f.write(b"some\nlines\nof\ntext")
-    
+
     assert m.read_text(path) == "some\nlines\nof\ntext"
+
 
 def test_open_path_windows(m):
     path = PureWindowsPath("C:\\myfile\\foo\\bar")
