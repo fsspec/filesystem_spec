@@ -1177,7 +1177,10 @@ class AbstractFileSystem(metaclass=_Cached):
         if path1 == path2:
             logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
-            self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
+            # explicitly raise exception to prevent data corruption
+            self.copy(
+                path1, path2, recursive=recursive, maxdepth=maxdepth, onerror="raise"
+            )
             self.rm(path1, recursive=recursive)
 
     def rm_file(self, path):
