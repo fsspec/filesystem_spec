@@ -1,4 +1,5 @@
 import os
+from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -363,3 +364,19 @@ def test_cp_two_files(m):
         "/target/file0",
         "/target/file1",
     ]
+
+
+def test_open_path_posix(m):
+    path = PurePosixPath("/myfile/foo/bar")
+    with m.open(path, "wb") as f:
+        f.write(b"some\nlines\nof\ntext")
+
+    assert m.read_text(path) == "some\nlines\nof\ntext"
+
+
+def test_open_path_windows(m):
+    path = PureWindowsPath("C:\\myfile\\foo\\bar")
+    with m.open(path, "wb") as f:
+        f.write(b"some\nlines\nof\ntext")
+
+    assert m.read_text(path) == "some\nlines\nof\ntext"
