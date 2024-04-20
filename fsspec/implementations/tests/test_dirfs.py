@@ -542,10 +542,10 @@ def test_rmdir(mocker, dirfs):
     dirfs.fs.rmdir.assert_called_once_with(f"{PATH}/dir")
 
 
-def test_mv_file(mocker, dirfs):
-    dirfs.fs.mv_file = mocker.Mock()
-    dirfs.mv_file("one", "two", **KWARGS)
-    dirfs.fs.mv_file.assert_called_once_with(f"{PATH}/one", f"{PATH}/two", **KWARGS)
+def test_mv(mocker, dirfs):
+    dirfs.fs.mv = mocker.Mock()
+    dirfs.mv("one", "two", **KWARGS)
+    dirfs.fs.mv.assert_called_once_with(f"{PATH}/one", f"{PATH}/two", **KWARGS)
 
 
 def test_touch(mocker, dirfs):
