@@ -31,7 +31,6 @@ def ftp():
     server = FTPServer((FTP_HOST, FTP_PORT), handler)
     server.authorizer = authorizer
 
-    print("ftp", FTP_HOST, "-p", FTP_PORT)
     server.serve_forever()
 
 
