@@ -577,7 +577,7 @@ class AsyncFileSystem(AbstractFileSystem):
         rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
         file_pairs = [(l, r) for l, r in zip(lpaths, rpaths) if not is_dir[l]]
 
-        await asyncio.gather(*[self._makedirs(d, exist_ok=True) for d in rdirs])
+        await self._bulk_makedirs(rdirs)
         batch_size = batch_size or self.batch_size
 
         coros = []
@@ -589,6 +589,9 @@ class AsyncFileSystem(AbstractFileSystem):
         return await _run_coros_in_chunks(
             coros, batch_size=batch_size, callback=callback
         )
+
+    async def _bulk_makedirs(self, dirs, **kw):
+        await asyncio.gather(*[self._makedirs(_, **kw) for _ in dirs])
 
     async def _get_file(self, rpath, lpath, **kwargs):
         raise NotImplementedError

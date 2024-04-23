@@ -306,6 +306,9 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         pass  # not necessary to implement, may not have directories
 
+    def bulk_makedirs(self, path, **kw):
+        [self.makedirs(_, **kw) for _ in path]
+
     def rmdir(self, path):
         """Remove a directory, if empty"""
         pass  # not necessary to implement, may not have directories
