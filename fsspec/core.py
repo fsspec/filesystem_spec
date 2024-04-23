@@ -379,6 +379,7 @@ def url_to_fs(url, **kwargs):
     urlpath : str
         The file-systems-specific URL for ``url``.
     """
+    url = stringify_path(url)
     # non-FS arguments that appear in fsspec.open()
     # inspect could keep this in sync with open()'s signature
     known_kwargs = {
