@@ -577,7 +577,7 @@ class AsyncFileSystem(AbstractFileSystem):
         rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
         file_pairs = [(l, r) for l, r in zip(lpaths, rpaths) if not is_dir[l]]
 
-        await self._bulk_makedirs(rdirs)
+        await self._bulk_makedirs(rdirs, exist_ok=True)
         batch_size = batch_size or self.batch_size
 
         coros = []
