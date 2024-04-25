@@ -329,8 +329,8 @@ class DirFileSystem(AsyncFileSystem):
     def rmdir(self, path):
         return self.fs.rmdir(self._join(path))
 
-    def mv_file(self, path1, path2, **kwargs):
-        return self.fs.mv_file(
+    def mv(self, path1, path2, **kwargs):
+        return self.fs.mv(
             self._join(path1),
             self._join(path2),
             **kwargs,

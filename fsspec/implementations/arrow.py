@@ -139,8 +139,6 @@ class ArrowFSWrapper(AbstractFileSystem):
         path2 = self._strip_protocol(path2).rstrip("/")
         self.fs.move(path1, path2)
 
-    mv_file = mv
-
     @wrap_exceptions
     def rm_file(self, path):
         path = self._strip_protocol(path)
