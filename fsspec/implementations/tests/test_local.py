@@ -40,6 +40,35 @@ csv_files = {
 odir = os.getcwd()
 
 
+@pytest.fixture()
+def cwd():
+    pth = os.getcwd().replace("\\", "/")
+    assert not pth.endswith("/")
+    yield pth
+
+
+@pytest.fixture()
+def current_drive(cwd):
+    drive = os.path.splitdrive(cwd)[0]
+    assert not drive or (len(drive) == 2 and drive.endswith(":"))
+    yield drive
+
+
+@pytest.fixture()
+def user_home():
+    pth = os.path.expanduser("~").replace("\\", "/")
+    assert not pth.endswith("/")
+    yield pth
+
+
+def winonly(*args):
+    return pytest.param(*args, marks=pytest.mark.skipif(not WIN, reason="Windows only"))
+
+
+def posixonly(*args):
+    return pytest.param(*args, marks=pytest.mark.skipif(WIN, reason="Posix only"))
+
+
 @contextmanager
 def filetexts(d, open=open, mode="t"):
     """Dumps a number of textfiles to disk
@@ -515,6 +544,49 @@ def test_parent():
         assert LocalFileSystem._parent("/") == "/"
 
 
+@pytest.mark.parametrize(
+    "path,parent",
+    [
+        ("C:\\", "C:/"),
+        ("C:\\.", "C:/"),
+        ("C:\\.\\", "C:/"),
+        ("file:C:/", "C:/"),
+        ("file://C:/", "C:/"),
+        ("local:C:/", "C:/"),
+        ("local://C:/", "C:/"),
+        ("\\\\server\\share", "//server/share"),
+        ("\\\\server\\share\\", "//server/share"),
+        ("\\\\server\\share\\path", "//server/share"),
+        ("//server/share", "//server/share"),
+        ("//server/share/", "//server/share"),
+        ("//server/share/path", "//server/share"),
+        ("C:\\file or folder", "C:/"),
+        ("C:\\file or folder\\", "C:/"),
+        ("file:///", "{current_drive}/"),
+        ("file:///path", "{current_drive}/"),
+    ]
+    if WIN
+    else [
+        ("/", "/"),
+        ("/.", "/"),
+        ("/./", "/"),
+        ("file:/", "/"),
+        ("file:///", "/"),
+        ("local:/", "/"),
+        ("local:///", "/"),
+        ("/file or folder", "/"),
+        ("/file or folder/", "/"),
+        ("file:///", "/"),
+        ("file:///path", "/"),
+        ("file://c/", "{cwd}"),
+    ],
+)
+def test_parent_edge_cases(path, parent, cwd, current_drive):
+    parent = parent.format(cwd=cwd, current_drive=current_drive)
+
+    assert LocalFileSystem._parent(path) == parent
+
+
 def test_linked_files(tmpdir):
     tmpdir = str(tmpdir)
     fn0 = os.path.join(tmpdir, "target")
@@ -648,33 +720,6 @@ def test_pickle(tmpdir):
         assert f2.read() == f.read()
 
 
-@pytest.fixture()
-def cwd():
-    yield os.getcwd().replace("\\", "/")
-
-
-@pytest.fixture()
-def current_drive(cwd):
-    drive = os.path.splitdrive(cwd)[0]
-    assert not drive or (len(drive) == 2 and drive.endswith(":"))
-    yield drive
-
-
-@pytest.fixture()
-def user_home():
-    pth = os.path.expanduser("~").replace("\\", "/")
-    assert not pth.endswith("/")
-    yield pth
-
-
-def winonly(*args):
-    return pytest.param(*args, marks=pytest.mark.skipif(not WIN, reason="Windows only"))
-
-
-def posixonly(*args):
-    return pytest.param(*args, marks=pytest.mark.skipif(WIN, reason="Posix only"))
-
-
 @pytest.mark.parametrize(
     "uri, expected",
     [
@@ -695,8 +740,7 @@ def test_strip_protocol_expanduser(uri, expected, user_home):
     "uri, expected",
     [
         ("file://", "{cwd}"),
-        posixonly("file://.", "{cwd}/."),
-        winonly("file://.", "{cwd}"),
+        ("file://.", "{cwd}"),
         ("file://./", "{cwd}"),
         ("./", "{cwd}"),
         ("file:path", "{cwd}/path"),
@@ -749,7 +793,7 @@ def test_strip_protocol_no_authority(uri, expected, cwd, current_drive):
         ("file://c:/path", "c:/path"),
         ("file:///c:/path", "c:/path"),
         ("local:/path", "{current_drive}/path"),
-        ("s3://bucket/key", "s3://bucket/key"),
+        ("s3://bucket/key", "{cwd}/s3://bucket/key"),
         ("c:/path", "c:/path"),
         ("c:\\path", "c:/path"),
         ("file:///", "{current_drive}/"),
@@ -785,17 +829,13 @@ def test_strip_protocol_legacy_dos_uris(uri, expected):
 @pytest.mark.parametrize(
     "uri, stripped",
     [
-        ("file://remote/share/path", "{cwd}/remote/share/path"),
-        ("file:////remote/share/path", "//remote/share/path"),
-        (
-            "file://///remote/share/path",
-            "///remote/share/path",
-        ),
-        ("//remote/share/path", "//remote/share/path"),
-        ("\\\\remote\\share\\path", "//remote/share/path"),
+        ("file://remote/share/pth", "{cwd}/remote/share/pth"),
+        ("file:////remote/share/pth", "//remote/share/pth"),
+        ("file://///remote/share/pth", "///remote/share/pth"),
+        ("//remote/share/pth", "//remote/share/pth"),
+        winonly("\\\\remote\\share\\pth", "//remote/share/pth"),
     ],
 )
-@pytest.mark.skipif(not WIN, reason="Windows only")
 def test_strip_protocol_windows_remote_shares(uri, stripped, cwd):
     stripped = stripped.format(cwd=cwd)
 
