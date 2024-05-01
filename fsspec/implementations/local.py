@@ -278,7 +278,7 @@ class LocalFileSystem(AbstractFileSystem):
 
 
 def make_path_posix(path):
-    """Make path generic for current OS"""
+    """Make path generic and absolute for current OS"""
     if not isinstance(path, str):
         if isinstance(path, (list, set, tuple)):
             return type(path)(make_path_posix(p) for p in path)
