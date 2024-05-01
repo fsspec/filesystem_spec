@@ -542,10 +542,20 @@ def test_make_path_posix():
         "abc/def",
         "",
         ".",
-        "//server/share",
+        "//server/share/",
+        "\\\\server\\share\\",
         "C:\\",
         "d:/abc/def",
         "e:",
+        pytest.param(
+            "\\\\server\\share",
+            marks=[
+                pytest.mark.xfail(
+                    WIN and sys.version_info < (3, 11),
+                    reason="requires py3.11+ see: python/cpython#96290",
+                )
+            ],
+        ),
         pytest.param(
             "f:foo",
             marks=[pytest.mark.xfail(WIN, reason="unsupported")],
