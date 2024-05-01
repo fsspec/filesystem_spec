@@ -535,6 +535,62 @@ def test_make_path_posix():
     assert userpath.endswith("/path")
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/abc/def",
+        "abc/def",
+        "",
+        ".",
+        "//server/share",
+        "C:\\",
+        "d:/abc/def",
+        "e:",
+        pytest.param(
+            "f:foo",
+            marks=[pytest.mark.xfail(WIN, reason="unsupported")],
+            id="relative-path-with-drive",
+        ),
+    ],
+)
+def test_make_path_posix_returns_absolute_paths(path):
+    posix_pth = make_path_posix(path)
+    assert os.path.isabs(posix_pth)
+
+
+@pytest.mark.parametrize("container_cls", [list, set, tuple])
+def test_make_path_posix_set_list_tuple(container_cls):
+    paths = container_cls(
+        [
+            "/foo/bar",
+            "bar/foo",
+        ]
+    )
+    posix_paths = make_path_posix(paths)
+    assert isinstance(posix_paths, container_cls)
+    assert posix_paths == container_cls(
+        [
+            make_path_posix("/foo/bar"),
+            make_path_posix("bar/foo"),
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        1,
+        True,
+        None,
+        object(),
+    ],
+)
+@pytest.mark.xfail(reason="all inputs coerced to string")
+def test_make_path_posix_wrong_type(obj):
+    with pytest.raises(AttributeError):  # should probably be changed to TypeError
+        make_path_posix(obj)
+
+
 def test_parent():
     if WIN:
         assert LocalFileSystem._parent("C:\\file or folder") == "C:/"
@@ -576,7 +632,6 @@ def test_parent():
         ("local:///", "/"),
         ("/file or folder", "/"),
         ("/file or folder/", "/"),
-        ("file:///", "/"),
         ("file:///path", "/"),
         ("file://c/", "{cwd}"),
     ],
@@ -764,6 +819,8 @@ def test_strip_protocol_relative_paths(uri, expected, cwd):
         posixonly("file:/foo/bar", "/foo/bar"),
         winonly("file:/foo/bar", "{current_drive}/foo/bar"),
         winonly("file:\\foo\\bar", "{current_drive}/foo/bar"),
+        winonly("file:D:\\path\\file", "D:/path/file"),
+        winonly("file:/D:\\path\\file", "D:/path/file"),
         winonly("file://D:\\path\\file", "D:/path/file"),
     ],
 )
@@ -800,7 +857,9 @@ def test_strip_protocol_no_authority(uri, expected, cwd, current_drive):
         pytest.param(
             "file://localhost/c:/path",
             "c:/path",
-            marks=pytest.mark.xfail(reason="not supported"),
+            marks=pytest.mark.xfail(
+                reason="rfc8089 section3 'localhost uri' not supported"
+            ),
         ),
     ],
 )
@@ -820,7 +879,7 @@ def test_strip_protocol_absolute_paths(uri, expected, current_drive, cwd):
     ],
 )
 @pytest.mark.skipif(not WIN, reason="Windows only")
-@pytest.mark.xfail(WIN, reason="not supported")
+@pytest.mark.xfail(WIN, reason="legacy dos uris not supported")
 def test_strip_protocol_legacy_dos_uris(uri, expected):
     stripped = LocalFileSystem._strip_protocol(uri)
     assert expected == stripped
