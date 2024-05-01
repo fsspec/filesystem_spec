@@ -819,6 +819,10 @@ def test_eq():
     result = fs == 1
     assert result is False
 
+    f = AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes")
+    result = f == 1
+    assert result is False
+
 
 def test_pickle_multiple():
     a = DummyTestFS(1)
