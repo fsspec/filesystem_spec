@@ -139,7 +139,7 @@ def rsync(
         source_files, target_files = zip(*allfiles.items())
         fs.cp(source_files, target_files, **kwargs)
     logger.debug(f"{len(to_delete)} files to delete")
-    if delete_missing:
+    if delete_missing and to_delete:
         fs.rm(to_delete)
     return allfiles
 
