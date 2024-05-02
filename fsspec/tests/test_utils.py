@@ -1,6 +1,6 @@
 import io
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
 from unittest.mock import Mock
 
 import pytest
@@ -440,3 +440,39 @@ def test_size():
     f = io.BytesIO(b"hello")
     assert fsspec.utils.file_size(f) == 5
     assert f.tell() == 0
+
+
+class _HasFspath:
+    def __fspath__(self):
+        return "foo"
+
+
+class _HasPathAttr:
+    def __init__(self):
+        self.path = "foo"
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        # coerce to string
+        ("foo", "foo"),
+        (Path("foo"), "foo"),
+        (PurePath("foo"), "foo"),
+        (_HasFspath(), "foo"),
+        (_HasPathAttr(), "foo"),
+        # passthrough
+        (b"bytes", b"bytes"),
+        (None, None),
+        (1, 1),
+        (True, True),
+        (o := object(), o),
+        ([], []),
+        ((), ()),
+        (set(), set()),
+    ],
+)
+def test_stringify_path(path, expected):
+    path = fsspec.utils.stringify_path(path)
+
+    assert path == expected
