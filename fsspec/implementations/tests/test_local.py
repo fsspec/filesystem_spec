@@ -595,9 +595,8 @@ def test_make_path_posix_set_list_tuple(container_cls):
         object(),
     ],
 )
-@pytest.mark.xfail(reason="all inputs coerced to string")
 def test_make_path_posix_wrong_type(obj):
-    with pytest.raises(AttributeError):  # should probably be changed to TypeError
+    with pytest.raises(TypeError):
         make_path_posix(obj)
 
 

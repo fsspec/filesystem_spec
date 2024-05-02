@@ -283,7 +283,9 @@ def make_path_posix(path):
         if isinstance(path, (list, set, tuple)):
             return type(path)(make_path_posix(p) for p in path)
         else:
-            path = str(stringify_path(path))
+            path = stringify_path(path)
+            if not isinstance(path, str):
+                raise TypeError(f"could not convert {path!r} to string")
     if os.sep == "/":
         # Native posix
         if path.startswith("/"):
