@@ -67,6 +67,7 @@ class SMBFileSystem(AbstractFileSystem):
         timeout=60,
         encrypt=None,
         share_access=None,
+        register_session_retries=5,
         **kwargs,
     ):
         """
@@ -111,6 +112,7 @@ class SMBFileSystem(AbstractFileSystem):
         self.encrypt = encrypt
         self.temppath = kwargs.pop("temppath", "")
         self.share_access = share_access
+        self.register_session_retries = register_session_retries
         self._connect()
 
     @property
@@ -120,7 +122,7 @@ class SMBFileSystem(AbstractFileSystem):
     def _connect(self):
         import time
 
-        for _ in range(5):
+        for _ in range(self.register_session_retries):
             try:
                 smbclient.register_session(
                     self.host,
