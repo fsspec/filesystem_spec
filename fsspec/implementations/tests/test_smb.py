@@ -63,6 +63,7 @@ def smb_params(request):
             "port": request.param,
             "username": "testuser",
             "password": "testpass",
+            "register_session_retries": 100,  # max ~= 10 seconds
         }
     finally:
         import smbclient  # pylint: disable=import-outside-toplevel
