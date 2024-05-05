@@ -1,5 +1,5 @@
 # s3fs tests are not currently accessible to import via a normal install.
-# We need to instead do an editible install. Further, s3fs is very specific
+# We need to instead do an editable install. Further, s3fs is very specific
 # about the version of fsspec that it installs.
 
 rm -r -f downstream
