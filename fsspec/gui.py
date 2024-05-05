@@ -94,7 +94,7 @@ class SigSlot:
         try:
             return self.panel._repr_mimebundle_(*args, **kwargs)
         except (ValueError, AttributeError):
-            raise NotImplementedError("Panel does not seem to be set " "up properly")
+            raise NotImplementedError("Panel does not seem to be set up properly")
 
     def connect(self, signal, slot):
         """Associate call back with given event
