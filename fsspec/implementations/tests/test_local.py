@@ -34,8 +34,8 @@ files = {
 }
 
 csv_files = {
-    ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
-    ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
+    ".test.fakedata.1.csv": (b"a,b\n1,2\n"),
+    ".test.fakedata.2.csv": (b"a,b\n3,4\n"),
 }
 odir = os.getcwd()
 
@@ -123,21 +123,19 @@ def test_urlpath_expand_read():
 def test_cats():
     with filetexts(csv_files, mode="b"):
         fs = fsspec.filesystem("file")
-        assert fs.cat(".test.fakedata.1.csv") == b"a,b\n" b"1,2\n"
+        assert fs.cat(".test.fakedata.1.csv") == b"a,b\n1,2\n"
         out = set(fs.cat([".test.fakedata.1.csv", ".test.fakedata.2.csv"]).values())
-        assert out == {b"a,b\n" b"1,2\n", b"a,b\n" b"3,4\n"}
-        assert fs.cat(".test.fakedata.1.csv", None, None) == b"a,b\n" b"1,2\n"
-        assert fs.cat(".test.fakedata.1.csv", start=1, end=6) == b"a,b\n" b"1,2\n"[1:6]
-        assert fs.cat(".test.fakedata.1.csv", start=-1) == b"a,b\n" b"1,2\n"[-1:]
-        assert (
-            fs.cat(".test.fakedata.1.csv", start=1, end=-2) == b"a,b\n" b"1,2\n"[1:-2]
-        )
+        assert out == {b"a,b\n1,2\n", b"a,b\n3,4\n"}
+        assert fs.cat(".test.fakedata.1.csv", None, None) == b"a,b\n1,2\n"
+        assert fs.cat(".test.fakedata.1.csv", start=1, end=6) == b"a,b\n1,2\n"[1:6]
+        assert fs.cat(".test.fakedata.1.csv", start=-1) == b"a,b\n1,2\n"[-1:]
+        assert fs.cat(".test.fakedata.1.csv", start=1, end=-2) == b"a,b\n1,2\n"[1:-2]
         out = set(
             fs.cat(
                 [".test.fakedata.1.csv", ".test.fakedata.2.csv"], start=1, end=-1
             ).values()
         )
-        assert out == {b"a,b\n" b"1,2\n"[1:-1], b"a,b\n" b"3,4\n"[1:-1]}
+        assert out == {b"a,b\n1,2\n"[1:-1], b"a,b\n3,4\n"[1:-1]}
 
 
 def test_urlpath_expand_write():
