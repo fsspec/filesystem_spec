@@ -350,8 +350,6 @@ def stringify_path(filepath: str | os.PathLike[str] | pathlib.Path) -> str:
         return filepath
     elif hasattr(filepath, "__fspath__"):
         return filepath.__fspath__()
-    elif isinstance(filepath, pathlib.Path):
-        return str(filepath)
     elif hasattr(filepath, "path"):
         return filepath.path
     else:

@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - pip
-  - git
+  - git <2.45.0
   - py
   - pip:
     - hadoop-test-cluster
