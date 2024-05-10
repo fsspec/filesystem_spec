@@ -181,15 +181,26 @@ Listings Caching
 ----------------
 
 For some implementations, getting file listings (i.e., ``ls`` and anything that
-depends on it) is expensive. These implementations use dict-like instances of
-:class:`fsspec.dircache.DirCache` to manage the listings.
+depends on it) is expensive. These implementations maye use either dict-like instances of
+:class:`fsspec.dircache.MemoryListingsCache` or file-based caching with instances of
+:class:`fsspec.dircache.FileListingsCache` to manage the listings.
 
-The cache allows for time-based expiry of entries with the ``listings_expiry_time``
-parameter, or LRU expiry with the ``max_paths`` parameter. These can be
-set on any implementation instance that uses listings caching; or to skip the
-caching altogether, use ``use_listings_cache=False``. That would be appropriate
-when the target location is known to be volatile because it is being written
-to from other sources.
+The listings cache can be controlled via the keyword ``listings_cache_options`` which is a dictionary.
+The type of cache that is used, can be controlled via the keyword ``cache_type`` (`disabled`, `memory` or `file`).
+The cache allows for time-based expiry of entries with the keyword ``expiry_time``. If the target location is known to
+be volatile because e.g. it is being written to from other sources we recommend to disable the listings cache.
+If you want to use the file-based caching, you can also provide the argument
+``directory`` to determine where the cache file is stored.
+
+Example for ``listings_cache_options``:
+
+.. code-block:: json
+
+        {
+            "cache_type": "file",
+            "expiry_time": 3600,
+            "directory": "/tmp/cache"
+        }
 
 When the ``fsspec`` instance writes to the backend, the method ``invalidate_cache``
 is called, so that subsequent listing of the given paths will force a refresh. In

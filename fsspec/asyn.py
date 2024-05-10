@@ -312,7 +312,15 @@ class AsyncFileSystem(AbstractFileSystem):
     mirror_sync_methods = True
     disable_throttling = False
 
-    def __init__(self, *args, asynchronous=False, loop=None, batch_size=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        asynchronous=False,
+        loop=None,
+        batch_size=None,
+        listings_cache_options=None,
+        **kwargs,
+    ):
         self.asynchronous = asynchronous
         self._pid = os.getpid()
         if not asynchronous:
@@ -320,7 +328,7 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             self._loop = None
         self.batch_size = batch_size
-        super().__init__(*args, **kwargs)
+        super().__init__(listings_cache_options, *args, **kwargs)
 
     @property
     def loop(self):

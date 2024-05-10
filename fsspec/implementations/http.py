@@ -3,7 +3,6 @@ import io
 import logging
 import re
 import weakref
-from copy import copy
 from urllib.parse import urlparse
 
 import aiohttp
@@ -58,6 +57,7 @@ class HTTPFileSystem(AsyncFileSystem):
         client_kwargs=None,
         get_client=get_client,
         encoded=False,
+        listings_cache_options=None,
         **storage_options,
     ):
         """
@@ -83,11 +83,39 @@ class HTTPFileSystem(AsyncFileSystem):
             A callable which takes keyword arguments and constructs
             an aiohttp.ClientSession. It's state will be managed by
             the HTTPFileSystem class.
+        listings_cache_options: dict
+            Options for the listings cache.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open
         """
-        super().__init__(self, asynchronous=asynchronous, loop=loop, **storage_options)
+        # TODO: remove in future release
+        # Clean caching-related parameters from `storage_options`
+        # before propagating them as `request_options` through `self.kwargs`.
+        old_listings_cache_kwargs = {
+            "use_listings_cache",
+            "listings_expiry_time",
+            "max_paths",
+            "skip_instance_cache",
+        }
+        # intersection of old_listings_cache_kwargs and storage_options
+        old_listings_cache_kwargs = old_listings_cache_kwargs.intersection(
+            storage_options
+        )
+        if old_listings_cache_kwargs:
+            logger.warning(
+                f"The following parameters are not used anymore and will be ignored: {old_listings_cache_kwargs}. "
+                f"Use new `listings_cache_options` instead."
+            )
+            for key in old_listings_cache_kwargs:
+                del storage_options[key]
+        super().__init__(
+            self,
+            asynchronous=asynchronous,
+            loop=loop,
+            listings_cache_options=listings_cache_options,
+            **storage_options,
+        )
         self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
         self.simple_links = simple_links
         self.same_schema = same_scheme
@@ -96,19 +124,10 @@ class HTTPFileSystem(AsyncFileSystem):
         self.client_kwargs = client_kwargs or {}
         self.get_client = get_client
         self.encoded = encoded
-        self.kwargs = storage_options
-        self._session = None
-
-        # Clean caching-related parameters from `storage_options`
-        # before propagating them as `request_options` through `self.kwargs`.
         # TODO: Maybe rename `self.kwargs` to `self.request_options` to make
         #       it clearer.
-        request_options = copy(storage_options)
-        self.use_listings_cache = request_options.pop("use_listings_cache", False)
-        request_options.pop("listings_expiry_time", None)
-        request_options.pop("max_paths", None)
-        request_options.pop("skip_instance_cache", None)
-        self.kwargs = request_options
+        self.kwargs = storage_options
+        self._session = None
 
     @property
     def fsid(self):
@@ -201,7 +220,7 @@ class HTTPFileSystem(AsyncFileSystem):
             return sorted(out)
 
     async def _ls(self, url, detail=True, **kwargs):
-        if self.use_listings_cache and url in self.dircache:
+        if url in self.dircache:
             out = self.dircache[url]
         else:
             out = await self._ls_real(url, detail=detail, **kwargs)

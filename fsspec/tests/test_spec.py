@@ -859,7 +859,7 @@ def test_json():
 
 
 def test_ls_from_cache():
-    fs = DummyTestFS()
+    fs = DummyTestFS(listings_cache_options=True)
     uncached_results = fs.ls("top_level/second_level/", refresh=True)
 
     assert fs.ls("top_level/second_level/", refresh=False) == uncached_results

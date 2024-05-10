@@ -47,7 +47,9 @@ Base Classes
    fsspec.core.OpenFiles
    fsspec.core.get_fs_token_paths
    fsspec.core.url_to_fs
-   fsspec.dircache.DirCache
+   fsspec.dircache.DisabledListingsCache
+   fsspec.dircache.MemoryListingsCache
+   fsspec.dircache.FileListingsCache
    fsspec.FSMap
    fsspec.generic.GenericFileSystem
    fsspec.registry.register_implementation
@@ -82,7 +84,13 @@ Base Classes
 
 .. autofunction:: fsspec.core.url_to_fs
 
-.. autoclass:: fsspec.dircache.DirCache
+.. autoclass:: fsspec.dircache.DisabledListingsCache
+   :members: __init__
+
+.. autoclass:: fsspec.dircache.MemoryListingsCache
+   :members: __init__
+
+.. autoclass:: fsspec.dircache.FileListingsCache
    :members: __init__
 
 .. autoclass:: fsspec.FSMap

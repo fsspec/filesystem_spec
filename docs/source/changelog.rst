@@ -1,6 +1,14 @@
 Changelog
 =========
 
+Dev
+--------
+
+Enhancements
+
+- add file-based listing cache using diskcache (#895)
+  warning: use new ``listings_cache_options`` instead of ``use_listings_cache`` etc.
+
 2024.3.1
 --------
 

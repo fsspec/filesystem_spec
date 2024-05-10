@@ -18,16 +18,19 @@ from typing import (
     Callable,
     Iterable,
     Iterator,
+    Optional,
     Sequence,
     TypeVar,
+    Union,
 )
 from urllib.parse import urlsplit
+
+from fsspec.dircache import CacheType
 
 if TYPE_CHECKING:
     from typing_extensions import TypeGuard
 
     from fsspec.spec import AbstractFileSystem
-
 
 DEFAULT_BLOCK_SIZE = 5 * 2**20
 
@@ -738,3 +741,49 @@ def glob_translate(pat):
             results.append(any_sep)
     res = "".join(results)
     return rf"(?s:{res})\Z"
+
+
+def normalize_listings_cache_options(
+    listings_cache_options: Optional[Union[bool, dict]],
+) -> dict:
+    """Normalize listings cache options
+    Cases:
+    - listings_cache_options is None: return disabled cache options (cache_type=CacheType.DISABLED, expiry_time=None)
+    - listings_cache_options is True: return default cache options (cache_type=CacheType.MEMORY, expiry_time=None)
+    - listings_cache_options is dict: return normalized cache options
+    """
+    default_listings_cache_options = {
+        "cache_type": CacheType.MEMORY,
+        "expiry_time": None,
+    }
+    if not listings_cache_options:
+        return {"cache_type": CacheType.DISABLED, "expiry_time": None}
+    elif listings_cache_options is True:
+        return default_listings_cache_options
+    else:
+        normalized_listings_cache_options = default_listings_cache_options.copy()
+        normalized_listings_cache_options.update(listings_cache_options)
+        # disassemble and reassemble normalized_listings_cache_options
+        cache_type = normalized_listings_cache_options["cache_type"]
+        expiry_time = normalized_listings_cache_options["expiry_time"]
+        directory = normalized_listings_cache_options.get("directory")
+        try:
+            cache_type = CacheType(cache_type)
+        except ValueError:
+            try:
+                cache_type = CacheType[cache_type.upper()]
+            except KeyError as e:
+                raise ValueError(
+                    f"Cache type must be one of {', '.join(ct.name.lower() for ct in CacheType)}"
+                ) from e
+        if expiry_time:
+            if expiry_time < 0:
+                raise ValueError("Expiry time must be positive")
+        expiry_time = int(expiry_time) if expiry_time else None
+        normalized_listings_cache_options = {
+            "cache_type": cache_type,
+            "expiry_time": expiry_time,
+        }
+        if cache_type == CacheType.FILE:
+            normalized_listings_cache_options["directory"] = directory
+        return normalized_listings_cache_options
