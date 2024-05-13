@@ -3,8 +3,9 @@ import time
 from collections.abc import MutableMapping
 from enum import Enum
 from functools import lru_cache
-from pathlib import Path
 from typing import Optional, Union
+
+from fsspec.implementations.local import LocalFileSystem
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ class FileListingsCache(MutableMapping):
     def __init__(
         self,
         expiry_time: Optional[int],
-        directory: Optional[Path],
+        directory: Optional[str],
     ):
         """
 
@@ -153,10 +154,12 @@ class FileListingsCache(MutableMapping):
 
         if not directory:
             directory = platformdirs.user_cache_dir(appname="fsspec")
-        directory = Path(directory) / "dircache" / str(expiry_time)
+        directory = f"{directory}/dircache/{str(expiry_time)}"
+
+        fs = LocalFileSystem()
 
         try:
-            directory.mkdir(exist_ok=True, parents=True)
+            fs.mkdir(directory, create_parents=True)
         except OSError as e:
             logger.error(f"Directory for dircache could not be created at {directory}.")
             raise e
