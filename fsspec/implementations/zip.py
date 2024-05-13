@@ -44,7 +44,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         compression, allowZip64, compresslevel: passed to ZipFile
             Only relevant when creating a ZIP
         """
-        super().__init__(self, **kwargs)
+        super().__init__(False, self, **kwargs)
         if mode not in set("rwa"):
             raise ValueError(f"mode '{mode}' no understood")
         self.mode = mode

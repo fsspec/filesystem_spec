@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 import fsspec.utils
+from fsspec.dircache import CacheType
 from fsspec.utils import (
     can_be_local,
     common_prefix,
@@ -13,6 +14,7 @@ from fsspec.utils import (
     infer_storage_options,
     merge_offset_ranges,
     mirror_from,
+    normalize_listings_cache_options,
     other_paths,
     read_block,
     seek_delimiter,
@@ -476,3 +478,49 @@ def test_stringify_path(path, expected):
     path = fsspec.utils.stringify_path(path)
 
     assert path == expected
+
+
+@pytest.mark.parametrize("listings_cache_options", [None, False, {}])
+def test_normalize_listings_cache_options_disable(listings_cache_options):
+    assert normalize_listings_cache_options(listings_cache_options) == {
+        "cache_type": CacheType.DISABLED,
+        "expiry_time": None,
+    }
+
+
+def test_normalize_listings_cache_options_enable():
+    assert normalize_listings_cache_options(True) == {
+        "cache_type": CacheType.MEMORY,
+        "expiry_time": None,
+    }
+
+
+def test_normalize_listings_cache_options_with_cache_type():
+    assert normalize_listings_cache_options({"cache_type": CacheType.FILE}) == {
+        "cache_type": CacheType.FILE,
+        "directory": None,
+        "expiry_time": None,
+    }
+
+
+def test_normalize_listings_cache_options_with_expiry_time():
+    assert normalize_listings_cache_options({"expiry_time": 10}) == {
+        "cache_type": CacheType.MEMORY,
+        "expiry_time": 10,
+    }
+
+
+def test_normalize_listings_cache_options_file_cache_with_directory():
+    assert normalize_listings_cache_options(
+        {"cache_type": CacheType.FILE, "directory": "foo"}
+    ) == {"cache_type": CacheType.FILE, "directory": "foo", "expiry_time": None}
+
+
+def test_normalize_listings_cache_options_invalid_cache_type():
+    with pytest.raises(ValueError):
+        normalize_listings_cache_options({"cache_type": "invalid"})
+
+
+def test_normalize_listings_cache_options_invalid_expiry_time():
+    with pytest.raises(ValueError):
+        normalize_listings_cache_options({"expiry_time": -1})

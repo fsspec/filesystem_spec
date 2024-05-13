@@ -115,7 +115,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
             Kwargs passed when instantiating the target FS, if ``fo`` is
             a string.
         """
-        super().__init__(self, **kwargs)
+        super().__init__(False, self, **kwargs)
         if mode != "r":
             raise ValueError("Only read from archive files accepted")
         if isinstance(fo, str):

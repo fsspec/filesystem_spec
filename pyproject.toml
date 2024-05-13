@@ -29,12 +29,14 @@ adl = ["adlfs"]
 arrow = ["pyarrow >= 1"]
 dask = ["dask", "distributed"]
 dev = ["ruff", "pre-commit"]
+dircache = ["diskcache", "platformdirs"]
 dropbox = ["dropbox", "dropboxdrivefs", "requests"]
 entrypoints = []
 full = [
     'adlfs',
     'aiohttp !=4.0.0a0, !=4.0.0a1',
     'dask',
+    'diskcache',
     'distributed',
     'dropbox',
     'dropboxdrivefs',
@@ -44,6 +46,7 @@ full = [
     'ocifs',
     'panel',
     'paramiko',
+    'platformdirs',
     'pyarrow >= 1',
     'pygit2',
     'requests',
@@ -84,6 +87,7 @@ test_full = [
     'aiohttp!=4.0.0a0, !=4.0.0a1',
     'cloudpickle',
     'dask',
+    'diskcache',
     'distributed',
     'dropbox',
     'dropboxdrivefs',
@@ -99,6 +103,7 @@ test_full = [
     'pandas',
     'panel',
     'paramiko',
+    'platformdirs',
     'pyarrow',
     'pyarrow >= 1',
     'pyftpdlib',
