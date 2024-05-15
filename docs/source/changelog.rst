@@ -1,6 +1,32 @@
 Changelog
 =========
 
+2024.5.0
+--------
+
+Enhancements
+
+- log hits/misses in bytes cachers (#1566)
+
+Fixes
+
+- SMB flaky tests (#1597)
+- rsync: only delete files if there are some to delete (#1596)
+- don't let files equal bytes objects (#1594)
+- url_to_fs to stringify paths (#1591)
+- assert types in MemoryFS (#1574)
+- restore _strip_protocol signature for local (#1567)
+- convert list to set when loading cache metadata (#1556)
+
+Other
+
+- remove mv_file (#1585)
+- mv() should not swallow errors (#1576)
+- change versioning template, allows easier co-install of dev s3fs (#1569)
+- in ls_from_cache, avoid dounble lookup (#1561)
+- expand=True in open() (#1558)
+- build system to hatch (#1553)
+
 2024.3.1
 --------
 
