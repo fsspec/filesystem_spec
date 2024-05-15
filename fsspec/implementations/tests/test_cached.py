@@ -1244,7 +1244,7 @@ def test_cache_size(tmpdir, protocol):
     # Remove cached file but leave cache metadata file
     fs.pop_from_cache(afile)
     if win and protocol == "filecache":
-        empty_cache_size < fs.cache_size()
+        assert empty_cache_size < fs.cache_size()
     elif protocol != "simplecache":
         assert empty_cache_size < fs.cache_size() < single_file_cache_size
     else:
