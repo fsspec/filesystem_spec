@@ -21,7 +21,8 @@ from fsspec.core import (
 
 
 @contextmanager
-def tempzip(data={}):
+def tempzip(data=None):
+    data = data or {}
     f = tempfile.mkstemp(suffix="zip")[1]
     with zipfile.ZipFile(f, mode="w") as z:
         for k, v in data.items():
