@@ -68,6 +68,7 @@ class SMBFileSystem(AbstractFileSystem):
         encrypt=None,
         share_access=None,
         register_session_retries=5,
+        auto_mkdir=False,
         **kwargs,
     ):
         """
@@ -102,6 +103,10 @@ class SMBFileSystem(AbstractFileSystem):
             - 'r': Allow other handles to be opened with read access.
             - 'w': Allow other handles to be opened with write access.
             - 'd': Allow other handles to be opened with delete access.
+        auto_mkdir: bool
+            Whether, when opening a file, the directory containing it should
+            be created (if it doesn't already exist). This is assumed by pyarrow
+            and zarr-python code.
         """
         super().__init__(**kwargs)
         self.host = host
@@ -113,6 +118,7 @@ class SMBFileSystem(AbstractFileSystem):
         self.temppath = kwargs.pop("temppath", "")
         self.share_access = share_access
         self.register_session_retries = register_session_retries
+        self.auto_mkdir = auto_mkdir
         self._connect()
 
     @property
@@ -224,6 +230,8 @@ class SMBFileSystem(AbstractFileSystem):
         By specifying 'share_access' in 'kwargs' it is possible to override the
         default shared access setting applied in the constructor of this object.
         """
+        if self.auto_mkdir and "w" in mode:
+            self.makedirs(self._parent(path), exist_ok=True)
         bls = block_size if block_size is not None and block_size >= 0 else -1
         wpath = _as_unc_path(self.host, path)
         share_access = kwargs.pop("share_access", self.share_access)
@@ -245,6 +253,8 @@ class SMBFileSystem(AbstractFileSystem):
         """Copy within two locations in the same filesystem"""
         wpath1 = _as_unc_path(self.host, path1)
         wpath2 = _as_unc_path(self.host, path2)
+        if self.auto_mkdir:
+            self.makedirs(self._parent(path2), exist_ok=True)
         smbclient.copyfile(wpath1, wpath2, port=self._port, **kwargs)
 
     def _rm(self, path):
