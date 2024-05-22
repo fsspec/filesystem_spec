@@ -353,9 +353,7 @@ async def test_async_walk(adirfs, mocker):
     adirfs.fs._walk = mocker.MagicMock()
     adirfs.fs._walk.side_effect = _walk
 
-    actual = []
-    async for entry in adirfs._walk("root", *ARGS, **KWARGS):
-        actual.append(entry)  # noqa: PERF402
+    actual = [entry async for entry in adirfs._walk("root", *ARGS, **KWARGS)]
     assert actual == [("root", ["foo", "bar"], ["baz", "qux"])]
     adirfs.fs._walk.assert_called_once_with(f"{PATH}/root", *ARGS, **KWARGS)
 

@@ -564,9 +564,7 @@ async def test_async_walk(server):
     fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
 
     # No maxdepth
-    res = []
-    async for a in fs._walk(server + "/index"):
-        res.append(a)  # noqa: PERF402
+    res = [a async for a in fs._walk(server + "/index")]
     assert res == [(server + "/index", [], ["realfile"])]
 
     # maxdepth=0
