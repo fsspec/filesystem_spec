@@ -140,8 +140,7 @@ raw-options = {'version_scheme'='post-release'}
 [tool.hatch.build.hooks.vcs]
 version-file = "fsspec/_version.py"
 
-[tool.hatch.build.targets.wheel]
-package = ["fsspec"]
+[tool.hatch.build]
 exclude = ["**/tests/*", "!**/tests/abstract/"]
 
 [tool.ruff]
