@@ -381,7 +381,7 @@ def test_mirror_from():
             return mock
 
         def func_2(self):
-            assert False, "have to overwrite this"
+            raise AssertionError("have to overwrite this")
 
         def func_3(self):
             return "should succeed"
