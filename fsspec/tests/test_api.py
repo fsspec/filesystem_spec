@@ -168,14 +168,14 @@ def test_recursive_get_put(tmpdir, m):
     fs.get("test/", d, recursive=True)
     for file in ["one", "two", "nest/other"]:
         with open(f"{d}/{file}", "rb") as f:
-            f.read() == b"data"
+            assert f.read() == b"data"
 
     # get to directory without slash
     d = tempfile.mkdtemp()
     fs.get("test", d, recursive=True)
     for file in ["test/one", "test/two", "test/nest/other"]:
         with open(f"{d}/{file}", "rb") as f:
-            f.read() == b"data"
+            assert f.read() == b"data"
 
 
 def test_pipe_cat(m):

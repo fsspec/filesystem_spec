@@ -425,7 +425,6 @@ class CachingFileSystem(AbstractFileSystem):
             "clear_cache",
             "clear_expired_cache",
             "pop_from_cache",
-            "_mkcache",
             "local_file",
             "_paths_from_path",
             "get_mapper",
@@ -438,9 +437,6 @@ class CachingFileSystem(AbstractFileSystem):
             "cache_size",
             "pipe_file",
             "pipe",
-            "isdir",
-            "isfile",
-            "exists",
             "start_transaction",
             "end_transaction",
         }:

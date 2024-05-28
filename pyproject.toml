@@ -152,7 +152,7 @@ line-length = 88
 select = [
     # fix noqas in fsspec/implementations/http.py
     "ASYNC",
-    # "B", enable in later PR
+    "B",
     "I",    # isort
     "C4",
     "G",
@@ -178,6 +178,17 @@ select = [
     "SIM101",
 ]
 ignore = [
+	# Loop control variable `loop` not used within loop body
+	"B007",
+	# Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
+	"B019",
+	# Star-arg unpacking after a keyword argument is strongly discouraged
+	"B026",
+	# No explicit `stacklevel` keyword argument found
+	"B028",
+	# Within an `except` clause, raise exceptions with `raise ... from err` or
+	# `raise ... from None` to distinguish them from errors in exception handling
+	"B904",
     # Assigning lambda expression
     "E731",
     # Ambiguous variable names
