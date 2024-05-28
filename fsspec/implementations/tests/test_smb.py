@@ -88,6 +88,7 @@ def test_simple(smb_params):
     fsmb.rm(adir, recursive=True)
     assert not fsmb.exists(adir)
 
+
 @pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_auto_mkdir(smb_params):
     adir = "/home/adir"
@@ -113,9 +114,6 @@ def test_auto_mkdir(smb_params):
     fsmb.rm(another_dir, recursive=True)
     assert not fsmb.exists(adir)
     assert not fsmb.exists(another_dir)
-
-
-
 
 
 @pytest.mark.flaky(reruns=2, reruns_delay=2)
