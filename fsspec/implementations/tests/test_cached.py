@@ -873,7 +873,7 @@ def test_filecache_with_checks():
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
 @pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
-def test_takes_fs_instance(impl, fs):
+def test_filecache_takes_fs_instance(impl, fs):
     origin = tempfile.mkdtemp()
     data = b"test data"
     f1 = os.path.join(origin, "afile")
@@ -883,6 +883,15 @@ def test_takes_fs_instance(impl, fs):
     fs2 = fsspec.filesystem(impl, fs=fs)
 
     assert fs2.cat(f1) == data
+
+
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+@pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
+def test_filecache_serialization(impl, fs):
+    fs1 = fsspec.filesystem(impl, fs=fs)
+    json1 = fs1.to_json()
+
+    assert fs1 is fsspec.AbstractFileSystem.from_json(json1)
 
 
 def test_add_file_to_cache_after_save(local_filecache):

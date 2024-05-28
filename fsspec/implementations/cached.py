@@ -435,6 +435,7 @@ class CachingFileSystem(AbstractFileSystem):
             "__hash__",
             "__eq__",
             "to_json",
+            "to_dict",
             "cache_size",
             "pipe_file",
             "pipe",
