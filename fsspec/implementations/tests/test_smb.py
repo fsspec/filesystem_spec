@@ -90,6 +90,33 @@ def test_simple(smb_params):
 
 
 @pytest.mark.flaky(reruns=2, reruns_delay=2)
+def test_auto_mkdir(smb_params):
+    adir = "/home/adir"
+    adir2 = "/home/adir/otherdir/"
+    afile = "/home/adir/otherdir/afile"
+    fsmb = fsspec.get_filesystem_class("smb")(**smb_params, auto_mkdir=True)
+    fsmb.touch(afile)
+    assert fsmb.exists(adir)
+    assert fsmb.exists(adir2)
+    assert fsmb.exists(afile)
+    assert fsmb.info(afile)["type"] == "file"
+
+    another_dir = "/home/another_dir"
+    another_dir2 = "/home/another_dir/another_nested_dir/"
+    another_file = "/home/another_dir/another_nested_dir/another_file"
+    fsmb.copy(afile, another_file)
+    assert fsmb.exists(another_dir)
+    assert fsmb.exists(another_dir2)
+    assert fsmb.exists(another_file)
+    assert fsmb.info(another_file)["type"] == "file"
+
+    fsmb.rm(adir, recursive=True)
+    fsmb.rm(another_dir, recursive=True)
+    assert not fsmb.exists(adir)
+    assert not fsmb.exists(another_dir)
+
+
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_with_url(smb_params):
     if smb_params["port"] is None:
         smb_url = "smb://{username}:{password}@{host}/home/someuser.txt"
