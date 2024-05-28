@@ -510,15 +510,6 @@ class CachingFileSystem(AbstractFileSystem):
             ^ hash(self.target_protocol)
         )
 
-    def to_json(self):
-        """Calculate JSON representation.
-
-        Not implemented yet for CachingFileSystem.
-        """
-        raise NotImplementedError(
-            "CachingFileSystem JSON representation not implemented"
-        )
-
 
 class WholeFileCacheFileSystem(CachingFileSystem):
     """Caches whole remote files on first access

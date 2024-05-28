@@ -257,27 +257,27 @@ update the current installation.
 """
 
 
-def _import_class(cls, minv=None):
-    """Take a string FQP and return the imported class or identifier
+def _import_class(fqp: str):
+    """Take a fully-qualified path and return the imported class or identifier
 
-    cls is of the form "package.module.klass" or "package.module:subobject.klass"
+    ``fqp`` is of the form "package.module.klass" or "package.module:subobject.klass"
     """
-    if ":" in cls:
-        mod, name = cls.rsplit(":", 1)
-        s3 = mod == "s3fs"
-        mod = importlib.import_module(mod)
-        if s3 and mod.__version__.split(".") < ["0", "5"]:
-            warnings.warn(s3_msg)
-        for part in name.split("."):
-            mod = getattr(mod, part)
-        return mod
+    if ":" in fqp:
+        mod, name = fqp.rsplit(":", 1)
     else:
-        mod, name = cls.rsplit(".", 1)
-        s3 = mod == "s3fs"
-        mod = importlib.import_module(mod)
-        if s3 and mod.__version__.split(".") < ["0", "5"]:
-            warnings.warn(s3_msg)
-        return getattr(mod, name)
+        mod, name = fqp.rsplit(".", 1)
+
+    is_s3 = mod == "s3fs"
+    mod = importlib.import_module(mod)
+    if is_s3 and mod.__version__.split(".") < ["0", "5"]:
+        warnings.warn(s3_msg)
+    for part in name.split("."):
+        mod = getattr(mod, part)
+
+    if not isinstance(mod, type):
+        raise TypeError(f"{fqp} is not a class")
+
+    return mod
 
 
 def filesystem(protocol, **storage_options):

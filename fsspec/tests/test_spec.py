@@ -858,6 +858,36 @@ def test_json():
     assert DummyTestFS.from_json(outb) is b
 
 
+def test_json_path_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+
+    outa = a.to_json()
+    outb = b.to_json()
+
+    assert json.loads(outb)  # is valid JSON
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+
+
+def test_json_fs_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=a)
+
+    outa = a.to_json()
+    outb = b.to_json()
+
+    assert json.loads(outb)  # is valid JSON
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+
+
 def test_ls_from_cache():
     fs = DummyTestFS()
     uncached_results = fs.ls("top_level/second_level/", refresh=True)

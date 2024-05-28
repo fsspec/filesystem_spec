@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 import os
 import threading
@@ -9,11 +10,13 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import ClassVar
+from pathlib import PurePath
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
+from .registry import _import_class, get_filesystem_class
 from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
@@ -114,6 +117,59 @@ class AbstractFileSystem(metaclass=_Cached):
 
     #: Extra *class attributes* that should be considered when hashing.
     _extra_tokenize_attributes = ()
+
+    # Set by _Cached metaclass
+    storage_args: Tuple[Any, ...]
+    storage_options: Dict[str, Any]
+
+    class _JSONEncoder(json.JSONEncoder):
+        def default(self, o: Any) -> Any:
+            if isinstance(o, AbstractFileSystem):
+                return o.to_dict()
+            if isinstance(o, PurePath):
+                cls = type(o)
+                return {"cls": f"{cls.__module__}.{cls.__name__}", "str": str(o)}
+
+            return super().default(o)
+
+    class _JSONDecoder(json.JSONDecoder):
+        def __init__(
+            self,
+            *,
+            object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+            parse_float: Optional[Callable[[str], Any]] = None,
+            parse_int: Optional[Callable[[str], Any]] = None,
+            parse_constant: Optional[Callable[[str], Any]] = None,
+            strict: bool = True,
+            object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
+        ) -> None:
+            self.original_object_hook = object_hook
+
+            super().__init__(
+                object_hook=self.custom_object_hook,
+                parse_float=parse_float,
+                parse_int=parse_int,
+                parse_constant=parse_constant,
+                strict=strict,
+                object_pairs_hook=object_pairs_hook,
+            )
+
+        def custom_object_hook(self, dct: Dict[str, Any]):
+            if "cls" in dct:
+                try:
+                    cls = _import_class(dct["cls"])
+                except (ImportError, ValueError, RuntimeError, KeyError):
+                    return AbstractFileSystem.from_dict(dct)
+
+                if issubclass(cls, PurePath):
+                    return cls(dct["str"])
+                else:
+                    return AbstractFileSystem.from_dict(dct)
+
+            if self.original_object_hook is not None:
+                return self.original_object_hook(dct)
+
+            return dct
 
     def __init__(self, *args, **storage_options):
         """Create and configure file-system instance
@@ -1381,37 +1437,21 @@ class AbstractFileSystem(metaclass=_Cached):
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
-    def to_json(self):
+    def to_json(self) -> str:
         """
         JSON representation of this filesystem instance
 
         Returns
         -------
-        str: JSON structure with keys cls (the python location of this class),
-            protocol (text name of this class's protocol, first one in case of
-            multiple), args (positional args, usually empty), and all other
-            kwargs as their own keys.
+        JSON string with keys cls (the python location of this class),
+        protocol (text name of this class's protocol, first one in case of
+        multiple), args (positional args, usually empty), and all other
+        kwargs as their own keys.
         """
-        import json
-
-        cls = type(self)
-        cls = ".".join((cls.__module__, cls.__name__))
-        proto = (
-            self.protocol[0]
-            if isinstance(self.protocol, (tuple, list))
-            else self.protocol
-        )
-        return json.dumps(
-            dict(
-                cls=cls,
-                protocol=proto,
-                args=self.storage_args,
-                **self.storage_options,
-            )
-        )
+        return json.dumps(self, cls=self._JSONEncoder)
 
     @staticmethod
-    def from_json(blob):
+    def from_json(blob: str) -> AbstractFileSystem:
         """
         Recreate a filesystem instance from JSON representation
 
@@ -1425,17 +1465,51 @@ class AbstractFileSystem(metaclass=_Cached):
         -------
         file system instance, not necessarily of this particular class.
         """
-        import json
+        return json.loads(blob, cls=AbstractFileSystem._JSONDecoder)
 
-        from .registry import _import_class, get_filesystem_class
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        JSON-serializable dictionary representation of this filesystem instance
 
-        dic = json.loads(blob)
-        protocol = dic.pop("protocol")
+        Returns
+        -------
+        Dictionary with keys cls (the python location of this class),
+        protocol (text name of this class's protocol, first one in case of
+        multiple), args (positional args, usually empty), and all other
+        kwargs as their own keys.
+        """
+        cls = type(self)
+        proto = self.protocol
+
+        return dict(
+            cls=f"{cls.__module__}.{cls.__name__}",
+            protocol=proto[0] if isinstance(proto, (tuple, list)) else proto,
+            args=self.storage_args,
+            **self.storage_options,
+        )
+
+    @staticmethod
+    def from_dict(dct: Dict[str, Any]) -> AbstractFileSystem:
+        """
+        Recreate a filesystem instance from dictionary representation
+
+        See ``.to_dict()`` for the expected structure of the input
+
+        Parameters
+        ----------
+        dct: Dict[str, Any]
+
+        Returns
+        -------
+        file system instance, not necessarily of this particular class.
+        """
+        protocol = dct.pop("protocol")
         try:
-            cls = _import_class(dic.pop("cls"))
+            cls = _import_class(dct.pop("cls"))
         except (ImportError, ValueError, RuntimeError, KeyError):
             cls = get_filesystem_class(protocol)
-        return cls(*dic.pop("args", ()), **dic)
+
+        return cls(*dct.pop("args", ()), **dct)
 
     def _get_pyarrow_filesystem(self):
         """
