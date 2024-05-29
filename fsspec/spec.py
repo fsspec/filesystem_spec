@@ -7,6 +7,7 @@ import os
 import threading
 import warnings
 import weakref
+from contextlib import suppress
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
@@ -156,32 +157,34 @@ class AbstractFileSystem(metaclass=_Cached):
 
         @classmethod
         def try_resolve_path_cls(cls, dct: Dict[str, Any]):
-            assert "cls" in dct
+            with suppress(Exception):
+                fqp = dct["cls"]
 
-            try:
-                path_cls = _import_class(dct["cls"])
-            except (ImportError, ValueError, RuntimeError, KeyError):
-                return None
+                try:
+                    path_cls = _import_class(fqp)
+                except Exception:
+                    raise
 
-            if issubclass(path_cls, PurePath):
-                return path_cls
+                if issubclass(path_cls, PurePath):
+                    return path_cls
 
             return None
 
         @classmethod
         def try_resolve_fs_cls(cls, dct: Dict[str, Any]):
-            assert "cls" in dct
+            with suppress(Exception):
+                fqp = dct["cls"]
 
-            try:
-                fs_cls = _import_class(dct["cls"])
-            except (ImportError, ValueError, RuntimeError, KeyError):
-                if "protocol" in dct:
-                    return get_filesystem_class(dct["protocol"])
+                try:
+                    fs_cls = _import_class(fqp)
+                except Exception:
+                    if "protocol" in dct:
+                        return get_filesystem_class(dct["protocol"])
 
-                return None
+                    raise
 
-            if issubclass(fs_cls, AbstractFileSystem):
-                return fs_cls
+                if issubclass(fs_cls, AbstractFileSystem):
+                    return fs_cls
 
             return None
 
@@ -1533,8 +1536,8 @@ class AbstractFileSystem(metaclass=_Cached):
         if cls is None:
             raise ValueError("Not a serialized AbstractFileSystem")
 
-        dct.pop("cls")
-        dct.pop("protocol")
+        dct.pop("cls", None)
+        dct.pop("protocol", None)
 
         return cls(*dct.pop("args", ()), **dct)
 
