@@ -1508,7 +1508,7 @@ class AbstractFileSystem(metaclass=_Cached):
         proto = self.protocol
 
         return dict(
-            cls=f"{cls.__module__}.{cls.__name__}",
+            cls=f"{cls.__module__}:{cls.__name__}",
             protocol=proto[0] if isinstance(proto, (tuple, list)) else proto,
             args=self.storage_args,
             **self.storage_options,
