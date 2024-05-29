@@ -1468,23 +1468,23 @@ class AbstractFileSystem(metaclass=_Cached):
 
     def to_json(self) -> str:
         """
-        JSON representation of this filesystem instance
+        JSON representation of this filesystem instance.
 
         Returns
         -------
-        JSON string with keys cls (the python location of this class),
+        JSON string with keys ``cls`` (the python location of this class),
         protocol (text name of this class's protocol, first one in case of
-        multiple), args (positional args, usually empty), and all other
-        kwargs as their own keys.
+        multiple), ``args`` (positional args, usually empty), and all other
+        keyword arguments as their own keys.
         """
         return json.dumps(self, cls=self._JSONEncoder)
 
     @staticmethod
     def from_json(blob: str) -> AbstractFileSystem:
         """
-        Recreate a filesystem instance from JSON representation
+        Recreate a filesystem instance from JSON representation.
 
-        See ``.to_json()`` for the expected structure of the input
+        See ``.to_json()`` for the expected structure of the input.
 
         Parameters
         ----------
@@ -1493,19 +1493,24 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns
         -------
         file system instance, not necessarily of this particular class.
+
+        Warnings
+        --------
+        This can import arbitrary modules (as determined by the ``cls`` key)
+        at runtime.
         """
         return json.loads(blob, cls=AbstractFileSystem._JSONDecoder)
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        JSON-serializable dictionary representation of this filesystem instance
+        JSON-serializable dictionary representation of this filesystem instance.
 
         Returns
         -------
-        Dictionary with keys cls (the python location of this class),
+        Dictionary with keys ``cls`` (the python location of this class),
         protocol (text name of this class's protocol, first one in case of
-        multiple), args (positional args, usually empty), and all other
-        kwargs as their own keys.
+        multiple), ``args`` (positional args, usually empty), and all other
+        keyword arguments as their own keys.
         """
         cls = type(self)
         proto = self.protocol
@@ -1520,9 +1525,9 @@ class AbstractFileSystem(metaclass=_Cached):
     @staticmethod
     def from_dict(dct: Dict[str, Any]) -> AbstractFileSystem:
         """
-        Recreate a filesystem instance from dictionary representation
+        Recreate a filesystem instance from dictionary representation.
 
-        See ``.to_dict()`` for the expected structure of the input
+        See ``.to_dict()`` for the expected structure of the input.
 
         Parameters
         ----------
@@ -1531,6 +1536,11 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns
         -------
         file system instance, not necessarily of this particular class.
+
+        Warnings
+        --------
+        This can import arbitrary modules (as determined by the ``cls`` key)
+        at runtime.
         """
         cls = AbstractFileSystem._JSONDecoder.try_resolve_fs_cls(dct)
         if cls is None:

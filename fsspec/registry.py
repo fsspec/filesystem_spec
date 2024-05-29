@@ -258,9 +258,14 @@ update the current installation.
 
 
 def _import_class(fqp: str):
-    """Take a fully-qualified path and return the imported class or identifier
+    """Take a fully-qualified path and return the imported class or identifier.
 
-    ``fqp`` is of the form "package.module.klass" or "package.module:subobject.klass"
+    ``fqp`` is of the form "package.module.klass" or
+    "package.module:subobject.klass".
+
+    Warnings
+    --------
+    This can import arbitrary modules at runtime.
     """
     if ":" in fqp:
         mod, name = fqp.rsplit(":", 1)
