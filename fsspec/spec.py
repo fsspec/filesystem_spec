@@ -154,17 +154,43 @@ class AbstractFileSystem(metaclass=_Cached):
                 object_pairs_hook=object_pairs_hook,
             )
 
+        @classmethod
+        def try_resolve_path_cls(cls, dct: Dict[str, Any]):
+            assert "cls" in dct
+
+            try:
+                path_cls = _import_class(dct["cls"])
+            except (ImportError, ValueError, RuntimeError, KeyError):
+                return None
+
+            if issubclass(path_cls, PurePath):
+                return path_cls
+
+            return None
+
+        @classmethod
+        def try_resolve_fs_cls(cls, dct: Dict[str, Any]):
+            assert "cls" in dct
+
+            try:
+                fs_cls = _import_class(dct["cls"])
+            except (ImportError, ValueError, RuntimeError, KeyError):
+                if "protocol" in dct:
+                    return get_filesystem_class(dct["protocol"])
+
+                return None
+
+            if issubclass(fs_cls, AbstractFileSystem):
+                return fs_cls
+
+            return None
+
         def custom_object_hook(self, dct: Dict[str, Any]):
             if "cls" in dct:
-                try:
-                    cls = _import_class(dct["cls"])
-                except (ImportError, ValueError, RuntimeError, KeyError):
+                if (obj_cls := self.try_resolve_fs_cls(dct)) is not None:
                     return AbstractFileSystem.from_dict(dct)
-
-                if issubclass(cls, PurePath):
-                    return cls(dct["str"])
-                else:
-                    return AbstractFileSystem.from_dict(dct)
+                if (obj_cls := self.try_resolve_path_cls(dct)) is not None:
+                    return obj_cls(dct["str"])
 
             if self.original_object_hook is not None:
                 return self.original_object_hook(dct)
@@ -1503,11 +1529,12 @@ class AbstractFileSystem(metaclass=_Cached):
         -------
         file system instance, not necessarily of this particular class.
         """
-        protocol = dct.pop("protocol")
-        try:
-            cls = _import_class(dct.pop("cls"))
-        except (ImportError, ValueError, RuntimeError, KeyError):
-            cls = get_filesystem_class(protocol)
+        cls = AbstractFileSystem._JSONDecoder.try_resolve_fs_cls(dct)
+        if cls is None:
+            raise ValueError("Not a serialized AbstractFileSystem")
+
+        dct.pop("cls")
+        dct.pop("protocol")
 
         return cls(*dct.pop("args", ()), **dct)
 
