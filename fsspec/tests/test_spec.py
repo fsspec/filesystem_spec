@@ -898,7 +898,12 @@ def test_from_dict_valid():
     fs = DummyTestFS.from_dict({"cls": "fsspec.implementations.local.LocalFileSystem"})
     assert isinstance(fs, LocalFileSystem)
 
-    fs = DummyTestFS.from_dict({"cls": "fsspec.implementations.local.LocalFileSystem", "protocol": "local"})
+    fs = DummyTestFS.from_dict(
+        {
+            "cls": "fsspec.implementations.local.LocalFileSystem",
+            "protocol": "local",
+        }
+    )
     assert isinstance(fs, LocalFileSystem)
 
 
