@@ -51,13 +51,13 @@ CI runtime. For local use, pick a version suitable for you.
 mamba create -n fsspec -c conda-forge  python=3.9 -y
 conda activate fsspec
 
-# Standard dev test install.
-pip install -e ".[dev,test]"
+# Standard dev install with docs and tests.
+pip install -e ".[dev,doc,test]"
 
 # Full tests except for downstream
 pip install s3fs
 pip uninstall s3fs
-pip install -e .[dev,test_full]
+pip install -e .[dev,doc,test_full]
 pip install s3fs --no-deps
 pytest -v
 
