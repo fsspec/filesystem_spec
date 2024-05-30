@@ -1418,8 +1418,9 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Warnings
         --------
-        This can import arbitrary modules (as determined by the ``cls`` key)
-        at runtime.
+        This can import arbitrary modules (as determined by the ``cls`` key).
+        Make sure you haven't installed any modules that may execute malicious code
+        at import time.
         """
         from .json import FilesystemJSONDecoder
 
@@ -1463,8 +1464,9 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Warnings
         --------
-        This can import arbitrary modules (as determined by the ``cls`` key)
-        at runtime.
+        This can import arbitrary modules (as determined by the ``cls`` key).
+        Make sure you haven't installed any modules that may execute malicious code
+        at import time.
         """
         from .json import FilesystemJSONDecoder
 

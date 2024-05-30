@@ -265,7 +265,8 @@ def _import_class(fqp: str):
 
     Warnings
     --------
-    This can import arbitrary modules at runtime.
+    This can import arbitrary modules. Make sure you haven't installed any modules
+    that may execute malicious code at import time.
     """
     if ":" in fqp:
         mod, name = fqp.rsplit(":", 1)
