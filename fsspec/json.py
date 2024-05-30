@@ -61,7 +61,7 @@ class FilesystemJSONDecoder(json.JSONDecoder):
                     if issubclass(fs_cls, AbstractFileSystem):
                         return fs_cls
                 except Exception:
-                    if "protocol" in dct:   # Fallback if cls cannot be imported
+                    if "protocol" in dct:  # Fallback if cls cannot be imported
                         return get_filesystem_class(dct["protocol"])
 
                     raise
