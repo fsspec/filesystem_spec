@@ -56,11 +56,15 @@ class FilesystemJSONDecoder(json.JSONDecoder):
     def try_resolve_fs_cls(cls, dct: Dict[str, Any]):
         with suppress(Exception):
             if "cls" in dct:
-                fs_cls = _import_class(dct["cls"])  # if this fails, we get None
-                if issubclass(fs_cls, AbstractFileSystem):
-                    return fs_cls
-            if "protocol" in dct:
-                return get_filesystem_class(dct["protocol"])
+                try:
+                    fs_cls = _import_class(dct["cls"])  # if this fails, we get None
+                    if issubclass(fs_cls, AbstractFileSystem):
+                        return fs_cls
+                except Exception:
+                    if "protocol" in dct:
+                        return get_filesystem_class(dct["protocol"])
+
+                    raise
 
         return None
 
