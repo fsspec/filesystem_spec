@@ -935,6 +935,10 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references0(self, references):
         """Make reference dict for Spec Version 0"""
+        references = {
+            key: json.dumps(val) if isinstance(val, dict) else val
+            for key, val in references.items()
+        }
         self.references = references
 
     def _process_references1(self, references, template_overrides=None):
@@ -964,6 +968,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                     else:
                         u = _render_jinja(u)
                 self.references[k] = [u] if len(v) == 1 else [u, v[1], v[2]]
+            elif isinstance(v, dict):
+                self.references[k] = json.dumps(v)
             else:
                 self.references[k] = v
         self.references.update(self._process_gen(references.get("gen", [])))
