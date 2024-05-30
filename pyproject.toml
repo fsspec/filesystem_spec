@@ -29,6 +29,7 @@ adl = ["adlfs"]
 arrow = ["pyarrow >= 1"]
 dask = ["dask", "distributed"]
 dev = ["ruff", "pre-commit"]
+doc = ["sphinx", "numpydoc", "sphinx-design", "sphinx-rtd-theme", "yarl"]
 dropbox = ["dropbox", "dropboxdrivefs", "requests"]
 entrypoints = []
 full = [

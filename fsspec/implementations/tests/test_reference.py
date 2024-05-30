@@ -14,6 +14,10 @@ from fsspec.tests.conftest import data, realfile, reset_files, server, win  # no
 
 
 def test_simple(server):  # noqa: F811
+    # The dictionary in refs may be dumped with a different separator
+    # depending on whether json or ujson is imported
+    from fsspec.implementations.reference import json as json_impl
+
     refs = {
         "a": b"data",
         "b": (realfile, 0, 5),
@@ -28,12 +32,16 @@ def test_simple(server):  # noqa: F811
     assert fs.cat("b") == data[:5]
     assert fs.cat("c") == data[1 : 1 + 5]
     assert fs.cat("d") == b"hello"
-    assert fs.cat("e") == b'{"key": "value"}'
+    assert fs.cat("e") == json_impl.dumps(refs["e"]).encode("utf-8")
     with fs.open("d", "rt") as f:
         assert f.read(2) == "he"
 
 
 def test_simple_ver1(server):  # noqa: F811
+    # The dictionary in refs may be dumped with a different separator
+    # depending on whether json or ujson is imported
+    from fsspec.implementations.reference import json as json_impl
+
     in_data = {
         "version": 1,
         "refs": {
@@ -51,7 +59,7 @@ def test_simple_ver1(server):  # noqa: F811
     assert fs.cat("b") == data[:5]
     assert fs.cat("c") == data[1 : 1 + 5]
     assert fs.cat("d") == b"hello"
-    assert fs.cat("e") == b'{"key": "value"}'
+    assert fs.cat("e") == json_impl.dumps(in_data["refs"]["e"]).encode("utf-8")
     with fs.open("d", "rt") as f:
         assert f.read(2) == "he"
 

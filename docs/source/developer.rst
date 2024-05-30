@@ -107,9 +107,9 @@ The following can be used to install ``fsspec`` in development mode
 
    git clone https://github.com/fsspec/filesystem_spec
    cd filesystem_spec
-   pip install -e .
+   pip install -e .[dev,doc,test]
 
-A number of additional dependencies are required to run tests, see "ci/environment*.yml", as
+A number of additional dependencies are required to run tests in full, see "ci/environment*.yml", as
 well as Docker. Most implementation-specific tests should skip if their requirements are
 not met.
 
