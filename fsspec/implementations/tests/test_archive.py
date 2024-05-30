@@ -65,7 +65,7 @@ def temptar(data=None, mode="w", suffix=".tar"):
     fn = tempfile.mkstemp(suffix=suffix)[1]
     with tarfile.TarFile.open(fn, mode=mode) as t:
         touched = {}
-        for name, data in data.items():
+        for name, value in data.items():
             # Create directory hierarchy.
             # https://bugs.python.org/issue22208#msg225558
             if "/" in name and name not in touched:
@@ -78,8 +78,8 @@ def temptar(data=None, mode="w", suffix=".tar"):
 
             # Add file content.
             info = tarfile.TarInfo(name=name)
-            info.size = len(data)
-            t.addfile(info, BytesIO(data))
+            info.size = len(value)
+            t.addfile(info, BytesIO(value))
 
     try:
         yield fn

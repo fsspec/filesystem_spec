@@ -139,7 +139,7 @@ class SnappyFile(AbstractBufferedFile):
 try:
     import snappy
 
-    snappy.compress
+    snappy.compress(b"")
     # Snappy may use the .sz file extension, but this is not part of the
     # standard implementation.
     register_compression("snappy", SnappyFile, [])
