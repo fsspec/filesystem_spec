@@ -229,6 +229,7 @@ jdata = """{
 
 def test_spec1_expand():
     pytest.importorskip("jinja2")
+    from fsspec.implementations.reference import json as json_impl
     in_data = {
         "version": 1,
         "templates": {"u": "server.domain/path", "f": "{{c}}"},
@@ -264,7 +265,7 @@ def test_spec1_expand():
         "key2": ["http://server.domain/path", 10000, 100],
         "key3": ["http://text", 10000, 100],
         "key4": ["http://target_url"],
-        "key5": '{"key": "value"}',
+        "key5": json_impl.dumps(in_data["refs"]["key5"]),
         "gen_key0": ["http://server.domain/path_0", 1000, 1000],
         "gen_key1": ["http://server.domain/path_1", 2000, 1000],
         "gen_key2": ["http://server.domain/path_2", 3000, 1000],
@@ -277,6 +278,7 @@ def test_spec1_expand():
 
 def test_spec1_expand_simple():
     pytest.importorskip("jinja2")
+    from fsspec.implementations.reference import json as json_impl
     in_data = {
         "version": 1,
         "templates": {"u": "server.domain/path"},
@@ -297,7 +299,7 @@ def test_spec1_expand_simple():
     )
     assert fs.references["key2"] == ["http://not.org/p", 10000, 100]
     assert fs.cat("key0") == b"data"
-    assert fs.cat("key5") == b'{"key": "value"}'
+    assert fs.cat("key5") == json_impl.dumps(in_data["refs"]["key5"]).encode("utf-8")
 
 
 def test_spec1_gen_variants():
