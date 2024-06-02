@@ -252,6 +252,7 @@ def test_spec1_expand():
             "key2": ["http://{{u}}", 10000, 100],
             "key3": ["http://{{f(c='text')}}", 10000, 100],
             "key4": ["http://target_url"],
+            "key5": {"key": "value"},
         },
     }
     fs = fsspec.filesystem(
@@ -263,6 +264,7 @@ def test_spec1_expand():
         "key2": ["http://server.domain/path", 10000, 100],
         "key3": ["http://text", 10000, 100],
         "key4": ["http://target_url"],
+        "key5": '{"key": "value"}',
         "gen_key0": ["http://server.domain/path_0", 1000, 1000],
         "gen_key1": ["http://server.domain/path_1", 2000, 1000],
         "gen_key2": ["http://server.domain/path_2", 3000, 1000],
@@ -282,6 +284,7 @@ def test_spec1_expand_simple():
             "key0": "base64:ZGF0YQ==",
             "key2": ["http://{{u}}", 10000, 100],
             "key4": ["http://target_url"],
+            "key5": {"key": "value"},
         },
     }
     fs = fsspec.filesystem("reference", fo=in_data, target_protocol="http")
@@ -294,6 +297,7 @@ def test_spec1_expand_simple():
     )
     assert fs.references["key2"] == ["http://not.org/p", 10000, 100]
     assert fs.cat("key0") == b"data"
+    assert fs.cat("key5") == b'{"key": "value"}'
 
 
 def test_spec1_gen_variants():
