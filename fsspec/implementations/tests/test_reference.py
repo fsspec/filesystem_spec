@@ -230,6 +230,7 @@ jdata = """{
 def test_spec1_expand():
     pytest.importorskip("jinja2")
     from fsspec.implementations.reference import json as json_impl
+
     in_data = {
         "version": 1,
         "templates": {"u": "server.domain/path", "f": "{{c}}"},
@@ -279,6 +280,7 @@ def test_spec1_expand():
 def test_spec1_expand_simple():
     pytest.importorskip("jinja2")
     from fsspec.implementations.reference import json as json_impl
+
     in_data = {
         "version": 1,
         "templates": {"u": "server.domain/path"},
