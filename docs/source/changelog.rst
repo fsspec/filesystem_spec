@@ -1,6 +1,26 @@
 Changelog
 =========
 
+2024.6.0
+--------
+
+Enhancements
+
+- allow dicts (not just bytes) for referenceFS (#1616
+- make filesystems JSON serializeable (#1612)
+- implement multifile cat() for github (#1620)
+
+Fixes
+
+- implement auto_mkdir for SMB (#1604)
+
+Other
+
+- add doc deps to pyproject (#1613)
+- re-remove test from package (#1611)
+- formatting (#1610, 1608, 1602)
+- change monthly download badge (#1607)
+
 2024.5.0
 --------
 
