@@ -1,5 +1,7 @@
 import requests
 
+import fsspec
+
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
 from .memory import MemoryFile
@@ -225,3 +227,13 @@ class GithubFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
         r.raise_for_status()
         return MemoryFile(None, None, r.content)
+
+    def cat(self, path, recursive=False, on_error="raise", **kwargs):
+        paths = self.expand_path(path, recursive=recursive)
+        urls = [
+            self.rurl.format(org=self.org, repo=self.repo, path=u, sha=self.root)
+            for u, sh in paths
+        ]
+        fs = fsspec.filesystem("http")
+        data = fs.cat(urls, on_error="return")
+        return {u: v for ((k, v), u) in zip(data.items(), urls)}
