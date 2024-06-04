@@ -434,6 +434,7 @@ class CachingFileSystem(AbstractFileSystem):
             "__hash__",
             "__eq__",
             "to_json",
+            "to_dict",
             "cache_size",
             "pipe_file",
             "pipe",
@@ -504,15 +505,6 @@ class CachingFileSystem(AbstractFileSystem):
             ^ hash(self.compression)
             ^ hash(self._mapper)
             ^ hash(self.target_protocol)
-        )
-
-    def to_json(self):
-        """Calculate JSON representation.
-
-        Not implemented yet for CachingFileSystem.
-        """
-        raise NotImplementedError(
-            "CachingFileSystem JSON representation not implemented"
         )
 
 

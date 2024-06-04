@@ -858,6 +858,66 @@ def test_json():
     assert DummyTestFS.from_json(outb) is b
 
 
+def test_json_path_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+
+    outa = a.to_json()
+    outb = b.to_json()
+
+    assert json.loads(outb)  # is valid JSON
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+
+
+def test_json_fs_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=a)
+
+    outa = a.to_json()
+    outb = b.to_json()
+
+    assert json.loads(outb)  # is valid JSON
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+
+
+def test_from_dict_valid():
+    fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS"})
+    assert isinstance(fs, DummyTestFS)
+
+    fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS", "bar": 1})
+    assert fs.storage_options["bar"] == 1
+
+    fs = DummyTestFS.from_dict({"cls": "fsspec.implementations.local.LocalFileSystem"})
+    assert isinstance(fs, LocalFileSystem)
+
+    fs = DummyTestFS.from_dict(
+        {
+            "cls": "fsspec.implementations.local.LocalFileSystem",
+            "protocol": "local",
+        }
+    )
+    assert isinstance(fs, LocalFileSystem)
+
+
+def test_from_dict_invalid():
+    with pytest.raises(ValueError, match="Not a serialized AbstractFileSystem"):
+        DummyTestFS.from_dict({})
+
+    with pytest.raises(ValueError, match="Not a serialized AbstractFileSystem"):
+        DummyTestFS.from_dict({"cls": "pathlib.Path"})
+
+    with pytest.raises(ValueError, match="Not a serialized AbstractFileSystem"):
+        DummyTestFS.from_dict({"protocol": "local"})  # cls must be present
+
+
 def test_ls_from_cache():
     fs = DummyTestFS()
     uncached_results = fs.ls("top_level/second_level/", refresh=True)
