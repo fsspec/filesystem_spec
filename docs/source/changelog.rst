@@ -7,7 +7,8 @@ Changelog
 Enhancements
 
 - allow dicts (not just bytes) for referenceFS (#1616
-- make filesystems JSON serializeable (#1612
+- make filesystems JSON serializeable (#1612)
+- implement multifile cat() for github (#1620)
 
 Fixes
 
