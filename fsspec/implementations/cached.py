@@ -651,7 +651,8 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         if "r" not in mode:
-            fn = self._make_local_details(path)
+            hash = self._mapper(path)
+            fn = os.path.join(self.storage[-1], hash)
             user_specified_kwargs = {
                 k: v
                 for k, v in kwargs.items()

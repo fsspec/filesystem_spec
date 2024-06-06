@@ -1313,3 +1313,17 @@ def test_write_transaction(tmpdir, m, monkeypatch):
     assert m.cat("myfile") == b"1"
     assert m.cat("otherfile") == b"2"
     assert called[0] == 1  # copy was done in one go
+
+
+def test_filecache_write(tmpdir, m):
+    fs = fsspec.filesystem(
+        "filecache", target_protocol="memory", cache_storage=str(tmpdir)
+    )
+    fn = "sample_file_in_mem.txt"
+    data = "hello world from memory"
+    with fs.open(fn, "w") as f:
+        assert not m.exists(fn)
+        f.write(data)
+
+    assert m.cat(fn) == data.encode()
+    assert fs.cat(fn) == data.encode()
