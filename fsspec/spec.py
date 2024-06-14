@@ -1386,9 +1386,15 @@ class AbstractFileSystem(metaclass=_Cached):
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
-    def to_json(self) -> str:
+    def to_json(self, *, include_password: bool = False) -> str:
         """
         JSON representation of this filesystem instance.
+
+        Parameters
+        ----------
+        include_password: bool, default False
+            Whether to include the password (if any) in the output.
+            For security reasons, this is set to `False` by default.
 
         Returns
         -------
@@ -1399,7 +1405,14 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         from .json import FilesystemJSONEncoder
 
-        return json.dumps(self, cls=FilesystemJSONEncoder)
+        return json.dumps(
+            self,
+            cls=type(
+                "_FilesystemJSONEncoder",
+                (FilesystemJSONEncoder,),
+                {"include_password": include_password},
+            ),
+        )
 
     @staticmethod
     def from_json(blob: str) -> AbstractFileSystem:
@@ -1426,9 +1439,15 @@ class AbstractFileSystem(metaclass=_Cached):
 
         return json.loads(blob, cls=FilesystemJSONDecoder)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, *, include_password: bool = False) -> Dict[str, Any]:
         """
         JSON-serializable dictionary representation of this filesystem instance.
+
+        Parameters
+        ----------
+        include_password: bool, default False
+            Whether to include the password (if any) in the output.
+            For security reasons, this is set to `False` by default.
 
         Returns
         -------
@@ -1441,7 +1460,8 @@ class AbstractFileSystem(metaclass=_Cached):
         proto = self.protocol
 
         storage_options = dict(self.storage_options)
-        storage_options.pop("password", None)
+        if not include_password:
+            storage_options.pop("password", None)
 
         return dict(
             cls=f"{cls.__module__}:{cls.__name__}",
