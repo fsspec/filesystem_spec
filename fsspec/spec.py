@@ -1440,11 +1440,14 @@ class AbstractFileSystem(metaclass=_Cached):
         cls = type(self)
         proto = self.protocol
 
+        storage_options = dict(self.storage_options)
+        storage_options.pop("password", None)
+
         return dict(
             cls=f"{cls.__module__}:{cls.__name__}",
             protocol=proto[0] if isinstance(proto, (tuple, list)) else proto,
             args=self.storage_args,
-            **self.storage_options,
+            **storage_options,
         )
 
     @staticmethod

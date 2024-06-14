@@ -888,6 +888,13 @@ def test_json_fs_attr():
     assert DummyTestFS.from_json(outb) is b
 
 
+def test_serialize_no_password():
+    fs = DummyTestFS(1, password="admin")
+
+    assert "password" not in fs.to_json()
+    assert "password" not in fs.to_dict()
+
+
 def test_from_dict_valid():
     fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS"})
     assert isinstance(fs, DummyTestFS)
