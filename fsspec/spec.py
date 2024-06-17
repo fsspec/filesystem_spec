@@ -1493,6 +1493,8 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         from .json import FilesystemJSONDecoder
 
+        dct = dict(dct)  # Defensive copy
+
         cls = FilesystemJSONDecoder.try_resolve_fs_cls(dct)
         if cls is None:
             raise ValueError("Not a serialized AbstractFileSystem")
