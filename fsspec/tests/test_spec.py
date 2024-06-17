@@ -888,6 +888,30 @@ def test_json_fs_attr():
     assert DummyTestFS.from_json(outb) is b
 
 
+def test_dict():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=1)
+
+    outa = a.to_dict()
+    outb = b.to_dict()
+
+    assert isinstance(outa, dict)
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outb) is b
+
+
+def test_dict_idempotent():
+    a = DummyTestFS(1)
+
+    outa = a.to_dict()
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outa) is a
+
+
 def test_from_dict_valid():
     fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS"})
     assert isinstance(fs, DummyTestFS)
