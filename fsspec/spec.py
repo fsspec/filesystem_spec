@@ -1386,15 +1386,14 @@ class AbstractFileSystem(metaclass=_Cached):
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
-    def to_json(self, *, include_password: bool = False) -> str:
+    def to_json(self, *, include_password: bool = True) -> str:
         """
         JSON representation of this filesystem instance.
 
         Parameters
         ----------
-        include_password: bool, default False
+        include_password: bool, default True
             Whether to include the password (if any) in the output.
-            For security reasons, this is set to `False` by default.
 
         Returns
         -------
@@ -1402,6 +1401,12 @@ class AbstractFileSystem(metaclass=_Cached):
         protocol (text name of this class's protocol, first one in case of
         multiple), ``args`` (positional args, usually empty), and all other
         keyword arguments as their own keys.
+
+        Warnings
+        --------
+        Serialized filesystems may contain sensitive information which have been
+        passed to the constructor, such as passwords and tokens. Make sure you
+        store and send them in a secure environment!
         """
         from .json import FilesystemJSONEncoder
 
@@ -1439,15 +1444,14 @@ class AbstractFileSystem(metaclass=_Cached):
 
         return json.loads(blob, cls=FilesystemJSONDecoder)
 
-    def to_dict(self, *, include_password: bool = False) -> Dict[str, Any]:
+    def to_dict(self, *, include_password: bool = True) -> Dict[str, Any]:
         """
         JSON-serializable dictionary representation of this filesystem instance.
 
         Parameters
         ----------
-        include_password: bool, default False
+        include_password: bool, default True
             Whether to include the password (if any) in the output.
-            For security reasons, this is set to `False` by default.
 
         Returns
         -------
@@ -1455,6 +1459,12 @@ class AbstractFileSystem(metaclass=_Cached):
         protocol (text name of this class's protocol, first one in case of
         multiple), ``args`` (positional args, usually empty), and all other
         keyword arguments as their own keys.
+
+        Warnings
+        --------
+        Serialized filesystems may contain sensitive information which have been
+        passed to the constructor, such as passwords and tokens. Make sure you
+        store and send them in a secure environment!
         """
         cls = type(self)
         proto = self.protocol

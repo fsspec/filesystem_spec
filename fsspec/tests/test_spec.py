@@ -915,11 +915,11 @@ def test_dict_idempotent():
 def test_serialize_no_password():
     fs = DummyTestFS(1, password="admin")
 
-    assert "password" not in fs.to_json()
-    assert "password" not in fs.to_dict()
+    assert "password" not in fs.to_json(include_password=False)
+    assert "password" not in fs.to_dict(include_password=False)
 
 
-def test_serialize_force_password():
+def test_serialize_with_password():
     fs = DummyTestFS(1, password="admin")
 
     assert "password" in fs.to_json(include_password=True)

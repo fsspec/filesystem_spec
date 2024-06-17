@@ -8,7 +8,7 @@ from .spec import AbstractFileSystem
 
 
 class FilesystemJSONEncoder(json.JSONEncoder):
-    include_password: ClassVar[bool] = False
+    include_password: ClassVar[bool] = True
 
     def default(self, o: Any) -> Any:
         if isinstance(o, AbstractFileSystem):
