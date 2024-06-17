@@ -162,6 +162,11 @@ def test_pipe(dirfs):
     dirfs.fs.pipe.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
 
 
+def test_pipe_dict(dirfs):
+    dirfs.pipe({"file": b"foo"}, *ARGS, **KWARGS)
+    dirfs.fs.pipe.assert_called_once_with({f"{PATH}/file": b"foo"}, *ARGS, **KWARGS)
+
+
 @pytest.mark.asyncio
 async def test_async_pipe_file(adirfs):
     await adirfs._pipe_file("file", *ARGS, **KWARGS)
