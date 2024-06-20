@@ -358,8 +358,8 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
-        info = self.info(path, **kwargs)
-        size = size or info["size"]
+        info = {}
+        size = size or (info.update(self.info(path, **kwargs)) or info["size"])
         session = sync(self.loop, self.set_session)
         if block_size and size and info.get("partial", True):
             return HTTPFile(
@@ -521,9 +521,9 @@ class HTTPFileSystem(AsyncFileSystem):
 
 class HTTPFile(AbstractBufferedFile):
     """
-    A file-like object pointing to a remove HTTP(S) resource
+    A file-like object pointing to a remote HTTP(S) resource
 
-    Supports only reading, with read-ahead of a predermined block-size.
+    Supports only reading, with read-ahead of a predetermined block-size.
 
     In the case that the server does not supply the filesize, only reading of
     the complete file in one go is supported.
