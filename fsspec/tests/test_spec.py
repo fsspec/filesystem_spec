@@ -891,6 +891,24 @@ def test_json_fs_attr():
     assert DummyTestFS.from_json(outc) is c
 
 
+def test_json_dict_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+    c = DummyTestFS(3, baz={"key": b})
+
+    outa = a.to_json()
+    outb = b.to_json()
+    outc = c.to_json()
+
+    assert json.loads(outc)  # is valid JSON
+    assert b != c
+    assert "baz" in outc
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+    assert DummyTestFS.from_json(outc) is c
+
+
 def test_dict():
     a = DummyTestFS(1)
     b = DummyTestFS(2, bar=1)
@@ -933,6 +951,24 @@ def test_dict_fs_attr():
     assert isinstance(outc, dict)
     assert b != c
     assert outc["baz"] == outb
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outb) is b
+    assert DummyTestFS.from_dict(outc) is c
+
+
+def test_dict_dict_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+    c = DummyTestFS(3, baz={"key": b})
+
+    outa = a.to_dict()
+    outb = b.to_dict()
+    outc = c.to_dict()
+
+    assert isinstance(outc, dict)
+    assert b != c
+    assert outc["baz"]["key"] == outb
 
     assert DummyTestFS.from_dict(outa) is a
     assert DummyTestFS.from_dict(outb) is b

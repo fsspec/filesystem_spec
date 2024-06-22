@@ -1486,10 +1486,15 @@ class AbstractFileSystem(metaclass=_Cached):
 
         json_decoder = FilesystemJSONDecoder()
 
-        def deserialize(obj: Any):
+        def deserialize(obj: Any) -> Any:
             if isinstance(obj, dict):
-                return json_decoder.custom_object_hook(obj)
-            
+                obj = json_decoder.custom_object_hook(obj)
+                if isinstance(obj, dict):
+                    return {k: deserialize(v) for k, v in obj.items()}
+
+            if isinstance(obj, (list, tuple)):
+                return [deserialize(v) for v in obj]
+
             return obj
 
         dct = dict(dct)  # Defensive copy
@@ -1501,10 +1506,10 @@ class AbstractFileSystem(metaclass=_Cached):
         dct.pop("cls", None)
         dct.pop("protocol", None)
 
-        args = tuple(deserialize(arg) for arg in dct.pop("args", ()))
-        kwargs = {k: deserialize(v) for k, v in dct.items()}
-
-        return cls(*args, **kwargs)
+        return cls(
+            *deserialize(dct.pop("args", ())),
+            **deserialize(dct),
+        )
 
     def _get_pyarrow_filesystem(self):
         """
