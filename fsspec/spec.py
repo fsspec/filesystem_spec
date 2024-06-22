@@ -1437,14 +1437,28 @@ class AbstractFileSystem(metaclass=_Cached):
         multiple), ``args`` (positional args, usually empty), and all other
         keyword arguments as their own keys.
         """
+        from .json import FilesystemJSONEncoder
+
+        json_encoder = FilesystemJSONEncoder()
+
+        def serialize(obj: Any) -> Any:
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, dict):
+                return {k: serialize(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [serialize(v) for v in obj]
+
+            return json_encoder.default(obj)
+
         cls = type(self)
         proto = self.protocol
 
         return dict(
             cls=f"{cls.__module__}:{cls.__name__}",
             protocol=proto[0] if isinstance(proto, (tuple, list)) else proto,
-            args=self.storage_args,
-            **self.storage_options,
+            args=serialize(self.storage_args),
+            **serialize(self.storage_options),
         )
 
     @staticmethod
@@ -1470,6 +1484,14 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         from .json import FilesystemJSONDecoder
 
+        json_decoder = FilesystemJSONDecoder()
+
+        def deserialize(obj: Any):
+            if isinstance(obj, dict):
+                return json_decoder.custom_object_hook(obj)
+            
+            return obj
+
         dct = dict(dct)  # Defensive copy
 
         cls = FilesystemJSONDecoder.try_resolve_fs_cls(dct)
@@ -1479,7 +1501,10 @@ class AbstractFileSystem(metaclass=_Cached):
         dct.pop("cls", None)
         dct.pop("protocol", None)
 
-        return cls(*dct.pop("args", ()), **dct)
+        args = tuple(deserialize(arg) for arg in dct.pop("args", ()))
+        kwargs = {k: deserialize(v) for k, v in dct.items()}
+
+        return cls(*args, **kwargs)
 
     def _get_pyarrow_filesystem(self):
         """
