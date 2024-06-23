@@ -1,16 +1,28 @@
 import json
 from contextlib import suppress
 from pathlib import PurePath
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from .registry import _import_class, get_filesystem_class
 from .spec import AbstractFileSystem
 
 
 class FilesystemJSONEncoder(json.JSONEncoder):
+    include_password: ClassVar[bool] = True
+
     def default(self, o: Any) -> Any:
         if isinstance(o, AbstractFileSystem):
-            return o.to_dict()
+            return o.to_dict(include_password=self.include_password)
         if isinstance(o, PurePath):
             cls = type(o)
             return {"cls": f"{cls.__module__}.{cls.__name__}", "str": str(o)}

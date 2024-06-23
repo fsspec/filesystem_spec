@@ -197,6 +197,7 @@ class GenericFileSystem(AsyncFileSystem):
             )
         result = {}
         for k, v in out.items():
+            v = v.copy()  # don't corrupt target FS dircache
             name = fs.unstrip_protocol(k)
             v["name"] = name
             result[name] = v
@@ -210,6 +211,7 @@ class GenericFileSystem(AsyncFileSystem):
             out = await fs._info(url, **kwargs)
         else:
             out = fs.info(url, **kwargs)
+        out = out.copy()  # don't edit originals
         out["name"] = fs.unstrip_protocol(out["name"])
         return out
 
@@ -224,6 +226,7 @@ class GenericFileSystem(AsyncFileSystem):
             out = await fs._ls(url, detail=True, **kwargs)
         else:
             out = fs.ls(url, detail=True, **kwargs)
+        out = [o.copy() for o in out]  # don't edit originals
         for o in out:
             o["name"] = fs.unstrip_protocol(o["name"])
         if detail:

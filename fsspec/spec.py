@@ -1386,9 +1386,14 @@ class AbstractFileSystem(metaclass=_Cached):
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
-    def to_json(self) -> str:
+    def to_json(self, *, include_password: bool = True) -> str:
         """
         JSON representation of this filesystem instance.
+
+        Parameters
+        ----------
+        include_password: bool, default True
+            Whether to include the password (if any) in the output.
 
         Returns
         -------
@@ -1396,10 +1401,23 @@ class AbstractFileSystem(metaclass=_Cached):
         protocol (text name of this class's protocol, first one in case of
         multiple), ``args`` (positional args, usually empty), and all other
         keyword arguments as their own keys.
+
+        Warnings
+        --------
+        Serialized filesystems may contain sensitive information which have been
+        passed to the constructor, such as passwords and tokens. Make sure you
+        store and send them in a secure environment!
         """
         from .json import FilesystemJSONEncoder
 
-        return json.dumps(self, cls=FilesystemJSONEncoder)
+        return json.dumps(
+            self,
+            cls=type(
+                "_FilesystemJSONEncoder",
+                (FilesystemJSONEncoder,),
+                {"include_password": include_password},
+            ),
+        )
 
     @staticmethod
     def from_json(blob: str) -> AbstractFileSystem:
@@ -1426,9 +1444,14 @@ class AbstractFileSystem(metaclass=_Cached):
 
         return json.loads(blob, cls=FilesystemJSONDecoder)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, *, include_password: bool = True) -> Dict[str, Any]:
         """
         JSON-serializable dictionary representation of this filesystem instance.
+
+        Parameters
+        ----------
+        include_password: bool, default True
+            Whether to include the password (if any) in the output.
 
         Returns
         -------
@@ -1436,6 +1459,12 @@ class AbstractFileSystem(metaclass=_Cached):
         protocol (text name of this class's protocol, first one in case of
         multiple), ``args`` (positional args, usually empty), and all other
         keyword arguments as their own keys.
+
+        Warnings
+        --------
+        Serialized filesystems may contain sensitive information which have been
+        passed to the constructor, such as passwords and tokens. Make sure you
+        store and send them in a secure environment!
         """
         from .json import FilesystemJSONEncoder
 
@@ -1444,11 +1473,15 @@ class AbstractFileSystem(metaclass=_Cached):
         cls = type(self)
         proto = self.protocol
 
+        storage_options = dict(self.storage_options)
+        if not include_password:
+            storage_options.pop("password", None)
+
         return dict(
             cls=f"{cls.__module__}:{cls.__name__}",
             protocol=proto[0] if isinstance(proto, (tuple, list)) else proto,
             args=json_encoder.make_serializable(self.storage_args),
-            **json_encoder.make_serializable(self.storage_options),
+            **json_encoder.make_serializable(storage_options),
         )
 
     @staticmethod

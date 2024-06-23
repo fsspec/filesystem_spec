@@ -998,6 +998,20 @@ def test_dict_json_serializable():
     json.dumps(outc)
 
 
+def test_serialize_no_password():
+    fs = DummyTestFS(1, password="admin")
+
+    assert "password" not in fs.to_json(include_password=False)
+    assert "password" not in fs.to_dict(include_password=False)
+
+
+def test_serialize_with_password():
+    fs = DummyTestFS(1, password="admin")
+
+    assert "password" in fs.to_json(include_password=True)
+    assert "password" in fs.to_dict(include_password=True)
+
+
 def test_from_dict_valid():
     fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS"})
     assert isinstance(fs, DummyTestFS)
