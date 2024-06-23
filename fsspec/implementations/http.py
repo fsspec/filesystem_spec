@@ -560,6 +560,7 @@ class HTTPFile(AbstractBufferedFile):
         if mode != "rb":
             raise NotImplementedError("File mode not supported")
         self.asynchronous = asynchronous
+        self.loop = loop
         self.url = url
         self.session = session
         self.details = {"name": url, "size": size, "type": "file"}
@@ -572,7 +573,6 @@ class HTTPFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs,
         )
-        self.loop = loop
 
     def read(self, length=-1):
         """Read bytes from file
@@ -736,6 +736,7 @@ class HTTPStreamFile(AbstractBufferedFile):
             return r
 
         self.r = sync(self.loop, cor)
+        self.loop = fs.loop
 
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:

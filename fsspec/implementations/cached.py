@@ -901,7 +901,7 @@ class LocalTempFile:
         self.close()
 
     def close(self):
-        self.size = self.fh.tell()
+        # self.size = self.fh.tell()
         if self.closed:
             return
         self.fh.close()
