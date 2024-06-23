@@ -17,6 +17,21 @@ class FilesystemJSONEncoder(json.JSONEncoder):
 
         return super().default(o)
 
+    def make_serializable(self, obj: Any) -> Any:
+        """
+        Recursively converts an object so that it can be JSON serialized via
+        :func:`json.dumps` and :func:`json.dump`, without actually calling
+        said functions.
+        """
+        if isinstance(obj, (str, int, float, bool)):
+            return obj
+        if isinstance(obj, dict):
+            return {k: self.make_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [self.make_serializable(v) for v in obj]
+
+        return self.default(obj)
+
 
 class FilesystemJSONDecoder(json.JSONDecoder):
     def __init__(
@@ -79,3 +94,17 @@ class FilesystemJSONDecoder(json.JSONDecoder):
             return self.original_object_hook(dct)
 
         return dct
+
+    def unmake_serializable(self, obj: Any) -> Any:
+        """
+        Inverse function of :meth:`FilesystemJSONEncoder.make_serializable`.
+        """
+        if isinstance(obj, dict):
+            obj = self.custom_object_hook(obj)
+            if isinstance(obj, dict):
+                return {k: self.unmake_serializable(v) for k, v in obj.items()}
+
+        if isinstance(obj, (list, tuple)):
+            return [self.unmake_serializable(v) for v in obj]
+
+        return obj
