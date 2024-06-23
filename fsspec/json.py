@@ -1,7 +1,7 @@
 import json
 from contextlib import suppress
 from pathlib import PurePath
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .registry import _import_class, get_filesystem_class
 from .spec import AbstractFileSystem
@@ -25,9 +25,9 @@ class FilesystemJSONEncoder(json.JSONEncoder):
         """
         if isinstance(obj, (str, int, float, bool)):
             return obj
-        if isinstance(obj, dict):
+        if isinstance(obj, Mapping):
             return {k: self.make_serializable(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple)):
+        if isinstance(obj, Sequence):
             return [self.make_serializable(v) for v in obj]
 
         return self.default(obj)
@@ -101,10 +101,9 @@ class FilesystemJSONDecoder(json.JSONDecoder):
         """
         if isinstance(obj, dict):
             obj = self.custom_object_hook(obj)
-            if isinstance(obj, dict):
-                return {k: self.unmake_serializable(v) for k, v in obj.items()}
-
-        if isinstance(obj, (list, tuple)):
+        if isinstance(obj, Mapping):
+            return {k: self.unmake_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, Sequence):
             return [self.unmake_serializable(v) for v in obj]
 
         return obj
