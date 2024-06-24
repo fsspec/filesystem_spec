@@ -935,10 +935,13 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references0(self, references):
         """Make reference dict for Spec Version 0"""
-        references = {
-            key: json.dumps(val) if isinstance(val, dict) else val
-            for key, val in references.items()
-        }
+        if isinstance(references, dict):
+            # do not do this for lazy/parquet backend, which will not make dicts,
+            # but must remain writable in the original object
+            references = {
+                key: json.dumps(val) if isinstance(val, dict) else val
+                for key, val in references.items()
+            }
         self.references = references
 
     def _process_references1(self, references, template_overrides=None):
