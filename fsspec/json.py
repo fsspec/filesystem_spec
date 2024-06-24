@@ -113,9 +113,9 @@ class FilesystemJSONDecoder(json.JSONDecoder):
         """
         if isinstance(obj, dict):
             obj = self.custom_object_hook(obj)
-        if isinstance(obj, Mapping):
+        if isinstance(obj, dict):
             return {k: self.unmake_serializable(v) for k, v in obj.items()}
-        if isinstance(obj, Sequence):
+        if isinstance(obj, (list, tuple)):
             return [self.unmake_serializable(v) for v in obj]
 
         return obj
