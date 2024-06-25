@@ -1466,6 +1466,10 @@ class AbstractFileSystem(metaclass=_Cached):
         passed to the constructor, such as passwords and tokens. Make sure you
         store and send them in a secure environment!
         """
+        from .json import FilesystemJSONEncoder
+
+        json_encoder = FilesystemJSONEncoder()
+
         cls = type(self)
         proto = self.protocol
 
@@ -1476,8 +1480,8 @@ class AbstractFileSystem(metaclass=_Cached):
         return dict(
             cls=f"{cls.__module__}:{cls.__name__}",
             protocol=proto[0] if isinstance(proto, (tuple, list)) else proto,
-            args=self.storage_args,
-            **storage_options,
+            args=json_encoder.make_serializable(self.storage_args),
+            **json_encoder.make_serializable(storage_options),
         )
 
     @staticmethod
@@ -1503,6 +1507,8 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         from .json import FilesystemJSONDecoder
 
+        json_decoder = FilesystemJSONDecoder()
+
         dct = dict(dct)  # Defensive copy
 
         cls = FilesystemJSONDecoder.try_resolve_fs_cls(dct)
@@ -1512,7 +1518,10 @@ class AbstractFileSystem(metaclass=_Cached):
         dct.pop("cls", None)
         dct.pop("protocol", None)
 
-        return cls(*dct.pop("args", ()), **dct)
+        return cls(
+            *json_decoder.unmake_serializable(dct.pop("args", ())),
+            **json_decoder.unmake_serializable(dct),
+        )
 
     def _get_pyarrow_filesystem(self):
         """
