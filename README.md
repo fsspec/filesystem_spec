@@ -4,7 +4,6 @@
 [![Anaconda-Server Badge](https://anaconda.org/conda-forge/fsspec/badges/version.svg)](https://anaconda.org/conda-forge/fsspec)
 ![Build](https://github.com/fsspec/filesystem_spec/workflows/CI/badge.svg)
 [![Docs](https://readthedocs.org/projects/filesystem-spec/badge/?version=latest)](https://filesystem-spec.readthedocs.io/en/latest/?badge=latest)
-[![PyPi downloads](https://img.shields.io/pypi/dm/fsspec?label=pypi%20downloads&style=flat)](https://pepy.tech/project/fsspec)
 
 A specification for pythonic filesystems.
 
