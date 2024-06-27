@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2024.6.1
+--------
+
+Fixes
+
+- fix appending to non-dict reference sets (#1634)
+- don't let generic edit info dicts (#1633)
+- set https's loop before calling super (#1633)
+- cached write file doesn't need to update it's size on close (#1633)
+- fix JSON serialize for FSs with interior FSs (#1628, 1627)
+- option to strip "password" when pickling (#1625)
+- fix filecache write (#1622)
+
+
 2024.6.0
 --------
 
