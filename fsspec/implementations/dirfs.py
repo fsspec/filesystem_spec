@@ -66,7 +66,9 @@ class DirFileSystem(AsyncFileSystem):
                 return path
             # We need to account for S3FileSystem returning paths that do not
             # start with a '/'
-            if path == self.path or (self.path.startswith(self.fs.sep) and path == self.path[1:]):
+            if path == self.path or (
+                self.path.startswith(self.fs.sep) and path == self.path[1:]
+            ):
                 return ""
             prefix = self.path + self.fs.sep
             if self.path.startswith(self.fs.sep) and not path.startswith(self.fs.sep):
