@@ -153,10 +153,10 @@ class FSMap(MutableMapping):
         k = self._key_to_str(key)
         try:
             result = self.fs.cat(k)
-        except self.missing_exceptions:
+        except self.missing_exceptions as exc:
             if default is not None:
                 return default
-            raise KeyError(key)
+            raise KeyError(key) from exc
         return result
 
     def pop(self, key, default=None):
@@ -184,8 +184,8 @@ class FSMap(MutableMapping):
         """Remove key"""
         try:
             self.fs.rm(self._key_to_str(key))
-        except:  # noqa: E722
-            raise KeyError
+        except Exception as exc:  # noqa: E722
+            raise KeyError from exc
 
     def __contains__(self, key):
         """Does key exist in mapping?"""

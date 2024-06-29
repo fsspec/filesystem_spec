@@ -685,7 +685,9 @@ def test_local_filecache_basic(local_filecache):
     assert "cache" in os.listdir(cache_location)
 
     # the file in the location contains the right data
-    fn = list(fs._metadata.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = next(iter(fs._metadata.cached_files[-1].values()))[
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == data
@@ -730,7 +732,9 @@ def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
         assert f.read() == new_data
 
     # the file in the location contains the right data
-    fn = list(fs._metadata.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = next(iter(fs._metadata.cached_files[-1].values()))[
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == new_data
@@ -753,7 +757,7 @@ def test_local_filecache_with_new_cache_location_makes_a_new_copy(local_filecach
         assert f.read() == data
 
     # the file in the location contains the right data
-    fn = list(new_fs._metadata.cached_files[-1].values())[0][
+    fn = next(iter(new_fs._metadata.cached_files[-1].values()))[
         "fn"
     ]  # this is a hash value
     assert fn in os.listdir(old_cache_location)
