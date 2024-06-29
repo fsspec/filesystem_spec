@@ -184,7 +184,7 @@ class FSMap(MutableMapping):
         """Remove key"""
         try:
             self.fs.rm(self._key_to_str(key))
-        except Exception as exc:  # noqa: E722
+        except Exception as exc:
             raise KeyError from exc
 
     def __contains__(self, key):
