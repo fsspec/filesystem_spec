@@ -35,7 +35,7 @@ class ReferenceNotReachable(RuntimeError):
 
 
 def _first(d):
-    return list(d.values())[0]
+    return next(iter(d.values()))
 
 
 def _prot_in_references(path, references):
@@ -291,8 +291,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # Chunk keys can be loaded from row group and cached in LRU cache
         try:
             refs = self.open_refs(field, record)
-        except (ValueError, TypeError, FileNotFoundError):
-            raise KeyError(key)
+        except (ValueError, TypeError, FileNotFoundError) as exc:
+            raise KeyError(key) from exc
         columns = ["path", "offset", "size", "raw"]
         selection = [refs[c][ri] if c in refs else None for c in columns]
         raw = selection[-1]
@@ -732,8 +732,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         logger.debug(f"cat: {path}")
         try:
             part = self.references[path]
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as exc:
+            raise FileNotFoundError(path) from exc
         if isinstance(part, str):
             part = part.encode()
         if isinstance(part, bytes):

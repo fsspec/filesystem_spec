@@ -224,8 +224,8 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         try:
             return bytes(self.store[path].getbuffer()[start:end])
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as e:
+            raise FileNotFoundError(path) from e
 
     def _rm(self, path):
         path = self._strip_protocol(path)
@@ -238,15 +238,15 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         try:
             return self.store[path].modified
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as e:
+            raise FileNotFoundError(path) from e
 
     def created(self, path):
         path = self._strip_protocol(path)
         try:
             return self.store[path].created
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as e:
+            raise FileNotFoundError(path) from e
 
     def rm(self, path, recursive=False, maxdepth=None):
         if isinstance(path, str):

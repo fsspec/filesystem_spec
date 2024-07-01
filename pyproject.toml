@@ -154,6 +154,7 @@ select = [
     # fix noqas in fsspec/implementations/http.py
     "ASYNC",
     "B",
+    "B904",
     "C4",
     "G",
     "E4",
@@ -177,6 +178,7 @@ select = [
     # "PT", enable in later PR
     "PYI",
     "RUF006",
+    "RUF015",
     "RUF024",
     "SLOT",
     "SIM101",
