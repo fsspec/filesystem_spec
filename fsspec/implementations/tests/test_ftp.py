@@ -52,11 +52,14 @@ def test_ls_root_dircache(ftp):
 
     assert "/" in fs.dircache
 
+    ftp_tmp = fs.ftp
     fs.ftp = None  # Ensure no ftp action will be done after
 
     files2 = fs.ls("/", detail=False)
 
     assert files == files2
+
+    fs.ftp = ftp_tmp
 
 
 @pytest.mark.parametrize("cache_type", ["bytes", "mmap"])
