@@ -107,9 +107,9 @@ class FTPFileSystem(AbstractFileSystem):
                 except error_perm:
                     out = _mlsd2(self.ftp, path)  # Not platform independent
                 for fn, details in out:
-                    if path == "/":
-                        path = ""  # just for forming the names, below
-                    details["name"] = "/".join([path, fn.lstrip("/")])
+                    details["name"] = "/".join(
+                        ["" if path == "/" else path, fn.lstrip("/")]
+                    )
                     if details["type"] == "file":
                         details["size"] = int(details["size"])
                     else:
