@@ -226,6 +226,7 @@ Other Known Implementations
 - `s3fs`_ for Amazon S3 and other compatible stores
 - `wandbfs`_ to access Wandb run data (experimental)
 - `webdav4`_ for WebDAV
+- `xrootd`_ for xrootd, with protocol "root://"
 
 .. _abfs: https://github.com/dask/adlfs
 .. _adl: https://github.com/dask/adlfs
@@ -244,6 +245,7 @@ Other Known Implementations
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _webdav4: https://github.com/skshetry/webdav4
+.. _xrootd: https://github.com/CoffeaTeam/fsspec-xrootd
 
 .. _readbuffering:
 
