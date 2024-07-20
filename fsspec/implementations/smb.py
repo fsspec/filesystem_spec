@@ -69,7 +69,9 @@ class SMBFileSystem(AbstractFileSystem):
         timeout=60,
         encrypt=None,
         share_access=None,
-        register_session_retries=5,
+        register_session_retries=4,
+        register_session_retry_wait=1,
+        register_session_retry_factor=10,
         auto_mkdir=False,
         **kwargs,
     ):
@@ -105,6 +107,19 @@ class SMBFileSystem(AbstractFileSystem):
             - 'r': Allow other handles to be opened with read access.
             - 'w': Allow other handles to be opened with write access.
             - 'd': Allow other handles to be opened with delete access.
+        register_session_retries: int
+            Number of retries to register a session with the server. Retries are not performed
+            for authentication errors, as they are considered as invalid credentials and not network
+            issues.
+        register_session_retry_wait: int
+            Time in seconds to wait between each retry.
+        register_session_retry_factor: int
+            Base factor for the wait time between each retry. The wait time
+            is calculated using exponential function. For factor=1 all wait times
+            will be equal to `register_session_retry_wait`. For any number of retries,
+            the last wait time will be equal to `register_session_retry_wait` and for retries>1
+            the first wait time will be equal to `register_session_retry_wait / factor`.
+            Optimal factor is 10.
         auto_mkdir: bool
             Whether, when opening a file, the directory containing it should
             be created (if it doesn't already exist). This is assumed by pyarrow
@@ -120,6 +135,8 @@ class SMBFileSystem(AbstractFileSystem):
         self.temppath = kwargs.pop("temppath", "")
         self.share_access = share_access
         self.register_session_retries = register_session_retries
+        self.register_session_retry_wait = register_session_retry_wait
+        self.register_session_retry_factor = register_session_retry_factor
         self.auto_mkdir = auto_mkdir
         self._connect()
 
@@ -129,9 +146,24 @@ class SMBFileSystem(AbstractFileSystem):
 
     def _connect(self):
         import time
+
         retried_errors = []
 
-        for retry in range(self.register_session_retries):
+        wait_time = self.register_session_retry_wait
+        n_waits = (
+            self.register_session_retries - 1
+        )  # -1 = No wait time after the last retry
+        factor = self.register_session_retry_factor
+
+        # Generate wait times for each retry attempt.
+        # Wait times are calculated using exponential function. For factor=1 all wait times
+        # will be equal to `wait`. For any number of retries the last wait time will be
+        # equal to `wait` and for retries>2 the first wait time will be equal to `wait / factor`.
+        wait_times = iter(
+            factor ** (n / n_waits - 1) * wait_time for n in range(1, n_waits + 1)
+        )
+
+        for attempt in range(self.register_session_retries + 1):
             try:
                 smbclient.register_session(
                     self.host,
@@ -144,7 +176,7 @@ class SMBFileSystem(AbstractFileSystem):
                 return
             except (
                 smbprotocol.exceptions.SMBAuthenticationError,
-                smbprotocol.exceptions.LogonFailure
+                smbprotocol.exceptions.LogonFailure,
             ):
                 # These exceptions should not be repeated, as they clearly indicate
                 # that the credentials are invalid and not a network issue.
@@ -164,8 +196,8 @@ class SMBFileSystem(AbstractFileSystem):
                 # in the future, once all exceptions suited for retry are identified.
                 retried_errors.append(exc)
 
-            if retry < self.register_session_retries - 1:
-                time.sleep(1)
+            if attempt < self.register_session_retries:
+                time.sleep(next(wait_times))
 
         # Raise last exception to inform user about the connection issues.
         # Note: Should we use ExceptionGroup to raise all exceptions?
