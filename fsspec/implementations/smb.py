@@ -134,8 +134,18 @@ class SMBFileSystem(AbstractFileSystem):
         self.encrypt = encrypt
         self.temppath = kwargs.pop("temppath", "")
         self.share_access = share_access
+        if register_session_retries < 0:
+            raise ValueError("register_session_retries must be a non-negative integer")
         self.register_session_retries = register_session_retries
+        if register_session_retry_wait < 0:
+            raise ValueError(
+                "register_session_retry_wait must be a non-negative integer"
+            )
         self.register_session_retry_wait = register_session_retry_wait
+        if register_session_retry_factor < 1:
+            raise ValueError(
+                "register_session_retry_factor must be a positive integer greater than 1"
+            )
         self.register_session_retry_factor = register_session_retry_factor
         self.auto_mkdir = auto_mkdir
         self._connect()
