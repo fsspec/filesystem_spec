@@ -150,7 +150,7 @@ class SMBFileSystem(AbstractFileSystem):
                 # that the credentials are invalid and not a network issue.
                 raise
             except ValueError as exc:
-                if re.match(r"\[Errno -\d+]", str(exc)):
+                if re.findall(r"\[Errno -\d+]", str(exc)):
                     # This exception is raised by the smbprotocol.transport:Tcp.connect
                     # and originates from socket.gaierror (OSError). These exceptions might
                     # be raised due to network instability. We will retry to connect.
