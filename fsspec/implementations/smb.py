@@ -160,7 +160,7 @@ class SMBFileSystem(AbstractFileSystem):
         # will be equal to `wait`. For any number of retries the last wait time will be
         # equal to `wait` and for retries>2 the first wait time will be equal to `wait / factor`.
         wait_times = iter(
-            factor ** (n / n_waits - 1) * wait_time for n in range(1, n_waits + 1)
+            factor ** (n / n_waits - 1) * wait_time for n in range(0, n_waits + 1)
         )
 
         for attempt in range(self.register_session_retries + 1):
