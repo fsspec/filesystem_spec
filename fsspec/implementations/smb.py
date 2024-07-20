@@ -4,10 +4,12 @@ Windows Samba network shares by using package smbprotocol
 """
 
 import datetime
+import re
 import uuid
 from stat import S_ISDIR, S_ISLNK
 
 import smbclient
+import smbprotocol.exceptions
 
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
@@ -127,8 +129,9 @@ class SMBFileSystem(AbstractFileSystem):
 
     def _connect(self):
         import time
+        retried_errors = []
 
-        for _ in range(self.register_session_retries):
+        for retry in range(self.register_session_retries):
             try:
                 smbclient.register_session(
                     self.host,
@@ -138,9 +141,35 @@ class SMBFileSystem(AbstractFileSystem):
                     encrypt=self.encrypt,
                     connection_timeout=self.timeout,
                 )
-                break
-            except Exception:
-                time.sleep(0.1)
+                return
+            except (
+                smbprotocol.exceptions.SMBAuthenticationError,
+                smbprotocol.exceptions.LogonFailure
+            ):
+                # These exceptions should not be repeated, as they clearly indicate
+                # that the credentials are invalid and not a network issue.
+                raise
+            except ValueError as exc:
+                if re.match(r"\[Errno -\d+]", str(exc)):
+                    # This exception is raised by the smbprotocol.transport:Tcp.connect
+                    # and originates from socket.gaierror (OSError). These exceptions might
+                    # be raised due to network instability. We will retry to connect.
+                    retried_errors.append(exc)
+                else:
+                    # All another ValueError exceptions should be raised, as they are not
+                    # related to network issues.
+                    raise exc
+            except Exception as exc:
+                # Save the exception and retry to connect. This except might be dropped
+                # in the future, once all exceptions suited for retry are identified.
+                retried_errors.append(exc)
+
+            if retry < self.register_session_retries - 1:
+                time.sleep(1)
+
+        # Raise last exception to inform user about the connection issues.
+        # Note: Should we use ExceptionGroup to raise all exceptions?
+        raise retried_errors[-1]
 
     @classmethod
     def _strip_protocol(cls, path):
