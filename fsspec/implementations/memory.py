@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
-from typing import Any, ClassVar
+from typing import Any, ClassVar, BinaryIO
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import LocalFileSystem
@@ -265,6 +265,17 @@ class MemoryFileSystem(AbstractFileSystem):
                 self.rm_file(p)
             else:
                 self.rmdir(p)
+    
+    def save(self, file: BinaryIO):
+        import pickle
+        pickle.dump({"store": self.store, "pseudo_dirs": self.pseudo_dirs}, file)
+    
+    def load(self, file: BinaryIO):
+        import pickle
+        _internal = pickle.load(file)
+        self.store = _internal["store"]
+        self.pseudo_dirs = _internal["pseudo_dirs"]
+
 
 
 class MemoryFile(BytesIO):
