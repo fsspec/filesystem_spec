@@ -110,16 +110,16 @@ class SMBFileSystem(AbstractFileSystem):
         register_session_retries: int
             Number of retries to register a session with the server. Retries are not performed
             for authentication errors, as they are considered as invalid credentials and not network
-            issues.
+            issues. If set to negative value, no register attempts will be performed.
         register_session_retry_wait: int
-            Time in seconds to wait between each retry.
+            Time in seconds to wait between each retry. Number must be non-negative.
         register_session_retry_factor: int
             Base factor for the wait time between each retry. The wait time
             is calculated using exponential function. For factor=1 all wait times
             will be equal to `register_session_retry_wait`. For any number of retries,
             the last wait time will be equal to `register_session_retry_wait` and for retries>1
             the first wait time will be equal to `register_session_retry_wait / factor`.
-            Optimal factor is 10.
+            Number must be equal to or greater than 1. Optimal factor is 10.
         auto_mkdir: bool
             Whether, when opening a file, the directory containing it should
             be created (if it doesn't already exist). This is assumed by pyarrow
@@ -134,8 +134,6 @@ class SMBFileSystem(AbstractFileSystem):
         self.encrypt = encrypt
         self.temppath = kwargs.pop("temppath", "")
         self.share_access = share_access
-        if register_session_retries < 0:
-            raise ValueError("register_session_retries must be a non-negative integer")
         self.register_session_retries = register_session_retries
         if register_session_retry_wait < 0:
             raise ValueError(
@@ -144,7 +142,8 @@ class SMBFileSystem(AbstractFileSystem):
         self.register_session_retry_wait = register_session_retry_wait
         if register_session_retry_factor < 1:
             raise ValueError(
-                "register_session_retry_factor must be a positive integer greater than 1"
+                "register_session_retry_factor must be a positive "
+                "integer equal to or greater than 1"
             )
         self.register_session_retry_factor = register_session_retry_factor
         self.auto_mkdir = auto_mkdir
@@ -156,6 +155,9 @@ class SMBFileSystem(AbstractFileSystem):
 
     def _connect(self):
         import time
+
+        if self.register_session_retries <= -1:
+            return
 
         retried_errors = []
 
