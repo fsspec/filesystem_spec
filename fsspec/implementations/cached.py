@@ -440,6 +440,7 @@ class CachingFileSystem(AbstractFileSystem):
             "pipe",
             "start_transaction",
             "end_transaction",
+            "cache_path"
         }:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -822,32 +823,14 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             paths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
 
-    def _open(self, path, mode="rb", **kwargs):
-        path = self._strip_protocol(path)
-        sha = self._mapper(path)
-
-        if "r" not in mode:
-            fn = os.path.join(self.storage[-1], sha)
-            user_specified_kwargs = {
-                k: v
-                for k, v in kwargs.items()
-                if k not in ["autocommit", "block_size", "cache_options"]
-            }  # those were added by open()
-            return LocalTempFile(
-                self,
-                path,
-                mode=mode,
-                autocommit=not self._intrans,
-                fn=fn,
-                **user_specified_kwargs,
-            )
+    def cache_path(self, path, force=False, **kwargs):
         fn = self._check_file(path)
-        if fn:
-            return open(fn, mode)
+        if fn and (not force):
+            return fn
 
+        sha = self._mapper(path)
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache", path)
-        kwargs["mode"] = mode
 
         self._mkcache()
         self._cache_size = None
@@ -868,8 +851,32 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                     data = f.read(block)
                     f2.write(data)
         else:
-            self.fs.get_file(path, fn)
-        return self._open(path, mode)
+            self.fs.get_file(path, fn, **kwargs)
+
+        return fn
+
+    def _open(self, path, mode="rb", force_cache=False, **kwargs):
+        path = self._strip_protocol(path)
+        sha = self._mapper(path)
+
+        if "r" not in mode:
+            fn = os.path.join(self.storage[-1], sha)
+            user_specified_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in ["autocommit", "block_size", "cache_options"]
+            }  # those were added by open()
+            return LocalTempFile(
+                self,
+                path,
+                mode=mode,
+                autocommit=not self._intrans,
+                fn=fn,
+                **user_specified_kwargs,
+            )
+
+        fn = self.cache_path(path, force=force_cache, **kwargs)
+        return open(fn, mode)
 
 
 class LocalTempFile:
