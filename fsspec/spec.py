@@ -912,6 +912,7 @@ class AbstractFileSystem(metaclass=_Cached):
             finally:
                 if not isfilelike(lpath):
                     outfile.close()
+                callback.close()
 
     def get(
         self,
