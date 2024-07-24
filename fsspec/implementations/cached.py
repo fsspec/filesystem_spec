@@ -440,7 +440,8 @@ class CachingFileSystem(AbstractFileSystem):
             "pipe",
             "start_transaction",
             "end_transaction",
-            "cache_path"
+            "cache_path",
+            "cache_detail"
         }:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -649,33 +650,14 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             out = out[paths[0]]
         return out
 
-    def _open(self, path, mode="rb", **kwargs):
-        path = self._strip_protocol(path)
-        if "r" not in mode:
-            hash = self._mapper(path)
-            fn = os.path.join(self.storage[-1], hash)
-            user_specified_kwargs = {
-                k: v
-                for k, v in kwargs.items()
-                # those kwargs were added by open(), we don't want them
-                if k not in ["autocommit", "block_size", "cache_options"]
-            }
-            return LocalTempFile(self, path, mode=mode, fn=fn, **user_specified_kwargs)
+    def cache_detail(self, path, force=False, **kwargs):
         detail = self._check_file(path)
-        if detail:
+        if detail and (not force):
             detail, fn = detail
-            _, blocks = detail["fn"], detail["blocks"]
+            blocks = detail["blocks"]
             if blocks is True:
                 logger.debug("Opening local copy of %s", path)
-
-                # In order to support downstream filesystems to be able to
-                # infer the compression from the original filename, like
-                # the `TarFileSystem`, let's extend the `io.BufferedReader`
-                # fileobject protocol by adding a dedicated attribute
-                # `original`.
-                f = open(fn, mode)
-                f.original = detail.get("original")
-                return f
+                return detail, fn
             else:
                 raise ValueError(
                     f"Attempt to open partially cached file {path}"
@@ -683,7 +665,6 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 )
         else:
             fn = self._make_local_details(path)
-        kwargs["mode"] = mode
 
         # call target filesystems open
         self._mkcache()
@@ -704,9 +685,34 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     data = f.read(block)
                     f2.write(data)
         else:
-            self.fs.get_file(path, fn)
+            self.fs.get_file(path, fn, **kwargs)
         self.save_cache()
-        return self._open(path, mode)
+        detail = self._check_file(path)
+        return detail
+
+    def _open(self, path, mode="rb", **kwargs):
+        path = self._strip_protocol(path)
+        if "r" not in mode:
+            hash = self._mapper(path)
+            fn = os.path.join(self.storage[-1], hash)
+            user_specified_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                # those kwargs were added by open(), we don't want them
+                if k not in ["autocommit", "block_size", "cache_options"]
+            }
+            return LocalTempFile(self, path, mode=mode, fn=fn, **user_specified_kwargs)
+
+        detail, fn = self.cache_detail(path)
+        fo = open(fn, mode)
+        if detail.get("blocks"):
+            # In order to support downstream filesystems to be able to
+            # infer the compression from the original filename, like
+            # the `TarFileSystem`, let's extend the `io.BufferedReader`
+            # fileobject protocol by adding a dedicated attribute
+            # `original`.
+            fo.original = detail.get("original")
+        return fo
 
 
 class SimpleCacheFileSystem(WholeFileCacheFileSystem):
