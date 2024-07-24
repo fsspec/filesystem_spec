@@ -265,6 +265,7 @@ class HTTPFileSystem(AsyncFileSystem):
             finally:
                 if not isfilelike(lpath):
                     outfile.close()
+                callback.close()
 
     async def _put_file(
         self,
