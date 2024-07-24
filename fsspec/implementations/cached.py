@@ -441,7 +441,7 @@ class CachingFileSystem(AbstractFileSystem):
             "start_transaction",
             "end_transaction",
             "cache_path",
-            "cache_detail"
+            "_cache_detail"
         }:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
@@ -650,7 +650,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             out = out[paths[0]]
         return out
 
-    def cache_detail(self, path, force=False, **kwargs):
+    def _cache_detail(self, path, force=False, **kwargs):
         detail = self._check_file(path)
         if detail and (not force):
             detail, fn = detail
@@ -690,7 +690,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         detail = self._check_file(path)
         return detail
 
-    def _open(self, path, mode="rb", **kwargs):
+    def cache_path(self, path, force=False, **kwargs):
+        _, fn = self._cache_detail(path, force=force, **kwargs)
+        return fn
+
+    def _open(self, path, mode="rb", force_cache=False, **kwargs):
         path = self._strip_protocol(path)
         if "r" not in mode:
             hash = self._mapper(path)
@@ -703,7 +707,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             }
             return LocalTempFile(self, path, mode=mode, fn=fn, **user_specified_kwargs)
 
-        detail, fn = self.cache_detail(path)
+        detail, fn = self._cache_detail(path, force=force_cache, **kwargs)
         fo = open(fn, mode)
         if detail.get("blocks"):
             # In order to support downstream filesystems to be able to
