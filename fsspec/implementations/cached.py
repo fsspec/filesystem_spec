@@ -441,7 +441,7 @@ class CachingFileSystem(AbstractFileSystem):
             "start_transaction",
             "end_transaction",
             "cache_path",
-            "_cache_detail"
+            "_cache_detail",
         }:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
