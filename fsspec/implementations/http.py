@@ -359,7 +359,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
         info = {}
-        size = size or (info.update(self.info(path, **kwargs)) or info["size"])
+        size = size or info.update(self.info(path, **kwargs)) or info["size"]
         session = sync(self.loop, self.set_session)
         if block_size and size and info.get("partial", True):
             return HTTPFile(
