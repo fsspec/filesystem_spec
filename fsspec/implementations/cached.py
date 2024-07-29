@@ -795,7 +795,8 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         if self._intrans:
             f = [_ for _ in self.transaction.files if _.path == path]
             if f:
-                return {"name": path, "size": f[0].size or f[0].tell(), "type": "file"}
+                size = os.path.getsize(f[0].fn) if f[0].closed else f[0].tell()
+                return {"name": path, "size": size, "type": "file"}
             f = any(_.path.startswith(path + "/") for _ in self.transaction.files)
             if f:
                 return {"name": path, "size": 0, "type": "directory"}
@@ -901,7 +902,7 @@ class LocalTempFile:
         self.close()
 
     def close(self):
-        self.size = self.fh.tell()
+        # self.size = self.fh.tell()
         if self.closed:
             return
         self.fh.close()

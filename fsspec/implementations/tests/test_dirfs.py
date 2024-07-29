@@ -82,11 +82,25 @@ def test_dirfs(fs, asyncfs):
         ("", "foo", "foo"),
         ("root", "", "root"),
         ("root", "foo", "root/foo"),
+        ("/root", "", "/root"),
+        ("/root", "foo", "/root/foo"),
     ],
 )
 def test_path(fs, root, rel, full):
     dirfs = DirFileSystem(root, fs)
     assert dirfs._join(rel) == full
+    assert dirfs._relpath(full) == rel
+
+
+@pytest.mark.parametrize(
+    "root, rel, full",
+    [
+        ("/root", "foo", "root/foo"),
+        ("/root", "", "root"),
+    ],
+)
+def test_path_no_leading_slash(fs, root, rel, full):
+    dirfs = DirFileSystem(root, fs)
     assert dirfs._relpath(full) == rel
 
 

@@ -44,6 +44,24 @@ def test_not_cached(ftp):
     assert fs is not fs2
 
 
+def test_ls_root_dircache(ftp):
+    host, port = ftp
+    fs = FTPFileSystem(host, port)
+
+    files = fs.ls("/", detail=False)
+
+    assert "/" in fs.dircache
+
+    ftp_tmp = fs.ftp
+    fs.ftp = None  # Ensure no ftp action will be done after
+
+    files2 = fs.ls("/", detail=False)
+
+    assert files == files2
+
+    fs.ftp = ftp_tmp
+
+
 @pytest.mark.parametrize("cache_type", ["bytes", "mmap"])
 def test_complex(ftp_writable, cache_type):
     from fsspec.core import BytesCache

@@ -4,10 +4,12 @@ Windows Samba network shares by using package smbprotocol
 """
 
 import datetime
+import re
 import uuid
 from stat import S_ISDIR, S_ISLNK
 
 import smbclient
+import smbprotocol.exceptions
 
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
@@ -67,7 +69,9 @@ class SMBFileSystem(AbstractFileSystem):
         timeout=60,
         encrypt=None,
         share_access=None,
-        register_session_retries=5,
+        register_session_retries=4,
+        register_session_retry_wait=1,
+        register_session_retry_factor=10,
         auto_mkdir=False,
         **kwargs,
     ):
@@ -103,6 +107,19 @@ class SMBFileSystem(AbstractFileSystem):
             - 'r': Allow other handles to be opened with read access.
             - 'w': Allow other handles to be opened with write access.
             - 'd': Allow other handles to be opened with delete access.
+        register_session_retries: int
+            Number of retries to register a session with the server. Retries are not performed
+            for authentication errors, as they are considered as invalid credentials and not network
+            issues. If set to negative value, no register attempts will be performed.
+        register_session_retry_wait: int
+            Time in seconds to wait between each retry. Number must be non-negative.
+        register_session_retry_factor: int
+            Base factor for the wait time between each retry. The wait time
+            is calculated using exponential function. For factor=1 all wait times
+            will be equal to `register_session_retry_wait`. For any number of retries,
+            the last wait time will be equal to `register_session_retry_wait` and for retries>1
+            the first wait time will be equal to `register_session_retry_wait / factor`.
+            Number must be equal to or greater than 1. Optimal factor is 10.
         auto_mkdir: bool
             Whether, when opening a file, the directory containing it should
             be created (if it doesn't already exist). This is assumed by pyarrow
@@ -118,6 +135,17 @@ class SMBFileSystem(AbstractFileSystem):
         self.temppath = kwargs.pop("temppath", "")
         self.share_access = share_access
         self.register_session_retries = register_session_retries
+        if register_session_retry_wait < 0:
+            raise ValueError(
+                "register_session_retry_wait must be a non-negative integer"
+            )
+        self.register_session_retry_wait = register_session_retry_wait
+        if register_session_retry_factor < 1:
+            raise ValueError(
+                "register_session_retry_factor must be a positive "
+                "integer equal to or greater than 1"
+            )
+        self.register_session_retry_factor = register_session_retry_factor
         self.auto_mkdir = auto_mkdir
         self._connect()
 
@@ -128,7 +156,26 @@ class SMBFileSystem(AbstractFileSystem):
     def _connect(self):
         import time
 
-        for _ in range(self.register_session_retries):
+        if self.register_session_retries <= -1:
+            return
+
+        retried_errors = []
+
+        wait_time = self.register_session_retry_wait
+        n_waits = (
+            self.register_session_retries - 1
+        )  # -1 = No wait time after the last retry
+        factor = self.register_session_retry_factor
+
+        # Generate wait times for each retry attempt.
+        # Wait times are calculated using exponential function. For factor=1 all wait times
+        # will be equal to `wait`. For any number of retries the last wait time will be
+        # equal to `wait` and for retries>2 the first wait time will be equal to `wait / factor`.
+        wait_times = iter(
+            factor ** (n / n_waits - 1) * wait_time for n in range(0, n_waits + 1)
+        )
+
+        for attempt in range(self.register_session_retries + 1):
             try:
                 smbclient.register_session(
                     self.host,
@@ -138,9 +185,35 @@ class SMBFileSystem(AbstractFileSystem):
                     encrypt=self.encrypt,
                     connection_timeout=self.timeout,
                 )
-                break
-            except Exception:
-                time.sleep(0.1)
+                return
+            except (
+                smbprotocol.exceptions.SMBAuthenticationError,
+                smbprotocol.exceptions.LogonFailure,
+            ):
+                # These exceptions should not be repeated, as they clearly indicate
+                # that the credentials are invalid and not a network issue.
+                raise
+            except ValueError as exc:
+                if re.findall(r"\[Errno -\d+]", str(exc)):
+                    # This exception is raised by the smbprotocol.transport:Tcp.connect
+                    # and originates from socket.gaierror (OSError). These exceptions might
+                    # be raised due to network instability. We will retry to connect.
+                    retried_errors.append(exc)
+                else:
+                    # All another ValueError exceptions should be raised, as they are not
+                    # related to network issues.
+                    raise exc
+            except Exception as exc:
+                # Save the exception and retry to connect. This except might be dropped
+                # in the future, once all exceptions suited for retry are identified.
+                retried_errors.append(exc)
+
+            if attempt < self.register_session_retries:
+                time.sleep(next(wait_times))
+
+        # Raise last exception to inform user about the connection issues.
+        # Note: Should we use ExceptionGroup to raise all exceptions?
+        raise retried_errors[-1]
 
     @classmethod
     def _strip_protocol(cls, path):

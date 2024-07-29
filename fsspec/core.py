@@ -639,7 +639,7 @@ def get_fs_token_paths(
     if isinstance(urlpath, (list, tuple, set)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
-        urlpath0 = stringify_path(list(urlpath)[0])
+        urlpath0 = stringify_path(next(iter(urlpath)))
     else:
         urlpath0 = stringify_path(urlpath)
     storage_options = storage_options or {}

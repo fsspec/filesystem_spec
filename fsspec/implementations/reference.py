@@ -5,6 +5,7 @@ import itertools
 import logging
 import math
 import os
+from itertools import chain
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -16,10 +17,10 @@ except ImportError:
     if not TYPE_CHECKING:
         import json
 
-from ..asyn import AsyncFileSystem
-from ..callbacks import DEFAULT_CALLBACK
-from ..core import filesystem, open, split_protocol
-from ..utils import isfilelike, merge_offset_ranges, other_paths
+from fsspec.asyn import AsyncFileSystem
+from fsspec.callbacks import DEFAULT_CALLBACK
+from fsspec.core import filesystem, open, split_protocol
+from fsspec.utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -35,7 +36,7 @@ class ReferenceNotReachable(RuntimeError):
 
 
 def _first(d):
-    return list(d.values())[0]
+    return next(iter(d.values()))
 
 
 def _prot_in_references(path, references):
@@ -131,7 +132,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.out_root = out_root or self.root
         self.cat_thresh = categorical_threshold
         self.cache_size = cache_size
-        self.dirs = None
         self.url = self.root + "/{field}/refs.{record}.parq"
         # TODO: derive fs from `root`
         self.fs = fsspec.filesystem("file") if fs is None else fs
@@ -195,32 +195,36 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
 
-    def listdir(self, basename=True):
+    @lru_cache()
+    def listdir(self):
         """List top-level directories"""
-        # cache me?
-        if self.dirs is None:
-            dirs = [p.split("/", 1)[0] for p in self.zmetadata]
-            self.dirs = {p for p in dirs if p and not p.startswith(".")}
-        listing = self.dirs
-        if basename:
-            listing = [os.path.basename(path) for path in listing]
-        return listing
+        dirs = (p.rsplit("/", 1)[0] for p in self.zmetadata if not p.startswith(".z"))
+        return set(dirs)
 
     def ls(self, path="", detail=True):
         """Shortcut file listings"""
-        if not path:
-            dirnames = self.listdir()
-            others = set(
-                [".zmetadata"]
-                + [name for name in self.zmetadata if "/" not in name]
-                + [name for name in self._items if "/" not in name]
-            )
+        path = path.rstrip("/")
+        pathdash = path + "/" if path else ""
+        dirnames = self.listdir()
+        dirs = [
+            d
+            for d in dirnames
+            if d.startswith(pathdash) and "/" not in d.lstrip(pathdash)
+        ]
+        if dirs:
+            others = {
+                f
+                for f in chain(
+                    [".zmetadata"],
+                    (name for name in self.zmetadata),
+                    (name for name in self._items),
+                )
+                if f.startswith(pathdash) and "/" not in f.lstrip(pathdash)
+            }
             if detail is False:
-                others.update(dirnames)
+                others.update(dirs)
                 return sorted(others)
-            dirinfo = [
-                {"name": name, "type": "directory", "size": 0} for name in dirnames
-            ]
+            dirinfo = [{"name": name, "type": "directory", "size": 0} for name in dirs]
             fileinfo = [
                 {
                     "name": name,
@@ -234,10 +238,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 for name in others
             ]
             return sorted(dirinfo + fileinfo, key=lambda s: s["name"])
-        parts = path.split("/", 1)
-        if len(parts) > 1:
-            raise FileNotFoundError("Cannot list within directories right now")
-        field = parts[0]
+        field = path
         others = set(
             [name for name in self.zmetadata if name.startswith(f"{path}/")]
             + [name for name in self._items if name.startswith(f"{path}/")]
@@ -291,8 +292,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # Chunk keys can be loaded from row group and cached in LRU cache
         try:
             refs = self.open_refs(field, record)
-        except (ValueError, TypeError, FileNotFoundError):
-            raise KeyError(key)
+        except (ValueError, TypeError, FileNotFoundError) as exc:
+            raise KeyError(key) from exc
         columns = ["path", "offset", "size", "raw"]
         selection = [refs[c][ri] if c in refs else None for c in columns]
         raw = selection[-1]
@@ -732,8 +733,8 @@ class ReferenceFileSystem(AsyncFileSystem):
         logger.debug(f"cat: {path}")
         try:
             part = self.references[path]
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as exc:
+            raise FileNotFoundError(path) from exc
         if isinstance(part, str):
             part = part.encode()
         if isinstance(part, bytes):
@@ -935,10 +936,13 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references0(self, references):
         """Make reference dict for Spec Version 0"""
-        references = {
-            key: json.dumps(val) if isinstance(val, dict) else val
-            for key, val in references.items()
-        }
+        if isinstance(references, dict):
+            # do not do this for lazy/parquet backend, which will not make dicts,
+            # but must remain writable in the original object
+            references = {
+                key: json.dumps(val) if isinstance(val, dict) else val
+                for key, val in references.items()
+            }
         self.references = references
 
     def _process_references1(self, references, template_overrides=None):

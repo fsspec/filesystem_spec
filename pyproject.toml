@@ -154,18 +154,21 @@ select = [
     # fix noqas in fsspec/implementations/http.py
     "ASYNC",
     "B",
-    "I",    # isort
+    "B904",
     "C4",
     "G",
     "E4",
     "E7",
     "E9",
     "F",
+    "FURB",
     "LOG",
     "PERF",
     "PLC",
     "PLE",
     "PLR1722",
+    "PLR1736",
+    "PLW1501",
     "PLW1510",
     "PLW3301",
     "PIE800",
@@ -175,6 +178,8 @@ select = [
     # "PT", enable in later PR
     "PYI",
     "RUF006",
+    "RUF015",
+    "RUF024",
     "SLOT",
     "SIM101",
 ]

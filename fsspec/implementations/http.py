@@ -254,7 +254,7 @@ class HTTPFileSystem(AsyncFileSystem):
             if isfilelike(lpath):
                 outfile = lpath
             else:
-                outfile = open(lpath, "wb")  # noqa: ASYNC101
+                outfile = open(lpath, "wb")  # noqa: ASYNC101, ASYNC230
 
             try:
                 chunk = True
@@ -282,7 +282,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 context = nullcontext(lpath)
                 use_seek = False  # might not support seeking
             else:
-                context = open(lpath, "rb")  # noqa: ASYNC101
+                context = open(lpath, "rb")  # noqa: ASYNC101, ASYNC230
                 use_seek = True
 
             with context as f:
@@ -561,6 +561,7 @@ class HTTPFile(AbstractBufferedFile):
         if mode != "rb":
             raise NotImplementedError("File mode not supported")
         self.asynchronous = asynchronous
+        self.loop = loop
         self.url = url
         self.session = session
         self.details = {"name": url, "size": size, "type": "file"}
@@ -573,7 +574,6 @@ class HTTPFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs,
         )
-        self.loop = loop
 
     def read(self, length=-1):
         """Read bytes from file
@@ -737,6 +737,7 @@ class HTTPStreamFile(AbstractBufferedFile):
             return r
 
         self.r = sync(self.loop, cor)
+        self.loop = fs.loop
 
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:
@@ -805,7 +806,7 @@ async def get_range(session, url, start, end, file=None, **kwargs):
     async with r:
         out = await r.read()
     if file:
-        with open(file, "r+b") as f:  # noqa: ASYNC101
+        with open(file, "r+b") as f:  # noqa: ASYNC101, ASYNC230
             f.seek(start)
             f.write(out)
     else:
