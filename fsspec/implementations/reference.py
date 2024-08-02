@@ -502,6 +502,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             if k != ".zmetadata" and ".z" in k:
                 self.zmetadata[k] = json.loads(self._items.pop(k))
         met = {"metadata": self.zmetadata, "record_size": self.record_size}
+        self._items.clear()
         self._items[".zmetadata"] = json.dumps(met).encode()
         self.fs.pipe(
             "/".join([base_url or self.out_root, ".zmetadata"]),
@@ -1085,7 +1086,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         if self.dircache:
             return path in self.dircache
         elif isinstance(self.references, LazyReferenceMapper):
-            return path in self.references.listdir("")
+            return path in self.references.listdir()
         else:
             # this may be faster than building dircache for single calls, but
             # by looping will be slow for many calls; could cache it?
