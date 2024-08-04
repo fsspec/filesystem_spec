@@ -237,9 +237,13 @@ def test_random_access(server, headers):
 @pytest.mark.parametrize(
     "headers",
     [
-        {"ignore_range": "true", "head_ok": "true", "head_give_length": "true"},
+        # HTTPFile seeks, response headers lack size, assumed no range support
+        {"head_ok": "true", "head_give_length": "true"},
+        # HTTPFile seeks, response is not a range
         {"ignore_range": "true", "give_length": "true"},
         {"ignore_range": "true", "give_range": "true"},
+        # HTTPStreamFile does not seek (past 0)
+        {"accept_range": "none", "head_ok": "true", "give_length": "true"},
     ],
 )
 def test_no_range_support(server, headers):
@@ -247,8 +251,8 @@ def test_no_range_support(server, headers):
     url = server + "/index/realfile"
     with h.open(url, "rb") as f:
         # Random access is not possible if the server doesn't respect Range
-        f.seek(5)
         with pytest.raises(ValueError):
+            f.seek(5)
             f.read(10)
 
         # Reading from the beginning should still work
