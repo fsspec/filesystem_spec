@@ -33,10 +33,7 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install s3fs --no-input
-          pip uninstall s3fs
           pip install -e .[test_full]
-          pip install s3fs --no-input --no-deps
           pytest -v
 
   win:
