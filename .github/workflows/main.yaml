@@ -28,8 +28,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-py38.yml
-          create-args: >-
-            python=${{ matrix.PY }}
+          python-version: ${{ matrix.PY }}
 
       - name: Run Tests
         shell: bash -l {0}
