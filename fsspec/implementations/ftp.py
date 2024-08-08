@@ -27,8 +27,7 @@ class FTPFileSystem(AbstractFileSystem):
         tempdir=None,
         timeout=30,
         encoding="utf-8",
-        ssl=False,
-        prot_p=False,
+        tls=False,
         **kwargs,
     ):
         """
@@ -58,26 +57,28 @@ class FTPFileSystem(AbstractFileSystem):
             Timeout of the ftp connection in seconds
         encoding: str
             Encoding to use for directories and filenames in FTP connection
+        tls: bool
+            Use FTP-TLS, by default False
         """
         super().__init__(**kwargs)
         self.host = host
         self.port = port
         self.tempdir = tempdir or "/tmp"
-        self.cred = username, password, acct
+        self.cred = username or "", password or "", acct or ""
+        print(self.cred)
         self.timeout = timeout
         self.encoding = encoding
         if block_size is not None:
             self.blocksize = block_size
         else:
             self.blocksize = 2**16
-        self.ssl = ssl
-        self.prot_p = prot_p
+        self.tls = tls
         self._connect()
-        if self.prot_p:
+        if self.tls:
             self.ftp.prot_p()
 
     def _connect(self):
-        if self.ssl:
+        if self.tls:
             ftp_cls = FTP_TLS
         else:
             ftp_cls = FTP

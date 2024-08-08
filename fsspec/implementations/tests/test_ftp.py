@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+from ftplib import FTP, FTP_TLS
 
 import pytest
 
@@ -27,6 +28,19 @@ def ftp():
     finally:
         P.terminate()
         P.wait()
+
+
+@pytest.mark.parametrize(
+    "tls,exp_cls",
+    (
+        (False, FTP),
+        (True, FTP_TLS),
+    ),
+)
+def test_tls(ftp, tls, exp_cls):
+    host, port = ftp
+    fs = FTPFileSystem(host, port, tls=tls)
+    assert isinstance(fs.ftp, exp_cls)
 
 
 def test_basic(ftp):
