@@ -25,19 +25,15 @@ jobs:
           fetch-depth: 0
 
       - name: Setup conda
-        uses: mamba-org/setup-micromamba@v1
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-py38.yml
-          create-args: >-
-            python=${{ matrix.PY }}
+          python-version: ${{ matrix.PY }}
 
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install s3fs
-          pip uninstall s3fs
           pip install -e .[test_full]
-          pip install s3fs --no-deps
           pytest -v
 
   win:
@@ -54,17 +50,14 @@ jobs:
           fetch-depth: 0
 
       - name: Setup conda
-        uses: mamba-org/setup-micromamba@v1
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-win.yml
 
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install s3fs
-          pip uninstall s3fs
           pip install -e .[test]
-          pip install s3fs --no-deps
           pytest -v
 
   lint:
@@ -84,7 +77,7 @@ jobs:
 #        uses: actions/checkout@v4
 #
 #      - name: Setup conda
-#        uses: mamba-org/setup-micromamba@v1
+#        uses: conda-incubator/setup-miniconda@v3
 #        with:
 #          environment-file: ci/environment-typecheck.yml
 #
@@ -104,7 +97,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup conda
-        uses: mamba-org/setup-micromamba@v1
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-downstream.yml
 
@@ -145,7 +138,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup conda
-        uses: mamba-org/setup-micromamba@v1
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-friends.yml
 
