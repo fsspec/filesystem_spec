@@ -6,11 +6,11 @@ from pyftpdlib.servers import FTPServer
 
 
 def ftp():
+    """Script to run FTP server that accepts TLS"""
     # Set up FTP server parameters
-    FTP_HOST = "0.0.0.0"
-    FTP_PORT = 2121  # Choose a free port for the FTP server
-    FTP_DIRECTORY = os.path.dirname(__file__)
-    print(FTP_DIRECTORY)
+    FTP_HOST = "localhost"
+    FTP_PORT = 2121
+    FTP_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
     # Instantiate a dummy authorizer
     authorizer = DummyAuthorizer()

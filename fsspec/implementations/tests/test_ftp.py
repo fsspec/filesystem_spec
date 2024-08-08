@@ -18,7 +18,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 def ftp():
     pytest.importorskip("pyftpdlib")
     P = subprocess.Popen(
-        [sys.executable, "-m", "pyftpdlib", "-d", here],
+        [sys.executable, os.path.join(here, "ftp_tls.py")],
         stderr=subprocess.STDOUT,
         stdout=subprocess.PIPE,
     )
@@ -43,9 +43,18 @@ def test_tls(ftp, tls, exp_cls):
     assert isinstance(fs.ftp, exp_cls)
 
 
-def test_basic(ftp):
+@pytest.mark.parametrize(
+    "tls,username,password",
+    (
+        (False, "", ""),
+        (True, "", ""),
+        (False, "user", "pass"),
+        (True, "user", "pass"),
+    ),
+)
+def test_basic(ftp, tls, username, password):
     host, port = ftp
-    fs = FTPFileSystem(host, port)
+    fs = FTPFileSystem(host, port, username, password, tls=tls)
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
