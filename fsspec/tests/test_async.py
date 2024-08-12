@@ -203,9 +203,6 @@ class DummyAsyncStreamedFile(fsspec.asyn.AbstractAsyncStreamedFile):
     async def get_data(self):
         return self.temp_buffer.getbuffer().tobytes()
 
-    async def get_data(self):
-        return self.temp_buffer.getbuffer().tobytes()
-
 
 @pytest.mark.asyncio
 async def test_async_streamed_file_write():
