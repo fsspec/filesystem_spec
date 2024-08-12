@@ -3,8 +3,9 @@ channels:
   - conda-forge
 dependencies:
   - pip
-  - git
+  - git <2.45.0
   - py
+  - s3fs
   - pip:
     - hadoop-test-cluster
     - smbprotocol

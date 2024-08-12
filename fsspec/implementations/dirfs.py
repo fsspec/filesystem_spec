@@ -56,15 +56,23 @@ class DirFileSystem(AsyncFileSystem):
             if not path:
                 return self.path
             return self.fs.sep.join((self.path, self._strip_protocol(path)))
+        if isinstance(path, dict):
+            return {self._join(_path): value for _path, value in path.items()}
         return [self._join(_path) for _path in path]
 
     def _relpath(self, path):
         if isinstance(path, str):
             if not self.path:
                 return path
-            if path == self.path:
+            # We need to account for S3FileSystem returning paths that do not
+            # start with a '/'
+            if path == self.path or (
+                self.path.startswith(self.fs.sep) and path == self.path[1:]
+            ):
                 return ""
             prefix = self.path + self.fs.sep
+            if self.path.startswith(self.fs.sep) and not path.startswith(self.fs.sep):
+                prefix = prefix[1:]
             assert path.startswith(prefix)
             return path[len(prefix) :]
         return [self._relpath(_path) for _path in path]
@@ -329,8 +337,8 @@ class DirFileSystem(AsyncFileSystem):
     def rmdir(self, path):
         return self.fs.rmdir(self._join(path))
 
-    def mv_file(self, path1, path2, **kwargs):
-        return self.fs.mv_file(
+    def mv(self, path1, path2, **kwargs):
+        return self.fs.mv(
             self._join(path1),
             self._join(path2),
             **kwargs,

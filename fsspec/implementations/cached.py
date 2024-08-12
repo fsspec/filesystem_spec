@@ -425,7 +425,6 @@ class CachingFileSystem(AbstractFileSystem):
             "clear_cache",
             "clear_expired_cache",
             "pop_from_cache",
-            "_mkcache",
             "local_file",
             "_paths_from_path",
             "get_mapper",
@@ -435,12 +434,10 @@ class CachingFileSystem(AbstractFileSystem):
             "__hash__",
             "__eq__",
             "to_json",
+            "to_dict",
             "cache_size",
             "pipe_file",
             "pipe",
-            "isdir",
-            "isfile",
-            "exists",
             "start_transaction",
             "end_transaction",
         }:
@@ -508,15 +505,6 @@ class CachingFileSystem(AbstractFileSystem):
             ^ hash(self.compression)
             ^ hash(self._mapper)
             ^ hash(self.target_protocol)
-        )
-
-    def to_json(self):
-        """Calculate JSON representation.
-
-        Not implemented yet for CachingFileSystem.
-        """
-        raise NotImplementedError(
-            "CachingFileSystem JSON representation not implemented"
         )
 
 
@@ -663,7 +651,8 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         if "r" not in mode:
-            fn = self._make_local_details(path)
+            hash = self._mapper(path)
+            fn = os.path.join(self.storage[-1], hash)
             user_specified_kwargs = {
                 k: v
                 for k, v in kwargs.items()
@@ -806,7 +795,8 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         if self._intrans:
             f = [_ for _ in self.transaction.files if _.path == path]
             if f:
-                return {"name": path, "size": f[0].size or f[0].tell(), "type": "file"}
+                size = os.path.getsize(f[0].fn) if f[0].closed else f[0].tell()
+                return {"name": path, "size": size, "type": "file"}
             f = any(_.path.startswith(path + "/") for _ in self.transaction.files)
             if f:
                 return {"name": path, "size": 0, "type": "directory"}
@@ -912,7 +902,7 @@ class LocalTempFile:
         self.close()
 
     def close(self):
-        self.size = self.fh.tell()
+        # self.size = self.fh.tell()
         if self.closed:
             return
         self.fh.close()

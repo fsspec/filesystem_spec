@@ -77,7 +77,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 )
             except DatabricksException as e:
                 if e.error_code == "RESOURCE_DOES_NOT_EXIST":
-                    raise FileNotFoundError(e.message)
+                    raise FileNotFoundError(e.message) from e
 
                 raise e
             files = r["files"]
@@ -123,7 +123,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             self._send_to_api(method="post", endpoint="mkdirs", json={"path": path})
         except DatabricksException as e:
             if e.error_code == "RESOURCE_ALREADY_EXISTS":
-                raise FileExistsError(e.message)
+                raise FileExistsError(e.message) from e
 
             raise e
         self.invalidate_cache(self._parent(path))
@@ -169,7 +169,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 self.rm(path=path, recursive=recursive)
             elif e.error_code == "IO_ERROR":
                 # Using the same exception as the os module would use here
-                raise OSError(e.message)
+                raise OSError(e.message) from e
 
             raise e
         self.invalidate_cache(self._parent(path))
@@ -212,9 +212,9 @@ class DatabricksFileSystem(AbstractFileSystem):
             )
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
-                raise FileNotFoundError(e.message)
+                raise FileNotFoundError(e.message) from e
             elif e.error_code == "RESOURCE_ALREADY_EXISTS":
-                raise FileExistsError(e.message)
+                raise FileExistsError(e.message) from e
 
             raise e
         self.invalidate_cache(self._parent(source_path))
@@ -264,9 +264,9 @@ class DatabricksFileSystem(AbstractFileSystem):
             try:
                 exception_json = e.response.json()
             except Exception:
-                raise e
+                raise e from None
 
-            raise DatabricksException(**exception_json)
+            raise DatabricksException(**exception_json) from e
 
         return r.json()
 
@@ -297,7 +297,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             return r["handle"]
         except DatabricksException as e:
             if e.error_code == "RESOURCE_ALREADY_EXISTS":
-                raise FileExistsError(e.message)
+                raise FileExistsError(e.message) from e
 
             raise e
 
@@ -314,7 +314,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             self._send_to_api(method="post", endpoint="close", json={"handle": handle})
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
-                raise FileNotFoundError(e.message)
+                raise FileNotFoundError(e.message) from e
 
             raise e
 
@@ -342,9 +342,9 @@ class DatabricksFileSystem(AbstractFileSystem):
             )
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
-                raise FileNotFoundError(e.message)
+                raise FileNotFoundError(e.message) from e
             elif e.error_code == "MAX_BLOCK_SIZE_EXCEEDED":
-                raise ValueError(e.message)
+                raise ValueError(e.message) from e
 
             raise e
 
@@ -372,9 +372,9 @@ class DatabricksFileSystem(AbstractFileSystem):
             return base64.b64decode(r["data"])
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
-                raise FileNotFoundError(e.message)
+                raise FileNotFoundError(e.message) from e
             elif e.error_code in ["INVALID_PARAMETER_VALUE", "MAX_READ_SIZE_EXCEEDED"]:
-                raise ValueError(e.message)
+                raise ValueError(e.message) from e
 
             raise e
 

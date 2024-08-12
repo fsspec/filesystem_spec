@@ -350,8 +350,6 @@ def stringify_path(filepath: str | os.PathLike[str] | pathlib.Path) -> str:
         return filepath
     elif hasattr(filepath, "__fspath__"):
         return filepath.__fspath__()
-    elif isinstance(filepath, pathlib.Path):
-        return str(filepath)
     elif hasattr(filepath, "path"):
         return filepath.path
     else:
@@ -437,7 +435,7 @@ def isfilelike(f: Any) -> TypeGuard[IO[bytes]]:
 
 def get_protocol(url: str) -> str:
     url = stringify_path(url)
-    parts = re.split(r"(\:\:|\://)", url, 1)
+    parts = re.split(r"(\:\:|\://)", url, maxsplit=1)
     if len(parts) > 1:
         return parts[0]
     return "file"

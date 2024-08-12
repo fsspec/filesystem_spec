@@ -819,6 +819,10 @@ def test_eq():
     result = fs == 1
     assert result is False
 
+    f = AbstractBufferedFile(fs, "misc/foo.txt", cache_type="bytes")
+    result = f == 1
+    assert result is False
+
 
 def test_pickle_multiple():
     a = DummyTestFS(1)
@@ -852,6 +856,190 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+def test_json_path_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+
+    outa = a.to_json()
+    outb = b.to_json()
+
+    assert json.loads(outb)  # is valid JSON
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+
+
+def test_json_fs_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+    c = DummyTestFS(3, baz=b)
+
+    outa = a.to_json()
+    outb = b.to_json()
+    outc = c.to_json()
+
+    assert json.loads(outc)  # is valid JSON
+    assert b != c
+    assert "baz" in outc
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+    assert DummyTestFS.from_json(outc) is c
+
+
+def test_json_dict_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+    c = DummyTestFS(3, baz={"key": b})
+
+    outa = a.to_json()
+    outb = b.to_json()
+    outc = c.to_json()
+
+    assert json.loads(outc)  # is valid JSON
+    assert b != c
+    assert "baz" in outc
+
+    assert DummyTestFS.from_json(outa) is a
+    assert DummyTestFS.from_json(outb) is b
+    assert DummyTestFS.from_json(outc) is c
+
+
+def test_dict():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=1)
+
+    outa = a.to_dict()
+    outb = b.to_dict()
+
+    assert isinstance(outa, dict)
+    assert a != b
+    assert "bar" in outb
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outb) is b
+
+
+def test_dict_path_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+
+    outa = a.to_dict()
+    outb = b.to_dict()
+
+    assert isinstance(outa, dict)
+    assert a != b
+    assert outb["bar"]["str"] == "baz"
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outb) is b
+
+
+def test_dict_fs_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+    c = DummyTestFS(3, baz=b)
+
+    outa = a.to_dict()
+    outb = b.to_dict()
+    outc = c.to_dict()
+
+    assert isinstance(outc, dict)
+    assert b != c
+    assert outc["baz"] == outb
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outb) is b
+    assert DummyTestFS.from_dict(outc) is c
+
+
+def test_dict_dict_attr():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+    c = DummyTestFS(3, baz={"key": b})
+
+    outa = a.to_dict()
+    outb = b.to_dict()
+    outc = c.to_dict()
+
+    assert isinstance(outc, dict)
+    assert b != c
+    assert outc["baz"]["key"] == outb
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outb) is b
+    assert DummyTestFS.from_dict(outc) is c
+
+
+def test_dict_idempotent():
+    a = DummyTestFS(1)
+
+    outa = a.to_dict()
+
+    assert DummyTestFS.from_dict(outa) is a
+    assert DummyTestFS.from_dict(outa) is a
+
+
+def test_dict_json_serializable():
+    a = DummyTestFS(1)
+    b = DummyTestFS(2, bar=Path("baz"))
+    c = DummyTestFS(3, baz=b)
+
+    outa = a.to_dict()
+    outb = b.to_dict()
+    outc = c.to_dict()
+
+    json.dumps(outa)
+    json.dumps(outb)
+    json.dumps(outc)
+
+
+def test_serialize_no_password():
+    fs = DummyTestFS(1, password="admin")
+
+    assert "password" not in fs.to_json(include_password=False)
+    assert "password" not in fs.to_dict(include_password=False)
+
+
+def test_serialize_with_password():
+    fs = DummyTestFS(1, password="admin")
+
+    assert "password" in fs.to_json(include_password=True)
+    assert "password" in fs.to_dict(include_password=True)
+
+
+def test_from_dict_valid():
+    fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS"})
+    assert isinstance(fs, DummyTestFS)
+
+    fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS", "bar": 1})
+    assert fs.storage_options["bar"] == 1
+
+    fs = DummyTestFS.from_dict({"cls": "fsspec.implementations.local.LocalFileSystem"})
+    assert isinstance(fs, LocalFileSystem)
+
+    fs = DummyTestFS.from_dict(
+        {
+            "cls": "fsspec.implementations.local.LocalFileSystem",
+            "protocol": "local",
+        }
+    )
+    assert isinstance(fs, LocalFileSystem)
+
+
+def test_from_dict_invalid():
+    with pytest.raises(ValueError, match="Not a serialized AbstractFileSystem"):
+        DummyTestFS.from_dict({})
+
+    with pytest.raises(ValueError, match="Not a serialized AbstractFileSystem"):
+        DummyTestFS.from_dict({"cls": "pathlib.Path"})
+
+    with pytest.raises(ValueError, match="Not a serialized AbstractFileSystem"):
+        DummyTestFS.from_dict({"protocol": "local"})  # cls must be present
 
 
 def test_ls_from_cache():

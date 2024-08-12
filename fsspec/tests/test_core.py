@@ -21,7 +21,8 @@ from fsspec.core import (
 
 
 @contextmanager
-def tempzip(data={}):
+def tempzip(data=None):
+    data = data or {}
     f = tempfile.mkstemp(suffix="zip")[1]
     with zipfile.ZipFile(f, mode="w") as z:
         for k, v in data.items():
@@ -311,7 +312,7 @@ def test_open_file_write_with_special_characters(tmp_path, char, monkeypatch):
         f.write(expected_content * 2)
 
     with open(file_path, "r") as f:
-        f.read() == actual_content * 2
+        assert f.read() == actual_content * 2
 
     assert actual_content == expected_content
 

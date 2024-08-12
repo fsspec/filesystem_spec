@@ -118,9 +118,9 @@ class FTPFileSystem(AbstractFileSystem):
                 except error_perm:
                     out = _mlsd2(self.ftp, path)  # Not platform independent
                 for fn, details in out:
-                    if path == "/":
-                        path = ""  # just for forming the names, below
-                    details["name"] = "/".join([path, fn.lstrip("/")])
+                    details["name"] = "/".join(
+                        ["" if path == "/" else path, fn.lstrip("/")]
+                    )
                     if details["type"] == "file":
                         details["size"] = int(details["size"])
                     else:
@@ -133,8 +133,8 @@ class FTPFileSystem(AbstractFileSystem):
                     info = self.info(path)
                     if info["type"] == "file":
                         out = [(path, info)]
-                except (Error, IndexError):
-                    raise FileNotFoundError(path)
+                except (Error, IndexError) as exc:
+                    raise FileNotFoundError(path) from exc
         files = self.dircache.get(path, out)
         if not detail:
             return sorted([fn for fn, details in files])
@@ -148,9 +148,9 @@ class FTPFileSystem(AbstractFileSystem):
             return {"name": "/", "size": 0, "type": "directory"}
         files = self.ls(self._parent(path).lstrip("/"), True)
         try:
-            out = [f for f in files if f["name"] == path][0]
-        except IndexError:
-            raise FileNotFoundError(path)
+            out = next(f for f in files if f["name"] == path)
+        except StopIteration as exc:
+            raise FileNotFoundError(path) from exc
         return out
 
     def get_file(self, rpath, lpath, **kwargs):

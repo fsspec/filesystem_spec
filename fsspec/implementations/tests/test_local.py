@@ -34,10 +34,39 @@ files = {
 }
 
 csv_files = {
-    ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
-    ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
+    ".test.fakedata.1.csv": (b"a,b\n1,2\n"),
+    ".test.fakedata.2.csv": (b"a,b\n3,4\n"),
 }
 odir = os.getcwd()
+
+
+@pytest.fixture()
+def cwd():
+    pth = os.getcwd().replace("\\", "/")
+    assert not pth.endswith("/")
+    yield pth
+
+
+@pytest.fixture()
+def current_drive(cwd):
+    drive = os.path.splitdrive(cwd)[0]
+    assert not drive or (len(drive) == 2 and drive.endswith(":"))
+    yield drive
+
+
+@pytest.fixture()
+def user_home():
+    pth = os.path.expanduser("~").replace("\\", "/")
+    assert not pth.endswith("/")
+    yield pth
+
+
+def winonly(*args):
+    return pytest.param(*args, marks=pytest.mark.skipif(not WIN, reason="Windows only"))
+
+
+def posixonly(*args):
+    return pytest.param(*args, marks=pytest.mark.skipif(WIN, reason="Posix only"))
 
 
 @contextmanager
@@ -123,21 +152,19 @@ def test_urlpath_expand_read():
 def test_cats():
     with filetexts(csv_files, mode="b"):
         fs = fsspec.filesystem("file")
-        assert fs.cat(".test.fakedata.1.csv") == b"a,b\n" b"1,2\n"
+        assert fs.cat(".test.fakedata.1.csv") == b"a,b\n1,2\n"
         out = set(fs.cat([".test.fakedata.1.csv", ".test.fakedata.2.csv"]).values())
-        assert out == {b"a,b\n" b"1,2\n", b"a,b\n" b"3,4\n"}
-        assert fs.cat(".test.fakedata.1.csv", None, None) == b"a,b\n" b"1,2\n"
-        assert fs.cat(".test.fakedata.1.csv", start=1, end=6) == b"a,b\n" b"1,2\n"[1:6]
-        assert fs.cat(".test.fakedata.1.csv", start=-1) == b"a,b\n" b"1,2\n"[-1:]
-        assert (
-            fs.cat(".test.fakedata.1.csv", start=1, end=-2) == b"a,b\n" b"1,2\n"[1:-2]
-        )
+        assert out == {b"a,b\n1,2\n", b"a,b\n3,4\n"}
+        assert fs.cat(".test.fakedata.1.csv", None, None) == b"a,b\n1,2\n"
+        assert fs.cat(".test.fakedata.1.csv", start=1, end=6) == b"a,b\n1,2\n"[1:6]
+        assert fs.cat(".test.fakedata.1.csv", start=-1) == b"a,b\n1,2\n"[-1:]
+        assert fs.cat(".test.fakedata.1.csv", start=1, end=-2) == b"a,b\n1,2\n"[1:-2]
         out = set(
             fs.cat(
                 [".test.fakedata.1.csv", ".test.fakedata.2.csv"], start=1, end=-1
             ).values()
         )
-        assert out == {b"a,b\n" b"1,2\n"[1:-1], b"a,b\n" b"3,4\n"[1:-1]}
+        assert out == {b"a,b\n1,2\n"[1:-1], b"a,b\n3,4\n"[1:-1]}
 
 
 def test_urlpath_expand_write():
@@ -474,7 +501,6 @@ def test_make_path_posix():
         assert make_path_posix("/posix") == f"{drive}:/posix"
         # Windows drive requires trailing slash
         assert make_path_posix("C:\\") == "C:/"
-        assert make_path_posix("C:\\", remove_trailing_slash=True) == "C:/"
     else:
         assert make_path_posix("/a/posix/path") == "/a/posix/path"
         assert make_path_posix("/posix") == "/posix"
@@ -507,6 +533,71 @@ def test_make_path_posix():
     assert userpath.endswith("/path")
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/abc/def",
+        "abc/def",
+        "",
+        ".",
+        "//server/share/",
+        "\\\\server\\share\\",
+        "C:\\",
+        "d:/abc/def",
+        "e:",
+        pytest.param(
+            "\\\\server\\share",
+            marks=[
+                pytest.mark.xfail(
+                    WIN and sys.version_info < (3, 11),
+                    reason="requires py3.11+ see: python/cpython#96290",
+                )
+            ],
+        ),
+        pytest.param(
+            "f:foo",
+            marks=[pytest.mark.xfail(WIN, reason="unsupported")],
+            id="relative-path-with-drive",
+        ),
+    ],
+)
+def test_make_path_posix_returns_absolute_paths(path):
+    posix_pth = make_path_posix(path)
+    assert os.path.isabs(posix_pth)
+
+
+@pytest.mark.parametrize("container_cls", [list, set, tuple])
+def test_make_path_posix_set_list_tuple(container_cls):
+    paths = container_cls(
+        [
+            "/foo/bar",
+            "bar/foo",
+        ]
+    )
+    posix_paths = make_path_posix(paths)
+    assert isinstance(posix_paths, container_cls)
+    assert posix_paths == container_cls(
+        [
+            make_path_posix("/foo/bar"),
+            make_path_posix("bar/foo"),
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        1,
+        True,
+        None,
+        object(),
+    ],
+)
+def test_make_path_posix_wrong_type(obj):
+    with pytest.raises(TypeError):
+        make_path_posix(obj)
+
+
 def test_parent():
     if WIN:
         assert LocalFileSystem._parent("C:\\file or folder") == "C:/"
@@ -514,6 +605,48 @@ def test_parent():
     else:
         assert LocalFileSystem._parent("/file or folder") == "/"
         assert LocalFileSystem._parent("/") == "/"
+
+
+@pytest.mark.parametrize(
+    "path,parent",
+    [
+        ("C:\\", "C:/"),
+        ("C:\\.", "C:/"),
+        ("C:\\.\\", "C:/"),
+        ("file:C:/", "C:/"),
+        ("file://C:/", "C:/"),
+        ("local:C:/", "C:/"),
+        ("local://C:/", "C:/"),
+        ("\\\\server\\share", "//server/share"),
+        ("\\\\server\\share\\", "//server/share"),
+        ("\\\\server\\share\\path", "//server/share"),
+        ("//server/share", "//server/share"),
+        ("//server/share/", "//server/share"),
+        ("//server/share/path", "//server/share"),
+        ("C:\\file or folder", "C:/"),
+        ("C:\\file or folder\\", "C:/"),
+        ("file:///", "{current_drive}/"),
+        ("file:///path", "{current_drive}/"),
+    ]
+    if WIN
+    else [
+        ("/", "/"),
+        ("/.", "/"),
+        ("/./", "/"),
+        ("file:/", "/"),
+        ("file:///", "/"),
+        ("local:/", "/"),
+        ("local:///", "/"),
+        ("/file or folder", "/"),
+        ("/file or folder/", "/"),
+        ("file:///path", "/"),
+        ("file://c/", "{cwd}"),
+    ],
+)
+def test_parent_edge_cases(path, parent, cwd, current_drive):
+    parent = parent.format(cwd=cwd, current_drive=current_drive)
+
+    assert LocalFileSystem._parent(path) == parent
 
 
 def test_linked_files(tmpdir):
@@ -649,26 +782,130 @@ def test_pickle(tmpdir):
         assert f2.read() == f.read()
 
 
-def test_strip_protocol_expanduser():
-    path = "file://~\\foo\\bar" if WIN else "file://~/foo/bar"
-    stripped = LocalFileSystem._strip_protocol(path)
-    assert path != stripped
-    assert "~" not in stripped
-    assert "file://" not in stripped
-    assert stripped.startswith(os.path.expanduser("~").replace("\\", "/"))
-    path = LocalFileSystem._strip_protocol("./", remove_trailing_slash=True)
-    assert not path.endswith("/")
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file://~/foo/bar", "{user_home}/foo/bar"),
+        ("~/foo/bar", "{user_home}/foo/bar"),
+        winonly("~\\foo\\bar", "{user_home}/foo/bar"),
+        winonly("file://~\\foo\\bar", "{user_home}/foo/bar"),
+    ],
+)
+def test_strip_protocol_expanduser(uri, expected, user_home):
+    expected = expected.format(user_home=user_home)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
 
 
-def test_strip_protocol_no_authority():
-    path = "file:\\foo\\bar" if WIN else "file:/foo/bar"
-    stripped = LocalFileSystem._strip_protocol(path)
-    assert "file:" not in stripped
-    assert stripped.endswith("/foo/bar")
-    if WIN:
-        assert (
-            LocalFileSystem._strip_protocol("file://C:\\path\\file") == "C:/path/file"
-        )
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file://", "{cwd}"),
+        ("file://.", "{cwd}"),
+        ("file://./", "{cwd}"),
+        ("./", "{cwd}"),
+        ("file:path", "{cwd}/path"),
+        ("file://path", "{cwd}/path"),
+        ("path", "{cwd}/path"),
+        ("./path", "{cwd}/path"),
+        winonly(".\\", "{cwd}"),
+        winonly("file://.\\path", "{cwd}/path"),
+    ],
+)
+def test_strip_protocol_relative_paths(uri, expected, cwd):
+    expected = expected.format(cwd=cwd)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        posixonly("file:/foo/bar", "/foo/bar"),
+        winonly("file:/foo/bar", "{current_drive}/foo/bar"),
+        winonly("file:\\foo\\bar", "{current_drive}/foo/bar"),
+        winonly("file:D:\\path\\file", "D:/path/file"),
+        winonly("file:/D:\\path\\file", "D:/path/file"),
+        winonly("file://D:\\path\\file", "D:/path/file"),
+    ],
+)
+def test_strip_protocol_no_authority(uri, expected, cwd, current_drive):
+    expected = expected.format(cwd=cwd, current_drive=current_drive)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file:/path", "/path"),
+        ("file:///path", "/path"),
+        ("file:////path", "//path"),
+        ("local:/path", "/path"),
+        ("s3://bucket/key", "{cwd}/s3://bucket/key"),
+        ("/path", "/path"),
+        ("file:///", "/"),
+    ]
+    if not WIN
+    else [
+        ("file:c:/path", "c:/path"),
+        ("file:/c:/path", "c:/path"),
+        ("file:/C:/path", "C:/path"),
+        ("file://c:/path", "c:/path"),
+        ("file:///c:/path", "c:/path"),
+        ("local:/path", "{current_drive}/path"),
+        ("s3://bucket/key", "{cwd}/s3://bucket/key"),
+        ("c:/path", "c:/path"),
+        ("c:\\path", "c:/path"),
+        ("file:///", "{current_drive}/"),
+        pytest.param(
+            "file://localhost/c:/path",
+            "c:/path",
+            marks=pytest.mark.xfail(
+                reason="rfc8089 section3 'localhost uri' not supported"
+            ),
+        ),
+    ],
+)
+def test_strip_protocol_absolute_paths(uri, expected, current_drive, cwd):
+    expected = expected.format(current_drive=current_drive, cwd=cwd)
+
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("file:c|/path", "c:/path"),
+        ("file:/D|/path", "D:/path"),
+        ("file:///C|/path", "C:/path"),
+    ],
+)
+@pytest.mark.skipif(not WIN, reason="Windows only")
+@pytest.mark.xfail(WIN, reason="legacy dos uris not supported")
+def test_strip_protocol_legacy_dos_uris(uri, expected):
+    stripped = LocalFileSystem._strip_protocol(uri)
+    assert expected == stripped
+
+
+@pytest.mark.parametrize(
+    "uri, stripped",
+    [
+        ("file://remote/share/pth", "{cwd}/remote/share/pth"),
+        ("file:////remote/share/pth", "//remote/share/pth"),
+        ("file://///remote/share/pth", "///remote/share/pth"),
+        ("//remote/share/pth", "//remote/share/pth"),
+        winonly("\\\\remote\\share\\pth", "//remote/share/pth"),
+    ],
+)
+def test_strip_protocol_windows_remote_shares(uri, stripped, cwd):
+    stripped = stripped.format(cwd=cwd)
+
+    assert LocalFileSystem._strip_protocol(uri) == stripped
 
 
 def test_mkdir_twice_faile(tmpdir):

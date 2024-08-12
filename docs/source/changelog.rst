@@ -1,6 +1,66 @@
 Changelog
 =========
 
+2024.6.1
+--------
+
+Fixes
+
+- fix appending to non-dict reference sets (#1634)
+- don't let generic edit info dicts (#1633)
+- set https's loop before calling super (#1633)
+- cached write file doesn't need to update it's size on close (#1633)
+- fix JSON serialize for FSs with interior FSs (#1628, 1627)
+- option to strip "password" when pickling (#1625)
+- fix filecache write (#1622)
+
+
+2024.6.0
+--------
+
+Enhancements
+
+- allow dicts (not just bytes) for referenceFS (#1616
+- make filesystems JSON serializeable (#1612)
+- implement multifile cat() for github (#1620)
+
+Fixes
+
+- implement auto_mkdir for SMB (#1604)
+
+Other
+
+- add doc deps to pyproject (#1613)
+- re-remove test from package (#1611)
+- formatting (#1610, 1608, 1602)
+- change monthly download badge (#1607)
+
+2024.5.0
+--------
+
+Enhancements
+
+- log hits/misses in bytes cachers (#1566)
+
+Fixes
+
+- SMB flaky tests (#1597)
+- rsync: only delete files if there are some to delete (#1596)
+- don't let files equal bytes objects (#1594)
+- url_to_fs to stringify paths (#1591)
+- assert types in MemoryFS (#1574)
+- restore _strip_protocol signature for local (#1567)
+- convert list to set when loading cache metadata (#1556)
+
+Other
+
+- remove mv_file (#1585)
+- mv() should not swallow errors (#1576)
+- change versioning template, allows easier co-install of dev s3fs (#1569)
+- in ls_from_cache, avoid dounble lookup (#1561)
+- expand=True in open() (#1558)
+- build system to hatch (#1553)
+
 2024.3.1
 --------
 

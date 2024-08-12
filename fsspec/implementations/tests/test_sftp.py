@@ -114,7 +114,7 @@ def test_get_dir(protocol, ssh, root_path, tmpdir):
 
     f.get(
         protocol
-        + "://{username}:{password}@{host}:{port}" "{root_path}".format(
+        + "://{username}:{password}@{host}:{port}{root_path}".format(
             root_path=root_path, **ssh
         ),
         f"{path}/test2",

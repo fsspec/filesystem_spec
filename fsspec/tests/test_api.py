@@ -168,14 +168,14 @@ def test_recursive_get_put(tmpdir, m):
     fs.get("test/", d, recursive=True)
     for file in ["one", "two", "nest/other"]:
         with open(f"{d}/{file}", "rb") as f:
-            f.read() == b"data"
+            assert f.read() == b"data"
 
     # get to directory without slash
     d = tempfile.mkdtemp()
     fs.get("test", d, recursive=True)
     for file in ["test/one", "test/two", "test/nest/other"]:
         with open(f"{d}/{file}", "rb") as f:
-            f.read() == b"data"
+            assert f.read() == b"data"
 
 
 def test_pipe_cat(m):
@@ -191,7 +191,7 @@ def test_pipe_cat(m):
 def test_read_block_delimiter(m):
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:
-        f.write(b"some\n" b"lines\n" b"of\n" b"text")
+        f.write(b"some\nlines\nof\ntext")
     assert fs.read_block("/myfile", 0, 2, b"\n") == b"some\n"
     assert fs.read_block("/myfile", 2, 6, b"\n") == b"lines\n"
     assert fs.read_block("/myfile", 6, 2, b"\n") == b""
@@ -203,7 +203,7 @@ def test_read_block_delimiter(m):
 def test_open_text(m):
     fs = MemoryFileSystem()
     with fs.open("/myfile", "wb") as f:
-        f.write(b"some\n" b"lines\n" b"of\n" b"text")
+        f.write(b"some\nlines\nof\ntext")
     f = fs.open("/myfile", "r", encoding="latin1")
     assert f.encoding == "latin1"
 

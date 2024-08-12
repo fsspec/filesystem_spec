@@ -69,7 +69,7 @@ The following libraries use ``fsspec`` internally for path and file handling:
 .. _xarray: https://docs.xarray.dev/
 .. _zarr: https://zarr.readthedocs.io/
 .. _DVC: https://dvc.org/
-.. _kedro: https://kedro.readthedocs.io/en/stable/01_introduction/01_introduction.html
+.. _kedro: https://docs.kedro.org/en/stable/tutorial/set_up_data.html#supported-data-locations
 .. _pyxet: https://github.com/xetdata/pyxet
 .. _Huggingface🤗 Datasets: https://github.com/huggingface/datasets
 .. _pyarrow: https://arrow.apache.org/docs/python/

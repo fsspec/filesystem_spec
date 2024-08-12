@@ -15,6 +15,7 @@ from typing import (
     ClassVar,
     Generic,
     NamedTuple,
+    Optional,
     OrderedDict,
     TypeVar,
 )
@@ -574,7 +575,7 @@ class KnownPartsOfAFile(BaseCache):
         blocksize: int,
         fetcher: Fetcher,
         size: int,
-        data: dict[tuple[int, int], bytes] = {},
+        data: Optional[dict[tuple[int, int], bytes]] = None,
         strict: bool = True,
         **_: Any,
     ):
@@ -597,7 +598,7 @@ class KnownPartsOfAFile(BaseCache):
 
             self.data = dict(zip(offsets, blocks))
         else:
-            self.data = data
+            self.data = {}
 
     def _fetch(self, start: int | None, stop: int | None) -> bytes:
         if start is None:

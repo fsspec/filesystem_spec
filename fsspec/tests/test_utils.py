@@ -1,6 +1,6 @@
 import io
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
 from unittest.mock import Mock
 
 import pytest
@@ -44,7 +44,7 @@ def test_read_block():
 
 
 def test_read_block_split_before():
-    """Test start/middle/end cases of split_before."""  # noqa: I
+    """Test start/middle/end cases of split_before."""
     d = (
         "#header" + "".join(">foo{i}\nFOOBAR{i}\n".format(i=i) for i in range(100000))
     ).encode()
@@ -381,7 +381,7 @@ def test_mirror_from():
             return mock
 
         def func_2(self):
-            assert False, "have to overwrite this"
+            raise AssertionError("have to overwrite this")
 
         def func_3(self):
             return "should succeed"
@@ -440,3 +440,39 @@ def test_size():
     f = io.BytesIO(b"hello")
     assert fsspec.utils.file_size(f) == 5
     assert f.tell() == 0
+
+
+class _HasFspath:
+    def __fspath__(self):
+        return "foo"
+
+
+class _HasPathAttr:
+    def __init__(self):
+        self.path = "foo"
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        # coerce to string
+        ("foo", "foo"),
+        (Path("foo"), "foo"),
+        (PurePath("foo"), "foo"),
+        (_HasFspath(), "foo"),
+        (_HasPathAttr(), "foo"),
+        # passthrough
+        (b"bytes", b"bytes"),
+        (None, None),
+        (1, 1),
+        (True, True),
+        (o := object(), o),
+        ([], []),
+        ((), ()),
+        (set(), set()),
+    ],
+)
+def test_stringify_path(path, expected):
+    path = fsspec.utils.stringify_path(path)
+
+    assert path == expected

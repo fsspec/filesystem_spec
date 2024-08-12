@@ -685,7 +685,9 @@ def test_local_filecache_basic(local_filecache):
     assert "cache" in os.listdir(cache_location)
 
     # the file in the location contains the right data
-    fn = list(fs._metadata.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = next(iter(fs._metadata.cached_files[-1].values()))[
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == data
@@ -730,7 +732,9 @@ def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
         assert f.read() == new_data
 
     # the file in the location contains the right data
-    fn = list(fs._metadata.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = next(iter(fs._metadata.cached_files[-1].values()))[
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == new_data
@@ -753,7 +757,7 @@ def test_local_filecache_with_new_cache_location_makes_a_new_copy(local_filecach
         assert f.read() == data
 
     # the file in the location contains the right data
-    fn = list(new_fs._metadata.cached_files[-1].values())[0][
+    fn = next(iter(new_fs._metadata.cached_files[-1].values()))[
         "fn"
     ]  # this is a hash value
     assert fn in os.listdir(old_cache_location)
@@ -873,7 +877,7 @@ def test_filecache_with_checks():
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
 @pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
-def test_takes_fs_instance(impl, fs):
+def test_filecache_takes_fs_instance(impl, fs):
     origin = tempfile.mkdtemp()
     data = b"test data"
     f1 = os.path.join(origin, "afile")
@@ -883,6 +887,15 @@ def test_takes_fs_instance(impl, fs):
     fs2 = fsspec.filesystem(impl, fs=fs)
 
     assert fs2.cat(f1) == data
+
+
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+@pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
+def test_filecache_serialization(impl, fs):
+    fs1 = fsspec.filesystem(impl, fs=fs)
+    json1 = fs1.to_json()
+
+    assert fs1 is fsspec.AbstractFileSystem.from_json(json1)
 
 
 def test_add_file_to_cache_after_save(local_filecache):
@@ -1244,7 +1257,7 @@ def test_cache_size(tmpdir, protocol):
     # Remove cached file but leave cache metadata file
     fs.pop_from_cache(afile)
     if win and protocol == "filecache":
-        empty_cache_size < fs.cache_size()
+        assert empty_cache_size < fs.cache_size()
     elif protocol != "simplecache":
         assert empty_cache_size < fs.cache_size() < single_file_cache_size
     else:
@@ -1304,3 +1317,17 @@ def test_write_transaction(tmpdir, m, monkeypatch):
     assert m.cat("myfile") == b"1"
     assert m.cat("otherfile") == b"2"
     assert called[0] == 1  # copy was done in one go
+
+
+def test_filecache_write(tmpdir, m):
+    fs = fsspec.filesystem(
+        "filecache", target_protocol="memory", cache_storage=str(tmpdir)
+    )
+    fn = "sample_file_in_mem.txt"
+    data = "hello world from memory"
+    with fs.open(fn, "w") as f:
+        assert not m.exists(fn)
+        f.write(data)
+
+    assert m.cat(fn) == data.encode()
+    assert fs.cat(fn) == data.encode()

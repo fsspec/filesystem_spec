@@ -82,11 +82,25 @@ def test_dirfs(fs, asyncfs):
         ("", "foo", "foo"),
         ("root", "", "root"),
         ("root", "foo", "root/foo"),
+        ("/root", "", "/root"),
+        ("/root", "foo", "/root/foo"),
     ],
 )
 def test_path(fs, root, rel, full):
     dirfs = DirFileSystem(root, fs)
     assert dirfs._join(rel) == full
+    assert dirfs._relpath(full) == rel
+
+
+@pytest.mark.parametrize(
+    "root, rel, full",
+    [
+        ("/root", "foo", "root/foo"),
+        ("/root", "", "root"),
+    ],
+)
+def test_path_no_leading_slash(fs, root, rel, full):
+    dirfs = DirFileSystem(root, fs)
     assert dirfs._relpath(full) == rel
 
 
@@ -160,6 +174,11 @@ async def test_async_pipe(adirfs):
 def test_pipe(dirfs):
     dirfs.pipe("file", *ARGS, **KWARGS)
     dirfs.fs.pipe.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+def test_pipe_dict(dirfs):
+    dirfs.pipe({"file": b"foo"}, *ARGS, **KWARGS)
+    dirfs.fs.pipe.assert_called_once_with({f"{PATH}/file": b"foo"}, *ARGS, **KWARGS)
 
 
 @pytest.mark.asyncio
@@ -353,9 +372,7 @@ async def test_async_walk(adirfs, mocker):
     adirfs.fs._walk = mocker.MagicMock()
     adirfs.fs._walk.side_effect = _walk
 
-    actual = []
-    async for entry in adirfs._walk("root", *ARGS, **KWARGS):
-        actual.append(entry)  # noqa: PERF402
+    actual = [entry async for entry in adirfs._walk("root", *ARGS, **KWARGS)]
     assert actual == [("root", ["foo", "bar"], ["baz", "qux"])]
     adirfs.fs._walk.assert_called_once_with(f"{PATH}/root", *ARGS, **KWARGS)
 
@@ -542,10 +559,10 @@ def test_rmdir(mocker, dirfs):
     dirfs.fs.rmdir.assert_called_once_with(f"{PATH}/dir")
 
 
-def test_mv_file(mocker, dirfs):
-    dirfs.fs.mv_file = mocker.Mock()
-    dirfs.mv_file("one", "two", **KWARGS)
-    dirfs.fs.mv_file.assert_called_once_with(f"{PATH}/one", f"{PATH}/two", **KWARGS)
+def test_mv(mocker, dirfs):
+    dirfs.fs.mv = mocker.Mock()
+    dirfs.mv("one", "two", **KWARGS)
+    dirfs.fs.mv.assert_called_once_with(f"{PATH}/one", f"{PATH}/two", **KWARGS)
 
 
 def test_touch(mocker, dirfs):

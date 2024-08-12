@@ -4,7 +4,6 @@
 [![Anaconda-Server Badge](https://anaconda.org/conda-forge/fsspec/badges/version.svg)](https://anaconda.org/conda-forge/fsspec)
 ![Build](https://github.com/fsspec/filesystem_spec/workflows/CI/badge.svg)
 [![Docs](https://readthedocs.org/projects/filesystem-spec/badge/?version=latest)](https://filesystem-spec.readthedocs.io/en/latest/?badge=latest)
-[![PyPi downloads](https://img.shields.io/pypi/dm/fsspec?label=pypi%20downloads&style=flat)](https://pepy.tech/project/fsspec)
 
 A specification for pythonic filesystems.
 
@@ -51,13 +50,13 @@ CI runtime. For local use, pick a version suitable for you.
 mamba create -n fsspec -c conda-forge  python=3.9 -y
 conda activate fsspec
 
-# Standard dev test install.
-pip install -e ".[dev,test]"
+# Standard dev install with docs and tests.
+pip install -e ".[dev,doc,test]"
 
 # Full tests except for downstream
 pip install s3fs
 pip uninstall s3fs
-pip install -e .[dev,test_full]
+pip install -e .[dev,doc,test_full]
 pip install s3fs --no-deps
 pytest -v
 

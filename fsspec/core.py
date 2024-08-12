@@ -379,6 +379,7 @@ def url_to_fs(url, **kwargs):
     urlpath : str
         The file-systems-specific URL for ``url``.
     """
+    url = stringify_path(url)
     # non-FS arguments that appear in fsspec.open()
     # inspect could keep this in sync with open()'s signature
     known_kwargs = {
@@ -638,7 +639,7 @@ def get_fs_token_paths(
     if isinstance(urlpath, (list, tuple, set)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
-        urlpath0 = stringify_path(list(urlpath)[0])
+        urlpath0 = stringify_path(next(iter(urlpath)))
     else:
         urlpath0 = stringify_path(urlpath)
     storage_options = storage_options or {}

@@ -15,12 +15,6 @@ from fsspec.utils import isfilelike, stringify_path
 logger = logging.getLogger("fsspec.local")
 
 
-def _remove_prefix(text: str, prefix: str):
-    if text.startswith(prefix):
-        return text[len(prefix) :]
-    return text
-
-
 class LocalFileSystem(AbstractFileSystem):
     """Interface to files on local storage
 
@@ -121,8 +115,8 @@ class LocalFileSystem(AbstractFileSystem):
         return osp.lexists(path)
 
     def cp_file(self, path1, path2, **kwargs):
-        path1 = self._strip_protocol(path1, remove_trailing_slash=True)
-        path2 = self._strip_protocol(path2, remove_trailing_slash=True)
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
         if self.isfile(path1):
@@ -150,9 +144,9 @@ class LocalFileSystem(AbstractFileSystem):
     def put_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
 
-    def mv_file(self, path1, path2, **kwargs):
-        path1 = self._strip_protocol(path1, remove_trailing_slash=True)
-        path2 = self._strip_protocol(path2, remove_trailing_slash=True)
+    def mv(self, path1, path2, **kwargs):
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         shutil.move(path1, path2)
 
     def link(self, src, dst, **kwargs):
@@ -176,7 +170,7 @@ class LocalFileSystem(AbstractFileSystem):
             path = [path]
 
         for p in path:
-            p = self._strip_protocol(p, remove_trailing_slash=True)
+            p = self._strip_protocol(p)
             if self.isdir(p):
                 if not recursive:
                     raise ValueError("Cannot delete directory, set recursive=True")
@@ -219,7 +213,7 @@ class LocalFileSystem(AbstractFileSystem):
 
     @classmethod
     def _parent(cls, path):
-        path = cls._strip_protocol(path, remove_trailing_slash=True)
+        path = cls._strip_protocol(path)
         if os.sep == "/":
             # posix native
             return path.rsplit("/", 1)[0] or "/"
@@ -234,17 +228,43 @@ class LocalFileSystem(AbstractFileSystem):
             return path_
 
     @classmethod
-    def _strip_protocol(cls, path, remove_trailing_slash=False):
+    def _strip_protocol(cls, path):
         path = stringify_path(path)
-        if path.startswith("file:"):
-            path = _remove_prefix(_remove_prefix(path, "file://"), "file:")
-            if os.sep == "\\":
-                path = path.lstrip("/")
+        if path.startswith("file://"):
+            path = path[7:]
+        elif path.startswith("file:"):
+            path = path[5:]
+        elif path.startswith("local://"):
+            path = path[8:]
         elif path.startswith("local:"):
-            path = _remove_prefix(_remove_prefix(path, "local://"), "local:")
-            if os.sep == "\\":
-                path = path.lstrip("/")
-        return make_path_posix(path, remove_trailing_slash)
+            path = path[6:]
+
+        path = make_path_posix(path)
+        if os.sep != "/":
+            # This code-path is a stripped down version of
+            # > drive, path = ntpath.splitdrive(path)
+            if path[1:2] == ":":
+                # Absolute drive-letter path, e.g. X:\Windows
+                # Relative path with drive, e.g. X:Windows
+                drive, path = path[:2], path[2:]
+            elif path[:2] == "//":
+                # UNC drives, e.g. \\server\share or \\?\UNC\server\share
+                # Device drives, e.g. \\.\device or \\?\device
+                if (index1 := path.find("/", 2)) == -1 or (
+                    index2 := path.find("/", index1 + 1)
+                ) == -1:
+                    drive, path = path, ""
+                else:
+                    drive, path = path[:index2], path[index2:]
+            else:
+                # Relative path, e.g. Windows
+                drive = ""
+
+            path = path.rstrip("/") or cls.root_marker
+            return drive + path
+
+        else:
+            return path.rstrip("/") or cls.root_marker
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)
@@ -257,42 +277,55 @@ class LocalFileSystem(AbstractFileSystem):
         return os.chmod(path, mode)
 
 
-def make_path_posix(path, remove_trailing_slash=False):
-    """Make path generic for current OS"""
+def make_path_posix(path):
+    """Make path generic and absolute for current OS"""
     if not isinstance(path, str):
         if isinstance(path, (list, set, tuple)):
-            return type(path)(make_path_posix(p, remove_trailing_slash) for p in path)
+            return type(path)(make_path_posix(p) for p in path)
         else:
-            path = str(stringify_path(path))
+            path = stringify_path(path)
+            if not isinstance(path, str):
+                raise TypeError(f"could not convert {path!r} to string")
     if os.sep == "/":
         # Native posix
         if path.startswith("/"):
             # most common fast case for posix
-            return path.rstrip("/") or "/" if remove_trailing_slash else path
+            return path
         elif path.startswith("~"):
-            return make_path_posix(osp.expanduser(path), remove_trailing_slash)
+            return osp.expanduser(path)
         elif path.startswith("./"):
             path = path[2:]
-            path = f"{os.getcwd()}/{path}"
-            return path.rstrip("/") or "/" if remove_trailing_slash else path
+        elif path == ".":
+            path = ""
         return f"{os.getcwd()}/{path}"
     else:
         # NT handling
-        if len(path) > 1:
-            if path[1] == ":":
-                # windows full path like "C:\\local\\path"
-                if len(path) <= 3:
-                    # nt root (something like c:/)
-                    return path[0] + ":/"
-                path = path.replace("\\", "/").replace("//", "/")
-                return path.rstrip("/") if remove_trailing_slash else path
-            elif path[0] == "~":
-                return make_path_posix(osp.expanduser(path), remove_trailing_slash)
-            elif path.startswith(("\\\\", "//")):
-                # windows UNC/DFS-style paths
-                path = "//" + path[2:].replace("\\", "/").replace("//", "/")
-                return path.rstrip("/") if remove_trailing_slash else path
-        return make_path_posix(osp.abspath(path), remove_trailing_slash)
+        if path[0:1] == "/" and path[2:3] == ":":
+            # path is like "/c:/local/path"
+            path = path[1:]
+        if path[1:2] == ":":
+            # windows full path like "C:\\local\\path"
+            if len(path) <= 3:
+                # nt root (something like c:/)
+                return path[0] + ":/"
+            path = path.replace("\\", "/")
+            return path
+        elif path[0:1] == "~":
+            return make_path_posix(osp.expanduser(path))
+        elif path.startswith(("\\\\", "//")):
+            # windows UNC/DFS-style paths
+            return "//" + path[2:].replace("\\", "/")
+        elif path.startswith(("\\", "/")):
+            # windows relative path with root
+            path = path.replace("\\", "/")
+            return f"{osp.splitdrive(os.getcwd())[0]}{path}"
+        else:
+            path = path.replace("\\", "/")
+            if path.startswith("./"):
+                path = path[2:]
+            elif path == ".":
+                path = ""
+            return f"{make_path_posix(os.getcwd())}/{path}"
 
 
 def trailing_sep(path):
