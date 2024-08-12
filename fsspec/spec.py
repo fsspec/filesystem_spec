@@ -1892,7 +1892,7 @@ class AbstractBufferedFile(io.IOBase):
             self.offset = 0
             try:
                 self._initiate_upload()
-            except:  # noqa: E722
+            except:
                 self.closed = True
                 raise
 

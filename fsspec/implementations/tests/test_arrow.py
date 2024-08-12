@@ -5,7 +5,7 @@ import pytest
 pyarrow_fs = pytest.importorskip("pyarrow.fs")
 FileSystem = pyarrow_fs.FileSystem
 
-from fsspec.implementations.arrow import ArrowFSWrapper, HadoopFileSystem  # noqa
+from fsspec.implementations.arrow import ArrowFSWrapper, HadoopFileSystem  # noqa: E402
 
 
 @pytest.fixture(scope="function")

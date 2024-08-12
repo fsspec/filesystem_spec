@@ -1072,7 +1072,7 @@ class AbstractAsyncStreamedFile(AbstractBufferedFile):
             self.offset = 0
             try:
                 await self._initiate_upload()
-            except:  # noqa: E722
+            except:
                 self.closed = True
                 raise
 
