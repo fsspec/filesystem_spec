@@ -65,7 +65,6 @@ class FTPFileSystem(AbstractFileSystem):
         self.port = port
         self.tempdir = tempdir or "/tmp"
         self.cred = username or "", password or "", acct or ""
-        print(self.cred)
         self.timeout = timeout
         self.encoding = encoding
         if block_size is not None:
