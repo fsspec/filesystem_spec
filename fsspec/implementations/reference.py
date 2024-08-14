@@ -41,7 +41,7 @@ def _first(d):
 
 def _prot_in_references(path, references):
     ref = references.get(path)
-    if isinstance(ref, (list, tuple)):
+    if isinstance(ref, (list, tuple)) and isinstance(ref[0], str):
         return split_protocol(ref[0])[0] if ref[0] else ref[0]
 
 
@@ -845,6 +845,9 @@ class ReferenceFileSystem(AsyncFileSystem):
                 # found and on_error is "raise"
                 try:
                     u, s, e = self._cat_common(p)
+                    if not isinstance(u, (bytes, str)):
+                        # nan/None from parquet
+                        continue
                 except FileNotFoundError as err:
                     if on_error == "raise":
                         raise
