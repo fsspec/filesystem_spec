@@ -261,24 +261,11 @@ def test_common_prefix(paths, out):
     (
         (["/path1"], "/path2", False, ["/path2"]),
         (["/path1"], "/path2", True, ["/path2/path1"]),
-        (["/path1"], "/path2", False, ["/path2"]),
         (["/path1"], "/path2/", True, ["/path2/path1"]),
         (["/path1"], ["/path2"], False, ["/path2"]),
         (["/path1"], ["/path2"], True, ["/path2"]),
         (["/path1", "/path2"], "/path2", False, ["/path2/path1", "/path2/path2"]),
         (["/path1", "/path2"], "/path2", True, ["/path2/path1", "/path2/path2"]),
-        (
-            ["/more/path1", "/more/path2"],
-            "/path2",
-            False,
-            ["/path2/path1", "/path2/path2"],
-        ),
-        (
-            ["/more/path1", "/more/path2"],
-            "/path2",
-            True,
-            ["/path2/more/path1", "/path2/more/path2"],
-        ),
         (
             ["/more/path1", "/more/path2"],
             "/path2",

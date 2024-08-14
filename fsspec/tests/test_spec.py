@@ -1276,7 +1276,7 @@ def glob_files_folder(tmp_path):
     local_fake_dir = str(tmp_path)
     for path_info in PATHS_FOR_GLOB_TESTS:
         if path_info["type"] == "file":
-            local_fs.touch(path=f"{str(tmp_path)}/{path_info['name']}")
+            local_fs.touch(path=f"{tmp_path}/{path_info['name']}")
     return local_fake_dir
 
 

@@ -128,7 +128,7 @@ class ArrowFSWrapper(AbstractFileSystem):
                 with self.open(tmp_fname, "wb") as rstream:
                     shutil.copyfileobj(lstream, rstream)
                 self.fs.move(tmp_fname, path2)
-            except BaseException:  # noqa
+            except BaseException:
                 with suppress(FileNotFoundError):
                     self.fs.delete_file(tmp_fname)
                 raise

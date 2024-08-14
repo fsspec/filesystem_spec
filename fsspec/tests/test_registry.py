@@ -105,7 +105,7 @@ def test_entry_points_registered_on_import(clear_registry, clean_imports):
     import_location = "importlib.metadata.entry_points"
     with patch(import_location, return_value={"fsspec.specs": [mock_ep]}):
         assert "test" not in registry
-        import fsspec  # noqa
+        import fsspec  # noqa: F401
 
         get_filesystem_class("test")
         assert "test" in registry
@@ -117,7 +117,7 @@ def test_filesystem_warning_arrow_hdfs_deprecated(clear_registry, clean_imports)
     mock_ep.value = "fsspec.spec.AbstractFileSystem"
     import_location = "importlib.metadata.entry_points"
     with patch(import_location, return_value={"fsspec.specs": [mock_ep]}):
-        import fsspec  # noqa
+        import fsspec  # noqa: F401
 
         with pytest.warns(DeprecationWarning):
             filesystem("arrow_hdfs")

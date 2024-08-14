@@ -159,7 +159,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             path = self.url.format(field=field, record=record)
             data = io.BytesIO(self.fs.cat_file(path))
             df = self.pd.read_parquet(data, engine="fastparquet")
-            refs = {c: df[c].values for c in df.columns}
+            refs = {c: df[c].to_numpy() for c in df.columns}
             return refs
 
         self.open_refs = open_refs
