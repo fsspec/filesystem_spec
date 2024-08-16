@@ -132,3 +132,59 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             out.size = info["size"]
             out.name = info["name"]
         return out
+
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
+        result = {}
+
+        def _below_max_recursion_depth(path):
+            if not maxdepth:
+                return True
+
+            depth = len(path.split("/"))
+            return depth <= maxdepth
+
+        for zip_info in self.zip.infolist():
+            file_name = zip_info.filename
+            if not file_name.startswith(path.lstrip("/")):
+                continue
+
+            # zip files can contain explicit or implicit directories
+            # hence the need to either add them directly or infer them
+            # from the file paths
+            if zip_info.is_dir():
+                if withdirs:
+                    if not result.get(file_name) and _below_max_recursion_depth(
+                        file_name
+                    ):
+                        result[file_name.strip("/")] = (
+                            self.info(file_name) if detail else None
+                        )
+                    continue
+                else:
+                    continue  # Skip along to the next entry if we don't want to add the dirs
+
+            if not result.get(file_name):
+                if _below_max_recursion_depth(file_name):
+                    result[file_name] = self.info(file_name) if detail else None
+
+                # Here we handle the case of implicitly adding the
+                # directories if they have been requested
+                if withdirs:
+                    directories = file_name.split("/")
+                    for i in range(1, len(directories)):
+                        dir_path = "/".join(directories[:i]).strip(
+                            "/"
+                        )  # remove the trailing slash, as this is not expected
+                        if not result.get(dir_path) and _below_max_recursion_depth(
+                            dir_path
+                        ):
+                            result[dir_path] = {
+                                "name": dir_path,
+                                "size": 0,
+                                "type": "directory",
+                            }
+
+        return result if detail else sorted(result.keys())
