@@ -165,11 +165,13 @@ def _assert_all_except_context_dependent_variables(result, expected_result):
         result_without_date_time.pop("date_time")
         result_without_date_time.pop("_raw_time")
         result_without_date_time.pop("external_attr")
+        result_without_date_time.pop("create_system")
 
         expected_result_without_date_time = expected_result[path].copy()
         expected_result_without_date_time.pop("date_time")
         expected_result_without_date_time.pop("_raw_time")
         expected_result_without_date_time.pop("external_attr")
+        expected_result_without_date_time.pop("create_system")
         assert result_without_date_time == expected_result_without_date_time
 
 
