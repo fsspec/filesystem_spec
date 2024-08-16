@@ -1,10 +1,13 @@
 import collections.abc
 import os.path
+from pathlib import Path
+from shutil import make_archive
 
 import pytest
 
 import fsspec
 from fsspec.implementations.tests.test_archive import archive_data, tempzip
+from fsspec.implementations.zip import ZipFileSystem
 
 
 def test_info():
@@ -132,3 +135,302 @@ def test_append(m, tmpdir):
     fs.close()
 
     assert len(fsspec.open_files("zip://*::memory://out.zip")) == 2
+
+
+@pytest.fixture(name="zip_file")
+def zip_file_fixture(tmp_path):
+    data_dir = tmp_path / "data/"
+    data_dir.mkdir()
+    file1 = data_dir / "file1.txt"
+    file1.write_text("Hello, World!")
+    file2 = data_dir / "file2.txt"
+    file2.write_text("Lorem ipsum dolor sit amet")
+
+    empty_dir = data_dir / "dir1"
+    empty_dir.mkdir()
+
+    dir_with_files = data_dir / "dir2"
+    dir_with_files.mkdir()
+    file3 = dir_with_files / "file3.txt"
+    file3.write_text("Hello!")
+
+    zip_file = tmp_path / "test"
+    return Path(make_archive(zip_file, "zip", data_dir))
+
+
+def _assert_all_except_date_time(result, expected_result):
+    for path in expected_result.keys():
+        assert result[path]
+        result_without_date_time = result[path].copy()
+        result_without_date_time.pop("date_time")
+        result_without_date_time.pop("_raw_time")
+
+        expected_result_without_date_time = expected_result[path].copy()
+        expected_result_without_date_time.pop("date_time")
+        expected_result_without_date_time.pop("_raw_time")
+        assert result_without_date_time == expected_result_without_date_time
+
+
+def test_find_returns_expected_result_detail_true(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+
+    result = zip_file_system.find("/", detail=True)
+
+    expected_result = {
+        "dir2/file3.txt": {
+            "orig_filename": "dir2/file3.txt",
+            "filename": "dir2/file3.txt",
+            "date_time": (2024, 8, 16, 10, 46, 18),
+            "compress_type": 8,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 2175008768,
+            "header_offset": 191,
+            "CRC": 2636827734,
+            "compress_size": 8,
+            "file_size": 6,
+            "_raw_time": 21961,
+            "_end_offset": 243,
+            "name": "dir2/file3.txt",
+            "size": 6,
+            "type": "file",
+        },
+        "file1.txt": {
+            "orig_filename": "file1.txt",
+            "filename": "file1.txt",
+            "date_time": (2024, 8, 16, 10, 46, 18),
+            "compress_type": 8,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 2175008768,
+            "header_offset": 70,
+            "CRC": 3964322768,
+            "compress_size": 15,
+            "file_size": 13,
+            "_raw_time": 21961,
+            "_end_offset": 124,
+            "name": "file1.txt",
+            "size": 13,
+            "type": "file",
+        },
+        "file2.txt": {
+            "orig_filename": "file2.txt",
+            "filename": "file2.txt",
+            "date_time": (2024, 8, 16, 10, 46, 18),
+            "compress_type": 8,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 2175008768,
+            "header_offset": 124,
+            "CRC": 1596576865,
+            "compress_size": 28,
+            "file_size": 26,
+            "_raw_time": 21961,
+            "_end_offset": 191,
+            "name": "file2.txt",
+            "size": 26,
+            "type": "file",
+        },
+    }
+
+    _assert_all_except_date_time(result, expected_result)
+
+
+def test_find_returns_expected_result_detail_false(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+
+    result = zip_file_system.find("/", detail=False)
+    expected_result = ["dir2/file3.txt", "file1.txt", "file2.txt"]
+
+    assert result == expected_result
+
+
+def test_find_returns_expected_result_detail_true_include_dirs(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+
+    result = zip_file_system.find("/", detail=True, withdirs=True)
+    expected_result = {
+        "dir1": {
+            "orig_filename": "dir1/",
+            "filename": "dir1/",
+            "date_time": (2024, 8, 16, 10, 54, 24),
+            "compress_type": 0,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 1106051088,
+            "header_offset": 0,
+            "CRC": 0,
+            "compress_size": 0,
+            "file_size": 0,
+            "_raw_time": 22220,
+            "_end_offset": 35,
+            "name": "dir1",
+            "size": 0,
+            "type": "directory",
+        },
+        "dir2": {
+            "orig_filename": "dir2/",
+            "filename": "dir2/",
+            "date_time": (2024, 8, 16, 10, 54, 24),
+            "compress_type": 0,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 1106051088,
+            "header_offset": 35,
+            "CRC": 0,
+            "compress_size": 0,
+            "file_size": 0,
+            "_raw_time": 22220,
+            "_end_offset": 70,
+            "name": "dir2",
+            "size": 0,
+            "type": "directory",
+        },
+        "dir2/file3.txt": {
+            "orig_filename": "dir2/file3.txt",
+            "filename": "dir2/file3.txt",
+            "date_time": (2024, 8, 16, 10, 54, 24),
+            "compress_type": 8,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 2175008768,
+            "header_offset": 191,
+            "CRC": 2636827734,
+            "compress_size": 8,
+            "file_size": 6,
+            "_raw_time": 22220,
+            "_end_offset": 243,
+            "name": "dir2/file3.txt",
+            "size": 6,
+            "type": "file",
+        },
+        "file1.txt": {
+            "orig_filename": "file1.txt",
+            "filename": "file1.txt",
+            "date_time": (2024, 8, 16, 10, 54, 24),
+            "compress_type": 8,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 2175008768,
+            "header_offset": 70,
+            "CRC": 3964322768,
+            "compress_size": 15,
+            "file_size": 13,
+            "_raw_time": 22220,
+            "_end_offset": 124,
+            "name": "file1.txt",
+            "size": 13,
+            "type": "file",
+        },
+        "file2.txt": {
+            "orig_filename": "file2.txt",
+            "filename": "file2.txt",
+            "date_time": (2024, 8, 16, 10, 54, 24),
+            "compress_type": 8,
+            "_compresslevel": None,
+            "comment": b"",
+            "extra": b"",
+            "create_system": 3,
+            "create_version": 20,
+            "extract_version": 20,
+            "reserved": 0,
+            "flag_bits": 0,
+            "volume": 0,
+            "internal_attr": 0,
+            "external_attr": 2175008768,
+            "header_offset": 124,
+            "CRC": 1596576865,
+            "compress_size": 28,
+            "file_size": 26,
+            "_raw_time": 22220,
+            "_end_offset": 191,
+            "name": "file2.txt",
+            "size": 26,
+            "type": "file",
+        },
+    }
+
+    _assert_all_except_date_time(result, expected_result)
+
+
+def test_find_returns_expected_result_detail_false_include_dirs(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+
+    result = zip_file_system.find("/", detail=False, withdirs=True)
+    expected_result = ["dir1", "dir2", "dir2/file3.txt", "file1.txt", "file2.txt"]
+
+    assert result == expected_result
+
+
+def test_find_returns_expected_result_recursion_depth_set(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+    result = zip_file_system.find("/", maxdepth=1)
+
+    expected_result = ["file1.txt", "file2.txt"]
+
+    assert result == expected_result
+
+
+def test_find_returns_expected_result_path_set(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+
+    result = zip_file_system.find("/dir2")
+    expected_result = ["dir2/file3.txt"]
+
+    assert result == expected_result
