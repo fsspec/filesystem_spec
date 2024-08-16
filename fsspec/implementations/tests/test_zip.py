@@ -158,16 +158,18 @@ def zip_file_fixture(tmp_path):
     return Path(make_archive(zip_file, "zip", data_dir))
 
 
-def _assert_all_except_date_time(result, expected_result):
+def _assert_all_except_context_dependent_variables(result, expected_result):
     for path in expected_result.keys():
         assert result[path]
         result_without_date_time = result[path].copy()
         result_without_date_time.pop("date_time")
         result_without_date_time.pop("_raw_time")
+        result_without_date_time.pop("external_attr")
 
         expected_result_without_date_time = expected_result[path].copy()
         expected_result_without_date_time.pop("date_time")
         expected_result_without_date_time.pop("_raw_time")
+        expected_result_without_date_time.pop("external_attr")
         assert result_without_date_time == expected_result_without_date_time
 
 
@@ -257,7 +259,7 @@ def test_find_returns_expected_result_detail_true(zip_file):
         },
     }
 
-    _assert_all_except_date_time(result, expected_result)
+    _assert_all_except_context_dependent_variables(result, expected_result)
 
 
 def test_find_returns_expected_result_detail_false(zip_file):
@@ -406,7 +408,7 @@ def test_find_returns_expected_result_detail_true_include_dirs(zip_file):
         },
     }
 
-    _assert_all_except_date_time(result, expected_result)
+    _assert_all_except_context_dependent_variables(result, expected_result)
 
 
 def test_find_returns_expected_result_detail_false_include_dirs(zip_file):
