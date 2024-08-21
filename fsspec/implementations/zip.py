@@ -149,6 +149,14 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         # Remove the leading slash, as the zip file paths are always
         # given without a leading slash
         path = path.lstrip("/")
+        path_parts = list(filter(lambda s: bool(s), path.split("/")))
+
+        def _matching_starts(file_path):
+            file_parts = filter(lambda s: bool(s), file_path.split("/"))
+            for a, b in zip(path_parts, file_parts):
+                if a != b:
+                    return False
+            return True
 
         self._get_dirs()
 
@@ -159,7 +167,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             return result if detail else [path]
 
         for file_path, file_info in self.dir_cache.items():
-            if not (path == "" or file_path.startswith(path + "/")):
+            if not (path == "" or _matching_starts(file_path)):
                 continue
 
             if _below_max_recursion_depth(file_path):

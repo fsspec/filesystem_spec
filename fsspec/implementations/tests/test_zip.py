@@ -446,6 +446,12 @@ def test_find_returns_expected_result_path_set(zip_file):
     assert result == expected_result
 
 
+def test_find_with_and_without_slash_should_return_same_result(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+
+    assert zip_file_system.find("/dir2/") == zip_file_system.find("/dir2")
+
+
 def test_find_should_return_file_if_exact_match(zip_file):
     zip_file_system = ZipFileSystem(zip_file)
 
