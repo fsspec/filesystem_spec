@@ -137,13 +137,6 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
-        def _below_max_recursion_depth(path):
-            if not maxdepth:
-                return False
-
-            depth = len(path.split("/"))
-            return depth > maxdepth
-
         # Remove the leading slash, as the zip file paths are always
         # given without a leading slash
         path = path.lstrip("/")
@@ -169,9 +162,6 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             if not (path == "" or _matching_starts(file_path)):
                 continue
 
-            if _below_max_recursion_depth(file_path):
-                continue
-
             if file_info["type"] == "directory":
                 if withdirs:
                     if file_path not in result:
@@ -181,4 +171,9 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             if file_path not in result:
                 result[file_path] = file_info if detail else None
 
+        if maxdepth:
+            path_depth = path.count("/")
+            result = {
+                k: v for k, v in result.items() if k.count("/") - path_depth < maxdepth
+            }
         return result if detail else sorted(result)
