@@ -144,8 +144,6 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             depth = len(path.split("/"))
             return depth > maxdepth
 
-        result = {}
-
         # Remove the leading slash, as the zip file paths are always
         # given without a leading slash
         path = path.lstrip("/")
@@ -160,6 +158,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
 
         self._get_dirs()
 
+        result = {}
         # To match posix find, if an exact file name is given, we should
         # return only that file
         if path in self.dir_cache and self.dir_cache[path]["type"] == "file":
