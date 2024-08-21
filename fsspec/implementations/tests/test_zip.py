@@ -154,6 +154,9 @@ def zip_file_fixture(tmp_path):
     file3 = dir_with_files / "file3.txt"
     file3.write_text("Hello!")
 
+    potential_mix_up_path = data_dir / "dir2startwithsamename.txt"
+    potential_mix_up_path.write_text("Hello again!")
+
     zip_file = tmp_path / "test"
     return Path(make_archive(zip_file, "zip", data_dir))
 
@@ -197,12 +200,12 @@ def test_find_returns_expected_result_detail_true(zip_file):
             "volume": 0,
             "internal_attr": 0,
             "external_attr": 2175008768,
-            "header_offset": 191,
+            "header_offset": 260,
             "CRC": 2636827734,
             "compress_size": 8,
             "file_size": 6,
             "_raw_time": 21961,
-            "_end_offset": 243,
+            "_end_offset": 312,
             "name": "dir2/file3.txt",
             "size": 6,
             "type": "file",
@@ -223,12 +226,12 @@ def test_find_returns_expected_result_detail_true(zip_file):
             "volume": 0,
             "internal_attr": 0,
             "external_attr": 2175008768,
-            "header_offset": 70,
+            "header_offset": 139,
             "CRC": 3964322768,
             "compress_size": 15,
             "file_size": 13,
             "_raw_time": 21961,
-            "_end_offset": 124,
+            "_end_offset": 193,
             "name": "file1.txt",
             "size": 13,
             "type": "file",
@@ -249,12 +252,12 @@ def test_find_returns_expected_result_detail_true(zip_file):
             "volume": 0,
             "internal_attr": 0,
             "external_attr": 2175008768,
-            "header_offset": 124,
+            "header_offset": 193,
             "CRC": 1596576865,
             "compress_size": 28,
             "file_size": 26,
             "_raw_time": 21961,
-            "_end_offset": 191,
+            "_end_offset": 260,
             "name": "file2.txt",
             "size": 26,
             "type": "file",
@@ -268,7 +271,12 @@ def test_find_returns_expected_result_detail_false(zip_file):
     zip_file_system = ZipFileSystem(zip_file)
 
     result = zip_file_system.find("/", detail=False)
-    expected_result = ["dir2/file3.txt", "file1.txt", "file2.txt"]
+    expected_result = [
+        "dir2/file3.txt",
+        "dir2startwithsamename.txt",
+        "file1.txt",
+        "file2.txt",
+    ]
 
     assert result == expected_result
 
@@ -346,12 +354,12 @@ def test_find_returns_expected_result_detail_true_include_dirs(zip_file):
             "volume": 0,
             "internal_attr": 0,
             "external_attr": 2175008768,
-            "header_offset": 191,
+            "header_offset": 260,
             "CRC": 2636827734,
             "compress_size": 8,
             "file_size": 6,
             "_raw_time": 22220,
-            "_end_offset": 243,
+            "_end_offset": 312,
             "name": "dir2/file3.txt",
             "size": 6,
             "type": "file",
@@ -372,12 +380,12 @@ def test_find_returns_expected_result_detail_true_include_dirs(zip_file):
             "volume": 0,
             "internal_attr": 0,
             "external_attr": 2175008768,
-            "header_offset": 70,
+            "header_offset": 139,
             "CRC": 3964322768,
             "compress_size": 15,
             "file_size": 13,
             "_raw_time": 22220,
-            "_end_offset": 124,
+            "_end_offset": 193,
             "name": "file1.txt",
             "size": 13,
             "type": "file",
@@ -398,12 +406,12 @@ def test_find_returns_expected_result_detail_true_include_dirs(zip_file):
             "volume": 0,
             "internal_attr": 0,
             "external_attr": 2175008768,
-            "header_offset": 124,
+            "header_offset": 193,
             "CRC": 1596576865,
             "compress_size": 28,
             "file_size": 26,
             "_raw_time": 22220,
-            "_end_offset": 191,
+            "_end_offset": 260,
             "name": "file2.txt",
             "size": 26,
             "type": "file",
@@ -417,16 +425,14 @@ def test_find_returns_expected_result_detail_false_include_dirs(zip_file):
     zip_file_system = ZipFileSystem(zip_file)
 
     result = zip_file_system.find("/", detail=False, withdirs=True)
-    expected_result = ["dir1", "dir2", "dir2/file3.txt", "file1.txt", "file2.txt"]
-
-    assert result == expected_result
-
-
-def test_find_returns_expected_result_recursion_depth_set(zip_file):
-    zip_file_system = ZipFileSystem(zip_file)
-    result = zip_file_system.find("/", maxdepth=1)
-
-    expected_result = ["file1.txt", "file2.txt"]
+    expected_result = [
+        "dir1",
+        "dir2",
+        "dir2/file3.txt",
+        "dir2startwithsamename.txt",
+        "file1.txt",
+        "file2.txt",
+    ]
 
     assert result == expected_result
 
@@ -436,5 +442,27 @@ def test_find_returns_expected_result_path_set(zip_file):
 
     result = zip_file_system.find("/dir2")
     expected_result = ["dir2/file3.txt"]
+
+    assert result == expected_result
+
+
+def test_find_should_return_file_if_exact_match(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+
+    result = zip_file_system.find("/dir2startwithsamename.txt", detail=False)
+    expected_result = ["dir2startwithsamename.txt"]
+
+    assert result == expected_result
+
+
+def test_find_returns_expected_result_recursion_depth_set(zip_file):
+    zip_file_system = ZipFileSystem(zip_file)
+    result = zip_file_system.find("/", maxdepth=1)
+
+    expected_result = [
+        "dir2startwithsamename.txt",
+        "file1.txt",
+        "file2.txt",
+    ]
 
     assert result == expected_result

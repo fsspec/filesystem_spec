@@ -137,52 +137,41 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
-        result = {}
-
         def _below_max_recursion_depth(path):
             if not maxdepth:
-                return True
+                return False
 
             depth = len(path.split("/"))
-            return depth <= maxdepth
+            return depth > maxdepth
 
-        for zip_info in self.zip.infolist():
-            file_name = zip_info.filename
-            if not file_name.startswith(path.lstrip("/")):
+        result = {}
+
+        # Remove the leading slash, as the zip file paths are always
+        # given without a leading slash
+        path = path.lstrip("/")
+
+        self._get_dirs()
+
+        # To match posix find, if an exact file name is given, we should
+        # return only that file
+        if path in self.dir_cache and self.dir_cache[path]["type"] == "file":
+            result[path] = self.dir_cache[path]
+            return result if detail else [path]
+
+        for file_path, file_info in self.dir_cache.items():
+            if not (path == "" or file_path.startswith(path + "/")):
                 continue
 
-            # zip files can contain explicit or implicit directories
-            # hence the need to either add them directly or infer them
-            # from the file paths
-            if zip_info.is_dir():
-                if withdirs:
-                    if not file_name in result and _below_max_recursion_depth(
-                        file_name
-                    ):
-                        result[file_name.strip("/")] = (
-                            self.info(file_name) if detail else None
-                        )
+            if _below_max_recursion_depth(file_path):
                 continue
 
-            if file_name not in result:
-                if _below_max_recursion_depth(file_name):
-                    result[file_name] = self.info(file_name) if detail else None
-
-                # Here we handle the case of implicitly adding the
-                # directories if they have been requested
+            if file_info["type"] == "directory":
                 if withdirs:
-                    directories = file_name.split("/")
-                    for i in range(1, len(directories)):
-                        dir_path = "/".join(directories[:i]).strip(
-                            "/"
-                        )  # remove the trailing slash, as this is not expected
-                        if not result.get(dir_path) and _below_max_recursion_depth(
-                            dir_path
-                        ):
-                            result[dir_path] = {
-                                "name": dir_path,
-                                "size": 0,
-                                "type": "directory",
-                            }
+                    if file_path not in result:
+                        result[file_path.strip("/")] = file_info
+                continue
+
+            if file_path not in result:
+                result[file_path] = file_info if detail else None
 
         return result if detail else sorted(result)
