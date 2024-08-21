@@ -156,17 +156,15 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             # from the file paths
             if zip_info.is_dir():
                 if withdirs:
-                    if not result.get(file_name) and _below_max_recursion_depth(
+                    if not file_name in result and _below_max_recursion_depth(
                         file_name
                     ):
                         result[file_name.strip("/")] = (
                             self.info(file_name) if detail else None
                         )
-                    continue
-                else:
-                    continue  # Skip along to the next entry if we don't want to add the dirs
+                continue
 
-            if not result.get(file_name):
+            if file_name not in result:
                 if _below_max_recursion_depth(file_name):
                     result[file_name] = self.info(file_name) if detail else None
 
@@ -187,4 +185,4 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                                 "type": "directory",
                             }
 
-        return result if detail else sorted(result.keys())
+        return result if detail else sorted(result)
