@@ -144,10 +144,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
 
         def _matching_starts(file_path):
             file_parts = filter(lambda s: bool(s), file_path.split("/"))
-            for a, b in zip(path_parts, file_parts):
-                if a != b:
-                    return False
-            return True
+            return all(a == b for a, b in zip(path_parts, file_parts))
 
         self._get_dirs()
 
