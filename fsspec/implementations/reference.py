@@ -158,8 +158,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             """cached parquet file loader"""
             path = self.url.format(field=field, record=record)
             data = io.BytesIO(self.fs.cat_file(path))
-            df = self.pd.read_parquet(data, engine="fastparquet")
-            refs = {c: df[c].values for c in df.columns}
+            try:
+                df = self.pd.read_parquet(data, engine="fastparquet")
+                refs = {c: df[c].values for c in df.columns}
+            except IOError:
+                refs = None
             return refs
 
         self.open_refs = open_refs

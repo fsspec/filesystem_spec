@@ -783,3 +783,24 @@ def test_deep_parq(m):
         "instant/one/.zarray",
         "instant/one/0",
     ]
+
+
+def test_parquet_no_data(m):
+    zarr = pytest.importorskip("zarr")
+    lz = fsspec.implementations.reference.LazyReferenceMapper.create(
+        "memory://out.parq", fs=m
+    )
+
+    g = zarr.open_group(lz, mode="w")
+    arr = g.create_dataset(
+        name="one",
+        dtype="int32",
+        shape=(10,),
+        chunks=(5,),
+        compression=None,
+        fill_value=1,
+    )
+    lz.flush()
+
+    breakpoint()
+    assert (arr[:] == 1).all()
