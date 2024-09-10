@@ -158,7 +158,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             """cached parquet file loader"""
             path = self.url.format(field=field, record=record)
             data = io.BytesIO(self.fs.cat_file(path))
-            df = self.pd.read_parquet(data, engine="fastparquet")
+            df = self.pd.read_parquet(data, engine="pyarrow")
             refs = {c: df[c].to_numpy() for c in df.columns}
             return refs
 
@@ -465,7 +465,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
         df.to_parquet(
             fn,
-            engine="fastparquet",
+            engine="pyarrow",
             storage_options=storage_options
             or getattr(self.fs, "storage_options", None),
             compression="zstd",
