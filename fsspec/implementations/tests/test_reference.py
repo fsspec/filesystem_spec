@@ -10,7 +10,7 @@ from fsspec.implementations.reference import (
     ReferenceFileSystem,
     ReferenceNotReachable,
 )
-from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
 
 
 def test_simple(server):
@@ -20,8 +20,8 @@ def test_simple(server):
 
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c": (realfile, 1, 5),
+        "b": (server.realfile, 0, 5),
+        "c": (server.realfile, 1, 5),
         "d": b"base64:aGVsbG8=",
         "e": {"key": "value"},
     }
@@ -46,8 +46,8 @@ def test_simple_ver1(server):
         "version": 1,
         "refs": {
             "a": b"data",
-            "b": (realfile, 0, 5),
-            "c": (realfile, 1, 5),
+            "b": (server.realfile, 0, 5),
+            "c": (server.realfile, 1, 5),
             "d": b"base64:aGVsbG8=",
             "e": {"key": "value"},
         },
@@ -76,7 +76,7 @@ def test_target_options(m):
 
 
 def test_ls(server):
-    refs = {"a": b"data", "b": (realfile, 0, 5), "c/d": (realfile, 1, 6)}
+    refs = {"a": b"data", "b": (server.realfile, 0, 5), "c/d": (server.realfile, 1, 6)}
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
@@ -102,9 +102,9 @@ def test_nested_dirs_ls():
 def test_info(server):
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c/d": (realfile, 1, 6),
-        "e": (realfile,),
+        "b": (server.realfile, 0, 5),
+        "c/d": (server.realfile, 1, 6),
+        "e": (server.realfile,),
     }
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -117,9 +117,9 @@ def test_info(server):
 def test_mutable(server, m):
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c/d": (realfile, 1, 6),
-        "e": (realfile,),
+        "b": (server.realfile, 0, 5),
+        "c/d": (server.realfile, 1, 6),
+        "e": (server.realfile,),
     }
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -179,7 +179,7 @@ def test_defaults(server):
         "reference",
         fo=refs,
         target_protocol="http",
-        target=realfile,
+        target=server.realfile,
         remote_protocol="http",
     )
 
