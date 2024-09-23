@@ -762,6 +762,7 @@ def test_append_parquet(lazy_refs, m):
 
 
 def test_deep_parq(m):
+    pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq", fs=m
