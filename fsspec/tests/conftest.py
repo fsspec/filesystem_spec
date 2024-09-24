@@ -135,10 +135,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.rfile.readline()
 
     def do_HEAD(self):
+        r_headers = {}
         if "head_not_auth" in self.headers:
-            return self._respond(
-                403, {"Content-Length": 123}, b"not authorized for HEAD request"
-            )
+            r_headers["Content-Length"] = 123
+            return self._respond(403, r_headers, b"not authorized for HEAD request")
         elif "head_ok" not in self.headers:
             return self._respond(405)
 
@@ -148,23 +148,23 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             return self._respond(404)
 
         if ("give_length" in self.headers) or ("head_give_length" in self.headers):
-            response_headers = {"Content-Length": len(file_data)}
             if "zero_length" in self.headers:
-                response_headers["Content-Length"] = 0
+                r_headers["Content-Length"] = 0
             elif "gzip_encoding" in self.headers:
                 file_data = gzip.compress(file_data)
-                response_headers["Content-Encoding"] = "gzip"
-                response_headers["Content-Length"] = len(file_data)
-
-            self._respond(200, response_headers)
+                r_headers["Content-Encoding"] = "gzip"
+                r_headers["Content-Length"] = len(file_data)
+            else:
+                r_headers["Content-Length"] = len(file_data)
         elif "give_range" in self.headers:
-            self._respond(
-                200, {"Content-Range": f"0-{len(file_data) - 1}/{len(file_data)}"}
-            )
+            r_headers["Content-Range"] = f"0-{len(file_data) - 1}/{len(file_data)}"
         elif "give_etag" in self.headers:
-            self._respond(200, {"ETag": "xxx"})
-        else:
-            self._respond(200)  # OK response, but no useful info
+            r_headers["ETag"] = "xxx"
+
+        if self.headers.get("accept_range") == "none":
+            r_headers["Accept-Ranges"] = "none"
+
+        self._respond(200, r_headers)
 
 
 @contextlib.contextmanager
