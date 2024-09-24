@@ -202,7 +202,7 @@ class SMBFileSystem(AbstractFileSystem):
                 else:
                     # All another ValueError exceptions should be raised, as they are not
                     # related to network issues.
-                    raise exc
+                    raise
             except Exception as exc:
                 # Save the exception and retry to connect. This except might be dropped
                 # in the future, once all exceptions suited for retry are identified.

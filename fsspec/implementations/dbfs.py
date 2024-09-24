@@ -79,7 +79,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                     raise FileNotFoundError(e.message) from e
 
-                raise e
+                raise
             files = r["files"]
             out = [
                 {
@@ -125,7 +125,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             if e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message) from e
 
-            raise e
+            raise
         self.invalidate_cache(self._parent(path))
 
     def mkdir(self, path, create_parents=True, **kwargs):
@@ -171,7 +171,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 # Using the same exception as the os module would use here
                 raise OSError(e.message) from e
 
-            raise e
+            raise
         self.invalidate_cache(self._parent(path))
 
     def mv(
@@ -216,7 +216,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             elif e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message) from e
 
-            raise e
+            raise
         self.invalidate_cache(self._parent(source_path))
         self.invalidate_cache(self._parent(destination_path))
 
@@ -299,7 +299,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             if e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message) from e
 
-            raise e
+            raise
 
     def _close_handle(self, handle):
         """
@@ -316,7 +316,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message) from e
 
-            raise e
+            raise
 
     def _add_data(self, handle, data):
         """
@@ -346,7 +346,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             elif e.error_code == "MAX_BLOCK_SIZE_EXCEEDED":
                 raise ValueError(e.message) from e
 
-            raise e
+            raise
 
     def _get_data(self, path, start, end):
         """
@@ -376,7 +376,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             elif e.error_code in ["INVALID_PARAMETER_VALUE", "MAX_READ_SIZE_EXCEEDED"]:
                 raise ValueError(e.message) from e
 
-            raise e
+            raise
 
     def invalidate_cache(self, path=None):
         if path is None:

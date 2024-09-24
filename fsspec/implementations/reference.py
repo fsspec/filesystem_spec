@@ -159,7 +159,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             path = self.url.format(field=field, record=record)
             data = io.BytesIO(self.fs.cat_file(path))
             df = self.pd.read_parquet(data, engine="fastparquet")
-            refs = {c: df[c].values for c in df.columns}
+            refs = {c: df[c].to_numpy() for c in df.columns}
             return refs
 
         self.open_refs = open_refs
@@ -502,6 +502,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             if k != ".zmetadata" and ".z" in k:
                 self.zmetadata[k] = json.loads(self._items.pop(k))
         met = {"metadata": self.zmetadata, "record_size": self.record_size}
+        self._items.clear()
         self._items[".zmetadata"] = json.dumps(met).encode()
         self.fs.pipe(
             "/".join([base_url or self.out_root, ".zmetadata"]),
@@ -996,9 +997,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         out = {}
         for gen in gens:
             dimension = {
-                k: v
-                if isinstance(v, list)
-                else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                k: (
+                    v
+                    if isinstance(v, list)
+                    else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                )
                 for k, v in gen["dimensions"].items()
             }
             products = (
@@ -1085,7 +1088,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         if self.dircache:
             return path in self.dircache
         elif isinstance(self.references, LazyReferenceMapper):
-            return path in self.references.listdir("")
+            return path in self.references.listdir()
         else:
             # this may be faster than building dircache for single calls, but
             # by looping will be slow for many calls; could cache it?

@@ -1,6 +1,28 @@
 Changelog
 =========
 
+2024.9.0
+--------
+
+Enhancements
+
+- fewer stat calls in localFS (#1659)
+- faster find in ZIP (#1664)
+
+Fixes
+
+- paths without "/" in dirFS (#1638)
+- paths with "/" in FTS (#1643, 1644)
+- ls in parquet-based nested reference sets, and append (#1645, 1657)
+- exception handling for SMB (#1650)
+
+
+Other
+
+- style (#1640, 1641, 1660)
+- docs: xrootd (#1646)
+- CI back on miniconda (#1658)
+
 2024.6.1
 --------
 

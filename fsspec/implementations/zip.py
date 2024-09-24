@@ -1,3 +1,4 @@
+import os
 import zipfile
 
 import fsspec
@@ -48,7 +49,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if mode not in set("rwa"):
             raise ValueError(f"mode '{mode}' no understood")
         self.mode = mode
-        if isinstance(fo, str):
+        if isinstance(fo, (str, os.PathLike)):
             if mode == "a":
                 m = "r+b"
             else:
@@ -132,3 +133,45 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             out.size = info["size"]
             out.name = info["name"]
         return out
+
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
+        # Remove the leading slash, as the zip file paths are always
+        # given without a leading slash
+        path = path.lstrip("/")
+        path_parts = list(filter(lambda s: bool(s), path.split("/")))
+
+        def _matching_starts(file_path):
+            file_parts = filter(lambda s: bool(s), file_path.split("/"))
+            return all(a == b for a, b in zip(path_parts, file_parts))
+
+        self._get_dirs()
+
+        result = {}
+        # To match posix find, if an exact file name is given, we should
+        # return only that file
+        if path in self.dir_cache and self.dir_cache[path]["type"] == "file":
+            result[path] = self.dir_cache[path]
+            return result if detail else [path]
+
+        for file_path, file_info in self.dir_cache.items():
+            if not (path == "" or _matching_starts(file_path)):
+                continue
+
+            if file_info["type"] == "directory":
+                if withdirs:
+                    if file_path not in result:
+                        result[file_path.strip("/")] = file_info
+                continue
+
+            if file_path not in result:
+                result[file_path] = file_info if detail else None
+
+        if maxdepth:
+            path_depth = path.count("/")
+            result = {
+                k: v for k, v in result.items() if k.count("/") - path_depth < maxdepth
+            }
+        return result if detail else sorted(result)

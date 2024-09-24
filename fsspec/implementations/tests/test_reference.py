@@ -13,7 +13,7 @@ from fsspec.implementations.reference import (
 from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
 
 
-def test_simple(server):  # noqa: F811
+def test_simple(server):
     # The dictionary in refs may be dumped with a different separator
     # depending on whether json or ujson is imported
     from fsspec.implementations.reference import json as json_impl
@@ -37,7 +37,7 @@ def test_simple(server):  # noqa: F811
         assert f.read(2) == "he"
 
 
-def test_simple_ver1(server):  # noqa: F811
+def test_simple_ver1(server):
     # The dictionary in refs may be dumped with a different separator
     # depending on whether json or ujson is imported
     from fsspec.implementations.reference import json as json_impl
@@ -75,7 +75,7 @@ def test_target_options(m):
     assert fs.cat("a") == b"hello"
 
 
-def test_ls(server):  # noqa: F811
+def test_ls(server):
     refs = {"a": b"data", "b": (realfile, 0, 5), "c/d": (realfile, 1, 6)}
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -99,7 +99,7 @@ def test_nested_dirs_ls():
     assert {e["name"] for e in fs.ls("B")} == {"B/C", "B/_"}
 
 
-def test_info(server):  # noqa: F811
+def test_info(server):
     refs = {
         "a": b"data",
         "b": (realfile, 0, 5),
@@ -173,7 +173,7 @@ def test_put_get_single(tmpdir):
     assert fs.cat("hi") == b"data"
 
 
-def test_defaults(server):  # noqa: F811
+def test_defaults(server):
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(
         "reference",
@@ -762,6 +762,7 @@ def test_append_parquet(lazy_refs, m):
 
 
 def test_deep_parq(m):
+    pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq", fs=m
