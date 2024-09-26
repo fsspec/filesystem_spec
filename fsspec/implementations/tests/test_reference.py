@@ -761,12 +761,14 @@ def test_append_parquet(lazy_refs, m):
     assert lazy2["data/1"] == b"Adata"
 
 
-@pytest.mark.parametrize('engine',['fastparquet','pyarrow'])
-def test_deep_parq(m,engine):
+@pytest.mark.parametrize("engine", ["fastparquet", "pyarrow"])
+def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
-        "memory://out.parq", fs=m, engine=engine,
+        "memory://out.parq",
+        fs=m,
+        engine=engine,
     )
     g = zarr.open_group(lz, mode="w")
 

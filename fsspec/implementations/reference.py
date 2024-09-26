@@ -104,7 +104,13 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return pd
 
     def __init__(
-        self, root, fs=None, out_root=None, cache_size=128, categorical_threshold=10, engine: Literal["fastparquet", "pyarrow"] = "fastparquet"
+        self,
+        root,
+        fs=None,
+        out_root=None,
+        cache_size=128,
+        categorical_threshold=10,
+        engine: Literal["fastparquet", "pyarrow"] = "fastparquet",
     ):
         """
 
@@ -129,14 +135,12 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         engine: Literal["fastparquet","pyarrow"]
             Engine choice for reading parquet files. (default is "fastparquet")
         """
-        if engine == 'pyarrow':
-            try:
-                import pyarrow
-            except ImportError as IE:
-                raise ImportError(
-                    "engine: pyarrow is not installed"
-                ) from IE
-        
+
+        from importlib.util import find_spec
+
+        if find_spec("pyarrow") is not None:
+            raise ImportError("engine choice `pyarrow` is not installed.")
+
         self.root = root
         self.chunk_sizes = {}
         self.out_root = out_root or self.root
