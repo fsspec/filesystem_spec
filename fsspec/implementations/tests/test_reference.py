@@ -773,12 +773,12 @@ def test_deep_parq(m, engine):
     )
     g = zarr.open_group(lz, mode="w")
 
-    # g2 = g.create_group("instant")
-    # g2.create_dataset(name="one", data=[1, 2, 3])
-    # lz.flush()
+    g2 = g.create_group("instant")
+    g2.create_dataset(name="one", data=[1, 2, 3])
+    lz.flush()
 
-    # # lz = fsspec.implementations.reference.LazyReferenceMapper("memory://out.parq", fs=m)
-    # # g = zarr.open_group(lz)
+    lz = fsspec.implementations.reference.LazyReferenceMapper("memory://out.parq", fs=m, engine=engine)
+    g = zarr.open_group(lz)
     # # assert g.instant.one[:].tolist() == [1, 2, 3]
     # # assert sorted(_["name"] for _ in lz.ls("")) == [".zgroup", ".zmetadata", "instant"]
     # # assert sorted(_["name"] for _ in lz.ls("instant")) == [

@@ -499,6 +499,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             index=False,
             **df_backend_kwargs,
         )
+
         partition.clear()
         self._items.pop((field, record))
 
