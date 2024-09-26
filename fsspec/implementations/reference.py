@@ -479,17 +479,25 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         fn = f"{base_url or self.out_root}/{field}/refs.{record}.parq"
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
 
+        if self.engine == "pyarrow":
+            df_backend_kwargs = {}
+        elif self.engine == "fastparquet":
+            df_backend_kwargs = {
+                "stats": False,
+                "object_encoding": object_encoding,
+                "has_nulls": has_nulls,
+            }
+        else:
+            raise NotImplementedError(f"{self.engine} not supported")
+
         df.to_parquet(
-            "tmp.parquet",
+            fn,
             engine=self.engine,
             storage_options=storage_options
             or getattr(self.fs, "storage_options", None),
             compression="zstd",
             index=False,
-            # stats=False,
-            # object_encoding=object_encoding,
-            # has_nulls=has_nulls,
-            # **kwargs,
+            **df_backend_kwargs,
         )
         partition.clear()
         self._items.pop((field, record))
