@@ -761,6 +761,15 @@ def test_append_parquet(lazy_refs, m):
     assert lazy2["data/1"] == b"Adata"
 
 
+import pytest
+import fsspec
+
+
+@pytest.fixture(autouse=True)
+def mock_fsspec_version(monkeypatch):
+    monkeypatch.setattr(fsspec, "__version__", "2022.11.0")
+
+
 @pytest.mark.parametrize("engine", ["fastparquet", "pyarrow"])
 def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
@@ -777,15 +786,18 @@ def test_deep_parq(m, engine):
     g2.create_dataset(name="one", data=[1, 2, 3])
     lz.flush()
 
-    lz = fsspec.implementations.reference.LazyReferenceMapper("memory://out.parq", fs=m, engine=engine)
+    lz = fsspec.implementations.reference.LazyReferenceMapper(
+        "memory://out.parq", fs=m, engine=engine
+    )
     g = zarr.open_group(lz)
-    # # assert g.instant.one[:].tolist() == [1, 2, 3]
-    # # assert sorted(_["name"] for _ in lz.ls("")) == [".zgroup", ".zmetadata", "instant"]
-    # # assert sorted(_["name"] for _ in lz.ls("instant")) == [
-    # #     "instant/.zgroup",
-    # #     "instant/one",
-    # # ]
-    # # assert sorted(_["name"] for _ in lz.ls("instant/one")) == [
-    # #     "instant/one/.zarray",
-    # #     "instant/one/0",
-    # # ]
+    assert g.instant.one[:].tolist() == [1, 2, 3]
+    assert sorted(_["name"] for _ in lz.ls("")) == [".zgroup", ".zmetadata", "instant"]
+    assert sorted(_["name"] for _ in lz.ls("instant")) == [
+        "instant/.zgroup",
+        "instant/one",
+    ]
+
+    assert sorted(_["name"] for _ in lz.ls("instant/one")) == [
+        "instant/one/.zarray",
+        "instant/one/0",
+    ]
