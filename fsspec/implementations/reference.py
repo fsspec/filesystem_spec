@@ -138,7 +138,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
         from importlib.util import find_spec
 
-        if find_spec("pyarrow") is not None:
+        if find_spec("pyarrow") is None:
             raise ImportError("engine choice `pyarrow` is not installed.")
 
         self.root = root
