@@ -761,15 +761,6 @@ def test_append_parquet(lazy_refs, m):
     assert lazy2["data/1"] == b"Adata"
 
 
-import pytest
-import fsspec
-
-
-@pytest.fixture(autouse=True)
-def mock_fsspec_version(monkeypatch):
-    monkeypatch.setattr(fsspec, "__version__", "2022.11.0")
-
-
 @pytest.mark.parametrize("engine", ["fastparquet", "pyarrow"])
 def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
