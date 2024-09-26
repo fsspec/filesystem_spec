@@ -478,16 +478,17 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
         fn = f"{base_url or self.out_root}/{field}/refs.{record}.parq"
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
+
         df.to_parquet(
-            fn,
+            "tmp.parquet",
             engine=self.engine,
             storage_options=storage_options
             or getattr(self.fs, "storage_options", None),
             compression="zstd",
             index=False,
-            stats=False,
-            object_encoding=object_encoding,
-            has_nulls=has_nulls,
+            # stats=False,
+            # object_encoding=object_encoding,
+            # has_nulls=has_nulls,
             # **kwargs,
         )
         partition.clear()
@@ -501,6 +502,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         base_url: str
             Location of the output
         """
+
         # write what we have so far and clear sub chunks
         for thing in list(self._items):
             if isinstance(thing, tuple):
