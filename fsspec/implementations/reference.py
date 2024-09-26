@@ -7,7 +7,7 @@ import math
 import os
 from itertools import chain
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import fsspec.core
 
@@ -104,7 +104,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return pd
 
     def __init__(
-        self, root, fs=None, out_root=None, cache_size=128, categorical_threshold=10
+        self, root, fs=None, out_root=None, cache_size=128, categorical_threshold=10, engine: Literal["fastparquet", "pyarrow"] = "fastparquet"
     ):
         """
 
@@ -126,11 +126,14 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             Encode urls as pandas.Categorical to reduce memory footprint if the ratio
             of the number of unique urls to total number of refs for each variable
             is greater than or equal to this number. (default 10)
+        engine: Literal["fastparquet","pyarrow"]
+            Engine choice for reading parquet files. (default is "fastparquet")
         """
         self.root = root
         self.chunk_sizes = {}
         self.out_root = out_root or self.root
         self.cat_thresh = categorical_threshold
+        self.engine = engine
         self.cache_size = cache_size
         self.url = self.root + "/{field}/refs.{record}.parq"
         # TODO: derive fs from `root`
@@ -158,7 +161,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             """cached parquet file loader"""
             path = self.url.format(field=field, record=record)
             data = io.BytesIO(self.fs.cat_file(path))
-            df = self.pd.read_parquet(data, engine="pyarrow")
+            df = self.pd.read_parquet(data, engine=self.engine)
             refs = {c: df[c].to_numpy() for c in df.columns}
             return refs
 
@@ -465,7 +468,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
         df.to_parquet(
             fn,
-            engine="pyarrow",
+            engine=self.engine,
             storage_options=storage_options
             or getattr(self.fs, "storage_options", None),
             compression="zstd",
