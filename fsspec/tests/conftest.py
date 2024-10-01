@@ -5,25 +5,34 @@ import os
 import threading
 from collections import ChainMap
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from types import SimpleNamespace
 
 import pytest
 
 requests = pytest.importorskip("requests")
-port = 9898
 data = b"\n".join([b"some test data"] * 1000)
-realfile = f"http://127.0.0.1:{port}/index/realfile"
-index = b'<a href="%s">Link</a>' % realfile.encode()
 listing = open(
     os.path.join(os.path.dirname(__file__), "data", "listing.html"), "rb"
 ).read()
 win = os.name == "nt"
 
 
+def _make_realfile(baseurl):
+    return f"{baseurl}/index/realfile"
+
+
+def _make_index_listing(baseurl):
+    realfile = _make_realfile(baseurl)
+    return b'<a href="%s">Link</a>' % realfile.encode()
+
+
 def _make_listing(*paths):
-    return "\n".join(
-        f'<a href="http://127.0.0.1:{port}{f}">Link_{i}</a>'
-        for i, f in enumerate(paths)
-    ).encode()
+    def _make_listing_port(baseurl):
+        return "\n".join(
+            f'<a href="{baseurl}{f}">Link_{i}</a>' for i, f in enumerate(paths)
+        ).encode()
+
+    return _make_listing_port
 
 
 @pytest.fixture
@@ -39,7 +48,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
     static_files = {
         "/index/realfile": data,
         "/index/otherfile": data,
-        "/index": index,
+        "/index": _make_index_listing,
         "/data/20020401": listing,
         "/simple/": _make_listing("/simple/file", "/simple/dir/"),
         "/simple/file": data,
@@ -64,14 +73,17 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
+        baseurl = f"http://{self.server.server_name}:{self.server.server_port}"
         file_path = self.path
         if file_path.endswith("/") and file_path.rstrip("/") in self.files:
             file_path = file_path.rstrip("/")
         file_data = self.files.get(file_path)
+        if callable(file_data):
+            file_data = file_data(baseurl)
         if "give_path" in self.headers:
             return self._respond(200, data=json.dumps({"path": self.path}).encode())
         if "redirect" in self.headers and file_path != "/index/realfile":
-            new_url = f"http://127.0.0.1:{port}/index/realfile"
+            new_url = _make_realfile(baseurl)
             return self._respond(301, {"Location": new_url})
         if file_data is None:
             return self._respond(404)
@@ -169,13 +181,13 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
 
 @contextlib.contextmanager
 def serve():
-    server_address = ("", port)
+    server_address = ("", 0)
     httpd = HTTPServer(server_address, HTTPTestHandler)
     th = threading.Thread(target=httpd.serve_forever)
     th.daemon = True
     th.start()
     try:
-        yield f"http://127.0.0.1:{port}"
+        yield f"http://{httpd.server_name}:{httpd.server_port}"
     finally:
         httpd.socket.close()
         httpd.shutdown()
@@ -185,4 +197,5 @@ def serve():
 @pytest.fixture(scope="module")
 def server():
     with serve() as s:
-        yield s
+        server = SimpleNamespace(address=s, realfile=_make_realfile(s))
+        yield server
