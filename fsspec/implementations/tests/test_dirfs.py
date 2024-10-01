@@ -592,7 +592,10 @@ def test_sign(mocker, dirfs):
 @pytest.mark.asyncio
 async def test_open_async(mocker, adirfs):
     adirfs.fs.open_async = mocker.AsyncMock()
-    assert await adirfs.open_async("file", *ARGS, **KWARGS) == adirfs.fs.open_async.return_value
+    assert (
+        await adirfs.open_async("file", *ARGS, **KWARGS)
+        == adirfs.fs.open_async.return_value
+    )
     adirfs.fs.open_async.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
 
 
