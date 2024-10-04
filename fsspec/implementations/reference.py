@@ -136,11 +136,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             Engine choice for reading parquet files. (default is "fastparquet")
         """
 
-        from importlib.util import find_spec
-
-        if find_spec("pyarrow") is None:
-            raise ImportError("engine choice `pyarrow` is not installed.")
-
         self.root = root
         self.chunk_sizes = {}
         self.out_root = out_root or self.root
@@ -150,6 +145,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.url = self.root + "/{field}/refs.{record}.parq"
         # TODO: derive fs from `root`
         self.fs = fsspec.filesystem("file") if fs is None else fs
+
+        from importlib.util import find_spec
+
+        if self.engine == "pyarrow" and find_spec("pyarrow") is None:
+            raise ImportError("engine choice `pyarrow` is not installed.")
 
     def __getattr__(self, item):
         if item in ("_items", "record_size", "zmetadata"):
@@ -480,7 +480,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
 
         if self.engine == "pyarrow":
-            df_backend_kwargs = {}
+            df_backend_kwargs = {"write_statistics": False}
         elif self.engine == "fastparquet":
             df_backend_kwargs = {
                 "stats": False,
