@@ -428,11 +428,9 @@ class AbstractFileSystem(metaclass=_Cached):
         except (FileNotFoundError, OSError) as e:
             if on_error == "raise":
                 raise
-            elif callable(on_error):
+            if callable(on_error):
                 on_error(e)
-            if detail:
-                return path, {}, {}
-            return path, [], []
+            return
 
         for info in listing:
             # each info name must be at least [path]/part , but here
