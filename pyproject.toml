@@ -128,6 +128,7 @@ test_downstream = [
     "aiobotocore>=2.5.4,<3.0.0",
 ]
 tqdm = ["tqdm"]
+typing = ["mypy"]
 
 [project.urls]
 Changelog = "https://filesystem-spec.readthedocs.io/en/latest/changelog.html"
@@ -228,3 +229,38 @@ ignore = [
 [tool.pytest.ini_options]
 # custom markers, need to be defined to avoid warnings
 markers = ["asyncio", "vcr"]
+
+[tool.mypy]
+incremental = false # Disabled until https://github.com/python/mypy/issues/12664 is resolved
+files = [
+    "fsspec/",
+]
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+ignore_errors = true
+module = [
+    "fsspec._version",
+    "fsspec.archive",
+    "fsspec.asyn",
+    "fsspec.caching",
+    "fsspec.callbacks",
+    "fsspec.compression",
+    "fsspec.config",
+    "fsspec.conftest",
+    "fsspec.core",
+    "fsspec.dircache",
+    "fsspec.exceptions",
+    "fsspec.fuse",
+    "fsspec.generic",
+    "fsspec.gui",
+    "fsspec.implementations.*",
+    "fsspec.json",
+    "fsspec.mapping",
+    "fsspec.parquet",
+    "fsspec.registry",
+    "fsspec.tests.*",
+    "fsspec.transaction",
+    "fsspec.utils",
+]
