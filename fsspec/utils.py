@@ -96,12 +96,17 @@ def infer_storage_options(
         # https://github.com/dask/dask/issues/1417
         options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
 
+        if protocol in ("s3", "s3a") and parsed_path.netloc.endswith(":accesspoint"):
+            # When receiving a s3 accesspoint url like s3://arn:aws:s3:us-west-2:1234:accesspoint/abc
+            # the :accesspoint suffix would fail the port parsing with a ValueError complaining the port is not an integer
+            # Ignore the port setting and keep the :accesspoint suffix in the options["host"]
+            options["host"] = parsed_path.netloc.rsplit("@", 1)[-1]
+        else:
+            if parsed_path.port:
+                options["port"] = parsed_path.port
+
         if protocol in ("s3", "s3a", "gcs", "gs"):
             options["path"] = options["host"] + options["path"]
-        else:
-            options["host"] = options["host"]
-        if parsed_path.port:
-            options["port"] = parsed_path.port
         if parsed_path.username:
             options["username"] = parsed_path.username
         if parsed_path.password:

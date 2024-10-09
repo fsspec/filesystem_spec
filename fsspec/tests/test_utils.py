@@ -209,7 +209,13 @@ def test_infer_options():
     # - The bucket is included in path
     for protocol in ["s3", "s3a", "gcs", "gs"]:
         options = infer_storage_options(f"{protocol}://Bucket-name.com/test.csv")
+        assert options["host"] == "Bucket-name.com"
         assert options["path"] == "Bucket-name.com/test.csv"
+
+    for protocol in ["s3", "s3a"]:
+        options = infer_storage_options(f"{protocol}://arn:aws:s3:us-west-2:1234:accesspoint/abc/test.csv")
+        assert options["host"] == "arn:aws:s3:us-west-2:1234:accesspoint"
+        assert options["path"] == "arn:aws:s3:us-west-2:1234:accesspoint/abc/test.csv"
 
     with pytest.raises(KeyError):
         infer_storage_options("file:///bucket/file.csv", {"path": "collide"})
