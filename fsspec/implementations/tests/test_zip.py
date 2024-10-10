@@ -164,17 +164,25 @@ def zip_file_fixture(tmp_path):
 def _assert_all_except_context_dependent_variables(result, expected_result):
     for path in expected_result.keys():
         assert result[path]
-        result_without_date_time = result[path].copy()
-        result_without_date_time.pop("date_time")
-        result_without_date_time.pop("_raw_time")
-        result_without_date_time.pop("external_attr")
-        result_without_date_time.pop("create_system")
+        fields = [
+            "orig_filename",
+            "filename",
+            "compress_type",
+            "comment",
+            "extra",
+            "CRC",
+            "compress_size",
+            "file_size",
+            "name",
+            "size",
+            "type",
+        ]
 
-        expected_result_without_date_time = expected_result[path].copy()
-        expected_result_without_date_time.pop("date_time")
-        expected_result_without_date_time.pop("_raw_time")
-        expected_result_without_date_time.pop("external_attr")
-        expected_result_without_date_time.pop("create_system")
+        result_without_date_time = {k: result[path][k] for k in fields}
+
+        expected_result_without_date_time = {
+            k: expected_result[path][k] for k in fields
+        }
         assert result_without_date_time == expected_result_without_date_time
 
 

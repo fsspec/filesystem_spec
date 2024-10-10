@@ -1,3 +1,4 @@
+import os
 import zipfile
 
 import fsspec
@@ -48,7 +49,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if mode not in set("rwa"):
             raise ValueError(f"mode '{mode}' no understood")
         self.mode = mode
-        if isinstance(fo, str):
+        if isinstance(fo, (str, os.PathLike)):
             if mode == "a":
                 m = "r+b"
             else:

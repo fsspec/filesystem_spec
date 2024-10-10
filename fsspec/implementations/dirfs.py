@@ -370,3 +370,15 @@ class DirFileSystem(AsyncFileSystem):
             *args,
             **kwargs,
         )
+
+    async def open_async(
+        self,
+        path,
+        *args,
+        **kwargs,
+    ):
+        return await self.fs.open_async(
+            self._join(path),
+            *args,
+            **kwargs,
+        )
