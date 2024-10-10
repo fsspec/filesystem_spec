@@ -648,7 +648,7 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns a single dictionary, with exactly the same information as ``ls``
         would with ``detail=True``.
 
-        The default implementation should calls ls and could be overridden by a
+        The default implementation calls ls and could be overridden by a
         shortcut. kwargs are passed on to ```ls()``.
 
         Some file systems might not be able to measure the file's size, in
