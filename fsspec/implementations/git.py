@@ -55,6 +55,8 @@ class GitFileSystem(AbstractFileSystem):
         tree = comm.tree
         for part in parts:
             if part and isinstance(tree, pygit2.Tree):
+                if part not in tree:
+                    raise FileNotFoundError(path)
                 tree = tree[part]
         return tree
 

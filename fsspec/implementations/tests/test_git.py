@@ -61,6 +61,42 @@ def test_refs(repo):
         assert f.read() == b"data3"
 
 
+def _check_FileNotFoundError(f, *args, **kwargs):
+    with pytest.raises(FileNotFoundError):
+        f(*args, **kwargs)
+
+
+def test_file_existence_checks(repo):
+    d, sha = repo
+
+    fs, _ = fsspec.url_to_fs(f"git://{d}:abranch@")
+
+    assert fs.lexists("inner")
+    assert fs.exists("inner")
+    assert fs.isdir("inner")
+    assert fs.info("inner")
+    assert fs.ls("inner")
+
+    assert fs.lexists("inner/file1")
+    assert fs.exists("inner/file1")
+    assert fs.info("inner/file1")
+    # I would not have expected that ls on a file works. I would not be surprised
+    # if this behavior is changed in the future or for other fsspec implementations.
+    assert fs.ls("inner/file1")
+
+    assert not fs.lexists("non-existing-file")
+    assert not fs.exists("non-existing-file")
+
+    # I would not have been surprised if these also raised exceptions, similar to "info".
+    assert not fs.isfile("non-existing-file")
+    assert not fs.isdir("non-existing-file")
+
+    _check_FileNotFoundError(fs.info, "non-existing-file")
+    _check_FileNotFoundError(fs.size, "non-existing-file")
+    _check_FileNotFoundError(fs.ls, "non-existing-file")
+    _check_FileNotFoundError(fs.open, "non-existing-file")
+
+
 def test_url(repo):
     d, sha = repo
     fs, _, paths = fsspec.core.get_fs_token_paths(f"git://file1::file://{d}")
