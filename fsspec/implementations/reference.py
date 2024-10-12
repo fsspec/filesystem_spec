@@ -5,8 +5,8 @@ import itertools
 import logging
 import math
 import os
-from itertools import chain
 from functools import lru_cache
+from itertools import chain
 from typing import TYPE_CHECKING, Literal
 
 import fsspec.core
