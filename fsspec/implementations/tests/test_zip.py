@@ -162,7 +162,7 @@ def zip_file_fixture(tmp_path):
 
 
 def _assert_all_except_context_dependent_variables(result, expected_result):
-    for path in expected_result.keys():
+    for path in expected_result:
         assert result[path]
         fields = [
             "orig_filename",
