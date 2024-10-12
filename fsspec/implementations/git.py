@@ -79,7 +79,7 @@ class GitFileSystem(AbstractFileSystem):
                     out.append(
                         {
                             "type": "directory",
-                            "name": "/".join([path, obj.name]).lstrip("/"),
+                            "name": f"{path}/{obj.name}".lstrip("/"),
                             "hex": str(obj.id),
                             "mode": f"{obj.filemode:o}",
                             "size": 0,
@@ -89,7 +89,7 @@ class GitFileSystem(AbstractFileSystem):
                     out.append(
                         {
                             "type": "file",
-                            "name": "/".join([path, obj.name]).lstrip("/"),
+                            "name": f"{path}/{obj.name}".lstrip("/"),
                             "hex": str(obj.id),
                             "mode": f"{obj.filemode:o}",
                             "size": obj.size,
