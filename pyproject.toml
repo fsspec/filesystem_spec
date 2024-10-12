@@ -182,6 +182,7 @@ select = [
     "RUF024",
     "SLOT",
     "SIM101",
+    "TCH",
 ]
 ignore = [
 	# Loop control variable `loop` not used within loop body
