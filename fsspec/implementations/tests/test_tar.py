@@ -5,7 +5,7 @@ import shutil
 import tarfile
 import tempfile
 from io import BytesIO
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +14,9 @@ from fsspec.core import OpenFile
 from fsspec.implementations.cached import WholeFileCacheFileSystem
 from fsspec.implementations.tar import TarFileSystem
 from fsspec.implementations.tests.test_archive import archive_data, temptar
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_info():
