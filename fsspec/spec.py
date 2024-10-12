@@ -10,7 +10,7 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import Any, ClassVar, Dict, Tuple
+from typing import Any, ClassVar
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -117,8 +117,8 @@ class AbstractFileSystem(metaclass=_Cached):
     _extra_tokenize_attributes = ()
 
     # Set by _Cached metaclass
-    storage_args: Tuple[Any, ...]
-    storage_options: Dict[str, Any]
+    storage_args: tuple[Any, ...]
+    storage_options: dict[str, Any]
 
     def __init__(self, *args, **storage_options):
         """Create and configure file-system instance
@@ -615,11 +615,9 @@ class AbstractFileSystem(metaclass=_Cached):
             p: info
             for p, info in sorted(allpaths.items())
             if pattern.match(
-                (
-                    p + "/"
-                    if append_slash_to_dirname and info["type"] == "directory"
-                    else p
-                )
+                p + "/"
+                if append_slash_to_dirname and info["type"] == "directory"
+                else p
             )
         }
 
@@ -1442,7 +1440,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         return json.loads(blob, cls=FilesystemJSONDecoder)
 
-    def to_dict(self, *, include_password: bool = True) -> Dict[str, Any]:
+    def to_dict(self, *, include_password: bool = True) -> dict[str, Any]:
         """
         JSON-serializable dictionary representation of this filesystem instance.
 
@@ -1483,7 +1481,7 @@ class AbstractFileSystem(metaclass=_Cached):
         )
 
     @staticmethod
-    def from_dict(dct: Dict[str, Any]) -> AbstractFileSystem:
+    def from_dict(dct: dict[str, Any]) -> AbstractFileSystem:
         """
         Recreate a filesystem instance from dictionary representation.
 
