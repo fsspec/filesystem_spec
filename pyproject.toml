@@ -185,6 +185,7 @@ select = [
     "SIM",
     "SLOT",
     "SIM101",
+    "TCH",
     "UP",
 ]
 ignore = [
