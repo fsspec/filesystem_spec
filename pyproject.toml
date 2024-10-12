@@ -180,6 +180,7 @@ select = [
     "RUF012",
     "RUF015",
     "RUF019",
+    "RUF022",
     "RUF024",
     "SIM",
     "SLOT",
