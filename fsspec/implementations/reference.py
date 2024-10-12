@@ -166,9 +166,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def setup(self):
         self._items = {}
-        self._items[".zmetadata"] = self.fs.cat_file(
-            "/".join([self.root, ".zmetadata"])
-        )
+        self._items[".zmetadata"] = self.fs.cat_file(f"{self.root}/.zmetadata")
         met = json.loads(self._items[".zmetadata"])
         self.record_size = met["record_size"]
         self.zmetadata = met["metadata"]
@@ -216,7 +214,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if fs.exists(root):
             fs.rm(root, recursive=True)
         fs.makedirs(root, exist_ok=True)
-        fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
+        fs.pipe(f"{root}/.zmetadata", json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
 
     @lru_cache()
