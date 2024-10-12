@@ -82,7 +82,8 @@ def infer_storage_options(
         # https://msdn.microsoft.com/en-us/library/jj710207.aspx
         windows_path = re.match(r"^/([a-zA-Z])[:|]([\\/].*)$", path)
         if windows_path:
-            path = "%s:%s" % windows_path.groups()
+            drive, path = windows_path.groups()
+            path = f"{drive}:{path}"
 
     if protocol in ["http", "https"]:
         # for HTTP, we don't want to parse, as requests will anyway
