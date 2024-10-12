@@ -213,21 +213,31 @@ Other Known Implementations
 - `adl`_ for Azure DataLake storage, with protocol "adl://"
 - `alluxiofs`_ to access fsspec implemented filesystem with Alluxio distributed cache
 - `boxfs`_ for access to Box file storage, with protocol "box://"
+- `csvbase`_ for access to csvbase.com hosted CSV files, with protocol "csvbase://"
 - `dropbox`_ for access to dropbox shares, with protocol "dropbox://"
 - `dvc`_ to access DVC/Git repository as a filesystem
+- `fsspec-encrypted`_ for transparent encryption on top of other fsspec filesystems.
 - `gcsfs`_ for Google Cloud Storage, with protocol "gcs://"
 - `gdrive`_ to access Google Drive and shares (experimental)
+- `git`_ to access Git repositories
 - `huggingface_hub`_ to access the Hugging Face Hub filesystem, with protocol "hf://"
+- `hdfs-native`_ to access Hadoop filesystem, with protocol "hdfs://"
+- `httpfs-sync`_ to access HTTP(s) files in a synchronous manner to offer an alternative to the aiohttp-based implementation.
 - `ipfsspec`_ for the InterPlanetary File System (IPFS), with protocol "ipfs://"
+- `irods`_ for access to iRODS servers, with protocol "irods://"
 - `lakefs`_ for lakeFS data lakes, with protocol "lakefs://"
+- `morefs`_ for `OverlayFileSystem`, `DictFileSystem`, and others
 - `ocifs`_ for access to Oracle Cloud Object Storage, with protocol "oci://"
 - `ocilake`_ for OCI Data Lake storage
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
 - `p9fs`_ for 9P (Plan 9 Filesystem Protocol) servers
+- `PyAthena`_ for S3 access to Amazon Athena, with protocol "s3://" or "s3a://"
+- `PyDrive2`_ for Google Drive access
 - `s3fs`_ for Amazon S3 and other compatible stores, with protocol "s3://"
 - `sshfs`_ for access to SSH servers, with protocol "ssh://" or "sftp://"
 - `swiftspec`_ for OpenStack SWIFT, with protocol "swift://"
 - `wandbfs`_ to access Wandb run data (experimental)
+- `wandbfsspec`_ to access Weights & Biases (experimental)
 - `webdav4`_ for WebDAV, with protocol "webdav://" or "dav://"
 - `xrootd`_ for xrootd, with protocol "root://"
 
@@ -235,21 +245,31 @@ Other Known Implementations
 .. _adl: https://github.com/dask/adlfs
 .. _alluxiofs: https://github.com/fsspec/alluxiofs
 .. _boxfs: https://github.com/IBM/boxfs
+.. _csvbase: https://github.com/calpaterson/csvbase-client
 .. _dropbox: https://github.com/fsspec/dropboxdrivefs
 .. _dvc: https://github.com/iterative/dvc
+.. _fsspec-encrypted: https://github.com/thevgergroup/fsspec-encrypted
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _gdrive: https://github.com/fsspec/gdrivefs
+.. _git: https://github.com/iterative/scmrepo
+.. _hdfs-native: https://github.com/Kimahriman/hdfs-native/blob/master/python/hdfs_native/fsspec.py
+.. _httpfs-sync: https://github.com/moradology/httpfs-sync
 .. _huggingface_hub: https://huggingface.co/docs/huggingface_hub/main/en/guides/hf_file_system
 .. _ipfsspec: https://github.com/fsspec/ipfsspec
-.. _lakefs: https://github.com/appliedAI-Initiative/lakefs-spec
+.. _irods: https://github.com/xwcl/irods_fsspec
+.. _lakefs: https://github.com/aai-institute/lakefs-spec
+.. _morefs: https://github.com/iterative/morefs
 .. _ocifs: https://ocifs.readthedocs.io/en/latest/
 .. _ocilake: https://github.com/oracle/ocifs
 .. _ossfs: https://github.com/fsspec/ossfs
 .. _p9fs: https://github.com/pbchekin/p9fs-py
+.. _PyAthena: https://github.com/laughingman7743/PyAthena
+.. _PyDrive2: https://github.com/iterative/PyDrive2
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _sshfs: https://github.com/fsspec/sshfs
 .. _swiftspec: https://github.com/fsspec/swiftspec
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
+.. _wandbfsspec: https://github.com/alvarobartt/wandbfsspec
 .. _webdav4: https://github.com/skshetry/webdav4
 .. _xrootd: https://github.com/CoffeaTeam/fsspec-xrootd
 
