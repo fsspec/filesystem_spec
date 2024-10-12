@@ -162,6 +162,7 @@ select = [
     "E9",
     "F",
     "FURB",
+    "I",
     "LOG",
     "PERF",
     "PLC",
