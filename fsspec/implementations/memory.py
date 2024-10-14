@@ -248,6 +248,10 @@ class MemoryFileSystem(AbstractFileSystem):
         except KeyError:
             raise FileNotFoundError(path)
 
+    def isfile(self, path):
+        path = self._strip_protocol(path)
+        return path in self.store
+
     def rm(self, path, recursive=False, maxdepth=None):
         if isinstance(path, str):
             path = self._strip_protocol(path)
@@ -255,14 +259,14 @@ class MemoryFileSystem(AbstractFileSystem):
             path = [self._strip_protocol(p) for p in path]
         paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
         for p in reversed(paths):
+            if self.isfile(p):
+                self.rm_file(p)
             # If the expanded path doesn't exist, it is only because the expanded
             # path was a directory that does not exist in self.pseudo_dirs. This
             # is possible if you directly create files without making the
             # directories first.
-            if not self.exists(p):
+            elif not self.exists(p):
                 continue
-            if self.isfile(p):
-                self.rm_file(p)
             else:
                 self.rmdir(p)
 
