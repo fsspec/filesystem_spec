@@ -346,7 +346,10 @@ def _un_chain(path, kwargs):
         kws = kwargs.pop(protocol, {})
         if bit is bits[0]:
             kws.update(kwargs)
-        kw = dict(**extra_kwargs, **kws)
+        kw = dict(
+            **{k: v for k, v in extra_kwargs.items() if k not in kws or v != kws[k]},
+            **kws,
+        )
         bit = cls._strip_protocol(bit)
         if (
             protocol in {"blockcache", "filecache", "simplecache"}
