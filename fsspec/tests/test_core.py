@@ -468,6 +468,7 @@ def test_automkdir_local():
 
 
 def test_repeated_argument():
+    pytest.importorskip("adlfs")
     from fsspec.core import url_to_fs
 
     fs, url = url_to_fs(

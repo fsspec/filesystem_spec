@@ -96,10 +96,9 @@ def test_run_coros_in_chunks(monkeypatch):
 
         total_running += 1
         await asyncio.sleep(0)
-        total_running -= 1
-
         if total_running > 4:
             raise ValueError("More than 4 coroutines are running together")
+        total_running -= 1
         return 1
 
     async def main(**kwargs):
