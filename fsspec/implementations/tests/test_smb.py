@@ -29,7 +29,7 @@ else:
 
 
 def stop_docker(container):
-    cmd = shlex.split('docker ps -a -q --filter "name=%s"' % container)
+    cmd = shlex.split(f'docker ps -a -q --filter "name={container}"')
     cid = subprocess.check_output(cmd).strip().decode()
     if cid:
         subprocess.call(["docker", "rm", "-f", "-v", cid])

@@ -225,7 +225,7 @@ class BaseAbstractFixtures:
         for i in range(10):
             hashed_i = md5(str(i).encode("utf-8")).hexdigest()
             path = some_join(source, f"{hashed_i}.txt")
-            some_fs.pipe(path=path, value=f"{i}".encode("utf-8"))
+            some_fs.pipe(path=path, value=f"{i}".encode())
         return source
 
 

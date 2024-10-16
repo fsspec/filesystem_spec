@@ -428,7 +428,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if len(partition) < self.record_size:
             try:
                 original = self.open_refs(field, record)
-            except IOError:
+            except OSError:
                 pass
 
         if original:

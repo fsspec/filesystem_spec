@@ -208,7 +208,7 @@ class DummyAsyncStreamedFile(fsspec.asyn.AbstractAsyncStreamedFile):
 async def test_async_streamed_file_write():
     test_fs = DummyAsyncFS()
     streamed_file = await test_fs.open_async("misc/foo.txt", mode="wb")
-    inp_data = "foo-bar".encode("utf8") * streamed_file.blocksize * 2
+    inp_data = b"foo-bar" * streamed_file.blocksize * 2
     await streamed_file.write(inp_data)
     assert streamed_file.loc == len(inp_data)
     await streamed_file.close()
