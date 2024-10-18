@@ -387,7 +387,7 @@ def _mlsd2(ftp, path="."):
                 "size": split_line[4],
             },
         )
-        if "d" == this[1]["unix.mode"][0]:
+        if this[1]["unix.mode"][0] == "d":
             this[1]["type"] = "dir"
         else:
             this[1]["type"] = "file"

@@ -612,7 +612,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         **kwargs,
     ):
         paths = self.expand_path(
-            path, recursive=recursive, maxdepth=kwargs.get("maxdepth", None)
+            path, recursive=recursive, maxdepth=kwargs.get("maxdepth")
         )
         getpaths = []
         storepaths = []
