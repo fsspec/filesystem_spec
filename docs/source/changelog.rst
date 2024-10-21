@@ -1,6 +1,27 @@
 Changelog
 =========
 
+2024.10.0
+---------
+
+Fixes
+
+- Peformance of memoryFS rm (#1725)
+- Performance of git FS info (#1712)
+- Avoid git hex for newer pygit (#1703)
+- tests fix for zip (#1700, 1691)
+- missing open_async for dirFS (#1698)
+- handle pathlib in zip (#1689)
+- skip tests needing kerchunk if not installed (#1689)
+- allow repeated kwargs in unchain (#1673)
+
+Other
+
+- Code style (#1704, 1706)
+- allow pyarrow in referenceFS parquet (#1692)
+- don't hardcode test port for parallel runs (#1690)
+
+
 2024.9.0
 --------
 
