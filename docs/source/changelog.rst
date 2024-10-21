@@ -6,7 +6,7 @@ Changelog
 
 Fixes
 
-- Peformance of memoryFS rm (#1725)
+- Performance of memoryFS rm (#1725)
 - Performance of git FS info (#1712)
 - Avoid git hex for newer pygit (#1703)
 - tests fix for zip (#1700, 1691)
