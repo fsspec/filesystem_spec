@@ -7,7 +7,7 @@ import math
 import os
 import threading
 import warnings
-from itertools import groupby, filterfalse
+from itertools import groupby
 from operator import itemgetter
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
