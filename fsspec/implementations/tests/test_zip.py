@@ -105,7 +105,7 @@ def test_zip_glob_star(m):
     outfiles = fs.glob("*")
     assert len(outfiles) == 1
 
-    fn = f"{os.path.dirname(os.path.abspath((__file__)))}/out.zip"
+    fn = f"{os.path.dirname(os.path.abspath(__file__))}/out.zip"
     fs = fsspec.filesystem("zip", fo=fn, mode="r")
     outfiles = fs.glob("*")
     assert len(outfiles) == 1

@@ -121,8 +121,7 @@ def test_chmod(mount_local):
 
     cp = subprocess.run(
         ["cp", str(mount_dir / "text"), str(mount_dir / "new")],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
 
