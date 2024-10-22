@@ -329,6 +329,9 @@ def open_files(
 
 
 def _un_chain(path, kwargs):
+    # Avoid a circular import
+    from fsspec.implementations.cached import CachingFileSystem
+
     x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
     bits = (
         [p if "://" in p or x.match(p) else p + "://" for p in path.split("::")]
@@ -352,8 +355,8 @@ def _un_chain(path, kwargs):
         )
         bit = cls._strip_protocol(bit)
         if (
-            protocol in {"blockcache", "filecache", "simplecache"}
-            and "target_protocol" not in kw
+            "target_protocol" not in kw
+            and issubclass(cls, CachingFileSystem)
         ):
             bit = previous_bit
         out.append((bit, protocol, kw))
