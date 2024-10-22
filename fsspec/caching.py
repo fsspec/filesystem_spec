@@ -165,7 +165,7 @@ class MMapCache(BaseCache):
         end_block = end // self.blocksize
         block_range = range(start_block, end_block + 1)
         need = (i for i in block_range if i not in self.blocks)
-        self.hit_count += len(self.blocks.intersection(block_range))
+        self.hit_count += sum(1 for i in block_range if i in self.blocks)
 
         # Consolidate needed blocks.
         # Algorithm adapted from Python 2.x itertools documentation
