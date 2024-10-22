@@ -7,7 +7,7 @@ import math
 import os
 import threading
 import warnings
-from itertools import groupby
+from itertools import groupby, filterfalse
 from operator import itemgetter
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
@@ -164,8 +164,7 @@ class MMapCache(BaseCache):
         start_block = start // self.blocksize
         end_block = end // self.blocksize
         block_range = range(start_block, end_block + 1)
-        need = [i for i in block_range if i not in self.blocks]
-        self.miss_count += len(need)
+        need = filterfalse(self.blocks.__contains__, block_range)
         self.hit_count += len(self.blocks.intersection(block_range))
 
         # Consolidate needed blocks.
@@ -178,6 +177,7 @@ class MMapCache(BaseCache):
             logger.debug(f"MMap get blocks {_blocks[0]}-{_blocks[-1]} ({sstart}-{send})")
             self.cache[sstart:send] = self.fetcher(sstart, send)
             self.blocks.update(_blocks)
+            self.miss_count += len(_blocks)
 
         return self.cache[start:end]
 
