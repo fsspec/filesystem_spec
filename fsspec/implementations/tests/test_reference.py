@@ -524,13 +524,13 @@ async def test_async_cat_file_ranges():
             "version": 1,
             "refs": {
                 "reference_time/0": [
-                    "http://noaa-nwm-retro-v2-0-pds.s3.amazonaws.com/full_physics/2017/201704010000.CHRTOUT_DOMAIN1.comp",
+                    "https://noaa-nwm-retro-v2-0-pds.s3.amazonaws.com/full_physics/2017/201704010000.CHRTOUT_DOMAIN1.comp",
                     39783,
                     12,
                 ],
             },
         },
-        fs=fss,
+        fs={'https': fss},
         asynchronous=True,
     )
 
