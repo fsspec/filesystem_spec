@@ -7,7 +7,7 @@ import math
 import os
 from itertools import chain
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import fsspec.core
 
@@ -104,7 +104,13 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         return pd
 
     def __init__(
-        self, root, fs=None, out_root=None, cache_size=128, categorical_threshold=10
+        self,
+        root,
+        fs=None,
+        out_root=None,
+        cache_size=128,
+        categorical_threshold=10,
+        engine: Literal["fastparquet", "pyarrow"] = "fastparquet",
     ):
         """
 
@@ -126,15 +132,24 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             Encode urls as pandas.Categorical to reduce memory footprint if the ratio
             of the number of unique urls to total number of refs for each variable
             is greater than or equal to this number. (default 10)
+        engine: Literal["fastparquet","pyarrow"]
+            Engine choice for reading parquet files. (default is "fastparquet")
         """
+
         self.root = root
         self.chunk_sizes = {}
         self.out_root = out_root or self.root
         self.cat_thresh = categorical_threshold
+        self.engine = engine
         self.cache_size = cache_size
         self.url = self.root + "/{field}/refs.{record}.parq"
         # TODO: derive fs from `root`
         self.fs = fsspec.filesystem("file") if fs is None else fs
+
+        from importlib.util import find_spec
+
+        if self.engine == "pyarrow" and find_spec("pyarrow") is None:
+            raise ImportError("engine choice `pyarrow` is not installed.")
 
     def __getattr__(self, item):
         if item in ("_items", "record_size", "zmetadata"):
@@ -159,8 +174,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             path = self.url.format(field=field, record=record)
             data = io.BytesIO(self.fs.cat_file(path))
             try:
-                df = self.pd.read_parquet(data, engine="fastparquet")
-                refs = {c: df[c].values for c in df.columns}
+                df = self.pd.read_parquet(data, engine=self.engine)
+                refs = {c: df[c].to_numpy() for c in df.columns}
             except IOError:
                 refs = None
             return refs
@@ -466,18 +481,28 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
         fn = f"{base_url or self.out_root}/{field}/refs.{record}.parq"
         self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
+
+        if self.engine == "pyarrow":
+            df_backend_kwargs = {"write_statistics": False}
+        elif self.engine == "fastparquet":
+            df_backend_kwargs = {
+                "stats": False,
+                "object_encoding": object_encoding,
+                "has_nulls": has_nulls,
+            }
+        else:
+            raise NotImplementedError(f"{self.engine} not supported")
+
         df.to_parquet(
             fn,
-            engine="fastparquet",
+            engine=self.engine,
             storage_options=storage_options
             or getattr(self.fs, "storage_options", None),
             compression="zstd",
             index=False,
-            stats=False,
-            object_encoding=object_encoding,
-            has_nulls=has_nulls,
-            # **kwargs,
+            **df_backend_kwargs,
         )
+
         partition.clear()
         self._items.pop((field, record))
 
@@ -489,6 +514,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         base_url: str
             Location of the output
         """
+
         # write what we have so far and clear sub chunks
         for thing in list(self._items):
             if isinstance(thing, tuple):
@@ -1003,9 +1029,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         out = {}
         for gen in gens:
             dimension = {
-                k: v
-                if isinstance(v, list)
-                else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                k: (
+                    v
+                    if isinstance(v, list)
+                    else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                )
                 for k, v in gen["dimensions"].items()
             }
             products = (

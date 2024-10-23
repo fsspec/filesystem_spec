@@ -16,20 +16,20 @@ from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
 
 def test_list(server):
     h = fsspec.filesystem("http")
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
 
 def test_list_invalid_args(server):
     with pytest.raises(TypeError):
         h = fsspec.filesystem("http", use_foobar=True)
-        h.glob(server + "/index/*")
+        h.glob(server.address + "/index/*")
 
 
 def test_list_cache(server):
     h = fsspec.filesystem("http", use_listings_cache=True)
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
 
 def test_list_cache_with_expiry_time_cached(server):
@@ -40,14 +40,14 @@ def test_list_cache_with_expiry_time_cached(server):
 
     # By querying the filesystem with "use_listings_cache=True",
     # the cache will automatically get populated.
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
     # Verify cache content.
     assert len(h.dircache) == 1
 
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
 
 def test_list_cache_with_expiry_time_purged(server):
@@ -58,26 +58,26 @@ def test_list_cache_with_expiry_time_purged(server):
 
     # By querying the filesystem with "use_listings_cache=True",
     # the cache will automatically get populated.
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
     assert len(h.dircache) == 1
 
     # Verify cache content.
-    assert server + "/index/" in h.dircache
-    assert len(h.dircache.get(server + "/index/")) == 1
+    assert server.address + "/index/" in h.dircache
+    assert len(h.dircache.get(server.address + "/index/")) == 1
 
     # Wait beyond the TTL / cache expiry time.
     time.sleep(0.31)
 
     # Verify that the cache item should have been purged.
-    cached_items = h.dircache.get(server + "/index/")
+    cached_items = h.dircache.get(server.address + "/index/")
     assert cached_items is None
 
     # Verify that after clearing the item from the cache,
     # it can get populated again.
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
-    cached_items = h.dircache.get(server + "/index/")
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
+    cached_items = h.dircache.get(server.address + "/index/")
     assert len(cached_items) == 1
 
 
@@ -89,8 +89,8 @@ def test_list_cache_reuse(server):
 
     # By querying the filesystem with "use_listings_cache=True",
     # the cache will automatically get populated.
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
     # Verify cache content.
     assert len(h.dircache) == 1
@@ -114,53 +114,53 @@ def test_ls_raises_filenotfound(server):
     h = fsspec.filesystem("http")
 
     with pytest.raises(FileNotFoundError):
-        h.ls(server + "/not-a-key")
+        h.ls(server.address + "/not-a-key")
 
 
 def test_list_cache_with_max_paths(server):
     h = fsspec.filesystem("http", use_listings_cache=True, max_paths=5)
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
 
 def test_list_cache_with_skip_instance_cache(server):
     h = fsspec.filesystem("http", use_listings_cache=True, skip_instance_cache=True)
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
 
 def test_glob_return_subfolders(server):
     h = fsspec.filesystem("http")
-    out = h.glob(server + "/simple/*")
+    out = h.glob(server.address + "/simple/*")
     assert set(out) == {
-        server + "/simple/dir/",
-        server + "/simple/file",
+        server.address + "/simple/dir/",
+        server.address + "/simple/file",
     }
 
 
 def test_isdir(server):
     h = fsspec.filesystem("http")
-    assert h.isdir(server + "/index/")
-    assert not h.isdir(server + "/index/realfile")
-    assert not h.isdir(server + "doesnotevenexist")
+    assert h.isdir(server.address + "/index/")
+    assert not h.isdir(server.realfile)
+    assert not h.isdir(server.address + "doesnotevenexist")
 
 
 def test_policy_arg(server):
     h = fsspec.filesystem("http", size_policy="get")
-    out = h.glob(server + "/index/*")
-    assert out == [server + "/index/realfile"]
+    out = h.glob(server.address + "/index/*")
+    assert out == [server.realfile]
 
 
 def test_exists(server):
     h = fsspec.filesystem("http")
-    assert not h.exists(server + "/notafile")
+    assert not h.exists(server.address + "/notafile")
     with pytest.raises(FileNotFoundError):
-        h.cat(server + "/notafile")
+        h.cat(server.address + "/notafile")
 
 
 def test_read(server):
     h = fsspec.filesystem("http")
-    out = server + "/index/realfile"
+    out = server.realfile
     with h.open(out, "rb") as f:
         assert f.read() == data
     with h.open(out, "rb", block_size=0) as f:
@@ -174,7 +174,7 @@ def test_file_pickle(server):
 
     # via HTTPFile
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
-    out = server + "/index/realfile"
+    out = server.realfile
 
     with fsspec.open(out, headers={"give_length": "true", "head_ok": "true"}) as f:
         pic = pickle.loads(pickle.dumps(f))
@@ -188,7 +188,7 @@ def test_file_pickle(server):
 
     # via HTTPStreamFile
     h = fsspec.filesystem("http")
-    out = server + "/index/realfile"
+    out = server.realfile
     with h.open(out, "rb") as f:
         out = pickle.dumps(f)
         assert f.read() == data
@@ -198,7 +198,7 @@ def test_file_pickle(server):
 
 def test_methods(server):
     h = fsspec.filesystem("http")
-    url = server + "/index/realfile"
+    url = server.realfile
     assert h.exists(url)
     assert h.cat(url) == data
 
@@ -219,7 +219,7 @@ def test_methods(server):
 )
 def test_random_access(server, headers):
     h = fsspec.filesystem("http", headers=headers)
-    url = server + "/index/realfile"
+    url = server.realfile
     with h.open(url, "rb") as f:
         if headers:
             assert f.size == len(data)
@@ -237,18 +237,22 @@ def test_random_access(server, headers):
 @pytest.mark.parametrize(
     "headers",
     [
-        {"ignore_range": "true", "head_ok": "true", "head_give_length": "true"},
+        # HTTPFile seeks, response headers lack size, assumed no range support
+        {"head_ok": "true", "head_give_length": "true"},
+        # HTTPFile seeks, response is not a range
         {"ignore_range": "true", "give_length": "true"},
         {"ignore_range": "true", "give_range": "true"},
+        # HTTPStreamFile does not seek (past 0)
+        {"accept_range": "none", "head_ok": "true", "give_length": "true"},
     ],
 )
 def test_no_range_support(server, headers):
     h = fsspec.filesystem("http", headers=headers)
-    url = server + "/index/realfile"
+    url = server.realfile
     with h.open(url, "rb") as f:
         # Random access is not possible if the server doesn't respect Range
-        f.seek(5)
         with pytest.raises(ValueError):
+            f.seek(5)
             f.read(10)
 
         # Reading from the beginning should still work
@@ -258,7 +262,7 @@ def test_no_range_support(server, headers):
 
 def test_stream_seek(server):
     h = fsspec.filesystem("http")
-    url = server + "/index/realfile"
+    url = server.realfile
     with h.open(url, "rb") as f:
         f.seek(0)  # is OK
         data1 = f.read(5)
@@ -271,11 +275,11 @@ def test_stream_seek(server):
 
 def test_mapper_url(server):
     h = fsspec.filesystem("http")
-    mapper = h.get_mapper(server + "/index/")
+    mapper = h.get_mapper(server.address + "/index/")
     assert mapper.root.startswith("http:")
     assert list(mapper)
 
-    mapper2 = fsspec.get_mapper(server + "/index/")
+    mapper2 = fsspec.get_mapper(server.address + "/index/")
     assert mapper2.root.startswith("http:")
     assert list(mapper) == list(mapper2)
 
@@ -284,7 +288,7 @@ def test_content_length_zero(server):
     h = fsspec.filesystem(
         "http", headers={"give_length": "true", "zero_length": "true"}
     )
-    url = server + "/index/realfile"
+    url = server.realfile
 
     with h.open(url, "rb") as f:
         assert f.read() == data
@@ -294,7 +298,7 @@ def test_content_encoding_gzip(server):
     h = fsspec.filesystem(
         "http", headers={"give_length": "true", "gzip_encoding": "true"}
     )
-    url = server + "/index/realfile"
+    url = server.realfile
 
     with h.open(url, "rb") as f:
         assert isinstance(f, HTTPStreamFile)
@@ -304,7 +308,7 @@ def test_content_encoding_gzip(server):
 
 def test_download(server, tmpdir):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
-    url = server + "/index/realfile"
+    url = server.realfile
     fn = os.path.join(tmpdir, "afile")
     h.get(url, fn)
     assert open(fn, "rb").read() == data
@@ -312,8 +316,8 @@ def test_download(server, tmpdir):
 
 def test_multi_download(server, tmpdir):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
-    urla = server + "/index/realfile"
-    urlb = server + "/index/otherfile"
+    urla = server.realfile
+    urlb = server.address + "/index/otherfile"
     fna = os.path.join(tmpdir, "afile")
     fnb = os.path.join(tmpdir, "bfile")
     h.get([urla, urlb], [fna, fnb])
@@ -323,25 +327,25 @@ def test_multi_download(server, tmpdir):
 
 def test_ls(server):
     h = fsspec.filesystem("http")
-    l = h.ls(server + "/data/20020401/", detail=False)
-    nc = server + "/data/20020401/GRACEDADM_CLSM0125US_7D.A20020401.030.nc4"
+    l = h.ls(server.address + "/data/20020401/", detail=False)
+    nc = server.address + "/data/20020401/GRACEDADM_CLSM0125US_7D.A20020401.030.nc4"
     assert nc in l
     assert len(l) == 11
-    assert all(u["type"] == "file" for u in h.ls(server + "/data/20020401/"))
-    assert h.glob(server + "/data/20020401/*.nc4") == [nc]
+    assert all(u["type"] == "file" for u in h.ls(server.address + "/data/20020401/"))
+    assert h.glob(server.address + "/data/20020401/*.nc4") == [nc]
 
 
 def test_mcat(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
-    urla = server + "/index/realfile"
-    urlb = server + "/index/otherfile"
+    urla = server.realfile
+    urlb = server.address + "/index/otherfile"
     out = h.cat([urla, urlb])
     assert out == {urla: data, urlb: data}
 
 
 def test_cat_file_range(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
-    urla = server + "/index/realfile"
+    urla = server.realfile
     assert h.cat(urla, start=1, end=10) == data[1:10]
     assert h.cat(urla, start=1) == data[1:]
 
@@ -354,37 +358,37 @@ def test_cat_file_range(server):
 def test_cat_file_range_numpy(server):
     np = pytest.importorskip("numpy")
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
-    urla = server + "/index/realfile"
+    urla = server.realfile
     assert h.cat(urla, start=np.int8(1), end=np.int8(10)) == data[1:10]
     out = h.cat_ranges([urla, urla], starts=np.array([1, 5]), ends=np.array([10, 15]))
     assert out == [data[1:10], data[5:15]]
 
 
 def test_mcat_cache(server):
-    urla = server + "/index/realfile"
-    urlb = server + "/index/otherfile"
+    urla = server.realfile
+    urlb = server.address + "/index/otherfile"
     fs = fsspec.filesystem("simplecache", target_protocol="http")
     assert fs.cat([urla, urlb]) == {urla: data, urlb: data}
 
 
 def test_mcat_expand(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
-    out = h.cat(server + "/index/*")
-    assert out == {server + "/index/realfile": data}
+    out = h.cat(server.address + "/index/*")
+    assert out == {server.realfile: data}
 
 
 def test_info(server):
     fs = fsspec.filesystem("http", headers={"give_etag": "true", "head_ok": "true"})
-    info = fs.info(server + "/index/realfile")
+    info = fs.info(server.realfile)
     assert info["ETag"] == "xxx"
 
     fs = fsspec.filesystem("http", headers={"give_mimetype": "true"})
-    info = fs.info(server + "/index/realfile")
+    info = fs.info(server.realfile)
     assert info["mimetype"] == "text/html"
 
     fs = fsspec.filesystem("http", headers={"redirect": "true"})
-    info = fs.info(server + "/redirectme")
-    assert info["url"] == server + "/index/realfile"
+    info = fs.info(server.address + "/redirectme")
+    assert info["url"] == server.realfile
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT"])
@@ -396,21 +400,21 @@ def test_put_file(server, tmp_path, method, reset_files):
 
     fs = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
     with pytest.raises(FileNotFoundError):
-        fs.info(server + "/hey")
+        fs.info(server.address + "/hey")
 
-    fs.put_file(src_file, server + "/hey", method=method)
-    assert fs.info(server + "/hey")["size"] == len(data)
+    fs.put_file(src_file, server.address + "/hey", method=method)
+    assert fs.info(server.address + "/hey")["size"] == len(data)
 
-    fs.get_file(server + "/hey", dwl_file)
+    fs.get_file(server.address + "/hey", dwl_file)
     assert dwl_file.read_bytes() == data
 
     src_file.write_bytes(b"xxx")
     with open(src_file, "rb") as stream:
-        fs.put_file(stream, server + "/hey_2", method=method)
-    assert fs.cat(server + "/hey_2") == b"xxx"
+        fs.put_file(stream, server.address + "/hey_2", method=method)
+    assert fs.cat(server.address + "/hey_2") == b"xxx"
 
-    fs.put_file(io.BytesIO(b"yyy"), server + "/hey_3", method=method)
-    assert fs.cat(server + "/hey_3") == b"yyy"
+    fs.put_file(io.BytesIO(b"yyy"), server.address + "/hey_3", method=method)
+    assert fs.cat(server.address + "/hey_3") == b"yyy"
 
 
 async def get_aiohttp():
@@ -446,7 +450,7 @@ def test_async_other_thread(server):
     th.start()
     fs = fsspec.filesystem("http", asynchronous=True, loop=loop)
     asyncio.run_coroutine_threadsafe(fs.set_session(), loop=loop).result()
-    url = server + "/index/realfile"
+    url = server.realfile
     cor = fs._cat([url])
     fut = asyncio.run_coroutine_threadsafe(cor, loop=loop)
     assert fut.result() == {url: data}
@@ -459,7 +463,7 @@ def test_async_this_thread(server):
 
         session = await fs.set_session()  # creates client
 
-        url = server + "/index/realfile"
+        url = server.realfile
         with pytest.raises((NotImplementedError, RuntimeError)):
             fs.cat([url])
         out = await fs._cat([url])
@@ -489,7 +493,7 @@ def test_processes(server, method):
     if win and method != "spawn":
         pytest.skip("Windows can only spawn")
     ctx = mp.get_context(method)
-    fn = server + "/index/realfile"
+    fn = server.realfile
     fs = fsspec.filesystem("http")
 
     q = ctx.Queue()
@@ -509,7 +513,7 @@ def test_close(get_client):
 @pytest.mark.asyncio
 async def test_async_file(server):
     fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
-    fn = server + "/index/realfile"
+    fn = server.realfile
     of = await fs.open_async(fn)
     async with of as f:
         out1 = await f.read(10)
@@ -521,19 +525,21 @@ async def test_async_file(server):
 
 def test_encoded(server):
     fs = fsspec.filesystem("http", encoded=True)
-    out = fs.cat(server + "/Hello%3A%20G%C3%BCnter", headers={"give_path": "true"})
+    out = fs.cat(
+        server.address + "/Hello%3A%20G%C3%BCnter", headers={"give_path": "true"}
+    )
     assert json.loads(out)["path"] == "/Hello%3A%20G%C3%BCnter"
     with pytest.raises(aiohttp.client_exceptions.ClientError):
-        fs.cat(server + "/Hello: Günter", headers={"give_path": "true"})
+        fs.cat(server.address + "/Hello: Günter", headers={"give_path": "true"})
 
     fs = fsspec.filesystem("http", encoded=False)
-    out = fs.cat(server + "/Hello: Günter", headers={"give_path": "true"})
+    out = fs.cat(server.address + "/Hello: Günter", headers={"give_path": "true"})
     assert json.loads(out)["path"] == "/Hello:%20G%C3%BCnter"
 
 
 def test_with_cache(server):
     fs = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
-    fn = server + "/index/realfile"
+    fn = server.realfile
     fs1 = fsspec.filesystem("blockcache", fs=fs)
     with fs1.open(fn, "rb") as f:
         out = f.read()
@@ -545,16 +551,18 @@ async def test_async_expand_path(server):
     fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
 
     # maxdepth=1
-    assert await fs._expand_path(server + "/index", recursive=True, maxdepth=1) == [
-        server + "/index",
-        server + "/index/realfile",
+    assert await fs._expand_path(
+        server.address + "/index", recursive=True, maxdepth=1
+    ) == [
+        server.address + "/index",
+        server.address + "/index/realfile",
     ]
 
     # maxdepth=0
     with pytest.raises(ValueError):
-        await fs._expand_path(server + "/index", maxdepth=0)
+        await fs._expand_path(server.address + "/index", maxdepth=0)
     with pytest.raises(ValueError):
-        await fs._expand_path(server + "/index", recursive=True, maxdepth=0)
+        await fs._expand_path(server.address + "/index", recursive=True, maxdepth=0)
 
     await fs._session.close()
 
@@ -564,12 +572,12 @@ async def test_async_walk(server):
     fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
 
     # No maxdepth
-    res = [a async for a in fs._walk(server + "/index")]
-    assert res == [(server + "/index", [], ["realfile"])]
+    res = [a async for a in fs._walk(server.address + "/index")]
+    assert res == [(server.address + "/index", [], ["realfile"])]
 
     # maxdepth=0
     with pytest.raises(ValueError):
-        async for a in fs._walk(server + "/index", maxdepth=0):
+        async for a in fs._walk(server.address + "/index", maxdepth=0):
             pass
 
     await fs._session.close()

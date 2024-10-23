@@ -79,6 +79,14 @@ class LocalFileSystem(AbstractFileSystem):
                 t = "file"
             else:
                 t = "other"
+
+            size = out.st_size
+            if link:
+                try:
+                    out2 = path.stat(follow_symlinks=True)
+                    size = out2.st_size
+                except OSError:
+                    size = 0
             path = self._strip_protocol(path.path)
         else:
             # str or path-like
@@ -87,6 +95,7 @@ class LocalFileSystem(AbstractFileSystem):
             link = stat.S_ISLNK(out.st_mode)
             if link:
                 out = os.stat(path, follow_symlinks=True)
+            size = out.st_size
             if stat.S_ISDIR(out.st_mode):
                 t = "directory"
             elif stat.S_ISREG(out.st_mode):
@@ -95,20 +104,15 @@ class LocalFileSystem(AbstractFileSystem):
                 t = "other"
         result = {
             "name": path,
-            "size": out.st_size,
+            "size": size,
             "type": t,
             "created": out.st_ctime,
             "islink": link,
         }
         for field in ["mode", "uid", "gid", "mtime", "ino", "nlink"]:
             result[field] = getattr(out, f"st_{field}")
-        if result["islink"]:
+        if link:
             result["destination"] = os.readlink(path)
-            try:
-                out2 = os.stat(path, follow_symlinks=True)
-                result["size"] = out2.st_size
-            except OSError:
-                result["size"] = 0
         return result
 
     def lexists(self, path, **kwargs):

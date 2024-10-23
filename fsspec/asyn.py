@@ -344,6 +344,10 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _cp_file(self, path1, path2, **kwargs):
         raise NotImplementedError
 
+    async def _mv_file(self, path1, path2):
+        await self._cp_file(path1, path2)
+        await self._rm_file(path1)
+
     async def _copy(
         self,
         path1,
@@ -1072,7 +1076,7 @@ class AbstractAsyncStreamedFile(AbstractBufferedFile):
             self.offset = 0
             try:
                 await self._initiate_upload()
-            except:  # noqa: E722
+            except:
                 self.closed = True
                 raise
 

@@ -428,11 +428,9 @@ class AbstractFileSystem(metaclass=_Cached):
         except (FileNotFoundError, OSError) as e:
             if on_error == "raise":
                 raise
-            elif callable(on_error):
+            if callable(on_error):
                 on_error(e)
-            if detail:
-                return path, {}, {}
-            return path, [], []
+            return
 
         for info in listing:
             # each info name must be at least [path]/part , but here
@@ -650,7 +648,7 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns a single dictionary, with exactly the same information as ``ls``
         would with ``detail=True``.
 
-        The default implementation should calls ls and could be overridden by a
+        The default implementation calls ls and could be overridden by a
         shortcut. kwargs are passed on to ```ls()``.
 
         Some file systems might not be able to measure the file's size, in
@@ -1892,7 +1890,7 @@ class AbstractBufferedFile(io.IOBase):
             self.offset = 0
             try:
                 self._initiate_upload()
-            except:  # noqa: E722
+            except:
                 self.closed = True
                 raise
 

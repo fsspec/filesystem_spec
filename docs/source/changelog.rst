@@ -1,6 +1,49 @@
 Changelog
 =========
 
+2024.10.0
+---------
+
+Fixes
+
+- Performance of memoryFS rm (#1725)
+- Performance of git FS info (#1712)
+- Avoid git hex for newer pygit (#1703)
+- tests fix for zip (#1700, 1691)
+- missing open_async for dirFS (#1698)
+- handle pathlib in zip (#1689)
+- skip tests needing kerchunk if not installed (#1689)
+- allow repeated kwargs in unchain (#1673)
+
+Other
+
+- Code style (#1704, 1706)
+- allow pyarrow in referenceFS parquet (#1692)
+- don't hardcode test port for parallel runs (#1690)
+
+
+2024.9.0
+--------
+
+Enhancements
+
+- fewer stat calls in localFS (#1659)
+- faster find in ZIP (#1664)
+
+Fixes
+
+- paths without "/" in dirFS (#1638)
+- paths with "/" in FTS (#1643, 1644)
+- ls in parquet-based nested reference sets, and append (#1645, 1657)
+- exception handling for SMB (#1650)
+
+
+Other
+
+- style (#1640, 1641, 1660)
+- docs: xrootd (#1646)
+- CI back on miniconda (#1658)
+
 2024.6.1
 --------
 

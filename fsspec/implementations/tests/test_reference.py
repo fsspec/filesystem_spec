@@ -10,18 +10,18 @@ from fsspec.implementations.reference import (
     ReferenceFileSystem,
     ReferenceNotReachable,
 )
-from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
 
 
-def test_simple(server):  # noqa: F811
+def test_simple(server):
     # The dictionary in refs may be dumped with a different separator
     # depending on whether json or ujson is imported
     from fsspec.implementations.reference import json as json_impl
 
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c": (realfile, 1, 5),
+        "b": (server.realfile, 0, 5),
+        "c": (server.realfile, 1, 5),
         "d": b"base64:aGVsbG8=",
         "e": {"key": "value"},
     }
@@ -37,7 +37,7 @@ def test_simple(server):  # noqa: F811
         assert f.read(2) == "he"
 
 
-def test_simple_ver1(server):  # noqa: F811
+def test_simple_ver1(server):
     # The dictionary in refs may be dumped with a different separator
     # depending on whether json or ujson is imported
     from fsspec.implementations.reference import json as json_impl
@@ -46,8 +46,8 @@ def test_simple_ver1(server):  # noqa: F811
         "version": 1,
         "refs": {
             "a": b"data",
-            "b": (realfile, 0, 5),
-            "c": (realfile, 1, 5),
+            "b": (server.realfile, 0, 5),
+            "c": (server.realfile, 1, 5),
             "d": b"base64:aGVsbG8=",
             "e": {"key": "value"},
         },
@@ -75,8 +75,8 @@ def test_target_options(m):
     assert fs.cat("a") == b"hello"
 
 
-def test_ls(server):  # noqa: F811
-    refs = {"a": b"data", "b": (realfile, 0, 5), "c/d": (realfile, 1, 6)}
+def test_ls(server):
+    refs = {"a": b"data", "b": (server.realfile, 0, 5), "c/d": (server.realfile, 1, 6)}
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
@@ -99,12 +99,12 @@ def test_nested_dirs_ls():
     assert {e["name"] for e in fs.ls("B")} == {"B/C", "B/_"}
 
 
-def test_info(server):  # noqa: F811
+def test_info(server):
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c/d": (realfile, 1, 6),
-        "e": (realfile,),
+        "b": (server.realfile, 0, 5),
+        "c/d": (server.realfile, 1, 6),
+        "e": (server.realfile,),
     }
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -117,9 +117,9 @@ def test_info(server):  # noqa: F811
 def test_mutable(server, m):
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c/d": (realfile, 1, 6),
-        "e": (realfile,),
+        "b": (server.realfile, 0, 5),
+        "c/d": (server.realfile, 1, 6),
+        "e": (server.realfile,),
     }
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -173,13 +173,13 @@ def test_put_get_single(tmpdir):
     assert fs.cat("hi") == b"data"
 
 
-def test_defaults(server):  # noqa: F811
+def test_defaults(server):
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(
         "reference",
         fo=refs,
         target_protocol="http",
-        target=realfile,
+        target=server.realfile,
         remote_protocol="http",
     )
 
@@ -761,17 +761,25 @@ def test_append_parquet(lazy_refs, m):
     assert lazy2["data/1"] == b"Adata"
 
 
-def test_deep_parq(m):
+@pytest.mark.parametrize("engine", ["fastparquet", "pyarrow"])
+def test_deep_parq(m, engine):
+    pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
+
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
-        "memory://out.parq", fs=m
+        "memory://out.parq",
+        fs=m,
+        engine=engine,
     )
     g = zarr.open_group(lz, mode="w")
+
     g2 = g.create_group("instant")
     g2.create_dataset(name="one", data=[1, 2, 3])
     lz.flush()
 
-    lz = fsspec.implementations.reference.LazyReferenceMapper("memory://out.parq", fs=m)
+    lz = fsspec.implementations.reference.LazyReferenceMapper(
+        "memory://out.parq", fs=m, engine=engine
+    )
     g = zarr.open_group(lz)
     assert g.instant.one[:].tolist() == [1, 2, 3]
     assert sorted(_["name"] for _ in lz.ls("")) == [".zgroup", ".zmetadata", "instant"]
@@ -779,6 +787,7 @@ def test_deep_parq(m):
         "instant/.zgroup",
         "instant/one",
     ]
+
     assert sorted(_["name"] for _ in lz.ls("instant/one")) == [
         "instant/one/.zarray",
         "instant/one/0",

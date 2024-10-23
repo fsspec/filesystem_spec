@@ -4,7 +4,7 @@ pytest.importorskip("s3fs")
 pytest.importorskip("moto")
 
 try:
-    from s3fs.tests.test_s3fs import (  # noqa: E402,F401
+    from s3fs.tests.test_s3fs import (  # noqa: F401
         endpoint_uri,
         s3,
         s3_base,

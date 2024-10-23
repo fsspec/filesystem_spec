@@ -6,10 +6,10 @@ from multiprocessing import Process
 import pytest
 
 try:
-    pytest.importorskip("fuse")  # noqa: E402
+    pytest.importorskip("fuse")
 except OSError:
     # can succeed in importing fuse, but fail to load so
-    pytest.importorskip("nonexistent")  # noqa: E402
+    pytest.importorskip("nonexistent")
 
 from fsspec.fuse import main, run
 from fsspec.implementations.memory import MemoryFileSystem

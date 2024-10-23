@@ -465,3 +465,21 @@ def test_chained_url(ftp_writable):
 def test_automkdir_local():
     fs, _ = fsspec.core.url_to_fs("file://", auto_mkdir=True)
     assert fs.auto_mkdir is True
+
+
+def test_repeated_argument():
+    pytest.importorskip("adlfs")
+    from fsspec.core import url_to_fs
+
+    fs, url = url_to_fs(
+        "az://DIR@ACCOUNT.blob.core.windows.net/DATA",
+        anon=False,
+        account_name="ACCOUNT",
+    )
+    assert fs.storage_options == {"account_name": "ACCOUNT", "anon": False}
+    with pytest.raises(TypeError):
+        url_to_fs(
+            "az://DIR@ACCOUNT.blob.core.windows.net/DATA",
+            anon=False,
+            account_name="OTHER",
+        )

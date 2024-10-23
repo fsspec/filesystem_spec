@@ -2,7 +2,7 @@ import os
 import sys
 import uuid
 import warnings
-from ftplib import FTP, Error, error_perm
+from ftplib import FTP, FTP_TLS, Error, error_perm
 from typing import Any
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
@@ -27,6 +27,7 @@ class FTPFileSystem(AbstractFileSystem):
         tempdir=None,
         timeout=30,
         encoding="utf-8",
+        tls=False,
         **kwargs,
     ):
         """
@@ -56,28 +57,37 @@ class FTPFileSystem(AbstractFileSystem):
             Timeout of the ftp connection in seconds
         encoding: str
             Encoding to use for directories and filenames in FTP connection
+        tls: bool
+            Use FTP-TLS, by default False
         """
         super().__init__(**kwargs)
         self.host = host
         self.port = port
         self.tempdir = tempdir or "/tmp"
-        self.cred = username, password, acct
+        self.cred = username or "", password or "", acct or ""
         self.timeout = timeout
         self.encoding = encoding
         if block_size is not None:
             self.blocksize = block_size
         else:
             self.blocksize = 2**16
+        self.tls = tls
         self._connect()
+        if self.tls:
+            self.ftp.prot_p()
 
     def _connect(self):
+        if self.tls:
+            ftp_cls = FTP_TLS
+        else:
+            ftp_cls = FTP
         if sys.version_info >= (3, 9):
-            self.ftp = FTP(timeout=self.timeout, encoding=self.encoding)
+            self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding)
         elif self.encoding:
             warnings.warn("`encoding` not supported for python<3.9, ignoring")
-            self.ftp = FTP(timeout=self.timeout)
+            self.ftp = ftp_cls(timeout=self.timeout)
         else:
-            self.ftp = FTP(timeout=self.timeout)
+            self.ftp = ftp_cls(timeout=self.timeout)
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 

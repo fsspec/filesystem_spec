@@ -427,10 +427,7 @@ def is_exception(obj: Any) -> bool:
 
 
 def isfilelike(f: Any) -> TypeGuard[IO[bytes]]:
-    for attr in ["read", "close", "tell"]:
-        if not hasattr(f, attr):
-            return False
-    return True
+    return all(hasattr(f, attr) for attr in ["read", "close", "tell"])
 
 
 def get_protocol(url: str) -> str:

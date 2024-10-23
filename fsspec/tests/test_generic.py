@@ -7,10 +7,10 @@ from fsspec.tests.conftest import data, server  # noqa: F401
 def test_remote_async_ops(server):
     fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("generic", default_method="current")
-    out = fs.info(server + "/index/realfile")
+    out = fs.info(server.realfile)
     assert out["size"] == len(data)
     assert out["type"] == "file"
-    assert fs.isfile(server + "/index/realfile")  # this method from superclass
+    assert fs.isfile(server.realfile)  # this method from superclass
 
 
 def test_touch_rm(m):
@@ -29,7 +29,7 @@ def test_touch_rm(m):
 def test_cp_async_to_sync(server, m):
     fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("generic", default_method="current")
-    fs.cp([server + "/index/realfile"], ["memory://realfile"])
+    fs.cp([server.realfile], ["memory://realfile"])
     assert m.cat("realfile") == data
 
     fs.rm("memory://realfile")
@@ -45,7 +45,7 @@ def test_pipe_cat_sync(m):
 def test_cat_async(server):
     fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("generic", default_method="current")
-    assert fs.cat(server + "/index/realfile") == data
+    assert fs.cat(server.realfile) == data
 
 
 def test_rsync(tmpdir, m):

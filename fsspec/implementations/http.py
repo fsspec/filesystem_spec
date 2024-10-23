@@ -358,9 +358,10 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
-        size = size or self.info(path, **kwargs)["size"]
+        info = {}
+        size = size or info.update(self.info(path, **kwargs)) or info["size"]
         session = sync(self.loop, self.set_session)
-        if block_size and size:
+        if block_size and size and info.get("partial", True):
             return HTTPFile(
                 self,
                 path,
@@ -520,9 +521,9 @@ class HTTPFileSystem(AsyncFileSystem):
 
 class HTTPFile(AbstractBufferedFile):
     """
-    A file-like object pointing to a remove HTTP(S) resource
+    A file-like object pointing to a remote HTTP(S) resource
 
-    Supports only reading, with read-ahead of a predermined block-size.
+    Supports only reading, with read-ahead of a predetermined block-size.
 
     In the case that the server does not supply the filesize, only reading of
     the complete file in one go is supported.
@@ -835,10 +836,6 @@ async def _file_info(url, session, size_policy="head", **kwargs):
     async with r:
         r.raise_for_status()
 
-        # TODO:
-        #  recognise lack of 'Accept-Ranges',
-        #                 or 'Accept-Ranges': 'none' (not 'bytes')
-        #  to mean streaming only, no random access => return None
         if "Content-Length" in r.headers:
             # Some servers may choose to ignore Accept-Encoding and return
             # compressed content, in which case the returned size is unreliable.
@@ -852,6 +849,11 @@ async def _file_info(url, session, size_policy="head", **kwargs):
 
         if "Content-Type" in r.headers:
             info["mimetype"] = r.headers["Content-Type"].partition(";")[0]
+
+        if r.headers.get("Accept-Ranges") == "none":
+            # Some servers may explicitly discourage partial content requests, but
+            # the lack of "Accept-Ranges" does not always indicate they would fail
+            info["partial"] = False
 
         info["url"] = str(r.url)
 

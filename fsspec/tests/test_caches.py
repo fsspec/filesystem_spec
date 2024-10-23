@@ -215,7 +215,7 @@ def test_background(server, monkeypatch):
     import fsspec
 
     head = {"head_ok": "true", "head_give_length": "true"}
-    urla = server + "/index/realfile"
+    urla = server.realfile
     h = fsspec.filesystem("http", headers=head)
     thread_ids = {threading.current_thread().ident}
     f = h.open(urla, block_size=5, cache_type="background")
