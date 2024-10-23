@@ -534,7 +534,6 @@ async def test_async_cat_file_ranges():
         asynchronous=True,
     )
 
-    
     assert await fs._cat_file("reference_time/0") == b'x^K0\xa9d\x04\x00\x03\x13\x01\x0f'
     await session.close()
 
