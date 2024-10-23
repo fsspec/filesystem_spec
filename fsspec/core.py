@@ -358,10 +358,7 @@ def _un_chain(path, kwargs):
             **kws,
         )
         bit = cls._strip_protocol(bit)
-        if (
-            "target_protocol" not in kw
-            and issubclass(cls, CachingFileSystem)
-        ):
+        if "target_protocol" not in kw and issubclass(cls, CachingFileSystem):
             bit = previous_bit
         out.append((bit, protocol, kw))
         previous_bit = bit

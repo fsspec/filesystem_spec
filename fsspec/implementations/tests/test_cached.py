@@ -1031,7 +1031,9 @@ def test_multi_cache(protocol):
             assert f.read() == b"hello"
 
 
-@pytest.mark.parametrize("protocol", ["simplecache", "filecache", "blockcache", "cached"])
+@pytest.mark.parametrize(
+    "protocol", ["simplecache", "filecache", "blockcache", "cached"]
+)
 def test_multi_cat(protocol, ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -1064,7 +1066,9 @@ def test_multi_cache_chain(protocol):
         assert files[0].read() == b"hello"
 
 
-@pytest.mark.parametrize("protocol", ["blockcache", "cached", "simplecache", "filecache"])
+@pytest.mark.parametrize(
+    "protocol", ["blockcache", "cached", "simplecache", "filecache"]
+)
 def test_strip(protocol):
     fs = fsspec.filesystem(protocol, target_protocol="memory")
     url1 = "memory://afile"
@@ -1235,7 +1239,9 @@ def test_cache_dir_auto_deleted(temp_cache, tmpdir):
         assert local.exists(cache_dir)
 
 
-@pytest.mark.parametrize("protocol", ["filecache", "blockcache", "cached", "simplecache"])
+@pytest.mark.parametrize(
+    "protocol", ["filecache", "blockcache", "cached", "simplecache"]
+)
 def test_cache_size(tmpdir, protocol):
     if win and protocol in {"blockcache", "cached"}:
         pytest.skip("Windows file locking affects blockcache size tests")
