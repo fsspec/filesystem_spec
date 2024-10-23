@@ -267,7 +267,7 @@ def test_blockcache_workflow(ftp_writable, tmp_path, force_save_pickle):
         assert f.read(5) == b"test\n"
 
 
-@pytest.mark.parametrize("impl", ["filecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["filecache", "blockcache", "cached"])
 def test_workflow(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -295,7 +295,7 @@ def test_workflow(ftp_writable, impl):
         )  # new value, because we overwrote the cached location
 
 
-@pytest.mark.parametrize("impl", ["simplecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["simplecache", "blockcache", "cached"])
 def test_glob(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -622,7 +622,7 @@ def test_metadata_save_blocked(ftp_writable, caplog):
     assert "Cache save failed due to interpreter shutdown" in caplog.text
 
 
-@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache", "cached"])
 def test_local_filecache_creates_dir_if_needed(impl):
     import tempfile
 
@@ -875,7 +875,7 @@ def test_filecache_with_checks():
     assert fs.cat(f1) == data * 2  # changed, since origin changed
 
 
-@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache", "cached"])
 @pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
 def test_filecache_takes_fs_instance(impl, fs):
     origin = tempfile.mkdtemp()
@@ -889,7 +889,7 @@ def test_filecache_takes_fs_instance(impl, fs):
     assert fs2.cat(f1) == data
 
 
-@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache", "cached"])
 @pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
 def test_filecache_serialization(impl, fs):
     fs1 = fsspec.filesystem(impl, fs=fs)
@@ -1031,7 +1031,9 @@ def test_multi_cache(protocol):
             assert f.read() == b"hello"
 
 
-@pytest.mark.parametrize("protocol", ["simplecache", "filecache", "blockcache"])
+@pytest.mark.parametrize(
+    "protocol", ["simplecache", "filecache", "blockcache", "cached"]
+)
 def test_multi_cat(protocol, ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -1064,7 +1066,9 @@ def test_multi_cache_chain(protocol):
         assert files[0].read() == b"hello"
 
 
-@pytest.mark.parametrize("protocol", ["blockcache", "simplecache", "filecache"])
+@pytest.mark.parametrize(
+    "protocol", ["blockcache", "cached", "simplecache", "filecache"]
+)
 def test_strip(protocol):
     fs = fsspec.filesystem(protocol, target_protocol="memory")
     url1 = "memory://afile"
@@ -1235,9 +1239,11 @@ def test_cache_dir_auto_deleted(temp_cache, tmpdir):
         assert local.exists(cache_dir)
 
 
-@pytest.mark.parametrize("protocol", ["filecache", "blockcache", "simplecache"])
+@pytest.mark.parametrize(
+    "protocol", ["filecache", "blockcache", "cached", "simplecache"]
+)
 def test_cache_size(tmpdir, protocol):
-    if win and protocol == "blockcache":
+    if win and protocol in {"blockcache", "cached"}:
         pytest.skip("Windows file locking affects blockcache size tests")
 
     source = os.path.join(tmpdir, "source")
