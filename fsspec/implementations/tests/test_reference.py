@@ -515,7 +515,7 @@ def test_cat_file_ranges(m):
 
 @pytest.mark.asyncio
 async def test_async_cat_file_ranges():
-    fss = fsspec.filesystem("http", asynchronous=True)
+    fss = fsspec.filesystem("https", asynchronous=True)
     session = await fss.set_session()
 
     fs = fsspec.filesystem(
@@ -531,6 +531,7 @@ async def test_async_cat_file_ranges():
             },
         },
         fs={"https": fss},
+        remote_protocol="https",
         asynchronous=True,
     )
 
