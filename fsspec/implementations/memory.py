@@ -220,6 +220,8 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path1)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
+        if "refs.0.parq" in path:
+            breakpoint()
         logger.debug("cat: %s", path)
         path = self._strip_protocol(path)
         try:
