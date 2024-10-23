@@ -515,6 +515,9 @@ def test_cat_file_ranges(m):
 
 @pytest.mark.asyncio
 async def test_async_cat_file_ranges():
+    fss = fsspec.filesystem("http", asynchronous=True)
+    session = await fss.set_session()
+
     fs = fsspec.filesystem(
         "reference",
         fo={
@@ -527,12 +530,13 @@ async def test_async_cat_file_ranges():
                 ],
             },
         },
-        remote_protocol="http",
-        remote_options={"asynchronous": True},
+        fs=fss,
         asynchronous=True,
     )
 
+    
     assert await fs._cat_file("reference_time/0") == b'x^K0\xa9d\x04\x00\x03\x13\x01\x0f'
+    await session.close()
 
 
 @pytest.mark.parametrize(
