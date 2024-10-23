@@ -513,6 +513,28 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
 
 
+@pytest.mark.asyncio
+async def test_async_cat_file_ranges():
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "version": 1,
+            "refs": {
+                "reference_time/0": [
+                    "http://noaa-nwm-retro-v2-0-pds.s3.amazonaws.com/full_physics/2017/201704010000.CHRTOUT_DOMAIN1.comp",
+                    39783,
+                    12,
+                ],
+            },
+        },
+        remote_protocol="http",
+        remote_options={"asynchronous": True},
+        asynchronous=True,
+    )
+
+    assert await fs._cat_file("reference_time/0") == b'x^K0\xa9d\x04\x00\x03\x13\x01\x0f'
+
+
 @pytest.mark.parametrize(
     "fo",
     [
