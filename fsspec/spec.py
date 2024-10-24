@@ -1915,7 +1915,7 @@ class AbstractBufferedFile(io.IOBase):
 
     def _fetch_range(self, start, end):
         """Get the specified set of bytes from remote"""
-        raise NotImplementedError
+        return self.fs.cat_file(self.path, start=start, end=end)
 
     def read(self, length=-1):
         """
