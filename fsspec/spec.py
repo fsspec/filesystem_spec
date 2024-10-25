@@ -408,7 +408,7 @@ class AbstractFileSystem(metaclass=_Cached):
         topdown: bool (True)
             Whether to walk the directory tree from the top downwards or from
             the bottom upwards.
-        on_error: "omit", "raise", a collable
+        on_error: "omit", "raise", a callable
             if omit (default), path with exception will simply be empty;
             If raise, an underlying exception will be raised;
             if callable, it will be called with a single OSError instance as argument
