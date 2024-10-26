@@ -187,7 +187,9 @@ class MMapCache(BaseCache):
 
             # Fetch bytes (could be multiple consecutive blocks)
             self.total_requested_bytes += send - sstart
-            logger.debug(f"MMap get blocks {_blocks[0]}-{_blocks[-1]} ({sstart}-{send})")
+            logger.debug(
+                f"MMap get blocks {_blocks[0]}-{_blocks[-1]} ({sstart}-{send})"
+            )
             self.cache[sstart:send] = self.fetcher(sstart, send)
 
             # Update set of cached blocks
