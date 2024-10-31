@@ -213,7 +213,9 @@ def test_infer_options():
         assert options["path"] == "Bucket-name.com/test.csv"
 
     for protocol in ["s3", "s3a"]:
-        options = infer_storage_options(f"{protocol}://arn:aws:s3:us-west-2:1234:accesspoint/abc/test.csv")
+        options = infer_storage_options(
+            f"{protocol}://arn:aws:s3:us-west-2:1234:accesspoint/abc/test.csv"
+        )
         assert options["host"] == "arn:aws:s3:us-west-2:1234:accesspoint"
         assert options["path"] == "arn:aws:s3:us-west-2:1234:accesspoint/abc/test.csv"
 
