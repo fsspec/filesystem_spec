@@ -60,7 +60,12 @@ class LocalFileSystem(AbstractFileSystem):
         info = self.info(path)
         if info["type"] == "directory":
             with os.scandir(path) as it:
-                infos = [self.info(f) for f in it]
+                infos = []
+                for f in it:
+                    try:
+                        infos.append(self.info(f))
+                    except FileNotFoundError:
+                        pass
         else:
             infos = [info]
 
