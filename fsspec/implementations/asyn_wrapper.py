@@ -41,6 +41,7 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
     """
     def __init__(self, sync_fs, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.asynchronous = True
         self.fs = sync_fs
         self._wrap_all_sync_methods()
 
