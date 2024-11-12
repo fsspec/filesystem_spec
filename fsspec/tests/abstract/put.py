@@ -568,6 +568,14 @@ class AbstractPutTests:
         assert fs.isfile(fs_join(fs_target, "subdir", "subfile.txt"))
         assert fs.isfile(fs_join(fs_target, "subdir.txt"))
 
+    def test_pipe_exclusive(self, fs, fs_target):
+        fs.pipe_file(fs_target, b"data")
+        assert fs.cat_file(fs_target) == b"data"
+        with pytest.raises(FileExistsError):
+            fs.pipe_file(fs_target, b"data", mode="create")
+        fs.pipe_file(fs_target, b"new data", mode="overwrite")
+        assert fs.cat_file(fs_target) == b"new data"
+
     def test_copy_with_source_and_destination_as_list(
         self, fs, fs_target, fs_join, local_join, local_10_files_with_hashed_names
     ):
