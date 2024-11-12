@@ -11,7 +11,7 @@ from .test_local import csv_files, filetexts
 def test_is_async():
     fs = fsspec.filesystem("file")
     async_fs = AsyncFileSystemWrapper(fs)
-    assert async_fs.async_impl == True
+    assert async_fs.async_impl
 
 
 def test_class_wrapper():
@@ -19,7 +19,7 @@ def test_class_wrapper():
     async_fs_cls = AsyncFileSystemWrapper.wrap_class(fs_cls)
     assert async_fs_cls.__name__ == "AsyncLocalFileSystemWrapper"
     async_fs = async_fs_cls()
-    assert async_fs.async_impl == True
+    assert async_fs.async_impl
 
 
 @pytest.mark.asyncio
@@ -27,11 +27,15 @@ async def test_cats():
     with filetexts(csv_files, mode="b"):
         fs = fsspec.filesystem("file")
         async_fs = AsyncFileSystemWrapper(fs)
-        
+
         result = await async_fs._cat(".test.fakedata.1.csv")
         assert result == b"a,b\n1,2\n"
 
-        out = set((await async_fs._cat([".test.fakedata.1.csv", ".test.fakedata.2.csv"])).values())
+        out = set(
+            (
+                await async_fs._cat([".test.fakedata.1.csv", ".test.fakedata.2.csv"])
+            ).values()
+        )
         assert out == {b"a,b\n1,2\n", b"a,b\n3,4\n"}
 
         result = await async_fs._cat(".test.fakedata.1.csv", None, None)
@@ -51,11 +55,14 @@ async def test_cats():
         assert result == b"a,b\n1,2\n"[1:-2]
 
         out = set(
-            (await async_fs._cat(
-                [".test.fakedata.1.csv", ".test.fakedata.2.csv"], start=1, end=-1
-            )).values()
+            (
+                await async_fs._cat(
+                    [".test.fakedata.1.csv", ".test.fakedata.2.csv"], start=1, end=-1
+                )
+            ).values()
         )
         assert out == {b"a,b\n1,2\n"[1:-1], b"a,b\n3,4\n"[1:-1]}
+
 
 @pytest.mark.asyncio
 async def test_basic_crud_operations():
@@ -76,6 +83,7 @@ async def test_basic_crud_operations():
         await async_fs._rm(".test.fakedata.1.csv")
         assert not await async_fs._exists(".test.fakedata.1.csv")
 
+
 @pytest.mark.asyncio
 async def test_error_handling():
     fs = fsspec.filesystem("file")
@@ -86,6 +94,7 @@ async def test_error_handling():
 
     with pytest.raises(FileNotFoundError):
         await async_fs._rm(".test.non_existent.csv")
+
 
 @pytest.mark.asyncio
 async def test_concurrent_operations():
@@ -99,10 +108,11 @@ async def test_concurrent_operations():
         results = await asyncio.gather(
             read_file(".test.fakedata.1.csv"),
             read_file(".test.fakedata.2.csv"),
-            read_file(".test.fakedata.1.csv")
+            read_file(".test.fakedata.1.csv"),
         )
 
         assert results == [b"a,b\n1,2\n", b"a,b\n3,4\n", b"a,b\n1,2\n"]
+
 
 @pytest.mark.asyncio
 async def test_directory_operations():
@@ -119,6 +129,7 @@ async def test_directory_operations():
         assert ".test.fakedata.1.csv" in filenames
         assert ".test.fakedata.2.csv" in filenames
         assert "new_directory" in filenames
+
 
 @pytest.mark.asyncio
 async def test_batch_operations():

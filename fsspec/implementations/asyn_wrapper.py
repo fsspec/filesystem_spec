@@ -20,10 +20,11 @@ def async_wrapper(func, obj=None):
     coroutine
         An awaitable version of the function.
     """
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        self = obj or args[0]
         return await asyncio.to_thread(func, *args, **kwargs)
+
     return wrapper
 
 
@@ -39,6 +40,7 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
     sync_fs : AbstractFileSystem
         The synchronous filesystem instance to wrap.
     """
+
     def __init__(self, sync_fs, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.asynchronous = True
@@ -82,10 +84,13 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         type
             A new class that wraps the provided synchronous filesystem class.
         """
+
         class GeneratedAsyncFileSystemWrapper(cls):
             def __init__(self, *args, **kwargs):
                 sync_fs = sync_fs_class(*args, **kwargs)
                 super().__init__(sync_fs)
 
-        GeneratedAsyncFileSystemWrapper.__name__ = f"Async{sync_fs_class.__name__}Wrapper"
+        GeneratedAsyncFileSystemWrapper.__name__ = (
+            f"Async{sync_fs_class.__name__}Wrapper"
+        )
         return GeneratedAsyncFileSystemWrapper
