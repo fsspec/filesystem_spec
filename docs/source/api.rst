@@ -240,6 +240,7 @@ documentation carefully before using any particular package.
 - `s3fs`_ for Amazon S3 and other compatible stores, with protocol "s3://"
 - `sshfs`_ for access to SSH servers, with protocol "ssh://" or "sftp://"
 - `swiftspec`_ for OpenStack SWIFT, with protocol "swift://"
+- `tosfs`_ for ByteDance volcano engine Tinder Object Storage (TOS)
 - `wandbfs`_ to access Wandb run data (experimental)
 - `wandbfsspec`_ to access Weights & Biases (experimental)
 - `webdav4`_ for WebDAV, with protocol "webdav://" or "dav://"
@@ -272,6 +273,7 @@ documentation carefully before using any particular package.
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _sshfs: https://github.com/fsspec/sshfs
 .. _swiftspec: https://github.com/fsspec/swiftspec
+.. _tosfs: https://tosfs.readthedocs.io/en/latest/
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _wandbfsspec: https://github.com/alvarobartt/wandbfsspec
 .. _webdav4: https://github.com/skshetry/webdav4

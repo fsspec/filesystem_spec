@@ -408,7 +408,7 @@ class AbstractFileSystem(metaclass=_Cached):
         topdown: bool (True)
             Whether to walk the directory tree from the top downwards or from
             the bottom upwards.
-        on_error: "omit", "raise", a collable
+        on_error: "omit", "raise", a callable
             if omit (default), path with exception will simply be empty;
             If raise, an underlying exception will be raised;
             if callable, it will be called with a single OSError instance as argument
@@ -648,7 +648,7 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns a single dictionary, with exactly the same information as ``ls``
         would with ``detail=True``.
 
-        The default implementation should calls ls and could be overridden by a
+        The default implementation calls ls and could be overridden by a
         shortcut. kwargs are passed on to ```ls()``.
 
         Some file systems might not be able to measure the file's size, in
@@ -1915,7 +1915,7 @@ class AbstractBufferedFile(io.IOBase):
 
     def _fetch_range(self, start, end):
         """Get the specified set of bytes from remote"""
-        raise NotImplementedError
+        return self.fs.cat_file(self.path, start=start, end=end)
 
     def read(self, length=-1):
         """
