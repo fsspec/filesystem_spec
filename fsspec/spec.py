@@ -1575,7 +1575,8 @@ class AbstractFileSystem(metaclass=_Cached):
             display_size: bool = False,
             prefix: str = "",
             is_last: bool = True,
-            first: bool = True
+            first: bool = True,
+            indent_size: int = 4
     ):
         """
         Display a tree-like structure of the filesystem starting from the given path.
@@ -1589,6 +1590,7 @@ class AbstractFileSystem(metaclass=_Cached):
             prefix: Current line prefix for visual tree structure
             is_last: Whether current item is last in its level            
             first: Whether this is the first call (displays root path)
+            indent_size: Number of spaces by indent
 
         Example
         -------
@@ -1601,44 +1603,58 @@ class AbstractFileSystem(metaclass=_Cached):
             └── folder2
                 └── file3.txt (2.345MB)
         """
+        def format_bytes(n: int) -> str:
+            """Format bytes as text."""
+            for prefix, k in (
+                ("P", 2**50),
+                ("T", 2**40),
+                ("G", 2**30),
+                ("M", 2**20),
+                ("k", 2**10),
+            ):
+                if n >= 0.9*k:
+                    return f"{n / k:.2f} {prefix}b"
+            return f"{n}B"
+
         if first:
             print(path)
         if recursion_limit:
-            try:
-                contents = self.ls(path, detail=True)
-                contents.sort(key=lambda x: (not x.get('type') == 'directory', x.get('name', '')))
+            indent = " " * indent_size
+            contents = self.ls(path, detail=True)
+            contents.sort(key=lambda x: (not x.get('type') == 'directory', x.get('name', '')))
 
-                if max_display is not None and len(contents) > max_display:
-                    displayed_contents = contents[:max_display]
-                    remaining_count = len(contents) - max_display
-                else:
-                    displayed_contents = contents
-                    remaining_count = 0
+            if max_display is not None and len(contents) > max_display:
+                displayed_contents = contents[:max_display]
+                remaining_count = len(contents) - max_display
+            else:
+                displayed_contents = contents
+                remaining_count = 0
 
-                for i, item in enumerate(displayed_contents):
-                    is_last_item = (i == len(displayed_contents) - 1) and (remaining_count == 0)
+            for i, item in enumerate(displayed_contents):
+                is_last_item = (i == len(displayed_contents) - 1) and (remaining_count == 0)
 
-                    branch = "└── " if is_last_item else "├── "
-                    new_prefix = prefix + ("    " if is_last_item else "│   ")
+                branch = "└"+('─'*(indent_size-2)) if is_last_item else "├"+('─'*(indent_size-2))
+                branch += ' '
+                new_prefix = prefix + (indent if is_last_item else "│" + " " * (indent_size - 1))
 
-                    name = os.path.basename(item.get('name', ''))
-                    size = f" ({item.get('size', 0) / 2**20:.3f}Mb)" if display_size and item.get('type') == 'file' else ""
+                name = os.path.basename(item.get('name', ''))
+                size = f" ({format_bytes(item.get('size', 0))})" if display_size and item.get('type') == 'file' else ""
 
-                    print(f"{prefix}{branch}{name}{size}")
+                print(f"{prefix}{branch}{name}{size}")
 
-                    if item.get('type') == 'directory' and recursion_limit > 0:
-                        self.tree(item.get('name', ''), recursion_limit - 1, max_display, new_prefix, is_last_item, display_size=display_size, first=False)
+                if item.get('type') == 'directory' and recursion_limit > 0:
+                    self.tree(path=item.get('name', ''),
+                              recursion_limit=recursion_limit - 1,
+                              max_display=max_display,
+                              display_size=display_size,
+                              prefix=new_prefix,
+                              is_last=is_last_item,
+                              first=False,
+                              indent_size=indent_size)
 
-                if remaining_count > 0:
-                    more_message = f"{remaining_count} more item(s) not displayed."
-                    print(f"{prefix}{'└── ' if is_last else '├── '}{more_message}")
-
-            except FileNotFoundError:
-                print(f"{prefix}Error: Path not found - {path}")
-            except PermissionError:
-                print(f"{prefix}Error: Permission denied - {path}")
-            except Exception as e:
-                print(f"{prefix}Unexpected error: {str(e)}")
+            if remaining_count > 0:
+                more_message = f"{remaining_count} more item(s) not displayed."
+                print(f"{prefix}{'└── ' if is_last else '├── '}{more_message}")
 
     # ------------------------------------------------------------------------
     # Aliases
