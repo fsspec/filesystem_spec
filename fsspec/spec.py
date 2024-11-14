@@ -1567,6 +1567,79 @@ class AbstractFileSystem(metaclass=_Cached):
         """Return the modified timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
 
+    def tree(
+            self,
+            path: str = '/',
+            recursion_limit: int = 2,
+            max_display: int = 25,
+            display_size: bool = False,
+            prefix: str = "",
+            is_last: bool = True,
+            first: bool = True
+    ):
+        """
+        Display a tree-like structure of the filesystem starting from the given path.
+
+        Parameters
+        ----------
+            path: Root path to start traversal from
+            recursion_limit: Maximum depth of directory traversal
+            max_display: Maximum number of items to display per directory
+            display_size: Whether to display file sizes
+            prefix: Current line prefix for visual tree structure
+            is_last: Whether current item is last in its level            
+            first: Whether this is the first call (displays root path)
+
+        Example
+        -------
+            >>> fs.tree(path='/start/folder', display_size=True)
+
+            /start/folder
+            ├── folder1
+            │   ├── file1.txt (1.234MB)
+            │   └── file2.txt (0.567MB)
+            └── folder2
+                └── file3.txt (2.345MB)
+        """
+        if first:
+            print(path)
+        if recursion_limit:
+            try:
+                contents = self.ls(path, detail=True)
+                contents.sort(key=lambda x: (not x.get('type') == 'directory', x.get('name', '')))
+
+                if max_display is not None and len(contents) > max_display:
+                    displayed_contents = contents[:max_display]
+                    remaining_count = len(contents) - max_display
+                else:
+                    displayed_contents = contents
+                    remaining_count = 0
+
+                for i, item in enumerate(displayed_contents):
+                    is_last_item = (i == len(displayed_contents) - 1) and (remaining_count == 0)
+
+                    branch = "└── " if is_last_item else "├── "
+                    new_prefix = prefix + ("    " if is_last_item else "│   ")
+
+                    name = os.path.basename(item.get('name', ''))
+                    size = f" ({item.get('size', 0) / 2**20:.3f}Mb)" if display_size and item.get('type') == 'file' else ""
+
+                    print(f"{prefix}{branch}{name}{size}")
+
+                    if item.get('type') == 'directory' and recursion_limit > 0:
+                        self.tree(item.get('name', ''), recursion_limit - 1, max_display, new_prefix, is_last_item, display_size=display_size, first=False)
+
+                if remaining_count > 0:
+                    more_message = f"{remaining_count} more item(s) not displayed."
+                    print(f"{prefix}{'└── ' if is_last else '├── '}{more_message}")
+
+            except FileNotFoundError:
+                print(f"{prefix}Error: Path not found - {path}")
+            except PermissionError:
+                print(f"{prefix}Error: Permission denied - {path}")
+            except Exception as e:
+                print(f"{prefix}Unexpected error: {str(e)}")
+
     # ------------------------------------------------------------------------
     # Aliases
 
