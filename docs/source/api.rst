@@ -211,7 +211,7 @@ Other Known Implementations
 
 
 Note that most of these projects are hosted outside of the `fsspec` organisation. Please read their
-documentation carefully before using any particular package. 
+documentation carefully before using any particular package.
 
 - `abfs`_ for Azure Blob service, with protocol "abfs://"
 - `adl`_ for Azure DataLake storage, with protocol "adl://"
