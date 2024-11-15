@@ -7,9 +7,9 @@ import math
 import os
 import threading
 import warnings
+from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import groupby
 from operator import itemgetter
-from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
     TYPE_CHECKING,
     Any,

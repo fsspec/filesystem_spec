@@ -176,7 +176,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             try:
                 df = self.pd.read_parquet(data, engine=self.engine)
                 refs = {c: df[c].to_numpy() for c in df.columns}
-            except IOError:
+            except OSError:
                 refs = None
             return refs
 
