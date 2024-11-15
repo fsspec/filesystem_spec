@@ -184,6 +184,8 @@ select = [
     "RUF024",
     "SIM",
     "SLOT",
+    "SIM101",
+    "UP",
 ]
 ignore = [
 	# Loop control variable `loop` not used within loop body
@@ -208,6 +210,12 @@ ignore = [
     # Fix these codes later
     "G004",
     "PERF203",
+    "UP007",
+    "UP011",
+    "UP015",
+    "UP018",
+    # deprecated
+    "UP027",
     "SIM102",
     "SIM105",
     "SIM108",

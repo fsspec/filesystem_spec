@@ -1,6 +1,7 @@
 import asyncio
-import inspect
 import functools
+import inspect
+
 from fsspec.asyn import AsyncFileSystem
 
 

@@ -176,7 +176,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             try:
                 df = self.pd.read_parquet(data, engine=self.engine)
                 refs = {c: df[c].to_numpy() for c in df.columns}
-            except IOError:
+            except OSError:
                 refs = None
             return refs
 
@@ -431,7 +431,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if len(partition) < self.record_size:
             try:
                 original = self.open_refs(field, record)
-            except IOError:
+            except OSError:
                 pass
 
         if original:

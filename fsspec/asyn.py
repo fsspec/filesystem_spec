@@ -816,11 +816,9 @@ class AsyncFileSystem(AbstractFileSystem):
             p: info
             for p, info in sorted(allpaths.items())
             if pattern.match(
-                (
-                    p + "/"
-                    if append_slash_to_dirname and info["type"] == "directory"
-                    else p
-                )
+                p + "/"
+                if append_slash_to_dirname and info["type"] == "directory"
+                else p
             )
         }
 
