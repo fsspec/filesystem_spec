@@ -1595,18 +1595,14 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns
         -------
             str: A string representing the tree structure.
-    
+
         Example
         -------
-            >>> tree = fs.tree(path='/start/folder', display_size=True)
+            >>> from fsspec import filesystem
+
+            >>> fs = filesystem('ftp', host='test.rebex.net', user='demo', password='password')
+            >>> tree = fs.tree(display_size=True, recursion_limit=3, indent_size=8, max_display=10)
             >>> print(tree)
-    
-            /start/folder
-            ├── folder1
-            │   ├── file1.txt (1.234MB)
-            │   └── file2.txt (0.567MB)
-            └── folder2
-                └── file3.txt (2.345MB)
         """
         def format_bytes(n: int) -> str:
             """Format bytes as text."""
@@ -1622,10 +1618,10 @@ class AbstractFileSystem(metaclass=_Cached):
             return f"{n}B"
     
         result = []
-        
+    
         if first:
             result.append(path)
-            
+    
         if recursion_limit:
             indent = " " * indent_size
             contents = self.ls(path, detail=True)
@@ -1646,7 +1642,24 @@ class AbstractFileSystem(metaclass=_Cached):
                 new_prefix = prefix + (indent if is_last_item else "│" + " " * (indent_size - 1))
     
                 name = os.path.basename(item.get('name', ''))
-                size = f" ({format_bytes(item.get('size', 0))})" if display_size and item.get('type') == 'file' else ""
+                
+                if display_size and item.get('type') == 'directory':
+                    sub_contents = self.ls(item.get('name', ''), detail=True)
+                    num_files = sum(1 for sub_item in sub_contents if sub_item.get('type') == 'file')
+                    num_folders = sum(1 for sub_item in sub_contents if sub_item.get('type') == 'directory')
+    
+                    if num_files == 0 and num_folders == 0:
+                        size = " (empty folder)"
+                    elif num_files == 0:
+                        size = f" ({num_folders} subfolder{'s' if num_folders > 1 else ''})"
+                    elif num_folders == 0:
+                        size = f" ({num_files} file{'s' if num_files > 1 else ''})"
+                    else:
+                        size = f" ({num_files} file{'s' if num_files > 1 else ''}, {num_folders} subfolder{'s' if num_folders > 1 else ''})"
+                elif display_size and item.get('type') == 'file':
+                    size = f" ({format_bytes(item.get('size', 0))})"
+                else:
+                    size = ""
     
                 result.append(f"{prefix}{branch}{name}{size}")
     
@@ -1666,7 +1679,7 @@ class AbstractFileSystem(metaclass=_Cached):
     
             if remaining_count > 0:
                 more_message = f"{remaining_count} more item(s) not displayed."
-                result.append(f"{prefix}{'└── ' if is_last else '├── '}{more_message}")
+                result.append(f"{prefix}{"└" + ('─' * (indent_size - 2))} {more_message}")
     
         return "\n".join((_ for _ in result if _))
 
