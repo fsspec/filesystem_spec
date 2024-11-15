@@ -513,6 +513,35 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
 
 
+@pytest.mark.asyncio
+async def test_async_cat_file_ranges():
+    fsspec.get_filesystem_class("http").clear_instance_cache()
+    fss = fsspec.filesystem("https", asynchronous=True)
+    session = await fss.set_session()
+
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "version": 1,
+            "refs": {
+                "reference_time/0": [
+                    "https://noaa-nwm-retro-v2-0-pds.s3.amazonaws.com/full_physics/2017/201704010000.CHRTOUT_DOMAIN1.comp",
+                    39783,
+                    12,
+                ],
+            },
+        },
+        fs={"https": fss},
+        remote_protocol="https",
+        asynchronous=True,
+    )
+
+    assert (
+        await fs._cat_file("reference_time/0") == b"x^K0\xa9d\x04\x00\x03\x13\x01\x0f"
+    )
+    await session.close()
+
+
 @pytest.mark.parametrize(
     "fo",
     [
@@ -792,3 +821,44 @@ def test_deep_parq(m, engine):
         "instant/one/.zarray",
         "instant/one/0",
     ]
+
+
+def test_parquet_no_data(m):
+    zarr = pytest.importorskip("zarr")
+    lz = fsspec.implementations.reference.LazyReferenceMapper.create(
+        "memory://out.parq", fs=m
+    )
+
+    g = zarr.open_group(lz, mode="w")
+    arr = g.create_dataset(
+        name="one",
+        dtype="int32",
+        shape=(10,),
+        chunks=(5,),
+        compression=None,
+        fill_value=1,
+    )
+    lz.flush()
+
+    assert (arr[:] == 1).all()
+
+
+def test_parquet_no_references(m):
+    zarr = pytest.importorskip("zarr")
+    lz = fsspec.implementations.reference.LazyReferenceMapper.create(
+        "memory://out.parq", fs=m
+    )
+
+    g = zarr.open_group(lz, mode="w")
+    arr = g.create_dataset(
+        name="one",
+        dtype="int32",
+        shape=(),
+        chunks=(),
+        compression=None,
+        fill_value=1,
+    )
+    lz.flush()
+    arr[...]
+
+    assert arr[...].tolist() == 1  #  scalar, equal to fill value

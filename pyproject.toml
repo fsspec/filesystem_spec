@@ -21,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 [project.optional-dependencies]
@@ -162,6 +163,7 @@ select = [
     "E9",
     "F",
     "FURB",
+    "I",
     "LOG",
     "PERF",
     "PLC",
@@ -180,6 +182,7 @@ select = [
     "RUF006",
     "RUF015",
     "RUF024",
+    "SIM",
     "SLOT",
     "SIM101",
     "UP",
@@ -213,6 +216,12 @@ ignore = [
     "UP018",
     # deprecated
     "UP027",
+    "SIM102",
+    "SIM105",
+    "SIM108",
+    "SIM114",
+    "SIM115",
+    "SIM117",
     # https://github.com/astral-sh/ruff/issues/7871
     "UP038",
     # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules

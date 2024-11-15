@@ -329,12 +329,19 @@ def open_files(
 
 
 def _un_chain(path, kwargs):
-    x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
-    bits = (
-        [p if "://" in p or x.match(p) else p + "://" for p in path.split("::")]
-        if "::" in path
-        else [path]
-    )
+    # Avoid a circular import
+    from fsspec.implementations.cached import CachingFileSystem
+
+    if "::" in path:
+        x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
+        bits = []
+        for p in path.split("::"):
+            if "://" in p or x.match(p):
+                bits.append(p)
+            else:
+                bits.append(p + "://")
+    else:
+        bits = [path]
     # [[url, protocol, kwargs], ...]
     out = []
     previous_bit = None
@@ -346,12 +353,12 @@ def _un_chain(path, kwargs):
         kws = kwargs.pop(protocol, {})
         if bit is bits[0]:
             kws.update(kwargs)
-        kw = dict(**extra_kwargs, **kws)
+        kw = dict(
+            **{k: v for k, v in extra_kwargs.items() if k not in kws or v != kws[k]},
+            **kws,
+        )
         bit = cls._strip_protocol(bit)
-        if (
-            protocol in {"blockcache", "filecache", "simplecache"}
-            and "target_protocol" not in kw
-        ):
+        if "target_protocol" not in kw and issubclass(cls, CachingFileSystem):
             bit = previous_bit
         out.append((bit, protocol, kw))
         previous_bit = bit
@@ -673,9 +680,7 @@ def get_fs_token_paths(
         elif not isinstance(paths, list):
             paths = list(paths)
     else:
-        if "w" in mode and expand:
-            paths = _expand_paths(paths, name_function, num)
-        elif "x" in mode and expand:
+        if ("w" in mode or "x" in mode) and expand:
             paths = _expand_paths(paths, name_function, num)
         elif "*" in paths:
             paths = [f for f in sorted(fs.glob(paths)) if not fs.isdir(f)]
