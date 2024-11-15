@@ -4,7 +4,6 @@ import contextlib
 import logging
 import math
 import os
-import pathlib
 import re
 import sys
 import tempfile
@@ -24,6 +23,8 @@ from typing import (
 from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
+    import pathlib
+
     from typing_extensions import TypeGuard
 
     from fsspec.spec import AbstractFileSystem
