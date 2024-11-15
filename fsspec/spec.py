@@ -1577,10 +1577,10 @@ class AbstractFileSystem(metaclass=_Cached):
             is_last: bool = True,
             first: bool = True,
             indent_size: int = 4
-    ):
+    ) -> str:
         """
-        Display a tree-like structure of the filesystem starting from the given path.
-
+        Return a tree-like structure of the filesystem starting from the given path as a string.
+    
         Parameters
         ----------
             path: Root path to start traversal from
@@ -1591,11 +1591,16 @@ class AbstractFileSystem(metaclass=_Cached):
             is_last: Whether current item is last in its level            
             first: Whether this is the first call (displays root path)
             indent_size: Number of spaces by indent
-
+    
+        Returns
+        -------
+            str: A string representing the tree structure.
+    
         Example
         -------
-            >>> fs.tree(path='/start/folder', display_size=True)
-
+            >>> tree = fs.tree(path='/start/folder', display_size=True)
+            >>> print(tree)
+    
             /start/folder
             ├── folder1
             │   ├── file1.txt (1.234MB)
@@ -1612,49 +1617,58 @@ class AbstractFileSystem(metaclass=_Cached):
                 ("M", 2**20),
                 ("k", 2**10),
             ):
-                if n >= 0.9*k:
+                if n >= 0.9 * k:
                     return f"{n / k:.2f} {prefix}b"
             return f"{n}B"
-
+    
+        result = []
+        
         if first:
-            print(path)
+            result.append(path)
+            
         if recursion_limit:
             indent = " " * indent_size
             contents = self.ls(path, detail=True)
             contents.sort(key=lambda x: (not x.get('type') == 'directory', x.get('name', '')))
-
+    
             if max_display is not None and len(contents) > max_display:
                 displayed_contents = contents[:max_display]
                 remaining_count = len(contents) - max_display
             else:
                 displayed_contents = contents
                 remaining_count = 0
-
+    
             for i, item in enumerate(displayed_contents):
                 is_last_item = (i == len(displayed_contents) - 1) and (remaining_count == 0)
-
-                branch = "└"+('─'*(indent_size-2)) if is_last_item else "├"+('─'*(indent_size-2))
+    
+                branch = "└" + ('─' * (indent_size - 2)) if is_last_item else "├" + ('─' * (indent_size - 2))
                 branch += ' '
                 new_prefix = prefix + (indent if is_last_item else "│" + " " * (indent_size - 1))
-
+    
                 name = os.path.basename(item.get('name', ''))
                 size = f" ({format_bytes(item.get('size', 0))})" if display_size and item.get('type') == 'file' else ""
-
-                print(f"{prefix}{branch}{name}{size}")
-
+    
+                result.append(f"{prefix}{branch}{name}{size}")
+    
                 if item.get('type') == 'directory' and recursion_limit > 0:
-                    self.tree(path=item.get('name', ''),
-                              recursion_limit=recursion_limit - 1,
-                              max_display=max_display,
-                              display_size=display_size,
-                              prefix=new_prefix,
-                              is_last=is_last_item,
-                              first=False,
-                              indent_size=indent_size)
-
+                    result.append(
+                        self.tree(
+                            path=item.get('name', ''),
+                            recursion_limit=recursion_limit - 1,
+                            max_display=max_display,
+                            display_size=display_size,
+                            prefix=new_prefix,
+                            is_last=is_last_item,
+                            first=False,
+                            indent_size=indent_size
+                        )
+                    )
+    
             if remaining_count > 0:
                 more_message = f"{remaining_count} more item(s) not displayed."
-                print(f"{prefix}{'└── ' if is_last else '├── '}{more_message}")
+                result.append(f"{prefix}{'└── ' if is_last else '├── '}{more_message}")
+    
+        return "\n".join((_ for _ in result if _))
 
     # ------------------------------------------------------------------------
     # Aliases
