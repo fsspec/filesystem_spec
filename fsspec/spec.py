@@ -2049,6 +2049,22 @@ class AbstractBufferedFile(io.IOBase):
     def writable(self):
         """Whether opened for writing"""
         return self.mode in {"wb", "ab"} and not self.closed
+    
+    def __reduce__(self):
+        if self.mode != "rb":
+            raise RuntimeError("Pickling a writeable file is not supported")
+        
+        return reopen, (
+            self.fs, 
+            self.path,
+            self.mode, 
+            self.blocksize, 
+            self.loc, 
+            self.size, 
+            self.autocommit, 
+            self.cache.name if self.cache else "none", 
+            self.kwargs,
+        )
 
     def __del__(self):
         if not self.closed:
@@ -2064,3 +2080,10 @@ class AbstractBufferedFile(io.IOBase):
 
     def __exit__(self, *args):
         self.close()
+
+
+def reopen(fs, path, mode, blocksize, loc, size, autocommit, cache_type, kwargs):
+    file = fs.open(path, mode=mode, block_size=blocksize, autocommit=autocommit, cache_type=cache_type, size=size, **kwargs)
+    if loc > 0:
+        file.seek(loc)
+    return file

@@ -692,25 +692,6 @@ class HTTPFile(AbstractBufferedFile):
 
     _fetch_range = sync_wrapper(async_fetch_range)
 
-    def __reduce__(self):
-        return (
-            reopen,
-            (
-                self.fs,
-                self.url,
-                self.mode,
-                self.blocksize,
-                self.cache.name if self.cache else "none",
-                self.size,
-            ),
-        )
-
-
-def reopen(fs, url, mode, blocksize, cache_type, size=None):
-    return fs.open(
-        url, mode=mode, block_size=blocksize, cache_type=cache_type, size=size
-    )
-
 
 magic_check = re.compile("([*[])")
 
@@ -759,9 +740,6 @@ class HTTPStreamFile(AbstractBufferedFile):
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
         super().close()
-
-    def __reduce__(self):
-        return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)
 
 
 class AsyncStreamFile(AbstractAsyncStreamedFile):
