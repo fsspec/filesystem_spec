@@ -247,7 +247,7 @@ def test_not_found():
 def test_isfile():
     fs = LocalFileSystem()
     with filetexts(files, mode="b"):
-        for f in files.keys():
+        for f in files:
             assert fs.isfile(f)
             assert fs.isfile(f"file://{f}")
         assert not fs.isfile("not-a-file")
@@ -257,7 +257,7 @@ def test_isfile():
 def test_isdir():
     fs = LocalFileSystem()
     with filetexts(files, mode="b"):
-        for f in files.keys():
+        for f in files:
             assert fs.isdir(os.path.dirname(os.path.abspath(f)))
             assert not fs.isdir(f)
         assert not fs.isdir("not-a-dir")

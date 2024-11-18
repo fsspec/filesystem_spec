@@ -105,7 +105,7 @@ def test_zip_glob_star(m):
     outfiles = fs.glob("*")
     assert len(outfiles) == 1
 
-    fn = f"{os.path.dirname(os.path.abspath((__file__)))}/out.zip"
+    fn = f"{os.path.dirname(os.path.abspath(__file__))}/out.zip"
     fs = fsspec.filesystem("zip", fo=fn, mode="r")
     outfiles = fs.glob("*")
     assert len(outfiles) == 1
@@ -162,7 +162,7 @@ def zip_file_fixture(tmp_path):
 
 
 def _assert_all_except_context_dependent_variables(result, expected_result):
-    for path in expected_result.keys():
+    for path in expected_result:
         assert result[path]
         fields = [
             "orig_filename",

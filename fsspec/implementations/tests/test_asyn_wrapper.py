@@ -1,10 +1,12 @@
 import asyncio
-import pytest
 import os
+
+import pytest
 
 import fsspec
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.local import LocalFileSystem
+
 from .test_local import csv_files, filetexts
 
 
