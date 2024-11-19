@@ -6,7 +6,9 @@ import pytest
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.tests.abstract.copy import AbstractCopyTests  # noqa: F401
 from fsspec.tests.abstract.get import AbstractGetTests  # noqa: F401
+from fsspec.tests.abstract.open import AbstractOpenTests  # noqa: F401
 from fsspec.tests.abstract.put import AbstractPutTests  # noqa: F401
+from fsspec.tests.abstract.pipe import AbstractPipeTests  # noqa: F401
 
 
 class BaseAbstractFixtures:

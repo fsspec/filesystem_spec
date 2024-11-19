@@ -200,7 +200,9 @@ class MemoryFileSystem(AbstractFileSystem):
                 return f
             else:
                 raise FileNotFoundError(path)
-        elif mode == "wb":
+        elif mode in {"wb", "xb"}:
+            if mode == "xb" and self.exists(path):
+                raise FileExistsError
             m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
                 m.commit()
