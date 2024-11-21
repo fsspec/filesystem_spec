@@ -752,10 +752,10 @@ def test_cache_not_pickled(server):
         cache_type="readahead",
         headers={"give_length": "true", "head_ok": "true"},
     )
-    # fs = fsspec.filesystem("readahead", target_protocol="http")
     filepath = server.realfile
     length = 3
     f = fs.open(filepath, mode="rb")
+    assert isinstance(f, AbstractBufferedFile)
     assert not f.cache.cache  # No cache initially
     assert f.read(length=length) == data[:length]
     assert f.cache.cache == data  # Cache is populated
