@@ -15,7 +15,6 @@ from fsspec.implementations.ftp import FTPFileSystem
 from fsspec.implementations.http import HTTPFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
-
 from fsspec.tests.conftest import data
 
 PATHS_FOR_GLOB_TESTS = (
