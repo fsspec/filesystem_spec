@@ -747,7 +747,7 @@ def test_cache():
 
 
 def test_cache_not_pickled(server):
-    fs = fsspec.filesystem("http")
+    fs = fsspec.filesystem("http", cache_type="readahead")
     filepath = server.realfile
     length = 3
     f = fs.open(filepath, mode="rb")
