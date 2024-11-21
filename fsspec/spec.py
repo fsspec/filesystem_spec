@@ -10,7 +10,7 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import Any, ClassVar, Dict, Tuple
+from typing import Any, ClassVar
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -117,8 +117,8 @@ class AbstractFileSystem(metaclass=_Cached):
     _extra_tokenize_attributes = ()
 
     # Set by _Cached metaclass
-    storage_args: Tuple[Any, ...]
-    storage_options: Dict[str, Any]
+    storage_args: tuple[Any, ...]
+    storage_options: dict[str, Any]
 
     def __init__(self, *args, **storage_options):
         """Create and configure file-system instance
@@ -615,11 +615,9 @@ class AbstractFileSystem(metaclass=_Cached):
             p: info
             for p, info in sorted(allpaths.items())
             if pattern.match(
-                (
-                    p + "/"
-                    if append_slash_to_dirname and info["type"] == "directory"
-                    else p
-                )
+                p + "/"
+                if append_slash_to_dirname and info["type"] == "directory"
+                else p
             )
         }
 
@@ -780,8 +778,12 @@ class AbstractFileSystem(metaclass=_Cached):
                 return f.read(end - f.tell())
             return f.read()
 
-    def pipe_file(self, path, value, **kwargs):
+    def pipe_file(self, path, value, mode="overwrite", **kwargs):
         """Set the bytes of given file"""
+        if mode == "create" and self.exists(path):
+            # non-atomic but simple way; or could use "xb" in open(), which is likely
+            # not as well supported
+            raise FileExistsError
         with self.open(path, "wb", **kwargs) as f:
             f.write(value)
 
@@ -973,8 +975,12 @@ class AbstractFileSystem(metaclass=_Cached):
             with callback.branched(rpath, lpath) as child:
                 self.get_file(rpath, lpath, callback=child, **kwargs)
 
-    def put_file(self, lpath, rpath, callback=DEFAULT_CALLBACK, **kwargs):
+    def put_file(
+        self, lpath, rpath, callback=DEFAULT_CALLBACK, mode="overwrite", **kwargs
+    ):
         """Copy single file to remote"""
+        if mode == "create" and self.exists(rpath):
+            raise FileExistsError
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
             return None
@@ -1264,6 +1270,9 @@ class AbstractFileSystem(metaclass=_Cached):
             Target file
         mode: str like 'rb', 'w'
             See builtin ``open()``
+            Mode "x" (exclusive write) may be implemented by the backend. Even if
+            it is, whether  it is checked up front or on commit, and whether it is
+            atomic is implementation-dependent.
         block_size: int
             Some indication of buffering - this is a value in bytes
         cache_options : dict, optional
@@ -1442,7 +1451,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         return json.loads(blob, cls=FilesystemJSONDecoder)
 
-    def to_dict(self, *, include_password: bool = True) -> Dict[str, Any]:
+    def to_dict(self, *, include_password: bool = True) -> dict[str, Any]:
         """
         JSON-serializable dictionary representation of this filesystem instance.
 
@@ -1483,7 +1492,7 @@ class AbstractFileSystem(metaclass=_Cached):
         )
 
     @staticmethod
-    def from_dict(dct: Dict[str, Any]) -> AbstractFileSystem:
+    def from_dict(dct: dict[str, Any]) -> AbstractFileSystem:
         """
         Recreate a filesystem instance from dictionary representation.
 
@@ -1797,7 +1806,7 @@ class AbstractBufferedFile(io.IOBase):
 
     def info(self):
         """File information about this path"""
-        if "r" in self.mode:
+        if self.readable():
             return self.details
         else:
             raise ValueError("Info not available while writing")
@@ -1844,7 +1853,7 @@ class AbstractBufferedFile(io.IOBase):
         data: bytes
             Set of bytes to be written.
         """
-        if self.mode not in {"wb", "ab"}:
+        if not self.writable():
             raise ValueError("File not in write mode")
         if self.closed:
             raise ValueError("I/O operation on closed file.")
@@ -1877,7 +1886,7 @@ class AbstractBufferedFile(io.IOBase):
         if force:
             self.forced = True
 
-        if self.mode not in {"wb", "ab"}:
+        if self.readable():
             # no-op to flush on read-mode
             return
 
@@ -2026,21 +2035,22 @@ class AbstractBufferedFile(io.IOBase):
             return
         if self.closed:
             return
-        if self.mode == "rb":
-            self.cache = None
-        else:
-            if not self.forced:
-                self.flush(force=True)
+        try:
+            if self.mode == "rb":
+                self.cache = None
+            else:
+                if not self.forced:
+                    self.flush(force=True)
 
-            if self.fs is not None:
-                self.fs.invalidate_cache(self.path)
-                self.fs.invalidate_cache(self.fs._parent(self.path))
-
-        self.closed = True
+                if self.fs is not None:
+                    self.fs.invalidate_cache(self.path)
+                    self.fs.invalidate_cache(self.fs._parent(self.path))
+        finally:
+            self.closed = True
 
     def readable(self):
         """Whether opened for reading"""
-        return self.mode == "rb" and not self.closed
+        return "r" in self.mode and not self.closed
 
     def seekable(self):
         """Whether is seekable (only in read mode)"""
@@ -2048,7 +2058,7 @@ class AbstractBufferedFile(io.IOBase):
 
     def writable(self):
         """Whether opened for writing"""
-        return self.mode in {"wb", "ab"} and not self.closed
+        return self.mode in {"wb", "ab", "xb"} and not self.closed
 
     def __reduce__(self):
         if self.mode != "rb":

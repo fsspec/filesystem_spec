@@ -273,8 +273,12 @@ class HTTPFileSystem(AsyncFileSystem):
         chunk_size=5 * 2**20,
         callback=DEFAULT_CALLBACK,
         method="post",
+        mode="overwrite",
         **kwargs,
     ):
+        if mode != "overwrite":
+            raise NotImplementedError("Exclusive write")
+
         async def gen_chunks():
             # Support passing arbitrary file-like objects
             # and use them instead of streams.

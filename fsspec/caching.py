@@ -7,9 +7,9 @@ import math
 import os
 import threading
 import warnings
+from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import groupby
 from operator import itemgetter
-from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -87,12 +87,7 @@ class BaseCache:
         if self.hit_count == 0 and self.miss_count == 0:
             # a cache that does nothing, this is for logs only
             return ""
-        return " , %s: %d hits, %d misses, %d total requested bytes" % (
-            self.name,
-            self.hit_count,
-            self.miss_count,
-            self.total_requested_bytes,
-        )
+        return f" , {self.name}: {self.hit_count} hits, {self.miss_count} misses, {self.total_requested_bytes} total requested bytes"
 
     def __repr__(self) -> str:
         # TODO: use rich for better formatting

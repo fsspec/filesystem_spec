@@ -163,6 +163,7 @@ select = [
     "E9",
     "F",
     "FURB",
+    "I",
     "LOG",
     "PERF",
     "PLC",
@@ -181,8 +182,11 @@ select = [
     "RUF006",
     "RUF015",
     "RUF024",
+    "SIM",
     "SLOT",
     "SIM101",
+    "TCH",
+    "UP",
 ]
 ignore = [
 	# Loop control variable `loop` not used within loop body
@@ -207,6 +211,18 @@ ignore = [
     # Fix these codes later
     "G004",
     "PERF203",
+    "UP007",
+    "UP011",
+    "UP015",
+    "UP018",
+    # deprecated
+    "UP027",
+    "SIM102",
+    "SIM105",
+    "SIM108",
+    "SIM114",
+    "SIM115",
+    "SIM117",
     # https://github.com/astral-sh/ruff/issues/7871
     "UP038",
     # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules

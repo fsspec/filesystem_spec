@@ -152,3 +152,37 @@ available as the attribute ``.loop``.
 
     <script data-goatcounter="https://fsspec.goatcounter.com/count"
         async src="//gc.zgo.at/count.js"></script>
+
+AsyncFileSystemWrapper
+----------------------
+
+The `AsyncFileSystemWrapper` class is an experimental feature that allows you to convert
+a synchronous filesystem into an asynchronous one. This is useful for quickly integrating
+synchronous filesystems into workflows that may expect `AsyncFileSystem` instances.
+
+Basic Usage
+~~~~~~~~~~~
+
+To use `AsyncFileSystemWrapper`, wrap any synchronous filesystem to work in an asynchronous context.
+In this example, the synchronous `LocalFileSystem` is wrapped, creating an `AsyncFileSystem` instance
+backed by the normal, synchronous methods of `LocalFileSystem`:
+
+.. code-block:: python
+
+    import asyncio
+    import fsspec
+    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+
+    async def async_copy_file():
+        sync_fs = fsspec.filesystem('file')  # by-default synchronous, local filesystem
+        async_fs = AsyncFileSystemWrapper(sync_fs)
+        return await async_fs._copy('/source/file.txt', '/destination/file.txt')
+
+    asyncio.run(async_copy_file())
+
+Limitations
+-----------
+
+This is experimental. Users should not expect this wrapper to magically make things faster.
+It is primarily provided to allow usage of synchronous filesystems with interfaces that expect
+`AsyncFileSystem` instances.

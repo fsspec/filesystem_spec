@@ -5,8 +5,8 @@ import itertools
 import logging
 import math
 import os
-from itertools import chain
 from functools import lru_cache
+from itertools import chain
 from typing import TYPE_CHECKING, Literal
 
 import fsspec.core
@@ -176,7 +176,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             try:
                 df = self.pd.read_parquet(data, engine=self.engine)
                 refs = {c: df[c].to_numpy() for c in df.columns}
-            except IOError:
+            except OSError:
                 refs = None
             return refs
 
@@ -431,7 +431,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if len(partition) < self.record_size:
             try:
                 original = self.open_refs(field, record)
-            except IOError:
+            except OSError:
                 pass
 
         if original:
@@ -1181,13 +1181,17 @@ class ReferenceFileSystem(AsyncFileSystem):
         )  # ignores FileNotFound, just as well for directories
         self.dircache.clear()  # this is a bit heavy handed
 
-    async def _pipe_file(self, path, data):
+    async def _pipe_file(self, path, data, mode="overwrite", **kwargs):
+        if mode == "create" and self.exists(path):
+            raise FileExistsError
         # can be str or bytes
         self.references[path] = data
         self.dircache.clear()  # this is a bit heavy handed
 
-    async def _put_file(self, lpath, rpath, **kwargs):
+    async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):
         # puts binary
+        if mode == "create" and self.exists(rpath):
+            raise FileExistsError
         with open(lpath, "rb") as f:
             self.references[rpath] = f.read()
         self.dircache.clear()  # this is a bit heavy handed

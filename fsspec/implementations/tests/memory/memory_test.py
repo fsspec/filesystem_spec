@@ -12,3 +12,11 @@ class TestMemoryGet(abstract.AbstractGetTests, MemoryFixtures):
 
 class TestMemoryPut(abstract.AbstractPutTests, MemoryFixtures):
     pass
+
+
+class TestMemoryPipe(abstract.AbstractPipeTests, MemoryFixtures):
+    pass
+
+
+class TestMemoryOpen(abstract.AbstractOpenTests, MemoryFixtures):
+    pass
