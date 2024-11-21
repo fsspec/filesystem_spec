@@ -20,6 +20,7 @@ except ImportError:
 from fsspec.asyn import AsyncFileSystem
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.core import filesystem, open, split_protocol
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
@@ -757,6 +758,10 @@ class ReferenceFileSystem(AsyncFileSystem):
             self.fss[remote_protocol] = fs
 
         self.fss[None] = fs or filesystem("file")  # default one
+        # Wrap any non-async filesystems to ensure async methods are available below
+        for k, f in self.fss.items():
+            if not f.async_impl:
+                self.fss[k] = AsyncFileSystemWrapper(f)
 
     def _cat_common(self, path, start=None, end=None):
         path = self._strip_protocol(path)
