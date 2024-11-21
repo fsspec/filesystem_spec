@@ -16,6 +16,8 @@ from fsspec.implementations.http import HTTPFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
+from fsspec.tests.conftest import data, server
+
 PATHS_FOR_GLOB_TESTS = (
     {"name": "test0.json", "type": "file", "size": 100},
     {"name": "test0.yaml", "type": "file", "size": 100},
@@ -742,6 +744,26 @@ def test_cache():
 
     DummyTestFS.clear_instance_cache()
     assert len(DummyTestFS._cache) == 0
+
+
+def test_cache_not_pickled(server):
+    fs = fsspec.filesystem("http")
+    filepath = server.realfile
+    length = 3
+    f = fs.open(filepath, mode="rb")
+    assert not f.cache.cache  # No cache initially
+    assert f.read(length=length) == data[:length]
+    assert f.cache.cache == data  # Cache is populated
+
+    # Roundtrip through pickle
+    import pickle
+
+    f2 = pickle.loads(pickle.dumps(f))
+    assert not f2.cache.cache  # No cache initially
+    assert (
+        f2.read(length=length) == data[length : 2 * length]
+    )  # Read file from previous seek point
+    assert f2.cache.cache == data[length:]  # Cache is populated
 
 
 def test_current():
