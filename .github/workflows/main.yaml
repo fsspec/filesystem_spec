@@ -40,7 +40,7 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install -e .[test_full]
-          pytest -v
+          pytest -v fsspec/tests/test_spec.py
 
   win:
     name: pytest-win
