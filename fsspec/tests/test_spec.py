@@ -16,7 +16,7 @@ from fsspec.implementations.http import HTTPFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
-from fsspec.tests.conftest import data, server
+from fsspec.tests.conftest import data
 
 PATHS_FOR_GLOB_TESTS = (
     {"name": "test0.json", "type": "file", "size": 100},
