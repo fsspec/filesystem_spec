@@ -1688,7 +1688,7 @@ class AbstractFileSystem(metaclass=_Cached):
     
             if remaining_count > 0:
                 more_message = f"{remaining_count} more item(s) not displayed."
-                result.append(f"{prefix}{"└" + ('─' * (indent_size - 2))} {more_message}")
+                result.append(f"{prefix}{'└' + ('─' * (indent_size - 2))} {more_message}")
     
         return "\n".join((_ for _ in result if _))
 
