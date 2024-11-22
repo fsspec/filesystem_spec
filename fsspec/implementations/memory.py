@@ -126,12 +126,13 @@ class MemoryFileSystem(AbstractFileSystem):
             if not exist_ok:
                 raise
 
-    def pipe_file(self, path, value, **kwargs):
+    def pipe_file(self, path, value, mode="overwrite", **kwargs):
         """Set the bytes of given file
 
         Avoids copies of the data if possible
         """
-        self.open(path, "wb", data=value)
+        mode = "xb" if mode == "create" else "wb"
+        self.open(path, mode=mode, data=value)
 
     def rmdir(self, path):
         path = self._strip_protocol(path)
@@ -178,6 +179,8 @@ class MemoryFileSystem(AbstractFileSystem):
         **kwargs,
     ):
         path = self._strip_protocol(path)
+        if "x" in mode and self.exists(path):
+            raise FileExistsError
         if path in self.pseudo_dirs:
             raise IsADirectoryError(path)
         parent = path
@@ -197,7 +200,9 @@ class MemoryFileSystem(AbstractFileSystem):
                 return f
             else:
                 raise FileNotFoundError(path)
-        elif mode == "wb":
+        elif mode in {"wb", "xb"}:
+            if mode == "xb" and self.exists(path):
+                raise FileExistsError
             m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
                 m.commit()

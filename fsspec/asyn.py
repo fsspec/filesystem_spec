@@ -408,7 +408,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 continue
             raise ex
 
-    async def _pipe_file(self, path, value, **kwargs):
+    async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
         raise NotImplementedError
 
     async def _pipe(self, path, value=None, batch_size=None, **kwargs):
@@ -517,7 +517,7 @@ class AsyncFileSystem(AbstractFileSystem):
             coros, batch_size=batch_size, nofiles=True, return_exceptions=True
         )
 
-    async def _put_file(self, lpath, rpath, **kwargs):
+    async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):
         raise NotImplementedError
 
     async def _put(
