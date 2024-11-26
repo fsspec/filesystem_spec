@@ -1875,7 +1875,7 @@ class AbstractBufferedFile(io.IOBase):
 
         self.kwargs = kwargs
 
-        if mode not in {"ab", "rb", "wb"}:
+        if mode not in {"ab", "rb", "wb", "xb"}:
             raise NotImplementedError("File mode not supported")
         if mode == "rb":
             if size is not None:
