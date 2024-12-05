@@ -26,3 +26,4 @@ dependencies:
   - aiobotocore
   - moto
   - flask
+  - pyopenssl>=24.0.0
