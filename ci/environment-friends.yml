@@ -25,5 +25,5 @@ dependencies:
   - google-api-python-client
   - httpretty
   - aiobotocore
-  - "moto >=4,<5"
+  - moto
   - flask
