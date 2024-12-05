@@ -156,6 +156,7 @@ jobs:
         run: |
           pip install -e . --no-deps
           pip install -e ./${{ matrix.FRIEND }} --no-deps
+          pip list
 
       - name: Test
         shell: bash -l {0}
