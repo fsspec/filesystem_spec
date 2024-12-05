@@ -1576,6 +1576,141 @@ class AbstractFileSystem(metaclass=_Cached):
         """Return the modified timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
 
+    def tree(
+        self,
+        path: str = "/",
+        recursion_limit: int = 2,
+        max_display: int = 25,
+        display_size: bool = False,
+        prefix: str = "",
+        is_last: bool = True,
+        first: bool = True,
+        indent_size: int = 4,
+    ) -> str:
+        """
+        Return a tree-like structure of the filesystem starting from the given path as a string.
+
+        Parameters
+        ----------
+            path: Root path to start traversal from
+            recursion_limit: Maximum depth of directory traversal
+            max_display: Maximum number of items to display per directory
+            display_size: Whether to display file sizes
+            prefix: Current line prefix for visual tree structure
+            is_last: Whether current item is last in its level
+            first: Whether this is the first call (displays root path)
+            indent_size: Number of spaces by indent
+
+        Returns
+        -------
+            str: A string representing the tree structure.
+
+        Example
+        -------
+            >>> from fsspec import filesystem
+
+            >>> fs = filesystem('ftp', host='test.rebex.net', user='demo', password='password')
+            >>> tree = fs.tree(display_size=True, recursion_limit=3, indent_size=8, max_display=10)
+            >>> print(tree)
+        """
+
+        def format_bytes(n: int) -> str:
+            """Format bytes as text."""
+            for prefix, k in (
+                ("P", 2**50),
+                ("T", 2**40),
+                ("G", 2**30),
+                ("M", 2**20),
+                ("k", 2**10),
+            ):
+                if n >= 0.9 * k:
+                    return f"{n / k:.2f} {prefix}b"
+            return f"{n}B"
+
+        result = []
+
+        if first:
+            result.append(path)
+
+        if recursion_limit:
+            indent = " " * indent_size
+            contents = self.ls(path, detail=True)
+            contents.sort(
+                key=lambda x: (x.get("type") != "directory", x.get("name", ""))
+            )
+
+            if max_display is not None and len(contents) > max_display:
+                displayed_contents = contents[:max_display]
+                remaining_count = len(contents) - max_display
+            else:
+                displayed_contents = contents
+                remaining_count = 0
+
+            for i, item in enumerate(displayed_contents):
+                is_last_item = (i == len(displayed_contents) - 1) and (
+                    remaining_count == 0
+                )
+
+                branch = (
+                    "└" + ("─" * (indent_size - 2))
+                    if is_last_item
+                    else "├" + ("─" * (indent_size - 2))
+                )
+                branch += " "
+                new_prefix = prefix + (
+                    indent if is_last_item else "│" + " " * (indent_size - 1)
+                )
+
+                name = os.path.basename(item.get("name", ""))
+
+                if display_size and item.get("type") == "directory":
+                    sub_contents = self.ls(item.get("name", ""), detail=True)
+                    num_files = sum(
+                        1 for sub_item in sub_contents if sub_item.get("type") == "file"
+                    )
+                    num_folders = sum(
+                        1
+                        for sub_item in sub_contents
+                        if sub_item.get("type") == "directory"
+                    )
+
+                    if num_files == 0 and num_folders == 0:
+                        size = " (empty folder)"
+                    elif num_files == 0:
+                        size = f" ({num_folders} subfolder{'s' if num_folders > 1 else ''})"
+                    elif num_folders == 0:
+                        size = f" ({num_files} file{'s' if num_files > 1 else ''})"
+                    else:
+                        size = f" ({num_files} file{'s' if num_files > 1 else ''}, {num_folders} subfolder{'s' if num_folders > 1 else ''})"
+                elif display_size and item.get("type") == "file":
+                    size = f" ({format_bytes(item.get('size', 0))})"
+                else:
+                    size = ""
+
+                result.append(f"{prefix}{branch}{name}{size}")
+
+                if item.get("type") == "directory" and recursion_limit > 0:
+                    result.append(
+                        self.tree(
+                            path=item.get("name", ""),
+                            recursion_limit=recursion_limit - 1,
+                            max_display=max_display,
+                            display_size=display_size,
+                            prefix=new_prefix,
+                            is_last=is_last_item,
+                            first=False,
+                            indent_size=indent_size,
+                        )
+                    )
+
+            if remaining_count > 0:
+                more_message = f"{remaining_count} more item(s) not displayed."
+                result.append(
+                    f"{prefix}{'└' + ('─' * (indent_size - 2))} {more_message}"
+                )
+
+        return "\n".join(_ for _ in result if _)
+
     # ------------------------------------------------------------------------
     # Aliases
 
