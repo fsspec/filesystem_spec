@@ -458,7 +458,8 @@ def test_fss_has_defaults(m):
     assert fs.fss["memory"].protocol == "memory"
 
     fs = fsspec.filesystem("reference", fs=m, fo={})
-    assert fs.fss[None] is m
+    # Default behavior here wraps synchronous filesystems to enable the async API
+    assert fs.fss[None].sync_fs is m
 
     fs = fsspec.filesystem("reference", fs={"memory": m}, fo={})
     assert fs.fss["memory"] is m

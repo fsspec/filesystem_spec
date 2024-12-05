@@ -45,26 +45,27 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
     def __init__(self, sync_fs, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.asynchronous = True
-        self.fs = sync_fs
+        self.sync_fs = sync_fs
+        self.protocol = self.sync_fs.protocol
         self._wrap_all_sync_methods()
 
     @property
     def fsid(self):
-        return f"async_{self.fs.fsid}"
+        return f"async_{self.sync_fs.fsid}"
 
     def _wrap_all_sync_methods(self):
         """
         Wrap all synchronous methods of the underlying filesystem with asynchronous versions.
         """
-        for method_name in dir(self.fs):
+        for method_name in dir(self.sync_fs):
             if method_name.startswith("_"):
                 continue
 
-            attr = inspect.getattr_static(self.fs, method_name)
+            attr = inspect.getattr_static(self.sync_fs, method_name)
             if isinstance(attr, property):
                 continue
 
-            method = getattr(self.fs, method_name)
+            method = getattr(self.sync_fs, method_name)
             if callable(method) and not asyncio.iscoroutinefunction(method):
                 async_method = async_wrapper(method, obj=self)
                 setattr(self, f"_{method_name}", async_method)
