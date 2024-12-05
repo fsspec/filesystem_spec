@@ -9,7 +9,6 @@ dependencies:
   - pytest-cov
   - pytest-mock
   - pip
-  - pytest<8
   - ujson
   - requests
   - decorator
