@@ -195,3 +195,16 @@ def test_write_read_verify_file_with_equals(hdfs_cluster):
     assert len(file_info) == 1
     assert file_info[0]["name"] == file_path
     assert file_info[0]["size"] == len(content)
+
+
+def test_protocol_prefixed_path(hdfs_cluster):
+    fs = WebHDFS(
+        hdfs_cluster, user="testuser", data_proxy={"worker.example.com": "localhost"}
+    )
+    protocol_prefixed_path = "webhdfs://localhost:50070/user/testuser/test_dir"
+
+    fs.mkdir(protocol_prefixed_path)
+    assert fs.exists(protocol_prefixed_path)
+
+    file_info = fs.ls(protocol_prefixed_path, detail=True)
+    assert len(file_info) == 0
