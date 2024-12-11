@@ -166,7 +166,8 @@ class WebHDFS(AbstractFileSystem):
             self.session.auth = HTTPBasicAuth(self.user, self.password)
 
     def _call(self, op, method="get", path=None, data=None, redirect=True, **kwargs):
-        url = self._apply_proxy(self.url + quote(path or "", safe="/="))
+        path = self._strip_protocol(path) if path is not None else ""
+        url = self._apply_proxy(self.url + quote(path, safe="/="))
         args = kwargs.copy()
         args.update(self.pars)
         args["op"] = op.upper()
