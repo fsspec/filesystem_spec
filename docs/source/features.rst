@@ -408,3 +408,21 @@ tqdm.
 
     <script data-goatcounter="https://fsspec.goatcounter.com/count"
         async src="//gc.zgo.at/count.js"></script>
+
+
+Exclusive write
+---------------
+
+Some backends support writing to a file only if it doesn't already exist. This may be
+implemented for the following methods:
+- pipe_file (with argument ``mode=='create'``)
+- put_file (with argument ``mode=='create'``)
+- open (with argument ``mode="xb"``)
+Since some writes will be achieved in blocks, the timing of when the check is done is
+not defined - it may be at the start or at the completion of the operation, depending
+on the backend.
+
+If using exclusive mode on a file that does already exist, a ``FileExistsError`` will
+be raised.
+
+This feature is currently included on a trial basis and may change in the future.
