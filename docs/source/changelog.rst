@@ -1,6 +1,31 @@
 Changelog
 =========
 
+2024.12.0
+---------
+
+Enhancements
+
+- "exclusive" mode for writing (#1762, 1756, 174+)
+- "tree" text display of filesystem contents (#1750)
+- async wrapper for sync FSs (#1745)
+- new known implementation: tosfs (#1739)
+- consilidate block fetch requests (#1733)
+
+Fixes
+
+- better webHDFS proxies (#
+- syn FSs in referenceFS (#1755)
+- don't serialize file caches (#1753)
+- race condition in local ls() (#1744)
+- missing/nan references in parquet (#1738)
+- _un_chain kwargs (@1736)
+- async _cat_file in referenceFS (#1734)
+
+Other
+
+- fallback implementation for _fetch_range (#1732)
+
 2024.10.0
 ---------
 
