@@ -158,6 +158,8 @@ jobs:
           cd s3fs
           git checkout test
           cd ..
+          pip install --upgrade "aiobotocore"
+          pip install --upgrade "botocore" --no-deps
           pip install -e ./${{ matrix.FRIEND }} --no-deps
           pip list
 

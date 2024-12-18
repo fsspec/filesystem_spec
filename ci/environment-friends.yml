@@ -2,17 +2,28 @@ name: test_env
 channels:
   - conda-forge
 dependencies:
+  - python=3.12
   - pytest
-  - pytest-asyncio
+  - pytest-asyncio !=0.22.0
+  - pytest-benchmark
+  - pytest-cov
+  - pytest-mock
   - pip
   - ujson
   - requests
   - decorator
   - pytest-timeout
+  - google-auth
+  - aiohttp
+  - google-auth-oauthlib
   - flake8
   - black
+  - google-cloud-core
+  - google-cloud-storage
+  - google-api-core
+  - google-api-python-client
   - httpretty
   - aiobotocore
   - moto
   - flask
-  - fsspec
+  - pyopenssl>=24.0.0
