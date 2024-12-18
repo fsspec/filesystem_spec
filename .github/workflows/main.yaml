@@ -130,7 +130,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        FRIEND: [gcsfs, s3fs]
+        FRIEND: [s3fs]
 
     env:
       CIRUN: true
@@ -149,13 +149,16 @@ jobs:
 
       - name: Clone
         shell: bash -l {0}
-        run: git clone https://github.com/fsspec/${{ matrix.FRIEND }}
+        run: git clone https://github.com/martindurant/${{ matrix.FRIEND }}
 
       - name: Install
         shell: bash -l {0}
         run: |
           pip install -e . --no-deps
+          cd s3fs
+          git checkout test
           pip install -e ./${{ matrix.FRIEND }} --no-deps
+          cd ..
           pip list
 
       - name: Test

@@ -27,5 +27,3 @@ dependencies:
   - moto
   - flask
   - pyopenssl>=24.0.0
-  - pip:
-      - git+https://github.com/martindurant/s3fs.git@test
