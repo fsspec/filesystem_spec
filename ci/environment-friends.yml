@@ -27,3 +27,5 @@ dependencies:
   - moto
   - flask
   - pyopenssl>=24.0.0
+  - s3fs
+  - gcsfs
