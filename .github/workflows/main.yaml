@@ -149,13 +149,12 @@ jobs:
 
       - name: Clone
         shell: bash -l {0}
-        run: git clone https://github.com/martindurant/${{ matrix.FRIEND }}
+        run: git clone https://github.com/fsspec/${{ matrix.FRIEND }}
 
       - name: Install
         shell: bash -l {0}
         run: |
           pip install -e . --no-deps
-          pip install --upgrade "aiobotocore"
           pip install -e ./${{ matrix.FRIEND }} --no-deps
           pip list
 
