@@ -26,6 +26,6 @@ dependencies:
   - aiobotocore
   - moto
   - flask
-  - pyopenssl>=24.0.0
-  - s3fs
-  - gcsfs
+  - pip:
+    - git+https://github.com/fsspec/s3fs
+    - git+https://github.com/fsspec/gcsfs
