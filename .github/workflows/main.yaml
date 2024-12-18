@@ -130,7 +130,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        FRIEND: [gcsfs, s3fs]
+        FRIEND: [s3fs, gcsfs]
 
     env:
       CIRUN: true
@@ -155,9 +155,11 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install -e . --no-deps
-          pip install -e ./${{ matrix.FRIEND }} --no-deps
           pip list
 
       - name: Test
         shell: bash -l {0}
-        run: pytest -v ${{ matrix.FRIEND }}
+        run: |
+          cd ${{ matrix.FRIEND }}
+          pytest -v
+          cd ..
