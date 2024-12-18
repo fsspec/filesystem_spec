@@ -157,8 +157,8 @@ jobs:
           pip install -e . --no-deps
           cd s3fs
           git checkout test
-          pip install -e ./${{ matrix.FRIEND }} --no-deps
           cd ..
+          pip install -e ./${{ matrix.FRIEND }} --no-deps
           pip list
 
       - name: Test
