@@ -9,7 +9,7 @@ on:
 jobs:
   linux:
     name: ${{ matrix.PY }}-pytest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +67,7 @@ jobs:
 
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@main
       - uses: actions/setup-python@main
@@ -93,7 +93,7 @@ jobs:
 #
   downstream:
     name: downstream
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -126,11 +126,11 @@ jobs:
 
   fsspec_friends:
     name: ${{ matrix.FRIEND }}-pytest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        FRIEND: [gcsfs, s3fs]
+        FRIEND: [s3fs, gcsfs]
 
     env:
       CIRUN: true
@@ -155,9 +155,11 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install -e . --no-deps
-          pip install -e ./${{ matrix.FRIEND }} --no-deps
           pip list
 
       - name: Test
         shell: bash -l {0}
-        run: pytest -v ${{ matrix.FRIEND }}
+        run: |
+          cd ${{ matrix.FRIEND }}
+          pytest -v
+          cd ..
