@@ -1,5 +1,6 @@
 from fsspec import AbstractFileSystem
 from fsspec.utils import tokenize
+import operator
 
 
 class AbstractArchiveFileSystem(AbstractFileSystem):
@@ -67,7 +68,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                     out = {"name": ppath, "size": 0, "type": "directory"}
                     paths[ppath] = out
         if detail:
-            out = sorted(paths.values(), key=lambda _: _["name"])
+            out = sorted(paths.values(), key=operator.itemgetter("name"))
             return out
         else:
             return sorted(paths)
