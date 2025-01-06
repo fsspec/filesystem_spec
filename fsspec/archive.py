@@ -1,6 +1,7 @@
+import operator
+
 from fsspec import AbstractFileSystem
 from fsspec.utils import tokenize
-import operator
 
 
 class AbstractArchiveFileSystem(AbstractFileSystem):
