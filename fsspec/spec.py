@@ -2131,7 +2131,7 @@ class AbstractBufferedFile(io.IOBase):
         return b"".join(out)
 
     def readline(self):
-        """Read until first occurrence of newline character
+        """Read until and including the first occurrence of newline character
 
         Note that, because of character encoding, this is not necessarily a
         true line ending.
@@ -2148,7 +2148,7 @@ class AbstractBufferedFile(io.IOBase):
         return self
 
     def readlines(self):
-        """Return all data, split by the newline character"""
+        """Return all data, split by the newline character, including the newline character"""
         data = self.read()
         lines = data.split(b"\n")
         out = [l + b"\n" for l in lines[:-1]]
