@@ -215,8 +215,6 @@ ignore = [
     "UP011",
     "UP015",
     "UP018",
-    # deprecated
-    "UP027",
     "SIM102",
     "SIM105",
     "SIM108",
