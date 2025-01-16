@@ -97,7 +97,7 @@ def test_filesystem_direct(recipe, tmpdir):
     Here: `LocalFileSystem`.
     """
 
-    filename = os.path.join(tmpdir, f'temp{recipe["suffix"]}')
+    filename = os.path.join(tmpdir, f"temp{recipe['suffix']}")
 
     fs = fsspec.filesystem("file")
     f = OpenFile(fs, filename, mode="wb")
@@ -132,7 +132,7 @@ def test_filesystem_cached(recipe, tmpdir):
     Here: `TarFileSystem` over `WholeFileCacheFileSystem` over `LocalFileSystem`.
     """
 
-    filename = os.path.join(tmpdir, f'temp{recipe["suffix"]}')
+    filename = os.path.join(tmpdir, f"temp{recipe['suffix']}")
 
     # Create a filesystem from test fixture.
     fs = fsspec.filesystem("file")

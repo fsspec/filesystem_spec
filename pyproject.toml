@@ -215,8 +215,6 @@ ignore = [
     "UP011",
     "UP015",
     "UP018",
-    # deprecated
-    "UP027",
     "SIM102",
     "SIM105",
     "SIM108",
@@ -238,8 +236,6 @@ ignore = [
     "Q003",
     "COM812",
     "COM819",
-    "ISC001",
-    "ISC002",
 ]
 
 [tool.pytest.ini_options]

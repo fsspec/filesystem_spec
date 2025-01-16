@@ -218,9 +218,9 @@ known_implementations = {
     "zip": {"class": "fsspec.implementations.zip.ZipFileSystem"},
 }
 
-assert list(known_implementations) == sorted(
-    known_implementations
-), "Not in alphabetical order"
+assert list(known_implementations) == sorted(known_implementations), (
+    "Not in alphabetical order"
+)
 
 
 def get_filesystem_class(protocol):

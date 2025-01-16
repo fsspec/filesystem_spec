@@ -412,9 +412,9 @@ class DatabricksFile(AbstractBufferedFile):
         if block_size is None or block_size == "default":
             block_size = self.DEFAULT_BLOCK_SIZE
 
-        assert (
-            block_size == self.DEFAULT_BLOCK_SIZE
-        ), f"Only the default block size is allowed, not {block_size}"
+        assert block_size == self.DEFAULT_BLOCK_SIZE, (
+            f"Only the default block size is allowed, not {block_size}"
+        )
 
         super().__init__(
             fs,
