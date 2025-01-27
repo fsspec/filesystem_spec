@@ -57,8 +57,9 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         """
         Wrap all synchronous methods of the underlying filesystem with asynchronous versions.
         """
+        excluded_methods = {"open"}
         for method_name in dir(self.sync_fs):
-            if method_name.startswith("_"):
+            if method_name.startswith("_") or method_name in excluded_methods:
                 continue
 
             attr = inspect.getattr_static(self.sync_fs, method_name)
