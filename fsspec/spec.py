@@ -382,7 +382,7 @@ class AbstractFileSystem(metaclass=_Cached):
             pass
 
     def walk(self, path, maxdepth=None, topdown=True, on_error="omit", **kwargs):
-        """Return all files belows path
+        """Return all files under the given path.
 
         List all files, recursing into subdirectories; output is iterator-style,
         like ``os.walk()``. For a simple list of files, ``find()`` is available.
