@@ -5,4 +5,3 @@ dependencies:
   - python=3.11
   - pip:
       - git+https://github.com/dask/dask
-      - git+https://github.com/dask/dask-expr

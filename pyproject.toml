@@ -122,7 +122,6 @@ test_full = [
 ]
 test_downstream = [
     "dask[dataframe,test]",
-    "dask-expr",
     "moto[server]>4,<5",
     "pytest-timeout",
     "xarray",
