@@ -394,10 +394,14 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
                 self.write(field, record)
         else:
             # metadata or top-level
-            self._items[key] = value
-            new_value = json.loads(
-                value.decode() if isinstance(value, bytes) else value
-            )
+            if hasattr(value, "to_bytes"):
+                val = value.to_bytes().decode()
+            elif isinstance(value, bytes):
+                val = value.decode()
+            else:
+                val = value
+            self._items[key] = val
+            new_value = json.loads(val)
             self.zmetadata[key] = {**self.zmetadata.get(key, {}), **new_value}
 
     @staticmethod
@@ -606,6 +610,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     """
 
     protocol = "reference"
+    cachable = False
 
     def __init__(
         self,
@@ -762,6 +767,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         for k, f in self.fss.items():
             if not f.async_impl:
                 self.fss[k] = AsyncFileSystemWrapper(f)
+            elif self.asynchronous ^ f.asynchronous:
+                raise ValueError(
+                    "Reference-FS's target filesystem must have same value"
+                    "of asynchronous"
+                )
 
     def _cat_common(self, path, start=None, end=None):
         path = self._strip_protocol(path)
@@ -772,6 +782,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             raise FileNotFoundError(path) from exc
         if isinstance(part, str):
             part = part.encode()
+        if hasattr(part, "to_bytes"):
+            part = part.to_bytes()
         if isinstance(part, bytes):
             logger.debug(f"Reference: {path}, type bytes")
             if part.startswith(b"base64:"):
@@ -1073,7 +1085,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.dircache = {"": []}
         it = self.references.items()
         for path, part in it:
-            if isinstance(part, (bytes, str)):
+            if isinstance(part, (bytes, str)) or hasattr(part, "to_bytes"):
                 size = len(part)
             elif len(part) == 1:
                 size = None
@@ -1104,6 +1116,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         return io.BytesIO(data)
 
     def ls(self, path, detail=True, **kwargs):
+        logger.debug("list %s", path)
         path = self._strip_protocol(path)
         if isinstance(self.references, LazyReferenceMapper):
             try:
