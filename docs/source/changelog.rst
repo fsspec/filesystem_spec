@@ -1,6 +1,25 @@
 Changelog
 =========
 
+2025.2.0
+--------
+
+Enhancements
+
+- add open() to referenceFS (#1778)
+
+Fixes
+
+- don't make async open() in async-wrapper (#1769)
+- fix CI following dask-expr upstream change (#1781)
+- cope with zarr3 "Buffer" objects in referenceFS (#1784)
+
+Other
+
+- use itemgetter in archiveFS (#1764)
+- document that newline is included in readline(s) (#1770)
+- format/spelling (#1774, 1779, 1780)
+
 2024.12.0
 ---------
 
