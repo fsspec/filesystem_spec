@@ -37,6 +37,52 @@ def test_simple(server):
         assert f.read(2) == "he"
 
 
+def test_open(m):
+    from fsspec.implementations.reference import json as json_impl
+
+    m.pipe("/data/0", data)
+    refs = {
+        "a": b"data",
+        "b": ["memory://data/0"],
+        "c": ("memory://data/0", 0, 5),
+        "d": ("memory://data/0", 1, 5),
+        "e": b"base64:aGVsbG8=",
+        "f": {"key": "value"},
+    }
+    fs = fsspec.filesystem("reference", fo=refs, fs=m)
+
+    with fs.open("a", "rb") as f:
+        assert f.read() == b"data"
+
+    with fs.open("b", "rb") as f:
+        assert f.read() == data
+
+    with fs.open("c", "rb") as f:
+        assert f.read() == data[:5]
+        assert not f.read()
+
+    with fs.open("d", "rb") as f:
+        assert f.read() == data[1:6]
+        assert not f.read()
+
+    with fs.open("e", "rb") as f:
+        assert f.read() == b"hello"
+
+    with fs.open("f", "rb") as f:
+        assert f.read() == json_impl.dumps(refs["f"]).encode("utf-8")
+
+    # check partial reads
+    with fs.open("c", "rb") as f:
+        assert f.read(2) == data[:2]
+        f.seek(2, os.SEEK_CUR)
+        assert f.read() == data[4:5]
+
+    with fs.open("d", "rb") as f:
+        assert f.read(2) == data[1:3]
+        f.seek(1, os.SEEK_CUR)
+        assert f.read() == data[4:6]
+
+
 def test_simple_ver1(server):
     # The dictionary in refs may be dumped with a different separator
     # depending on whether json or ujson is imported

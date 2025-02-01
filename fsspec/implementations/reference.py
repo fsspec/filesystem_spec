@@ -10,6 +10,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Literal
 
 import fsspec.core
+from fsspec.spec import AbstractBufferedFile
 
 try:
     import ujson as json
@@ -599,8 +600,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     async, and must allow start and end args in _cat_file. Later versions
     may allow multiple arbitrary URLs for the targets.
     This FileSystem is read-only. It is designed to be used with async
-    targets (for now). This FileSystem only allows whole-file access, no
-    ``open``. We do not get original file details from the target FS.
+    targets (for now). We do not get original file details from the target FS.
     Configuration is by passing a dict of references at init, or a URL to
     a JSON file containing the same; this dict
     can also contain concrete data for some set of paths.
@@ -1112,8 +1112,30 @@ class ReferenceFileSystem(AsyncFileSystem):
             self.dircache[par].append({"name": path, "type": "file", "size": size})
 
     def _open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
-        data = self.cat_file(path)  # load whole chunk into memory
-        return io.BytesIO(data)
+        part_or_url, start0, end0 = self._cat_common(path)
+        # This logic is kept outside `ReferenceFile` to avoid unnecessary redirection.
+        # That does mean `_cat_common` gets called twice if it eventually reaches `ReferenceFile`.
+        if isinstance(part_or_url, bytes):
+            return io.BytesIO(part_or_url[start0:end0])
+
+        protocol, _ = split_protocol(part_or_url)
+        if start0 is None and end0 is None:
+            return self.fss[protocol]._open(
+                part_or_url,
+                mode,
+                block_size=block_size,
+                cache_options=cache_options,
+                **kwargs,
+            )
+
+        return ReferenceFile(
+            self,
+            path,
+            mode,
+            block_size=block_size,
+            cache_options=cache_options,
+            **kwargs,
+        )
 
     def ls(self, path, detail=True, **kwargs):
         logger.debug("list %s", path)
@@ -1227,3 +1249,58 @@ class ReferenceFileSystem(AsyncFileSystem):
                 out[k] = v
         with fsspec.open(url, "wb", **storage_options) as f:
             f.write(json.dumps({"version": 1, "refs": out}).encode())
+
+
+class ReferenceFile(AbstractBufferedFile):
+    def __init__(
+        self,
+        fs,
+        path,
+        mode="rb",
+        block_size="default",
+        autocommit=True,
+        cache_type="readahead",
+        cache_options=None,
+        size=None,
+        **kwargs,
+    ):
+        super().__init__(
+            fs,
+            path,
+            mode=mode,
+            block_size=block_size,
+            autocommit=autocommit,
+            size=size,
+            cache_type=cache_type,
+            cache_options=cache_options,
+            **kwargs,
+        )
+        part_or_url, self.start, self.end = self.fs._cat_common(self.path)
+        protocol, _ = split_protocol(part_or_url)
+        self.src_fs = self.fs.fss[protocol]
+        self.src_path = part_or_url
+        self._f = None
+
+    @property
+    def f(self):
+        if self._f is None or self._f.closed:
+            self._f = self.src_fs._open(
+                self.src_path,
+                mode=self.mode,
+                block_size=self.blocksize,
+                autocommit=self.autocommit,
+                cache_type="none",
+                **self.kwargs,
+            )
+        return self._f
+
+    def close(self):
+        if self._f is not None:
+            self._f.close()
+        return super().close()
+
+    def _fetch_range(self, start, end):
+        start = start + self.start
+        end = min(end + self.start, self.end)
+        self.f.seek(start)
+        return self.f.read(end - start)
