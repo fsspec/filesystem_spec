@@ -151,6 +151,16 @@ def get_loop():
     return loop[0]
 
 
+def reset_after_fork():
+    global lock
+    loop[0] = None
+    iothread[0] = None
+    lock = None
+
+
+os.register_at_fork(after_in_child=reset_after_fork)
+
+
 if TYPE_CHECKING:
     import resource
 
