@@ -7,8 +7,6 @@ from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
 from .memory import MemoryFile
 
-# TODO: add GIST backend, would be very similar
-
 
 class GithubFileSystem(AbstractFileSystem):
     """Interface to files in github
