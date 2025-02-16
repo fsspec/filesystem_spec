@@ -3,7 +3,7 @@ import pytest
 import fsspec
 
 
-@pytest.mark.parametrize("gist_id", ["9406787cc6b3aa55e38a54dd6d4c0a28"])
+@pytest.mark.parametrize("gist_id", ["16bee4256595d3b6814be139ab1bd54e"])
 def test_gist_public(gist_id):
     fs = fsspec.filesystem("gist", gist_id=gist_id)
     # Listing
