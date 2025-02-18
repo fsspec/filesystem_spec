@@ -843,10 +843,19 @@ def test_append_parquet(lazy_refs, m):
     assert lazy2["data/1"] == b"Adata"
 
 
+def skip_zarr_2():
+    import zarr
+    from packaging.version import parse
+
+    if parse(zarr.__version__) < parse("3.0"):
+        pytest.skip("Zarr 3 required")
+
+
 @pytest.mark.parametrize("engine", ["fastparquet", "pyarrow"])
 def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
 
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq",
@@ -896,6 +905,7 @@ def test_deep_parq(m, engine):
 
 def test_parquet_no_data(m):
     zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
     fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq", fs=m
     )
@@ -924,6 +934,7 @@ def test_parquet_no_data(m):
 
 def test_parquet_no_references(m):
     zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq", fs=m
     )
