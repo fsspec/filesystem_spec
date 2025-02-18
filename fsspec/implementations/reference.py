@@ -22,10 +22,9 @@ from fsspec.asyn import AsyncFileSystem
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.core import filesystem, open, split_protocol
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
-from fsspec.utils import isfilelike, merge_offset_ranges, other_paths, setup_logging
+from fsspec.utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
-setup_logging(logger_name="fsspec.reference")
 
 
 class ReferenceNotReachable(RuntimeError):
