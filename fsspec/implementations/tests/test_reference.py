@@ -489,9 +489,9 @@ def test_missing_nonasync(m):
     }
     refs = {".zarray": json.dumps(zarray)}
 
-    m = fsspec.get_mapper("reference://", fo=refs, remote_protocol="memory")
-
-    a = zarr.open_array(m)
+    a = zarr.open_array(
+        "reference://", storage_options={"fo": refs, "remote_protocol": "memory"}
+    )
     assert str(a[0]) == "nan"
 
 
@@ -800,9 +800,15 @@ def test_cached(m, tmpdir):
 @pytest.fixture()
 def lazy_refs(m):
     zarr = pytest.importorskip("zarr")
-    l = LazyReferenceMapper.create("memory://refs", fs=m)
-    g = zarr.open(l, mode="w")
+    l = LazyReferenceMapper.create("memory://refs.parquet", fs=m)
+    g = zarr.open(
+        "reference://",
+        storage_options={"fo": "memory://refs.parquet", "remote_options": "memory"},
+        zarr_format=2,
+        mode="w",
+    )
     g.create_dataset(name="data", shape=(100,), chunks=(10,), dtype="int64")
+    g.store.fs.references.flush()
     return l
 
 
@@ -814,7 +820,7 @@ def test_append_parquet(lazy_refs, m):
     assert lazy_refs["data/0"] == b"data"
     lazy_refs.flush()
 
-    lazy2 = LazyReferenceMapper("memory://refs", fs=m)
+    lazy2 = LazyReferenceMapper("memory://refs.parquet", fs=m)
     assert lazy2["data/0"] == b"data"
     with pytest.raises(KeyError):
         lazy_refs["data/1"]
@@ -822,7 +828,7 @@ def test_append_parquet(lazy_refs, m):
     assert lazy2["data/1"] == b"Bdata"
     lazy2.flush()
 
-    lazy2 = LazyReferenceMapper("memory://refs", fs=m)
+    lazy2 = LazyReferenceMapper("memory://refs.parquet", fs=m)
     assert lazy2["data/0"] == b"data"
     assert lazy2["data/1"] == b"Bdata"
     lazy2["data/1"] = b"Adata"
@@ -831,7 +837,7 @@ def test_append_parquet(lazy_refs, m):
     assert "data/0" not in lazy2
     lazy2.flush()
 
-    lazy2 = LazyReferenceMapper("memory://refs", fs=m)
+    lazy2 = LazyReferenceMapper("memory://refs.parquet", fs=m)
     with pytest.raises(KeyError):
         lazy2["data/0"]
     assert lazy2["data/1"] == b"Adata"
@@ -847,45 +853,71 @@ def test_deep_parq(m, engine):
         fs=m,
         engine=engine,
     )
-    g = zarr.open_group(lz, mode="w")
+    g = zarr.open_group(
+        "reference://",
+        mode="w",
+        storage_options={"fo": "memory://out.parq", "remote_protocol": "memory"},
+        zarr_version=2,
+    )
 
     g2 = g.create_group("instant")
-    g2.create_dataset(name="one", data=[1, 2, 3])
+    arr = g2.create_dataset(name="one", shape=(3,), dtype="int64")
+    arr[:] = [1, 2, 3]
+    g.store.fs.references.flush()
     lz.flush()
 
     lz = fsspec.implementations.reference.LazyReferenceMapper(
         "memory://out.parq", fs=m, engine=engine
     )
-    g = zarr.open_group(lz)
-    assert g.instant.one[:].tolist() == [1, 2, 3]
-    assert sorted(_["name"] for _ in lz.ls("")) == [".zgroup", ".zmetadata", "instant"]
+    g = zarr.open_group(
+        "reference://",
+        storage_options={"fo": "memory://out.parq", "remote_protocol": "memory"},
+        zarr_version=2,
+    )
+    assert g["instant"]["one"][:].tolist() == [1, 2, 3]
+    assert sorted(_["name"] for _ in lz.ls("")) == [
+        ".zattrs",
+        ".zgroup",
+        ".zmetadata",
+        "instant",
+    ]
     assert sorted(_["name"] for _ in lz.ls("instant")) == [
+        "instant/.zattrs",
         "instant/.zgroup",
         "instant/one",
     ]
 
     assert sorted(_["name"] for _ in lz.ls("instant/one")) == [
         "instant/one/.zarray",
+        "instant/one/.zattrs",
         "instant/one/0",
     ]
 
 
 def test_parquet_no_data(m):
     zarr = pytest.importorskip("zarr")
-    lz = fsspec.implementations.reference.LazyReferenceMapper.create(
+    fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq", fs=m
     )
-
-    g = zarr.open_group(lz, mode="w")
+    g = zarr.open_group(
+        "reference://",
+        storage_options={
+            "fo": "memory://out.parq",
+            "fs": m,
+            "remote_protocol": "memory",
+        },
+        zarr_format=2,
+        mode="w",
+    )
     arr = g.create_dataset(
         name="one",
         dtype="int32",
         shape=(10,),
         chunks=(5,),
-        compression=None,
+        compressor=None,
         fill_value=1,
     )
-    lz.flush()
+    g.store.fs.references.flush()
 
     assert (arr[:] == 1).all()
 
@@ -896,16 +928,24 @@ def test_parquet_no_references(m):
         "memory://out.parq", fs=m
     )
 
-    g = zarr.open_group(lz, mode="w")
+    g = zarr.open_group(
+        "reference://",
+        storage_options={
+            "fo": "memory://out.parq",
+            "fs": m,
+            "remote_protocol": "memory",
+        },
+        zarr_format=2,
+        mode="w",
+    )
     arr = g.create_dataset(
         name="one",
         dtype="int32",
         shape=(),
         chunks=(),
-        compression=None,
+        compressor=None,
         fill_value=1,
     )
     lz.flush()
-    arr[...]
 
     assert arr[...].tolist() == 1  #  scalar, equal to fill value
