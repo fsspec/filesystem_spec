@@ -800,6 +800,7 @@ def test_cached(m, tmpdir):
 @pytest.fixture()
 def lazy_refs(m):
     zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
     l = LazyReferenceMapper.create("memory://refs.parquet", fs=m)
     g = zarr.open(
         "reference://",
