@@ -10,7 +10,8 @@ from fsspec.implementations.local import LocalFileSystem
 from .test_local import csv_files, filetexts
 
 
-def test_is_async_default():
+@pytest.mark.asyncio
+async def test_is_async_default():
     fs = fsspec.filesystem("file")
     async_fs = AsyncFileSystemWrapper(fs)
     assert async_fs.async_impl
@@ -146,3 +147,17 @@ async def test_batch_operations():
         await async_fs._rm([".test.fakedata.1.csv", ".test.fakedata.2.csv"])
         assert not await async_fs._exists(".test.fakedata.1.csv")
         assert not await async_fs._exists(".test.fakedata.2.csv")
+
+
+def test_open(tmpdir):
+    fn = f"{tmpdir}/afile"
+    with open(fn, "wb") as f:
+        f.write(b"hello")
+    of = fsspec.open(
+        "dir://afile::async_wrapper::file",
+        mode="rb",
+        async_wrapper={"asynchronous": False},
+        dir={"path": str(tmpdir)},
+    )
+    with of as f:
+        assert f.read() == b"hello"
