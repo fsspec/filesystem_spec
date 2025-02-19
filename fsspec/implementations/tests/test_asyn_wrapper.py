@@ -10,10 +10,13 @@ from fsspec.implementations.local import LocalFileSystem
 from .test_local import csv_files, filetexts
 
 
-def test_is_async():
+def test_is_async_default():
     fs = fsspec.filesystem("file")
     async_fs = AsyncFileSystemWrapper(fs)
     assert async_fs.async_impl
+    assert async_fs.asynchronous
+    async_fs = AsyncFileSystemWrapper(fs, asynchronous=False)
+    assert not async_fs.asynchronous
 
 
 def test_class_wrapper():
@@ -53,6 +56,7 @@ async def test_cats():
         assert result == b"a,b\n1,2\n"[1:-2]
 
         # test synchronous API is available as expected
+        async_fs = AsyncFileSystemWrapper(fs, asynchronous=False)
         result = async_fs.cat(".test.fakedata.1.csv", start=1, end=-2)
         assert result == b"a,b\n1,2\n"[1:-2]
 

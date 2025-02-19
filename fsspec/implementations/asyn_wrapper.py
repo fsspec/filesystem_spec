@@ -42,9 +42,8 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         The synchronous filesystem instance to wrap.
     """
 
-    def __init__(self, sync_fs, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.asynchronous = True
+    def __init__(self, sync_fs, *args, asynchronous=True, **kwargs):
+        super().__init__(*args, asynchronous=asynchronous, **kwargs)
         self.sync_fs = sync_fs
         self.protocol = self.sync_fs.protocol
         self._wrap_all_sync_methods()
