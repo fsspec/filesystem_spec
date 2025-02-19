@@ -43,6 +43,7 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
     """
 
     protocol = "async_wrapper"
+    cachable = False
 
     def __init__(self, fs, *args, asynchronous=None, **kwargs):
         if asynchronous is None:
