@@ -2,7 +2,7 @@ import asyncio
 import functools
 import inspect
 
-from fsspec.asyn import AsyncFileSystem
+from fsspec.asyn import AsyncFileSystem, running_async
 
 
 def async_wrapper(func, obj=None):
@@ -42,10 +42,14 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         The synchronous filesystem instance to wrap.
     """
 
-    def __init__(self, sync_fs, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.asynchronous = True
-        self.sync_fs = sync_fs
+    protocol = "async_wrapper"
+    cachable = False
+
+    def __init__(self, fs, *args, asynchronous=None, **kwargs):
+        if asynchronous is None:
+            asynchronous = running_async()
+        super().__init__(*args, asynchronous=asynchronous, **kwargs)
+        self.sync_fs = fs
         self.protocol = self.sync_fs.protocol
         self._wrap_all_sync_methods()
 
