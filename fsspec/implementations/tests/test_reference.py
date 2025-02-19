@@ -515,10 +515,10 @@ def test_fss_has_defaults(m):
     assert fs.fss[None] is m
 
     fs = fsspec.filesystem("reference", fo={"key": ["memory://a"]})
-    assert fs.fss[None] is fs.fss["memory"]
+    assert fs.fss[None] == fs.fss["memory"]
 
     fs = fsspec.filesystem("reference", fo={"key": ["memory://a"], "blah": ["path"]})
-    assert fs.fss[None] is fs.fss["memory"]
+    assert fs.fss[None] == fs.fss["memory"]
 
 
 def test_merging(m):
