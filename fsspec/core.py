@@ -452,7 +452,7 @@ def open(
     newline: bytes or None
         Used for line terminator in text mode. If None, uses system default;
         if blank, uses no translation.
-    expand: bool or Nonw
+    expand: bool or None
         Whether to regard file paths containing special glob characters as needing
         expansion (finding the first match) or absolute. Setting False allows using
         paths which do embed such characters. If None (default), this argument
