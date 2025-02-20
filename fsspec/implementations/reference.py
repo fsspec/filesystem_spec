@@ -765,7 +765,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         # Wrap any non-async filesystems to ensure async methods are available below
         for k, f in self.fss.items():
             if not f.async_impl:
-                self.fss[k] = AsyncFileSystemWrapper(f)
+                self.fss[k] = AsyncFileSystemWrapper(f, asynchronous=self.asynchronous)
             elif self.asynchronous ^ f.asynchronous:
                 raise ValueError(
                     "Reference-FS's target filesystem must have same value"
