@@ -57,20 +57,20 @@ class LocalFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=False, **kwargs):
         path = self._strip_protocol(path)
-        info = self.info(path)
-        if info["type"] == "directory":
+        path_info = self.info(path)
+        infos = []
+        if path_info["type"] == "directory":
             with os.scandir(path) as it:
-                infos = []
                 for f in it:
                     try:
-                        infos.append(self.info(f))
+                        # Only get the info if requested since it is a bit expensive
+                        info = self.info(f) if detail else f.path
+                        infos.append(info)
                     except FileNotFoundError:
                         pass
         else:
-            infos = [info]
+            infos = [path_info] if detail else [path_info["name"]]
 
-        if not detail:
-            return [i["name"] for i in infos]
         return infos
 
     def info(self, path, **kwargs):
