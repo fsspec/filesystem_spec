@@ -140,13 +140,13 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
         self.root = root
         self.chunk_sizes = {}
-        self.out_root = out_root or self.root
         self.cat_thresh = categorical_threshold
         self.engine = engine
         self.cache_size = cache_size
         self.url = self.root + "/{field}/refs.{record}.parq"
         # TODO: derive fs from `root`
         self.fs = fsspec.filesystem("file") if fs is None else fs
+        self.out_root = self.fs.unstrip_protocol(out_root or self.root)
 
         from importlib.util import find_spec
 
@@ -498,7 +498,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             }
         else:
             raise NotImplementedError(f"{self.engine} not supported")
-
         df.to_parquet(
             fn,
             engine=self.engine,
@@ -766,7 +765,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         # Wrap any non-async filesystems to ensure async methods are available below
         for k, f in self.fss.items():
             if not f.async_impl:
-                self.fss[k] = AsyncFileSystemWrapper(f)
+                self.fss[k] = AsyncFileSystemWrapper(f, asynchronous=self.asynchronous)
             elif self.asynchronous ^ f.asynchronous:
                 raise ValueError(
                     "Reference-FS's target filesystem must have same value"
