@@ -413,7 +413,7 @@ def test_ls_on_files(tmpdir):
         fs.touch(r)
 
     actual_files = fs.ls(tmpdir, detail=True)
-    assert {[f["name"] for f in actual_files]} == set(resources)
+    assert {f["name"] for f in actual_files} == set(resources)
 
     actual_files = fs.ls(tmpdir, detail=False)
     assert set(actual_files) == set(resources)
