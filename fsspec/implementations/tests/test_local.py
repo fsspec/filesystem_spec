@@ -404,6 +404,7 @@ def test_ls_on_file(tmpdir):
     assert fs.ls(resource, detail=True)[0] == fs.info(resource)
     assert fs.ls(resource, detail=False)[0] == resource
 
+
 def test_ls_on_files(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
@@ -411,12 +412,11 @@ def test_ls_on_files(tmpdir):
     for r in resources:
         fs.touch(r)
 
-    actual_files = fs.ls(tmpdir,detail=True)
-    assert set([f["name"] for f in actual_files]) == set(resources)
+    actual_files = fs.ls(tmpdir, detail=True)
+    assert {f["name"] for f in actual_files} == set(resources)
 
     actual_files = fs.ls(tmpdir, detail=False)
     assert set(actual_files) == set(resources)
-
 
 
 @pytest.mark.parametrize("file_protocol", ["", "file://"])
