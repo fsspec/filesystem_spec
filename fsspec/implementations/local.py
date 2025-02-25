@@ -63,8 +63,9 @@ class LocalFileSystem(AbstractFileSystem):
             with os.scandir(path) as it:
                 for f in it:
                     try:
-                        # Only get the info if requested since it is a bit expensive
-                        info = self.info(f) if detail else f.path
+                        # Only get the info if requested since it is a bit expensive (the stat call inside)
+                        # The strip_protocol is also used in info() and calls make_path_posix to always return posix paths
+                        info = self.info(f) if detail else self._strip_protocol(f.path)
                         infos.append(info)
                     except FileNotFoundError:
                         pass

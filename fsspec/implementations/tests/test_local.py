@@ -397,7 +397,7 @@ def test_directories(tmpdir):
 def test_ls_on_file(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
-    resource = str(Path(tmpdir) / "a.json")
+    resource = tmpdir + "/a.json"
     fs.touch(resource)
     assert fs.exists(resource)
     assert fs.ls(tmpdir) == fs.ls(resource)
@@ -408,7 +408,7 @@ def test_ls_on_file(tmpdir):
 def test_ls_on_files(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     fs = LocalFileSystem()
-    resources = [str(Path(tmpdir)/f) for f in ["file_1.json", "file_2.json"]]
+    resources = [f"{tmpdir}/{file}" for file in ["file_1.json", "file_2.json"]]
     for r in resources:
         fs.touch(r)
 
