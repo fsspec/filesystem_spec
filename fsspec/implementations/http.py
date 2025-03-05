@@ -525,7 +525,7 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
         """
         Write bytes to a remote file over HTTP.
-        
+
         Parameters
         ----------
         path : str
@@ -538,13 +538,14 @@ class HTTPFileSystem(AsyncFileSystem):
             Additional parameters to pass to the HTTP request
         """
         url = self._strip_protocol(path)
-        headers = kwargs.pop('headers', {})
-        headers['Content-Length'] = str(len(value))
-        
-        if not hasattr(self, 'session'):
+        headers = kwargs.pop("headers", {})
+        headers["Content-Length"] = str(len(value))
+
+        if not hasattr(self, "session"):
             import aiohttp
+
             self.session = aiohttp.ClientSession()
-            
+
         async with self.session.put(url, data=value, headers=headers, **kwargs) as r:
             r.raise_for_status()
         return True
