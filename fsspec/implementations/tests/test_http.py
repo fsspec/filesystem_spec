@@ -581,3 +581,38 @@ async def test_async_walk(server):
             pass
 
     await fs._session.close()
+
+
+def test_pipe_file(server, tmpdir, reset_files):
+    """Test that the pipe_file method works correctly."""
+    import io
+    import fsspec
+    
+    # Create test data
+    test_content = b"This is test data to pipe to a file"
+    
+    # Initialize filesystem
+    fs = fsspec.filesystem("http", headers={"accept_put": "true"})
+    
+    # Test that the file doesn't exist yet
+    with pytest.raises(FileNotFoundError):
+        fs.info(server.address + "/piped_file")
+    
+    # Pipe data to the file
+    fs.pipe_file(server.address + "/piped_file", test_content)
+    
+    # Verify the file exists now
+    assert fs.exists(server.address + "/piped_file")
+    
+    # Verify content
+    assert fs.cat(server.address + "/piped_file") == test_content
+    
+    # Test with different modes and headers
+    fs.pipe_file(server.address + "/piped_file2", test_content, 
+                mode="overwrite", headers={"Content-Type": "text/plain"})
+    assert fs.cat(server.address + "/piped_file2") == test_content
+    
+    # Test with byte-like object
+    bytesio = io.BytesIO(b"BytesIO content")
+    fs.pipe_file(server.address + "/piped_bytes", bytesio.getvalue())
+    assert fs.cat(server.address + "/piped_bytes") == b"BytesIO content"
