@@ -545,7 +545,6 @@ class HTTPFileSystem(AsyncFileSystem):
 
         async with self.session.put(url, data=value, headers=headers, **kwargs) as r:
             r.raise_for_status()
-        return True
 
 
 class HTTPFile(AbstractBufferedFile):
