@@ -586,6 +586,7 @@ async def test_async_walk(server):
 def test_pipe_file(server, tmpdir, reset_files):
     """Test that the pipe_file method works correctly."""
     import io
+
     import fsspec
 
     # Create test data
