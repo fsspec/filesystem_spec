@@ -522,6 +522,30 @@ class HTTPFileSystem(AsyncFileSystem):
         except (FileNotFoundError, ValueError):
             return False
 
+    async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
+        """
+        Write bytes to a remote file over HTTP.
+
+        Parameters
+        ----------
+        path : str
+            Target URL where the data should be written
+        value : bytes
+            Data to be written
+        mode : str
+            How to write to the file - 'overwrite' or 'append'
+        **kwargs : dict
+            Additional parameters to pass to the HTTP request
+        """
+        url = self._strip_protocol(path)
+        headers = kwargs.pop("headers", {})
+        headers["Content-Length"] = str(len(value))
+
+        session = await self.get_session()
+
+        async with session.put(url, data=value, headers=headers, **kwargs) as r:
+            r.raise_for_status()
+
 
 class HTTPFile(AbstractBufferedFile):
     """
