@@ -541,10 +541,7 @@ class HTTPFileSystem(AsyncFileSystem):
         headers = kwargs.pop("headers", {})
         headers["Content-Length"] = str(len(value))
 
-        if not hasattr(self, "session"):
-            import aiohttp
-
-            self.session = aiohttp.ClientSession()
+        session = await self.get_session()
 
         async with self.session.put(url, data=value, headers=headers, **kwargs) as r:
             r.raise_for_status()
