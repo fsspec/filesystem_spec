@@ -142,9 +142,6 @@ class RequestsSessionShim:
         import js
         from js import Blob, XMLHttpRequest
 
-        if hasattr(js, "document"):
-            raise RuntimeError("Filesystem can only be run from a worker, not main")
-
         logger.debug("JS request: %s %s", method, url)
 
         if cert or verify or proxies or files or cookies or hooks:
