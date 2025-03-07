@@ -565,7 +565,7 @@ class HTTPFileSystem(AbstractFileSystem):
 
         return {"name": url, "size": None, **info, "type": "file"}
 
-    def glob(self, path, **kwargs):
+    def glob(self, path, maxdepth=None, **kwargs):
         """
         Find files by glob-matching.
 
@@ -607,7 +607,9 @@ class HTTPFileSystem(AbstractFileSystem):
             root = ""
             depth = None if "**" in path else path[ind + 1 :].count("/") + 1
 
-        allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
+        allpaths = self.find(
+            root, maxdepth=maxdepth or depth, withdirs=True, detail=True, **kwargs
+        )
         # Escape characters special to python regex, leaving our supported
         # special characters in place.
         # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
