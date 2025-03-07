@@ -541,7 +541,7 @@ class HTTPFileSystem(AsyncFileSystem):
         headers = kwargs.pop("headers", {})
         headers["Content-Length"] = str(len(value))
 
-        session = await self.get_session()
+        session = await self.set_session()
 
         async with session.put(url, data=value, headers=headers, **kwargs) as r:
             r.raise_for_status()
