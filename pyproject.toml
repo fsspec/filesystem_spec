@@ -1,23 +1,242 @@
-[tool.black]
-target_version = ['py37', 'py38']
-line-length = 88
-skip-string-normalization = false
-exclude = '''
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-  | fsspec/_version.py
-  | versioneer.py
-)
-'''
+[project]
+name = "fsspec"
+dynamic = ["version"]
+description = "File-system specification"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+maintainers = [{ name = "Martin Durant", email = "mdurant@anaconda.com" }]
+keywords = ["file"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.optional-dependencies]
+abfs = ["adlfs"]
+adl = ["adlfs"]
+arrow = ["pyarrow >= 1"]
+dask = ["dask", "distributed"]
+dev = ["ruff", "pre-commit"]
+doc = ["sphinx", "numpydoc", "sphinx-design", "sphinx-rtd-theme", "yarl"]
+dropbox = ["dropbox", "dropboxdrivefs", "requests"]
+entrypoints = []
+full = [
+    'adlfs',
+    'aiohttp !=4.0.0a0, !=4.0.0a1',
+    'dask',
+    'distributed',
+    'dropbox',
+    'dropboxdrivefs',
+    'fusepy',
+    'gcsfs',
+    'libarchive-c',
+    'ocifs',
+    'panel',
+    'paramiko',
+    'pyarrow >= 1',
+    'pygit2',
+    'requests',
+    's3fs',
+    'smbprotocol',
+    'tqdm',
+]
+fuse = ["fusepy"]
+gcs = ["gcsfs"]
+git = ["pygit2"]
+github = ["requests"]
+gs = ["gcsfs"]
+gui = ["panel"]
+hdfs = ["pyarrow >= 1"]
+http = ["aiohttp !=4.0.0a0, !=4.0.0a1"]
+libarchive = ["libarchive-c"]
+oci = ["ocifs"]
+s3 = ["s3fs"]
+sftp = ["paramiko"]
+smb = ["smbprotocol"]
+ssh = ["paramiko"]
+test = [
+    "aiohttp!=4.0.0a0, !=4.0.0a1",
+    "numpy",
+    "pytest",
+    "requests",
+    "pytest-benchmark",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-recording",
+    "pytest-rerunfailures",
+    "pytest-asyncio !=0.22.0",
+]
+test_full = [
+    'Jinja2',
+    'adlfs',
+    'aiohttp !=4.0.0a0, !=4.0.0a1',
+    'aiohttp!=4.0.0a0, !=4.0.0a1',
+    'cloudpickle',
+    'dask',
+    'distributed',
+    'dropbox',
+    'dropboxdrivefs',
+    'fastparquet',
+    'fusepy',
+    'gcsfs',
+    "kerchunk",
+    'libarchive-c',
+    'lz4',
+    'notebook',
+    'numpy',
+    'ocifs',
+    'pandas',
+    'panel',
+    'paramiko',
+    'pyarrow',
+    'pyarrow >= 1',
+    'pyftpdlib',
+    'pygit2',
+    'pytest',
+    'pytest-asyncio !=0.22.0',
+    'pytest-benchmark',
+    'pytest-cov',
+    'pytest-mock',
+    'pytest-rerunfailures',
+    'pytest-recording',
+    'requests',
+    'smbprotocol',
+    'python-snappy',
+    'tqdm',
+    'urllib3',
+    'zarr',
+    'zstandard',
+]
+test_downstream = [
+    "dask[dataframe,test]",
+    "moto[server]>4,<5",
+    "pytest-timeout",
+    "xarray",
+    "aiobotocore>=2.5.4,<3.0.0",
+]
+tqdm = ["tqdm"]
+
+[project.urls]
+Changelog = "https://filesystem-spec.readthedocs.io/en/latest/changelog.html"
+Documentation = "https://filesystem-spec.readthedocs.io/en/latest/"
+Homepage = "https://github.com/fsspec/filesystem_spec"
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = {'version_scheme'='post-release'}
+
+[tool.hatch.build.hooks.vcs]
+version-file = "fsspec/_version.py"
+
+[tool.hatch.build]
+exclude = ["**/tests/*", "!**/tests/abstract/"]
+
+[tool.ruff]
+target-version = "py38"
+exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version"]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    # fix noqas in fsspec/implementations/http.py
+    "ASYNC",
+    "B",
+    "B904",
+    "C4",
+    "G",
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "FURB",
+    "I",
+    "LOG",
+    "PERF",
+    "PLC",
+    "PLE",
+    "PLR1722",
+    "PLR1736",
+    "PLW1501",
+    "PLW1510",
+    "PLW3301",
+    "PIE800",
+    "PIE804",
+    "PIE807",
+    "PIE810",
+    # "PT", enable in later PR
+    "PYI",
+    "RUF006",
+    "RUF015",
+    "RUF024",
+    "SIM",
+    "SLOT",
+    "SIM101",
+    "TCH",
+    "UP",
+]
+ignore = [
+	# Loop control variable `loop` not used within loop body
+	"B007",
+	# Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
+	"B019",
+	# Star-arg unpacking after a keyword argument is strongly discouraged
+	"B026",
+	# No explicit `stacklevel` keyword argument found
+	"B028",
+    # Assigning lambda expression
+    "E731",
+    # Ambiguous variable names
+    "E741",
+    # line break before binary operator
+    # uncomment when implemented in ruff
+    # "W503",
+    # whitespace before :
+    "E203",
+    # redefs
+    "F811",
+    # Fix these codes later
+    "G004",
+    "PERF203",
+    "UP007",
+    "UP011",
+    "UP015",
+    "UP018",
+    "SIM102",
+    "SIM105",
+    "SIM108",
+    "SIM114",
+    "SIM115",
+    "SIM117",
+    # https://github.com/astral-sh/ruff/issues/7871
+    "UP038",
+    # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+    "W191",
+    "E111",
+    "E114",
+    "E117",
+    "D206",
+    "D300",
+    "Q000",
+    "Q001",
+    "Q002",
+    "Q003",
+    "COM812",
+    "COM819",
+]
+
+[tool.pytest.ini_options]
+# custom markers, need to be defined to avoid warnings
+markers = ["asyncio", "vcr"]

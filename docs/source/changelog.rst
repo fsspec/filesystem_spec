@@ -1,6 +1,451 @@
 Changelog
 =========
 
+2025.2.0
+--------
+
+Enhancements
+
+- add open() to referenceFS (#1778)
+
+Fixes
+
+- don't make async open() in async-wrapper (#1769)
+- fix CI following dask-expr upstream change (#1781)
+- cope with zarr3 "Buffer" objects in referenceFS (#1784)
+
+Other
+
+- use itemgetter in archiveFS (#1764)
+- document that newline is included in readline(s) (#1770)
+- format/spelling (#1774, 1779, 1780)
+
+2024.12.0
+---------
+
+Enhancements
+
+- "exclusive" mode for writing (#1762, 1756, 174+)
+- "tree" text display of filesystem contents (#1750)
+- async wrapper for sync FSs (#1745)
+- new known implementation: tosfs (#1739)
+- consilidate block fetch requests (#1733)
+
+Fixes
+
+- better webHDFS proxies (#
+- syn FSs in referenceFS (#1755)
+- don't serialize file caches (#1753)
+- race condition in local ls() (#1744)
+- missing/nan references in parquet (#1738)
+- _un_chain kwargs (@1736)
+- async _cat_file in referenceFS (#1734)
+
+Other
+
+- fallback implementation for _fetch_range (#1732)
+
+2024.10.0
+---------
+
+Fixes
+
+- Performance of memoryFS rm (#1725)
+- Performance of git FS info (#1712)
+- Avoid git hex for newer pygit (#1703)
+- tests fix for zip (#1700, 1691)
+- missing open_async for dirFS (#1698)
+- handle pathlib in zip (#1689)
+- skip tests needing kerchunk if not installed (#1689)
+- allow repeated kwargs in unchain (#1673)
+
+Other
+
+- Code style (#1704, 1706)
+- allow pyarrow in referenceFS parquet (#1692)
+- don't hardcode test port for parallel runs (#1690)
+
+
+2024.9.0
+--------
+
+Enhancements
+
+- fewer stat calls in localFS (#1659)
+- faster find in ZIP (#1664)
+
+Fixes
+
+- paths without "/" in dirFS (#1638)
+- paths with "/" in FTS (#1643, 1644)
+- ls in parquet-based nested reference sets, and append (#1645, 1657)
+- exception handling for SMB (#1650)
+
+
+Other
+
+- style (#1640, 1641, 1660)
+- docs: xrootd (#1646)
+- CI back on miniconda (#1658)
+
+2024.6.1
+--------
+
+Fixes
+
+- fix appending to non-dict reference sets (#1634)
+- don't let generic edit info dicts (#1633)
+- set https's loop before calling super (#1633)
+- cached write file doesn't need to update it's size on close (#1633)
+- fix JSON serialize for FSs with interior FSs (#1628, 1627)
+- option to strip "password" when pickling (#1625)
+- fix filecache write (#1622)
+
+
+2024.6.0
+--------
+
+Enhancements
+
+- allow dicts (not just bytes) for referenceFS (#1616
+- make filesystems JSON serializeable (#1612)
+- implement multifile cat() for github (#1620)
+
+Fixes
+
+- implement auto_mkdir for SMB (#1604)
+
+Other
+
+- add doc deps to pyproject (#1613)
+- re-remove test from package (#1611)
+- formatting (#1610, 1608, 1602)
+- change monthly download badge (#1607)
+
+2024.5.0
+--------
+
+Enhancements
+
+- log hits/misses in bytes cachers (#1566)
+
+Fixes
+
+- SMB flaky tests (#1597)
+- rsync: only delete files if there are some to delete (#1596)
+- don't let files equal bytes objects (#1594)
+- url_to_fs to stringify paths (#1591)
+- assert types in MemoryFS (#1574)
+- restore _strip_protocol signature for local (#1567)
+- convert list to set when loading cache metadata (#1556)
+
+Other
+
+- remove mv_file (#1585)
+- mv() should not swallow errors (#1576)
+- change versioning template, allows easier co-install of dev s3fs (#1569)
+- in ls_from_cache, avoid dounble lookup (#1561)
+- expand=True in open() (#1558)
+- build system to hatch (#1553)
+
+2024.3.1
+--------
+
+Fixes
+
+- allow override of expand in open() (#1549)
+- root handling in local file paths, fix for windows (#1477)
+
+2024.3.0
+--------
+
+Enhancements
+
+- coroutines throttle to stream pool rather than batches (#1544)
+- write transactions in simplecache (#1531)
+- allow deep nested refs in referenceFS/parquet (#1530)
+
+Fixes
+
+- Fixes bug (#1476) that made open_files ignore expand=False (#1536)
+- remove extra calling mapper contains (#1546)
+- connection retry for SMB (#1533)
+- zip64 should be on is allowZip64 is (#1532)
+
+Other
+
+- HTTP logging (#1547)
+- url_to_fs exposed in package root (#1540)
+- sort known_implementations (#1549)
+- code quality/stype (#1538, 1537, 1528, 1526)
+
+2024.2.0
+--------
+
+Enhancements
+
+- add 9P known implementation (#1513)
+- allow TqdmCallback subclassing (#1497, 1480)
+- callbacks/branching kwargs handling and scopes (#1496, 1495, 1460)
+- add aluuxioFS to known implementations (#1469)
+- implement pipe_file for dirFS (#1465)
+
+Fixes
+
+- infer compression for .lzma files (#1514)
+- fix append to categorical/parquet references (#1510)
+- allow for FTP servers that list with leading "total" line (#1503)
+- convert FTP failure to FileNotFound (#1494)
+- out of order reference fix (#1492)
+- retry "backoff" response for DBFS (#1491)
+- referenceFS case for scalar arrays (#1487)
+- fix create_parents for SFTP (#1484)
+- fix local .ls() on files (#1479)
+- allow Path and similar in _expand_path (#1475)
+- make lazy references editable (#1468)
+- fix eq for abstract buffered files (#1466)
+- fit tqdm cleanup (#1463)
+- fix passing kwargs from cached file to underlying FS (#1462)
+
+Other
+
+- fix tests for supports_empty_directories=False (#1512)
+- don't read references in init for referenceFS (#1521)
+- code cleaning (#1518, 1502, 1499, 1493, 1481)
+- pass through "replication" for HDFS (#1486)
+- record more info for HTTP info() (#1483)
+- add timeout argument to githubFS (#1473)
+- add more security pars to webHDFS (#1472)
+
+2023.12.2
+---------
+
+Fixes
+
+- top-level glob in ZIP (#1454)
+- append mode on local ZIP files/truncate (#1449)
+- restrict ":" as protocol marker to data: (#1452)
+- sftp relative paths (#1451)
+- http encoding in HTTP FS put_file (#1450)
+
+
+2023.12.1
+---------
+
+Fixes
+
+- Remove trailing "/" from directory names in zipFS/archive (#1445)
+
+2023.12.0
+---------
+
+Enhancements
+
+- allow HTTP size guess in more circumstances (#1440)
+- allow kwargs passed to GUI to be dict (#1437)
+- transaction support for writing via a cache FS (#1434)
+- make cached FSs work better with async backends (#1429)
+- allow FSs to set their transaction implementation (#1424)
+- add dataFS (#1421, 1415)
+- allow basic auth in webHDFS (#1409)
+
+Fixes
+
+- in referenceFS, maintain order when some keys are omitted in cat (#1436)
+- nested subdirectory listing in referenceFS (#1433)
+- allow "=" in webHDF paths (#1428)
+- fix file mode to consistent "r+b" format (#1426)
+- pass on kwargs in HTTP glob (#1422)
+- allow Path in can_be_local and open_local (#1419, #1418)
+- fix parent for cachedFS (#1413)
+- "ends" list in _cat_ranges was incorrect (#1402)
+
+Other
+
+- smarter handling of exceptions when doing auto_mkdir (#1406)
+
+
+2023.10.0
+---------
+
+Enhancements
+
+- alias "local://" to "file://" (#1381)
+- get size of file cache (#1377)
+
+Fixes
+
+- stop unexpected kwargs for SMB (#1391)
+- dos formatting (#1383)
+
+Other
+
+- small optimisations in referenceFS (#1393)
+- define ordering behaviour for entrypoints (#1389)
+- style (#1387, 1386, 1385)
+- add LazyReferenceMapper to API docs (#1378)
+- add PyPI badge to README (#1376)
+
+2023.9.2
+--------
+
+Fixes
+
+- revert #1358: auto_mkdir in open() (#1365)
+
+Other
+
+- code style updates (#1373, 1372, 1371, 1370, 1369, 1364)
+- update CI setup (#1386)
+
+2023.9.1
+--------
+
+Enhancements
+
+- #1353, save file cache metadata in JSON
+- #1352, remove some unnecessary list iterations
+
+Fixes
+
+- #1361, re-allow None for default port for SMB
+- #1360, initialising GUI widget FS with kwargs
+- #1358, pass auto_mkdir vi url_to_fs again
+
+Other
+
+- #1354, auto delete temp cache directory
+
+2023.9.0
+--------
+
+Enhancements
+
+- #1346, add ocilake protocol
+- #1345, implement async-sync and async-async generic cp and rsync
+- #1344, add lakefs protocol
+- #1337 add goatcounter to docs
+- #1323, 1328, add xethub protocol
+- #1320, in HTTP, check content-encoding when getting length
+- #1303, add on_error in walk
+- #1302, add dirfs attribute to mappers
+- #1293, configure port for smb
+
+Fixes
+
+- #1349, don't reorder paths in bulk ops if source and dest are both lists
+- #1333, allow mode="x" in get_fs_token_paths
+- #1324, allow generic to work with complex URLs
+- #1316, exclude bytes-cache kwargs in url_to_fs
+- #1314, remote utcnow/utcfromtimestamp
+- #1311, dirFS's protocol
+- #1305, use get_file rather than get in file caching
+- #1295, allow bz2 to be optional
+
+Other
+
+- #1340, 1339, 1329 more bulk ops testing
+- #1326, 1296 separate out classes in file caching for future enhancements
+
+2023.6.0
+--------
+
+Enhancements
+
+- #1259, add maxdepth fo cp/get/put
+- #1263, allow dir modification during walk()
+- #1264, add boxfs to registry
+- #1266, optimise referenceFS lazy lookups, especially for writing parquet
+- #1287, 1288 "encoding" for FTP
+
+Fixes
+
+- #1273, (re)allow reading .zstd reference sets
+- #1275, resource.error for win32
+- #1278, range reads in dbfs
+- #1282, create parent directories in get_file
+- #1283, off-by-one in reference block writing
+- #1286, strip protocol in local rm_file
+
+Other
+
+- #1267, async bulk tests
+- #1268, types and mypy
+- #1277, 1279, drop outdated forms io.open, IOError
+
+2023.5.0
+--------
+
+Enhancements
+
+- #1236, allow writing ReferenceFS references directly to parquet
+
+Fixes
+
+- #1255, copy of glob to single output directory
+- #1254, non-recursive copy of directory (no-op)
+- #1253, cleanup fix on close of ZIP FS
+- #1250, ignore dirs when copying list of files
+- #1249, don't error on register without clobber is registering same thing again
+- #1245, special case for other_files and relative path
+
+Other
+
+- #1248, add test harness into released wheel package
+- #1247, docs and tests around common bulk file operations
+
+
+2023.4.0
+--------
+
+Enhancements
+
+- #1225, comprehensive docs of expected behaviour of cp/get/put and tests
+- #1216, test harness for any backend
+
+Fixes
+
+- #1224, small fixes in reference and dask FSs
+- #1218, mv is no-op when origin and destination are the same
+- #1217, await in AbstractStreamedFile
+- #1215, docbuild fixes
+- #1214, unneeded maxdepth manipulation in expand_path
+- #1213, pyarros and posixpath related test fixes
+- #1211, BackgroundBlockCache: keep a block longer if not yet used
+- #1210, webHDFS: location parameter
+
+Other
+
+- #1241, add HfFileSystem to registry
+- #1237, register_implementation clobber default changes to False
+- #1228, "full" and "devel" installation options
+- #1227, register_cache and reporting collision
+- #1221, docs about implementations and protocols
+
+2023.3.0
+--------
+
+Enhancements
+
+- #1201, add directory FS to the registry and constructable from URLs
+- #1194, allow JSON for setting dict-like kwargs in the config
+- #1181, give arrow FS proper place in the registry
+- #1178, add experimental background-thread buffering cache
+- #1162, make ZipFS writable
+
+Fixes
+
+- #1202, fix on_error="omit" when using caching's cat
+- #1199, 1163, get/put/cp consistency and empty directories
+- #1197, 1183 use bytes for setting value on mapper using numpy
+- #1191, clean up open files in spec get_file
+- #1164, pass on kwargs correctly to http
+
+Other
+
+- #1186, make seekable=True default for pyarrow files
+- #1184, 1185, set minimum python version to 3.8
+
 2023.1.0
 --------
 
@@ -661,3 +1106,8 @@ Version 0.6.0
   HTTP server responds with an (incorrect) content-length of 0 (:pr:`163`)
 * Added a ``detail=True`` parameter to :meth:`fsspec.spec.AbstractFileSystem.ls` (:pr:`168`)
 * Fixed handling of UNC/DFS paths (:issue:`154`)
+
+.. raw:: html
+
+    <script data-goatcounter="https://fsspec.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>

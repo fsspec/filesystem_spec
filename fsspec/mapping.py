@@ -1,9 +1,13 @@
 import array
+import logging
 import posixpath
 import warnings
 from collections.abc import MutableMapping
+from functools import cached_property
 
-from .core import url_to_fs
+from fsspec.core import url_to_fs
+
+logger = logging.getLogger("fsspec.mapping")
 
 
 class FSMap(MutableMapping):
@@ -36,7 +40,7 @@ class FSMap(MutableMapping):
 
     def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
         self.fs = fs
-        self.root = fs._strip_protocol(root).rstrip("/")
+        self.root = fs._strip_protocol(root)
         self._root_key_to_str = fs._strip_protocol(posixpath.join(root, "x"))[:-1]
         if missing_exceptions is None:
             missing_exceptions = (
@@ -53,14 +57,22 @@ class FSMap(MutableMapping):
         if check:
             if not self.fs.exists(root):
                 raise ValueError(
-                    "Path %s does not exist. Create "
-                    " with the ``create=True`` keyword" % root
+                    f"Path {root} does not exist. Create "
+                    f" with the ``create=True`` keyword"
                 )
             self.fs.touch(root + "/a")
             self.fs.rm(root + "/a")
 
+    @cached_property
+    def dirfs(self):
+        """dirfs instance that can be used with the same keys as the mapper"""
+        from .implementations.dirfs import DirFileSystem
+
+        return DirFileSystem(path=self._root_key_to_str, fs=self.fs)
+
     def clear(self):
         """Remove all keys below root - empties out mapping"""
+        logger.info("Clear mapping at %s", self.root)
         try:
             self.fs.rm(self.root, True)
             self.fs.mkdir(self.root)
@@ -100,7 +112,7 @@ class FSMap(MutableMapping):
             for k, v in out.items()
         }
         return {
-            key: out[k2]
+            key: out[k2] if on_error == "raise" else out.get(k2, KeyError(k2))
             for key, k2 in zip(keys, keys2)
             if on_error == "return" or not isinstance(out[k2], BaseException)
         }
@@ -130,7 +142,7 @@ class FSMap(MutableMapping):
             if isinstance(key, list):
                 key = tuple(key)
             key = str(key)
-        return f"{self._root_key_to_str}{key}"
+        return f"{self._root_key_to_str}{key}".rstrip("/")
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
@@ -141,10 +153,10 @@ class FSMap(MutableMapping):
         k = self._key_to_str(key)
         try:
             result = self.fs.cat(k)
-        except self.missing_exceptions:
+        except self.missing_exceptions as exc:
             if default is not None:
                 return default
-            raise KeyError(key)
+            raise KeyError(key) from exc
         return result
 
     def pop(self, key, default=None):
@@ -172,13 +184,13 @@ class FSMap(MutableMapping):
         """Remove key"""
         try:
             self.fs.rm(self._key_to_str(key))
-        except:  # noqa: E722
-            raise KeyError
+        except Exception as exc:
+            raise KeyError from exc
 
     def __contains__(self, key):
         """Does key exist in mapping?"""
         path = self._key_to_str(key)
-        return self.fs.exists(path) and self.fs.isfile(path)
+        return self.fs.isfile(path)
 
     def __reduce__(self):
         return FSMap, (self.root, self.fs, False, False, self.missing_exceptions)
@@ -191,7 +203,7 @@ def maybe_convert(value):
             # The buffer interface doesn't support datetime64/timdelta64 numpy
             # arrays
             value = value.view("int64")
-        value = bytearray(memoryview(value))
+        value = bytes(memoryview(value))
     return value
 
 

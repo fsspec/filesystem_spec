@@ -51,6 +51,10 @@ The following libraries use ``fsspec`` internally for path and file handling:
    for machine learning projects
 #. `Kedro`_, a Python framework for reproducible,
    maintainable and modular data science code
+#. `pyxet`_, a Python library for mounting and
+   accessing very large datasets from XetHub
+#. `Huggingface🤗 Datasets`_, a popular library to
+   load&manipulate data for Deep Learning models
 
 ``fsspec`` filesystems are also supported by:
 
@@ -62,12 +66,15 @@ The following libraries use ``fsspec`` internally for path and file handling:
 .. _Dask: https://dask.org/
 .. _Intake: https://intake.readthedocs.io/
 .. _pandas: https://pandas.pydata.org/
-.. _xarray: http://xarray.pydata.org/
+.. _xarray: https://docs.xarray.dev/
 .. _zarr: https://zarr.readthedocs.io/
 .. _DVC: https://dvc.org/
-.. _kedro: https://kedro.readthedocs.io/en/stable/01_introduction/01_introduction.html
+.. _kedro: https://docs.kedro.org/en/stable/tutorial/set_up_data.html#supported-data-locations
+.. _pyxet: https://github.com/xetdata/pyxet
+.. _Huggingface🤗 Datasets: https://github.com/huggingface/datasets
 .. _pyarrow: https://arrow.apache.org/docs/python/
 .. _petl: https://petl.readthedocs.io/en/stable/io.html#petl.io.remotes.RemoteSource
+
 
 Installation
 ------------
@@ -80,7 +87,7 @@ Installation
    conda install -c conda-forge fsspec
 
 Not all filesystem implementations are available without installing extra
-dependencies. For example to be able to access data in S3, you can use the optional
+dependencies. For example to be able to access data in GCS, you can use the optional
 pip install syntax below, or install the specific package required
 
 .. code-block:: sh
@@ -88,7 +95,7 @@ pip install syntax below, or install the specific package required
    pip install fsspec[gcs]
    conda install -c conda-forge gcsfs
 
-``fsspec``` attempts to provide the right message when you attempt to use a filesystem
+``fsspec`` attempts to provide the right message when you attempt to use a filesystem
 for which you need additional dependencies.
 The current list of known implementations can be found as follows
 
@@ -107,7 +114,13 @@ The current list of known implementations can be found as follows
    intro.rst
    usage.rst
    features.rst
+   copying.rst
    developer.rst
    async.rst
    api.rst
    changelog.rst
+
+.. raw:: html
+
+    <script data-goatcounter="https://fsspec.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>

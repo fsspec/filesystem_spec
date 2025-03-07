@@ -36,19 +36,19 @@ class SFTPFileSystem(AbstractFileSystem):
             Location on the server to put files, when within a transaction
         ssh_kwargs: dict
             Parameters passed on to connection. See details in
-            http://docs.paramiko.org/en/2.4/api/client.html#paramiko.client.SSHClient.connect
+            https://docs.paramiko.org/en/3.3/api/client.html#paramiko.client.SSHClient.connect
             May include port, username, password...
         """
         if self._cached:
             return
-        super(SFTPFileSystem, self).__init__(**ssh_kwargs)
+        super().__init__(**ssh_kwargs)
         self.temppath = ssh_kwargs.pop("temppath", "/tmp")  # remote temp directory
         self.host = host
         self.ssh_kwargs = ssh_kwargs
         self._connect()
 
     def _connect(self):
-        logger.debug("Connecting to SFTP server %s" % self.host)
+        logger.debug("Connecting to SFTP server %s", self.host)
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.client.connect(self.host, **self.ssh_kwargs)
@@ -65,10 +65,10 @@ class SFTPFileSystem(AbstractFileSystem):
         out.pop("protocol", None)
         return out
 
-    def mkdir(self, path, create_parents=False, mode=511):
-        logger.debug("Creating folder %s" % path)
+    def mkdir(self, path, create_parents=True, mode=511):
+        logger.debug("Creating folder %s", path)
         if self.exists(path):
-            raise FileExistsError("File exists: {}".format(path))
+            raise FileExistsError(f"File exists: {path}")
 
         if create_parents:
             self.makedirs(path)
@@ -77,18 +77,19 @@ class SFTPFileSystem(AbstractFileSystem):
 
     def makedirs(self, path, exist_ok=False, mode=511):
         if self.exists(path) and not exist_ok:
-            raise FileExistsError("File exists: {}".format(path))
+            raise FileExistsError(f"File exists: {path}")
 
         parts = path.split("/")
-        path = ""
+        new_path = "/" if path[:1] == "/" else ""
 
         for part in parts:
-            path += "/" + part
-            if not self.exists(path):
-                self.ftp.mkdir(path, mode)
+            if part:
+                new_path = f"{new_path}/{part}" if new_path else part
+                if not self.exists(new_path):
+                    self.ftp.mkdir(new_path, mode)
 
     def rmdir(self, path):
-        logger.debug("Removing folder %s" % path)
+        logger.debug("Removing folder %s", path)
         self.ftp.rmdir(path)
 
     def info(self, path):
@@ -110,15 +111,19 @@ class SFTPFileSystem(AbstractFileSystem):
             "type": t,
             "uid": stat.st_uid,
             "gid": stat.st_gid,
-            "time": datetime.datetime.utcfromtimestamp(stat.st_atime),
-            "mtime": datetime.datetime.utcfromtimestamp(stat.st_mtime),
+            "time": datetime.datetime.fromtimestamp(
+                stat.st_atime, tz=datetime.timezone.utc
+            ),
+            "mtime": datetime.datetime.fromtimestamp(
+                stat.st_mtime, tz=datetime.timezone.utc
+            ),
         }
         if parent_path:
             out["name"] = "/".join([parent_path.rstrip("/"), stat.filename])
         return out
 
     def ls(self, path, detail=False):
-        logger.debug("Listing folder %s" % path)
+        logger.debug("Listing folder %s", path)
         stats = [self._decode_stat(stat, path) for stat in self.ftp.listdir_iter(path)]
         if detail:
             return stats
@@ -127,7 +132,7 @@ class SFTPFileSystem(AbstractFileSystem):
             return sorted(paths)
 
     def put(self, lpath, rpath, callback=None, **kwargs):
-        logger.debug("Put file %s into %s" % (lpath, rpath))
+        logger.debug("Put file %s into %s", lpath, rpath)
         self.ftp.put(lpath, rpath)
 
     def get_file(self, rpath, lpath, **kwargs):
@@ -142,7 +147,7 @@ class SFTPFileSystem(AbstractFileSystem):
             If 0, no buffering, if 1, line buffering, if >1, buffer that many
             bytes, if None use default from paramiko.
         """
-        logger.debug("Opening file %s" % path)
+        logger.debug("Opening file %s", path)
         if kwargs.get("autocommit", True) is False:
             # writes to temporary file, move on commit
             path2 = "/".join([self.temppath, str(uuid.uuid4())])
@@ -163,7 +168,7 @@ class SFTPFileSystem(AbstractFileSystem):
             self.ftp.remove(path)
 
     def mv(self, old, new):
-        logger.debug("Renaming %s into %s" % (old, new))
+        logger.debug("Renaming %s into %s", old, new)
         self.ftp.posix_rename(old, new)
 
 

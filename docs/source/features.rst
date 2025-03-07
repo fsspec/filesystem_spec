@@ -365,14 +365,16 @@ For instance:
 Obviously, you should only define default values that are appropriate for
 a given file system implementation. INI files only support string values.
 
-Alternatively, you can provide overrides with environment variables of
-the style ``FSSPEC_{protocol}_{kwargname}=value``.
+Alternatively, you can provide overrides with environment variables of the style
+``FSSPEC_{protocol}=<json_dict_value>`` and
+``FSSPEC_{protocol}_{kwargname}=<string_value>``.
 
 Configuration is determined in the following order, with later items winning:
 
-#. the contents of ini files, and json files in the config directory, sorted
-   alphabetically
-#. environment variables
+#. ini and json files in the config directory (``FSSPEC_CONFIG_DIRECTORY`` or ``$HOME/.config/fsspec/``), sorted
+   lexically by filename
+#. ``FSSPEC_{protocol}`` environment variables
+#. ``FSSPEC_{protocol}_{kwargname}`` environment variables
 #. the contents of ``fsspec.config.conf``, which can be edited at runtime
 #. kwargs explicitly passed, whether with ``fsspec.open``, ``fsspec.filesystem``
    or directly instantiating the implementation class.
@@ -401,3 +403,26 @@ backends.
 See the docstrings in the callbacks module for further details.
 ``fsspec.callbacks.TqdmCallback`` can be used to display a progress bar using
 tqdm.
+
+.. raw:: html
+
+    <script data-goatcounter="https://fsspec.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+
+
+Exclusive write
+---------------
+
+Some backends support writing to a file only if it doesn't already exist. This may be
+implemented for the following methods:
+- pipe_file (with argument ``mode=='create'``)
+- put_file (with argument ``mode=='create'``)
+- open (with argument ``mode="xb"``)
+Since some writes will be achieved in blocks, the timing of when the check is done is
+not defined - it may be at the start or at the completion of the operation, depending
+on the backend.
+
+If using exclusive mode on a file that does already exist, a ``FileExistsError`` will
+be raised.
+
+This feature is currently included on a trial basis and may change in the future.

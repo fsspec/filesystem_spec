@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import os
 import shutil
 import tarfile
 import tempfile
 from io import BytesIO
-from pathlib import Path
-from typing import Dict
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -13,6 +14,9 @@ from fsspec.core import OpenFile
 from fsspec.implementations.cached import WholeFileCacheFileSystem
 from fsspec.implementations.tar import TarFileSystem
 from fsspec.implementations.tests.test_archive import archive_data, temptar
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_info():
@@ -25,7 +29,7 @@ def test_info():
             lhs = fs.info(d)
             del lhs["chksum"]
             expected = {
-                "name": f"{d}/",
+                "name": f"{d}",
                 "size": 0,
                 "type": "directory",
                 "devmajor": 0,
@@ -41,7 +45,7 @@ def test_info():
             assert lhs == expected
 
         # Iterate over all files.
-        for f, v in archive_data.items():
+        for f in archive_data:
             lhs = fs.info(f)
 
             # Probe some specific fields of Tar archives.
@@ -93,7 +97,7 @@ def test_filesystem_direct(recipe, tmpdir):
     Here: `LocalFileSystem`.
     """
 
-    filename = os.path.join(tmpdir, f'temp{recipe["suffix"]}')
+    filename = os.path.join(tmpdir, f"temp{recipe['suffix']}")
 
     fs = fsspec.filesystem("file")
     f = OpenFile(fs, filename, mode="wb")
@@ -128,7 +132,7 @@ def test_filesystem_cached(recipe, tmpdir):
     Here: `TarFileSystem` over `WholeFileCacheFileSystem` over `LocalFileSystem`.
     """
 
-    filename = os.path.join(tmpdir, f'temp{recipe["suffix"]}')
+    filename = os.path.join(tmpdir, f"temp{recipe['suffix']}")
 
     # Create a filesystem from test fixture.
     fs = fsspec.filesystem("file")
@@ -210,7 +214,7 @@ def test_ls_with_folders(compression: str, tmp_path: Path):
     but make sure that the reading filesystem is still able to resolve the
     intermediate folders, like the ZipFileSystem.
     """
-    tar_data: Dict[str, bytes] = {
+    tar_data: dict[str, bytes] = {
         "a.pdf": b"Hello A!",
         "b/c.pdf": b"Hello C!",
         "d/e/f.pdf": b"Hello F!",
@@ -233,10 +237,10 @@ def test_ls_with_folders(compression: str, tmp_path: Path):
         fs = TarFileSystem(fd)
         assert fs.find("/", withdirs=True) == [
             "a.pdf",
-            "b/",
+            "b",
             "b/c.pdf",
-            "d/",
-            "d/e/",
+            "d",
+            "d/e",
             "d/e/f.pdf",
             "d/g.pdf",
         ]

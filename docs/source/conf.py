@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # fsspec documentation build configuration file, created by
 # sphinx-quickstart on Mon Jan 15 18:11:02 2018.
 #
@@ -37,6 +35,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.extlinks",
     "numpydoc",
+    "sphinx_design",
 ]
 
 numpydoc_show_class_members = False
@@ -120,7 +119,7 @@ html_static_path = ["_static"]
 # to template names.
 #
 # This is required for the alabaster theme
-# refs: http://alabaster.readthedocs.io/en/latest/installation.html#sidebars
+# refs: https://alabaster.readthedocs.io/en/latest/installation.html#sidebars
 html_sidebars = {
     "**": [
         "relations.html",  # needs 'show_related': True theme option to display

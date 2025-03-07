@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function
+"""This file is largely copied from http.py"""
 
 import io
 import logging
@@ -27,8 +27,7 @@ ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
 
 
-class JsHttpException(urllib.error.HTTPError):
-    ...
+class JsHttpException(urllib.error.HTTPError): ...
 
 
 class StreamIO(io.BytesIO):
@@ -139,7 +138,6 @@ class RequestsSessionShim:
         cert=None,
         json=None,
     ):
-        import js
         from js import Blob, XMLHttpRequest
 
         logger.debug("JS request: %s %s", method, url)
@@ -199,12 +197,11 @@ class HTTPFileSystem(AbstractFileSystem):
     This is the BLOCKING version of the normal HTTPFileSystem. It uses
     requests in normal python and the JS runtime in pyodide.
 
-    Note that
-    for pyodide, it only runs in a webworker, because we require binary
-    blocking fetches. Also, all requests must pass the browser's CORS
-    checks, which requires the server to send the right headers.
+    ***This implementation is extremely experimental, do not use unless
+    you are testing pyodide/pyscript integration***
     """
 
+    protocol = ("http", "https", "http_sync", "https_sync")
     sep = "/"
 
     def __init__(
@@ -272,7 +269,7 @@ class HTTPFileSystem(AbstractFileSystem):
 
     @property
     def fsid(self):
-        return "http"
+        return "http_sync"
 
     def encode_url(self, url):
         if yarl:
@@ -280,8 +277,11 @@ class HTTPFileSystem(AbstractFileSystem):
         return url
 
     @classmethod
-    def _strip_protocol(cls, path):
+    def _strip_protocol(cls, path: str) -> str:
         """For HTTP, we always want to keep the full URL"""
+        path = path.replace("http_sync://", "http://").replace(
+            "https_sync://", "https://"
+        )
         return path
 
     @classmethod
@@ -336,10 +336,9 @@ class HTTPFileSystem(AbstractFileSystem):
                 for u in out
             ]
         else:
-            return list(sorted(out))
+            return sorted(out)
 
     def ls(self, url, detail=True, **kwargs):
-
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
@@ -463,7 +462,7 @@ class HTTPFileSystem(AbstractFileSystem):
                 end = ""
             if isinstance(end, int):
                 end -= 1  # bytes range is inclusive
-        return "bytes=%s-%s" % (start, end)
+        return f"bytes={start}-{end}"
 
     def exists(self, path, **kwargs):
         kw = self.kwargs.copy()
@@ -766,8 +765,8 @@ class HTTPFile(AbstractBufferedFile):
         logger.debug(f"Fetch range for {self}: {start}-{end}")
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
-        headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-        logger.debug(str(self.url) + " : " + headers["Range"])
+        headers["Range"] = f"bytes={start}-{end - 1}"
+        logger.debug("%s : %s", self.url, headers["Range"])
         r = self.session.get(self.fs.encode_url(self.url), headers=headers, **kwargs)
         if r.status_code == 416:
             # range request outside file
@@ -864,7 +863,7 @@ def get_range(session, url, start, end, **kwargs):
     # explicit get a range when we know it must be safe
     kwargs = kwargs.copy()
     headers = kwargs.pop("headers", {}).copy()
-    headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+    headers["Range"] = f"bytes={start}-{end - 1}"
     r = session.get(url, headers=headers, **kwargs)
     r.raise_for_status()
     return r.content
@@ -876,7 +875,7 @@ def _file_info(url, session, size_policy="head", **kwargs):
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
     """
-    logger.debug("Retrieve file size for %s" % url)
+    logger.debug("Retrieve file size for %s", url)
     kwargs = kwargs.copy()
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
@@ -890,7 +889,7 @@ def _file_info(url, session, size_policy="head", **kwargs):
     elif size_policy == "get":
         r = session.get(url, allow_redirects=ar, **kwargs)
     else:
-        raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
+        raise TypeError(f'size_policy must be "head" or "get", got {size_policy}')
     r.raise_for_status()
 
     # TODO:
@@ -917,6 +916,8 @@ def _file_info(url, session, size_policy="head", **kwargs):
 def register():
     register_implementation("http", HTTPFileSystem, clobber=True)
     register_implementation("https", HTTPFileSystem, clobber=True)
+    register_implementation("http_sync", HTTPFileSystem, clobber=True)
+    register_implementation("https_sync", HTTPFileSystem, clobber=True)
 
 
 register()

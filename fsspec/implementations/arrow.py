@@ -5,6 +5,7 @@ import secrets
 import shutil
 from contextlib import suppress
 from functools import cached_property, wraps
+from urllib.parse import parse_qs
 
 from fsspec.spec import AbstractFileSystem
 from fsspec.utils import (
@@ -52,6 +53,10 @@ class ArrowFSWrapper(AbstractFileSystem):
         PYARROW_VERSION = get_package_version_without_import("pyarrow")
         self.fs = fs
         super().__init__(**kwargs)
+
+    @property
+    def protocol(self):
+        return self.fs.type_name
 
     @cached_property
     def fsid(self):
@@ -123,7 +128,7 @@ class ArrowFSWrapper(AbstractFileSystem):
                 with self.open(tmp_fname, "wb") as rstream:
                     shutil.copyfileobj(lstream, rstream)
                 self.fs.move(tmp_fname, path2)
-            except BaseException:  # noqa
+            except BaseException:
                 with suppress(FileNotFoundError):
                     self.fs.delete_file(tmp_fname)
                 raise
@@ -133,8 +138,6 @@ class ArrowFSWrapper(AbstractFileSystem):
         path1 = self._strip_protocol(path1).rstrip("/")
         path2 = self._strip_protocol(path2).rstrip("/")
         self.fs.move(path1, path2)
-
-    mv_file = mv
 
     @wrap_exceptions
     def rm_file(self, path):
@@ -153,7 +156,7 @@ class ArrowFSWrapper(AbstractFileSystem):
             self.fs.delete_file(path)
 
     @wrap_exceptions
-    def _open(self, path, mode="rb", block_size=None, seekable=False, **kwargs):
+    def _open(self, path, mode="rb", block_size=None, seekable=True, **kwargs):
         if mode == "rb":
             if seekable:
                 method = self.fs.open_input_file
@@ -197,6 +200,14 @@ class ArrowFSWrapper(AbstractFileSystem):
     def modified(self, path):
         path = self._strip_protocol(path)
         return self.fs.get_file_info(path).mtime
+
+    def cat_file(self, path, start=None, end=None, **kwargs):
+        kwargs["seekable"] = start not in [None, 0]
+        return super().cat_file(path, start=None, end=None, **kwargs)
+
+    def get_file(self, rpath, lpath, **kwargs):
+        kwargs["seekable"] = False
+        super().get_file(rpath, lpath, **kwargs)
 
 
 @mirror_from(
@@ -243,6 +254,7 @@ class HadoopFileSystem(ArrowFSWrapper):
         port=0,
         user=None,
         kerb_ticket=None,
+        replication=3,
         extra_conf=None,
         **kwargs,
     ):
@@ -258,6 +270,8 @@ class HadoopFileSystem(ArrowFSWrapper):
             If given, connect as this username
         kerb_ticket: str or None
             If given, use this ticket for authentication
+        replication: int
+            set replication factor of file for write operations. default value is 3.
         extra_conf: None or dict
             Passed on to HadoopFileSystem
         """
@@ -268,6 +282,7 @@ class HadoopFileSystem(ArrowFSWrapper):
             port=port,
             user=user,
             kerb_ticket=kerb_ticket,
+            replication=replication,
             extra_conf=extra_conf,
         )
         super().__init__(fs=fs, **kwargs)
@@ -282,4 +297,8 @@ class HadoopFileSystem(ArrowFSWrapper):
             out["user"] = ops["username"]
         if ops.get("port", None):
             out["port"] = ops["port"]
+        if ops.get("url_query", None):
+            queries = parse_qs(ops["url_query"])
+            if queries.get("replication", None):
+                out["replication"] = int(queries["replication"][0])
         return out

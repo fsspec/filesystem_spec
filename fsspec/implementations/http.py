@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import asyncio
 import io
 import logging
@@ -9,14 +7,19 @@ from copy import copy
 from urllib.parse import urlparse
 
 import aiohttp
-import requests
 import yarl
 
 from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
-from fsspec.callbacks import _DEFAULT_CALLBACK
+from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
 from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
+from fsspec.utils import (
+    DEFAULT_BLOCK_SIZE,
+    glob_translate,
+    isfilelike,
+    nullcontext,
+    tokenize,
+)
 
 from ..caching import AllBytes
 
@@ -120,7 +123,7 @@ class HTTPFileSystem(AsyncFileSystem):
             try:
                 sync(loop, session.close, timeout=0.1)
                 return
-            except (TimeoutError, FSTimeoutError):
+            except (TimeoutError, FSTimeoutError, NotImplementedError):
                 pass
         connector = getattr(session, "_connector", None)
         if connector is not None:
@@ -155,11 +158,14 @@ class HTTPFileSystem(AsyncFileSystem):
         session = await self.set_session()
         async with session.get(self.encode_url(url), **self.kwargs) as r:
             self._raise_not_found_for_status(r, url)
-            text = await r.text()
-        if self.simple_links:
-            links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
-        else:
-            links = [u[2] for u in ex.findall(text)]
+            try:
+                text = await r.text()
+                if self.simple_links:
+                    links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
+                else:
+                    links = [u[2] for u in ex.findall(text)]
+            except UnicodeDecodeError:
+                links = []  # binary, not HTML
         out = set()
         parts = urlparse(url)
         for l in links:
@@ -167,7 +173,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 l = l[1]
             if l.startswith("/") and len(l) > 1:
                 # absolute URL on this server
-                l = parts.scheme + "://" + parts.netloc + l
+                l = f"{parts.scheme}://{parts.netloc}{l}"
             if l.startswith("http"):
                 if self.same_schema and l.startswith(url.rstrip("/") + "/"):
                     out.add(l)
@@ -192,11 +198,9 @@ class HTTPFileSystem(AsyncFileSystem):
                 for u in out
             ]
         else:
-            return list(sorted(out))
-        return out
+            return sorted(out)
 
     async def _ls(self, url, detail=True, **kwargs):
-
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
@@ -233,7 +237,7 @@ class HTTPFileSystem(AsyncFileSystem):
         return out
 
     async def _get_file(
-        self, rpath, lpath, chunk_size=5 * 2**20, callback=_DEFAULT_CALLBACK, **kwargs
+        self, rpath, lpath, chunk_size=5 * 2**20, callback=DEFAULT_CALLBACK, **kwargs
     ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -247,23 +251,34 @@ class HTTPFileSystem(AsyncFileSystem):
 
             callback.set_size(size)
             self._raise_not_found_for_status(r, rpath)
-            if not isfilelike(lpath):
-                lpath = open(lpath, "wb")
-            chunk = True
-            while chunk:
-                chunk = await r.content.read(chunk_size)
-                lpath.write(chunk)
-                callback.relative_update(len(chunk))
+            if isfilelike(lpath):
+                outfile = lpath
+            else:
+                outfile = open(lpath, "wb")  # noqa: ASYNC101, ASYNC230
+
+            try:
+                chunk = True
+                while chunk:
+                    chunk = await r.content.read(chunk_size)
+                    outfile.write(chunk)
+                    callback.relative_update(len(chunk))
+            finally:
+                if not isfilelike(lpath):
+                    outfile.close()
 
     async def _put_file(
         self,
         lpath,
         rpath,
         chunk_size=5 * 2**20,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         method="post",
+        mode="overwrite",
         **kwargs,
     ):
+        if mode != "overwrite":
+            raise NotImplementedError("Exclusive write")
+
         async def gen_chunks():
             # Support passing arbitrary file-like objects
             # and use them instead of streams.
@@ -271,7 +286,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 context = nullcontext(lpath)
                 use_seek = False  # might not support seeking
             else:
-                context = open(lpath, "rb")
+                context = open(lpath, "rb")  # noqa: ASYNC101, ASYNC230
                 use_seek = True
 
             with context as f:
@@ -298,7 +313,7 @@ class HTTPFileSystem(AsyncFileSystem):
             )
 
         meth = getattr(session, method)
-        async with meth(rpath, data=gen_chunks(), **kw) as resp:
+        async with meth(self.encode_url(rpath), data=gen_chunks(), **kw) as resp:
             self._raise_not_found_for_status(resp, rpath)
 
     async def _exists(self, path, **kwargs):
@@ -310,7 +325,7 @@ class HTTPFileSystem(AsyncFileSystem):
             r = await session.get(self.encode_url(path), **kw)
             async with r:
                 return r.status < 400
-        except (requests.HTTPError, aiohttp.ClientError):
+        except aiohttp.ClientError:
             return False
 
     async def _isfile(self, path, **kwargs):
@@ -347,9 +362,10 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
-        size = size or self.info(path, **kwargs)["size"]
+        info = {}
+        size = size or info.update(self.info(path, **kwargs)) or info["size"]
         session = sync(self.loop, self.set_session)
-        if block_size and size:
+        if block_size and size and info.get("partial", True):
             return HTTPFile(
                 self,
                 path,
@@ -422,11 +438,11 @@ class HTTPFileSystem(AsyncFileSystem):
                 if policy == "get":
                     # If get failed, then raise a FileNotFoundError
                     raise FileNotFoundError(url) from exc
-                logger.debug(str(exc))
+                logger.debug("", exc_info=exc)
 
         return {"name": url, "size": None, **info, "type": "file"}
 
-    async def _glob(self, path, **kwargs):
+    async def _glob(self, path, maxdepth=None, **kwargs):
         """
         Find files by glob-matching.
 
@@ -434,73 +450,66 @@ class HTTPFileSystem(AsyncFileSystem):
         but "?" is not considered as a character for globbing, because it is
         so common in URLs, often identifying the "query" part.
         """
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
         import re
 
-        ends = path.endswith("/")
+        ends_with_slash = path.endswith("/")  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+        append_slash_to_dirname = ends_with_slash or path.endswith(("/**", "/*"))
+        idx_star = path.find("*") if path.find("*") >= 0 else len(path)
+        idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        ind = min(indstar, indbrace)
+        min_idx = min(idx_star, idx_brace)
 
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif await self._exists(path):
+            if await self._exists(path, **kwargs):
                 if not detail:
                     return [path]
                 else:
-                    return {path: await self._info(path)}
+                    return {path: await self._info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        elif "/" in path[:min_idx]:
+            min_idx = path[:min_idx].rindex("/")
+            root = path[: min_idx + 1]
+            depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+            depth = path[min_idx + 1 :].count("/") + 1
+
+        if "**" in path:
+            if maxdepth is not None:
+                idx_double_stars = path.find("**")
+                depth_double_stars = path[idx_double_stars:].count("/") + 1
+                depth = depth - depth_double_stars + maxdepth
+            else:
+                depth = None
 
         allpaths = await self._find(
             root, maxdepth=depth, withdirs=True, detail=True, **kwargs
         )
-        # Escape characters special to python regex, leaving our supported
-        # special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
-        # for shell globbing details.
-        pattern = (
-            "^"
-            + (
-                path.replace("\\", r"\\")
-                .replace(".", r"\.")
-                .replace("+", r"\+")
-                .replace("//", "/")
-                .replace("(", r"\(")
-                .replace(")", r"\)")
-                .replace("|", r"\|")
-                .replace("^", r"\^")
-                .replace("$", r"\$")
-                .replace("{", r"\{")
-                .replace("}", r"\}")
-                .rstrip("/")
-            )
-            + "$"
-        )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+
+        pattern = glob_translate(path + ("/" if ends_with_slash else ""))
+        pattern = re.compile(pattern)
+
         out = {
-            p: allpaths[p]
-            for p in sorted(allpaths)
-            if pattern.match(p.replace("//", "/").rstrip("/"))
+            (
+                p.rstrip("/")
+                if not append_slash_to_dirname
+                and info["type"] == "directory"
+                and p.endswith("/")
+                else p
+            ): info
+            for p, info in sorted(allpaths.items())
+            if pattern.match(p.rstrip("/"))
         }
+
         if detail:
             return out
         else:
@@ -513,12 +522,36 @@ class HTTPFileSystem(AsyncFileSystem):
         except (FileNotFoundError, ValueError):
             return False
 
+    async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
+        """
+        Write bytes to a remote file over HTTP.
+
+        Parameters
+        ----------
+        path : str
+            Target URL where the data should be written
+        value : bytes
+            Data to be written
+        mode : str
+            How to write to the file - 'overwrite' or 'append'
+        **kwargs : dict
+            Additional parameters to pass to the HTTP request
+        """
+        url = self._strip_protocol(path)
+        headers = kwargs.pop("headers", {})
+        headers["Content-Length"] = str(len(value))
+
+        session = await self.set_session()
+
+        async with session.put(url, data=value, headers=headers, **kwargs) as r:
+            r.raise_for_status()
+
 
 class HTTPFile(AbstractBufferedFile):
     """
-    A file-like object pointing to a remove HTTP(S) resource
+    A file-like object pointing to a remote HTTP(S) resource
 
-    Supports only reading, with read-ahead of a predermined block-size.
+    Supports only reading, with read-ahead of a predetermined block-size.
 
     In the case that the server does not supply the filesize, only reading of
     the complete file in one go is supported.
@@ -527,7 +560,7 @@ class HTTPFile(AbstractBufferedFile):
     ----------
     url: str
         Full URL of the remote resource, including the protocol
-    session: requests.Session or None
+    session: aiohttp.ClientSession or None
         All calls will be made within this session, to avoid restarting
         connections where the server allows this
     block_size: int or None
@@ -556,6 +589,7 @@ class HTTPFile(AbstractBufferedFile):
         if mode != "rb":
             raise NotImplementedError("File mode not supported")
         self.asynchronous = asynchronous
+        self.loop = loop
         self.url = url
         self.session = session
         self.details = {"name": url, "size": size, "type": "file"}
@@ -568,7 +602,6 @@ class HTTPFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs,
         )
-        self.loop = loop
 
     def read(self, length=-1):
         """Read bytes from file
@@ -637,8 +670,8 @@ class HTTPFile(AbstractBufferedFile):
         logger.debug(f"Fetch range for {self}: {start}-{end}")
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
-        headers["Range"] = "bytes=%i-%i" % (start, end - 1)
-        logger.debug(str(self.url) + " : " + headers["Range"])
+        headers["Range"] = f"bytes={start}-{end - 1}"
+        logger.debug(f"{self.url} : {headers['Range']}")
         r = await self.session.get(
             self.fs.encode_url(self.url), headers=headers, **kwargs
         )
@@ -687,25 +720,6 @@ class HTTPFile(AbstractBufferedFile):
 
     _fetch_range = sync_wrapper(async_fetch_range)
 
-    def __reduce__(self):
-        return (
-            reopen,
-            (
-                self.fs,
-                self.url,
-                self.mode,
-                self.blocksize,
-                self.cache.name if self.cache else "none",
-                self.size,
-            ),
-        )
-
-
-def reopen(fs, url, mode, blocksize, cache_type, size=None):
-    return fs.open(
-        url, mode=mode, block_size=blocksize, cache_type=cache_type, size=size
-    )
-
 
 magic_check = re.compile("([*[])")
 
@@ -732,8 +746,13 @@ class HTTPStreamFile(AbstractBufferedFile):
             return r
 
         self.r = sync(self.loop, cor)
+        self.loop = fs.loop
 
-    def seek(self, *args, **kwargs):
+    def seek(self, loc, whence=0):
+        if loc == 0 and whence == 1:
+            return
+        if loc == self.loc and whence == 0:
+            return
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
@@ -749,9 +768,6 @@ class HTTPStreamFile(AbstractBufferedFile):
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
         super().close()
-
-    def __reduce__(self):
-        return reopen, (self.fs, self.url, self.mode, self.blocksize, self.cache.name)
 
 
 class AsyncStreamFile(AbstractAsyncStreamedFile):
@@ -790,13 +806,13 @@ async def get_range(session, url, start, end, file=None, **kwargs):
     # explicit get a range when we know it must be safe
     kwargs = kwargs.copy()
     headers = kwargs.pop("headers", {}).copy()
-    headers["Range"] = "bytes=%i-%i" % (start, end - 1)
+    headers["Range"] = f"bytes={start}-{end - 1}"
     r = await session.get(url, headers=headers, **kwargs)
     r.raise_for_status()
     async with r:
         out = await r.read()
     if file:
-        with open(file, "rb+") as f:
+        with open(file, "r+b") as f:  # noqa: ASYNC101, ASYNC230
             f.seek(start)
             f.write(out)
     else:
@@ -809,7 +825,7 @@ async def _file_info(url, session, size_policy="head", **kwargs):
     Default operation is to explicitly allow redirects and use encoding
     'identity' (no compression) to get the true size of the target.
     """
-    logger.debug("Retrieve file size for %s" % url)
+    logger.debug("Retrieve file size for %s", url)
     kwargs = kwargs.copy()
     ar = kwargs.pop("allow_redirects", True)
     head = kwargs.get("headers", {}).copy()
@@ -822,18 +838,30 @@ async def _file_info(url, session, size_policy="head", **kwargs):
     elif size_policy == "get":
         r = await session.get(url, allow_redirects=ar, **kwargs)
     else:
-        raise TypeError('size_policy must be "head" or "get", got %s' "" % size_policy)
+        raise TypeError(f'size_policy must be "head" or "get", got {size_policy}')
     async with r:
         r.raise_for_status()
 
-        # TODO:
-        #  recognise lack of 'Accept-Ranges',
-        #                 or 'Accept-Ranges': 'none' (not 'bytes')
-        #  to mean streaming only, no random access => return None
         if "Content-Length" in r.headers:
-            info["size"] = int(r.headers["Content-Length"])
+            # Some servers may choose to ignore Accept-Encoding and return
+            # compressed content, in which case the returned size is unreliable.
+            if "Content-Encoding" not in r.headers or r.headers["Content-Encoding"] in [
+                "identity",
+                "",
+            ]:
+                info["size"] = int(r.headers["Content-Length"])
         elif "Content-Range" in r.headers:
             info["size"] = int(r.headers["Content-Range"].split("/")[1])
+
+        if "Content-Type" in r.headers:
+            info["mimetype"] = r.headers["Content-Type"].partition(";")[0]
+
+        if r.headers.get("Accept-Ranges") == "none":
+            # Some servers may explicitly discourage partial content requests, but
+            # the lack of "Accept-Ranges" does not always indicate they would fail
+            info["partial"] = False
+
+        info["url"] = str(r.url)
 
         for checksum_field in ["ETag", "Content-MD5", "Digest"]:
             if r.headers.get(checksum_field):

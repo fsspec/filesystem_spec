@@ -40,7 +40,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
-        r = self.session.get(self.url + "/" + path)
+        r = self.session.get(f"{self.url}/{path}")
         if r.status_code == 404:
             return FileNotFoundError(path)
         r.raise_for_status()
@@ -61,7 +61,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         path = self._strip_protocol(path)
-        r = self.session.get(self.url + "/" + path)
+        r = self.session.get(f"{self.url}/{path}")
         if r.status_code == 404:
             return FileNotFoundError(path)
         r.raise_for_status()
@@ -83,7 +83,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "format": "base64",
             "type": "file",
         }
-        self.session.put(self.url + "/" + path, json=json)
+        self.session.put(f"{self.url}/{path}", json=json)
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
@@ -96,11 +96,11 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "content": None,
             "type": "directory",
         }
-        self.session.put(self.url + "/" + path, json=json)
+        self.session.put(f"{self.url}/{path}", json=json)
 
     def _rm(self, path):
         path = self._strip_protocol(path)
-        self.session.delete(self.url + "/" + path)
+        self.session.delete(f"{self.url}/{path}")
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)

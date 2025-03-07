@@ -1,4 +1,7 @@
-class Transaction(object):
+from collections import deque
+
+
+class Transaction:
     """Filesystem transaction write context
 
     Gathers files for deferred commit or discard, so that several write
@@ -6,42 +9,47 @@ class Transaction(object):
     instance as the ``.transaction`` attribute of the given filesystem
     """
 
-    def __init__(self, fs):
+    def __init__(self, fs, **kwargs):
         """
         Parameters
         ----------
         fs: FileSystem instance
         """
         self.fs = fs
-        self.files = []
+        self.files = deque()
 
     def __enter__(self):
         self.start()
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """End transaction and commit, if exit is not due to exception"""
         # only commit if there was no exception
         self.complete(commit=exc_type is None)
-        self.fs._intrans = False
-        self.fs._transaction = None
+        if self.fs:
+            self.fs._intrans = False
+            self.fs._transaction = None
+            self.fs = None
 
     def start(self):
         """Start a transaction on this FileSystem"""
-        self.files = []  # clean up after previous failed completions
+        self.files = deque()  # clean up after previous failed completions
         self.fs._intrans = True
 
     def complete(self, commit=True):
         """Finish transaction: commit or discard all deferred files"""
-        for f in self.files:
+        while self.files:
+            f = self.files.popleft()
             if commit:
                 f.commit()
             else:
                 f.discard()
-        self.files = []
         self.fs._intrans = False
+        self.fs._transaction = None
+        self.fs = None
 
 
-class FileActor(object):
+class FileActor:
     def __init__(self):
         self.files = []
 
@@ -79,3 +87,4 @@ class DaskTransaction(Transaction):
         else:
             self.files.discard().result()
         self.fs._intrans = False
+        self.fs = None

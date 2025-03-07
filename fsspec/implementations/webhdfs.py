@@ -21,7 +21,7 @@ class WebHDFS(AbstractFileSystem):
     """
     Interface to HDFS over HTTP using the WebHDFS API. Supports also HttpFS gateways.
 
-    Three auth mechanisms are supported:
+    Four auth mechanisms are supported:
 
     insecure: no auth is done, and the user is assumed to be whoever they
         say they are (parameter ``user``), or a predefined value such as
@@ -34,6 +34,8 @@ class WebHDFS(AbstractFileSystem):
         service. Indeed, this client can also generate such tokens when
         not insecure. Note that tokens expire, but can be renewed (by a
         previously specified user) and may allow for proxying.
+    basic-auth: used when both parameter ``user`` and parameter ``password``
+        are provided.
 
     """
 
@@ -47,10 +49,13 @@ class WebHDFS(AbstractFileSystem):
         kerberos=False,
         token=None,
         user=None,
+        password=None,
         proxy_to=None,
         kerb_kwargs=None,
         data_proxy=None,
         use_https=False,
+        session_cert=None,
+        session_verify=True,
         **kwargs,
     ):
         """
@@ -68,6 +73,9 @@ class WebHDFS(AbstractFileSystem):
             given
         user: str or None
             If given, assert the user name to connect with
+        password: str or None
+            If given, assert the password to use for basic auth. If password
+            is provided, user must be provided also
         proxy_to: str or None
             If given, the user has the authority to proxy, and this value is
             the user in who's name actions are taken
@@ -84,14 +92,17 @@ class WebHDFS(AbstractFileSystem):
             ``url->data_proxy(url)``.
         use_https: bool
             Whether to connect to the Name-node using HTTPS instead of HTTP
+        session_cert: str or Tuple[str, str] or None
+            Path to a certificate file, or tuple of (cert, key) files to use
+            for the requests.Session
+        session_verify: str, bool or None
+            Path to a certificate file to use for verifying the requests.Session.
         kwargs
         """
         if self._cached:
             return
         super().__init__(**kwargs)
-        self.url = "{protocol}://{host}:{port}/webhdfs/v1".format(
-            protocol="https" if use_https else "http", host=host, port=port
-        )
+        self.url = f"{'https' if use_https else 'http'}://{host}:{port}/webhdfs/v1"
         self.kerb = kerberos
         self.kerb_kwargs = kerb_kwargs or {}
         self.pars = {}
@@ -104,8 +115,19 @@ class WebHDFS(AbstractFileSystem):
                     " token"
                 )
             self.pars["delegation"] = token
-        if user is not None:
-            self.pars["user.name"] = user
+        self.user = user
+        self.password = password
+
+        if password is not None:
+            if user is None:
+                raise ValueError(
+                    "If passing a password, the user must also be"
+                    "set in order to set up the basic-auth"
+                )
+        else:
+            if user is not None:
+                self.pars["user.name"] = user
+
         if proxy_to is not None:
             self.pars["doas"] = proxy_to
         if kerberos and user is not None:
@@ -113,9 +135,13 @@ class WebHDFS(AbstractFileSystem):
                 "If using Kerberos auth, do not specify the "
                 "user, this is handled by kinit."
             )
+
+        self.session_cert = session_cert
+        self.session_verify = session_verify
+
         self._connect()
 
-        self._fsid = "webhdfs_" + tokenize(host, port)
+        self._fsid = f"webhdfs_{tokenize(host, port)}"
 
     @property
     def fsid(self):
@@ -123,13 +149,25 @@ class WebHDFS(AbstractFileSystem):
 
     def _connect(self):
         self.session = requests.Session()
+
+        if self.session_cert:
+            self.session.cert = self.session_cert
+
+        self.session.verify = self.session_verify
+
         if self.kerb:
             from requests_kerberos import HTTPKerberosAuth
 
             self.session.auth = HTTPKerberosAuth(**self.kerb_kwargs)
 
+        if self.user is not None and self.password is not None:
+            from requests.auth import HTTPBasicAuth
+
+            self.session.auth = HTTPBasicAuth(self.user, self.password)
+
     def _call(self, op, method="get", path=None, data=None, redirect=True, **kwargs):
-        url = self.url + quote(path or "")
+        path = self._strip_protocol(path) if path is not None else ""
+        url = self._apply_proxy(self.url + quote(path, safe="/="))
         args = kwargs.copy()
         args.update(self.pars)
         args["op"] = op.upper()
@@ -356,7 +394,7 @@ class WebHDFS(AbstractFileSystem):
                 with self.open(tmp_fname, "wb") as rstream:
                     shutil.copyfileobj(lstream, rstream)
                 self.mv(tmp_fname, rpath)
-            except BaseException:  # noqa
+            except BaseException:
                 with suppress(FileNotFoundError):
                     self.rm(tmp_fname)
                 raise
@@ -420,7 +458,9 @@ class WebHDFile(AbstractBufferedFile):
                 location, headers={"content-type": "application/octet-stream"}
             )
             out2.raise_for_status()
-        self.location = location.replace("CREATE", "APPEND")
+            # after creating empty file, change location to append to
+            out2 = self.fs._call("APPEND", "POST", self.path, redirect=False, **kwargs)
+            self.location = self.fs._apply_proxy(out2.headers["Location"])
 
     def _fetch_range(self, start, end):
         start = max(start, 0)

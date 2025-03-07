@@ -1,5 +1,5 @@
 """Helper functions for a standard streaming compression API"""
-from bz2 import BZ2File
+
 from zipfile import ZipFile
 
 import fsspec.utils
@@ -40,13 +40,11 @@ def register_compression(name, callback, extensions, force=False):
 
     # Validate registration
     if name in compr and not force:
-        raise ValueError("Duplicate compression registration: %s" % name)
+        raise ValueError(f"Duplicate compression registration: {name}")
 
     for ext in extensions:
         if ext in fsspec.utils.compressions and not force:
-            raise ValueError(
-                "Duplicate compression file extension: %s (%s)" % (ext, name)
-            )
+            raise ValueError(f"Duplicate compression file extension: {ext} ({name})")
 
     compr[name] = callback
 
@@ -68,7 +66,13 @@ def unzip(infile, mode="rb", filename=None, **kwargs):
 
 
 register_compression("zip", unzip, "zip")
-register_compression("bz2", BZ2File, "bz2")
+
+try:
+    from bz2 import BZ2File
+except ImportError:
+    pass
+else:
+    register_compression("bz2", BZ2File, "bz2")
 
 try:  # pragma: no cover
     from isal import igzip
@@ -87,15 +91,15 @@ except ImportError:
 try:
     from lzma import LZMAFile
 
-    register_compression("lzma", LZMAFile, "xz")
-    register_compression("xz", LZMAFile, "xz", force=True)
+    register_compression("lzma", LZMAFile, "lzma")
+    register_compression("xz", LZMAFile, "xz")
 except ImportError:
     pass
 
 try:
     import lzmaffi
 
-    register_compression("lzma", lzmaffi.LZMAFile, "xz", force=True)
+    register_compression("lzma", lzmaffi.LZMAFile, "lzma", force=True)
     register_compression("xz", lzmaffi.LZMAFile, "xz", force=True)
 except ImportError:
     pass
@@ -135,7 +139,7 @@ class SnappyFile(AbstractBufferedFile):
 try:
     import snappy
 
-    snappy.compress
+    snappy.compress(b"")
     # Snappy may use the .sz file extension, but this is not part of the
     # standard implementation.
     register_compression("snappy", SnappyFile, [])

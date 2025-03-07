@@ -1,6 +1,8 @@
 import os
+import sys
 import uuid
-from ftplib import FTP, Error, error_perm
+import warnings
+from ftplib import FTP, FTP_TLS, Error, error_perm
 from typing import Any
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
@@ -24,6 +26,8 @@ class FTPFileSystem(AbstractFileSystem):
         block_size=None,
         tempdir=None,
         timeout=30,
+        encoding="utf-8",
+        tls=False,
         **kwargs,
     ):
         """
@@ -51,21 +55,39 @@ class FTPFileSystem(AbstractFileSystem):
             Directory on remote to put temporary files when in a transaction
         timeout: int
             Timeout of the ftp connection in seconds
+        encoding: str
+            Encoding to use for directories and filenames in FTP connection
+        tls: bool
+            Use FTP-TLS, by default False
         """
-        super(FTPFileSystem, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.host = host
         self.port = port
         self.tempdir = tempdir or "/tmp"
-        self.cred = username, password, acct
+        self.cred = username or "", password or "", acct or ""
         self.timeout = timeout
+        self.encoding = encoding
         if block_size is not None:
             self.blocksize = block_size
         else:
             self.blocksize = 2**16
+        self.tls = tls
         self._connect()
+        if self.tls:
+            self.ftp.prot_p()
 
     def _connect(self):
-        self.ftp = FTP(timeout=self.timeout)
+        if self.tls:
+            ftp_cls = FTP_TLS
+        else:
+            ftp_cls = FTP
+        if sys.version_info >= (3, 9):
+            self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding)
+        elif self.encoding:
+            warnings.warn("`encoding` not supported for python<3.9, ignoring")
+            self.ftp = ftp_cls(timeout=self.timeout)
+        else:
+            self.ftp = ftp_cls(timeout=self.timeout)
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 
@@ -95,9 +117,9 @@ class FTPFileSystem(AbstractFileSystem):
                 except error_perm:
                     out = _mlsd2(self.ftp, path)  # Not platform independent
                 for fn, details in out:
-                    if path == "/":
-                        path = ""  # just for forming the names, below
-                    details["name"] = "/".join([path, fn.lstrip("/")])
+                    details["name"] = "/".join(
+                        ["" if path == "/" else path, fn.lstrip("/")]
+                    )
                     if details["type"] == "file":
                         details["size"] = int(details["size"])
                     else:
@@ -110,8 +132,8 @@ class FTPFileSystem(AbstractFileSystem):
                     info = self.info(path)
                     if info["type"] == "file":
                         out = [(path, info)]
-                except (Error, IndexError):
-                    raise FileNotFoundError(path)
+                except (Error, IndexError) as exc:
+                    raise FileNotFoundError(path) from exc
         files = self.dircache.get(path, out)
         if not detail:
             return sorted([fn for fn, details in files])
@@ -125,9 +147,9 @@ class FTPFileSystem(AbstractFileSystem):
             return {"name": "/", "size": 0, "type": "directory"}
         files = self.ls(self._parent(path).lstrip("/"), True)
         try:
-            out = [f for f in files if f["name"] == path][0]
-        except IndexError:
-            raise FileNotFoundError(path)
+            out = next(f for f in files if f["name"] == path)
+        except StopIteration as exc:
+            raise FileNotFoundError(path) from exc
         return out
 
     def get_file(self, rpath, lpath, **kwargs):
@@ -144,7 +166,7 @@ class FTPFileSystem(AbstractFileSystem):
             outfile.write(x)
 
         self.ftp.retrbinary(
-            "RETR %s" % rpath,
+            f"RETR {rpath}",
             blocksize=self.blocksize,
             callback=cb,
         )
@@ -159,12 +181,15 @@ class FTPFileSystem(AbstractFileSystem):
         def cb(x):
             out.append(x)
 
-        self.ftp.retrbinary(
-            "RETR %s" % path,
-            blocksize=self.blocksize,
-            rest=start,
-            callback=cb,
-        )
+        try:
+            self.ftp.retrbinary(
+                f"RETR {path}",
+                blocksize=self.blocksize,
+                rest=start,
+                callback=cb,
+            )
+        except (Error, error_perm) as orig_exc:
+            raise FileNotFoundError(path) from orig_exc
         return b"".join(out)
 
     def _open(
@@ -240,7 +265,7 @@ class FTPFileSystem(AbstractFileSystem):
             self.dircache.clear()
         else:
             self.dircache.pop(path, None)
-        super(FTPFileSystem, self).invalidate_cache(path)
+        super().invalidate_cache(path)
 
 
 class TransferDone(Exception):
@@ -309,7 +334,7 @@ class FTPFile(AbstractBufferedFile):
 
         try:
             self.fs.ftp.retrbinary(
-                "RETR %s" % self.path,
+                f"RETR {self.path}",
                 blocksize=self.blocksize,
                 rest=start,
                 callback=callback,
@@ -327,7 +352,7 @@ class FTPFile(AbstractBufferedFile):
     def _upload_chunk(self, final=False):
         self.buffer.seek(0)
         self.fs.ftp.storbinary(
-            "STOR " + self.path, self.buffer, blocksize=self.blocksize, rest=self.offset
+            f"STOR {self.path}", self.buffer, blocksize=self.blocksize, rest=self.offset
         )
         return True
 
@@ -349,18 +374,20 @@ def _mlsd2(ftp, path="."):
     minfo = []
     ftp.dir(path, lines.append)
     for line in lines:
-        line = line.split()
+        split_line = line.split()
+        if len(split_line) < 9:
+            continue
         this = (
-            line[-1],
+            split_line[-1],
             {
-                "modify": " ".join(line[5:8]),
-                "unix.owner": line[2],
-                "unix.group": line[3],
-                "unix.mode": line[0],
-                "size": line[4],
+                "modify": " ".join(split_line[5:8]),
+                "unix.owner": split_line[2],
+                "unix.group": split_line[3],
+                "unix.mode": split_line[0],
+                "size": split_line[4],
             },
         )
-        if "d" == this[1]["unix.mode"][0]:
+        if this[1]["unix.mode"][0] == "d":
             this[1]["type"] = "dir"
         else:
             this[1]["type"] = "file"

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from contextlib import contextmanager
 from ctypes import (
     CFUNCTYPE,
@@ -124,8 +122,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
             files = open_files(fo, protocol=target_protocol, **(target_options or {}))
             if len(files) != 1:
                 raise ValueError(
-                    'Path "{}" did not resolve to exactly'
-                    'one file: "{}"'.format(fo, files)
+                    f'Path "{fo}" did not resolve to exactly one file: "{files}"'
                 )
             fo = files[0]
         self.of = fo
@@ -167,8 +164,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
                     continue
                 self.dir_cache.update(
                     {
-                        dirname
-                        + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                        dirname: {"name": dirname, "size": 0, "type": "directory"}
                         for dirname in self._all_dirnames(set(entry.name))
                     }
                 )
@@ -181,7 +177,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
         # not in all formats), so get the directories names from the files names
         self.dir_cache.update(
             {
-                dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+                dirname: {"name": dirname, "size": 0, "type": "directory"}
                 for dirname in self._all_dirnames(list_names)
             }
         )

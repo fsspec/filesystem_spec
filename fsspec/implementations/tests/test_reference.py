@@ -6,20 +6,24 @@ import pytest
 import fsspec
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.reference import (
-    DFReferenceFileSystem,
+    LazyReferenceMapper,
+    ReferenceFileSystem,
     ReferenceNotReachable,
-    _unmodel_hdf5,
 )
-from fsspec.tests.conftest import data, realfile, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
 
 
-def test_simple(server):  # noqa: F811
+def test_simple(server):
+    # The dictionary in refs may be dumped with a different separator
+    # depending on whether json or ujson is imported
+    from fsspec.implementations.reference import json as json_impl
 
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c": (realfile, 1, 5),
+        "b": (server.realfile, 0, 5),
+        "c": (server.realfile, 1, 5),
         "d": b"base64:aGVsbG8=",
+        "e": {"key": "value"},
     }
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -28,12 +32,97 @@ def test_simple(server):  # noqa: F811
     assert fs.cat("b") == data[:5]
     assert fs.cat("c") == data[1 : 1 + 5]
     assert fs.cat("d") == b"hello"
+    assert fs.cat("e") == json_impl.dumps(refs["e"]).encode("utf-8")
     with fs.open("d", "rt") as f:
         assert f.read(2) == "he"
 
 
-def test_ls(server):  # noqa: F811
-    refs = {"a": b"data", "b": (realfile, 0, 5), "c/d": (realfile, 1, 6)}
+def test_open(m):
+    from fsspec.implementations.reference import json as json_impl
+
+    m.pipe("/data/0", data)
+    refs = {
+        "a": b"data",
+        "b": ["memory://data/0"],
+        "c": ("memory://data/0", 0, 5),
+        "d": ("memory://data/0", 1, 5),
+        "e": b"base64:aGVsbG8=",
+        "f": {"key": "value"},
+    }
+    fs = fsspec.filesystem("reference", fo=refs, fs=m)
+
+    with fs.open("a", "rb") as f:
+        assert f.read() == b"data"
+
+    with fs.open("b", "rb") as f:
+        assert f.read() == data
+
+    with fs.open("c", "rb") as f:
+        assert f.read() == data[:5]
+        assert not f.read()
+
+    with fs.open("d", "rb") as f:
+        assert f.read() == data[1:6]
+        assert not f.read()
+
+    with fs.open("e", "rb") as f:
+        assert f.read() == b"hello"
+
+    with fs.open("f", "rb") as f:
+        assert f.read() == json_impl.dumps(refs["f"]).encode("utf-8")
+
+    # check partial reads
+    with fs.open("c", "rb") as f:
+        assert f.read(2) == data[:2]
+        f.seek(2, os.SEEK_CUR)
+        assert f.read() == data[4:5]
+
+    with fs.open("d", "rb") as f:
+        assert f.read(2) == data[1:3]
+        f.seek(1, os.SEEK_CUR)
+        assert f.read() == data[4:6]
+
+
+def test_simple_ver1(server):
+    # The dictionary in refs may be dumped with a different separator
+    # depending on whether json or ujson is imported
+    from fsspec.implementations.reference import json as json_impl
+
+    in_data = {
+        "version": 1,
+        "refs": {
+            "a": b"data",
+            "b": (server.realfile, 0, 5),
+            "c": (server.realfile, 1, 5),
+            "d": b"base64:aGVsbG8=",
+            "e": {"key": "value"},
+        },
+    }
+    h = fsspec.filesystem("http")
+    fs = fsspec.filesystem("reference", fo=in_data, fs=h)
+
+    assert fs.cat("a") == b"data"
+    assert fs.cat("b") == data[:5]
+    assert fs.cat("c") == data[1 : 1 + 5]
+    assert fs.cat("d") == b"hello"
+    assert fs.cat("e") == json_impl.dumps(in_data["refs"]["e"]).encode("utf-8")
+    with fs.open("d", "rt") as f:
+        assert f.read(2) == "he"
+
+
+def test_target_options(m):
+    m.pipe("data/0", b"hello")
+    refs = {"a": ["memory://data/0"]}
+    fn = "memory://refs.json.gz"
+    with fsspec.open(fn, "wt", compression="gzip") as f:
+        json.dump(refs, f)
+
+    fs = fsspec.filesystem("reference", fo=fn, target_options={"compression": "gzip"})
+    assert fs.cat("a") == b"hello"
+
+
+def test_ls(server):
+    refs = {"a": b"data", "b": (server.realfile, 0, 5), "c/d": (server.realfile, 1, 6)}
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
@@ -46,12 +135,22 @@ def test_ls(server):  # noqa: F811
     }
 
 
-def test_info(server):  # noqa: F811
+def test_nested_dirs_ls():
+    # issue #1430
+    refs = {"a": "A", "B/C/b": "B", "B/C/d": "d", "B/_": "_"}
+    fs = fsspec.filesystem("reference", fo=refs)
+    assert len(fs.ls("")) == 2
+    assert {e["name"] for e in fs.ls("")} == {"a", "B"}
+    assert len(fs.ls("B")) == 2
+    assert {e["name"] for e in fs.ls("B")} == {"B/C", "B/_"}
+
+
+def test_info(server):
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c/d": (realfile, 1, 6),
-        "e": (realfile,),
+        "b": (server.realfile, 0, 5),
+        "c/d": (server.realfile, 1, 6),
+        "e": (server.realfile,),
     }
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -64,9 +163,9 @@ def test_info(server):  # noqa: F811
 def test_mutable(server, m):
     refs = {
         "a": b"data",
-        "b": (realfile, 0, 5),
-        "c/d": (realfile, 1, 6),
-        "e": (realfile,),
+        "b": (server.realfile, 0, 5),
+        "c/d": (server.realfile, 1, 6),
+        "e": (server.realfile,),
     }
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
@@ -120,34 +219,18 @@ def test_put_get_single(tmpdir):
     assert fs.cat("hi") == b"data"
 
 
-def test_defaults(server):  # noqa: F811
+def test_defaults(server):
     refs = {"a": b"data", "b": (None, 0, 5)}
     fs = fsspec.filesystem(
         "reference",
         fo=refs,
         target_protocol="http",
-        target=realfile,
+        target=server.realfile,
         remote_protocol="http",
     )
 
     assert fs.cat("a") == b"data"
     assert fs.cat("b") == data[:5]
-
-
-def test_inputs():  # noqa: F811
-    import io
-
-    refs = io.StringIO("""{"a": "data", "b": [null, 0, 5]}""")
-    fs = fsspec.filesystem(
-        "reference", fo=refs, target_protocol="http", target=realfile
-    )
-    assert fs.cat("a") == b"data"
-
-    refs = io.BytesIO(b"""{"a": "data", "b": [null, 0, 5]}""")
-    fs = fsspec.filesystem(
-        "reference", fo=refs, target_protocol="http", target=realfile
-    )
-    assert fs.cat("a") == b"data"
 
 
 jdata = """{
@@ -190,15 +273,10 @@ jdata = """{
 """
 
 
-def test_unmodel():
-    refs = _unmodel_hdf5(json.loads(jdata))
-    # apparently the output may or may not contain a space after ":"
-    assert b'"Conventions":"UGRID-0.9.0"' in refs[".zattrs"].replace(b" ", b"")
-    assert refs["adcirc_mesh/0"] == ("https://url", 8928, 8932)
-
-
 def test_spec1_expand():
     pytest.importorskip("jinja2")
+    from fsspec.implementations.reference import json as json_impl
+
     in_data = {
         "version": 1,
         "templates": {"u": "server.domain/path", "f": "{{c}}"},
@@ -222,6 +300,7 @@ def test_spec1_expand():
             "key2": ["http://{{u}}", 10000, 100],
             "key3": ["http://{{f(c='text')}}", 10000, 100],
             "key4": ["http://target_url"],
+            "key5": {"key": "value"},
         },
     }
     fs = fsspec.filesystem(
@@ -233,6 +312,7 @@ def test_spec1_expand():
         "key2": ["http://server.domain/path", 10000, 100],
         "key3": ["http://text", 10000, 100],
         "key4": ["http://target_url"],
+        "key5": json_impl.dumps(in_data["refs"]["key5"]),
         "gen_key0": ["http://server.domain/path_0", 1000, 1000],
         "gen_key1": ["http://server.domain/path_1", 2000, 1000],
         "gen_key2": ["http://server.domain/path_2", 3000, 1000],
@@ -245,6 +325,8 @@ def test_spec1_expand():
 
 def test_spec1_expand_simple():
     pytest.importorskip("jinja2")
+    from fsspec.implementations.reference import json as json_impl
+
     in_data = {
         "version": 1,
         "templates": {"u": "server.domain/path"},
@@ -252,6 +334,7 @@ def test_spec1_expand_simple():
             "key0": "base64:ZGF0YQ==",
             "key2": ["http://{{u}}", 10000, 100],
             "key4": ["http://target_url"],
+            "key5": {"key": "value"},
         },
     }
     fs = fsspec.filesystem("reference", fo=in_data, target_protocol="http")
@@ -264,6 +347,7 @@ def test_spec1_expand_simple():
     )
     assert fs.references["key2"] == ["http://not.org/p", 10000, 100]
     assert fs.cat("key0") == b"data"
+    assert fs.cat("key5") == json_impl.dumps(in_data["refs"]["key5"]).encode("utf-8")
 
 
 def test_spec1_gen_variants():
@@ -354,8 +438,8 @@ def test_multi_fs_provided(m, tmpdir):
     # local URLs are file:// by default
     refs = {
         "a": b"data",
-        "b": ("file://" + str(real), 0, 5),
-        "c/d": ("file://" + str(real), 1, 6),
+        "b": (f"file://{real}", 0, 5),
+        "c/d": (f"file://{real}", 1, 6),
         "c/e": ["memory://afile"],
     }
 
@@ -377,8 +461,8 @@ def test_multi_fs_created(m, tmpdir):
     # local URLs are file:// by default
     refs = {
         "a": b"data",
-        "b": ("file://" + str(real), 0, 5),
-        "c/d": ("file://" + str(real), 1, 6),
+        "b": (f"file://{real}", 0, 5),
+        "c/d": (f"file://{real}", 1, 6),
         "c/e": ["memory://afile"],
     }
 
@@ -405,9 +489,9 @@ def test_missing_nonasync(m):
     }
     refs = {".zarray": json.dumps(zarray)}
 
-    m = fsspec.get_mapper("reference://", fo=refs, remote_protocol="memory")
-
-    a = zarr.open_array(m)
+    a = zarr.open_array(
+        "reference://", storage_options={"fo": refs, "remote_protocol": "memory"}
+    )
     assert str(a[0]) == "nan"
 
 
@@ -420,20 +504,21 @@ def test_fss_has_defaults(m):
     assert fs.fss["memory"].protocol == "memory"
 
     fs = fsspec.filesystem("reference", fs=m, fo={})
-    assert fs.fss[None] is m
+    # Default behavior here wraps synchronous filesystems to enable the async API
+    assert fs.fss[None].sync_fs is m
 
     fs = fsspec.filesystem("reference", fs={"memory": m}, fo={})
     assert fs.fss["memory"] is m
-    assert fs.fss[None].protocol == "file"
+    assert fs.fss[None].protocol == ("file", "local")
 
     fs = fsspec.filesystem("reference", fs={None: m}, fo={})
     assert fs.fss[None] is m
 
     fs = fsspec.filesystem("reference", fo={"key": ["memory://a"]})
-    assert fs.fss[None] is fs.fss["memory"]
+    assert fs.fss[None] == fs.fss["memory"]
 
     fs = fsspec.filesystem("reference", fo={"key": ["memory://a"], "blah": ["path"]})
-    assert fs.fss[None] is fs.fss["memory"]
+    assert fs.fss[None] == fs.fss["memory"]
 
 
 def test_merging(m):
@@ -456,6 +541,7 @@ def test_merging(m):
 def test_cat_file_ranges(m):
     other = b"other test data"
     m.pipe("/b", other)
+
     fs = fsspec.filesystem(
         "reference",
         fo={
@@ -474,15 +560,55 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
 
 
-def test_cat_missing(m):
+@pytest.mark.asyncio
+async def test_async_cat_file_ranges():
+    fsspec.get_filesystem_class("http").clear_instance_cache()
+    fss = fsspec.filesystem("https", asynchronous=True)
+    session = await fss.set_session()
+
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "version": 1,
+            "refs": {
+                "reference_time/0": [
+                    "https://noaa-nwm-retro-v2-0-pds.s3.amazonaws.com/full_physics/2017/201704010000.CHRTOUT_DOMAIN1.comp",
+                    39783,
+                    12,
+                ],
+            },
+        },
+        fs={"https": fss},
+        remote_protocol="https",
+        asynchronous=True,
+    )
+
+    assert (
+        await fs._cat_file("reference_time/0") == b"x^K0\xa9d\x04\x00\x03\x13\x01\x0f"
+    )
+    await session.close()
+
+
+@pytest.mark.parametrize(
+    "fo",
+    [
+        {
+            "c": ["memory://b"],
+            "d": ["memory://unknown", 4, 6],
+        },
+        {
+            "c": ["memory://b"],
+            "d": ["//unknown", 4, 6],
+        },
+    ],
+    ids=["memory protocol", "mixed protocols: memory and unspecified"],
+)
+def test_cat_missing(m, fo):
     other = b"other test data"
     m.pipe("/b", other)
     fs = fsspec.filesystem(
         "reference",
-        fo={
-            "c": ["memory://b"],
-            "d": ["memory://unknown", 4, 6],
-        },
+        fo=fo,
     )
     with pytest.raises(FileNotFoundError):
         fs.cat("notafile")
@@ -515,56 +641,120 @@ def test_cat_missing(m):
     out = mapper.getitems(["c", "d"], on_error="return")
     assert isinstance(out["d"], ReferenceNotReachable)
 
+    out = fs.cat(["notone", "c", "d"], on_error="return")
+    assert isinstance(out["notone"], FileNotFoundError)
+    assert out["c"] == other
+    assert isinstance(out["d"], ReferenceNotReachable)
+
     out = mapper.getitems(["c", "d"], on_error="omit")
     assert list(out) == ["c"]
 
 
 def test_df_single(m):
     pd = pytest.importorskip("pandas")
+    pytest.importorskip("fastparquet")
     data = b"data0data1data2"
     m.pipe({"data": data})
     df = pd.DataFrame(
         {
-            "key": ["a", "b", "c"],
             "path": [None, "memory://data", "memory://data"],
             "offset": [0, 0, 4],
             "size": [0, 0, 4],
             "raw": [b"raw", None, None],
         }
     )
-    df.to_parquet("memory://df.parq")
-    fs = DFReferenceFileSystem(fo="memory://df.parq", remote_protocol="memory")
-    assert fs.cat("a") == b"raw"
-    assert fs.cat("b") == data
-    assert fs.cat("c") == data[4:8]
+    df.to_parquet("memory://stuff/refs.0.parq")
+    m.pipe(
+        ".zmetadata",
+        b"""{
+    "metadata": {
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "stuff/.zarray": {
+            "chunks": [1],
+            "compressor": null,
+            "dtype": "i8",
+            "filters": null,
+            "shape": [3],
+            "zarr_format": 2
+        }
+    },
+    "zarr_consolidated_format": 1,
+    "record_size": 10
+    }
+    """,
+    )
+    fs = ReferenceFileSystem(fo="memory:///", remote_protocol="memory")
+    allfiles = fs.find("")
+    assert ".zmetadata" in allfiles
+    assert ".zgroup" in allfiles
+    assert "stuff/2" in allfiles
+
+    assert fs.cat("stuff/0") == b"raw"
+    assert fs.cat("stuff/1") == data
+    assert fs.cat("stuff/2") == data[4:8]
 
 
 def test_df_multi(m):
     pd = pytest.importorskip("pandas")
+    pytest.importorskip("fastparquet")
     data = b"data0data1data2"
-    m.pipe({"data": data, "data2": b"hello"})
-    df = pd.DataFrame(
+    m.pipe({"data": data})
+    df0 = pd.DataFrame(
         {
-            "key": ["a", "b", "b", "d", "d"],
-            "path": [
-                None,
-                "memory://data",
-                "memory://data",
-                "memory://data",
-                "memory://data2",
-            ],
-            "offset": [0, 0, 4, 4, 1],
-            "size": [0, 0, 4, 2, 2],
-            "raw": [b"raw", None, None, None, None],
+            "path": [None, "memory://data", "memory://data"],
+            "offset": [0, 0, 4],
+            "size": [0, 0, 4],
+            "raw": [b"raw1", None, None],
         }
     )
-    df.to_parquet("memory://df.parq")
-    fs = DFReferenceFileSystem(
-        fo="memory://df.parq", remote_protocol="memory", allow_multi=True
+    df0.to_parquet("memory://stuff/refs.0.parq")
+    df1 = pd.DataFrame(
+        {
+            "path": [None, "memory://data", "memory://data"],
+            "offset": [0, 0, 2],
+            "size": [0, 0, 2],
+            "raw": [b"raw2", None, None],
+        }
     )
-    assert fs.cat("a") == b"raw"
-    assert fs.cat("b") == data + data[4:8]
-    assert fs.cat("d") == data[4:6] + b"hello"[1:3]
+    df1.to_parquet("memory://stuff/refs.1.parq")
+    m.pipe(
+        ".zmetadata",
+        b"""{
+    "metadata": {
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "stuff/.zarray": {
+            "chunks": [1],
+            "compressor": null,
+            "dtype": "i8",
+            "filters": null,
+            "shape": [6],
+            "zarr_format": 2
+        }
+    },
+    "zarr_consolidated_format": 1,
+    "record_size": 3
+    }
+    """,
+    )
+    fs = ReferenceFileSystem(
+        fo="memory:///", remote_protocol="memory", skip_instance_cache=True
+    )
+    allfiles = fs.find("")
+    assert ".zmetadata" in allfiles
+    assert ".zgroup" in allfiles
+    assert "stuff/2" in allfiles
+    assert "stuff/4" in allfiles
+
+    assert fs.cat("stuff/0") == b"raw1"
+    assert fs.cat("stuff/1") == data
+    assert fs.cat("stuff/2") == data[4:8]
+    assert fs.cat("stuff/3") == b"raw2"
+    assert fs.cat("stuff/4") == data
+    assert fs.cat("stuff/5") == data[2:4]
 
 
 def test_mapping_getitems(m):
@@ -578,3 +768,196 @@ def test_mapping_getitems(m):
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
     mapping = fs.get_mapper("")
     assert mapping.getitems(["b", "a"]) == {"a": b"A", "b": b"B"}
+
+
+def test_cached(m, tmpdir):
+    fn = f"{tmpdir}/ref.json"
+
+    m.pipe({"a": b"A", "b": b"B"})
+    m.pipe("ref.json", b"""{"a": ["a"], "b": ["b"]}""")
+
+    fs = fsspec.filesystem(
+        "reference",
+        fo="simplecache::memory://ref.json",
+        fs=m,
+        target_options={"cache_storage": str(tmpdir), "same_names": True},
+    )
+    assert fs.cat("a") == b"A"
+    assert os.path.exists(fn)
+
+    # truncate original file to show we are loading from the cached version
+    m.pipe("ref.json", b"")
+    fs = fsspec.filesystem(
+        "reference",
+        fo="simplecache::memory://ref.json",
+        fs=m,
+        target_options={"cache_storage": str(tmpdir), "same_names": True},
+        skip_instance_cache=True,
+    )
+    assert fs.cat("a") == b"A"
+
+
+@pytest.fixture()
+def lazy_refs(m):
+    zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
+    l = LazyReferenceMapper.create("memory://refs.parquet", fs=m)
+    g = zarr.open(
+        "reference://",
+        storage_options={"fo": "memory://refs.parquet", "remote_options": "memory"},
+        zarr_format=2,
+        mode="w",
+    )
+    g.create_dataset(name="data", shape=(100,), chunks=(10,), dtype="int64")
+    g.store.fs.references.flush()
+    return l
+
+
+def test_append_parquet(lazy_refs, m):
+    pytest.importorskip("kerchunk")
+    with pytest.raises(KeyError):
+        lazy_refs["data/0"]
+    lazy_refs["data/0"] = b"data"
+    assert lazy_refs["data/0"] == b"data"
+    lazy_refs.flush()
+
+    lazy2 = LazyReferenceMapper("memory://refs.parquet", fs=m)
+    assert lazy2["data/0"] == b"data"
+    with pytest.raises(KeyError):
+        lazy_refs["data/1"]
+    lazy2["data/1"] = b"Bdata"
+    assert lazy2["data/1"] == b"Bdata"
+    lazy2.flush()
+
+    lazy2 = LazyReferenceMapper("memory://refs.parquet", fs=m)
+    assert lazy2["data/0"] == b"data"
+    assert lazy2["data/1"] == b"Bdata"
+    lazy2["data/1"] = b"Adata"
+    del lazy2["data/0"]
+    assert lazy2["data/1"] == b"Adata"
+    assert "data/0" not in lazy2
+    lazy2.flush()
+
+    lazy2 = LazyReferenceMapper("memory://refs.parquet", fs=m)
+    with pytest.raises(KeyError):
+        lazy2["data/0"]
+    assert lazy2["data/1"] == b"Adata"
+
+
+def skip_zarr_2():
+    import zarr
+    from packaging.version import parse
+
+    if parse(zarr.__version__) < parse("3.0"):
+        pytest.skip("Zarr 3 required")
+
+
+@pytest.mark.parametrize("engine", ["fastparquet", "pyarrow"])
+def test_deep_parq(m, engine):
+    pytest.importorskip("kerchunk")
+    zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
+
+    lz = fsspec.implementations.reference.LazyReferenceMapper.create(
+        "memory://out.parq",
+        fs=m,
+        engine=engine,
+    )
+    g = zarr.open_group(
+        "reference://",
+        mode="w",
+        storage_options={"fo": "memory://out.parq", "remote_protocol": "memory"},
+        zarr_version=2,
+    )
+
+    g2 = g.create_group("instant")
+    arr = g2.create_dataset(name="one", shape=(3,), dtype="int64")
+    arr[:] = [1, 2, 3]
+    g.store.fs.references.flush()
+    lz.flush()
+
+    lz = fsspec.implementations.reference.LazyReferenceMapper(
+        "memory://out.parq", fs=m, engine=engine
+    )
+    g = zarr.open_group(
+        "reference://",
+        storage_options={"fo": "memory://out.parq", "remote_protocol": "memory"},
+        zarr_version=2,
+    )
+    assert g["instant"]["one"][:].tolist() == [1, 2, 3]
+    assert sorted(_["name"] for _ in lz.ls("")) == [
+        ".zattrs",
+        ".zgroup",
+        ".zmetadata",
+        "instant",
+    ]
+    assert sorted(_["name"] for _ in lz.ls("instant")) == [
+        "instant/.zattrs",
+        "instant/.zgroup",
+        "instant/one",
+    ]
+
+    assert sorted(_["name"] for _ in lz.ls("instant/one")) == [
+        "instant/one/.zarray",
+        "instant/one/.zattrs",
+        "instant/one/0",
+    ]
+
+
+def test_parquet_no_data(m):
+    zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
+    fsspec.implementations.reference.LazyReferenceMapper.create(
+        "memory://out.parq", fs=m
+    )
+    g = zarr.open_group(
+        "reference://",
+        storage_options={
+            "fo": "memory://out.parq",
+            "fs": m,
+            "remote_protocol": "memory",
+        },
+        zarr_format=2,
+        mode="w",
+    )
+    arr = g.create_dataset(
+        name="one",
+        dtype="int32",
+        shape=(10,),
+        chunks=(5,),
+        compressor=None,
+        fill_value=1,
+    )
+    g.store.fs.references.flush()
+
+    assert (arr[:] == 1).all()
+
+
+def test_parquet_no_references(m):
+    zarr = pytest.importorskip("zarr")
+    skip_zarr_2()
+    lz = fsspec.implementations.reference.LazyReferenceMapper.create(
+        "memory://out.parq", fs=m
+    )
+
+    g = zarr.open_group(
+        "reference://",
+        storage_options={
+            "fo": "memory://out.parq",
+            "fs": m,
+            "remote_protocol": "memory",
+        },
+        zarr_format=2,
+        mode="w",
+    )
+    arr = g.create_dataset(
+        name="one",
+        dtype="int32",
+        shape=(),
+        chunks=(),
+        compressor=None,
+        fill_value=1,
+    )
+    lz.flush()
+
+    assert arr[...].tolist() == 1  #  scalar, equal to fill value

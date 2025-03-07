@@ -6,10 +6,10 @@ from multiprocessing import Process
 import pytest
 
 try:
-    pytest.importorskip("fuse")  # noqa: E402
+    pytest.importorskip("fuse")
 except OSError:
     # can succeed in importing fuse, but fail to load so
-    pytest.importorskip("nonexistent")  # noqa: E402
+    pytest.importorskip("nonexistent")
 
 from fsspec.fuse import main, run
 from fsspec.implementations.memory import MemoryFileSystem
@@ -121,13 +121,13 @@ def test_chmod(mount_local):
 
     cp = subprocess.run(
         ["cp", str(mount_dir / "text"), str(mount_dir / "new")],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
     )
 
     assert cp.stderr == b""
     assert cp.stdout == b""
-    assert set(os.listdir(source_dir)) == set(["text", "new"])
+    assert set(os.listdir(source_dir)) == {"text", "new"}
     assert open(mount_dir / "new").read() == "test"
 
 

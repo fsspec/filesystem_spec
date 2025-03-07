@@ -5,7 +5,7 @@ import pytest
 pyarrow_fs = pytest.importorskip("pyarrow.fs")
 FileSystem = pyarrow_fs.FileSystem
 
-from fsspec.implementations.arrow import ArrowFSWrapper  # noqa
+from fsspec.implementations.arrow import ArrowFSWrapper, HadoopFileSystem  # noqa: E402
 
 
 @pytest.fixture(scope="function")
@@ -20,6 +20,12 @@ def remote_dir(fs, request):
     fs.makedirs(directory)
     yield ("hdfs://" if request.param else "/") + directory
     fs.rm(directory, recursive=True)
+
+
+def test_protocol():
+    fs, _ = FileSystem.from_uri("mock://")
+    fss = ArrowFSWrapper(fs)
+    assert fss.protocol == "mock"
 
 
 def strip_keys(original_entry):
@@ -230,3 +236,24 @@ def test_seekable(fs, remote_dir):
     for seekable in [True, False]:
         with fs.open(remote_dir + "/a.txt", "rb", seekable=seekable) as file:
             assert file.seekable() == seekable
+            assert file.read() == data
+
+    with fs.open(remote_dir + "/a.txt", "rb", seekable=False) as file:
+        with pytest.raises(OSError):
+            file.seek(5)
+
+
+def test_get_kwargs_from_urls_hadoop_fs():
+    kwargs = HadoopFileSystem._get_kwargs_from_urls(
+        "hdfs://user@localhost:8020/?replication=2"
+    )
+    assert kwargs["user"] == "user"
+    assert kwargs["host"] == "localhost"
+    assert kwargs["port"] == 8020
+    assert kwargs["replication"] == 2
+
+    kwargs = HadoopFileSystem._get_kwargs_from_urls("hdfs://user@localhost:8020/")
+    assert kwargs["user"] == "user"
+    assert kwargs["host"] == "localhost"
+    assert kwargs["port"] == 8020
+    assert "replication" not in kwargs

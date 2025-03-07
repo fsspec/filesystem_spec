@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import io
+import json
 import logging
 import os
 import threading
@@ -7,13 +10,15 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
+from typing import Any, ClassVar
 
-from .callbacks import _DEFAULT_CALLBACK
+from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
+    glob_translate,
     isfilelike,
     other_paths,
     read_block,
@@ -101,14 +106,19 @@ class AbstractFileSystem(metaclass=_Cached):
     _cached = False
     blocksize = 2**22
     sep = "/"
-    protocol = "abstract"
+    protocol: ClassVar[str | tuple[str, ...]] = "abstract"
     _latest = None
     async_impl = False
     mirror_sync_methods = False
     root_marker = ""  # For some FSs, may require leading '/' or other character
+    transaction_type = Transaction
 
     #: Extra *class attributes* that should be considered when hashing.
     _extra_tokenize_attributes = ()
+
+    # Set by _Cached metaclass
+    storage_args: tuple[Any, ...]
+    storage_options: dict[str, Any]
 
     def __init__(self, *args, **storage_options):
         """Create and configure file-system instance
@@ -193,7 +203,7 @@ class AbstractFileSystem(metaclass=_Cached):
         # use of root_marker to make minimum required path, e.g., "/"
         return path or cls.root_marker
 
-    def unstrip_protocol(self, name):
+    def unstrip_protocol(self, name: str) -> str:
         """Format FS-specific path to generic, including protocol"""
         protos = (self.protocol,) if isinstance(self.protocol, str) else self.protocol
         for protocol in protos:
@@ -232,20 +242,20 @@ class AbstractFileSystem(metaclass=_Cached):
         for the normal and exception cases.
         """
         if self._transaction is None:
-            self._transaction = Transaction(self)
+            self._transaction = self.transaction_type(self)
         return self._transaction
 
     def start_transaction(self):
         """Begin write transaction for deferring files, non-context version"""
         self._intrans = True
-        self._transaction = Transaction(self)
+        self._transaction = self.transaction_type(self)
         return self.transaction
 
     def end_transaction(self):
         """Finish write transaction, non-context version"""
         self.transaction.complete()
         self._transaction = None
-        # The invalid cache must be cleared after the transcation is completed.
+        # The invalid cache must be cleared after the transaction is completed.
         for path in self._invalidated_caches_in_transaction:
             self.invalidate_cache(path)
         self._invalidated_caches_in_transaction.clear()
@@ -353,8 +363,10 @@ class AbstractFileSystem(metaclass=_Cached):
         but contains nothing), None if not in cache.
         """
         parent = self._parent(path)
-        if path.rstrip("/") in self.dircache:
+        try:
             return self.dircache[path.rstrip("/")]
+        except KeyError:
+            pass
         try:
             files = [
                 f
@@ -369,11 +381,19 @@ class AbstractFileSystem(metaclass=_Cached):
         except KeyError:
             pass
 
-    def walk(self, path, maxdepth=None, topdown=True, **kwargs):
-        """Return all files belows path
+    def walk(self, path, maxdepth=None, topdown=True, on_error="omit", **kwargs):
+        """Return all files under the given path.
 
         List all files, recursing into subdirectories; output is iterator-style,
         like ``os.walk()``. For a simple list of files, ``find()`` is available.
+
+        When topdown is True, the caller can modify the dirnames list in-place (perhaps
+        using del or slice assignment), and walk() will
+        only recurse into the subdirectories whose names remain in dirnames;
+        this can be used to prune the search, impose a specific order of visiting,
+        or even to inform walk() about directories the caller creates or renames before
+        it resumes walk() again.
+        Modifying dirnames when topdown is False has no effect. (see os.walk)
 
         Note that the "files" outputted will include anything that is not
         a directory, such as links.
@@ -388,6 +408,10 @@ class AbstractFileSystem(metaclass=_Cached):
         topdown: bool (True)
             Whether to walk the directory tree from the top downwards or from
             the bottom upwards.
+        on_error: "omit", "raise", a callable
+            if omit (default), path with exception will simply be empty;
+            If raise, an underlying exception will be raised;
+            if callable, it will be called with a single OSError instance as argument
         kwargs: passed to ``ls``
         """
         if maxdepth is not None and maxdepth < 1:
@@ -401,10 +425,12 @@ class AbstractFileSystem(metaclass=_Cached):
         detail = kwargs.pop("detail", False)
         try:
             listing = self.ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, IOError):
-            if detail:
-                return path, {}, {}
-            return path, [], []
+        except (FileNotFoundError, OSError) as e:
+            if on_error == "raise":
+                raise
+            if callable(on_error):
+                on_error(e)
+            return
 
         for info in listing:
             # each info name must be at least [path]/part , but here
@@ -413,7 +439,7 @@ class AbstractFileSystem(metaclass=_Cached):
             name = pathname.rsplit("/", 1)[-1]
             if info["type"] == "directory" and pathname != path:
                 # do not include "self" path
-                full_dirs[pathname] = info
+                full_dirs[name] = pathname
                 dirs[name] = info
             elif pathname == path:
                 # file-like with same name as give path
@@ -436,9 +462,13 @@ class AbstractFileSystem(metaclass=_Cached):
                     yield path, dirs, files
                 return
 
-        for d in full_dirs:
+        for d in dirs:
             yield from self.walk(
-                d, maxdepth=maxdepth, detail=detail, topdown=topdown, **kwargs
+                full_dirs[d],
+                maxdepth=maxdepth,
+                detail=detail,
+                topdown=topdown,
+                **kwargs,
             )
 
         if not topdown:
@@ -462,7 +492,13 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         # TODO: allow equivalent of -name parameter
         path = self._strip_protocol(path)
-        out = dict()
+        out = {}
+
+        # Add the root directory if withdirs is requested
+        # This is needed for posix glob compliance
+        if withdirs and path != "" and self.isdir(path):
+            out[path] = self.info(path)
+
         for _, dirs, files in self.walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
                 files.update(dirs)
@@ -511,89 +547,80 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return sizes
 
-    def glob(self, path, **kwargs):
+    def glob(self, path, maxdepth=None, **kwargs):
         """
         Find files by glob-matching.
 
-        If the path ends with '/' and does not contain "*", it is essentially
-        the same as ``ls(path)``, returning only files.
+        If the path ends with '/', only folders are returned.
 
         We support ``"**"``,
         ``"?"`` and ``"[..]"``. We do not support ^ for pattern negation.
 
-        Search path names that contain embedded characters special to this
-        implementation of glob may not produce expected results;
-        e.g., 'foo/bar/*starredfilename*'.
+        The `maxdepth` option is applied on the first `**` found in the path.
 
         kwargs are passed to ``ls``.
         """
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
         import re
 
-        ends = path.endswith("/")
+        seps = (os.path.sep, os.path.altsep) if os.path.altsep else (os.path.sep,)
+        ends_with_sep = path.endswith(seps)  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+        append_slash_to_dirname = ends_with_sep or path.endswith(
+            tuple(sep + "**" for sep in seps)
+        )
+        idx_star = path.find("*") if path.find("*") >= 0 else len(path)
+        idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
+        idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        ind = min(indstar, indques, indbrace)
+        min_idx = min(idx_star, idx_qmark, idx_brace)
 
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif self.exists(path):
+            if self.exists(path, **kwargs):
                 if not detail:
                     return [path]
                 else:
-                    return {path: self.info(path)}
+                    return {path: self.info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        elif "/" in path[:min_idx]:
+            min_idx = path[:min_idx].rindex("/")
+            root = path[: min_idx + 1]
+            depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+            depth = path[min_idx + 1 :].count("/") + 1
+
+        if "**" in path:
+            if maxdepth is not None:
+                idx_double_stars = path.find("**")
+                depth_double_stars = path[idx_double_stars:].count("/") + 1
+                depth = depth - depth_double_stars + maxdepth
+            else:
+                depth = None
 
         allpaths = self.find(root, maxdepth=depth, withdirs=True, detail=True, **kwargs)
-        # Escape characters special to python regex, leaving our supported
-        # special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
-        # for shell globbing details.
-        pattern = (
-            "^"
-            + (
-                path.replace("\\", r"\\")
-                .replace(".", r"\.")
-                .replace("+", r"\+")
-                .replace("//", "/")
-                .replace("(", r"\(")
-                .replace(")", r"\)")
-                .replace("|", r"\|")
-                .replace("^", r"\^")
-                .replace("$", r"\$")
-                .replace("{", r"\{")
-                .replace("}", r"\}")
-                .rstrip("/")
-                .replace("?", ".")
-            )
-            + "$"
-        )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+
+        pattern = glob_translate(path + ("/" if ends_with_sep else ""))
+        pattern = re.compile(pattern)
+
         out = {
-            p: allpaths[p]
-            for p in sorted(allpaths)
-            if pattern.match(p.replace("//", "/").rstrip("/"))
+            p: info
+            for p, info in sorted(allpaths.items())
+            if pattern.match(
+                p + "/"
+                if append_slash_to_dirname and info["type"] == "directory"
+                else p
+            )
         }
+
         if detail:
             return out
         else:
@@ -619,7 +646,7 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns a single dictionary, with exactly the same information as ``ls``
         would with ``detail=True``.
 
-        The default implementation should calls ls and could be overridden by a
+        The default implementation calls ls and could be overridden by a
         shortcut. kwargs are passed on to ```ls()``.
 
         Some file systems might not be able to measure the file's size, in
@@ -672,7 +699,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """Is this entry directory-like?"""
         try:
             return self.info(path)["type"] == "directory"
-        except IOError:
+        except OSError:
             return False
 
     def isfile(self, path):
@@ -751,8 +778,12 @@ class AbstractFileSystem(metaclass=_Cached):
                 return f.read(end - f.tell())
             return f.read()
 
-    def pipe_file(self, path, value, **kwargs):
+    def pipe_file(self, path, value, mode="overwrite", **kwargs):
         """Set the bytes of given file"""
+        if mode == "create" and self.exists(path):
+            # non-atomic but simple way; or could use "xb" in open(), which is likely
+            # not as well supported
+            raise FileExistsError
         with self.open(path, "wb", **kwargs) as f:
             f.write(value)
 
@@ -781,6 +812,16 @@ class AbstractFileSystem(metaclass=_Cached):
     def cat_ranges(
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
+        """Get the contents of byte ranges from one or more files
+
+        Parameters
+        ----------
+        paths: list
+            A list of of filepaths on this filesystems
+        starts, ends: int or list
+            Bytes limits of the read. If using a single int, the same value will be
+            used to read all the specified files.
+        """
         if max_gap is not None:
             raise NotImplementedError
         if not isinstance(paths, list):
@@ -788,7 +829,7 @@ class AbstractFileSystem(metaclass=_Cached):
         if not isinstance(starts, list):
             starts = [starts] * len(paths)
         if not isinstance(ends, list):
-            ends = [starts] * len(paths)
+            ends = [ends] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
         out = []
@@ -842,33 +883,45 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(
-        self, rpath, lpath, callback=_DEFAULT_CALLBACK, outfile=None, **kwargs
-    ):
+    def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, outfile=None, **kwargs):
         """Copy single remote file to local"""
+        from .implementations.local import LocalFileSystem
+
         if isfilelike(lpath):
             outfile = lpath
-        else:
-            if self.isdir(rpath):
-                os.makedirs(lpath, exist_ok=True)
-                return None
+        elif self.isdir(rpath):
+            os.makedirs(lpath, exist_ok=True)
+            return None
 
+        fs = LocalFileSystem(auto_mkdir=True)
+        fs.makedirs(fs._parent(lpath), exist_ok=True)
+
+        with self.open(rpath, "rb", **kwargs) as f1:
             if outfile is None:
                 outfile = open(lpath, "wb")
 
-        with self.open(rpath, "rb", **kwargs) as f1:
-            callback.set_size(getattr(f1, "size", None))
-            data = True
-            while data:
-                data = f1.read(self.blocksize)
-                segment_len = outfile.write(data)
-                if segment_len is None:
-                    segment_len = len(data)
-                callback.relative_update(segment_len)
-        if not isfilelike(lpath):
-            outfile.close()
+            try:
+                callback.set_size(getattr(f1, "size", None))
+                data = True
+                while data:
+                    data = f1.read(self.blocksize)
+                    segment_len = outfile.write(data)
+                    if segment_len is None:
+                        segment_len = len(data)
+                    callback.relative_update(segment_len)
+            finally:
+                if not isfilelike(lpath):
+                    outfile.close()
 
-    def get(self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get(
+        self,
+        rpath,
+        lpath,
+        recursive=False,
+        callback=DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
+    ):
         """Copy file(s) to local.
 
         Copies a specific file or tree of files (if recursive=True). If lpath
@@ -878,26 +931,56 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls get_file for each source.
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
+        if isinstance(lpath, list) and isinstance(rpath, list):
+            # No need to expand paths when both source and destination
+            # are provided as lists
+            rpaths = rpath
+            lpaths = lpath
+        else:
+            from .implementations.local import (
+                LocalFileSystem,
+                make_path_posix,
+                trailing_sep,
+            )
 
-        if isinstance(lpath, str):
-            lpath = make_path_posix(lpath)
-        rpaths = self.expand_path(rpath, recursive=recursive)
-        isdir = isinstance(lpath, str) and LocalFileSystem().isdir(lpath)
-        lpaths = other_paths(
-            rpaths,
-            lpath,
-            exists=isdir and isinstance(rpath, str) and not rpath.endswith("/"),
-            is_dir=isdir,
-        )
+            source_is_str = isinstance(rpath, str)
+            rpaths = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                rpaths = [p for p in rpaths if not (trailing_sep(p) or self.isdir(p))]
+                if not rpaths:
+                    return
+
+            if isinstance(lpath, str):
+                lpath = make_path_posix(lpath)
+
+            source_is_file = len(rpaths) == 1
+            dest_is_dir = isinstance(lpath, str) and (
+                trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
+            )
+
+            exists = source_is_str and (
+                (has_magic(rpath) and source_is_file)
+                or (not has_magic(rpath) and dest_is_dir and not trailing_sep(rpath))
+            )
+            lpaths = other_paths(
+                rpaths,
+                lpath,
+                exists=exists,
+                flatten=not source_is_str,
+            )
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            callback.branch(rpath, lpath, kwargs)
-            self.get_file(rpath, lpath, **kwargs)
+            with callback.branched(rpath, lpath) as child:
+                self.get_file(rpath, lpath, callback=child, **kwargs)
 
-    def put_file(self, lpath, rpath, callback=_DEFAULT_CALLBACK, **kwargs):
+    def put_file(
+        self, lpath, rpath, callback=DEFAULT_CALLBACK, mode="overwrite", **kwargs
+    ):
         """Copy single file to remote"""
+        if mode == "create" and self.exists(rpath):
+            raise FileExistsError
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
             return None
@@ -916,7 +999,15 @@ class AbstractFileSystem(metaclass=_Cached):
                         segment_len = len(data)
                     callback.relative_update(segment_len)
 
-    def put(self, lpath, rpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs):
+    def put(
+        self,
+        lpath,
+        rpath,
+        recursive=False,
+        callback=DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
+    ):
         """Copy file(s) from local.
 
         Copies a specific file or tree of files (if recursive=True). If rpath
@@ -925,29 +1016,54 @@ class AbstractFileSystem(metaclass=_Cached):
 
         Calls put_file for each source.
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
+        if isinstance(lpath, list) and isinstance(rpath, list):
+            # No need to expand paths when both source and destination
+            # are provided as lists
+            rpaths = rpath
+            lpaths = lpath
+        else:
+            from .implementations.local import (
+                LocalFileSystem,
+                make_path_posix,
+                trailing_sep,
+            )
 
-        rpath = (
-            self._strip_protocol(rpath)
-            if isinstance(rpath, str)
-            else [self._strip_protocol(p) for p in rpath]
-        )
-        if isinstance(lpath, str):
-            lpath = make_path_posix(lpath)
-        fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive)
-        isdir = isinstance(rpath, str) and self.isdir(rpath)
-        rpaths = other_paths(
-            lpaths,
-            rpath,
-            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
-            is_dir=isdir,
-        )
+            source_is_str = isinstance(lpath, str)
+            if source_is_str:
+                lpath = make_path_posix(lpath)
+            fs = LocalFileSystem()
+            lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
+                if not lpaths:
+                    return
+
+            source_is_file = len(lpaths) == 1
+            dest_is_dir = isinstance(rpath, str) and (
+                trailing_sep(rpath) or self.isdir(rpath)
+            )
+
+            rpath = (
+                self._strip_protocol(rpath)
+                if isinstance(rpath, str)
+                else [self._strip_protocol(p) for p in rpath]
+            )
+            exists = source_is_str and (
+                (has_magic(lpath) and source_is_file)
+                or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
+            )
+            rpaths = other_paths(
+                lpaths,
+                rpath,
+                exists=exists,
+                flatten=not source_is_str,
+            )
 
         callback.set_size(len(rpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
-            callback.branch(lpath, rpath, kwargs)
-            self.put_file(lpath, rpath, **kwargs)
+            with callback.branched(lpath, rpath) as child:
+                self.put_file(lpath, rpath, callback=child, **kwargs)
 
     def head(self, path, size=1024):
         """Get the first ``size`` bytes from file"""
@@ -963,7 +1079,9 @@ class AbstractFileSystem(metaclass=_Cached):
     def cp_file(self, path1, path2, **kwargs):
         raise NotImplementedError
 
-    def copy(self, path1, path2, recursive=False, on_error=None, **kwargs):
+    def copy(
+        self, path1, path2, recursive=False, maxdepth=None, on_error=None, **kwargs
+    ):
         """Copy within two locations in the filesystem
 
         on_error : "raise", "ignore"
@@ -976,62 +1094,103 @@ class AbstractFileSystem(metaclass=_Cached):
         elif on_error is None:
             on_error = "raise"
 
-        paths = self.expand_path(path1, recursive=recursive)
-        isdir = isinstance(path2, str) and self.isdir(path2)
-        path2 = other_paths(
-            paths,
-            path2,
-            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
-            is_dir=isdir,
-        )
+        if isinstance(path1, list) and isinstance(path2, list):
+            # No need to expand paths when both source and destination
+            # are provided as lists
+            paths1 = path1
+            paths2 = path2
+        else:
+            from .implementations.local import trailing_sep
 
-        for p1, p2 in zip(paths, path2):
+            source_is_str = isinstance(path1, str)
+            paths1 = self.expand_path(path1, recursive=recursive, maxdepth=maxdepth)
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                paths1 = [p for p in paths1 if not (trailing_sep(p) or self.isdir(p))]
+                if not paths1:
+                    return
+
+            source_is_file = len(paths1) == 1
+            dest_is_dir = isinstance(path2, str) and (
+                trailing_sep(path2) or self.isdir(path2)
+            )
+
+            exists = source_is_str and (
+                (has_magic(path1) and source_is_file)
+                or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
+            )
+            paths2 = other_paths(
+                paths1,
+                path2,
+                exists=exists,
+                flatten=not source_is_str,
+            )
+
+        for p1, p2 in zip(paths1, paths2):
             try:
                 self.cp_file(p1, p2, **kwargs)
             except FileNotFoundError:
                 if on_error == "raise":
                     raise
 
-    def expand_path(self, path, recursive=False, maxdepth=None):
+    def expand_path(self, path, recursive=False, maxdepth=None, **kwargs):
         """Turn one or more globs or directories into a list of all matching paths
-        to files or directories."""
+        to files or directories.
+
+        kwargs are passed to ``glob`` or ``find``, which may in turn call ``ls``
+        """
+
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
-        if isinstance(path, str):
+        if isinstance(path, (str, os.PathLike)):
             out = self.expand_path([path], recursive, maxdepth)
         else:
             out = set()
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if has_magic(p):
-                    bit = set(self.glob(p))
+                    bit = set(self.glob(p, maxdepth=maxdepth, **kwargs))
                     out |= bit
                     if recursive:
+                        # glob call above expanded one depth so if maxdepth is defined
+                        # then decrement it in expand_path call below. If it is zero
+                        # after decrementing then avoid expand_path call.
+                        if maxdepth is not None and maxdepth <= 1:
+                            continue
                         out |= set(
                             self.expand_path(
-                                list(bit), recursive=recursive, maxdepth=maxdepth
+                                list(bit),
+                                recursive=recursive,
+                                maxdepth=maxdepth - 1 if maxdepth is not None else None,
+                                **kwargs,
                             )
                         )
                     continue
                 elif recursive:
                     rec = set(
-                        self.find(p, maxdepth=maxdepth, withdirs=True, detail=False)
+                        self.find(
+                            p, maxdepth=maxdepth, withdirs=True, detail=False, **kwargs
+                        )
                     )
                     out |= rec
                 if p not in out and (recursive is False or self.exists(p)):
                     # should only check once, for the root
                     out.add(p)
-            # reduce depth on each recursion level unless None or 0
-            maxdepth = maxdepth if not maxdepth else maxdepth - 1
         if not out:
             raise FileNotFoundError(path)
-        return list(sorted(out))
+        return sorted(out)
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """Move file(s) from one location to another"""
-        self.copy(path1, path2, recursive=recursive, maxdepth=maxdepth)
-        self.rm(path1, recursive=recursive)
+        if path1 == path2:
+            logger.debug("%s mv: The paths are the same, so no files were moved.", self)
+        else:
+            # explicitly raise exception to prevent data corruption
+            self.copy(
+                path1, path2, recursive=recursive, maxdepth=maxdepth, onerror="raise"
+            )
+            self.rm(path1, recursive=recursive)
 
     def rm_file(self, path):
         """Delete a file"""
@@ -1111,6 +1270,9 @@ class AbstractFileSystem(metaclass=_Cached):
             Target file
         mode: str like 'rb', 'w'
             See builtin ``open()``
+            Mode "x" (exclusive write) may be implemented by the backend. Even if
+            it is, whether  it is checked up front or on commit, and whether it is
+            atomic is implementation-dependent.
         block_size: int
             Some indication of buffering - this is a value in bytes
         cache_options : dict, optional
@@ -1204,7 +1366,7 @@ class AbstractFileSystem(metaclass=_Cached):
         offset: int
             Byte offset to start read
         length: int
-            Number of bytes to read
+            Number of bytes to read. If None, read to end.
         delimiter: bytes (optional)
             Ensure reading starts and stops at delimiter bytestring
 
@@ -1231,39 +1393,45 @@ class AbstractFileSystem(metaclass=_Cached):
                 length = size - offset
             return read_block(f, offset, length, delimiter)
 
-    def to_json(self):
+    def to_json(self, *, include_password: bool = True) -> str:
         """
-        JSON representation of this filesystem instance
+        JSON representation of this filesystem instance.
+
+        Parameters
+        ----------
+        include_password: bool, default True
+            Whether to include the password (if any) in the output.
 
         Returns
         -------
-        str: JSON structure with keys cls (the python location of this class),
-            protocol (text name of this class's protocol, first one in case of
-            multiple), args (positional args, usually empty), and all other
-            kwargs as their own keys.
-        """
-        import json
+        JSON string with keys ``cls`` (the python location of this class),
+        protocol (text name of this class's protocol, first one in case of
+        multiple), ``args`` (positional args, usually empty), and all other
+        keyword arguments as their own keys.
 
-        cls = type(self)
-        cls = ".".join((cls.__module__, cls.__name__))
-        proto = (
-            self.protocol[0]
-            if isinstance(self.protocol, (tuple, list))
-            else self.protocol
-        )
+        Warnings
+        --------
+        Serialized filesystems may contain sensitive information which have been
+        passed to the constructor, such as passwords and tokens. Make sure you
+        store and send them in a secure environment!
+        """
+        from .json import FilesystemJSONEncoder
+
         return json.dumps(
-            dict(
-                **{"cls": cls, "protocol": proto, "args": self.storage_args},
-                **self.storage_options,
-            )
+            self,
+            cls=type(
+                "_FilesystemJSONEncoder",
+                (FilesystemJSONEncoder,),
+                {"include_password": include_password},
+            ),
         )
 
     @staticmethod
-    def from_json(blob):
+    def from_json(blob: str) -> AbstractFileSystem:
         """
-        Recreate a filesystem instance from JSON representation
+        Recreate a filesystem instance from JSON representation.
 
-        See ``.to_json()`` for the expected structure of the input
+        See ``.to_json()`` for the expected structure of the input.
 
         Parameters
         ----------
@@ -1272,18 +1440,95 @@ class AbstractFileSystem(metaclass=_Cached):
         Returns
         -------
         file system instance, not necessarily of this particular class.
+
+        Warnings
+        --------
+        This can import arbitrary modules (as determined by the ``cls`` key).
+        Make sure you haven't installed any modules that may execute malicious code
+        at import time.
         """
-        import json
+        from .json import FilesystemJSONDecoder
 
-        from .registry import _import_class, get_filesystem_class
+        return json.loads(blob, cls=FilesystemJSONDecoder)
 
-        dic = json.loads(blob)
-        protocol = dic.pop("protocol")
-        try:
-            cls = _import_class(dic.pop("cls"))
-        except (ImportError, ValueError, RuntimeError, KeyError):
-            cls = get_filesystem_class(protocol)
-        return cls(*dic.pop("args", ()), **dic)
+    def to_dict(self, *, include_password: bool = True) -> dict[str, Any]:
+        """
+        JSON-serializable dictionary representation of this filesystem instance.
+
+        Parameters
+        ----------
+        include_password: bool, default True
+            Whether to include the password (if any) in the output.
+
+        Returns
+        -------
+        Dictionary with keys ``cls`` (the python location of this class),
+        protocol (text name of this class's protocol, first one in case of
+        multiple), ``args`` (positional args, usually empty), and all other
+        keyword arguments as their own keys.
+
+        Warnings
+        --------
+        Serialized filesystems may contain sensitive information which have been
+        passed to the constructor, such as passwords and tokens. Make sure you
+        store and send them in a secure environment!
+        """
+        from .json import FilesystemJSONEncoder
+
+        json_encoder = FilesystemJSONEncoder()
+
+        cls = type(self)
+        proto = self.protocol
+
+        storage_options = dict(self.storage_options)
+        if not include_password:
+            storage_options.pop("password", None)
+
+        return dict(
+            cls=f"{cls.__module__}:{cls.__name__}",
+            protocol=proto[0] if isinstance(proto, (tuple, list)) else proto,
+            args=json_encoder.make_serializable(self.storage_args),
+            **json_encoder.make_serializable(storage_options),
+        )
+
+    @staticmethod
+    def from_dict(dct: dict[str, Any]) -> AbstractFileSystem:
+        """
+        Recreate a filesystem instance from dictionary representation.
+
+        See ``.to_dict()`` for the expected structure of the input.
+
+        Parameters
+        ----------
+        dct: Dict[str, Any]
+
+        Returns
+        -------
+        file system instance, not necessarily of this particular class.
+
+        Warnings
+        --------
+        This can import arbitrary modules (as determined by the ``cls`` key).
+        Make sure you haven't installed any modules that may execute malicious code
+        at import time.
+        """
+        from .json import FilesystemJSONDecoder
+
+        json_decoder = FilesystemJSONDecoder()
+
+        dct = dict(dct)  # Defensive copy
+
+        cls = FilesystemJSONDecoder.try_resolve_fs_cls(dct)
+        if cls is None:
+            raise ValueError("Not a serialized AbstractFileSystem")
+
+        dct.pop("cls", None)
+        dct.pop("protocol", None)
+
+        return cls(
+            *json_decoder.unmake_serializable(dct.pop("args", ())),
+            **json_decoder.unmake_serializable(dct),
+        )
 
     def _get_pyarrow_filesystem(self):
         """
@@ -1330,6 +1575,141 @@ class AbstractFileSystem(metaclass=_Cached):
     def modified(self, path):
         """Return the modified timestamp of a file as a datetime.datetime"""
         raise NotImplementedError
+
+    def tree(
+        self,
+        path: str = "/",
+        recursion_limit: int = 2,
+        max_display: int = 25,
+        display_size: bool = False,
+        prefix: str = "",
+        is_last: bool = True,
+        first: bool = True,
+        indent_size: int = 4,
+    ) -> str:
+        """
+        Return a tree-like structure of the filesystem starting from the given path as a string.
+
+        Parameters
+        ----------
+            path: Root path to start traversal from
+            recursion_limit: Maximum depth of directory traversal
+            max_display: Maximum number of items to display per directory
+            display_size: Whether to display file sizes
+            prefix: Current line prefix for visual tree structure
+            is_last: Whether current item is last in its level
+            first: Whether this is the first call (displays root path)
+            indent_size: Number of spaces by indent
+
+        Returns
+        -------
+            str: A string representing the tree structure.
+
+        Example
+        -------
+            >>> from fsspec import filesystem
+
+            >>> fs = filesystem('ftp', host='test.rebex.net', user='demo', password='password')
+            >>> tree = fs.tree(display_size=True, recursion_limit=3, indent_size=8, max_display=10)
+            >>> print(tree)
+        """
+
+        def format_bytes(n: int) -> str:
+            """Format bytes as text."""
+            for prefix, k in (
+                ("P", 2**50),
+                ("T", 2**40),
+                ("G", 2**30),
+                ("M", 2**20),
+                ("k", 2**10),
+            ):
+                if n >= 0.9 * k:
+                    return f"{n / k:.2f} {prefix}b"
+            return f"{n}B"
+
+        result = []
+
+        if first:
+            result.append(path)
+
+        if recursion_limit:
+            indent = " " * indent_size
+            contents = self.ls(path, detail=True)
+            contents.sort(
+                key=lambda x: (x.get("type") != "directory", x.get("name", ""))
+            )
+
+            if max_display is not None and len(contents) > max_display:
+                displayed_contents = contents[:max_display]
+                remaining_count = len(contents) - max_display
+            else:
+                displayed_contents = contents
+                remaining_count = 0
+
+            for i, item in enumerate(displayed_contents):
+                is_last_item = (i == len(displayed_contents) - 1) and (
+                    remaining_count == 0
+                )
+
+                branch = (
+                    "└" + ("─" * (indent_size - 2))
+                    if is_last_item
+                    else "├" + ("─" * (indent_size - 2))
+                )
+                branch += " "
+                new_prefix = prefix + (
+                    indent if is_last_item else "│" + " " * (indent_size - 1)
+                )
+
+                name = os.path.basename(item.get("name", ""))
+
+                if display_size and item.get("type") == "directory":
+                    sub_contents = self.ls(item.get("name", ""), detail=True)
+                    num_files = sum(
+                        1 for sub_item in sub_contents if sub_item.get("type") == "file"
+                    )
+                    num_folders = sum(
+                        1
+                        for sub_item in sub_contents
+                        if sub_item.get("type") == "directory"
+                    )
+
+                    if num_files == 0 and num_folders == 0:
+                        size = " (empty folder)"
+                    elif num_files == 0:
+                        size = f" ({num_folders} subfolder{'s' if num_folders > 1 else ''})"
+                    elif num_folders == 0:
+                        size = f" ({num_files} file{'s' if num_files > 1 else ''})"
+                    else:
+                        size = f" ({num_files} file{'s' if num_files > 1 else ''}, {num_folders} subfolder{'s' if num_folders > 1 else ''})"
+                elif display_size and item.get("type") == "file":
+                    size = f" ({format_bytes(item.get('size', 0))})"
+                else:
+                    size = ""
+
+                result.append(f"{prefix}{branch}{name}{size}")
+
+                if item.get("type") == "directory" and recursion_limit > 0:
+                    result.append(
+                        self.tree(
+                            path=item.get("name", ""),
+                            recursion_limit=recursion_limit - 1,
+                            max_display=max_display,
+                            display_size=display_size,
+                            prefix=new_prefix,
+                            is_last=is_last_item,
+                            first=False,
+                            indent_size=indent_size,
+                        )
+                    )
+
+            if remaining_count > 0:
+                more_message = f"{remaining_count} more item(s) not displayed."
+                result.append(
+                    f"{prefix}{'└' + ('─' * (indent_size - 2))} {more_message}"
+                )
+
+        return "\n".join(_ for _ in result if _)
 
     # ------------------------------------------------------------------------
     # Aliases
@@ -1495,7 +1875,7 @@ class AbstractBufferedFile(io.IOBase):
 
         self.kwargs = kwargs
 
-        if mode not in {"ab", "rb", "wb"}:
+        if mode not in {"ab", "rb", "wb", "xb"}:
             raise NotImplementedError("File mode not supported")
         if mode == "rb":
             if size is not None:
@@ -1544,7 +1924,14 @@ class AbstractBufferedFile(io.IOBase):
 
     def __eq__(self, other):
         """Files are equal if they have the same checksum, only in read mode"""
-        return self.mode == "rb" and other.mode == "rb" and hash(self) == hash(other)
+        if self is other:
+            return True
+        return (
+            isinstance(other, type(self))
+            and self.mode == "rb"
+            and other.mode == "rb"
+            and hash(self) == hash(other)
+        )
 
     def commit(self):
         """Move from temp to final destination"""
@@ -1554,7 +1941,7 @@ class AbstractBufferedFile(io.IOBase):
 
     def info(self):
         """File information about this path"""
-        if "r" in self.mode:
+        if self.readable():
             return self.details
         else:
             raise ValueError("Info not available while writing")
@@ -1583,7 +1970,7 @@ class AbstractBufferedFile(io.IOBase):
         elif whence == 2:
             nloc = self.size + loc
         else:
-            raise ValueError("invalid whence (%s, should be 0, 1 or 2)" % whence)
+            raise ValueError(f"invalid whence ({whence}, should be 0, 1 or 2)")
         if nloc < 0:
             raise ValueError("Seek before start of file")
         self.loc = nloc
@@ -1601,7 +1988,7 @@ class AbstractBufferedFile(io.IOBase):
         data: bytes
             Set of bytes to be written.
         """
-        if self.mode not in {"wb", "ab"}:
+        if not self.writable():
             raise ValueError("File not in write mode")
         if self.closed:
             raise ValueError("I/O operation on closed file.")
@@ -1634,7 +2021,7 @@ class AbstractBufferedFile(io.IOBase):
         if force:
             self.forced = True
 
-        if self.mode not in {"wb", "ab"}:
+        if self.readable():
             # no-op to flush on read-mode
             return
 
@@ -1647,7 +2034,7 @@ class AbstractBufferedFile(io.IOBase):
             self.offset = 0
             try:
                 self._initiate_upload()
-            except:  # noqa: E722
+            except:
                 self.closed = True
                 raise
 
@@ -1672,7 +2059,7 @@ class AbstractBufferedFile(io.IOBase):
 
     def _fetch_range(self, start, end):
         """Get the specified set of bytes from remote"""
-        raise NotImplementedError
+        return self.fs.cat_file(self.path, start=start, end=end)
 
     def read(self, length=-1):
         """
@@ -1690,11 +2077,18 @@ class AbstractBufferedFile(io.IOBase):
             length = self.size - self.loc
         if self.closed:
             raise ValueError("I/O operation on closed file.")
-        logger.debug("%s read: %i - %i" % (self, self.loc, self.loc + length))
         if length == 0:
             # don't even bother calling fetch
             return b""
         out = self.cache._fetch(self.loc, self.loc + length)
+
+        logger.debug(
+            "%s read: %i - %i %s",
+            self,
+            self.loc,
+            self.loc + length,
+            self.cache._log_stats(),
+        )
         self.loc += len(out)
         return out
 
@@ -1737,7 +2131,7 @@ class AbstractBufferedFile(io.IOBase):
         return b"".join(out)
 
     def readline(self):
-        """Read until first occurrence of newline character
+        """Read until and including the first occurrence of newline character
 
         Note that, because of character encoding, this is not necessarily a
         true line ending.
@@ -1754,7 +2148,7 @@ class AbstractBufferedFile(io.IOBase):
         return self
 
     def readlines(self):
-        """Return all data, split by the newline character"""
+        """Return all data, split by the newline character, including the newline character"""
         data = self.read()
         lines = data.split(b"\n")
         out = [l + b"\n" for l in lines[:-1]]
@@ -1776,21 +2170,22 @@ class AbstractBufferedFile(io.IOBase):
             return
         if self.closed:
             return
-        if self.mode == "rb":
-            self.cache = None
-        else:
-            if not self.forced:
-                self.flush(force=True)
+        try:
+            if self.mode == "rb":
+                self.cache = None
+            else:
+                if not self.forced:
+                    self.flush(force=True)
 
-            if self.fs is not None:
-                self.fs.invalidate_cache(self.path)
-                self.fs.invalidate_cache(self.fs._parent(self.path))
-
-        self.closed = True
+                if self.fs is not None:
+                    self.fs.invalidate_cache(self.path)
+                    self.fs.invalidate_cache(self.fs._parent(self.path))
+        finally:
+            self.closed = True
 
     def readable(self):
         """Whether opened for reading"""
-        return self.mode == "rb" and not self.closed
+        return "r" in self.mode and not self.closed
 
     def seekable(self):
         """Whether is seekable (only in read mode)"""
@@ -1798,14 +2193,30 @@ class AbstractBufferedFile(io.IOBase):
 
     def writable(self):
         """Whether opened for writing"""
-        return self.mode in {"wb", "ab"} and not self.closed
+        return self.mode in {"wb", "ab", "xb"} and not self.closed
+
+    def __reduce__(self):
+        if self.mode != "rb":
+            raise RuntimeError("Pickling a writeable file is not supported")
+
+        return reopen, (
+            self.fs,
+            self.path,
+            self.mode,
+            self.blocksize,
+            self.loc,
+            self.size,
+            self.autocommit,
+            self.cache.name if self.cache else "none",
+            self.kwargs,
+        )
 
     def __del__(self):
         if not self.closed:
             self.close()
 
     def __str__(self):
-        return "<File-like object %s, %s>" % (type(self.fs).__name__, self.path)
+        return f"<File-like object {type(self.fs).__name__}, {self.path}>"
 
     __repr__ = __str__
 
@@ -1814,3 +2225,18 @@ class AbstractBufferedFile(io.IOBase):
 
     def __exit__(self, *args):
         self.close()
+
+
+def reopen(fs, path, mode, blocksize, loc, size, autocommit, cache_type, kwargs):
+    file = fs.open(
+        path,
+        mode=mode,
+        block_size=blocksize,
+        autocommit=autocommit,
+        cache_type=cache_type,
+        size=size,
+        **kwargs,
+    )
+    if loc > 0:
+        file.seek(loc)
+    return file

@@ -2,18 +2,6 @@ name: test_env
 channels:
   - conda-forge
 dependencies:
-  - python=3.9
-  - dask
-  - pandas
-  - xarray
-  - zarr
-  - pytest
-  - pytest-cov
-  - pytest-rerunfailures
-  - pytest-timeout
-  - pytest-xdist
-  - s3fs
-  - requests
-  - moto
-  - sqlalchemy
-  - flask
+  - python=3.11
+  - pip:
+      - git+https://github.com/dask/dask

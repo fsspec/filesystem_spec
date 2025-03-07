@@ -81,7 +81,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
         self._fo_ref = fo
         self.fo = fo  # the whole instance is a context
-        self.tar: tarfile.TarFile = tarfile.TarFile(fileobj=self.fo)
+        self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
         self.index_store = index_store
@@ -106,11 +106,12 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
         # This enables ls to get directories as children as well as files
         self.dir_cache = {
-            dirname + "/": {"name": dirname + "/", "size": 0, "type": "directory"}
+            dirname: {"name": dirname, "size": 0, "type": "directory"}
             for dirname in self._all_dirnames(self.tar.getnames())
         }
         for member in self.tar.getmembers():
             info = member.get_info()
+            info["name"] = info["name"].rstrip("/")
             info["type"] = typemap.get(info["type"], "file")
             self.dir_cache[info["name"]] = info
 

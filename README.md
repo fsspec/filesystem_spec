@@ -12,10 +12,17 @@ A specification for pythonic filesystems.
 ```bash
 pip install fsspec
 ```
-or
+
+would install the base fsspec. Various optionally supported features might require specification of custom
+extra require, e.g. `pip install fsspec[ssh]` will install dependencies for `ssh` backends support.
+Use `pip install fsspec[full]` for installation of all known extra dependencies.
+
+Up-to-date package also provided through conda-forge distribution:
+
 ```bash
 conda install -c conda-forge fsspec
 ```
+
 
 ## Purpose
 
@@ -37,6 +44,27 @@ fsspec uses GitHub Actions for CI. Environment files can be found
 in the "ci/" directory. Note that the main environment is called "py38",
 but it is expected that the version of python installed be adjustable at
 CI runtime. For local use, pick a version suitable for you.
+
+```bash
+# For a new environment (mamba / conda).
+mamba create -n fsspec -c conda-forge  python=3.9 -y
+conda activate fsspec
+
+# Standard dev install with docs and tests.
+pip install -e ".[dev,doc,test]"
+
+# Full tests except for downstream
+pip install s3fs
+pip uninstall s3fs
+pip install -e .[dev,doc,test_full]
+pip install s3fs --no-deps
+pytest -v
+
+# Downstream tests.
+sh install_s3fs.sh
+# Windows powershell.
+install_s3fs.sh
+```
 
 ### Testing
 

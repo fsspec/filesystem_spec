@@ -1,23 +1,28 @@
-import ast
 import base64
+import collections
 import io
 import itertools
 import logging
+import math
 import os
 from functools import lru_cache
+from itertools import chain
+from typing import TYPE_CHECKING, Literal
 
 import fsspec.core
+from fsspec.spec import AbstractBufferedFile
 
 try:
     import ujson as json
 except ImportError:
-    import json
+    if not TYPE_CHECKING:
+        import json
 
-from ..asyn import AsyncFileSystem
-from ..callbacks import _DEFAULT_CALLBACK
-from ..core import filesystem, open, split_protocol
-from ..spec import AbstractFileSystem
-from ..utils import isfilelike, merge_offset_ranges, other_paths
+from fsspec.asyn import AsyncFileSystem
+from fsspec.callbacks import DEFAULT_CALLBACK
+from fsspec.core import filesystem, open, split_protocol
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+from fsspec.utils import isfilelike, merge_offset_ranges, other_paths
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -33,12 +38,12 @@ class ReferenceNotReachable(RuntimeError):
 
 
 def _first(d):
-    return list(d.values())[0]
+    return next(iter(d.values()))
 
 
 def _prot_in_references(path, references):
     ref = references.get(path)
-    if isinstance(ref, (list, tuple)):
+    if isinstance(ref, (list, tuple)) and isinstance(ref[0], str):
         return split_protocol(ref[0])[0] if ref[0] else ref[0]
 
 
@@ -52,28 +57,559 @@ def _protocol_groups(paths, references):
     return out
 
 
+class RefsValuesView(collections.abc.ValuesView):
+    def __iter__(self):
+        for val in self._mapping.zmetadata.values():
+            yield json.dumps(val).encode()
+        yield from self._mapping._items.values()
+        for field in self._mapping.listdir():
+            chunk_sizes = self._mapping._get_chunk_sizes(field)
+            if len(chunk_sizes) == 0:
+                yield self._mapping[field + "/0"]
+                continue
+            yield from self._mapping._generate_all_records(field)
+
+
+class RefsItemsView(collections.abc.ItemsView):
+    def __iter__(self):
+        return zip(self._mapping.keys(), self._mapping.values())
+
+
+def ravel_multi_index(idx, sizes):
+    val = 0
+    mult = 1
+    for i, s in zip(idx[::-1], sizes[::-1]):
+        val += i * mult
+        mult *= s
+    return val
+
+
+class LazyReferenceMapper(collections.abc.MutableMapping):
+    """This interface can be used to read/write references from Parquet stores.
+    It is not intended for other types of references.
+    It can be used with Kerchunk's MultiZarrToZarr method to combine
+    references into a parquet store.
+    Examples of this use-case can be found here:
+    https://fsspec.github.io/kerchunk/advanced.html?highlight=parquet#parquet-storage"""
+
+    # import is class level to prevent numpy dep requirement for fsspec
+    @property
+    def np(self):
+        import numpy as np
+
+        return np
+
+    @property
+    def pd(self):
+        import pandas as pd
+
+        return pd
+
+    def __init__(
+        self,
+        root,
+        fs=None,
+        out_root=None,
+        cache_size=128,
+        categorical_threshold=10,
+        engine: Literal["fastparquet", "pyarrow"] = "fastparquet",
+    ):
+        """
+
+        This instance will be writable, storing changes in memory until full partitions
+        are accumulated or .flush() is called.
+
+        To create an empty lazy store, use .create()
+
+        Parameters
+        ----------
+        root : str
+            Root of parquet store
+        fs : fsspec.AbstractFileSystem
+            fsspec filesystem object, default is local filesystem.
+        cache_size : int, default=128
+            Maximum size of LRU cache, where cache_size*record_size denotes
+            the total number of references that can be loaded in memory at once.
+        categorical_threshold : int
+            Encode urls as pandas.Categorical to reduce memory footprint if the ratio
+            of the number of unique urls to total number of refs for each variable
+            is greater than or equal to this number. (default 10)
+        engine: Literal["fastparquet","pyarrow"]
+            Engine choice for reading parquet files. (default is "fastparquet")
+        """
+
+        self.root = root
+        self.chunk_sizes = {}
+        self.cat_thresh = categorical_threshold
+        self.engine = engine
+        self.cache_size = cache_size
+        self.url = self.root + "/{field}/refs.{record}.parq"
+        # TODO: derive fs from `root`
+        self.fs = fsspec.filesystem("file") if fs is None else fs
+        self.out_root = self.fs.unstrip_protocol(out_root or self.root)
+
+        from importlib.util import find_spec
+
+        if self.engine == "pyarrow" and find_spec("pyarrow") is None:
+            raise ImportError("engine choice `pyarrow` is not installed.")
+
+    def __getattr__(self, item):
+        if item in ("_items", "record_size", "zmetadata"):
+            self.setup()
+            # avoid possible recursion if setup fails somehow
+            return self.__dict__[item]
+        raise AttributeError(item)
+
+    def setup(self):
+        self._items = {}
+        self._items[".zmetadata"] = self.fs.cat_file(
+            "/".join([self.root, ".zmetadata"])
+        )
+        met = json.loads(self._items[".zmetadata"])
+        self.record_size = met["record_size"]
+        self.zmetadata = met["metadata"]
+
+        # Define function to open and decompress refs
+        @lru_cache(maxsize=self.cache_size)
+        def open_refs(field, record):
+            """cached parquet file loader"""
+            path = self.url.format(field=field, record=record)
+            data = io.BytesIO(self.fs.cat_file(path))
+            try:
+                df = self.pd.read_parquet(data, engine=self.engine)
+                refs = {c: df[c].to_numpy() for c in df.columns}
+            except OSError:
+                refs = None
+            return refs
+
+        self.open_refs = open_refs
+
+    @staticmethod
+    def create(root, storage_options=None, fs=None, record_size=10000, **kwargs):
+        """Make empty parquet reference set
+
+        First deletes the contents of the given directory, if it exists.
+
+        Parameters
+        ----------
+        root: str
+            Directory to contain the output; will be created
+        storage_options: dict | None
+            For making the filesystem to use for writing is fs is None
+        fs: FileSystem | None
+            Filesystem for writing
+        record_size: int
+            Number of references per parquet file
+        kwargs: passed to __init__
+
+        Returns
+        -------
+        LazyReferenceMapper instance
+        """
+        met = {"metadata": {}, "record_size": record_size}
+        if fs is None:
+            fs, root = fsspec.core.url_to_fs(root, **(storage_options or {}))
+        if fs.exists(root):
+            fs.rm(root, recursive=True)
+        fs.makedirs(root, exist_ok=True)
+        fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
+        return LazyReferenceMapper(root, fs, **kwargs)
+
+    @lru_cache()
+    def listdir(self):
+        """List top-level directories"""
+        dirs = (p.rsplit("/", 1)[0] for p in self.zmetadata if not p.startswith(".z"))
+        return set(dirs)
+
+    def ls(self, path="", detail=True):
+        """Shortcut file listings"""
+        path = path.rstrip("/")
+        pathdash = path + "/" if path else ""
+        dirnames = self.listdir()
+        dirs = [
+            d
+            for d in dirnames
+            if d.startswith(pathdash) and "/" not in d.lstrip(pathdash)
+        ]
+        if dirs:
+            others = {
+                f
+                for f in chain(
+                    [".zmetadata"],
+                    (name for name in self.zmetadata),
+                    (name for name in self._items),
+                )
+                if f.startswith(pathdash) and "/" not in f.lstrip(pathdash)
+            }
+            if detail is False:
+                others.update(dirs)
+                return sorted(others)
+            dirinfo = [{"name": name, "type": "directory", "size": 0} for name in dirs]
+            fileinfo = [
+                {
+                    "name": name,
+                    "type": "file",
+                    "size": len(
+                        json.dumps(self.zmetadata[name])
+                        if name in self.zmetadata
+                        else self._items[name]
+                    ),
+                }
+                for name in others
+            ]
+            return sorted(dirinfo + fileinfo, key=lambda s: s["name"])
+        field = path
+        others = set(
+            [name for name in self.zmetadata if name.startswith(f"{path}/")]
+            + [name for name in self._items if name.startswith(f"{path}/")]
+        )
+        fileinfo = [
+            {
+                "name": name,
+                "type": "file",
+                "size": len(
+                    json.dumps(self.zmetadata[name])
+                    if name in self.zmetadata
+                    else self._items[name]
+                ),
+            }
+            for name in others
+        ]
+        keys = self._keys_in_field(field)
+
+        if detail is False:
+            return list(others) + list(keys)
+        recs = self._generate_all_records(field)
+        recinfo = [
+            {"name": name, "type": "file", "size": rec[-1]}
+            for name, rec in zip(keys, recs)
+            if rec[0]  # filters out path==None, deleted/missing
+        ]
+        return fileinfo + recinfo
+
+    def _load_one_key(self, key):
+        """Get the reference for one key
+
+        Returns bytes, one-element list or three-element list.
+        """
+        if key in self._items:
+            return self._items[key]
+        elif key in self.zmetadata:
+            return json.dumps(self.zmetadata[key]).encode()
+        elif "/" not in key or self._is_meta(key):
+            raise KeyError(key)
+        field, _ = key.rsplit("/", 1)
+        record, ri, chunk_size = self._key_to_record(key)
+        maybe = self._items.get((field, record), {}).get(ri, False)
+        if maybe is None:
+            # explicitly deleted
+            raise KeyError
+        elif maybe:
+            return maybe
+        elif chunk_size == 0:
+            return b""
+
+        # Chunk keys can be loaded from row group and cached in LRU cache
+        try:
+            refs = self.open_refs(field, record)
+        except (ValueError, TypeError, FileNotFoundError) as exc:
+            raise KeyError(key) from exc
+        columns = ["path", "offset", "size", "raw"]
+        selection = [refs[c][ri] if c in refs else None for c in columns]
+        raw = selection[-1]
+        if raw is not None:
+            return raw
+        if selection[0] is None:
+            raise KeyError("This reference does not exist or has been deleted")
+        if selection[1:3] == [0, 0]:
+            # URL only
+            return selection[:1]
+        # URL, offset, size
+        return selection[:3]
+
+    @lru_cache(4096)
+    def _key_to_record(self, key):
+        """Details needed to construct a reference for one key"""
+        field, chunk = key.rsplit("/", 1)
+        chunk_sizes = self._get_chunk_sizes(field)
+        if len(chunk_sizes) == 0:
+            return 0, 0, 0
+        chunk_idx = [int(c) for c in chunk.split(".")]
+        chunk_number = ravel_multi_index(chunk_idx, chunk_sizes)
+        record = chunk_number // self.record_size
+        ri = chunk_number % self.record_size
+        return record, ri, len(chunk_sizes)
+
+    def _get_chunk_sizes(self, field):
+        """The number of chunks along each axis for a given field"""
+        if field not in self.chunk_sizes:
+            zarray = self.zmetadata[f"{field}/.zarray"]
+            size_ratio = [
+                math.ceil(s / c) for s, c in zip(zarray["shape"], zarray["chunks"])
+            ]
+            self.chunk_sizes[field] = size_ratio or [1]
+        return self.chunk_sizes[field]
+
+    def _generate_record(self, field, record):
+        """The references for a given parquet file of a given field"""
+        refs = self.open_refs(field, record)
+        it = iter(zip(*refs.values()))
+        if len(refs) == 3:
+            # All urls
+            return (list(t) for t in it)
+        elif len(refs) == 1:
+            # All raws
+            return refs["raw"]
+        else:
+            # Mix of urls and raws
+            return (list(t[:3]) if not t[3] else t[3] for t in it)
+
+    def _generate_all_records(self, field):
+        """Load all the references within a field by iterating over the parquet files"""
+        nrec = 1
+        for ch in self._get_chunk_sizes(field):
+            nrec *= ch
+        nrec = math.ceil(nrec / self.record_size)
+        for record in range(nrec):
+            yield from self._generate_record(field, record)
+
+    def values(self):
+        return RefsValuesView(self)
+
+    def items(self):
+        return RefsItemsView(self)
+
+    def __hash__(self):
+        return id(self)
+
+    def __getitem__(self, key):
+        return self._load_one_key(key)
+
+    def __setitem__(self, key, value):
+        if "/" in key and not self._is_meta(key):
+            field, chunk = key.rsplit("/", 1)
+            record, i, _ = self._key_to_record(key)
+            subdict = self._items.setdefault((field, record), {})
+            subdict[i] = value
+            if len(subdict) == self.record_size:
+                self.write(field, record)
+        else:
+            # metadata or top-level
+            if hasattr(value, "to_bytes"):
+                val = value.to_bytes().decode()
+            elif isinstance(value, bytes):
+                val = value.decode()
+            else:
+                val = value
+            self._items[key] = val
+            new_value = json.loads(val)
+            self.zmetadata[key] = {**self.zmetadata.get(key, {}), **new_value}
+
+    @staticmethod
+    def _is_meta(key):
+        return key.startswith(".z") or "/.z" in key
+
+    def __delitem__(self, key):
+        if key in self._items:
+            del self._items[key]
+        elif key in self.zmetadata:
+            del self.zmetadata[key]
+        else:
+            if "/" in key and not self._is_meta(key):
+                field, _ = key.rsplit("/", 1)
+                record, i, _ = self._key_to_record(key)
+                subdict = self._items.setdefault((field, record), {})
+                subdict[i] = None
+                if len(subdict) == self.record_size:
+                    self.write(field, record)
+            else:
+                # metadata or top-level
+                self._items[key] = None
+
+    def write(self, field, record, base_url=None, storage_options=None):
+        # extra requirements if writing
+        import kerchunk.df
+        import numpy as np
+        import pandas as pd
+
+        partition = self._items[(field, record)]
+        original = False
+        if len(partition) < self.record_size:
+            try:
+                original = self.open_refs(field, record)
+            except OSError:
+                pass
+
+        if original:
+            paths = original["path"]
+            offsets = original["offset"]
+            sizes = original["size"]
+            raws = original["raw"]
+        else:
+            paths = np.full(self.record_size, np.nan, dtype="O")
+            offsets = np.zeros(self.record_size, dtype="int64")
+            sizes = np.zeros(self.record_size, dtype="int64")
+            raws = np.full(self.record_size, np.nan, dtype="O")
+        for j, data in partition.items():
+            if isinstance(data, list):
+                if (
+                    str(paths.dtype) == "category"
+                    and data[0] not in paths.dtype.categories
+                ):
+                    paths = paths.add_categories(data[0])
+                paths[j] = data[0]
+                if len(data) > 1:
+                    offsets[j] = data[1]
+                    sizes[j] = data[2]
+            elif data is None:
+                # delete
+                paths[j] = None
+                offsets[j] = 0
+                sizes[j] = 0
+                raws[j] = None
+            else:
+                # this is the only call into kerchunk, could remove
+                raws[j] = kerchunk.df._proc_raw(data)
+        # TODO: only save needed columns
+        df = pd.DataFrame(
+            {
+                "path": paths,
+                "offset": offsets,
+                "size": sizes,
+                "raw": raws,
+            },
+            copy=False,
+        )
+        if df.path.count() / (df.path.nunique() or 1) > self.cat_thresh:
+            df["path"] = df["path"].astype("category")
+        object_encoding = {"raw": "bytes", "path": "utf8"}
+        has_nulls = ["path", "raw"]
+
+        fn = f"{base_url or self.out_root}/{field}/refs.{record}.parq"
+        self.fs.mkdirs(f"{base_url or self.out_root}/{field}", exist_ok=True)
+
+        if self.engine == "pyarrow":
+            df_backend_kwargs = {"write_statistics": False}
+        elif self.engine == "fastparquet":
+            df_backend_kwargs = {
+                "stats": False,
+                "object_encoding": object_encoding,
+                "has_nulls": has_nulls,
+            }
+        else:
+            raise NotImplementedError(f"{self.engine} not supported")
+        df.to_parquet(
+            fn,
+            engine=self.engine,
+            storage_options=storage_options
+            or getattr(self.fs, "storage_options", None),
+            compression="zstd",
+            index=False,
+            **df_backend_kwargs,
+        )
+
+        partition.clear()
+        self._items.pop((field, record))
+
+    def flush(self, base_url=None, storage_options=None):
+        """Output any modified or deleted keys
+
+        Parameters
+        ----------
+        base_url: str
+            Location of the output
+        """
+
+        # write what we have so far and clear sub chunks
+        for thing in list(self._items):
+            if isinstance(thing, tuple):
+                field, record = thing
+                self.write(
+                    field,
+                    record,
+                    base_url=base_url,
+                    storage_options=storage_options,
+                )
+
+        # gather .zmetadata from self._items and write that too
+        for k in list(self._items):
+            if k != ".zmetadata" and ".z" in k:
+                self.zmetadata[k] = json.loads(self._items.pop(k))
+        met = {"metadata": self.zmetadata, "record_size": self.record_size}
+        self._items.clear()
+        self._items[".zmetadata"] = json.dumps(met).encode()
+        self.fs.pipe(
+            "/".join([base_url or self.out_root, ".zmetadata"]),
+            self._items[".zmetadata"],
+        )
+
+        # TODO: only clear those that we wrote to?
+        self.open_refs.cache_clear()
+
+    def __len__(self):
+        # Caveat: This counts expected references, not actual - but is fast
+        count = 0
+        for field in self.listdir():
+            if field.startswith("."):
+                count += 1
+            else:
+                count += math.prod(self._get_chunk_sizes(field))
+        count += len(self.zmetadata)  # all metadata keys
+        # any other files not in reference partitions
+        count += sum(1 for _ in self._items if not isinstance(_, tuple))
+        return count
+
+    def __iter__(self):
+        # Caveat: returns only existing keys, so the number of these does not
+        #  match len(self)
+        metas = set(self.zmetadata)
+        metas.update(self._items)
+        for bit in metas:
+            if isinstance(bit, str):
+                yield bit
+        for field in self.listdir():
+            for k in self._keys_in_field(field):
+                if k in self:
+                    yield k
+
+    def __contains__(self, item):
+        try:
+            self._load_one_key(item)
+            return True
+        except KeyError:
+            return False
+
+    def _keys_in_field(self, field):
+        """List key names in given field
+
+        Produces strings like "field/x.y" appropriate from the chunking of the array
+        """
+        chunk_sizes = self._get_chunk_sizes(field)
+        if len(chunk_sizes) == 0:
+            yield field + "/0"
+            return
+        inds = itertools.product(*(range(i) for i in chunk_sizes))
+        for ind in inds:
+            yield field + "/" + ".".join([str(c) for c in ind])
+
+
 class ReferenceFileSystem(AsyncFileSystem):
     """View byte ranges of some other file as a file system
-
     Initial version: single file system target, which must support
     async, and must allow start and end args in _cat_file. Later versions
     may allow multiple arbitrary URLs for the targets.
-
     This FileSystem is read-only. It is designed to be used with async
-    targets (for now). This FileSystem only allows whole-file access, no
-    ``open``. We do not get original file details from the target FS.
-
+    targets (for now). We do not get original file details from the target FS.
     Configuration is by passing a dict of references at init, or a URL to
     a JSON file containing the same; this dict
     can also contain concrete data for some set of paths.
-
     Reference dict format:
     {path0: bytes_data, path1: (target_url, offset, size)}
-
     https://github.com/fsspec/kerchunk/blob/main/README.md
     """
 
     protocol = "reference"
+    cachable = False
 
     def __init__(
         self,
@@ -89,16 +625,18 @@ class ReferenceFileSystem(AsyncFileSystem):
         simple_templates=True,
         max_gap=64_000,
         max_block=256_000_000,
+        cache_size=128,
         **kwargs,
     ):
         """
-
         Parameters
         ----------
         fo : dict or str
             The set of references to use for this instance, with a structure as above.
-            If str, will use fsspec.open, in conjunction with target_options
-            and target_protocol to open and parse JSON at this location.
+            If str referencing a JSON file, will use fsspec.open, in conjunction
+            with target_options and target_protocol to open and parse JSON at this
+            location. If a directory, then assume references are a set of parquet
+            files to be loaded lazily.
         target : str
             For any references having target_url as None, this is the default file
             target to use
@@ -140,6 +678,10 @@ class ReferenceFileSystem(AsyncFileSystem):
             number to disable merging, appropriate for local target files.
             Neighboring byte ranges will only be merged when the size of
             the aggregated range is <= ``max_block``. Default is 256MB.
+        cache_size : int
+            Maximum size of LRU cache, where cache_size*record_size denotes
+            the total number of references that can be loaded in memory at once.
+            Only used for lazily loaded references.
         kwargs : passed to parent class
         """
         super().__init__(**kwargs)
@@ -151,23 +693,28 @@ class ReferenceFileSystem(AsyncFileSystem):
         self._dircache = {}
         self.max_gap = max_gap
         self.max_block = max_block
-        if hasattr(fo, "read"):
-            text = json.load(fo)
-            text = text.decode() if isinstance(text, bytes) else text
-        elif isinstance(fo, str):
-            if target_protocol:
-                extra = {"protocol": target_protocol}
+        if isinstance(fo, str):
+            dic = dict(
+                **(ref_storage_args or target_options or {}), protocol=target_protocol
+            )
+            ref_fs, fo2 = fsspec.core.url_to_fs(fo, **dic)
+            if ref_fs.isfile(fo2):
+                # text JSON
+                with fsspec.open(fo, "rb", **dic) as f:
+                    logger.info("Read reference from URL %s", fo)
+                    text = json.load(f)
+                self._process_references(text, template_overrides)
             else:
-                extra = {}
-            dic = dict(**(ref_storage_args or target_options or {}), **extra)
-            # text JSON
-            with open(fo, "rb", **dic) as f:
-                logger.info("Read reference from URL %s", fo)
-                text = json.load(f)
+                # Lazy parquet refs
+                logger.info("Open lazy reference dict from URL %s", fo)
+                self.references = LazyReferenceMapper(
+                    fo2,
+                    fs=ref_fs,
+                    cache_size=cache_size,
+                )
         else:
             # dictionaries
-            text = fo
-        self._process_references(text, template_overrides)
+            self._process_references(fo, template_overrides)
         if isinstance(fs, dict):
             self.fss = {
                 k: (
@@ -198,30 +745,44 @@ class ReferenceFileSystem(AsyncFileSystem):
                     self.fss[protocol] = fs
         if remote_protocol is None:
             # get single protocol from references
+            # TODO: warning here, since this can be very expensive?
             for ref in self.references.values():
                 if callable(ref):
                     ref = ref()
                 if isinstance(ref, list) and ref[0]:
                     protocol, _ = fsspec.core.split_protocol(ref[0])
-                    if protocol and protocol not in self.fss:
+                    if protocol not in self.fss:
                         fs = filesystem(protocol, **(remote_options or {}))
                         self.fss[protocol] = fs
+                        # only use first remote URL
+                        break
 
         if remote_protocol and remote_protocol not in self.fss:
             fs = filesystem(remote_protocol, **(remote_options or {}))
             self.fss[remote_protocol] = fs
 
         self.fss[None] = fs or filesystem("file")  # default one
+        # Wrap any non-async filesystems to ensure async methods are available below
+        for k, f in self.fss.items():
+            if not f.async_impl:
+                self.fss[k] = AsyncFileSystemWrapper(f, asynchronous=self.asynchronous)
+            elif self.asynchronous ^ f.asynchronous:
+                raise ValueError(
+                    "Reference-FS's target filesystem must have same value"
+                    "of asynchronous"
+                )
 
     def _cat_common(self, path, start=None, end=None):
         path = self._strip_protocol(path)
         logger.debug(f"cat: {path}")
         try:
             part = self.references[path]
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as exc:
+            raise FileNotFoundError(path) from exc
         if isinstance(part, str):
             part = part.encode()
+        if hasattr(part, "to_bytes"):
+            part = part.to_bytes()
         if isinstance(part, bytes):
             logger.debug(f"Reference: {path}, type bytes")
             if part.startswith(b"base64:"):
@@ -229,7 +790,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part, None, None
 
         if len(part) == 1:
-            logger.debug(f"Reference: {path}, whole file")
+            logger.debug(f"Reference: {path}, whole file => {part}")
             url = part[0]
             start1, end1 = start, end
         else:
@@ -261,7 +822,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
         try:
-            await self.fss[protocol]._cat_file(part_or_url, start=start, end=end)
+            return await self.fss[protocol]._cat_file(
+                part_or_url, start=start0, end=end0
+            )
         except Exception as e:
             raise ReferenceNotReachable(path, part_or_url) from e
 
@@ -286,7 +849,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         with open(lpath, "wb") as f:
             f.write(data)
 
-    def get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, **kwargs):
+    def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, **kwargs):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
@@ -318,17 +881,38 @@ class ReferenceFileSystem(AsyncFileSystem):
             raise NotImplementedError
         if isinstance(path, list) and (recursive or any("*" in p for p in path)):
             raise NotImplementedError
+        # TODO: if references is lazy, pre-fetch all paths in batch before access
         proto_dict = _protocol_groups(path, self.references)
         out = {}
         for proto, paths in proto_dict.items():
             fs = self.fss[proto]
-            urls, starts, ends = zip(*[self._cat_common(p) for p in paths])
+            urls, starts, ends, valid_paths = [], [], [], []
+            for p in paths:
+                # find references or label not-found. Early exit if any not
+                # found and on_error is "raise"
+                try:
+                    u, s, e = self._cat_common(p)
+                    if not isinstance(u, (bytes, str)):
+                        # nan/None from parquet
+                        continue
+                except FileNotFoundError as err:
+                    if on_error == "raise":
+                        raise
+                    if on_error != "omit":
+                        out[p] = err
+                else:
+                    urls.append(u)
+                    starts.append(s)
+                    ends.append(e)
+                    valid_paths.append(p)
+
+            # process references into form for merging
             urls2 = []
             starts2 = []
             ends2 = []
             paths2 = []
             whole_files = set()
-            for u, s, e, p in zip(urls, starts, ends, paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths):
                 if isinstance(u, bytes):
                     # data
                     out[p] = u
@@ -340,12 +924,15 @@ class ReferenceFileSystem(AsyncFileSystem):
                     starts2.append(s)
                     ends2.append(e)
                     paths2.append(p)
-            for u, s, e, p in zip(urls, starts, ends, paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths):
+                # second run to account for files that are to be loaded whole
                 if s is not None and u not in whole_files:
                     urls2.append(u)
                     starts2.append(s)
                     ends2.append(e)
                     paths2.append(p)
+
+            # merge and fetch consolidated ranges
             new_paths, new_starts, new_ends = merge_offset_ranges(
                 list(urls2),
                 list(starts2),
@@ -355,26 +942,26 @@ class ReferenceFileSystem(AsyncFileSystem):
                 max_block=self.max_block,
             )
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
-            if len(urls2) == len(bytes_out):
-                # we didn't do any merging
-                for url, b in zip(new_paths, bytes_out):
-                    p = paths2[urls2.index(url)]
-                    out[p] = b
-            else:
-                # unbundle from merged bytes - simple approach
-                for u, s, e, p in zip(urls, starts, ends, paths):
-                    if p in out:
-                        continue  # was bytes, already handled
-                    for np, ns, ne, b in zip(
-                        new_paths, new_starts, new_ends, bytes_out
-                    ):
-                        if np == u and (ns is None or ne is None):
+
+            # unbundle from merged bytes - simple approach
+            for u, s, e, p in zip(urls, starts, ends, valid_paths):
+                if p in out:
+                    continue  # was bytes, already handled
+                for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
+                    if np == u and (ns is None or ne is None):
+                        if isinstance(b, Exception):
+                            out[p] = b
+                        else:
                             out[p] = b[s:e]
-                        elif np == u and s >= ns and e <= ne:
+                    elif np == u and s >= ns and e <= ne:
+                        if isinstance(b, Exception):
+                            out[p] = b
+                        else:
                             out[p] = b[s - ns : (e - ne) or None]
 
         for k, v in out.copy().items():
-            if isinstance(v, Exception):
+            # these were valid references, but fetch failed, so transform exc
+            if isinstance(v, Exception) and k in self.references:
                 ex = out[k]
                 new_ex = ReferenceNotReachable(k, self.references[k])
                 new_ex.__cause__ = ex
@@ -400,9 +987,13 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_references0(self, references):
         """Make reference dict for Spec Version 0"""
-        if "zarr_consolidated_format" in references:
-            # special case for Ike prototype
-            references = _unmodel_hdf5(references)
+        if isinstance(references, dict):
+            # do not do this for lazy/parquet backend, which will not make dicts,
+            # but must remain writable in the original object
+            references = {
+                key: json.dumps(val) if isinstance(val, dict) else val
+                for key, val in references.items()
+            }
         self.references = references
 
     def _process_references1(self, references, template_overrides=None):
@@ -420,6 +1011,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                 if v.startswith("base64:"):
                     self.references[k] = base64.b64decode(v[7:])
                 self.references[k] = v
+            elif isinstance(v, dict):
+                self.references[k] = json.dumps(v)
             elif self.templates:
                 u = v[0]
                 if "{{" in u:
@@ -437,7 +1030,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.references.update(self._process_gen(references.get("gen", [])))
 
     def _process_templates(self, tmp):
-
         self.templates = {}
         if self.template_overrides is not None:
             tmp.update(self.template_overrides)
@@ -452,13 +1044,14 @@ class ReferenceFileSystem(AsyncFileSystem):
                 self.templates[k] = v
 
     def _process_gen(self, gens):
-
         out = {}
         for gen in gens:
             dimension = {
-                k: v
-                if isinstance(v, list)
-                else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                k: (
+                    v
+                    if isinstance(v, list)
+                    else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                )
                 for k, v in gen["dimensions"].items()
             }
             products = (
@@ -491,30 +1084,67 @@ class ReferenceFileSystem(AsyncFileSystem):
         self.dircache = {"": []}
         it = self.references.items()
         for path, part in it:
-            if isinstance(part, (bytes, str)):
+            if isinstance(part, (bytes, str)) or hasattr(part, "to_bytes"):
                 size = len(part)
             elif len(part) == 1:
                 size = None
             else:
-                _, start, size = part
+                _, _, size = part
             par = path.rsplit("/", 1)[0] if "/" in path else ""
             par0 = par
+            subdirs = [par0]
             while par0 and par0 not in self.dircache:
-                # build parent directories
-                self.dircache[par0] = []
-                self.dircache.setdefault(
-                    par0.rsplit("/", 1)[0] if "/" in par0 else "", []
-                ).append({"name": par0, "type": "directory", "size": 0})
+                # collect parent directories
                 par0 = self._parent(par0)
+                subdirs.append(par0)
+
+            subdirs.reverse()
+            for parent, child in zip(subdirs, subdirs[1:]):
+                # register newly discovered directories
+                assert child not in self.dircache
+                assert parent in self.dircache
+                self.dircache[parent].append(
+                    {"name": child, "type": "directory", "size": 0}
+                )
+                self.dircache[child] = []
 
             self.dircache[par].append({"name": path, "type": "file", "size": size})
 
     def _open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
-        data = self.cat_file(path)  # load whole chunk into memory
-        return io.BytesIO(data)
+        part_or_url, start0, end0 = self._cat_common(path)
+        # This logic is kept outside `ReferenceFile` to avoid unnecessary redirection.
+        # That does mean `_cat_common` gets called twice if it eventually reaches `ReferenceFile`.
+        if isinstance(part_or_url, bytes):
+            return io.BytesIO(part_or_url[start0:end0])
+
+        protocol, _ = split_protocol(part_or_url)
+        if start0 is None and end0 is None:
+            return self.fss[protocol]._open(
+                part_or_url,
+                mode,
+                block_size=block_size,
+                cache_options=cache_options,
+                **kwargs,
+            )
+
+        return ReferenceFile(
+            self,
+            path,
+            mode,
+            block_size=block_size,
+            cache_options=cache_options,
+            **kwargs,
+        )
 
     def ls(self, path, detail=True, **kwargs):
+        logger.debug("list %s", path)
         path = self._strip_protocol(path)
+        if isinstance(self.references, LazyReferenceMapper):
+            try:
+                return self.references.ls(path, detail)
+            except KeyError:
+                pass
+            raise FileNotFoundError(f"'{path}' is not a known key")
         if not self.dircache:
             self._dircache_from_items()
         out = self._ls_from_cache(path)
@@ -530,6 +1160,8 @@ class ReferenceFileSystem(AsyncFileSystem):
     def isdir(self, path):  # overwrite auto-sync version
         if self.dircache:
             return path in self.dircache
+        elif isinstance(self.references, LazyReferenceMapper):
+            return path in self.references.listdir()
         else:
             # this may be faster than building dircache for single calls, but
             # by looping will be slow for many calls; could cache it?
@@ -542,7 +1174,6 @@ class ReferenceFileSystem(AsyncFileSystem):
         return self.ls(path, detail, **kwargs)
 
     def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
-        # TODO: details
         if withdirs:
             return super().find(
                 path, maxdepth=maxdepth, withdirs=withdirs, detail=detail, **kwargs
@@ -560,8 +1191,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             return r
 
     def info(self, path, **kwargs):
-        if path in self.references:
-            out = self.references[path]
+        out = self.references.get(path)
+        if out is not None:
             if isinstance(out, (str, bytes)):
                 # decode base64 here
                 return {"name": path, "type": "file", "size": len(out)}
@@ -589,13 +1220,17 @@ class ReferenceFileSystem(AsyncFileSystem):
         )  # ignores FileNotFound, just as well for directories
         self.dircache.clear()  # this is a bit heavy handed
 
-    async def _pipe_file(self, path, data):
+    async def _pipe_file(self, path, data, mode="overwrite", **kwargs):
+        if mode == "create" and self.exists(path):
+            raise FileExistsError
         # can be str or bytes
         self.references[path] = data
         self.dircache.clear()  # this is a bit heavy handed
 
-    async def _put_file(self, lpath, rpath):
+    async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):
         # puts binary
+        if mode == "create" and self.exists(rpath):
+            raise FileExistsError
         with open(lpath, "rb") as f:
             self.references[rpath] = f.read()
         self.dircache.clear()  # this is a bit heavy handed
@@ -615,326 +1250,56 @@ class ReferenceFileSystem(AsyncFileSystem):
             f.write(json.dumps({"version": 1, "refs": out}).encode())
 
 
-def prefix(x):
-    if "/.z" in x or "/" not in x:
-        return "metadata", x
-    return x.split("/", 1)
-
-
-def constant_prefix(x):
-    return "metadata", x
-
-
-class DFReferenceFileSystem(AbstractFileSystem):
-    """
-    (Experimental) Parquet-based Reference Filesystem
-
-    Putative replacement or adjunct to ReferenceFileSystem with
-    additional capabilities:
-    - loads from parquet for better on-disk and in-memory space
-    - optional lazy loading by key prefix (lazy=True)
-    - multiple targets for a given key (allow_multi=True), concatenated
-      together by default, of multi_func=
-    - per-chunk processing with extra parameters stored in the parquet
-      (chunk_func=)
-
-    This implementation is not (yet) multable.
-    """
-
+class ReferenceFile(AbstractBufferedFile):
     def __init__(
         self,
-        fo,
-        target_options=None,
-        remote_protocol=None,
-        remote_options=None,
-        fs=None,
-        max_gap=64_000,
-        max_block=256_000_000,
-        parquet_kwargs=None,
-        chunk_func=None,
-        allow_multi=False,
-        multi_func=b"".join,
-        prefix_func=prefix,
-        lazy=False,
+        fs,
+        path,
+        mode="rb",
+        block_size="default",
+        autocommit=True,
+        cache_type="readahead",
+        cache_options=None,
+        size=None,
         **kwargs,
     ):
-        self.fo = fo
-        self.target_options = target_options or {}
-        self.max_gap = max_gap
-        self.max_block = max_block
-        self.dataframes = {}
-        self.keysets = {}
-        self.url_dict = {}
-        self.template_dict = {}
-        self.prefs = None
-        self.fss = {}
-        self.dirs = None
-        self.lazy = lazy
-        self.chunk_func = chunk_func
-        self.allow_multi = allow_multi
-        self.multi_func = multi_func
-        self.prefix_func = prefix_func if lazy else constant_prefix
-        self.pkwargs = parquet_kwargs or {}
-        if fs is not None:
-            # single remote FS
-            remote_protocol = (
-                fs.protocol[0] if isinstance(fs.protocol, tuple) else fs.protocol
-            )
-            self.fss[remote_protocol] = fs
-
-        if remote_protocol and remote_protocol not in self.fss:
-            fs = filesystem(remote_protocol, **(remote_options or {}))
-            self.fss[remote_protocol] = fs
-
-        if fs:
-            self.fss[None] = fs
-        elif self.fss:
-            self.fss[None] = iter(self.fss.values()).__next__()
-        else:
-            self.fss[None] = fsspec.filesystem(
-                remote_protocol, **(remote_options or {})
-            )
-
-        super().__init__(**kwargs)
-        self._reference_part()
-
-    def _reference_part(self, part="metadata"):
-        """Load some references from parquet
-
-        If lazy is False, this is called exactly once per instance
-
-        If lazy is true, selecting a path will determine the name of
-        the target parquet file, and the resultant columns will be
-        cached so the file need not be read again
-        """
-        import fastparquet
-
-        if part != "metadata" and part not in self.dirs:
-            raise FileNotFoundError(f"prefix {part}")
-        if part not in self.dataframes:
-            url = f"{self.fo}/{part}.parq" if self.lazy else self.fo
-            fs, path = fsspec.core.url_to_fs(url, **self.target_options)
-            pf = fastparquet.ParquetFile(path, fs=fs)
-            self.template_dict[part] = pf.key_value_metadata
-            df = pf.to_pandas()
-            thispart = {}
-            for k in df:
-                if df[k].dtype == "category" and k == "path":
-                    self.url_dict[part] = df[k].cat.categories.values
-                    thispart[k] = df[k].cat.codes.values
-                else:
-                    thispart[k] = df[k].values
-            self.dataframes[part] = thispart
-            if self.allow_multi is False:
-                self.keysets[part] = {
-                    k: i for (i, k) in enumerate(self.dataframes[part]["key"])
-                }
-            else:
-                self.keysets[part] = {}
-                for i, k in enumerate(self.dataframes[part]["key"]):
-                    self.keysets[part].setdefault(k, []).append(i)
-            if part == "metadata":
-                self.dirs = {
-                    k.rsplit("/", 1)[0]
-                    for k in self.dataframes[part]["key"]
-                    if "/" in k
-                }
-                self.prefs = (
-                    ast.literal_eval(pf.key_value_metadata["prefs"])
-                    if "prefs" in pf.key_value_metadata
-                    else set()
-                )
-
-        return self.dataframes[part]
-
-    def isdir(self, path):
-        return path in self.dirs
-
-    def cat_file(self, path, start=None, end=None, **kwargs):
-        return self.cat_ranges([path], [start], [end])[0]
-
-    def cat(self, path, recursive=False, on_error="return", **kwargs):
-        paths = self.expand_path(path, recursive=recursive)
-        paths1 = [p for p in paths if not self.isdir(p)]
-        result = {
-            p: data
-            for p, data in zip(
-                paths1, self.cat_ranges(paths1, on_error=on_error, **kwargs)
-            )
-        }
-        if len(paths1) == 1 and recursive is False and "*" not in path:
-            # same as cat_file
-            return list(result.values())[0]
-        return result
-
-    def cat_ranges(self, paths, starts=None, ends=None, on_error="return", **kwargs):
-        out = []  # eventual output; initially each key contains raw bytes or None
-        proto_dict = {}  # mapping of protocol to lists of URL/start/end to fetch
-        assign_dict = {}  # how to assign the results of cat_ranges to output
-        if starts is None:
-            starts = [None] * len(paths)
-        if ends is None:
-            ends = [None] * len(paths)
-        for p, s, e in zip(paths, starts, ends):
-            thislist = []
-            out.append(thislist)
-            if self.lazy:
-                pref, p0 = self.prefix_func(p)
-                if pref in self.prefs:
-                    # reference already inlined in metadata file
-                    pref = "metadata"
-                else:
-                    # new key in the target pref file
-                    p = p0
-            else:
-                # everything is in the same file
-                pref = "metadata"
-            self._reference_part(pref)
-            inds = self.keysets[pref][p]
-            if isinstance(inds, int):
-                inds = [inds]
-            for i in inds:
-                if x := self.dataframes[pref]["raw"][i]:
-                    thislist.append(x)
-                else:
-                    # infer path - cache this?
-                    path = self.dataframes[pref]["path"][i]
-                    if pref in self.url_dict:
-                        # dict-encoded columns; actually, numpy can do
-                        # many of these at once with int fancy indexing
-                        path = self.url_dict[pref][path]
-                    # apply template: common prefix
-                    path = path.format(**self.template_dict[pref])
-
-                    prot, _ = split_protocol(path)
-                    proto_dict.setdefault(prot, [[], [], []])
-                    proto_dict[prot][0].append(path)
-                    if s is None or s >= 0:
-                        proto_dict[prot][1].append(
-                            self.dataframes[pref]["offset"][i] or s
-                        )
-                    else:
-                        # range is from end of file, which we do not know
-                        # the size of, so this can only work if there is no
-                        # merging
-                        proto_dict[prot][1].append(s)
-
-                    if e is None or e >= 0:
-                        proto_dict[prot][2].append(
-                            self.dataframes[pref]["offset"][i]
-                            + self.dataframes[pref]["size"][i]
-                            or e
-                        )
-                    else:
-                        # range is from end of file, which we do not know
-                        # the size of, so this can only work if there is no
-                        # merging
-                        proto_dict[prot][1].append(e)
-                    thislist.append(None)
-                    assign_dict.setdefault(prot, []).append(
-                        (thislist, len(thislist) - 1)
-                    )
-
-        for proto, (urls2, starts2, ends2) in proto_dict.items():
-            fs = self.fss[proto]
-
-            new_paths, new_starts, new_ends = merge_offset_ranges(
-                list(urls2),
-                list(starts2),
-                list(ends2),
-                sort=True,
-                max_gap=self.max_gap,
-                max_block=self.max_block,
-            )
-            bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
-            if len(urls2) == len(bytes_out):
-                # we didn't do any merging
-                for (l, i), d in zip(assign_dict[proto], bytes_out):
-                    l[i] = d
-            else:
-                # unbundle from merged bytes - simple approach
-                for u, s, e, (l, i) in zip(urls2, starts2, ends2, assign_dict[proto]):
-                    if p in out:
-                        continue  # was bytes, already handled
-                    for np, ns, ne, b in zip(
-                        new_paths, new_starts, new_ends, bytes_out
-                    ):
-                        if np == u and (ns is None or ne is None):
-                            l[i] = b[s:e]
-                        elif np == u and s >= ns and e <= ne:
-                            l[i] = b[s - ns : (e - ne) or None]
-
-        out = [self.multi_func(part) for part in out]
-        return out
-
-    def find(self, path, detail=False, withdirs=False, **kwargs):
-        path = self._strip_protocol(path)
-        if path in self.dirs:
-            path = path + "/"
-        pref, p = self.prefix_func(path)
-        dirs = (
-            [
-                {"name": d, "size": 0, "type": "directory"}
-                for d in self.dirs
-                if d.startswith(path)
-            ]
-            if withdirs
-            else []
+        super().__init__(
+            fs,
+            path,
+            mode=mode,
+            block_size=block_size,
+            autocommit=autocommit,
+            size=size,
+            cache_type=cache_type,
+            cache_options=cache_options,
+            **kwargs,
         )
-        if pref in self.prefs:
-            pref = "metadata"
-        df = self._reference_part(pref)
-        files = [
-            {"name": k, "type": "file", "size": _size(self.dataframes["metadata"], i)}
-            for k, i in self.keysets["metadata"].items()
-            if k.startswith(path)
-        ]
-        if self.lazy and pref != "metadata":
-            files.extend(
-                [
-                    {"name": f"{pref}/{k}", "type": "file", "size": _size(df, i)}
-                    for k, i in self.keysets[pref].items()
-                    if k.startswith(p)
-                ]
+        part_or_url, self.start, self.end = self.fs._cat_common(self.path)
+        protocol, _ = split_protocol(part_or_url)
+        self.src_fs = self.fs.fss[protocol]
+        self.src_path = part_or_url
+        self._f = None
+
+    @property
+    def f(self):
+        if self._f is None or self._f.closed:
+            self._f = self.src_fs._open(
+                self.src_path,
+                mode=self.mode,
+                block_size=self.blocksize,
+                autocommit=self.autocommit,
+                cache_type="none",
+                **self.kwargs,
             )
-        if detail:
-            return dirs + files
-        return [k["name"] for k in dirs + files]
+        return self._f
 
-    def ls(self, path, detail=True, **kwargs):
-        path = self._strip_protocol(path)
-        allfiles = self.find(path, detail=True, withdirs=True)
-        isdir = path in self.dirs
-        subdfiles = [
-            p for p in allfiles if p["name"].count("/") == path.count("/") + isdir
-        ]
-        if detail:
-            return subdfiles
-        return [p["name"] for p in subdfiles]
+    def close(self):
+        if self._f is not None:
+            self._f.close()
+        return super().close()
 
-    def info(self, path, **kwargs):
-        path = self._strip_protocol(path)
-
-        if path in self.dirs:
-            return {"name": path, "type": "directory", "Size": 0}
-        return self.ls(path, detail=True)[0]
-
-
-def _size(df, i):
-    if isinstance(i, int):
-        return len(df["raw"][i]) if df["raw"][i] else df["size"][i]
-    return sum(len(df["raw"][_]) if df["raw"][_] else df["size"][_] for _ in i)
-
-
-def _unmodel_hdf5(references):
-    """Special JSON format from HDF5 prototype"""
-    # see https://gist.github.com/ajelenak/80354a95b449cedea5cca508004f97a9
-    ref = {}
-    for key, value in references["metadata"].items():
-        if key.endswith(".zchunkstore"):
-            source = value.pop("source")["uri"]
-            for k, v in value.items():
-                ref[k] = (source, v["offset"], v["offset"] + v["size"])
-        else:
-            ref[key] = json.dumps(value).encode()
-    return ref
+    def _fetch_range(self, start, end):
+        start = start + self.start
+        end = min(end + self.start, self.end)
+        self.f.seek(start)
+        return self.f.read(end - start)

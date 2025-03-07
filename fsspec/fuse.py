@@ -31,8 +31,8 @@ class FUSEr(Operations):
         path = "".join([self.root, path.lstrip("/")]).rstrip("/")
         try:
             info = self.fs.info(path)
-        except FileNotFoundError:
-            raise FuseOSError(ENOENT)
+        except FileNotFoundError as exc:
+            raise FuseOSError(ENOENT) from exc
 
         data = {"st_uid": info.get("uid", 1000), "st_gid": info.get("gid", 1000)}
         perm = info.get("mode", 0o777)
@@ -119,8 +119,8 @@ class FUSEr(Operations):
         fn = "".join([self.root, path.lstrip("/")])
         try:
             self.fs.rm(fn, False)
-        except (IOError, FileNotFoundError):
-            raise FuseOSError(EIO)
+        except (OSError, FileNotFoundError) as exc:
+            raise FuseOSError(EIO) from exc
 
     def release(self, path, fh):
         try:
@@ -231,7 +231,7 @@ def main(args):
 
     class RawDescriptionArgumentParser(argparse.ArgumentParser):
         def format_help(self):
-            usage = super(RawDescriptionArgumentParser, self).format_help()
+            usage = super().format_help()
             parts = usage.split("\n\n")
             parts[1] = self.description.rstrip()
             return "\n\n".join(parts)
@@ -275,7 +275,7 @@ def main(args):
     for item in args.option or []:
         key, sep, value = item.partition("=")
         if not sep:
-            parser.error(message="Wrong option: {!r}".format(item))
+            parser.error(message=f"Wrong option: {item!r}")
         val = value.lower()
         if val.endswith("[int]"):
             value = int(value[: -len("[int]")])

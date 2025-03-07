@@ -1,3 +1,5 @@
+import operator
+
 from fsspec import AbstractFileSystem
 from fsspec.utils import tokenize
 
@@ -13,7 +15,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
     """
 
     def __str__(self):
-        return "<Archive-like object %s at %s>" % (type(self).__name__, id(self))
+        return f"<Archive-like object {type(self).__name__} at {id(self)}>"
 
     __repr__ = __str__
 
@@ -38,7 +40,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
         self._get_dirs()
         path = self._strip_protocol(path)
         if path in {"", "/"} and self.dir_cache:
-            return {"name": "/", "type": "directory", "size": 0}
+            return {"name": "", "type": "directory", "size": 0}
         if path in self.dir_cache:
             return self.dir_cache[path]
         elif path + "/" in self.dir_cache:
@@ -64,10 +66,10 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                 # root directory entry
                 ppath = p.rstrip("/").split("/", 1)[0]
                 if ppath not in paths:
-                    out = {"name": ppath + "/", "size": 0, "type": "directory"}
+                    out = {"name": ppath, "size": 0, "type": "directory"}
                     paths[ppath] = out
-        out = sorted(paths.values(), key=lambda _: _["name"])
         if detail:
+            out = sorted(paths.values(), key=operator.itemgetter("name"))
             return out
         else:
-            return [f["name"] for f in out]
+            return sorted(paths)

@@ -12,7 +12,7 @@ pytest.importorskip("paramiko")
 
 
 def stop_docker(name):
-    cmd = shlex.split('docker ps -a -q --filter "name=%s"' % name)
+    cmd = shlex.split(f'docker ps -a -q --filter "name={name}"')
     cid = subprocess.check_output(cmd).strip().decode()
     if cid:
         subprocess.call(["docker", "rm", "-f", cid])
@@ -21,7 +21,9 @@ def stop_docker(name):
 @pytest.fixture(scope="module")
 def ssh():
     try:
-        subprocess.check_call(["docker", "run", "hello-world"])
+        pchk = ["docker", "run", "--name", "fsspec_test_sftp", "hello-world"]
+        subprocess.check_call(pchk)
+        stop_docker("fsspec_test_sftp")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("docker run not available")
         return
@@ -45,13 +47,18 @@ def ssh():
     ]
     name = "fsspec_sftp"
     stop_docker(name)
-    cmd = "docker run -d -p 9200:22 --name {} ubuntu:16.04 sleep 9000".format(name)
-    cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
-    for cmd in cmds:
-        subprocess.call(["docker", "exec", cid] + shlex.split(cmd))
+    cmd = f"docker run -d -p 9200:22 --name {name} ubuntu:16.04 sleep 9000"
     try:
+        cid = subprocess.check_output(shlex.split(cmd)).strip().decode()
+        for cmd in cmds:
+            subprocess.call(["docker", "exec", cid] + shlex.split(cmd))
         time.sleep(1)
-        yield dict(host="localhost", port=9200, username="root", password="pass")
+        yield {
+            "host": "localhost",
+            "port": 9200,
+            "username": "root",
+            "password": "pass",
+        }
     finally:
         stop_docker(name)
 
@@ -79,15 +86,15 @@ def test_simple(ssh, root_path):
 @pytest.mark.parametrize("protocol", ["sftp", "ssh"])
 def test_with_url(protocol, ssh):
     fo = fsspec.open(
-        protocol + "://{username}:{password}@{host}:{port}"
-        "/home/someuserout".format(**ssh),
+        protocol
+        + "://{username}:{password}@{host}:{port}/home/someuserout".format(**ssh),
         "wb",
     )
     with fo as f:
         f.write(b"hello")
     fo = fsspec.open(
-        protocol + "://{username}:{password}@{host}:{port}"
-        "/home/someuserout".format(**ssh),
+        protocol
+        + "://{username}:{password}@{host}:{port}/home/someuserout".format(**ssh),
         "rb",
     )
     with fo as f:
@@ -106,8 +113,10 @@ def test_get_dir(protocol, ssh, root_path, tmpdir):
     assert os.path.isfile(f"{path}/deeper/afile")
 
     f.get(
-        protocol + "://{username}:{password}@{host}:{port}"
-        "{root_path}".format(root_path=root_path, **ssh),
+        protocol
+        + "://{username}:{password}@{host}:{port}{root_path}".format(
+            root_path=root_path, **ssh
+        ),
         f"{path}/test2",
         recursive=True,
     )
@@ -123,16 +132,15 @@ def netloc(ssh):
     host = ssh.get("host")
     port = ssh.get("port")
     userpass = (
-        username + ((":" + password) if password is not None else "") + "@"
+        f"{username}:{password if password is not None else ''}@"
         if username is not None
         else ""
     )
-    netloc = host + ((":" + str(port)) if port is not None else "")
+    netloc = f"{host}:{port if port is not None else ''}"
     return userpass + netloc
 
 
 def test_put_file(ssh, tmp_path, root_path):
-
     tmp_file = tmp_path / "a.txt"
     with open(tmp_file, mode="w") as fd:
         fd.write("blabla")
@@ -142,19 +150,18 @@ def test_put_file(ssh, tmp_path, root_path):
 
 
 def test_simple_with_tar(ssh, netloc, tmp_path, root_path):
-
     files_to_pack = ["a.txt", "b.txt"]
 
     tar_filename = make_tarfile(files_to_pack, tmp_path)
 
     f = fsspec.get_filesystem_class("sftp")(**ssh)
-    f.mkdirs(root_path + "deeper", exist_ok=True)
+    f.mkdirs(f"{root_path}deeper", exist_ok=True)
     try:
-        remote_tar_filename = root_path + "deeper/somefile.tar"
+        remote_tar_filename = f"{root_path}deeper/somefile.tar"
         with f.open(remote_tar_filename, mode="wb") as wfd:
             with open(tar_filename, mode="rb") as rfd:
                 wfd.write(rfd.read())
-        fs = fsspec.open("tar::ssh://" + netloc + remote_tar_filename).fs
+        fs = fsspec.open(f"tar::ssh://{netloc}{remote_tar_filename}").fs
         files = fs.find("/")
         assert files == files_to_pack
     finally:
@@ -195,27 +202,32 @@ def test_transaction(ssh, root_path):
         f.rm(root_path, recursive=True)
 
 
-def test_mkdir_create_parent(ssh):
+@pytest.mark.parametrize("path", ["/a/b/c", "a/b/c"])
+def test_mkdir_create_parent(ssh, path):
     f = fsspec.get_filesystem_class("sftp")(**ssh)
 
     with pytest.raises(FileNotFoundError):
-        f.mkdir("/a/b/c")
+        f.mkdir(path, create_parents=False)
 
-    f.mkdir("/a/b/c", create_parents=True)
-    assert f.exists("/a/b/c")
+    f.mkdir(path)
+    assert f.exists(path)
 
-    with pytest.raises(FileExistsError, match="/a/b/c"):
-        f.mkdir("/a/b/c")
+    with pytest.raises(FileExistsError, match=path):
+        f.mkdir(path)
 
-    f.rm("/a/b/c", recursive=True)
+    f.rm(path, recursive=True)
+    assert not f.exists(path)
 
 
-def test_makedirs_exist_ok(ssh):
+@pytest.mark.parametrize("path", ["/a/b/c", "a/b/c"])
+def test_makedirs_exist_ok(ssh, path):
     f = fsspec.get_filesystem_class("sftp")(**ssh)
 
-    f.makedirs("/a/b/c")
+    f.makedirs(path, exist_ok=False)
 
-    with pytest.raises(FileExistsError, match="/a/b/c"):
-        f.makedirs("/a/b/c", exist_ok=False)
+    with pytest.raises(FileExistsError, match=path):
+        f.makedirs(path, exist_ok=False)
 
-    f.makedirs("/a/b/c", exist_ok=True)
+    f.makedirs(path, exist_ok=True)
+    f.rm(path, recursive=True)
+    assert not f.exists(path)

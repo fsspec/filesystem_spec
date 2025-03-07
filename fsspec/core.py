@@ -1,13 +1,14 @@
-from __future__ import absolute_import, division, print_function
+from __future__ import annotations
 
 import io
 import logging
 import os
 import re
 from glob import has_magic
+from pathlib import Path
 
 # for backwards compat, we export cache things from here too
-from .caching import (  # noqa: F401
+from fsspec.caching import (  # noqa: F401
     BaseCache,
     BlockCache,
     BytesCache,
@@ -15,9 +16,10 @@ from .caching import (  # noqa: F401
     ReadAheadCache,
     caches,
 )
-from .compression import compr
-from .registry import filesystem, get_filesystem_class
-from .utils import (
+from fsspec.compression import compr
+from fsspec.config import conf
+from fsspec.registry import filesystem, get_filesystem_class
+from fsspec.utils import (
     _unstrip_protocol,
     build_name_function,
     infer_compression,
@@ -94,12 +96,23 @@ class OpenFile:
         )
 
     def __repr__(self):
-        return "<OpenFile '{}'>".format(self.path)
+        return f"<OpenFile '{self.path}'>"
 
     def __enter__(self):
         mode = self.mode.replace("t", "").replace("b", "") + "b"
 
-        f = self.fs.open(self.path, mode=mode)
+        try:
+            f = self.fs.open(self.path, mode=mode)
+        except FileNotFoundError as e:
+            if has_magic(self.path):
+                raise FileNotFoundError(
+                    "%s not found. The URL contains glob characters: you maybe needed\n"
+                    "to pass expand=True in fsspec.open() or the storage_options of \n"
+                    "your library. You can also set the config value 'open_expand'\n"
+                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
+                    self.path,
+                ) from e
+            raise
 
         self.fobjects = [f]
 
@@ -197,7 +210,7 @@ class OpenFiles(list):
         return out
 
     def __repr__(self):
-        return "<List of %s OpenFile instances>" % len(self)
+        return f"<List of {len(self)} OpenFile instances>"
 
 
 def open_files(
@@ -268,6 +281,16 @@ def open_files(
     -------
     An ``OpenFiles`` instance, which is a list of ``OpenFile`` objects that can
     be used as a single context
+
+    Notes
+    -----
+    For a full list of the available protocols and the implementations that
+    they map across to see the latest online documentation:
+
+    - For implementations built into ``fsspec`` see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#built-in-implementations
+    - For implementations in separate packages see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
     fs, fs_token, paths = get_fs_token_paths(
         urlpath,
@@ -278,9 +301,15 @@ def open_files(
         protocol=protocol,
         expand=expand,
     )
-    if "r" not in mode and auto_mkdir:
+    if fs.protocol == "file":
+        fs.auto_mkdir = auto_mkdir
+    elif "r" not in mode and auto_mkdir:
         parents = {fs._parent(path) for path in paths}
-        [fs.makedirs(parent, exist_ok=True) for parent in parents]
+        for parent in parents:
+            try:
+                fs.makedirs(parent, exist_ok=True)
+            except PermissionError:
+                pass
     return OpenFiles(
         [
             OpenFile(
@@ -300,12 +329,19 @@ def open_files(
 
 
 def _un_chain(path, kwargs):
-    x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
-    bits = (
-        [p if "://" in p or x.match(p) else p + "://" for p in path.split("::")]
-        if "::" in path
-        else [path]
-    )
+    # Avoid a circular import
+    from fsspec.implementations.cached import CachingFileSystem
+
+    if "::" in path:
+        x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
+        bits = []
+        for p in path.split("::"):
+            if "://" in p or x.match(p):
+                bits.append(p)
+            else:
+                bits.append(p + "://")
+    else:
+        bits = [path]
     # [[url, protocol, kwargs], ...]
     out = []
     previous_bit = None
@@ -317,16 +353,16 @@ def _un_chain(path, kwargs):
         kws = kwargs.pop(protocol, {})
         if bit is bits[0]:
             kws.update(kwargs)
-        kw = dict(**extra_kwargs, **kws)
+        kw = dict(
+            **{k: v for k, v in extra_kwargs.items() if k not in kws or v != kws[k]},
+            **kws,
+        )
         bit = cls._strip_protocol(bit)
-        if (
-            protocol in {"blockcache", "filecache", "simplecache"}
-            and "target_protocol" not in kw
-        ):
+        if "target_protocol" not in kw and issubclass(cls, CachingFileSystem):
             bit = previous_bit
         out.append((bit, protocol, kw))
         previous_bit = bit
-    out = list(reversed(out))
+    out.reverse()
     return out
 
 
@@ -350,6 +386,20 @@ def url_to_fs(url, **kwargs):
     urlpath : str
         The file-systems-specific URL for ``url``.
     """
+    url = stringify_path(url)
+    # non-FS arguments that appear in fsspec.open()
+    # inspect could keep this in sync with open()'s signature
+    known_kwargs = {
+        "compression",
+        "encoding",
+        "errors",
+        "expand",
+        "mode",
+        "name_function",
+        "newline",
+        "num",
+    }
+    kwargs = {k: v for k, v in kwargs.items() if k not in known_kwargs}
     chain = _un_chain(url, kwargs)
     inkwargs = {}
     # Reverse iterate the chain, creating a nested target_* structure
@@ -366,6 +416,9 @@ def url_to_fs(url, **kwargs):
     return fs, urlpath
 
 
+DEFAULT_EXPAND = conf.get("open_expand", False)
+
+
 def open(
     urlpath,
     mode="rb",
@@ -374,6 +427,7 @@ def open(
     errors=None,
     protocol=None,
     newline=None,
+    expand=None,
     **kwargs,
 ):
     """Given a path or paths, return one ``OpenFile`` object.
@@ -398,6 +452,13 @@ def open(
     newline: bytes or None
         Used for line terminator in text mode. If None, uses system default;
         if blank, uses no translation.
+    expand: bool or None
+        Whether to regard file paths containing special glob characters as needing
+        expansion (finding the first match) or absolute. Setting False allows using
+        paths which do embed such characters. If None (default), this argument
+        takes its value from the DEFAULT_EXPAND module variable, which takes
+        its initial value from the "open_expand" config value at startup, which will
+        be False if not set.
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -415,8 +476,19 @@ def open(
     Returns
     -------
     ``OpenFile`` object.
+
+    Notes
+    -----
+    For a full list of the available protocols and the implementations that
+    they map across to see the latest online documentation:
+
+    - For implementations built into ``fsspec`` see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#built-in-implementations
+    - For implementations in separate packages see
+      https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
-    return open_files(
+    expand = DEFAULT_EXPAND if expand is None else expand
+    out = open_files(
         urlpath=[urlpath],
         mode=mode,
         compression=compression,
@@ -424,12 +496,19 @@ def open(
         errors=errors,
         protocol=protocol,
         newline=newline,
-        expand=False,
+        expand=expand,
         **kwargs,
-    )[0]
+    )
+    if not out:
+        raise FileNotFoundError(urlpath)
+    return out[0]
 
 
-def open_local(url, mode="rb", **storage_options):
+def open_local(
+    url: str | list[str] | Path | list[Path],
+    mode: str = "rb",
+    **storage_options: dict,
+) -> str | list[str]:
     """Open file(s) which can be resolved to local
 
     For files which either are local, or get downloaded upon open
@@ -453,7 +532,7 @@ def open_local(url, mode="rb", **storage_options):
         )
     with of as files:
         paths = [f.name for f in files]
-    if isinstance(url, str) and not has_magic(url):
+    if (isinstance(url, str) and not has_magic(url)) or isinstance(url, Path):
         return paths[0]
     return paths
 
@@ -462,7 +541,7 @@ def get_compression(urlpath, compression):
     if compression == "infer":
         compression = infer_compression(urlpath)
     if compression is not None and compression not in compr:
-        raise ValueError("Compression type %s not supported" % compression)
+        raise ValueError(f"Compression type {compression} not supported")
     return compression
 
 
@@ -474,6 +553,8 @@ def split_protocol(urlpath):
         if len(protocol) > 1:
             # excludes Windows paths
             return protocol, path
+    if urlpath.startswith("data:"):
+        return urlpath.split(":", 1)
     return None, urlpath
 
 
@@ -504,7 +585,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     paths = list(paths)
 
     if "w" in mode:  # read mode
-        if sum([1 for p in paths if "*" in p]) > 1:
+        if sum(1 for p in paths if "*" in p) > 1:
             raise ValueError(
                 "When writing data, only one filename mask can be specified."
             )
@@ -565,7 +646,7 @@ def get_fs_token_paths(
     if isinstance(urlpath, (list, tuple, set)):
         if not urlpath:
             raise ValueError("empty urlpath sequence")
-        urlpath0 = stringify_path(list(urlpath)[0])
+        urlpath0 = stringify_path(next(iter(urlpath)))
     else:
         urlpath0 = stringify_path(urlpath)
     storage_options = storage_options or {}
@@ -588,15 +669,18 @@ def get_fs_token_paths(
         pchains = [
             _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
         ]
-        if len(set(pc[1] for pc in pchains)) > 1:
+        if len({pc[1] for pc in pchains}) > 1:
             raise ValueError("Protocol mismatch getting fs from %s", urlpath)
         paths = [pc[0] for pc in pchains]
     else:
         paths = fs._strip_protocol(paths)
     if isinstance(paths, (list, tuple, set)):
-        paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
+        if expand:
+            paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
+        elif not isinstance(paths, list):
+            paths = list(paths)
     else:
-        if "w" in mode and expand:
+        if ("w" in mode or "x" in mode) and expand:
             paths = _expand_paths(paths, name_function, num)
         elif "*" in paths:
             paths = [f for f in sorted(fs.glob(paths)) if not fs.isdir(f)]

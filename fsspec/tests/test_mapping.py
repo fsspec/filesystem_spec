@@ -17,13 +17,13 @@ def test_mapping_prefix(tmpdir):
     open(os.path.join(tmpdir, "afile"), "w").write("test")
     open(os.path.join(tmpdir, "afolder", "anotherfile"), "w").write("test2")
 
-    m = fsspec.get_mapper("file://" + tmpdir)
+    m = fsspec.get_mapper(f"file://{tmpdir}")
     assert "afile" in m
     assert m["afolder/anotherfile"] == b"test2"
 
     fs = fsspec.filesystem("file")
     m2 = fs.get_mapper(tmpdir)
-    m3 = fs.get_mapper("file://" + tmpdir)
+    m3 = fs.get_mapper(f"file://{tmpdir}")
 
     assert m == m2 == m3
 
@@ -33,13 +33,13 @@ def test_getitems_errors(tmpdir):
     os.makedirs(os.path.join(tmpdir, "afolder"))
     open(os.path.join(tmpdir, "afile"), "w").write("test")
     open(os.path.join(tmpdir, "afolder", "anotherfile"), "w").write("test2")
-    m = fsspec.get_mapper("file://" + tmpdir)
+    m = fsspec.get_mapper(f"file://{tmpdir}")
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
     with pytest.raises(KeyError):
         m.getitems(["afile", "bfile"])
     out = m.getitems(["afile", "bfile"], on_error="return")
     assert isinstance(out["bfile"], KeyError)
-    m = fsspec.get_mapper("file://" + tmpdir, missing_exceptions=())
+    m = fsspec.get_mapper(f"file://{tmpdir}", missing_exceptions=())
     assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
     with pytest.raises(FileNotFoundError):
         m.getitems(["afile", "bfile"])
@@ -200,17 +200,29 @@ def test_fsmap_error_on_protocol_keys():
         _ = m[f"memory://{root}/a"]
 
 
-# on Windows opening a directory will raise PermissionError
-# see: https://bugs.python.org/issue43095
-@pytest.mark.skipif(
-    platform.system() == "Windows", reason="raises PermissionError on windows"
-)
 def test_fsmap_access_with_suffix(tmp_path):
     tmp_path.joinpath("b").mkdir()
     tmp_path.joinpath("b", "a").write_bytes(b"data")
-    m = fsspec.get_mapper(f"file://{tmp_path}")
-
+    if platform.system() == "Windows":
+        # on Windows opening a directory will raise PermissionError
+        # see: https://bugs.python.org/issue43095
+        missing_exceptions = (
+            FileNotFoundError,
+            IsADirectoryError,
+            NotADirectoryError,
+            PermissionError,
+        )
+    else:
+        missing_exceptions = None
+    m = fsspec.get_mapper(f"file://{tmp_path}", missing_exceptions=missing_exceptions)
     with pytest.raises(KeyError):
         _ = m["b/"]
-
     assert m["b/a/"] == b"data"
+
+
+def test_fsmap_dirfs():
+    m = fsspec.get_mapper("memory://")
+
+    fs = m.dirfs
+    assert isinstance(fs, fsspec.implementations.dirfs.DirFileSystem)
+    assert fs.path == m.root

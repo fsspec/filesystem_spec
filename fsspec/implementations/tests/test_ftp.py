@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+from ftplib import FTP, FTP_TLS
 
 import pytest
 
@@ -17,7 +18,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 def ftp():
     pytest.importorskip("pyftpdlib")
     P = subprocess.Popen(
-        [sys.executable, "-m", "pyftpdlib", "-d", here],
+        [sys.executable, os.path.join(here, "ftp_tls.py")],
         stderr=subprocess.STDOUT,
         stdout=subprocess.PIPE,
     )
@@ -29,11 +30,33 @@ def ftp():
         P.wait()
 
 
-def test_basic(ftp):
+@pytest.mark.parametrize(
+    "tls,exp_cls",
+    (
+        (False, FTP),
+        (True, FTP_TLS),
+    ),
+)
+def test_tls(ftp, tls, exp_cls):
     host, port = ftp
-    fs = FTPFileSystem(host, port)
+    fs = FTPFileSystem(host, port, tls=tls)
+    assert isinstance(fs.ftp, exp_cls)
+
+
+@pytest.mark.parametrize(
+    "tls,username,password",
+    (
+        (False, "", ""),
+        (True, "", ""),
+        (False, "user", "pass"),
+        (True, "user", "pass"),
+    ),
+)
+def test_basic(ftp, tls, username, password):
+    host, port = ftp
+    fs = FTPFileSystem(host, port, username, password, tls=tls)
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
-    out = fs.cat("/" + os.path.basename(__file__))
+    out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
 
 
@@ -42,6 +65,24 @@ def test_not_cached(ftp):
     fs = FTPFileSystem(host, port)
     fs2 = FTPFileSystem(host, port)
     assert fs is not fs2
+
+
+def test_ls_root_dircache(ftp):
+    host, port = ftp
+    fs = FTPFileSystem(host, port)
+
+    files = fs.ls("/", detail=False)
+
+    assert "/" in fs.dircache
+
+    ftp_tmp = fs.ftp
+    fs.ftp = None  # Ensure no ftp action will be done after
+
+    files2 = fs.ls("/", detail=False)
+
+    assert files == files2
+
+    fs.ftp = ftp_tmp
 
 
 @pytest.mark.parametrize("cache_type", ["bytes", "mmap"])
@@ -77,10 +118,10 @@ def test_write_small(ftp_writable):
 
 def test_with_url(ftp_writable):
     host, port, user, pw = ftp_writable
-    fo = fsspec.open("ftp://{}:{}@{}:{}/out".format(user, pw, host, port), "wb")
+    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out", "wb")
     with fo as f:
         f.write(b"hello")
-    fo = fsspec.open("ftp://{}:{}@{}:{}/out".format(user, pw, host, port), "rb")
+    fo = fsspec.open(f"ftp://{user}:{pw}@{host}:{port}/out", "rb")
     with fo as f:
         assert f.read() == b"hello"
 

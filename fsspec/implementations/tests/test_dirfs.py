@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 
 from fsspec.asyn import AsyncFileSystem
@@ -21,9 +19,6 @@ def make_fs(mocker):
         }
 
         if async_impl:
-            if asynchronous and sys.version_info < (3, 8):
-                pytest.skip("no AsyncMock before Python 3.8")
-
             attrs["asynchronous"] = asynchronous
             cls = AsyncFileSystem
         else:
@@ -87,11 +82,25 @@ def test_dirfs(fs, asyncfs):
         ("", "foo", "foo"),
         ("root", "", "root"),
         ("root", "foo", "root/foo"),
+        ("/root", "", "/root"),
+        ("/root", "foo", "/root/foo"),
     ],
 )
 def test_path(fs, root, rel, full):
     dirfs = DirFileSystem(root, fs)
     assert dirfs._join(rel) == full
+    assert dirfs._relpath(full) == rel
+
+
+@pytest.mark.parametrize(
+    "root, rel, full",
+    [
+        ("/root", "foo", "root/foo"),
+        ("/root", "", "root"),
+    ],
+)
+def test_path_no_leading_slash(fs, root, rel, full):
+    dirfs = DirFileSystem(root, fs)
     assert dirfs._relpath(full) == rel
 
 
@@ -165,6 +174,22 @@ async def test_async_pipe(adirfs):
 def test_pipe(dirfs):
     dirfs.pipe("file", *ARGS, **KWARGS)
     dirfs.fs.pipe.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+def test_pipe_dict(dirfs):
+    dirfs.pipe({"file": b"foo"}, *ARGS, **KWARGS)
+    dirfs.fs.pipe.assert_called_once_with({f"{PATH}/file": b"foo"}, *ARGS, **KWARGS)
+
+
+@pytest.mark.asyncio
+async def test_async_pipe_file(adirfs):
+    await adirfs._pipe_file("file", *ARGS, **KWARGS)
+    adirfs.fs._pipe_file.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+def test_pipe_file(dirfs):
+    dirfs.pipe_file("file", *ARGS, **KWARGS)
+    dirfs.fs.pipe_file.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
 
 
 @pytest.mark.asyncio
@@ -302,12 +327,14 @@ def test_exists(dirfs):
 
 @pytest.mark.asyncio
 async def test_async_info(adirfs):
-    assert await adirfs._info("file", **KWARGS) == adirfs.fs._info.return_value
+    adirfs.fs._info.return_value = {"name": f"{PATH}/file", "foo": "bar"}
+    assert await adirfs._info("file", **KWARGS) == {"name": "file", "foo": "bar"}
     adirfs.fs._info.assert_called_once_with(f"{PATH}/file", **KWARGS)
 
 
 def test_info(dirfs):
-    assert dirfs.info("file", **KWARGS) == dirfs.fs.info.return_value
+    dirfs.fs.info.return_value = {"name": f"{PATH}/file", "foo": "bar"}
+    assert dirfs.info("file", **KWARGS) == {"name": "file", "foo": "bar"}
     dirfs.fs.info.assert_called_once_with(f"{PATH}/file", **KWARGS)
 
 
@@ -347,9 +374,7 @@ async def test_async_walk(adirfs, mocker):
     adirfs.fs._walk = mocker.MagicMock()
     adirfs.fs._walk.side_effect = _walk
 
-    actual = []
-    async for entry in adirfs._walk("root", *ARGS, **KWARGS):
-        actual.append(entry)
+    actual = [entry async for entry in adirfs._walk("root", *ARGS, **KWARGS)]
     assert actual == [("root", ["foo", "bar"], ["baz", "qux"])]
     adirfs.fs._walk.assert_called_once_with(f"{PATH}/root", *ARGS, **KWARGS)
 
@@ -374,6 +399,12 @@ async def test_async_glob(adirfs):
 def test_glob(dirfs):
     dirfs.fs.glob.return_value = [f"{PATH}/one", f"{PATH}/two"]
     assert dirfs.glob("*", **KWARGS) == ["one", "two"]
+    dirfs.fs.glob.assert_called_once_with(f"{PATH}/*", **KWARGS)
+
+
+def test_glob_with_protocol(dirfs):
+    dirfs.fs.glob.return_value = [f"{PATH}/one", f"{PATH}/two"]
+    assert dirfs.glob("dir://*", **KWARGS) == ["one", "two"]
     dirfs.fs.glob.assert_called_once_with(f"{PATH}/*", **KWARGS)
 
 
@@ -530,10 +561,10 @@ def test_rmdir(mocker, dirfs):
     dirfs.fs.rmdir.assert_called_once_with(f"{PATH}/dir")
 
 
-def test_mv_file(mocker, dirfs):
-    dirfs.fs.mv_file = mocker.Mock()
-    dirfs.mv_file("one", "two", **KWARGS)
-    dirfs.fs.mv_file.assert_called_once_with(f"{PATH}/one", f"{PATH}/two", **KWARGS)
+def test_mv(mocker, dirfs):
+    dirfs.fs.mv = mocker.Mock()
+    dirfs.mv("one", "two", **KWARGS)
+    dirfs.fs.mv.assert_called_once_with(f"{PATH}/one", f"{PATH}/two", **KWARGS)
 
 
 def test_touch(mocker, dirfs):
@@ -560,7 +591,27 @@ def test_sign(mocker, dirfs):
     dirfs.fs.sign.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
 
 
+@pytest.mark.asyncio
+async def test_open_async(mocker, adirfs):
+    adirfs.fs.open_async = mocker.AsyncMock()
+    assert (
+        await adirfs.open_async("file", *ARGS, **KWARGS)
+        == adirfs.fs.open_async.return_value
+    )
+    adirfs.fs.open_async.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
 def test_open(mocker, dirfs):
     dirfs.fs.open = mocker.Mock()
     assert dirfs.open("file", *ARGS, **KWARGS) == dirfs.fs.open.return_value
     dirfs.fs.open.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+def test_from_url(m):
+    from fsspec.core import url_to_fs
+
+    m.pipe("inner/file", b"data")
+    fs, _ = url_to_fs("dir::memory://inner")
+    assert fs.ls("", False) == ["file"]
+    assert fs.ls("", True)[0]["name"] == "file"
+    assert fs.cat("file") == b"data"

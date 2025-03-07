@@ -1,5 +1,6 @@
 import io
 import sys
+from pathlib import Path, PurePath
 from unittest.mock import Mock
 
 import pytest
@@ -8,6 +9,7 @@ import fsspec.utils
 from fsspec.utils import (
     can_be_local,
     common_prefix,
+    get_protocol,
     infer_storage_options,
     merge_offset_ranges,
     mirror_from,
@@ -42,10 +44,8 @@ def test_read_block():
 
 
 def test_read_block_split_before():
-    """Test start/middle/end cases of split_before."""  # noqa: I
-    d = (
-        "#header" + "".join(">foo{i}\nFOOBAR{i}\n".format(i=i) for i in range(100000))
-    ).encode()
+    """Test start/middle/end cases of split_before."""
+    d = ("#header" + "".join(f">foo{i}\nFOOBAR{i}\n" for i in range(100000))).encode()
 
     # Read single record at beginning.
     # All reads include beginning of file and read through termination of
@@ -206,7 +206,7 @@ def test_infer_options():
     # - Parsing doesn't lowercase the bucket
     # - The bucket is included in path
     for protocol in ["s3", "s3a", "gcs", "gs"]:
-        options = infer_storage_options("%s://Bucket-name.com/test.csv" % protocol)
+        options = infer_storage_options(f"{protocol}://Bucket-name.com/test.csv")
         assert options["path"] == "Bucket-name.com/test.csv"
 
     with pytest.raises(KeyError):
@@ -255,20 +255,15 @@ def test_common_prefix(paths, out):
 
 
 @pytest.mark.parametrize(
-    "paths, other, is_dir, expected",
+    "paths, other, exists, expected",
     (
         (["/path1"], "/path2", False, ["/path2"]),
         (["/path1"], "/path2", True, ["/path2/path1"]),
-        (["/path1"], "/path2", None, ["/path2"]),
         (["/path1"], "/path2/", True, ["/path2/path1"]),
+        (["/path1"], ["/path2"], False, ["/path2"]),
         (["/path1"], ["/path2"], True, ["/path2"]),
+        (["/path1", "/path2"], "/path2", False, ["/path2/path1", "/path2/path2"]),
         (["/path1", "/path2"], "/path2", True, ["/path2/path1", "/path2/path2"]),
-        (
-            ["/more/path1", "/more/path2"],
-            "/path2",
-            True,
-            ["/path2/path1", "/path2/path2"],
-        ),
         (
             ["/more/path1", "/more/path2"],
             "/path2",
@@ -277,20 +272,45 @@ def test_common_prefix(paths, out):
         ),
         (
             ["/more/path1", "/more/path2"],
+            "/path2",
+            True,
+            ["/path2/more/path1", "/path2/more/path2"],
+        ),
+        (
+            ["/more/path1", "/more/path2"],
             "/path2/",
-            None,
+            False,
             ["/path2/path1", "/path2/path2"],
+        ),
+        (
+            ["/more/path1", "/more/path2"],
+            "/path2/",
+            True,
+            ["/path2/more/path1", "/path2/more/path2"],
         ),
         (
             ["/more/path1", "/diff/path2"],
             "/path2/",
-            None,
+            False,
             ["/path2/more/path1", "/path2/diff/path2"],
+        ),
+        (
+            ["/more/path1", "/diff/path2"],
+            "/path2/",
+            True,
+            ["/path2/more/path1", "/path2/diff/path2"],
+        ),
+        (["a", "b/", "b/c"], "dest/", False, ["dest/a", "dest/b/", "dest/b/c"]),
+        (
+            ["/a", "/b/", "/b/c"],
+            "dest/",
+            False,
+            ["dest/a", "dest/b/", "dest/b/c"],
         ),
     ),
 )
-def test_other_paths(paths, other, is_dir, expected):
-    assert other_paths(paths, other, is_dir) == expected
+def test_other_paths(paths, other, exists, expected):
+    assert other_paths(paths, other, exists) == expected
 
 
 def test_log():
@@ -303,12 +323,31 @@ def test_log():
 @pytest.mark.parametrize(
     "par",
     [
+        ("afile", "file"),
+        ("file://afile", "file"),
+        ("noproto://afile", "noproto"),
+        ("noproto::stuff", "noproto"),
+        ("simplecache::stuff", "simplecache"),
+        ("simplecache://stuff", "simplecache"),
+        ("s3://afile", "s3"),
+        (Path("afile"), "file"),
+    ],
+)
+def test_get_protocol(par):
+    url, outcome = par
+    assert get_protocol(url) == outcome
+
+
+@pytest.mark.parametrize(
+    "par",
+    [
         ("afile", True),
         ("file://afile", True),
         ("noproto://afile", False),
         ("noproto::stuff", False),
         ("simplecache::stuff", True),
         ("simplecache://stuff", True),
+        (Path("afile"), True),
     ],
 )
 def test_can_local(par):
@@ -317,7 +356,6 @@ def test_can_local(par):
 
 
 def test_mirror_from():
-
     mock = Mock()
     mock.attr = 1
 
@@ -328,7 +366,7 @@ def test_mirror_from():
             return mock
 
         def func_2(self):
-            assert False, "have to overwrite this"
+            raise AssertionError("have to overwrite this")
 
         def func_3(self):
             return "should succeed"
@@ -349,7 +387,6 @@ def test_mirror_from():
 @pytest.mark.parametrize("max_gap", [0, 32])
 @pytest.mark.parametrize("max_block", [None, 128])
 def test_merge_offset_ranges(max_gap, max_block):
-
     # Input ranges
     # (Using out-of-order ranges for full coverage)
     paths = ["foo", "bar", "bar", "bar", "foo"]
@@ -357,7 +394,11 @@ def test_merge_offset_ranges(max_gap, max_block):
     ends = [32, 32, 1024, 256, 64]
 
     # Call merge_offset_ranges
-    (result_paths, result_starts, result_ends,) = merge_offset_ranges(
+    (
+        result_paths,
+        result_starts,
+        result_ends,
+    ) = merge_offset_ranges(
         paths,
         starts,
         ends,
@@ -384,3 +425,39 @@ def test_size():
     f = io.BytesIO(b"hello")
     assert fsspec.utils.file_size(f) == 5
     assert f.tell() == 0
+
+
+class _HasFspath:
+    def __fspath__(self):
+        return "foo"
+
+
+class _HasPathAttr:
+    def __init__(self):
+        self.path = "foo"
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        # coerce to string
+        ("foo", "foo"),
+        (Path("foo"), "foo"),
+        (PurePath("foo"), "foo"),
+        (_HasFspath(), "foo"),
+        (_HasPathAttr(), "foo"),
+        # passthrough
+        (b"bytes", b"bytes"),
+        (None, None),
+        (1, 1),
+        (True, True),
+        (o := object(), o),
+        ([], []),
+        ((), ()),
+        (set(), set()),
+    ],
+)
+def test_stringify_path(path, expected):
+    path = fsspec.utils.stringify_path(path)
+
+    assert path == expected

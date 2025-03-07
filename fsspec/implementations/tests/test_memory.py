@@ -1,4 +1,5 @@
 import os
+from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -21,19 +22,6 @@ def test_strip(m):
     assert m._strip_protocol("afile") == "/afile"
     assert m._strip_protocol("/b/c") == "/b/c"
     assert m._strip_protocol("/b/c/") == "/b/c"
-
-
-def test_put_single(m, tmpdir):
-    fn = os.path.join(str(tmpdir), "dir")
-    os.mkdir(fn)
-    open(os.path.join(fn, "abc"), "w").write("text")
-    m.put(fn, "/test")  # no-op, no files
-    assert m.isdir("/test")
-    assert not m.exists("/test/abc")
-    assert not m.exists("/test/dir")
-    m.put(fn, "/test", recursive=True)
-    assert m.isdir("/test/dir")
-    assert m.cat("/test/dir/abc") == b"text"
 
 
 def test_ls(m):
@@ -71,6 +59,44 @@ def test_directories(m):
     assert not m.store
 
 
+def test_exists_isdir_isfile(m):
+    m.mkdir("/root")
+    m.touch("/root/a")
+
+    assert m.exists("/root")
+    assert m.isdir("/root")
+    assert not m.isfile("/root")
+
+    assert m.exists("/root/a")
+    assert m.isfile("/root/a")
+    assert not m.isdir("/root/a")
+
+    assert not m.exists("/root/not-exists")
+    assert not m.isfile("/root/not-exists")
+    assert not m.isdir("/root/not-exists")
+
+    m.rm("/root/a")
+    m.rmdir("/root")
+
+    assert not m.exists("/root")
+
+    m.touch("/a/b")
+    assert m.isfile("/a/b")
+
+    assert m.exists("/a")
+    assert m.isdir("/a")
+    assert not m.isfile("/a")
+
+
+def test_touch(m):
+    m.touch("/root/a")
+    with pytest.raises(FileExistsError):
+        m.touch("/root/a/b")
+    with pytest.raises(FileExistsError):
+        m.touch("/root/a/b/c")
+    assert not m.exists("/root/a/b/")
+
+
 def test_mv_recursive(m):
     m.mkdir("src")
     m.touch("src/file.txt")
@@ -79,7 +105,14 @@ def test_mv_recursive(m):
     assert not m.exists("src")
 
 
-def test_rm_no_psuedo_dir(m):
+def test_mv_same_paths(m):
+    m.mkdir("src")
+    m.touch("src/file.txt")
+    m.mv("src", "src", recursive=True)
+    assert m.exists("src/file.txt")
+
+
+def test_rm_no_pseudo_dir(m):
     m.touch("/dir1/dir2/file")
     m.rm("/dir1", recursive=True)
     assert not m.exists("/dir1/dir2/file")
@@ -157,6 +190,15 @@ def test_seekable(m):
     f.seek(1)
     assert f.read(1) == "a"
     assert f.tell() == 2
+
+
+# https://github.com/fsspec/filesystem_spec/issues/1425
+@pytest.mark.parametrize("mode", ["r", "rb", "w", "wb", "ab", "r+b"])
+def test_open_mode(m, mode):
+    filename = "mode.txt"
+    m.touch(filename)
+    with m.open(filename, mode=mode) as _:
+        pass
 
 
 def test_remove_all(m):
@@ -272,6 +314,38 @@ def test_put_directory_recursive(m, tmpdir):
         assert m.find(target) == correct
 
 
+def test_cp_empty_directory(m):
+    # https://github.com/fsspec/filesystem_spec/issues/1198
+    # cp/get/put of empty directory.
+    empty = "/src/empty"
+    m.mkdir(empty)
+
+    target = "/target"
+    m.mkdir(target)
+
+    # cp without slash, target directory exists
+    assert m.isdir(target)
+    m.cp(empty, target)
+    assert m.find(target, withdirs=True) == [target]
+
+    # cp with slash, target directory exists
+    assert m.isdir(target)
+    m.cp(empty + "/", target)
+    assert m.find(target, withdirs=True) == [target]
+
+    m.rmdir(target)
+
+    # cp without slash, target directory doesn't exist
+    assert not m.isdir(target)
+    m.cp(empty, target)
+    assert not m.isdir(target)
+
+    # cp with slash, target directory doesn't exist
+    assert not m.isdir(target)
+    m.cp(empty + "/", target)
+    assert not m.isdir(target)
+
+
 def test_cp_two_files(m):
     src = "/src"
     file0 = src + "/file0"
@@ -290,3 +364,19 @@ def test_cp_two_files(m):
         "/target/file0",
         "/target/file1",
     ]
+
+
+def test_open_path_posix(m):
+    path = PurePosixPath("/myfile/foo/bar")
+    with m.open(path, "wb") as f:
+        f.write(b"some\nlines\nof\ntext")
+
+    assert m.read_text(path) == "some\nlines\nof\ntext"
+
+
+def test_open_path_windows(m):
+    path = PureWindowsPath("C:\\myfile\\foo\\bar")
+    with m.open(path, "wb") as f:
+        f.write(b"some\nlines\nof\ntext")
+
+    assert m.read_text(path) == "some\nlines\nof\ntext"

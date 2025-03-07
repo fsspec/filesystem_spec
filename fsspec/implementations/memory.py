@@ -1,13 +1,17 @@
-from __future__ import absolute_import, division, print_function
+from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
+from pathlib import PurePath, PureWindowsPath
+from typing import Any, ClassVar
 
 from fsspec import AbstractFileSystem
+from fsspec.implementations.local import LocalFileSystem
+from fsspec.utils import stringify_path
 
-logger = logging.Logger("fsspec.memoryfs")
+logger = logging.getLogger("fsspec.memoryfs")
 
 
 class MemoryFileSystem(AbstractFileSystem):
@@ -17,13 +21,19 @@ class MemoryFileSystem(AbstractFileSystem):
     in memory filesystem.
     """
 
-    store = {}  # global, do not overwrite!
+    store: ClassVar[dict[str, Any]] = {}  # global, do not overwrite!
     pseudo_dirs = [""]  # global, do not overwrite!
     protocol = "memory"
     root_marker = "/"
 
     @classmethod
     def _strip_protocol(cls, path):
+        if isinstance(path, PurePath):
+            if isinstance(path, PureWindowsPath):
+                return LocalFileSystem._strip_protocol(path)
+            else:
+                path = stringify_path(path)
+
         if path.startswith("memory://"):
             path = path[len("memory://") :]
         if "::" in path or "://" in path:
@@ -116,12 +126,13 @@ class MemoryFileSystem(AbstractFileSystem):
             if not exist_ok:
                 raise
 
-    def pipe_file(self, path, value, **kwargs):
+    def pipe_file(self, path, value, mode="overwrite", **kwargs):
         """Set the bytes of given file
 
         Avoids copies of the data if possible
         """
-        self.open(path, "wb", data=value)
+        mode = "xb" if mode == "create" else "wb"
+        self.open(path, mode=mode, data=value)
 
     def rmdir(self, path):
         path = self._strip_protocol(path)
@@ -136,11 +147,8 @@ class MemoryFileSystem(AbstractFileSystem):
         else:
             raise FileNotFoundError(path)
 
-    def exists(self, path, **kwargs):
-        path = self._strip_protocol(path)
-        return path in self.store or path in self.pseudo_dirs
-
     def info(self, path, **kwargs):
+        logger.debug("info: %s", path)
         path = self._strip_protocol(path)
         if path in self.pseudo_dirs or any(
             p.startswith(path + "/") for p in list(self.store) + self.pseudo_dirs
@@ -171,6 +179,8 @@ class MemoryFileSystem(AbstractFileSystem):
         **kwargs,
     ):
         path = self._strip_protocol(path)
+        if "x" in mode and self.exists(path):
+            raise FileExistsError
         if path in self.pseudo_dirs:
             raise IsADirectoryError(path)
         parent = path
@@ -178,7 +188,7 @@ class MemoryFileSystem(AbstractFileSystem):
             parent = self._parent(parent)
             if self.isfile(parent):
                 raise FileExistsError(parent)
-        if mode in ["rb", "ab", "rb+"]:
+        if mode in ["rb", "ab", "r+b"]:
             if path in self.store:
                 f = self.store[path]
                 if mode == "ab":
@@ -190,11 +200,16 @@ class MemoryFileSystem(AbstractFileSystem):
                 return f
             else:
                 raise FileNotFoundError(path)
-        if mode == "wb":
+        elif mode in {"wb", "xb"}:
+            if mode == "xb" and self.exists(path):
+                raise FileExistsError
             m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
                 m.commit()
             return m
+        else:
+            name = self.__class__.__name__
+            raise ValueError(f"unsupported file mode for {name}: {mode!r}")
 
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
@@ -210,11 +225,12 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path1)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
+        logger.debug("cat: %s", path)
         path = self._strip_protocol(path)
         try:
             return bytes(self.store[path].getbuffer()[start:end])
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as e:
+            raise FileNotFoundError(path) from e
 
     def _rm(self, path):
         path = self._strip_protocol(path)
@@ -227,15 +243,19 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         try:
             return self.store[path].modified
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as e:
+            raise FileNotFoundError(path) from e
 
     def created(self, path):
         path = self._strip_protocol(path)
         try:
             return self.store[path].created
-        except KeyError:
-            raise FileNotFoundError(path)
+        except KeyError as e:
+            raise FileNotFoundError(path) from e
+
+    def isfile(self, path):
+        path = self._strip_protocol(path)
+        return path in self.store
 
     def rm(self, path, recursive=False, maxdepth=None):
         if isinstance(path, str):
@@ -244,14 +264,14 @@ class MemoryFileSystem(AbstractFileSystem):
             path = [self._strip_protocol(p) for p in path]
         paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
         for p in reversed(paths):
+            if self.isfile(p):
+                self.rm_file(p)
             # If the expanded path doesn't exist, it is only because the expanded
             # path was a directory that does not exist in self.pseudo_dirs. This
             # is possible if you directly create files without making the
             # directories first.
-            if not self.exists(p):
+            elif not self.exists(p):
                 continue
-            if self.isfile(p):
-                self.rm_file(p)
             else:
                 self.rmdir(p)
 
@@ -268,8 +288,8 @@ class MemoryFile(BytesIO):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
-        self.created = datetime.utcnow()
-        self.modified = datetime.utcnow()
+        self.created = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=timezone.utc)
         if data:
             super().__init__(data)
             self.seek(0)
@@ -289,4 +309,4 @@ class MemoryFile(BytesIO):
 
     def commit(self):
         self.fs.store[self.path] = self
-        self.modified = datetime.utcnow()
+        self.modified = datetime.now(tz=timezone.utc)

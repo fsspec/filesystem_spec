@@ -14,7 +14,8 @@ file-like objects.
 Some concrete implementations are bundled with ``fsspec`` and others can be installed separately. They
 can be instantiated directly, or the ``registry`` can be used to find them.
 
-Direct instantiation:
+Direct instantiation using the name of the class such as ``LocalFileSystem``, ``ZipFileSystem`` or
+``S3FileSystem``:
 
 .. code-block:: python
 
@@ -30,6 +31,10 @@ Look-up via registry:
 
     fs = fsspec.filesystem('file')
 
+The argument passed here is the protocol name which maps across to the corresponding implementation
+class ``LocalFileSystem``. Other examples are ``zip`` which maps across to ``ZipFileSystem`` and
+``s3`` which maps across to ``S3FileSystem``.
+
 Many filesystems also take extra parameters, some of which may be options - see :doc:`api`, or use
 :func:`fsspec.get_filesystem_class` to get the class object and inspect its docstring.
 
@@ -40,6 +45,14 @@ Many filesystems also take extra parameters, some of which may be options - see 
     fs = fsspec.filesystem('ftp', host=host, port=port, username=user, password=pw)
 
 The list of implemented ``fsspec`` protocols can be retrieved using :func:`fsspec.available_protocols`.
+
+.. note::
+
+   The full list of the available protocols and the implementations that they map across to is
+   divided into two sections:
+
+    - Implementations built into ``fsspec``: :ref:`implementations`
+    - Implementations in separate packages: :ref:`external_implementations`
 
 Use a file-system
 -----------------
@@ -104,3 +117,8 @@ or write mode (create names). Critically, the file on the backend system is not 
             print(line)
             if "KENYA" in line:
                 break
+
+.. raw:: html
+
+    <script data-goatcounter="https://fsspec.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>

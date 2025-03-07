@@ -32,7 +32,7 @@ def tempzip(data=None):
     finally:
         try:
             os.remove(f)
-        except (IOError, OSError):
+        except OSError:
             pass
 
 
@@ -52,7 +52,7 @@ def temparchive(data=None):
     finally:
         try:
             os.remove(f)
-        except (IOError, OSError):
+        except OSError:
             pass
 
 
@@ -65,8 +65,7 @@ def temptar(data=None, mode="w", suffix=".tar"):
     fn = tempfile.mkstemp(suffix=suffix)[1]
     with tarfile.TarFile.open(fn, mode=mode) as t:
         touched = {}
-        for name, data in data.items():
-
+        for name, value in data.items():
             # Create directory hierarchy.
             # https://bugs.python.org/issue22208#msg225558
             if "/" in name and name not in touched:
@@ -79,15 +78,15 @@ def temptar(data=None, mode="w", suffix=".tar"):
 
             # Add file content.
             info = tarfile.TarInfo(name=name)
-            info.size = len(data)
-            t.addfile(info, BytesIO(data))
+            info.size = len(value)
+            t.addfile(info, BytesIO(value))
 
     try:
         yield fn
     finally:
         try:
             os.remove(fn)
-        except (IOError, OSError):
+        except OSError:
             pass
 
 
@@ -98,7 +97,6 @@ def temptargz(data=None, mode="w", suffix=".tar.gz"):
     """
 
     with temptar(data=data, mode=mode) as tarname:
-
         fn = tempfile.mkstemp(suffix=suffix)[1]
         with open(tarname, "rb") as tar:
             cf = gzip.GzipFile(filename=fn, mode=mode)
@@ -110,7 +108,7 @@ def temptargz(data=None, mode="w", suffix=".tar.gz"):
         finally:
             try:
                 os.remove(fn)
-            except (IOError, OSError):
+            except OSError:
                 pass
 
 
@@ -121,7 +119,6 @@ def temptarbz2(data=None, mode="w", suffix=".tar.bz2"):
     """
 
     with temptar(data=data, mode=mode) as tarname:
-
         fn = tempfile.mkstemp(suffix=suffix)[1]
         with open(tarname, "rb") as tar:
             cf = bz2.BZ2File(filename=fn, mode=mode)
@@ -133,7 +130,7 @@ def temptarbz2(data=None, mode="w", suffix=".tar.bz2"):
         finally:
             try:
                 os.remove(fn)
-            except (IOError, OSError):
+            except OSError:
                 pass
 
 
@@ -144,7 +141,6 @@ def temptarxz(data=None, mode="w", suffix=".tar.xz"):
     """
 
     with temptar(data=data, mode=mode) as tarname:
-
         fn = tempfile.mkstemp(suffix=suffix)[1]
         with open(tarname, "rb") as tar:
             cf = lzma.open(filename=fn, mode=mode, format=lzma.FORMAT_XZ)
@@ -156,7 +152,7 @@ def temptarxz(data=None, mode="w", suffix=".tar.xz"):
         finally:
             try:
                 os.remove(fn)
-            except (IOError, OSError):
+            except OSError:
                 pass
 
 
@@ -276,10 +272,10 @@ class TestAnyArchive:
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
 
-            assert fs.ls("", detail=False) == ["a", "b", "deeply/"]
+            assert fs.ls("", detail=False) == ["a", "b", "deeply"]
             assert fs.ls("/") == fs.ls("")
 
-            assert fs.ls("deeply", detail=False) == ["deeply/nested/"]
+            assert fs.ls("deeply", detail=False) == ["deeply/nested"]
             assert fs.ls("deeply/") == fs.ls("deeply")
 
             assert fs.ls("deeply/nested", detail=False) == ["deeply/nested/path"]
@@ -293,8 +289,8 @@ class TestAnyArchive:
             assert fs.find("", withdirs=True) == [
                 "a",
                 "b",
-                "deeply/",
-                "deeply/nested/",
+                "deeply",
+                "deeply/nested",
                 "deeply/nested/path",
             ]
 
@@ -302,28 +298,40 @@ class TestAnyArchive:
             assert fs.find("deeply/") == fs.find("deeply")
 
     @pytest.mark.parametrize("topdown", [True, False])
-    def test_walk(self, scenario: ArchiveTestScenario, topdown):
+    @pytest.mark.parametrize("prune_nested", [True, False])
+    def test_walk(self, scenario: ArchiveTestScenario, topdown, prune_nested):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             expected = [
                 # (dirname, list of subdirs, list of files)
                 ("", ["deeply"], ["a", "b"]),
                 ("deeply", ["nested"], []),
-                ("deeply/nested", [], ["path"]),
             ]
+            if not topdown or not prune_nested:
+                expected.append(("deeply/nested", [], ["path"]))
             if not topdown:
                 expected.reverse()
-            for lhs, rhs in zip(fs.walk("", topdown=topdown), expected):
+
+            result = []
+            for path, dirs, files in fs.walk("", topdown=topdown):
+                result.append((path, dirs.copy(), files))
+                # Bypass the "nested" dir
+                if prune_nested and "nested" in dirs:
+                    dirs.remove("nested")
+
+            # prior py3.10 zip() does not support strict=True, we need
+            # a manual len check here
+            assert len(result) == len(expected)
+            for lhs, rhs in zip(result, expected):
                 assert lhs[0] == rhs[0]
                 assert sorted(lhs[1]) == sorted(rhs[1])
                 assert sorted(lhs[2]) == sorted(rhs[2])
 
     def test_info(self, scenario: ArchiveTestScenario):
-
         # https://github.com/Suor/funcy/blob/1.15/funcy/colls.py#L243-L245
         def project(mapping, keys):
             """Leaves only given keys in mapping."""
-            return dict((k, mapping[k]) for k in keys if k in mapping)
+            return {k: mapping[k] for k in keys if k in mapping}
 
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
@@ -334,7 +342,7 @@ class TestAnyArchive:
             # Iterate over all directories.
             for d in fs._all_dirnames(archive_data.keys()):
                 lhs = project(fs.info(d), ["name", "size", "type"])
-                expected = {"name": f"{d}/", "size": 0, "type": "directory"}
+                expected = {"name": f"{d}", "size": 0, "type": "directory"}
                 assert lhs == expected
 
             # Iterate over all files.

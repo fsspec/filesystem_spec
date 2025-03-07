@@ -1,8 +1,26 @@
+from .. import filesystem
 from ..asyn import AsyncFileSystem
 
 
 class DirFileSystem(AsyncFileSystem):
-    def __init__(self, path, fs, *args, **storage_options):
+    """Directory prefix filesystem
+
+    The DirFileSystem is a filesystem-wrapper. It assumes every path it is dealing with
+    is relative to the `path`. After performing the necessary paths operation it
+    delegates everything to the wrapped filesystem.
+    """
+
+    protocol = "dir"
+
+    def __init__(
+        self,
+        path=None,
+        fs=None,
+        fo=None,
+        target_protocol=None,
+        target_options=None,
+        **storage_options,
+    ):
         """
         Parameters
         ----------
@@ -10,8 +28,15 @@ class DirFileSystem(AsyncFileSystem):
             Path to the directory.
         fs: AbstractFileSystem
             An instantiated filesystem to wrap.
+        target_protocol, target_options:
+            if fs is none, construct it from these
+        fo: str
+            Alternate for path; do not provide both
         """
-        super().__init__(*args, **storage_options)
+        super().__init__(**storage_options)
+        if fs is None:
+            fs = filesystem(protocol=target_protocol, **(target_options or {}))
+        path = path or fo
 
         if self.asynchronous and not fs.async_impl:
             raise ValueError("can't use asynchronous with non-async fs")
@@ -28,16 +53,24 @@ class DirFileSystem(AsyncFileSystem):
                 return path
             if not path:
                 return self.path
-            return self.fs.sep.join((self.path, path))
+            return self.fs.sep.join((self.path, self._strip_protocol(path)))
+        if isinstance(path, dict):
+            return {self._join(_path): value for _path, value in path.items()}
         return [self._join(_path) for _path in path]
 
     def _relpath(self, path):
         if isinstance(path, str):
             if not self.path:
                 return path
-            if path == self.path:
+            # We need to account for S3FileSystem returning paths that do not
+            # start with a '/'
+            if path == self.path or (
+                self.path.startswith(self.fs.sep) and path == self.path[1:]
+            ):
                 return ""
             prefix = self.path + self.fs.sep
+            if self.path.startswith(self.fs.sep) and not path.startswith(self.fs.sep):
+                prefix = prefix[1:]
             assert path.startswith(prefix)
             return path[len(prefix) :]
         return [self._relpath(_path) for _path in path]
@@ -96,6 +129,12 @@ class DirFileSystem(AsyncFileSystem):
 
     def pipe(self, path, *args, **kwargs):
         return self.fs.pipe(self._join(path), *args, **kwargs)
+
+    async def _pipe_file(self, path, *args, **kwargs):
+        return await self.fs._pipe_file(self._join(path), *args, **kwargs)
+
+    def pipe_file(self, path, *args, **kwargs):
+        return self.fs.pipe_file(self._join(path), *args, **kwargs)
 
     async def _cat_file(self, path, *args, **kwargs):
         return await self.fs._cat_file(self._join(path), *args, **kwargs)
@@ -192,26 +231,38 @@ class DirFileSystem(AsyncFileSystem):
         return self.fs.exists(self._join(path))
 
     async def _info(self, path, **kwargs):
-        return await self.fs._info(self._join(path), **kwargs)
+        info = await self.fs._info(self._join(path), **kwargs)
+        info = info.copy()
+        info["name"] = self._relpath(info["name"])
+        return info
 
     def info(self, path, **kwargs):
-        return self.fs.info(self._join(path), **kwargs)
+        info = self.fs.info(self._join(path), **kwargs)
+        info = info.copy()
+        info["name"] = self._relpath(info["name"])
+        return info
 
     async def _ls(self, path, detail=True, **kwargs):
-        ret = await self.fs._ls(self._join(path), detail=detail, **kwargs)
+        ret = (await self.fs._ls(self._join(path), detail=detail, **kwargs)).copy()
         if detail:
+            out = []
             for entry in ret:
+                entry = entry.copy()
                 entry["name"] = self._relpath(entry["name"])
-            return ret
+                out.append(entry)
+            return out
 
         return self._relpath(ret)
 
     def ls(self, path, detail=True, **kwargs):
-        ret = self.fs.ls(self._join(path), detail=detail, **kwargs)
+        ret = self.fs.ls(self._join(path), detail=detail, **kwargs).copy()
         if detail:
+            out = []
             for entry in ret:
+                entry = entry.copy()
                 entry["name"] = self._relpath(entry["name"])
-            return ret
+                out.append(entry)
+            return out
 
         return self._relpath(ret)
 
@@ -290,8 +341,8 @@ class DirFileSystem(AsyncFileSystem):
     def rmdir(self, path):
         return self.fs.rmdir(self._join(path))
 
-    def mv_file(self, path1, path2, **kwargs):
-        return self.fs.mv_file(
+    def mv(self, path1, path2, **kwargs):
+        return self.fs.mv(
             self._join(path1),
             self._join(path2),
             **kwargs,
@@ -319,6 +370,18 @@ class DirFileSystem(AsyncFileSystem):
         **kwargs,
     ):
         return self.fs.open(
+            self._join(path),
+            *args,
+            **kwargs,
+        )
+
+    async def open_async(
+        self,
+        path,
+        *args,
+        **kwargs,
+    ):
+        return await self.fs.open_async(
             self._join(path),
             *args,
             **kwargs,

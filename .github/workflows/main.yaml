@@ -2,127 +2,135 @@ name: CI
 
 on:
   push:
-    branches: "*"
+    branches: ["*"]
   pull_request:
-    branches: master
+    branches: [master]
 
 jobs:
   linux:
     name: ${{ matrix.PY }}-pytest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        PY: ["3.8", "3.9", "3.10"]
+        PY:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
 
     env:
       CIRUN: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup conda
-        uses: mamba-org/provision-with-micromamba@main
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-py38.yml
-          extra-specs: python=${{ matrix.PY }}
+          python-version: ${{ matrix.PY }}
 
       - name: Run Tests
         shell: bash -l {0}
         run: |
+          pip install -e .[test_full]
           pytest -v
 
   win:
     name: pytest-win
     runs-on: windows-2019
-    strategy:
-      fail-fast: false
 
     env:
       CIRUN: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup conda
-        uses: mamba-org/provision-with-micromamba@main
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-win.yml
 
       - name: Run Tests
         shell: bash -l {0}
         run: |
+          pip install -e .[test]
           pytest -v
 
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - uses: pre-commit/action@v2.0.0
+      - uses: actions/checkout@main
+      - uses: actions/setup-python@main
+        with:
+          python-version: "3.11"
+      - uses: pre-commit/action@main
 
+#  typecheck:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Setup conda
+#        uses: conda-incubator/setup-miniconda@v3
+#        with:
+#          environment-file: ci/environment-typecheck.yml
+#
+#      - name: mypy
+#        shell: bash -l {0}
+#        run: |
+#          mypy fsspec
+#
   downstream:
     name: downstream
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup conda
-        uses: mamba-org/provision-with-micromamba@main
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-downstream.yml
 
       - name: Local install
         shell: bash -l {0}
         run: |
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
-          git tag -a 3000 -m "fake"
-          pip install -e .
-
-      - name: Clone s3fs
-        shell: bash -l {0}
-        run: git clone https://github.com/fsspec/s3fs
-
-      - name: Install s3fs
-        shell: bash -l {0}
-        run: |
-          pip install -e ./s3fs --no-deps
+          sh install_s3fs.sh
+          pip install -e .[test,test_downstream]
+          pip list
 
       - name: Run fsspec tests
         shell: bash -l {0}
         run: |
           pytest -v fsspec/tests/test_downstream.py
 
-      - name: clone dask
-        shell: bash -l {0}
-        run: |
-          git clone https://github.com/dask/dask
-          pip install -e ./dask
-
       - name: Run dask tests
         shell: bash -l {0}
         run: |
-          pytest -v dask/dask/bytes
+          dask_test_path=$(python -c "import dask.bytes;print(dask.bytes.__path__[0])")
+          pytest -v $dask_test_path
 
   fsspec_friends:
     name: ${{ matrix.FRIEND }}-pytest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        FRIEND: [gcsfs, s3fs]
+        FRIEND: [s3fs, gcsfs]
 
     env:
       CIRUN: true
@@ -132,10 +140,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Setup conda
-        uses: mamba-org/provision-with-micromamba@main
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/environment-friends.yml
 
@@ -147,8 +155,11 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install -e . --no-deps
-          pip install -e ./${{ matrix.FRIEND }} --no-deps
+          pip list
 
       - name: Test
         shell: bash -l {0}
-        run: pytest -v ${{ matrix.FRIEND }}
+        run: |
+          cd ${{ matrix.FRIEND }}
+          pytest -v
+          cd ..

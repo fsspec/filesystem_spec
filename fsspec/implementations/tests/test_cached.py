@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import shutil
@@ -8,7 +9,19 @@ import pytest
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
-from fsspec.implementations.cached import CachingFileSystem, LocalTempFile
+from fsspec.implementations.cache_mapper import (
+    BasenameCacheMapper,
+    HashCacheMapper,
+    create_cache_mapper,
+)
+from fsspec.implementations.cached import (
+    CachingFileSystem,
+    LocalTempFile,
+    WholeFileCacheFileSystem,
+)
+from fsspec.implementations.local import make_path_posix
+from fsspec.implementations.zip import ZipFileSystem
+from fsspec.tests.conftest import win
 
 from .test_ftp import FTPFileSystem
 
@@ -32,6 +45,172 @@ def local_filecache():
     return data, original_file, cache_location, fs
 
 
+def test_mapper():
+    mapper0 = create_cache_mapper(True)
+    assert mapper0("somefile") == "somefile"
+    assert mapper0("/somefile") == "somefile"
+    assert mapper0("/somedir/somefile") == "somefile"
+    assert mapper0("/otherdir/somefile") == "somefile"
+
+    mapper1 = create_cache_mapper(False)
+    assert (
+        mapper1("somefile")
+        == "dd00b9487898b02555b6a2d90a070586d63f93e80c70aaa60c992fa9e81a72fe"
+    )
+    assert (
+        mapper1("/somefile")
+        == "884c07bc2efe65c60fb9d280a620e7f180488718fb5d97736521b7f9cf5c8b37"
+    )
+    assert (
+        mapper1("/somedir/somefile")
+        == "67a6956e5a5f95231263f03758c1fd9254fdb1c564d311674cec56b0372d2056"
+    )
+    assert (
+        mapper1("/otherdir/somefile")
+        == "f043dee01ab9b752c7f2ecaeb1a5e1b2d872018e2d0a1a26c43835ebf34e7d3e"
+    )
+
+    assert mapper0 != mapper1
+    assert create_cache_mapper(True) == mapper0
+    assert create_cache_mapper(False) == mapper1
+
+    assert hash(mapper0) != hash(mapper1)
+    assert hash(create_cache_mapper(True)) == hash(mapper0)
+    assert hash(create_cache_mapper(False)) == hash(mapper1)
+
+    with pytest.raises(
+        ValueError,
+        match="BasenameCacheMapper requires zero or positive directory_levels",
+    ):
+        BasenameCacheMapper(-1)
+
+    mapper2 = BasenameCacheMapper(1)
+    assert mapper2("/somefile") == "somefile"
+    assert mapper2("/somedir/somefile") == "somedir_@_somefile"
+    assert mapper2("/otherdir/somefile") == "otherdir_@_somefile"
+    assert mapper2("/dir1/dir2/dir3/somefile") == "dir3_@_somefile"
+
+    assert mapper2 != mapper0
+    assert mapper2 != mapper1
+    assert BasenameCacheMapper(1) == mapper2
+
+    assert hash(mapper2) != hash(mapper0)
+    assert hash(mapper2) != hash(mapper1)
+    assert hash(BasenameCacheMapper(1)) == hash(mapper2)
+
+    mapper3 = BasenameCacheMapper(2)
+    assert mapper3("/somefile") == "somefile"
+    assert mapper3("/somedir/somefile") == "somedir_@_somefile"
+    assert mapper3("/otherdir/somefile") == "otherdir_@_somefile"
+    assert mapper3("/dir1/dir2/dir3/somefile") == "dir2_@_dir3_@_somefile"
+
+    assert mapper3 != mapper0
+    assert mapper3 != mapper1
+    assert mapper3 != mapper2
+    assert BasenameCacheMapper(2) == mapper3
+
+    assert hash(mapper3) != hash(mapper0)
+    assert hash(mapper3) != hash(mapper1)
+    assert hash(mapper3) != hash(mapper2)
+    assert hash(BasenameCacheMapper(2)) == hash(mapper3)
+
+
+@pytest.mark.parametrize(
+    "cache_mapper", [BasenameCacheMapper(), BasenameCacheMapper(1), HashCacheMapper()]
+)
+@pytest.mark.parametrize("force_save_pickle", [True, False])
+def test_metadata(tmpdir, cache_mapper, force_save_pickle):
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=os.path.join(tmpdir, "cache"),
+        cache_mapper=cache_mapper,
+    )
+    fs._metadata._force_save_pickle = force_save_pickle
+
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    afile_posix = make_path_posix(afile)
+    detail = fs._metadata.cached_files[0][afile_posix]
+    assert sorted(detail.keys()) == ["blocks", "fn", "original", "time", "uid"]
+    assert isinstance(detail["blocks"], bool)
+    assert isinstance(detail["fn"], str)
+    assert isinstance(detail["time"], float)
+    assert isinstance(detail["uid"], str)
+
+    assert detail["original"] == afile_posix
+    assert detail["fn"] == fs._mapper(afile_posix)
+
+    if isinstance(cache_mapper, BasenameCacheMapper):
+        if cache_mapper.directory_levels == 0:
+            assert detail["fn"] == "afile"
+        else:
+            assert detail["fn"] == "source_@_afile"
+
+
+def test_metadata_replace_pickle_with_json(tmpdir):
+    # For backward compatibility will allow reading of old pickled metadata.
+    # When the metadata is next saved, it is in json format.
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    # Save metadata in pickle format, to simulate old metadata
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=os.path.join(tmpdir, "cache"),
+    )
+    fs._metadata._force_save_pickle = True
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    # Confirm metadata is in pickle format
+    cache_fn = os.path.join(fs.storage[-1], "cache")
+    with open(cache_fn, "rb") as f:
+        metadata = pickle.load(f)
+    assert list(metadata.keys()) == [make_path_posix(afile)]
+
+    # Force rewrite of metadata, now in json format
+    fs._metadata._force_save_pickle = False
+    fs.pop_from_cache(afile)
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    # Confirm metadata is in json format
+    with open(cache_fn, "r") as f:
+        metadata = json.load(f)
+    assert list(metadata.keys()) == [make_path_posix(afile)]
+
+
+def test_constructor_kwargs(tmpdir):
+    fs = fsspec.filesystem("filecache", target_protocol="file", same_names=True)
+    assert isinstance(fs._mapper, BasenameCacheMapper)
+
+    fs = fsspec.filesystem("filecache", target_protocol="file", same_names=False)
+    assert isinstance(fs._mapper, HashCacheMapper)
+
+    fs = fsspec.filesystem("filecache", target_protocol="file")
+    assert isinstance(fs._mapper, HashCacheMapper)
+
+    with pytest.raises(
+        ValueError, match="Cannot specify both same_names and cache_mapper"
+    ):
+        fs = fsspec.filesystem(
+            "filecache",
+            target_protocol="file",
+            cache_mapper=HashCacheMapper(),
+            same_names=True,
+        )
+
+
 def test_idempotent():
     fs = CachingFileSystem("file")
     fs2 = CachingFileSystem("file")
@@ -40,21 +219,28 @@ def test_idempotent():
     assert fs3.storage == fs.storage
 
 
-def test_blockcache_workflow(ftp_writable, tmp_path):
+@pytest.mark.parametrize("force_save_pickle", [True, False])
+def test_blockcache_workflow(ftp_writable, tmp_path, force_save_pickle):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
     with fs.open("/out", "wb") as f:
         f.write(b"test\n" * 4096)
 
-    fs_kwargs = dict(
-        skip_instance_cache=True,
-        cache_storage=str(tmp_path),
-        target_protocol="ftp",
-        target_options={"host": host, "port": port, "username": user, "password": pw},
-    )
+    fs_kwargs = {
+        "skip_instance_cache": True,
+        "cache_storage": str(tmp_path),
+        "target_protocol": "ftp",
+        "target_options": {
+            "host": host,
+            "port": port,
+            "username": user,
+            "password": pw,
+        },
+    }
 
     # Open the blockcache and read a little bit of the data
     fs = fsspec.filesystem("blockcache", **fs_kwargs)
+    fs._metadata._force_save_pickle = force_save_pickle
     with fs.open("/out", "rb", block_size=5) as f:
         assert f.read(5) == b"test\n"
 
@@ -63,20 +249,25 @@ def test_blockcache_workflow(ftp_writable, tmp_path):
     del fs
 
     # Check that cache file only has the first two blocks
-    with open(tmp_path / "cache", "rb") as f:
-        cache = pickle.load(f)
-        assert "/out" in cache
-        assert cache["/out"]["blocks"] == [0, 1]
+    if force_save_pickle:
+        with open(tmp_path / "cache", "rb") as f:
+            cache = pickle.load(f)
+    else:
+        with open(tmp_path / "cache", "r") as f:
+            cache = json.load(f)
+    assert "/out" in cache
+    assert cache["/out"]["blocks"] == [0, 1]
 
     # Reopen the same cache and read some more...
     fs = fsspec.filesystem("blockcache", **fs_kwargs)
+    fs._metadata._force_save_pickle = force_save_pickle
     with fs.open("/out", block_size=5) as f:
         assert f.read(5) == b"test\n"
         f.seek(30)
         assert f.read(5) == b"test\n"
 
 
-@pytest.mark.parametrize("impl", ["filecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["filecache", "blockcache", "cached"])
 def test_workflow(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -91,17 +282,20 @@ def test_workflow(ftp_writable, impl):
     with fs.open("/out") as f:
         assert os.listdir(fs.storage[-1])
         assert f.read() == b"test"
-        assert fs.cached_files[-1]["/out"]["blocks"]
+        assert fs._metadata.cached_files[-1]["/out"]["blocks"]
     assert fs.cat("/out") == b"test"
-    assert fs.cached_files[-1]["/out"]["blocks"] is True
+    assert fs._metadata.cached_files[-1]["/out"]["blocks"] is True
 
     with fs.open("/out", "wb") as f:
         f.write(b"changed")
 
-    assert fs.cat("/out") == b"test"  # old value
+    if impl == "filecache":
+        assert (
+            fs.cat("/out") == b"changed"
+        )  # new value, because we overwrote the cached location
 
 
-@pytest.mark.parametrize("impl", ["simplecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["simplecache", "blockcache", "cached"])
 def test_glob(ftp_writable, impl):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
@@ -121,7 +315,7 @@ def test_glob(ftp_writable, impl):
 def test_write():
     tmp = str(tempfile.mkdtemp())
     fn = tmp + "afile"
-    url = "simplecache::file://" + fn
+    url = f"simplecache::file://{fn}"
     with fsspec.open(url, "wb") as f:
         f.write(b"hello")
         assert fn not in f.name
@@ -153,8 +347,9 @@ def test_clear():
     assert len(os.listdir(cache1)) < 2
 
 
-def test_clear_expired(tmp_path):
-    def __ager(cache_fn, fn):
+@pytest.mark.parametrize("force_save_pickle", [True, False])
+def test_clear_expired(tmp_path, force_save_pickle):
+    def __ager(cache_fn, fn, del_fn=False):
         """
         Modify the cache file to virtually add time lag to selected files.
 
@@ -164,18 +359,30 @@ def test_clear_expired(tmp_path):
             cache path
         fn: str
             file name to be modified
+        del_fn: bool
+            whether or not to delete 'fn' from cache details
         """
         import pathlib
         import time
 
         if os.path.exists(cache_fn):
-            with open(cache_fn, "rb") as f:
-                cached_files = pickle.load(f)
-                fn_posix = pathlib.Path(fn).as_posix()
-                cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
+            if force_save_pickle:
+                with open(cache_fn, "rb") as f:
+                    cached_files = pickle.load(f)
+            else:
+                with open(cache_fn, "r") as f:
+                    cached_files = json.load(f)
+            fn_posix = pathlib.Path(fn).as_posix()
+            cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
             assert os.access(cache_fn, os.W_OK), "Cache is not writable"
-            with open(cache_fn, "wb") as f:
-                pickle.dump(cached_files, f)
+            if del_fn:
+                del cached_files[fn_posix]["fn"]
+            if force_save_pickle:
+                with open(cache_fn, "wb") as f:
+                    pickle.dump(cached_files, f)
+            else:
+                with open(cache_fn, "w") as f:
+                    json.dump(cached_files, f)
             time.sleep(1)
 
     origin = tmp_path.joinpath("origin")
@@ -207,6 +414,7 @@ def test_clear_expired(tmp_path):
     fs = fsspec.filesystem(
         "filecache", target_protocol="file", cache_storage=str(cache1), cache_check=1
     )
+    fs._metadata._force_save_pickle = force_save_pickle
     assert fs.cat(str(f1)) == data
 
     # populates "last" cache if file not found in first one
@@ -216,6 +424,7 @@ def test_clear_expired(tmp_path):
         cache_storage=[str(cache1), str(cache2)],
         cache_check=1,
     )
+    fs._metadata._force_save_pickle = force_save_pickle
     assert fs.cat(str(f2)) == data
     assert fs.cat(str(f3)) == data
     assert len(os.listdir(cache2)) == 3
@@ -247,6 +456,7 @@ def test_clear_expired(tmp_path):
         same_names=True,
         cache_check=1,
     )
+    fs._metadata._force_save_pickle = force_save_pickle
     assert fs.cat(str(f4)) == data
 
     cache_fn = os.path.join(fs.storage[-1], "cache")
@@ -254,6 +464,23 @@ def test_clear_expired(tmp_path):
 
     fs.clear_expired_cache()
     assert not fs._check_file(str(f4))
+
+    # check cache metadata lacking 'fn' raises RuntimeError.
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=str(cache1),
+        same_names=True,
+        cache_check=1,
+    )
+    fs._metadata._force_save_pickle = force_save_pickle
+    assert fs.cat(str(f1)) == data
+
+    cache_fn = os.path.join(fs.storage[-1], "cache")
+    __ager(cache_fn, f1, del_fn=True)
+
+    with pytest.raises(RuntimeError, match="Cache metadata does not contain 'fn' for"):
+        fs.clear_expired_cache()
 
 
 def test_pop():
@@ -293,7 +520,7 @@ def test_pop():
 def test_write_pickle_context():
     tmp = str(tempfile.mkdtemp())
     fn = tmp + "afile"
-    url = "simplecache::file://" + fn
+    url = f"simplecache::file://{fn}"
     with fsspec.open(url, "wb") as f:
         pickle.loads(pickle.dumps(f))
         f.write(b"hello ")
@@ -345,13 +572,13 @@ def test_blockcache_multiinstance(ftp_writable):
         skip_instance_cache=True,
         cache_storage=fs.storage,
     )
-    assert fs2.cached_files  # loaded from metadata for "one"
+    assert fs2._metadata.cached_files  # loaded from metadata for "one"
     with fs2.open("/two", block_size=20) as f:
         assert f.read(1) == b"t"
-    assert "/two" in fs2.cached_files[-1]
+    assert "/two" in fs2._metadata.cached_files[-1]
     fs.save_cache()
-    assert list(fs.cached_files[-1]) == ["/one", "/two"]
-    assert list(fs2.cached_files[-1]) == ["/one", "/two"]
+    assert list(fs._metadata.cached_files[-1]) == ["/one", "/two"]
+    assert list(fs2._metadata.cached_files[-1]) == ["/one", "/two"]
 
 
 def test_metadata_save_blocked(ftp_writable, caplog):
@@ -383,18 +610,19 @@ def test_metadata_save_blocked(ftp_writable, caplog):
         raise NameError
 
     try:
-
+        # To simulate an interpreter shutdown we temporarily set an open function in the
+        # cache_metadata module which is used on the next attempt to save metadata.
         with caplog.at_level(logging.DEBUG):
             with fs.open("/one", block_size=20) as f:
-                fsspec.implementations.cached.open = open_raise
+                fsspec.implementations.cache_metadata.open = open_raise
                 f.seek(21)
                 assert f.read(1)
     finally:
-        fsspec.implementations.cached.__dict__.pop("open", None)
+        fsspec.implementations.cache_metadata.__dict__.pop("open", None)
     assert "Cache save failed due to interpreter shutdown" in caplog.text
 
 
-@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache", "cached"])
 def test_local_filecache_creates_dir_if_needed(impl):
     import tempfile
 
@@ -457,7 +685,9 @@ def test_local_filecache_basic(local_filecache):
     assert "cache" in os.listdir(cache_location)
 
     # the file in the location contains the right data
-    fn = list(fs.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = next(iter(fs._metadata.cached_files[-1].values()))[
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == data
@@ -502,7 +732,9 @@ def test_local_filecache_gets_from_original_if_cache_deleted(local_filecache):
         assert f.read() == new_data
 
     # the file in the location contains the right data
-    fn = list(fs.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = next(iter(fs._metadata.cached_files[-1].values()))[
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(cache_location)
     with open(os.path.join(cache_location, fn), "rb") as f:
         assert f.read() == new_data
@@ -525,7 +757,9 @@ def test_local_filecache_with_new_cache_location_makes_a_new_copy(local_filecach
         assert f.read() == data
 
     # the file in the location contains the right data
-    fn = list(new_fs.cached_files[-1].values())[0]["fn"]  # this is a hash value
+    fn = next(iter(new_fs._metadata.cached_files[-1].values()))[
+        "fn"
+    ]  # this is a hash value
     assert fn in os.listdir(old_cache_location)
     assert fn in os.listdir(new_cache_location)
 
@@ -641,9 +875,9 @@ def test_filecache_with_checks():
     assert fs.cat(f1) == data * 2  # changed, since origin changed
 
 
-@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache"])
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache", "cached"])
 @pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
-def test_takes_fs_instance(impl, fs):
+def test_filecache_takes_fs_instance(impl, fs):
     origin = tempfile.mkdtemp()
     data = b"test data"
     f1 = os.path.join(origin, "afile")
@@ -655,13 +889,22 @@ def test_takes_fs_instance(impl, fs):
     assert fs2.cat(f1) == data
 
 
+@pytest.mark.parametrize("impl", ["filecache", "simplecache", "blockcache", "cached"])
+@pytest.mark.parametrize("fs", ["local", "multi"], indirect=["fs"])
+def test_filecache_serialization(impl, fs):
+    fs1 = fsspec.filesystem(impl, fs=fs)
+    json1 = fs1.to_json()
+
+    assert fs1 is fsspec.AbstractFileSystem.from_json(json1)
+
+
 def test_add_file_to_cache_after_save(local_filecache):
     (data, original_file, cache_location, fs) = local_filecache
 
     fs.save_cache()
 
     fs.cat(original_file)
-    assert len(fs.cached_files[-1]) == 1
+    assert len(fs._metadata.cached_files[-1]) == 1
 
     fs.save_cache()
 
@@ -671,7 +914,7 @@ def test_add_file_to_cache_after_save(local_filecache):
         cache_storage=cache_location,
         do_not_use_cache_for_this_instance=True,  # cache is masking the issue
     )
-    assert len(fs2.cached_files[-1]) == 1
+    assert len(fs2._metadata.cached_files[-1]) == 1
 
 
 def test_cached_open_close_read(ftp_writable):
@@ -690,7 +933,7 @@ def test_cached_open_close_read(ftp_writable):
     with fs.open("/out_block", block_size=1024) as f:
         assert f.read(1) == b"t"
     # Regression test for <https://github.com/fsspec/filesystem_spec/issues/845>
-    assert fs.cached_files[-1]["/out_block"]["blocks"] == {0}
+    assert fs._metadata.cached_files[-1]["/out_block"]["blocks"] == {0}
 
 
 @pytest.mark.parametrize("impl", ["filecache", "simplecache"])
@@ -705,10 +948,10 @@ def test_with_compression(impl, compression):
     f.close()
 
     with fsspec.open(
-        "%s::%s" % (impl, fn),
+        f"{impl}::{fn}",
         "rb",
         compression=compression,
-        **{impl: dict(same_names=True, cache_storage=cachedir)},
+        **{impl: {"same_names": True, "cache_storage": cachedir}},
     ) as f:
         # stores original compressed file, uncompress on read
         assert f.read() == data
@@ -718,10 +961,14 @@ def test_with_compression(impl, compression):
     cachedir = tempfile.mkdtemp()
 
     with fsspec.open(
-        "%s::%s" % (impl, fn),
+        f"{impl}::{fn}",
         "rb",
         **{
-            impl: dict(same_names=True, compression=compression, cache_storage=cachedir)
+            impl: {
+                "same_names": True,
+                "compression": compression,
+                "cache_storage": cachedir,
+            }
         },
     ) as f:
         # stores uncompressed data
@@ -784,11 +1031,13 @@ def test_multi_cache(protocol):
             assert f.read() == b"hello"
 
 
-@pytest.mark.parametrize("protocol", ["simplecache", "filecache", "blockcache"])
+@pytest.mark.parametrize(
+    "protocol", ["simplecache", "filecache", "blockcache", "cached"]
+)
 def test_multi_cat(protocol, ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
-    for fn in {"/file0", "/file1"}:
+    for fn in ("/file0", "/file1"):
         with fs.open(fn, "wb") as f:
             f.write(b"hello")
 
@@ -817,7 +1066,9 @@ def test_multi_cache_chain(protocol):
         assert files[0].read() == b"hello"
 
 
-@pytest.mark.parametrize("protocol", ["blockcache", "simplecache", "filecache"])
+@pytest.mark.parametrize(
+    "protocol", ["blockcache", "cached", "simplecache", "filecache"]
+)
 def test_strip(protocol):
     fs = fsspec.filesystem(protocol, target_protocol="memory")
     url1 = "memory://afile"
@@ -863,7 +1114,7 @@ def test_expiry():
     # get file
     assert fs._check_file(fn0) is False
     assert fs.open(fn0, mode="rb").read() == data
-    start_time = fs.cached_files[-1][fn]["time"]
+    start_time = fs._metadata.cached_files[-1][fn]["time"]
 
     # cache time..
     assert fs.last_cache - start_time < 0.19
@@ -924,3 +1175,165 @@ def test_str():
     lfs = LocalFileSystem()
     cfs = CachingFileSystem(fs=lfs)
     assert "CachingFileSystem" in str(cfs)
+
+
+def test_getitems_errors(tmpdir):
+    tmpdir = str(tmpdir)
+    os.makedirs(os.path.join(tmpdir, "afolder"))
+    open(os.path.join(tmpdir, "afile"), "w").write("test")
+    open(os.path.join(tmpdir, "afolder", "anotherfile"), "w").write("test2")
+    m = fsspec.get_mapper(f"file://{tmpdir}")
+    assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
+
+    # my code
+    m2 = fsspec.get_mapper(f"simplecache::file://{tmpdir}")
+    assert m2.getitems(["afile"], on_error="omit") == {"afile": b"test"}  # works
+    assert m2.getitems(["afile", "bfile"], on_error="omit") == {
+        "afile": b"test"
+    }  # throws KeyError
+
+    with pytest.raises(KeyError):
+        m.getitems(["afile", "bfile"])
+    out = m.getitems(["afile", "bfile"], on_error="return")
+    assert isinstance(out["bfile"], KeyError)
+    m = fsspec.get_mapper(f"file://{tmpdir}", missing_exceptions=())
+    assert m.getitems(["afile", "bfile"], on_error="omit") == {"afile": b"test"}
+    with pytest.raises(FileNotFoundError):
+        m.getitems(["afile", "bfile"])
+
+
+@pytest.mark.parametrize("temp_cache", [False, True])
+def test_cache_dir_auto_deleted(temp_cache, tmpdir):
+    import gc
+
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage="TMP" if temp_cache else os.path.join(tmpdir, "cache"),
+        skip_instance_cache=True,  # Important to avoid fs itself being cached
+    )
+
+    cache_dir = fs.storage[-1]
+
+    # Force cache to be created
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+
+    # Confirm cache exists
+    local = fsspec.filesystem("file")
+    assert local.exists(cache_dir)
+
+    # Delete file system
+    del fs
+    gc.collect()
+
+    # Ensure cache has been deleted, if it is temporary
+    if temp_cache:
+        assert not local.exists(cache_dir)
+    else:
+        assert local.exists(cache_dir)
+
+
+@pytest.mark.parametrize(
+    "protocol", ["filecache", "blockcache", "cached", "simplecache"]
+)
+def test_cache_size(tmpdir, protocol):
+    if win and protocol in {"blockcache", "cached"}:
+        pytest.skip("Windows file locking affects blockcache size tests")
+
+    source = os.path.join(tmpdir, "source")
+    afile = os.path.join(source, "afile")
+    os.mkdir(source)
+    open(afile, "w").write("test")
+
+    fs = fsspec.filesystem(protocol, target_protocol="file")
+    empty_cache_size = fs.cache_size()
+
+    # Create cache
+    with fs.open(afile, "rb") as f:
+        assert f.read(5) == b"test"
+    single_file_cache_size = fs.cache_size()
+    assert single_file_cache_size > empty_cache_size
+
+    # Remove cached file but leave cache metadata file
+    fs.pop_from_cache(afile)
+    if win and protocol == "filecache":
+        assert empty_cache_size < fs.cache_size()
+    elif protocol != "simplecache":
+        assert empty_cache_size < fs.cache_size() < single_file_cache_size
+    else:
+        # simplecache never stores metadata
+        assert fs.cache_size() == single_file_cache_size
+
+    # Completely remove cache
+    fs.clear_cache()
+    if protocol != "simplecache":
+        assert fs.cache_size() == empty_cache_size
+    else:
+        # Whole cache directory has been deleted
+        assert fs.cache_size() == 0
+
+
+def test_spurious_directory_issue1410(tmpdir):
+    import zipfile
+
+    os.chdir(tmpdir)
+    zipfile.ZipFile("dir.zip", mode="w").open("file.txt", "w").write(b"hello")
+    fs = WholeFileCacheFileSystem(fs=ZipFileSystem("dir.zip"))
+
+    assert len(os.listdir()) == 1
+    with fs.open("/file.txt", "rb"):
+        pass
+
+    # There was a bug reported in issue #1410 in which a directory
+    # would be created and the next assertion would fail.
+    assert len(os.listdir()) == 1
+    assert fs._parent("/any/path") == "any"  # correct for ZIP, which has no leading /
+
+
+def test_write_transaction(tmpdir, m, monkeypatch):
+    called = [0]
+    orig = m.put
+
+    def patched_put(*args, **kwargs):
+        called[0] += 1
+        orig(*args, **kwargs)
+
+    monkeypatch.setattr(m, "put", patched_put)
+    tmpdir = str(tmpdir)
+    fs, _ = fsspec.core.url_to_fs("simplecache::memory://", cache_storage=tmpdir)
+    with fs.transaction:
+        fs.pipe("myfile", b"1")
+        fs.pipe("otherfile", b"2")
+        fs.pipe("deep/dir/otherfile", b"3")
+        with fs.open("blarh", "wb") as f:
+            f.write(b"ff")
+        assert not m.find("")
+
+        assert fs.info("otherfile")["size"] == 1
+        assert fs.info("deep")["type"] == "directory"
+        assert fs.isdir("deep")
+        assert fs.ls("deep", detail=False) == ["/deep/dir"]
+
+    assert m.cat("myfile") == b"1"
+    assert m.cat("otherfile") == b"2"
+    assert called[0] == 1  # copy was done in one go
+
+
+def test_filecache_write(tmpdir, m):
+    fs = fsspec.filesystem(
+        "filecache", target_protocol="memory", cache_storage=str(tmpdir)
+    )
+    fn = "sample_file_in_mem.txt"
+    data = "hello world from memory"
+    with fs.open(fn, "w") as f:
+        assert not m.exists(fn)
+        f.write(data)
+
+    assert m.cat(fn) == data.encode()
+    assert fs.cat(fn) == data.encode()

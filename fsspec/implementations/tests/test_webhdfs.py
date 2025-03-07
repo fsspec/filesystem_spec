@@ -20,7 +20,7 @@ def hdfs_cluster():
     except FileNotFoundError:
         pytest.skip("htcluster not found")
     except subprocess.CalledProcessError as ex:
-        pytest.skip("htcluster failed: " + ex.output.decode())
+        pytest.skip(f"htcluster failed: {ex.output.decode()}")
     cmd1 = shlex.split("htcluster startup --image base")
     subprocess.check_output(cmd1)
     try:
@@ -135,3 +135,76 @@ def test_webhdfs_cp_file(hdfs_cluster):
     assert fs.exists(src)
     assert fs.exists(dst)
     assert fs.cat(src) == fs.cat(dst)
+
+
+def test_path_with_equals(hdfs_cluster):
+    fs = WebHDFS(
+        hdfs_cluster, user="testuser", data_proxy={"worker.example.com": "localhost"}
+    )
+    path_with_equals = "/user/testuser/some_table/datestamp=2023-11-11"
+
+    fs.mkdir(path_with_equals)
+
+    result = fs.ls(path_with_equals)
+    assert result is not None
+    assert fs.exists(path_with_equals)
+
+
+def test_error_handling_with_equals_in_path(hdfs_cluster):
+    fs = WebHDFS(hdfs_cluster, user="testuser")
+    invalid_path_with_equals = (
+        "/user/testuser/some_table/invalid_path=datestamp=2023-11-11"
+    )
+
+    with pytest.raises(FileNotFoundError):
+        fs.ls(invalid_path_with_equals)
+
+
+def test_create_and_touch_file_with_equals(hdfs_cluster):
+    fs = WebHDFS(
+        hdfs_cluster,
+        user="testuser",
+        data_proxy={"worker.example.com": "localhost"},
+    )
+    base_path = "/user/testuser/some_table/datestamp=2023-11-11"
+    file_path = f"{base_path}/testfile.txt"
+
+    fs.mkdir(base_path)
+    fs.touch(file_path, "wb")
+    assert fs.exists(file_path)
+
+
+def test_write_read_verify_file_with_equals(hdfs_cluster):
+    fs = WebHDFS(
+        hdfs_cluster,
+        user="testuser",
+        data_proxy={"worker.example.com": "localhost"},
+    )
+    base_path = "/user/testuser/some_table/datestamp=2023-11-11"
+    file_path = f"{base_path}/testfile.txt"
+    content = b"This is some content!"
+
+    fs.mkdir(base_path)
+    with fs.open(file_path, "wb") as f:
+        f.write(content)
+
+    with fs.open(file_path, "rb") as f:
+        assert f.read() == content
+
+    file_info = fs.ls(base_path, detail=True)
+    assert len(file_info) == 1
+    assert file_info[0]["name"] == file_path
+    assert file_info[0]["size"] == len(content)
+
+
+def test_protocol_prefixed_path(hdfs_cluster):
+    fs = WebHDFS(
+        hdfs_cluster, user="testuser", data_proxy={"worker.example.com": "localhost"}
+    )
+    protocol_prefixed_path = "webhdfs://localhost:50070/user/testuser/test_dir"
+
+    fs.mkdir(protocol_prefixed_path)
+    assert fs.exists(protocol_prefixed_path)
+
+    file_info = fs.ls(protocol_prefixed_path, detail=True)
+    assert len(file_info) == 0

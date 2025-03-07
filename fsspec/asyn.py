@@ -3,17 +3,19 @@ import asyncio.events
 import functools
 import inspect
 import io
+import numbers
 import os
 import re
-import sys
 import threading
 from contextlib import contextmanager
 from glob import has_magic
+from typing import TYPE_CHECKING, Iterable
 
-from .callbacks import _DEFAULT_CALLBACK
+from .callbacks import DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
+from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
-from .utils import is_exception, other_paths
+from .utils import glob_translate, is_exception, other_paths
 
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
@@ -76,6 +78,8 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         loop0 = asyncio.events.get_running_loop()
         if loop0 is loop:
             raise NotImplementedError("Calling sync() from within a running loop")
+    except NotImplementedError:
+        raise
     except RuntimeError:
         pass
     coro = func(*args, **kwargs)
@@ -102,7 +106,7 @@ def sync(loop, func, *args, timeout=None, **kwargs):
 
 
 def sync_wrapper(func, obj=None):
-    """Given a function, make so can be called in async or blocking contexts
+    """Given a function, make so can be called in blocking contexts
 
     Leave obj=None if defining within a class. Pass the instance if attaching
     as an attribute of the instance.
@@ -120,11 +124,7 @@ def sync_wrapper(func, obj=None):
 def _selector_policy():
     original_policy = asyncio.get_event_loop_policy()
     try:
-        if (
-            sys.version_info >= (3, 8)
-            and os.name == "nt"
-            and hasattr(asyncio, "WindowsSelectorEventLoopPolicy")
-        ):
+        if os.name == "nt" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
         yield
@@ -151,13 +151,18 @@ def get_loop():
     return loop[0]
 
 
-try:
+if TYPE_CHECKING:
     import resource
-except ImportError:
-    resource = None
-    ResourceError = OSError
+
+    ResourceError = resource.error
 else:
-    ResourceEror = resource.error
+    try:
+        import resource
+    except ImportError:
+        resource = None
+        ResourceError = OSError
+    else:
+        ResourceError = getattr(resource, "error", OSError)
 
 _DEFAULT_BATCH_SIZE = 128
 _NOFILES_DEFAULT_BATCH_SIZE = 1280
@@ -200,7 +205,7 @@ def running_async() -> bool:
 async def _run_coros_in_chunks(
     coros,
     batch_size=None,
-    callback=_DEFAULT_CALLBACK,
+    callback=DEFAULT_CALLBACK,
     timeout=None,
     return_exceptions=False,
     nofiles=False,
@@ -234,20 +239,35 @@ async def _run_coros_in_chunks(
         batch_size = len(coros)
 
     assert batch_size > 0
-    results = []
-    for start in range(0, len(coros), batch_size):
-        chunk = [
-            asyncio.Task(asyncio.wait_for(c, timeout=timeout))
-            for c in coros[start : start + batch_size]
-        ]
-        if callback is not _DEFAULT_CALLBACK:
-            [
-                t.add_done_callback(lambda *_, **__: callback.relative_update(1))
-                for t in chunk
-            ]
-        results.extend(
-            await asyncio.gather(*chunk, return_exceptions=return_exceptions),
-        )
+
+    async def _run_coro(coro, i):
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout), i
+        except Exception as e:
+            if not return_exceptions:
+                raise
+            return e, i
+        finally:
+            callback.relative_update(1)
+
+    i = 0
+    n = len(coros)
+    results = [None] * n
+    pending = set()
+
+    while pending or i < n:
+        while len(pending) < batch_size and i < n:
+            pending.add(asyncio.ensure_future(_run_coro(coros[i], i)))
+            i += 1
+
+        if not pending:
+            break
+
+        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        while done:
+            result, k = await done.pop()
+            results[k] = result
+
     return results
 
 
@@ -324,6 +344,10 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _cp_file(self, path1, path2, **kwargs):
         raise NotImplementedError
 
+    async def _mv_file(self, path1, path2):
+        await self._cp_file(path1, path2)
+        await self._rm_file(path1)
+
     async def _copy(
         self,
         path1,
@@ -339,16 +363,42 @@ class AsyncFileSystem(AbstractFileSystem):
         elif on_error is None:
             on_error = "raise"
 
-        paths = await self._expand_path(path1, maxdepth=maxdepth, recursive=recursive)
-        isdir = isinstance(path2, str) and await self._isdir(path2)
-        path2 = other_paths(
-            paths,
-            path2,
-            exists=isdir and isinstance(path1, str) and not path1.endswith("/"),
-            is_dir=isdir,
-        )
+        if isinstance(path1, list) and isinstance(path2, list):
+            # No need to expand paths when both source and destination
+            # are provided as lists
+            paths1 = path1
+            paths2 = path2
+        else:
+            source_is_str = isinstance(path1, str)
+            paths1 = await self._expand_path(
+                path1, maxdepth=maxdepth, recursive=recursive
+            )
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                paths1 = [
+                    p for p in paths1 if not (trailing_sep(p) or await self._isdir(p))
+                ]
+                if not paths1:
+                    return
+
+            source_is_file = len(paths1) == 1
+            dest_is_dir = isinstance(path2, str) and (
+                trailing_sep(path2) or await self._isdir(path2)
+            )
+
+            exists = source_is_str and (
+                (has_magic(path1) and source_is_file)
+                or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
+            )
+            paths2 = other_paths(
+                paths1,
+                path2,
+                exists=exists,
+                flatten=not source_is_str,
+            )
+
         batch_size = batch_size or self.batch_size
-        coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths, path2)]
+        coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths1, paths2)]
         result = await _run_coros_in_chunks(
             coros, batch_size=batch_size, return_exceptions=True, nofiles=True
         )
@@ -358,7 +408,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 continue
             raise ex
 
-    async def _pipe_file(self, path, value, **kwargs):
+    async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
         raise NotImplementedError
 
     async def _pipe(self, path, value=None, batch_size=None, **kwargs):
@@ -393,9 +443,9 @@ class AsyncFileSystem(AbstractFileSystem):
                     end = size + end
             elif end is None:
                 end = ""
-            if isinstance(end, int):
+            if isinstance(end, numbers.Integral):
                 end -= 1  # bytes range is inclusive
-        return "bytes=%s-%s" % (start, end)
+        return f"bytes={start}-{end}"
 
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         raise NotImplementedError
@@ -436,16 +486,26 @@ class AsyncFileSystem(AbstractFileSystem):
         on_error="return",
         **kwargs,
     ):
+        """Get the contents of byte ranges from one or more files
+
+        Parameters
+        ----------
+        paths: list
+            A list of of filepaths on this filesystems
+        starts, ends: int or list
+            Bytes limits of the read. If using a single int, the same value will be
+            used to read all the specified files.
+        """
         # TODO: on_error
         if max_gap is not None:
             # use utils.merge_offset_ranges
             raise NotImplementedError
         if not isinstance(paths, list):
             raise TypeError
-        if not isinstance(starts, list):
+        if not isinstance(starts, Iterable):
             starts = [starts] * len(paths)
-        if not isinstance(ends, list):
-            ends = [starts] * len(paths)
+        if not isinstance(ends, Iterable):
+            ends = [ends] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
         coros = [
@@ -457,7 +517,7 @@ class AsyncFileSystem(AbstractFileSystem):
             coros, batch_size=batch_size, nofiles=True, return_exceptions=True
         )
 
-    async def _put_file(self, lpath, rpath, **kwargs):
+    async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):
         raise NotImplementedError
 
     async def _put(
@@ -465,8 +525,9 @@ class AsyncFileSystem(AbstractFileSystem):
         lpath,
         rpath,
         recursive=False,
-        callback=_DEFAULT_CALLBACK,
+        callback=DEFAULT_CALLBACK,
         batch_size=None,
+        maxdepth=None,
         **kwargs,
     ):
         """Copy file(s) from local.
@@ -482,20 +543,39 @@ class AsyncFileSystem(AbstractFileSystem):
         constructor, or for all instances by setting the "gather_batch_size" key
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
-        from .implementations.local import LocalFileSystem, make_path_posix
+        if isinstance(lpath, list) and isinstance(rpath, list):
+            # No need to expand paths when both source and destination
+            # are provided as lists
+            rpaths = rpath
+            lpaths = lpath
+        else:
+            source_is_str = isinstance(lpath, str)
+            if source_is_str:
+                lpath = make_path_posix(lpath)
+            fs = LocalFileSystem()
+            lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
+                if not lpaths:
+                    return
 
-        rpath = self._strip_protocol(rpath)
-        if isinstance(lpath, str):
-            lpath = make_path_posix(lpath)
-        fs = LocalFileSystem()
-        lpaths = fs.expand_path(lpath, recursive=recursive)
-        isdir = isinstance(rpath, str) and await self._isdir(rpath)
-        rpaths = other_paths(
-            lpaths,
-            rpath,
-            exists=isdir and isinstance(lpath, str) and not lpath.endswith("/"),
-            is_dir=isdir,
-        )
+            source_is_file = len(lpaths) == 1
+            dest_is_dir = isinstance(rpath, str) and (
+                trailing_sep(rpath) or await self._isdir(rpath)
+            )
+
+            rpath = self._strip_protocol(rpath)
+            exists = source_is_str and (
+                (has_magic(lpath) and source_is_file)
+                or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
+            )
+            rpaths = other_paths(
+                lpaths,
+                rpath,
+                exists=exists,
+                flatten=not source_is_str,
+            )
 
         is_dir = {l: os.path.isdir(l) for l in lpaths}
         rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
@@ -507,8 +587,8 @@ class AsyncFileSystem(AbstractFileSystem):
         coros = []
         callback.set_size(len(file_pairs))
         for lfile, rfile in file_pairs:
-            callback.branch(lfile, rfile, kwargs)
-            coros.append(self._put_file(lfile, rfile, **kwargs))
+            put_file = callback.branch_coro(self._put_file)
+            coros.append(put_file(lfile, rfile, **kwargs))
 
         return await _run_coros_in_chunks(
             coros, batch_size=batch_size, callback=callback
@@ -518,7 +598,13 @@ class AsyncFileSystem(AbstractFileSystem):
         raise NotImplementedError
 
     async def _get(
-        self, rpath, lpath, recursive=False, callback=_DEFAULT_CALLBACK, **kwargs
+        self,
+        rpath,
+        lpath,
+        recursive=False,
+        callback=DEFAULT_CALLBACK,
+        maxdepth=None,
+        **kwargs,
     ):
         """Copy file(s) to local.
 
@@ -534,28 +620,52 @@ class AsyncFileSystem(AbstractFileSystem):
         constructor, or for all instances by setting the "gather_batch_size" key
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
-        from fsspec.implementations.local import LocalFileSystem, make_path_posix
+        if isinstance(lpath, list) and isinstance(rpath, list):
+            # No need to expand paths when both source and destination
+            # are provided as lists
+            rpaths = rpath
+            lpaths = lpath
+        else:
+            source_is_str = isinstance(rpath, str)
+            # First check for rpath trailing slash as _strip_protocol removes it.
+            source_not_trailing_sep = source_is_str and not trailing_sep(rpath)
+            rpath = self._strip_protocol(rpath)
+            rpaths = await self._expand_path(
+                rpath, recursive=recursive, maxdepth=maxdepth
+            )
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not copy directories
+                rpaths = [
+                    p for p in rpaths if not (trailing_sep(p) or await self._isdir(p))
+                ]
+                if not rpaths:
+                    return
 
-        # First check for rpath trailing slash as _strip_protocol removes it.
-        rpath_trailing_slash = isinstance(rpath, str) and rpath.endswith("/")
-        rpath = self._strip_protocol(rpath)
-        lpath = make_path_posix(lpath)
-        rpaths = await self._expand_path(rpath, recursive=recursive)
-        isdir = isinstance(lpath, str) and LocalFileSystem().isdir(lpath)
-        lpaths = other_paths(
-            rpaths,
-            lpath,
-            exists=isdir and not rpath_trailing_slash,
-            is_dir=isdir,
-        )
+            lpath = make_path_posix(lpath)
+            source_is_file = len(rpaths) == 1
+            dest_is_dir = isinstance(lpath, str) and (
+                trailing_sep(lpath) or LocalFileSystem().isdir(lpath)
+            )
+
+            exists = source_is_str and (
+                (has_magic(rpath) and source_is_file)
+                or (not has_magic(rpath) and dest_is_dir and source_not_trailing_sep)
+            )
+            lpaths = other_paths(
+                rpaths,
+                lpath,
+                exists=exists,
+                flatten=not source_is_str,
+            )
+
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []
         callback.set_size(len(lpaths))
         for lpath, rpath in zip(lpaths, rpaths):
-            callback.branch(rpath, lpath, kwargs)
-            coros.append(self._get_file(rpath, lpath, **kwargs))
+            get_file = callback.branch_coro(self._get_file)
+            coros.append(get_file(rpath, lpath, **kwargs))
         return await _run_coros_in_chunks(
             coros, batch_size=batch_size, callback=callback
         )
@@ -569,7 +679,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _isdir(self, path):
         try:
             return (await self._info(path))["type"] == "directory"
-        except IOError:
+        except OSError:
             return False
 
     async def _size(self, path):
@@ -581,9 +691,9 @@ class AsyncFileSystem(AbstractFileSystem):
             [self._size(p) for p in paths], batch_size=batch_size
         )
 
-    async def _exists(self, path):
+    async def _exists(self, path, **kwargs):
         try:
-            await self._info(path)
+            await self._info(path, **kwargs)
             return True
         except FileNotFoundError:
             return False
@@ -594,7 +704,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _ls(self, path, detail=True, **kwargs):
         raise NotImplementedError
 
-    async def _walk(self, path, maxdepth=None, **kwargs):
+    async def _walk(self, path, maxdepth=None, on_error="omit", **kwargs):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
@@ -606,7 +716,11 @@ class AsyncFileSystem(AbstractFileSystem):
         detail = kwargs.pop("detail", False)
         try:
             listing = await self._ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, IOError):
+        except (FileNotFoundError, OSError) as e:
+            if on_error == "raise":
+                raise
+            elif callable(on_error):
+                on_error(e)
             if detail:
                 yield path, {}, {}
             else:
@@ -620,7 +734,7 @@ class AsyncFileSystem(AbstractFileSystem):
             name = pathname.rsplit("/", 1)[-1]
             if info["type"] == "directory" and pathname != path:
                 # do not include "self" path
-                full_dirs[pathname] = info
+                full_dirs[name] = pathname
                 dirs[name] = info
             elif pathname == path:
                 # file-like with same name as give path
@@ -638,80 +752,76 @@ class AsyncFileSystem(AbstractFileSystem):
             if maxdepth < 1:
                 return
 
-        for d in full_dirs:
-            async for _ in self._walk(d, maxdepth=maxdepth, detail=detail, **kwargs):
+        for d in dirs:
+            async for _ in self._walk(
+                full_dirs[d], maxdepth=maxdepth, detail=detail, **kwargs
+            ):
                 yield _
 
-    async def _glob(self, path, **kwargs):
+    async def _glob(self, path, maxdepth=None, **kwargs):
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+
         import re
 
-        ends = path.endswith("/")
+        seps = (os.path.sep, os.path.altsep) if os.path.altsep else (os.path.sep,)
+        ends_with_sep = path.endswith(seps)  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
-        indstar = path.find("*") if path.find("*") >= 0 else len(path)
-        indques = path.find("?") if path.find("?") >= 0 else len(path)
-        indbrace = path.find("[") if path.find("[") >= 0 else len(path)
+        append_slash_to_dirname = ends_with_sep or path.endswith(
+            tuple(sep + "**" for sep in seps)
+        )
+        idx_star = path.find("*") if path.find("*") >= 0 else len(path)
+        idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
+        idx_brace = path.find("[") if path.find("[") >= 0 else len(path)
 
-        ind = min(indstar, indques, indbrace)
+        min_idx = min(idx_star, idx_qmark, idx_brace)
 
         detail = kwargs.pop("detail", False)
 
         if not has_magic(path):
-            root = path
-            depth = 1
-            if ends:
-                path += "/*"
-            elif await self._exists(path):
+            if await self._exists(path, **kwargs):
                 if not detail:
                     return [path]
                 else:
-                    return {path: await self._info(path)}
+                    return {path: await self._info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
                 else:
                     return {}
-        elif "/" in path[:ind]:
-            ind2 = path[:ind].rindex("/")
-            root = path[: ind2 + 1]
-            depth = None if "**" in path else path[ind2 + 1 :].count("/") + 1
+        elif "/" in path[:min_idx]:
+            min_idx = path[:min_idx].rindex("/")
+            root = path[: min_idx + 1]
+            depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            depth = None if "**" in path else path[ind + 1 :].count("/") + 1
+            depth = path[min_idx + 1 :].count("/") + 1
+
+        if "**" in path:
+            if maxdepth is not None:
+                idx_double_stars = path.find("**")
+                depth_double_stars = path[idx_double_stars:].count("/") + 1
+                depth = depth - depth_double_stars + maxdepth
+            else:
+                depth = None
 
         allpaths = await self._find(
             root, maxdepth=depth, withdirs=True, detail=True, **kwargs
         )
-        # Escape characters special to python regex, leaving our supported
-        # special characters in place.
-        # See https://www.gnu.org/software/bash/manual/html_node/Pattern-Matching.html
-        # for shell globbing details.
-        pattern = (
-            "^"
-            + (
-                path.replace("\\", r"\\")
-                .replace(".", r"\.")
-                .replace("+", r"\+")
-                .replace("//", "/")
-                .replace("(", r"\(")
-                .replace(")", r"\)")
-                .replace("|", r"\|")
-                .replace("^", r"\^")
-                .replace("$", r"\$")
-                .replace("{", r"\{")
-                .replace("}", r"\}")
-                .rstrip("/")
-                .replace("?", ".")
-            )
-            + "$"
-        )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+
+        pattern = glob_translate(path + ("/" if ends_with_sep else ""))
+        pattern = re.compile(pattern)
+
         out = {
-            p: allpaths[p]
-            for p in sorted(allpaths)
-            if pattern.match(p.replace("//", "/").rstrip("/"))
+            p: info
+            for p, info in sorted(allpaths.items())
+            if pattern.match(
+                p + "/"
+                if append_slash_to_dirname and info["type"] == "directory"
+                else p
+            )
         }
+
         if detail:
             return out
         else:
@@ -730,8 +840,14 @@ class AsyncFileSystem(AbstractFileSystem):
 
     async def _find(self, path, maxdepth=None, withdirs=False, **kwargs):
         path = self._strip_protocol(path)
-        out = dict()
+        out = {}
         detail = kwargs.pop("detail", False)
+
+        # Add the root directory if withdirs is requested
+        # This is needed for posix glob compliance
+        if withdirs and path != "" and await self._isdir(path):
+            out[path] = await self._info(path)
+
         # async for?
         async for _, dirs, files in self._walk(path, maxdepth, detail=True, **kwargs):
             if withdirs:
@@ -758,12 +874,19 @@ class AsyncFileSystem(AbstractFileSystem):
             path = [self._strip_protocol(p) for p in path]
             for p in path:  # can gather here
                 if has_magic(p):
-                    bit = set(await self._glob(p))
+                    bit = set(await self._glob(p, maxdepth=maxdepth))
                     out |= bit
                     if recursive:
+                        # glob call above expanded one depth so if maxdepth is defined
+                        # then decrement it in expand_path call below. If it is zero
+                        # after decrementing then avoid expand_path call.
+                        if maxdepth is not None and maxdepth <= 1:
+                            continue
                         out |= set(
                             await self._expand_path(
-                                list(bit), recursive=recursive, maxdepth=maxdepth
+                                list(bit),
+                                recursive=recursive,
+                                maxdepth=maxdepth - 1 if maxdepth is not None else None,
                             )
                         )
                     continue
@@ -773,11 +896,9 @@ class AsyncFileSystem(AbstractFileSystem):
                 if p not in out and (recursive is False or (await self._exists(p))):
                     # should only check once, for the root
                     out.add(p)
-            # reduce depth on each recursion level unless None or 0
-            maxdepth = maxdepth if not maxdepth else maxdepth - 1
         if not out:
             raise FileNotFoundError(path)
-        return list(sorted(out))
+        return sorted(out)
 
     async def _mkdir(self, path, create_parents=True, **kwargs):
         pass  # not necessary to implement, may not have directories
@@ -953,11 +1074,11 @@ class AbstractAsyncStreamedFile(AbstractBufferedFile):
             self.offset = 0
             try:
                 await self._initiate_upload()
-            except:  # noqa: E722
+            except:
                 self.closed = True
                 raise
 
-        if self._upload_chunk(final=force) is not False:
+        if await self._upload_chunk(final=force) is not False:
             self.offset += self.buffer.seek(0, 2)
             self.buffer = io.BytesIO()
 
@@ -971,7 +1092,7 @@ class AbstractAsyncStreamedFile(AbstractBufferedFile):
         raise NotImplementedError
 
     async def _initiate_upload(self):
-        raise NotImplementedError
+        pass
 
     async def _upload_chunk(self, final=False):
         raise NotImplementedError
