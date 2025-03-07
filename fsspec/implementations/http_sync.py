@@ -201,7 +201,7 @@ class HTTPFileSystem(AbstractFileSystem):
     you are testing pyodide/pyscript integration***
     """
 
-    protocol = ("http", "https", "http_sync", "https_sync")
+    protocol = ("http", "https", "sync_http", "sync_https")
     sep = "/"
 
     def __init__(
@@ -916,8 +916,8 @@ def _file_info(url, session, size_policy="head", **kwargs):
 def register():
     register_implementation("http", HTTPFileSystem, clobber=True)
     register_implementation("https", HTTPFileSystem, clobber=True)
-    register_implementation("http_sync", HTTPFileSystem, clobber=True)
-    register_implementation("https_sync", HTTPFileSystem, clobber=True)
+    register_implementation("sync_http", HTTPFileSystem, clobber=True)
+    register_implementation("sync_https", HTTPFileSystem, clobber=True)
 
 
 register()
