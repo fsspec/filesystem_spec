@@ -73,7 +73,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
-        baseurl = f"http://{self.server.server_name}:{self.server.server_port}"
+        baseurl = f"http://127.0.0.1:{self.server.server_port}"
         file_path = self.path
         if file_path.endswith("/") and file_path.rstrip("/") in self.files:
             file_path = file_path.rstrip("/")
