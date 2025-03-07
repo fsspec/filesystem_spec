@@ -1,6 +1,22 @@
 Changelog
 =========
 
+2025.3.0
+--------
+
+Enhancements
+
+- add pipe_file to HTTP (#1799, 1801)
+- add sync http for pyodide (#1177)
+- ls performance for local and detail=False (#1789)
+
+Fixes
+
+- dir/info consistency in dirfs (#1798)
+- referenceFS async consistency (#1794, 1795)
+- CI (#1793)
+
+
 2025.2.0
 --------
 
