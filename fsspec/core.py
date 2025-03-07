@@ -366,13 +366,13 @@ def _un_chain(path, kwargs):
     return out
 
 
-def url_to_fs(url, **kwargs):
+def url_to_fs(_url, **kwargs):
     """
     Turn fully-qualified and potentially chained URL into filesystem instance
 
     Parameters
     ----------
-    url : str
+    _url : str
         The fsspec-compatible URL
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
