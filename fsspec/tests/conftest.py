@@ -130,7 +130,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             assert self.headers.get("Transfer-Encoding") == "chunked"
             self.files[file_path] = b"".join(self.read_chunks())
         else:
-            self.files[file_path] = self.rfile.read(length)
+            self.files[file_path] = self.rfile.read(int(length))
         self._respond(200)
 
     do_PUT = do_POST
@@ -187,7 +187,7 @@ def serve():
     th.daemon = True
     th.start()
     try:
-        yield f"http://{httpd.server_name}:{httpd.server_port}"
+        yield f"http://127.0.0.1:{httpd.server_port}"
     finally:
         httpd.socket.close()
         httpd.shutdown()
