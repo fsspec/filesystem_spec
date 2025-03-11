@@ -14,7 +14,7 @@ from .registry import (
 from .spec import AbstractFileSystem
 
 try:
-    from ._version import __version__  # noqa: F401
+    from ._version import __version__
 except ImportError:
     __version__ = "unknown"
 

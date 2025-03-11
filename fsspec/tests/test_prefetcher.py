@@ -922,7 +922,7 @@ def test_close_concurrent_with_inflight_read_does_not_truncate(prefetcher_factor
     def reader():
         try:
             result["data"] = bp.fetch(1000, 1000 + 1_000_000)
-        except BaseException as e:  # noqa: BLE001
+        except BaseException as e:
             result["exc"] = e
 
     t = threading.Thread(target=reader)
