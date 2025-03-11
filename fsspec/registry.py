@@ -248,7 +248,7 @@ def get_filesystem_class(protocol):
         try:
             register_implementation(protocol, _import_class(bit["class"]))
         except ImportError as e:
-            raise ImportError(bit["err"]) from e
+            raise ImportError(bit.get("err")) from e
     cls = registry[protocol]
     if getattr(cls, "protocol", None) in ("abstract", None):
         cls.protocol = protocol
