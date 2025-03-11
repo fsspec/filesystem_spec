@@ -201,7 +201,7 @@ class HTTPFileSystem(AbstractFileSystem):
     you are testing pyodide/pyscript integration***
     """
 
-    protocol = ("http", "https", "sync_http", "sync_https")
+    protocol = ("http", "https", "sync-http", "sync-https")
     sep = "/"
 
     def __init__(
@@ -269,7 +269,7 @@ class HTTPFileSystem(AbstractFileSystem):
 
     @property
     def fsid(self):
-        return "http_sync"
+        return "sync-http"
 
     def encode_url(self, url):
         if yarl:
@@ -279,8 +279,8 @@ class HTTPFileSystem(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
         """For HTTP, we always want to keep the full URL"""
-        path = path.replace("http_sync://", "http://").replace(
-            "https_sync://", "https://"
+        path = path.replace("sync-http://", "http://").replace(
+            "sync-https://", "https://"
         )
         return path
 
@@ -918,8 +918,8 @@ def _file_info(url, session, size_policy="head", **kwargs):
 def register():
     register_implementation("http", HTTPFileSystem, clobber=True)
     register_implementation("https", HTTPFileSystem, clobber=True)
-    register_implementation("sync_http", HTTPFileSystem, clobber=True)
-    register_implementation("sync_https", HTTPFileSystem, clobber=True)
+    register_implementation("sync-http", HTTPFileSystem, clobber=True)
+    register_implementation("sync-https", HTTPFileSystem, clobber=True)
 
 
 register()

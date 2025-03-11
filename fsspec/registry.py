@@ -73,7 +73,7 @@ known_implementations = {
         "err": "pyarrow and local java libraries required for HDFS",
     },
     "async_wrapper": {
-        "class": "morefs.asyn_wrapper.AsyncWrapperFileSystem",
+        "class": "fsspec.asyn_wrapper.AsyncWrapperFileSystem",
     },
     "asynclocal": {
         "class": "morefs.asyn_local.AsyncLocalFileSystem",
