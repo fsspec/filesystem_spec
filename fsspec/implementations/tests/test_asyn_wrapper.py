@@ -10,10 +10,14 @@ from fsspec.implementations.local import LocalFileSystem
 from .test_local import csv_files, filetexts
 
 
-def test_is_async():
+@pytest.mark.asyncio
+async def test_is_async_default():
     fs = fsspec.filesystem("file")
     async_fs = AsyncFileSystemWrapper(fs)
     assert async_fs.async_impl
+    assert async_fs.asynchronous
+    async_fs = AsyncFileSystemWrapper(fs, asynchronous=False)
+    assert not async_fs.asynchronous
 
 
 def test_class_wrapper():
@@ -53,6 +57,7 @@ async def test_cats():
         assert result == b"a,b\n1,2\n"[1:-2]
 
         # test synchronous API is available as expected
+        async_fs = AsyncFileSystemWrapper(fs, asynchronous=False)
         result = async_fs.cat(".test.fakedata.1.csv", start=1, end=-2)
         assert result == b"a,b\n1,2\n"[1:-2]
 
@@ -142,3 +147,17 @@ async def test_batch_operations():
         await async_fs._rm([".test.fakedata.1.csv", ".test.fakedata.2.csv"])
         assert not await async_fs._exists(".test.fakedata.1.csv")
         assert not await async_fs._exists(".test.fakedata.2.csv")
+
+
+def test_open(tmpdir):
+    fn = f"{tmpdir}/afile"
+    with open(fn, "wb") as f:
+        f.write(b"hello")
+    of = fsspec.open(
+        "dir://afile::async_wrapper::file",
+        mode="rb",
+        async_wrapper={"asynchronous": False},
+        dir={"path": str(tmpdir)},
+    )
+    with of as f:
+        assert f.read() == b"hello"

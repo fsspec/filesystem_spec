@@ -327,12 +327,14 @@ def test_exists(dirfs):
 
 @pytest.mark.asyncio
 async def test_async_info(adirfs):
-    assert await adirfs._info("file", **KWARGS) == adirfs.fs._info.return_value
+    adirfs.fs._info.return_value = {"name": f"{PATH}/file", "foo": "bar"}
+    assert await adirfs._info("file", **KWARGS) == {"name": "file", "foo": "bar"}
     adirfs.fs._info.assert_called_once_with(f"{PATH}/file", **KWARGS)
 
 
 def test_info(dirfs):
-    assert dirfs.info("file", **KWARGS) == dirfs.fs.info.return_value
+    dirfs.fs.info.return_value = {"name": f"{PATH}/file", "foo": "bar"}
+    assert dirfs.info("file", **KWARGS) == {"name": "file", "foo": "bar"}
     dirfs.fs.info.assert_called_once_with(f"{PATH}/file", **KWARGS)
 
 

@@ -36,8 +36,6 @@ class DirFileSystem(AsyncFileSystem):
         super().__init__(**storage_options)
         if fs is None:
             fs = filesystem(protocol=target_protocol, **(target_options or {}))
-        if (path is not None) ^ (fo is not None) is False:
-            raise ValueError("Provide path or fo, not both")
         path = path or fo
 
         if self.asynchronous and not fs.async_impl:
@@ -233,10 +231,16 @@ class DirFileSystem(AsyncFileSystem):
         return self.fs.exists(self._join(path))
 
     async def _info(self, path, **kwargs):
-        return await self.fs._info(self._join(path), **kwargs)
+        info = await self.fs._info(self._join(path), **kwargs)
+        info = info.copy()
+        info["name"] = self._relpath(info["name"])
+        return info
 
     def info(self, path, **kwargs):
-        return self.fs.info(self._join(path), **kwargs)
+        info = self.fs.info(self._join(path), **kwargs)
+        info = info.copy()
+        info["name"] = self._relpath(info["name"])
+        return info
 
     async def _ls(self, path, detail=True, **kwargs):
         ret = (await self.fs._ls(self._join(path), detail=detail, **kwargs)).copy()
