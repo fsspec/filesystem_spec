@@ -151,6 +151,18 @@ def get_loop():
     return loop[0]
 
 
+def reset_after_fork():
+    global lock
+    loop[0] = None
+    iothread[0] = None
+    lock = None
+
+
+if hasattr(os, "register_at_fork"):
+    # should be posix; this will do nothing for spawn or forkserver subprocesses
+    os.register_at_fork(after_in_child=reset_after_fork)
+
+
 if TYPE_CHECKING:
     import resource
 
