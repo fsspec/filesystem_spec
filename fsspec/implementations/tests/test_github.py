@@ -9,8 +9,14 @@ def test_github_open_small_file():
 
 def test_github_open_large_file():
     # test opening a large file >1 MB
-    with fsspec.open("github://mwaskom:seaborn-data@83bfba7/brain_networks.csv") as f:
-        assert f.readline().startswith(b"network,1,1,2,2")
+    # use block_size=0 to get a streaming interface to the file, ensuring that
+    # we fetch only the parts we need instead of downloading the full file all
+    # at once
+    with fsspec.open(
+        "github://mwaskom:seaborn-data@83bfba7/brain_networks.csv", block_size=0
+    ) as f:
+        # read only the first 20 bytes of the file
+        assert f.read(20).startswith(b"network,1,1,2,2,3,3,")
 
 
 def test_github_open_lfs_file():

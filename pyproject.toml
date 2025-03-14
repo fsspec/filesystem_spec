@@ -56,7 +56,7 @@ full = [
 fuse = ["fusepy"]
 gcs = ["gcsfs"]
 git = ["pygit2"]
-github = ["requests"]
+github = ["fsspec[http]", "requests"]
 gs = ["gcsfs"]
 gui = ["panel"]
 hdfs = ["pyarrow >= 1"]

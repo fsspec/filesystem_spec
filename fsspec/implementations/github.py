@@ -2,8 +2,10 @@ import base64
 
 import requests
 
+from ..asyn import get_loop, sync
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
+from .http import HTTPFile, HTTPFileSystem
 from .memory import MemoryFile
 
 # TODO: add GIST backend, would be very similar
@@ -63,6 +65,11 @@ class GithubFileSystem(AbstractFileSystem):
 
         self.root = sha
         self.ls("")
+
+        # prepare elements needed to return HTTPFile
+        self.http_fs = HTTPFileSystem(**kwargs)
+        self.loop = get_loop()
+        self.session = sync(self.loop, self.http_fs.set_session)
 
     @property
     def kw(self):
@@ -245,9 +252,16 @@ class GithubFileSystem(AbstractFileSystem):
 
         # we land here if the content was not present in the first response
         # (regular file over 1MB or git-lfs tracked file)
-        # in this case, we get the content from the download_url
-        r = requests.get(content_json["download_url"], timeout=self.timeout, **self.kw)
-        if r.status_code == 404:
-            raise FileNotFoundError(path)
-        r.raise_for_status()
-        return MemoryFile(None, None, r.content)
+        # in this case, we get return an HTTPFile object wrapping the
+        # download_url
+        return HTTPFile(
+            self.http_fs,
+            content_json["download_url"],
+            session=self.session,
+            block_size=block_size,
+            autocommit=autocommit,
+            cache_options=cache_options,
+            size=content_json["size"],
+            loop=self.loop,
+            **kwargs,
+        )
