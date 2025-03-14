@@ -88,7 +88,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
         if isinstance(index_store, (str, pathlib.Path)):
             self.index_store = pathlib.Path(index_store)
-        elif isinstance(index_store, bool):
+        elif bool(index_store) is True:
             self.index_store = pathlib.Path(f"{name}.index.json")
         else:
             self.index_store = index_store
@@ -96,7 +96,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
         self._index()
 
     def _index(self):
-        if self.index_store is not None and pathlib.Path(self.index_store).exists():
+        if self.index_store is not None and self.index_store.exists():
             # NOTE(PG): Not sure if JSON is the best way to go here, but it's
             #           simple and human-readable.
             with self.index_store.open("r") as f:
@@ -111,7 +111,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
             self.index = out
             if self.index_store is not None:
-                with pathlib.Path(self.index_store).open("w") as f:
+                with self.index_store.open("w") as f:
                     json.dump(out, f)
 
     def _get_dirs(self):
