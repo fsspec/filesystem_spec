@@ -112,7 +112,10 @@ class TarFileSystem(AbstractArchiveFileSystem):
             self.index = out
             if self.index_store is not None:
                 with self.index_store.open("w") as f:
-                    json.dump(out, f)
+                    try:
+                        json.dump(out, f)
+                    except Exception as e:
+                        logger.warning(f"Failed to write index: {e}")
 
     def _get_dirs(self):
         if self.dir_cache is not None:
