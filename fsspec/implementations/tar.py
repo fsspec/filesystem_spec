@@ -106,7 +106,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
 
             self.index = out
             if self.index_store is not None:
-                with self.index_store.open("w") as f:
+                with pathlib.Path(self.index_store).open("w") as f:
                     json.dump(out, f)
 
     def _get_dirs(self):
