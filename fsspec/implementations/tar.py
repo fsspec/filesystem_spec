@@ -86,7 +86,12 @@ class TarFileSystem(AbstractArchiveFileSystem):
         self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
-        self.index_store = index_store
+        if isinstance(index_store, (str, pathlib.Path)):
+            self.index_store = pathlib.Path(index_store)
+        elif isinstance(index_store, bool):
+            self.index_store = pathlib.Path(f"{name}.index.json")
+        else:
+            self.index_store = index_store
         self.index = None
         self._index()
 
