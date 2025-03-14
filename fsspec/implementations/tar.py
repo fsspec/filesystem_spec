@@ -89,6 +89,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
         if isinstance(index_store, (str, pathlib.Path)):
             self.index_store = pathlib.Path(index_store)
         elif bool(index_store) is True:
+            # TODO: How to handle a hashed filename from FileCache?
             self.index_store = pathlib.Path(f"{name}.index.json")
         else:
             self.index_store = index_store
