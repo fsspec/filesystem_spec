@@ -1,6 +1,6 @@
-import requests
+import base64
 
-import fsspec
+import requests
 
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
@@ -36,7 +36,7 @@ class GithubFileSystem(AbstractFileSystem):
     """
 
     url = "https://api.github.com/repos/{org}/{repo}/git/trees/{sha}"
-    rurl = "https://raw.githubusercontent.com/{org}/{repo}/{sha}/{path}"
+    content_url = "https://api.github.com/repos/{org}/{repo}/contents/{path}?ref={sha}"
     protocol = "github"
     timeout = (60, 60)  # connect, read timeouts
 
@@ -219,21 +219,35 @@ class GithubFileSystem(AbstractFileSystem):
     ):
         if mode != "rb":
             raise NotImplementedError
-        url = self.rurl.format(
+
+        # construct a url to hit the GitHub API's repo contents API
+        url = self.content_url.format(
             org=self.org, repo=self.repo, path=path, sha=sha or self.root
         )
+
+        # make a request to this API, and parse the response as JSON
         r = requests.get(url, timeout=self.timeout, **self.kw)
         if r.status_code == 404:
             raise FileNotFoundError(path)
         r.raise_for_status()
-        return MemoryFile(None, None, r.content)
+        content_json = r.json()
 
-    def cat(self, path, recursive=False, on_error="raise", **kwargs):
-        paths = self.expand_path(path, recursive=recursive)
-        urls = [
-            self.rurl.format(org=self.org, repo=self.repo, path=u, sha=self.root)
-            for u, sh in paths
-        ]
-        fs = fsspec.filesystem("http")
-        data = fs.cat(urls, on_error="return")
-        return {u: v for ((k, v), u) in zip(data.items(), urls)}
+        # if the response's content key is not empty, try to parse it as base64
+        if content_json["content"]:
+            content = base64.b64decode(content_json["content"])
+
+            # as long as the content does not start with the string
+            # "version https://git-lfs.github.com/"
+            # then it is probably not a git-lfs pointer and we can just return
+            # the content directly
+            if not content.startswith(b"version https://git-lfs.github.com/"):
+                return MemoryFile(None, None, content)
+
+        # we land here if the content was not present in the first response
+        # (regular file over 1MB or git-lfs tracked file)
+        # in this case, we get the content from the download_url
+        r = requests.get(content_json["download_url"], timeout=self.timeout, **self.kw)
+        if r.status_code == 404:
+            raise FileNotFoundError(path)
+        r.raise_for_status()
+        return MemoryFile(None, None, r.content)
