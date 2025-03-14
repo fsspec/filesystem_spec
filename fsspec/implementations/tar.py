@@ -91,7 +91,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
         self._index()
 
     def _index(self):
-        if self.index_store is not None and pathlib(self.index_store).exists():
+        if self.index_store is not None and pathlib.Path(self.index_store).exists():
             # NOTE(PG): Not sure if JSON is the best way to go here, but it's
             #           simple and human-readable.
             with self.index_store.open("r") as f:
