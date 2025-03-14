@@ -351,6 +351,11 @@ class GenericFileSystem(AsyncFileSystem):
             raise NotImplementedError
         fs = _resolve_fs(path1[0], self.method)
         fs2 = _resolve_fs(path2[0], self.method)
+
+        # strip all paths here, after resolve...
+        path1 = [fs._strip_protocol(p) for p in path1]
+        path2 = [fs2._strip_protocol(p) for p in path2]
+
         # not expanding paths atm., assume call is from rsync()
         if fs is fs2:
             # pure remote
