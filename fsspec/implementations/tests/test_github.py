@@ -16,7 +16,7 @@ def test_github_open_large_file():
         "github://mwaskom:seaborn-data@83bfba7/brain_networks.csv", block_size=0
     ) as f:
         # read only the first 20 bytes of the file
-        assert f.read(20).startswith(b"network,1,1,2,2,3,3,")
+        assert f.read(20) == b"network,1,1,2,2,3,3,"
 
 
 def test_github_open_lfs_file():
@@ -25,7 +25,7 @@ def test_github_open_lfs_file():
         "github://cBioPortal:datahub@55cd360"
         "/public/acc_2019/data_gene_panel_matrix.txt",
     ) as f:
-        assert f.readline().startswith(b"SAMPLE_ID\tmutations")
+        assert f.read(19) == b"SAMPLE_ID\tmutations"
 
 
 def test_github_cat():
