@@ -24,6 +24,7 @@ def test_github_open_lfs_file():
     with fsspec.open(
         "github://cBioPortal:datahub@55cd360"
         "/public/acc_2019/data_gene_panel_matrix.txt",
+        block_size=0,
     ) as f:
         assert f.read(19) == b"SAMPLE_ID\tmutations"
 
