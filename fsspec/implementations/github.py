@@ -4,7 +4,6 @@ import requests
 
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
-from .http import HTTPFileSystem
 from .memory import MemoryFile
 
 # TODO: add GIST backend, would be very similar
@@ -64,7 +63,7 @@ class GithubFileSystem(AbstractFileSystem):
 
         self.root = sha
         self.ls("")
-        self.http_fs = HTTPFileSystem(**kwargs)
+        self.kwargs = kwargs
 
     @property
     def kw(self):
@@ -247,7 +246,14 @@ class GithubFileSystem(AbstractFileSystem):
         # we land here if the content was not present in the first response
         # (regular file over 1MB or git-lfs tracked file)
         # in this case, we get let the HTTPFileSystem handle the download
-        return self.http_fs.open(
+        try:
+            from .http import HTTPFileSystem
+        except ImportError as e:
+            raise ImportError(
+                "Please install fsspec[http] to acccess github files >1 MB "
+                "or git-lfs tracked files."
+            ) from e
+        return HTTPFileSystem(**self.kwargs).open(
             content_json["download_url"],
             mode=mode,
             block_size=block_size,
