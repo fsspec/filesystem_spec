@@ -65,7 +65,12 @@ class GithubFileSystem(AbstractFileSystem):
 
         self.root = sha
         self.ls("")
-        self.kwargs = kwargs
+        try:
+            from .http import HTTPFileSystem
+
+            self.http_fs = HTTPFileSystem(**kwargs)
+        except ImportError:
+            self.http_fs = None
 
     @property
     def kw(self):
@@ -248,14 +253,12 @@ class GithubFileSystem(AbstractFileSystem):
         # we land here if the content was not present in the first response
         # (regular file over 1MB or git-lfs tracked file)
         # in this case, we get let the HTTPFileSystem handle the download
-        try:
-            from .http import HTTPFileSystem
-        except ImportError as e:
+        if self.http_fs is None:
             raise ImportError(
                 "Please install fsspec[http] to acccess github files >1 MB "
                 "or git-lfs tracked files."
-            ) from e
-        return HTTPFileSystem(**self.kwargs).open(
+            )
+        return self.http_fs.open(
             content_json["download_url"],
             mode=mode,
             block_size=block_size,
