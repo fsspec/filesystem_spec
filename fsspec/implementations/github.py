@@ -16,8 +16,10 @@ class GithubFileSystem(AbstractFileSystem):
     repository. You may specify a point in the repos history, by SHA, branch
     or tag (default is current master).
 
-    Given that code files tend to be small, and that github does not support
-    retrieving partial content, we always fetch whole files.
+    For files less than 1 MB in size, file content is returned directly in a
+    MemoryFile. For larger files, or for files tracked by git-lfs, file content
+    is returned as an HTTPFile wrapping the ``download_url`` provided by the
+    GitHub API.
 
     When using fsspec.open, allows URIs of the form:
 
