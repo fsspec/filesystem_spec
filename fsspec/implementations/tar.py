@@ -100,14 +100,16 @@ class TarFileSystem(AbstractArchiveFileSystem):
         if self.index_store is not None and self.index_store.exists():
             # NOTE(PG): Not sure if JSON is the best way to go here, but it's
             #           simple and human-readable.
+            logger.debug(f"Reloading from {self.index_store}")
             with self.index_store.open("r") as f:
                 self.index = json.load(f)
         else:
+            logger.debug(f"Populating {self.index_store}")
             out = {}
             for ti in self.tar:
                 info = ti.get_info()
                 info["type"] = typemap.get(info["type"], "file")
-                name = ti.get_info()["name"].rstrip("/")
+                info["name"] = name = info["name"].rstrip("/")
                 out[name] = (info, ti.offset_data)
 
             self.index = out
@@ -125,13 +127,10 @@ class TarFileSystem(AbstractArchiveFileSystem):
         # This enables ls to get directories as children as well as files
         self.dir_cache = {
             dirname: {"name": dirname, "size": 0, "type": "directory"}
-            for dirname in self._all_dirnames(self.tar.getnames())
+            for dirname in self._all_dirnames(self.index.keys())
         }
-        for member in self.tar.getmembers():
-            info = member.get_info()
-            info["name"] = info["name"].rstrip("/")
-            info["type"] = typemap.get(info["type"], "file")
-            self.dir_cache[info["name"]] = info
+        for name, (info, _) in self.index.items():
+            self.dir_cache[name] = info
 
     def _open(self, path, mode="rb", **kwargs):
         if mode != "rb":
