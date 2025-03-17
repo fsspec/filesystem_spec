@@ -255,7 +255,7 @@ class GithubFileSystem(AbstractFileSystem):
         # in this case, we get let the HTTPFileSystem handle the download
         if self.http_fs is None:
             raise ImportError(
-                "Please install fsspec[http] to acccess github files >1 MB "
+                "Please install fsspec[http] to access github files >1 MB "
                 "or git-lfs tracked files."
             )
         return self.http_fs.open(
