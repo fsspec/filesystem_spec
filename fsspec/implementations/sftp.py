@@ -93,6 +93,7 @@ class SFTPFileSystem(AbstractFileSystem):
         self.ftp.rmdir(path)
 
     def info(self, path):
+        path = self._strip_protocol(path)
         stat = self._decode_stat(self.ftp.stat(path))
         stat["name"] = path
         return stat
