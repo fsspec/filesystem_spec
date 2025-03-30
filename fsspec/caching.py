@@ -227,7 +227,7 @@ class MMapCache(BaseCache):
                 logger.debug(f"MMap copy block ({sstart}-{send}")
                 self.cache[sstart:send] = r
         else:
-            for (sstart, send) in ranges:
+            for sstart, send in ranges:
                 logger.debug(f"MMap get block ({sstart}-{send}")
                 self.cache[sstart:send] = self.fetcher(sstart, send)
 
