@@ -1,6 +1,23 @@
 Changelog
 =========
 
+2025.3.1
+--------
+
+Enhancements
+
+- LFS support in github: (#1810)
+
+Fixes
+
+- json should be a method fo requests shim (#1814)
+- don't raise if known_implementation has no given error string (#1804)
+
+Other
+
+- rename protocols for sync-http (#1810)
+
+
 2025.3.0
 --------
 
