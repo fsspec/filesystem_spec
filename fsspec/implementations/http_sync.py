@@ -110,7 +110,6 @@ class ResponseProxy:
         self.stream = False
         return self.raw
 
-    @property
     def json(self):
         return loads(self.text)
 
