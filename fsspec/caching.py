@@ -37,6 +37,7 @@ T = TypeVar("T")
 logger = logging.getLogger("fsspec")
 
 Fetcher = Callable[[int, int], bytes]  # Maps (start, end) to bytes
+MultiFetcher = Callable[list[[int, int]], bytes]  # Maps [(start, end)] to bytes
 
 
 class BaseCache:
@@ -109,6 +110,26 @@ class MMapCache(BaseCache):
     Ensure there is enough disc space in the temporary location.
 
     This cache method might only work on posix
+
+    Parameters
+    ----------
+    blocksize: int
+        How far to read ahead in numbers of bytes
+    fetcher: Fetcher
+        Function of the form f(start, end) which gets bytes from remote as
+        specified
+    size: int
+        How big this file is
+    location: str
+        Where to create the temporary file. If None, a temporary file is
+        created using tempfile.TemporaryFile().
+    blocks: set[int]
+        Set of block numbers that have already been fetched. If None, an empty
+        set is created.
+    multi_fetcher: MultiFetcher
+        Function of the form f([(start, end)]) which gets bytes from remote
+        as specified. This function is used to fetch multiple blocks at once.
+        If not specified, the fetcher function is used instead.
     """
 
     name = "mmap"
@@ -120,10 +141,12 @@ class MMapCache(BaseCache):
         size: int,
         location: str | None = None,
         blocks: set[int] | None = None,
+        multi_fetcher: MultiFetcher | None = None,
     ) -> None:
         super().__init__(blocksize, fetcher, size)
         self.blocks = set() if blocks is None else blocks
         self.location = location
+        self.multi_fetcher = multi_fetcher
         self.cache = self._makefile()
 
     def _makefile(self) -> mmap.mmap | bytearray:
@@ -164,6 +187,8 @@ class MMapCache(BaseCache):
         # Count the number of blocks already cached
         self.hit_count += sum(1 for i in block_range if i in self.blocks)
 
+        ranges = []
+
         # Consolidate needed blocks.
         # Algorithm adapted from Python 2.x itertools documentation.
         # We are grouping an enumerated sequence of blocks. By comparing when the difference
@@ -185,12 +210,26 @@ class MMapCache(BaseCache):
             logger.debug(
                 f"MMap get blocks {_blocks[0]}-{_blocks[-1]} ({sstart}-{send})"
             )
-            self.cache[sstart:send] = self.fetcher(sstart, send)
+            ranges.append((sstart, send))
 
             # Update set of cached blocks
             self.blocks.update(_blocks)
             # Update cache statistics with number of blocks we had to cache
             self.miss_count += len(_blocks)
+
+        if not ranges:
+            return self.cache[start:end]
+
+        if self.multi_fetcher:
+            logger.debug(f"MMap get blocks {ranges}")
+            for idx, r in enumerate(self.multi_fetcher(ranges)):
+                (sstart, send) = ranges[idx]
+                logger.debug(f"MMap copy block ({sstart}-{send}")
+                self.cache[sstart:send] = r
+        else:
+            for sstart, send in ranges:
+                logger.debug(f"MMap get block ({sstart}-{send}")
+                self.cache[sstart:send] = self.fetcher(sstart, send)
 
         return self.cache[start:end]
 
