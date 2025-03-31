@@ -4,7 +4,7 @@ Changelog
 2025.3.2
 --------
 
-- drop support for py3.8 
+- drop support for py3.8
 
 2025.3.1
 --------
