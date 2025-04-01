@@ -154,7 +154,7 @@ class LocalFileSystem(AbstractFileSystem):
     def put_file(self, path1, path2, callback=None, **kwargs):
         return self.cp_file(path1, path2, **kwargs)
 
-    def mv(self, path1, path2, **kwargs):
+    def mv(self, path1, path2, recursive: bool = True, **kwargs):
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
         shutil.move(path1, path2)
