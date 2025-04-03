@@ -155,6 +155,11 @@ class LocalFileSystem(AbstractFileSystem):
         return self.cp_file(path1, path2, **kwargs)
 
     def mv(self, path1, path2, recursive: bool = True, **kwargs):
+        """Move files/directories
+        
+        For the specific case of local, all ops on directories are recursive and
+        the recursive= kwarg is ignored.
+        """
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
         shutil.move(path1, path2)
