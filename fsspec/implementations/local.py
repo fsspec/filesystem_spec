@@ -156,7 +156,6 @@ class LocalFileSystem(AbstractFileSystem):
 
     def mv(self, path1, path2, recursive: bool = True, **kwargs):
         """Move files/directories
-        
         For the specific case of local, all ops on directories are recursive and
         the recursive= kwarg is ignored.
         """
