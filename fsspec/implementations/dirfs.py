@@ -12,6 +12,19 @@ class DirFileSystem(AsyncFileSystem):
 
     protocol = "dir"
 
+    # ----------------------------------------------------------------
+    # Transaction delegation: use the wrapped FS’s transaction
+    transaction_type = property(lambda self: self.fs.transaction_type)
+
+    @property
+    def transaction(self):
+        """
+        Delegate `with fs.transaction:` to the underlying filesystem
+        so that dir:// writes participate in the base FS’s transaction.
+        """
+        return self.fs.transaction
+    # ----------------------------------------------------------------    
+
     def __init__(
         self,
         path=None,
