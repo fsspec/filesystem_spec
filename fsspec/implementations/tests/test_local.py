@@ -508,6 +508,19 @@ def test_commit_discard(tmpdir):
         assert not fs.exists(tmpdir + "/bfile")
 
 
+def test_same_permissions_with_and_without_transaction(tmpdir):
+    tmpdir = str(tmpdir)
+
+    with fsspec.open(tmpdir + "/afile", 'wb') as f:
+        f.write(b'data')
+
+    fs, urlpath = fsspec.core.url_to_fs(tmpdir + "/bfile")
+    with fs.transaction, fs.open(urlpath, 'wb') as f:
+        f.write(b'data')
+    
+    assert fs.info(tmpdir + "/afile")["mode"] == fs.info(tmpdir + "/bfile")["mode"]
+
+
 def test_make_path_posix():
     cwd = os.getcwd()
     if WIN:

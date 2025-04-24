@@ -417,6 +417,13 @@ class LocalFileOpener(io.IOBase):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
         shutil.move(self.temp, self.path)
+        try:
+            # Get the current umask and set it temporarily to 0o666.
+            umask = os.umask(0o666)
+            os.umask(umask)
+            os.chmod(self.path, 0o666 & ~umask)
+        except RuntimeError:
+            pass
 
     def discard(self):
         if self.autocommit:
