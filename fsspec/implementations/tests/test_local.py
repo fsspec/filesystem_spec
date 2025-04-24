@@ -550,6 +550,7 @@ def test_multiple_transactions_use_umask_cache(tmpdir):
             f.write(b"data")
     assert get_umask.cache_info().hits == 1
 
+
 def test_multiple_filesystems_use_umask_cache(tmpdir):
     get_umask.cache_clear()  # Clear the cache before the test for testing purposes.
     fs1 = LocalFileSystem()
