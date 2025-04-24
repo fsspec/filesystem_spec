@@ -6,6 +6,7 @@ import os.path as osp
 import shutil
 import stat
 import tempfile
+from functools import lru_cache
 
 from fsspec import AbstractFileSystem
 from fsspec.compression import compr
@@ -354,6 +355,14 @@ def trailing_sep(path):
     return path.endswith(os.sep) or (os.altsep is not None and path.endswith(os.altsep))
 
 
+@lru_cache(maxsize=1)
+def get_umask(mask: int = 0o666) -> int:
+    """Get the current umask and set it temporarily to 0o666."""
+    value = os.umask(mask)
+    os.umask(value)
+    return value
+
+
 class LocalFileOpener(io.IOBase):
     def __init__(
         self, path, mode, autocommit=True, fs=None, compression=None, **kwargs
@@ -418,10 +427,8 @@ class LocalFileOpener(io.IOBase):
             raise RuntimeError("Can only commit if not already set to autocommit")
         shutil.move(self.temp, self.path)
         try:
-            # Get the current umask and set it temporarily to 0o666.
-            umask = os.umask(0o666)
-            os.umask(umask)
-            os.chmod(self.path, 0o666 & ~umask)
+            mask = 0o666
+            os.chmod(self.path, mask & ~get_umask(mask))
         except RuntimeError:
             pass
 
