@@ -548,17 +548,45 @@ class AbstractFileSystem(metaclass=_Cached):
             return sizes
 
     def glob(self, path, maxdepth=None, **kwargs):
-        """
-        Find files by glob-matching.
+        """Find files by glob-matching.
 
-        If the path ends with '/', only folders are returned.
+        Pattern matching capabilities for finding files that match the given pattern.
 
-        We support ``"**"``,
-        ``"?"`` and ``"[..]"``. We do not support ^ for pattern negation.
+        Parameters
+        ----------
+        path: str
+            The glob pattern to match against
+        maxdepth: int or None
+            Maximum depth for '**' patterns. Applied on the first '**' found.
+            Must be at least 1 if provided.
+        **kwargs:
+            Additional arguments passed to ``find`` (e.g., detail=True)
 
-        The `maxdepth` option is applied on the first `**` found in the path.
+        Returns
+        -------
+        List of matched paths, or dict of paths and their info if detail=True
 
-        kwargs are passed to ``ls``.
+        Notes
+        -----
+        Supported patterns:
+        - '*': Matches any sequence of characters within a single directory level
+        - '**': Matches any number of directory levels (must be an entire path component)
+        - '?': Matches exactly one character
+        - '[abc]': Matches any character in the set
+        - '[a-z]': Matches any character in the range
+        - '[!abc]': Matches any character NOT in the set
+
+        Special behaviors:
+        - If the path ends with '/', only folders are returned
+        - Consecutive '*' characters are compressed into a single '*'
+        - Empty brackets '[]' never match anything
+        - Negated empty brackets '[!]' match any single character
+        - Special characters in character classes are escaped properly
+
+        Limitations:
+        - '**' must be a complete path component (e.g., 'a/**/b', not 'a**b')
+        - No brace expansion ('{a,b}.txt')
+        - No extended glob patterns ('+(pattern)', '!(pattern)')
         """
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
