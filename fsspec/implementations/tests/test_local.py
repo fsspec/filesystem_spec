@@ -15,7 +15,7 @@ import pytest
 import fsspec
 from fsspec import compression
 from fsspec.core import OpenFile, get_fs_token_paths, open_files
-from fsspec.implementations.local import LocalFileSystem, make_path_posix
+from fsspec.implementations.local import LocalFileSystem, get_umask, make_path_posix
 from fsspec.tests.test_utils import WIN
 
 files = {
@@ -506,6 +506,60 @@ def test_commit_discard(tmpdir):
             raise KeyboardInterrupt
     except KeyboardInterrupt:
         assert not fs.exists(tmpdir + "/bfile")
+
+
+def test_same_permissions_with_and_without_transaction(tmpdir):
+    tmpdir = str(tmpdir)
+
+    with fsspec.open(tmpdir + "/afile", "wb") as f:
+        f.write(b"data")
+
+    fs, urlpath = fsspec.core.url_to_fs(tmpdir + "/bfile")
+    with fs.transaction, fs.open(urlpath, "wb") as f:
+        f.write(b"data")
+
+    assert fs.info(tmpdir + "/afile")["mode"] == fs.info(tmpdir + "/bfile")["mode"]
+
+
+def test_get_umask_uses_cache():
+    get_umask.cache_clear()  # Clear the cache before the test for testing purposes.
+    get_umask()  # Retrieve the current umask value.
+    get_umask()  # Retrieve the umask again; this should result in a cache hit.
+    assert get_umask.cache_info().hits == 1
+
+
+def test_multiple_file_transaction_use_umask_cache(tmpdir):
+    get_umask.cache_clear()  # Clear the cache before the test for testing purposes.
+    fs = LocalFileSystem()
+    with fs.transaction:
+        with fs.open(tmpdir + "/afile", "wb") as f:
+            f.write(b"data")
+        with fs.open(tmpdir + "/bfile", "wb") as f:
+            f.write(b"data")
+    assert get_umask.cache_info().hits == 1
+
+
+def test_multiple_transactions_use_umask_cache(tmpdir):
+    get_umask.cache_clear()  # Clear the cache before the test for testing purposes.
+    fs = LocalFileSystem()
+    with fs.transaction:
+        with fs.open(tmpdir + "/afile", "wb") as f:
+            f.write(b"data")
+    with fs.transaction:
+        with fs.open(tmpdir + "/bfile", "wb") as f:
+            f.write(b"data")
+    assert get_umask.cache_info().hits == 1
+
+
+def test_multiple_filesystems_use_umask_cache(tmpdir):
+    get_umask.cache_clear()  # Clear the cache before the test for testing purposes.
+    fs1 = LocalFileSystem()
+    fs2 = LocalFileSystem()
+    with fs1.transaction, fs1.open(tmpdir + "/afile", "wb") as f:
+        f.write(b"data")
+    with fs2.transaction, fs2.open(tmpdir + "/bfile", "wb") as f:
+        f.write(b"data")
+    assert get_umask.cache_info().hits == 1
 
 
 def test_make_path_posix():
