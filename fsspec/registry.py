@@ -72,12 +72,12 @@ known_implementations = {
         "class": "fsspec.implementations.arrow.HadoopFileSystem",
         "err": "pyarrow and local java libraries required for HDFS",
     },
-    "async_wrapper": {
-        "class": "fsspec.asyn_wrapper.AsyncWrapperFileSystem",
-    },
     "asynclocal": {
         "class": "morefs.asyn_local.AsyncLocalFileSystem",
         "err": "Install 'morefs[asynclocalfs]' to use AsyncLocalFileSystem",
+    },
+    "asyncwrapper": {
+        "class": "fsspec.implementations.asyn_wrapper.AsyncFileSystemWrapper",
     },
     "az": {
         "class": "adlfs.AzureBlobFileSystem",
