@@ -180,6 +180,10 @@ known_implementations = {
         "class": "ossfs.OSSFileSystem",
         "err": "Install ossfs to access Alibaba Object Storage System",
     },
+    "pyscript": {
+        "class": "pyscript_fsspec_client.client.PyscriptFileSystem",
+        "err": "Install requests (cpython) or run in pyscript",
+    },
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
     "root": {
         "class": "fsspec_xrootd.XRootDFileSystem",
