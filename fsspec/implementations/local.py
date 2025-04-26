@@ -442,7 +442,7 @@ class LocalFileOpener(io.IOBase):
         try:
             mask = 0o666
             os.chmod(self.path, mask & ~get_umask(mask))
-        except RuntimeError:
+        except (RuntimeError, PermissionError):
             pass
 
     def discard(self):
