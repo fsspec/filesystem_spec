@@ -584,7 +584,7 @@ def test_fsspec_transaction_cross_device(tmpdir):
         # shutil.move falls back to copy2 (that does copyfile + copystat) if os.rename fails.
         mock_rename.assert_called_once()
         mock_copystat.assert_called_once()
-        mock_chmod.assert_called_once()
+        mock_chmod.assert_not_called()
 
     # After transaction commit, data must be present despite EXDEV and PermissionError.
     # Permissions are not checked here, because copystat fails.

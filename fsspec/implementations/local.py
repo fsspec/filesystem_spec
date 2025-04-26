@@ -439,11 +439,12 @@ class LocalFileOpener(io.IOBase):
             # If it doesn't exist, there was no permission to create the file.
             if not os.path.exists(self.path):
                 raise e
-        try:
-            mask = 0o666
-            os.chmod(self.path, mask & ~get_umask(mask))
-        except (RuntimeError, PermissionError):
-            pass
+        else:
+            try:
+                mask = 0o666
+                os.chmod(self.path, mask & ~get_umask(mask))
+            except RuntimeError:
+                pass
 
     def discard(self):
         if self.autocommit:
