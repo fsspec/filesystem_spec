@@ -1,4 +1,5 @@
 import bz2
+import errno
 import gzip
 import os
 import os.path
@@ -560,6 +561,45 @@ def test_multiple_filesystems_use_umask_cache(tmpdir):
     with fs2.transaction, fs2.open(tmpdir + "/bfile", "wb") as f:
         f.write(b"data")
     assert get_umask.cache_info().hits == 1
+
+
+def test_fsspec_transaction_cross_device(tmpdir):
+    tmpdir = str(tmpdir)
+    fs1, urlpath1 = fsspec.core.url_to_fs(tmpdir + "/file1")
+    data = b"data"
+    with patch(
+        "os.rename",
+        side_effect=OSError(errno.EXDEV, "Invalid cross-device link"),
+    ) as mock_rename, patch(
+        "shutil.copystat",
+        side_effect=PermissionError("Operation not permitted"),
+    ) as mock_copystat:
+        with fs1.transaction, fs1.open(urlpath1, "wb") as f:
+            f.write(data)
+
+        # Ensure rename was attempted and copystat was used in the default fallback.
+        # shutil.move falls back to copy2 (that does copyfile + copystat) if os.rename fails.
+        mock_rename.assert_called_once()
+        mock_copystat.assert_called_once()
+
+    # After transaction commit, data must be present despite EXDEV and PermissionError.
+    # Permissions are not checked here, because copystat fails.
+    with fs1.open(urlpath1, "rb") as f:
+        assert f.read() == data, (
+            "Data should be present despite EXDEV and PermissionError if only copystat fails."
+        )
+
+    fs2, urlpath2 = fsspec.core.url_to_fs(tmpdir + "/file2")
+    with patch(
+        "shutil.move",
+        side_effect=PermissionError("Operation not permitted"),
+    ), pytest.raises(PermissionError):
+        with fs2.transaction, fsspec.open(urlpath2, "wb") as f:
+            f.write(data)
+
+    assert not os.path.exists(urlpath2), (
+        "File should not exist after failed transaction."
+    )
 
 
 def test_make_path_posix():
