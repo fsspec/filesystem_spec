@@ -1,4 +1,5 @@
 import bz2
+import errno
 import gzip
 import os
 import os.path
@@ -560,6 +561,13 @@ def test_multiple_filesystems_use_umask_cache(tmpdir):
     with fs2.transaction, fs2.open(tmpdir + "/bfile", "wb") as f:
         f.write(b"data")
     assert get_umask.cache_info().hits == 1
+
+
+def test_transaction_chmod_catch_permission_error(tmpdir):
+    fs = LocalFileSystem()
+    with patch("os.chmod", side_effect=PermissionError("Operation not permitted")):
+        with fs.transaction, fs.open(tmpdir + "/afile", "wb") as f:
+            f.write(b"data")
 
 
 def test_make_path_posix():
