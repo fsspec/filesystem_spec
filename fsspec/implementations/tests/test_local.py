@@ -1,5 +1,4 @@
 import bz2
-import errno
 import gzip
 import os
 import os.path
