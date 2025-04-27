@@ -391,7 +391,7 @@ class LocalFileOpener(io.IOBase):
                     self.f = compress(self.f, mode=self.mode)
             else:
                 # TODO: check if path is writable?
-                i, name = tempfile.mkstemp()
+                i, name = tempfile.mkstemp(dir=os.path.dirname(self.path))
                 os.close(i)  # we want normal open and normal buffered file
                 self.temp = name
                 self.f = open(name, mode=self.mode)
@@ -430,21 +430,12 @@ class LocalFileOpener(io.IOBase):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
+        shutil.move(self.temp, self.path)
         try:
-            shutil.move(self.temp, self.path)
-        except PermissionError as e:
-            # shutil.move raises PermissionError if os.rename
-            # and the default copy2 fallback with shutil.copystats fail.
-            # The file should be there nonetheless, but without copied permissions.
-            # If it doesn't exist, there was no permission to create the file.
-            if not os.path.exists(self.path):
-                raise e
-        else:
-            try:
-                mask = 0o666
-                os.chmod(self.path, mask & ~get_umask(mask))
-            except RuntimeError:
-                pass
+            mask = 0o666
+            os.chmod(self.path, mask & ~get_umask(mask))
+        except RuntimeError:
+            pass
 
     def discard(self):
         if self.autocommit:
