@@ -391,7 +391,10 @@ class LocalFileOpener(io.IOBase):
                     self.f = compress(self.f, mode=self.mode)
             else:
                 # TODO: check if path is writable?
-                i, name = tempfile.mkstemp(dir=os.path.dirname(self.path))
+                i, name = tempfile.mkstemp(
+                    dir=os.path.dirname(self.path),
+                    prefix=os.path.basename(self.path) + "-",
+                )
                 os.close(i)  # we want normal open and normal buffered file
                 self.temp = name
                 self.f = open(name, mode=self.mode)
@@ -434,7 +437,7 @@ class LocalFileOpener(io.IOBase):
         try:
             mask = 0o666
             os.chmod(self.path, mask & ~get_umask(mask))
-        except RuntimeError:
+        except (RuntimeError, PermissionError):
             pass
 
     def discard(self):
