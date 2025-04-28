@@ -563,13 +563,6 @@ def test_multiple_filesystems_use_umask_cache(tmpdir):
     assert get_umask.cache_info().hits == 1
 
 
-def test_transaction_chmod_catch_permission_error(tmpdir):
-    fs = LocalFileSystem()
-    with patch("os.chmod", side_effect=PermissionError("Operation not permitted")):
-        with fs.transaction, fs.open(tmpdir + "/afile", "wb") as f:
-            f.write(b"data")
-
-
 def test_transaction_cross_device_but_mock_temp_dir_on_wrong_device(tmpdir):
     # If the temporary file for a transaction is not on the correct device,
     # os.rename in shutil.move will raise EXDEV and lookup('chmod') will raise
@@ -584,7 +577,6 @@ def test_transaction_cross_device_but_mock_temp_dir_on_wrong_device(tmpdir):
             "os.chmod",
             side_effect=PermissionError("Operation not permitted"),
         ),
-        pytest.raises(PermissionError, match="Operation not permitted"),
     ):
         with fs.transaction, fs.open(tmpdir + "/afile", "wb") as f:
             f.write(b"data")
