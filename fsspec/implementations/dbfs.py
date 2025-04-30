@@ -14,12 +14,13 @@ class DatabricksException(Exception):
     Helper class for exceptions raised in this module.
     """
 
-    def __init__(self, error_code, message):
+    def __init__(self, error_code, message, details=None):
         """Create a new DatabricksException"""
         super().__init__(message)
 
         self.error_code = error_code
         self.message = message
+        self.details = details
 
 
 class DatabricksFileSystem(AbstractFileSystem):
@@ -80,7 +81,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                     raise FileNotFoundError(e.message) from e
 
                 raise
-            files = r["files"]
+            files = r.get("files", [])
             out = [
                 {
                     "name": o["path"],
