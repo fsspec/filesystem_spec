@@ -159,7 +159,7 @@ class GenericFileSystem(AsyncFileSystem):
 
     protocol = "generic"  # there is no real reason to ever use a protocol with this FS
 
-    def __init__(self, default_method="default", **kwargs):
+    def __init__(self, default_method="default", storage_options=None, **kwargs):
         """
 
         Parameters
@@ -171,22 +171,25 @@ class GenericFileSystem(AsyncFileSystem):
               configured via the config system
             - "generic": takes instances from the `_generic_fs` dict in this module,
               which you must populate before use. Keys are by protocol
+            - "options": expects storage_options, a dict mapping protocol to
+              kwargs to use when constructing the filesystem
             - "current": takes the most recently instantiated version of each FS
         """
         self.method = default_method
+        self.st_opts = storage_options
         super().__init__(**kwargs)
 
     def _parent(self, path):
-        fs = _resolve_fs(path, self.method)
+        fs = _resolve_fs(path, self.method, storage_options=self.st_opts)
         return fs.unstrip_protocol(fs._parent(path))
 
     def _strip_protocol(self, path):
         # normalization only
-        fs = _resolve_fs(path, self.method)
+        fs = _resolve_fs(path, self.method, storage_options=self.st_opts)
         return fs.unstrip_protocol(fs._strip_protocol(path))
 
     async def _find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
-        fs = _resolve_fs(path, self.method)
+        fs = _resolve_fs(path, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             out = await fs._find(
                 path, maxdepth=maxdepth, withdirs=withdirs, detail=True, **kwargs
@@ -251,7 +254,7 @@ class GenericFileSystem(AsyncFileSystem):
         value,
         **kwargs,
     ):
-        fs = _resolve_fs(path, self.method)
+        fs = _resolve_fs(path, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             return await fs._pipe_file(path, value, **kwargs)
         else:
@@ -269,7 +272,7 @@ class GenericFileSystem(AsyncFileSystem):
 
     async def _makedirs(self, path, exist_ok=False):
         logger.debug("Make dir %s", path)
-        fs = _resolve_fs(path, self.method)
+        fs = _resolve_fs(path, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             await fs._makedirs(path, exist_ok=exist_ok)
         else:
@@ -288,6 +291,7 @@ class GenericFileSystem(AsyncFileSystem):
         url2,
         blocksize=2**20,
         callback=DEFAULT_CALLBACK,
+        tempdir: Optional[str] = None,
         **kwargs,
     ):
         fs = _resolve_fs(url, self.method)
@@ -295,35 +299,10 @@ class GenericFileSystem(AsyncFileSystem):
         if fs is fs2:
             # pure remote
             if fs.async_impl:
-                return await fs._cp_file(url, url2, **kwargs)
+                return await fs._copy(url, url2, **kwargs)
             else:
-                return fs.cp_file(url, url2, **kwargs)
-        kw = {"blocksize": 0, "cache_type": "none"}
-        try:
-            f1 = (
-                await fs.open_async(url, "rb")
-                if hasattr(fs, "open_async")
-                else fs.open(url, "rb", **kw)
-            )
-            callback.set_size(await maybe_await(f1.size))
-            f2 = (
-                await fs2.open_async(url2, "wb")
-                if hasattr(fs2, "open_async")
-                else fs2.open(url2, "wb", **kw)
-            )
-            while f1.size is None or f2.tell() < f1.size:
-                data = await maybe_await(f1.read(blocksize))
-                if f1.size is None and not data:
-                    break
-                await maybe_await(f2.write(data))
-                callback.absolute_update(f2.tell())
-        finally:
-            try:
-                await maybe_await(f2.close())
-                await maybe_await(f1.close())
-            except NameError:
-                # fail while opening f1 or f2
-                pass
+                return fs.copy(url, url2, **kwargs)
+        await copy_file_op(fs, [url], fs2, [url2], tempdir, 1, on_error="raise")
 
     async def _make_many_dirs(self, urls, exist_ok=True):
         fs = _resolve_fs(urls[0], self.method)
@@ -348,16 +327,16 @@ class GenericFileSystem(AsyncFileSystem):
         **kwargs,
     ):
         if recursive:
-            raise NotImplementedError
+            raise NotImplementedError("Please use fsspec.generic.rsync")
         fs = _resolve_fs(path1[0], self.method)
         fs2 = _resolve_fs(path2[0], self.method)
-        # not expanding paths atm., assume call is from rsync()
+
         if fs is fs2:
-            # pure remote
             if fs.async_impl:
                 return await fs._copy(path1, path2, **kwargs)
             else:
                 return fs.copy(path1, path2, **kwargs)
+
         await copy_file_op(
             fs, path1, fs2, path2, tempdir, batch_size, on_error=on_error
         )
@@ -377,31 +356,33 @@ async def copy_file_op(
                 fs2,
                 u2,
                 os.path.join(tempdir, uuid.uuid4().hex),
-                on_error=on_error,
             )
             for u1, u2 in zip(url1, url2)
         ]
-        await _run_coros_in_chunks(coros, batch_size=batch_size)
+        out = await _run_coros_in_chunks(
+            coros, batch_size=batch_size, return_exceptions=True
+        )
     finally:
         shutil.rmtree(tempdir)
+    if on_error == "return":
+        return out
+    elif on_error == "raise":
+        for o in out:
+            if isinstance(o, Exception):
+                raise o
 
 
 async def _copy_file_op(fs1, url1, fs2, url2, local, on_error="ignore"):
-    ex = () if on_error == "raise" else Exception
-    logger.debug("Copy %s -> %s", url1, url2)
-    try:
-        if fs1.async_impl:
-            await fs1._get_file(url1, local)
-        else:
-            fs1.get_file(url1, local)
-        if fs2.async_impl:
-            await fs2._put_file(local, url2)
-        else:
-            fs2.put_file(local, url2)
-        os.unlink(local)
-        logger.debug("Copy %s -> %s; done", url1, url2)
-    except ex as e:
-        logger.debug("ignoring cp exception for %s: %s", url1, e)
+    if fs1.async_impl:
+        await fs1._get_file(url1, local)
+    else:
+        fs1.get_file(url1, local)
+    if fs2.async_impl:
+        await fs2._put_file(local, url2)
+    else:
+        fs2.put_file(local, url2)
+    os.unlink(local)
+    logger.debug("Copy %s -> %s; done", url1, url2)
 
 
 async def maybe_await(cor):
