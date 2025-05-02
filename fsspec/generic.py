@@ -16,15 +16,13 @@ logger = logging.getLogger("fsspec.generic")
 
 
 def set_generic_fs(protocol, **storage_options):
+    """Populate the dict used for method=="generic" lookups"""
     _generic_fs[protocol] = filesystem(protocol, **storage_options)
 
 
-default_method = "default"
-
-
-def _resolve_fs(url, method=None, protocol=None, storage_options=None):
+def _resolve_fs(url, method, protocol=None, storage_options=None):
     """Pick instance of backend FS"""
-    method = method or default_method
+    url = url[0] if isinstance(url, (list, tuple)) else url
     protocol = protocol or split_protocol(url)[0]
     storage_options = storage_options or {}
     if method == "default":
@@ -326,10 +324,15 @@ class GenericFileSystem(AsyncFileSystem):
         tempdir: Optional[str] = None,
         **kwargs,
     ):
+        # TODO: special case for one FS being local, which can use get/put
+        # TODO: special case for one being memFS, which can use cat/pipe
         if recursive:
             raise NotImplementedError("Please use fsspec.generic.rsync")
-        fs = _resolve_fs(path1[0], self.method)
-        fs2 = _resolve_fs(path2[0], self.method)
+        path1 = [path1] if isinstance(path1, str) else path1
+        path2 = [path2] if isinstance(path2, str) else path2
+
+        fs = _resolve_fs(path1, self.method)
+        fs2 = _resolve_fs(path2, self.method)
 
         if fs is fs2:
             if fs.async_impl:

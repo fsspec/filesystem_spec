@@ -48,6 +48,34 @@ def test_cat_async(server):
     assert fs.cat(server.realfile) == data
 
 
+def test_cp_one(server, tmpdir):
+    fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    local = fsspec.filesystem("file")
+    fn = f"file://{tmpdir}/afile"
+
+    fs = fsspec.filesystem("generic", default_method="current")
+
+    fs.copy([server.realfile], [fn])
+    assert local.cat(fn) == data
+    fs.rm(fn)
+    assert not fs.exists(fn)
+
+    fs.copy(server.realfile, fn)
+    assert local.cat(fn) == data
+    fs.rm(fn)
+    assert not fs.exists(fn)
+
+    fs.cp([server.realfile], [fn])
+    assert local.cat(fn) == data
+    fs.rm(fn)
+    assert not fs.exists(fn)
+
+    fs.cp_file(server.realfile, fn)
+    assert local.cat(fn) == data
+    fs.rm(fn)
+    assert not fs.exists(fn)
+
+
 def test_rsync(tmpdir, m):
     from fsspec.generic import GenericFileSystem, rsync
 
