@@ -1,6 +1,6 @@
 interactions:
 - request:
-    body: '{"path": "/"}'
+    body: '{"path": "/FileStore/fsspec_dbfs/project_root/empty_dir"}'
     headers:
       Accept:
       - '*/*'
@@ -9,22 +9,18 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '13'
+      - '57'
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.3
       authorization:
       - DUMMY
-    method: GET
-    uri: https://my_instance.com/api/2.0/dbfs/list
+    method: POST
+    uri: https://my_instance.com/api/2.0/dbfs/mkdirs
   response:
     body:
-      string: !!binary |
-        H4sIAAAAAAAEA6zSSwrCMBAG4LvMumLSpo3JAbyA4Eak1DbiYF8kExeW3t2qC6G46WM3/AwfzKOD
-        K5bGgT510GZ0Aw3b/ZAcqLEGAkCXFmhBk/Um+PSmDp8GNAugagq8Yp4RNnVKWA0pl0woxmMhGGN9
-        8DOPTemHhsngH8QtVIqMsovF/O4279IZWlG0xvlyMVjVNH1InoTD5kMpotHuqWrnaErGkeJyN9K8
-        M3YOxxmLEhGqEfdY4zG+yKwznvsXAAAA//8DAMDPrToDAwAA
+      string: '{}'
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -33,8 +29,8 @@ interactions:
       - '*'
       cache-control:
       - no-cache, no-store, must-revalidate
-      content-encoding:
-      - gzip
+      content-length:
+      - '2'
       content-type:
       - application/json
       expires:
@@ -45,17 +41,15 @@ interactions:
       - databricks
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
-      transfer-encoding:
-      - chunked
-      vary:
-      - Accept-Encoding
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - fea11be8-942d-46a4-833c-35ca76acc8f1
     status:
       code: 200
       message: OK
 - request:
-    body: '{"path": "/"}'
+    body: '{"path": "/FileStore/fsspec_dbfs"}'
     headers:
       Accept:
       - '*/*'
@@ -64,11 +58,11 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '13'
+      - '34'
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.3
       authorization:
       - DUMMY
     method: GET
@@ -76,10 +70,9 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA6zSSwrCMBAG4LvMumLSpo3JAbyA4Eak1DbiYF8kExeW3t2qC6G46WM3/AwfzKOD
-        K5bGgT510GZ0Aw3b/ZAcqLEGAkCXFmhBk/Um+PSmDp8GNAugagq8Yp4RNnVKWA0pl0woxmMhGGN9
-        8DOPTemHhsngH8QtVIqMsovF/O4279IZWlG0xvlyMVjVNH1InoTD5kMpotHuqWrnaErGkeJyN9K8
-        M3YOxxmLEhGqEfdY4zG+yKwznvsXAAAA//8DAMDPrToDAwAA
+        H4sIAAAAAAAEAxzMMQ7CMAwF0Lv8OVKYcwAuwIiQ1SaOMKI4ss3SqncvZX3D29DlzY5y3zCmeKIg
+        X39yCzXO3X1wpTZ3z8P0xTXIVAMJ4tTEUMK+nP4JuayMcklYtEmXOoXoh0KWU/fHfgAAAP//AwCB
+        uORhbAAAAA==
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -106,6 +99,57 @@ interactions:
       - Accept-Encoding
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - 813f4602-831b-44bc-be14-7f5693ba3206
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore/fsspec_dbfs/project_root/empty_dir"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '57'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.3
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: '{}'
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-length:
+      - '2'
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-content-type-options:
+      - nosniff
+      x-request-id:
+      - b85246e3-658d-4723-b344-f651ba5c28d7
     status:
       code: 200
       message: OK
