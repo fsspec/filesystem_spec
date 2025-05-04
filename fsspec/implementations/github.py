@@ -265,3 +265,33 @@ class GithubFileSystem(AbstractFileSystem):
             cache_options=cache_options,
             **kwargs,
         )
+
+    def _rm(self, path):
+        if not self.username:
+            raise ValueError("Authentication required")
+
+        path = self._strip_protocol(path).lstrip("/")
+
+        # Get the file SHA
+        url = self.content_url.format(
+            org=self.org, repo=self.repo, path=path, sha=self.root
+        )
+        r = requests.get(url, timeout=self.timeout, **self.kw)
+        if r.status_code == 404:
+            raise FileNotFoundError(path)
+        r.raise_for_status()
+        content_json = r.json()
+        sha = content_json["sha"]
+
+        # Delete the file using GitHub API
+        delete_url = url
+        data = {
+            "message": f"Delete {path}",
+            "sha": sha,
+            "branch": self.root,
+        }
+        r = requests.delete(delete_url, json=data, timeout=self.timeout, **self.kw)
+        if r.status_code not in (200, 204):
+            r.raise_for_status()
+
+        self.invalidate_cache(path)

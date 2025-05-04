@@ -1,4 +1,5 @@
 import fsspec
+import pytest
 
 
 def test_github_open_small_file():
@@ -46,3 +47,17 @@ def test_github_ls():
     expected = {"brain_networks.csv", "mpg.csv", "penguins.csv", "README.md", "raw"}
     # check if the result is a subset of the expected files
     assert expected.issubset(ls_result)
+
+
+def test_github_rm():
+    # trying to remove a file without passing authentication should raise ValueError
+    fs = fsspec.filesystem("github", org="mwaskom", repo="seaborn-data")
+    with pytest.raises(ValueError):
+        fs.rm("mpg.csv")
+
+    # trying to remove a file which doesn't exist should raise FineNotFoundError
+    fs = fsspec.filesystem(
+        "github", org="mwaskom", repo="seaborn-data", username="user", token="token"
+    )
+    with pytest.raises(FileNotFoundError):
+        fs.rm("/this-file-doesnt-exist")
