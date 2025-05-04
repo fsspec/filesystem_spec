@@ -134,6 +134,9 @@ def test_dbfs_listing(dbfsFS):
     assert {'name': '/FileStore/fsspec_dbfs/project_root', 'size': 0, 'type': 'directory'} in \
            dbfsFS.ls("/FileStore/fsspec_dbfs", detail=True)
     assert dbfsFS.ls("/FileStore/fsspec_dbfs/project_root/empty_dir", detail=True) == []
+    # Test that FileNotFoundError is raised when listing a missing directory
+    with pytest.raises(FileNotFoundError):
+        dbfsFS.ls("/FileStore/fsspec_dbfs/project_root/missing_directory", detail=True)
 
 
 @pytest.mark.vcr()
