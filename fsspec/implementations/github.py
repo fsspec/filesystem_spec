@@ -266,32 +266,62 @@ class GithubFileSystem(AbstractFileSystem):
             **kwargs,
         )
 
-    def _rm(self, path):
+    def rm(self, path, **kwargs):
+        self.rm_file(path, **kwargs)
+
+    def rm_file(self, path, branch=None, message=None, **kwargs):
+        """
+        Remove a file from a specified branch using a given commit message.
+
+        Parameters
+        ----------
+        path : str
+            The file's location relative to the repository root.
+        branch : str, optional
+            The branch containing the file. Defaults to the repository's default branch if not provided.
+        message : str, optional
+            The commit message for the deletion.
+        """
+
         if not self.username:
             raise ValueError("Authentication required")
 
-        path = self._strip_protocol(path).lstrip("/")
+        path = self._strip_protocol(path)
 
-        # Get the file SHA
-        url = self.content_url.format(
+        # Attempt to get SHA from cache or Github API
+        sha = self._get_sha_from_cache(path)
+        if not sha:
+            url = self.content_url.format(
+                org=self.org, repo=self.repo, path=path.lstrip("/"), sha=self.root
+            )
+            r = requests.get(url, timeout=self.timeout, **self.kw)
+            if r.status_code == 404:
+                raise FileNotFoundError(path)
+            r.raise_for_status()
+            sha = r.json()["sha"]
+
+        # Delete the file
+        delete_url = self.content_url.format(
             org=self.org, repo=self.repo, path=path, sha=self.root
         )
-        r = requests.get(url, timeout=self.timeout, **self.kw)
-        if r.status_code == 404:
-            raise FileNotFoundError(path)
-        r.raise_for_status()
-        content_json = r.json()
-        sha = content_json["sha"]
-
-        # Delete the file using GitHub API
-        delete_url = url
         data = {
-            "message": f"Delete {path}",
+            "message": message or f"Delete {path}",
             "sha": sha,
-            "branch": self.root,
+            **({"branch": branch} if branch else {}),
         }
         r = requests.delete(delete_url, json=data, timeout=self.timeout, **self.kw)
-        if r.status_code not in (200, 204):
-            r.raise_for_status()
+        r.raise_for_status()
 
         self.invalidate_cache(path)
+
+    def _get_sha_from_cache(self, path):
+        sha = None
+        for entries in self.dircache.values():
+            for entry in entries:
+                entry_path = entry.get("name")
+                if entry_path and entry_path == path and "sha" in entry:
+                    sha = entry["sha"]
+                    break
+            if sha:
+                break
+        return sha
