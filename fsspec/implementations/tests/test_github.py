@@ -1,5 +1,6 @@
-import fsspec
 import pytest
+
+import fsspec
 
 
 def test_github_open_small_file():
@@ -60,4 +61,4 @@ def test_github_rm():
         "github", org="mwaskom", repo="seaborn-data", username="user", token="token"
     )
     with pytest.raises(FileNotFoundError):
-        fs.rm("/this-file-doesnt-exist", branch="master", message="Delete my file")
+        fs.rm("/this-file-doesnt-exist")

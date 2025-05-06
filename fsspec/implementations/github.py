@@ -266,20 +266,25 @@ class GithubFileSystem(AbstractFileSystem):
             **kwargs,
         )
 
-    def rm(self, path, **kwargs):
-        self.rm_file(path, **kwargs)
+    def rm(self, path, recursive=False, maxdepth=None):
+        path = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        for p in reversed(path):
+            self.rm_file(p)
 
-    def rm_file(self, path, branch=None, message=None, **kwargs):
+    def rm_file(self, path, message=None, **kwargs):
         """
         Remove a file from a specified branch using a given commit message.
 
+        Since Github DELETE operation requires a branch name, and we can't reliably
+        determine whether the provided SHA refers to a branch, tag, or commit, we
+        assume it's a branch. If it's not, the user will encounter an error when
+        attempting to retrieve the file SHA or delete the file.
+
         Parameters
         ----------
-        path : str
+        path: str
             The file's location relative to the repository root.
-        branch : str, optional
-            The branch containing the file. Defaults to the repository's default branch if not provided.
-        message : str, optional
+        message: str, optional
             The commit message for the deletion.
         """
 
@@ -304,24 +309,22 @@ class GithubFileSystem(AbstractFileSystem):
         delete_url = self.content_url.format(
             org=self.org, repo=self.repo, path=path, sha=self.root
         )
+        branch = self.root
         data = {
             "message": message or f"Delete {path}",
             "sha": sha,
             **({"branch": branch} if branch else {}),
         }
+
         r = requests.delete(delete_url, json=data, timeout=self.timeout, **self.kw)
         r.raise_for_status()
 
         self.invalidate_cache(path)
 
     def _get_sha_from_cache(self, path):
-        sha = None
         for entries in self.dircache.values():
             for entry in entries:
                 entry_path = entry.get("name")
                 if entry_path and entry_path == path and "sha" in entry:
-                    sha = entry["sha"]
-                    break
-            if sha:
-                break
-        return sha
+                    return entry["sha"]
+        return None
