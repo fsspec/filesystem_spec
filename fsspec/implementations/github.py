@@ -1,4 +1,5 @@
 import base64
+import re
 
 import requests
 
@@ -266,10 +267,10 @@ class GithubFileSystem(AbstractFileSystem):
             **kwargs,
         )
 
-    def rm(self, path, recursive=False, maxdepth=None):
+    def rm(self, path, recursive=False, maxdepth=None, message=None):
         path = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
         for p in reversed(path):
-            self.rm_file(p)
+            self.rm_file(p, message=message)
 
     def rm_file(self, path, message=None, **kwargs):
         """
@@ -317,6 +318,10 @@ class GithubFileSystem(AbstractFileSystem):
         }
 
         r = requests.delete(delete_url, json=data, timeout=self.timeout, **self.kw)
+        error_message = r.json().get("message", "")
+        if re.search(r"Branch .+ not found", error_message):
+            error = "Remove only works when the filesystem is initialised from a branch or default (None)"
+            raise ValueError(error)
         r.raise_for_status()
 
         self.invalidate_cache(path)
