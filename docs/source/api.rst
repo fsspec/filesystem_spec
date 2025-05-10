@@ -221,7 +221,7 @@ documentation carefully before using any particular package.
 - `dropbox`_ for access to dropbox shares, with protocol "dropbox://"
 - `dvc`_ to access DVC/Git repository as a filesystem
 - `fsspec-encrypted`_ for transparent encryption on top of other fsspec filesystems.
-- `gcsfs`_ for Google Cloud Storage, with protocol "gcs://"
+- `gcsfs`_ for Google Cloud Storage, with protocol "gs://" or "gcs://"
 - `gdrive`_ to access Google Drive and shares (experimental)
 - `git`_ to access Git repositories
 - `huggingface_hub`_ to access the Hugging Face Hub filesystem, with protocol "hf://"
