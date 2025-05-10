@@ -1,4 +1,5 @@
 import base64
+import re
 
 import requests
 
@@ -265,3 +266,70 @@ class GithubFileSystem(AbstractFileSystem):
             cache_options=cache_options,
             **kwargs,
         )
+
+    def rm(self, path, recursive=False, maxdepth=None, message=None):
+        path = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        for p in reversed(path):
+            self.rm_file(p, message=message)
+
+    def rm_file(self, path, message=None, **kwargs):
+        """
+        Remove a file from a specified branch using a given commit message.
+
+        Since Github DELETE operation requires a branch name, and we can't reliably
+        determine whether the provided SHA refers to a branch, tag, or commit, we
+        assume it's a branch. If it's not, the user will encounter an error when
+        attempting to retrieve the file SHA or delete the file.
+
+        Parameters
+        ----------
+        path: str
+            The file's location relative to the repository root.
+        message: str, optional
+            The commit message for the deletion.
+        """
+
+        if not self.username:
+            raise ValueError("Authentication required")
+
+        path = self._strip_protocol(path)
+
+        # Attempt to get SHA from cache or Github API
+        sha = self._get_sha_from_cache(path)
+        if not sha:
+            url = self.content_url.format(
+                org=self.org, repo=self.repo, path=path.lstrip("/"), sha=self.root
+            )
+            r = requests.get(url, timeout=self.timeout, **self.kw)
+            if r.status_code == 404:
+                raise FileNotFoundError(path)
+            r.raise_for_status()
+            sha = r.json()["sha"]
+
+        # Delete the file
+        delete_url = self.content_url.format(
+            org=self.org, repo=self.repo, path=path, sha=self.root
+        )
+        branch = self.root
+        data = {
+            "message": message or f"Delete {path}",
+            "sha": sha,
+            **({"branch": branch} if branch else {}),
+        }
+
+        r = requests.delete(delete_url, json=data, timeout=self.timeout, **self.kw)
+        error_message = r.json().get("message", "")
+        if re.search(r"Branch .+ not found", error_message):
+            error = "Remove only works when the filesystem is initialised from a branch or default (None)"
+            raise ValueError(error)
+        r.raise_for_status()
+
+        self.invalidate_cache(path)
+
+    def _get_sha_from_cache(self, path):
+        for entries in self.dircache.values():
+            for entry in entries:
+                entry_path = entry.get("name")
+                if entry_path and entry_path == path and "sha" in entry:
+                    return entry["sha"]
+        return None

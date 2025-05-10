@@ -1,5 +1,3 @@
-from importlib.metadata import entry_points
-
 from . import caching
 from ._version import __version__  # noqa: F401
 from .callbacks import Callback
@@ -38,6 +36,10 @@ __all__ = [
 
 
 def process_entries():
+    try:
+        from importlib.metadata import entry_points
+    except ImportError:
+        return
     if entry_points is not None:
         try:
             eps = entry_points()

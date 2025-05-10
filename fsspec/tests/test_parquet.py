@@ -86,7 +86,7 @@ def test_open_parquet_file(
     with open(path, "wb") as f:
         f.write(b"0" * file_size)
 
-        if footer_sample_size == 8:
+        if footer_sample_size == 8 and columns is not None:
             # We know 8 bytes is too small to include
             # the footer metadata, so there should NOT
             # be a key for the last 8 bytes of the file

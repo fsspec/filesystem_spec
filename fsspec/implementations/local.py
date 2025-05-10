@@ -6,6 +6,7 @@ import os.path as osp
 import shutil
 import stat
 import tempfile
+from functools import lru_cache
 
 from fsspec import AbstractFileSystem
 from fsspec.compression import compr
@@ -354,6 +355,19 @@ def trailing_sep(path):
     return path.endswith(os.sep) or (os.altsep is not None and path.endswith(os.altsep))
 
 
+@lru_cache(maxsize=1)
+def get_umask(mask: int = 0o666) -> int:
+    """Get the current umask.
+
+    Follows https://stackoverflow.com/a/44130549 to get the umask.
+    Temporarily sets the umask to the given value, and then resets it to the
+    original value.
+    """
+    value = os.umask(mask)
+    os.umask(value)
+    return value
+
+
 class LocalFileOpener(io.IOBase):
     def __init__(
         self, path, mode, autocommit=True, fs=None, compression=None, **kwargs
@@ -416,7 +430,22 @@ class LocalFileOpener(io.IOBase):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
-        shutil.move(self.temp, self.path)
+        try:
+            shutil.move(self.temp, self.path)
+        except PermissionError as e:
+            # shutil.move raises PermissionError if os.rename
+            # and the default copy2 fallback with shutil.copystats fail.
+            # The file should be there nonetheless, but without copied permissions.
+            # If it doesn't exist, there was no permission to create the file.
+            if not os.path.exists(self.path):
+                raise e
+        else:
+            # If PermissionError is not raised, permissions can be set.
+            try:
+                mask = 0o666
+                os.chmod(self.path, mask & ~get_umask(mask))
+            except RuntimeError:
+                pass
 
     def discard(self):
         if self.autocommit:

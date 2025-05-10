@@ -221,7 +221,7 @@ documentation carefully before using any particular package.
 - `dropbox`_ for access to dropbox shares, with protocol "dropbox://"
 - `dvc`_ to access DVC/Git repository as a filesystem
 - `fsspec-encrypted`_ for transparent encryption on top of other fsspec filesystems.
-- `gcsfs`_ for Google Cloud Storage, with protocol "gcs://"
+- `gcsfs`_ for Google Cloud Storage, with protocol "gs://" or "gcs://"
 - `gdrive`_ to access Google Drive and shares (experimental)
 - `git`_ to access Git repositories
 - `huggingface_hub`_ to access the Hugging Face Hub filesystem, with protocol "hf://"
@@ -237,6 +237,7 @@ documentation carefully before using any particular package.
 - `p9fs`_ for 9P (Plan 9 Filesystem Protocol) servers
 - `PyAthena`_ for S3 access to Amazon Athena, with protocol "s3://" or "s3a://"
 - `PyDrive2`_ for Google Drive access
+- `fsspec-proxy`_ for "pyscript:" URLs via a proxy server
 - `s3fs`_ for Amazon S3 and other compatible stores, with protocol "s3://"
 - `sshfs`_ for access to SSH servers, with protocol "ssh://" or "sftp://"
 - `swiftspec`_ for OpenStack SWIFT, with protocol "swift://"
@@ -254,6 +255,7 @@ documentation carefully before using any particular package.
 .. _dropbox: https://github.com/fsspec/dropboxdrivefs
 .. _dvc: https://github.com/iterative/dvc
 .. _fsspec-encrypted: https://github.com/thevgergroup/fsspec-encrypted
+.. _fsspec-proxy: https://github.com/fsspec/fsspec-proxy
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _gdrive: https://github.com/fsspec/gdrivefs
 .. _git: https://github.com/iterative/scmrepo
