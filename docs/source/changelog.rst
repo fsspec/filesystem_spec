@@ -1,6 +1,31 @@
 Changelog
 =========
 
+2025.5.0
+--------
+
+Enhancements
+
+- add rm in github: (##1839)
+- cachingFS performance, don't ls every time (#1833)
+- pyscript: protocol and optional entrypoint (#1828)
+
+Fixes
+
+- improve cp in generic (#1835)
+- fix ls in dbfs (#1834)
+- fix parquet tests for pyarrow 20 (#1831)
+- fix crosslink for local tempfile (#1829)
+- keep permissions in local transaction (#1826)
+- signature compatibility in local cp() (#1820)
+
+Other
+
+- add "gs" at mention of gcsfs in docs (#1840)
+- lint style (#1837)
+- glob docstring to reflect reality (#1825)
+
+
 2025.3.2
 --------
 
