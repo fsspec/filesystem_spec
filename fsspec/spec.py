@@ -559,7 +559,7 @@ class AbstractFileSystem(metaclass=_Cached):
         maxdepth: int or None
             Maximum depth for ``'**'`` patterns. Applied on the first ``'**'`` found.
             Must be at least 1 if provided.
-        **kwargs:
+        kwargs:
             Additional arguments passed to ``find`` (e.g., detail=True)
 
         Returns
