@@ -117,6 +117,7 @@ Built-in Implementations
    fsspec.implementations.dbfs.DatabricksFileSystem
    fsspec.implementations.dirfs.DirFileSystem
    fsspec.implementations.ftp.FTPFileSystem
+   fsspec.implementations.gist.GistFileSystem
    fsspec.implementations.git.GitFileSystem
    fsspec.implementations.github.GithubFileSystem
    fsspec.implementations.http.HTTPFileSystem
@@ -160,6 +161,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.gist.GistFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.git.GitFileSystem
