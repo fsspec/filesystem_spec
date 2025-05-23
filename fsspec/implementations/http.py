@@ -319,14 +319,11 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _exists(self, path, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
-        try:
-            logger.debug(path)
-            session = await self.set_session()
-            r = await session.get(self.encode_url(path), **kw)
-            async with r:
-                return r.status < 400
-        except aiohttp.ClientError:
-            return False
+        logger.debug(path)
+        session = await self.set_session()
+        r = await session.get(self.encode_url(path), **kw)
+        async with r:
+            return r.status < 400
 
     async def _isfile(self, path, **kwargs):
         return await self._exists(path, **kwargs)
