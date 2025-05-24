@@ -172,7 +172,7 @@ def build_name_function(max_int: float) -> Callable[[int], str]:
     # handle corner cases max_int is 0 or exact power of 10
     max_int += 1e-8
 
-    pad_length = int(math.ceil(math.log10(max_int)))
+    pad_length = math.ceil(math.log10(max_int))
 
     def name_function(i: int) -> str:
         return str(i).zfill(pad_length)
