@@ -1,6 +1,17 @@
 Changelog
 =========
 
+2025.5.1
+--------
+
+Enhancements
+
+- file system for GitHub gists (#1791)
+
+Other
+
+- doc fixes (#1847, 1848)
+
 2025.5.0
 --------
 
