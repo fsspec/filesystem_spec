@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
-from typing import Any
+from typing import Any, ClassVar, Sequence
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import LocalFileSystem
@@ -22,8 +22,8 @@ class MemoryFileSystem(AbstractFileSystem):
     with an independent store instead.
     """
 
-    store: dict[str, Any] = {}  # shared by default
-    pseudo_dirs = [""]  # shared by default
+    store: ClassVar[dict[str, Any]] = {}  # shared by default
+    pseudo_dirs: ClassVar[Sequence[str]] = [""]  # shared by default
     protocol = "memory"
     root_marker = "/"
 

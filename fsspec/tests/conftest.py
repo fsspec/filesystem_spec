@@ -6,6 +6,7 @@ import threading
 from collections import ChainMap
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -58,7 +59,7 @@ def reset_faults():
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):
-    static_files = {
+    static_files: ClassVar[dict[str, bytes]] = {
         "/index/realfile": data,
         "/index/otherfile": data,
         "/index": _make_index_listing,
@@ -69,13 +70,13 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         "/simple/dir/file": data,
         "/unauthorized": AssertionError("shouldn't access"),
     }
-    dynamic_files = {}
+    dynamic_files: ClassVar[dict[str, bytes]] = {}
     # fault injection, keyed by request path; cleared by the reset_faults fixture
-    fault_counts = {}
-    get_counts = {}
-    head_counts = {}
+    fault_counts: ClassVar[dict[str, int]] = {}
+    get_counts: ClassVar[dict[str, int]] = {}
+    head_counts: ClassVar[dict[str, int]] = {}
 
-    files = ChainMap(dynamic_files, static_files)
+    files: ClassVar[dict[str, str]] = ChainMap(dynamic_files, static_files)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

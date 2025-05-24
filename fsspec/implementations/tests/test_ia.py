@@ -10,6 +10,7 @@ turn into a constructor argument) reads the first bytes of a public item.
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import ClassVar
 
 import pytest
 
@@ -75,9 +76,9 @@ class _CrossOriginHandler(BaseHTTPRequestHandler):
     ``Authorization`` header. The item route serves ``files`` by Range and, when
     ``required`` is set, only to a request carrying that ``Authorization`` value."""
 
-    files = {}
+    files: ClassVar[dict[str, bytes]] = {}
     required = None
-    hits = []
+    hits: ClassVar[list[tuple]] = []
     data_node = None  # "http://host:port", set by the fixture
 
     def log_message(self, *args):

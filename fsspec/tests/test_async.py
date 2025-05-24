@@ -12,6 +12,7 @@ import weakref
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -507,7 +508,7 @@ def test_rm_honours_maxdepth():
 class _CatRangesFS(fsspec.asyn.AsyncFileSystem):
     # Mirrors the gcsfs/s3fs pattern: overrides _cat_file, inherits _cat_ranges.
     cachable = False
-    store = {"ok": b"0123456789"}
+    store: ClassVar[dict[str, bytes]] = {"ok": b"0123456789"}
 
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         if path not in self.store:
@@ -794,7 +795,7 @@ class UnreadableAsyncSubdirFS(fsspec.asyn.AsyncFileSystem):
     cachable = False
     mirror_sync_methods = False
 
-    tree = {
+    tree: ClassVar[dict[str, str]] = {
         "": ["top"],
         "top": ["top/readable", "top/locked"],
         "top/readable": [],

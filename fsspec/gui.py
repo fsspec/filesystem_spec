@@ -170,8 +170,17 @@ class SigSlot:
 class SingleSelect(SigSlot):
     """A multiselect which only allows you to select one item for an event"""
 
-    signals = ["_selected", "selected"]  # the first is internal
-    slots = ["set_options", "set_selection", "add", "clear", "select"]
+    signals: ClassVar[Sequence[str]] = [
+        "_selected",
+        "selected",
+    ]  # the first is internal
+    slots: ClassVar[Sequence[str]] = [
+        "set_options",
+        "set_selection",
+        "add",
+        "clear",
+        "select",
+    ]
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -213,7 +222,7 @@ class FileSelector(SigSlot):
     them as the output of a cell,  or in a separate browser tab using ``.show()``.
     """
 
-    signals = [
+    signals: ClassVar[Sequence[str]] = [
         "protocol_changed",
         "selection_changed",
         "directory_entered",
@@ -222,7 +231,7 @@ class FileSelector(SigSlot):
         "go_clicked",
         "filters_changed",
     ]
-    slots = ["set_filters", "go_home"]
+    slots: ClassVar[Sequence[str]] = ["set_filters", "go_home"]
 
     def __init__(self, url=None, filters=None, ignore=None, kwargs=None):
         """

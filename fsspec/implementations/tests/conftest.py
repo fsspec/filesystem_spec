@@ -10,7 +10,7 @@ from fsspec.implementations.memory import MemoryFileSystem
 
 
 class MultiProtocolFileSystem(LocalFileSystem):
-    protocol = ["file", "other"]
+    protocol = ("file", "other")
 
 
 FILESYSTEMS = {

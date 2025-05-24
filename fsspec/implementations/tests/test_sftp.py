@@ -14,6 +14,7 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from tarfile import TarFile
+from typing import ClassVar
 
 import pytest
 
@@ -543,7 +544,7 @@ def test_known_hosts_file(fake_client):
 
 
 class _Server(paramiko.ServerInterface):
-    attempts = []  # every authentication attempt that reached the server
+    attempts: ClassVar[list[str]] = []  # auth attempts that reached the server
 
     def check_auth_publickey(self, username, key):
         self.attempts.append("publickey")
