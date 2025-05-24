@@ -177,6 +177,7 @@ select = [
     # "PT", enable in later PR
     "PYI",
     "RUF006",
+    "RUF012",
     "RUF015",
     "RUF024",
     "SIM",
