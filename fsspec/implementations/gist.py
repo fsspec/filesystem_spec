@@ -148,16 +148,16 @@ class GistFileSystem(AbstractFileSystem):
         """
         so = infer_storage_options(path)
         out = {}
-        if "username" in so and so["username"]:
+        if so.get("username"):
             out["username"] = so["username"]
-        if "password" in so and so["password"]:
+        if so.get("password"):
             out["token"] = so["password"]
-        if "host" in so and so["host"]:
+        if so.get("host"):
             # We interpret 'host' as the gist ID
             out["gist_id"] = so["host"]
 
         # Extract SHA and filename from path
-        if "path" in so and so["path"]:
+        if so.get("path"):
             path_parts = so["path"].rsplit("/", 2)[-2:]
             if len(path_parts) == 2:
                 if path_parts[0]:  # SHA present
