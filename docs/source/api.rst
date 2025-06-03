@@ -250,6 +250,7 @@ documentation carefully before using any particular package.
 - `wandbfsspec`_ to access Weights & Biases (experimental)
 - `webdav4`_ for WebDAV, with protocol "webdav://" or "dav://"
 - `xrootd`_ for xrootd, with protocol "root://"
+- `msgraphfs`_ for Microsoft storage (ie Sharepoint) using the drive API through Microsoft Graph, with protocol "msgd://"
 
 .. _abfs: https://github.com/dask/adlfs
 .. _adl: https://github.com/dask/adlfs
@@ -284,6 +285,7 @@ documentation carefully before using any particular package.
 .. _wandbfsspec: https://github.com/alvarobartt/wandbfsspec
 .. _webdav4: https://github.com/skshetry/webdav4
 .. _xrootd: https://github.com/CoffeaTeam/fsspec-xrootd
+.. _msgraphfs: https://github.com/acsone/msgraphfs
 
 .. _readbuffering:
 
