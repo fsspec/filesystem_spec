@@ -768,7 +768,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 self.fss[k] = AsyncFileSystemWrapper(f, asynchronous=self.asynchronous)
             elif self.asynchronous ^ f.asynchronous:
                 raise ValueError(
-                    "Reference-FS's target filesystem must have same value"
+                    "Reference-FS's target filesystem must have same value "
                     "of asynchronous"
                 )
 
