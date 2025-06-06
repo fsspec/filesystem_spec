@@ -118,8 +118,8 @@ known_implementations = {
         "err": "Please install gcsfs to access Google Storage",
     },
     "gdrive": {
-        "class": "gdrivefs.GoogleDriveFileSystem",
-        "err": "Please install gdrivefs for access to Google Drive",
+        "class": "gdrive_fsspec.GoogleDriveFileSystem",
+        "err": "Please install gdrive_fs for access to Google Drive",
     },
     "generic": {"class": "fsspec.generic.GenericFileSystem"},
     "gist": {
