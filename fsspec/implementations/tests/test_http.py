@@ -442,8 +442,11 @@ def test_docstring():
 
 def test_async_other_thread(server):
     import threading
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:  # Python 3.14 codepath
+        loop = asyncio.new_event_loop()
 
-    loop = asyncio.get_event_loop()
     th = threading.Thread(target=loop.run_forever)
 
     th.daemon = True
