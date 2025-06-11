@@ -118,10 +118,14 @@ known_implementations = {
         "err": "Please install gcsfs to access Google Storage",
     },
     "gdrive": {
-        "class": "gdrivefs.GoogleDriveFileSystem",
-        "err": "Please install gdrivefs for access to Google Drive",
+        "class": "gdrive_fsspec.GoogleDriveFileSystem",
+        "err": "Please install gdrive_fs for access to Google Drive",
     },
     "generic": {"class": "fsspec.generic.GenericFileSystem"},
+    "gist": {
+        "class": "fsspec.implementations.gist.GistFileSystem",
+        "err": "Install the requests package to use the gist FS",
+    },
     "git": {
         "class": "fsspec.implementations.git.GitFileSystem",
         "err": "Install pygit2 to browse local git repos",

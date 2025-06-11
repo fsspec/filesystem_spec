@@ -557,9 +557,9 @@ class AbstractFileSystem(metaclass=_Cached):
         path: str
             The glob pattern to match against
         maxdepth: int or None
-            Maximum depth for '**' patterns. Applied on the first '**' found.
+            Maximum depth for ``'**'`` patterns. Applied on the first ``'**'`` found.
             Must be at least 1 if provided.
-        **kwargs:
+        kwargs:
             Additional arguments passed to ``find`` (e.g., detail=True)
 
         Returns
@@ -570,7 +570,7 @@ class AbstractFileSystem(metaclass=_Cached):
         -----
         Supported patterns:
         - '*': Matches any sequence of characters within a single directory level
-        - '**': Matches any number of directory levels (must be an entire path component)
+        - ``'**'``: Matches any number of directory levels (must be an entire path component)
         - '?': Matches exactly one character
         - '[abc]': Matches any character in the set
         - '[a-z]': Matches any character in the range
@@ -584,7 +584,7 @@ class AbstractFileSystem(metaclass=_Cached):
         - Special characters in character classes are escaped properly
 
         Limitations:
-        - '**' must be a complete path component (e.g., 'a/**/b', not 'a**b')
+        - ``'**'`` must be a complete path component (e.g., ``'a/**/b'``, not ``'a**b'``)
         - No brace expansion ('{a,b}.txt')
         - No extended glob patterns ('+(pattern)', '!(pattern)')
         """
