@@ -25,6 +25,8 @@ class LocalFileSystem(AbstractFileSystem):
         Whether, when opening a file, the directory containing it should
         be created (if it doesn't already exist). This is assumed by pyarrow
         code.
+    follow_symlinks: bool
+        follow symbolic links (default: False)
     """
 
     root_marker = "/"
