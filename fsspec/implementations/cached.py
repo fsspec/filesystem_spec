@@ -335,6 +335,11 @@ class CachingFileSystem(AbstractFileSystem):
             self._metadata.update_file(path, detail)
             logger.debug("Creating local sparse file for %s", path)
 
+        # explicitly submitting the size to the open call will avoid extra
+        # operations when opening. This is particularly relevant
+        # for any file that is read over a network, e.g. S3.
+        size = detail.get("size", None)
+
         # call target filesystems open
         self._mkcache()
         f = self.fs._open(
@@ -344,8 +349,15 @@ class CachingFileSystem(AbstractFileSystem):
             autocommit=autocommit,
             cache_options=cache_options,
             cache_type="none",
+            size=size,
             **kwargs,
         )
+
+        # set size if not already set
+        if size is None:
+            detail["size"] = f.size
+            self._metadata.update_file(path, detail)
+
         if self.compression:
             comp = (
                 infer_compression(path)

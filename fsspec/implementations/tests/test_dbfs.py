@@ -129,11 +129,21 @@ def make_mock_diabetes_ds():
 
 
 @pytest.mark.vcr()
-def test_dbfs_file_listing(dbfsFS):
-    assert "/FileStore" in dbfsFS.ls("/", detail=False)
-    assert {"name": "/FileStore", "size": 0, "type": "directory"} in dbfsFS.ls(
-        "/", detail=True
+def test_dbfs_listing(dbfsFS):
+    dbfsFS.mkdir(
+        "/FileStore/fsspec_dbfs/project_root/empty_dir",
+        create_parents=True,
+        exist_ok=True,
     )
+    assert {
+        "name": "/FileStore/fsspec_dbfs/project_root",
+        "size": 0,
+        "type": "directory",
+    } in dbfsFS.ls("/FileStore/fsspec_dbfs", detail=True)
+    assert dbfsFS.ls("/FileStore/fsspec_dbfs/project_root/empty_dir", detail=True) == []
+    # Test that FileNotFoundError is raised when listing a missing directory
+    with pytest.raises(FileNotFoundError):
+        dbfsFS.ls("/FileStore/fsspec_dbfs/project_root/missing_directory", detail=True)
 
 
 @pytest.mark.vcr()

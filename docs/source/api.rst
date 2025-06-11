@@ -117,6 +117,7 @@ Built-in Implementations
    fsspec.implementations.dbfs.DatabricksFileSystem
    fsspec.implementations.dirfs.DirFileSystem
    fsspec.implementations.ftp.FTPFileSystem
+   fsspec.implementations.gist.GistFileSystem
    fsspec.implementations.git.GitFileSystem
    fsspec.implementations.github.GithubFileSystem
    fsspec.implementations.http.HTTPFileSystem
@@ -160,6 +161,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.ftp.FTPFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.gist.GistFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.git.GitFileSystem
@@ -221,7 +225,7 @@ documentation carefully before using any particular package.
 - `dropbox`_ for access to dropbox shares, with protocol "dropbox://"
 - `dvc`_ to access DVC/Git repository as a filesystem
 - `fsspec-encrypted`_ for transparent encryption on top of other fsspec filesystems.
-- `gcsfs`_ for Google Cloud Storage, with protocol "gcs://"
+- `gcsfs`_ for Google Cloud Storage, with protocol "gs://" or "gcs://"
 - `gdrive`_ to access Google Drive and shares (experimental)
 - `git`_ to access Git repositories
 - `huggingface_hub`_ to access the Hugging Face Hub filesystem, with protocol "hf://"
@@ -246,6 +250,7 @@ documentation carefully before using any particular package.
 - `wandbfsspec`_ to access Weights & Biases (experimental)
 - `webdav4`_ for WebDAV, with protocol "webdav://" or "dav://"
 - `xrootd`_ for xrootd, with protocol "root://"
+- `msgraphfs`_ for Microsoft storage (ie Sharepoint) using the drive API through Microsoft Graph, with protocol "msgd://"
 
 .. _abfs: https://github.com/dask/adlfs
 .. _adl: https://github.com/dask/adlfs
@@ -280,6 +285,7 @@ documentation carefully before using any particular package.
 .. _wandbfsspec: https://github.com/alvarobartt/wandbfsspec
 .. _webdav4: https://github.com/skshetry/webdav4
 .. _xrootd: https://github.com/CoffeaTeam/fsspec-xrootd
+.. _msgraphfs: https://github.com/acsone/msgraphfs
 
 .. _readbuffering:
 
