@@ -82,7 +82,7 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
                 continue
 
             method = getattr(self.sync_fs, method_name)
-            if callable(method) and not asyncio.iscoroutinefunction(method):
+            if callable(method) and not inspect.iscoroutinefunction(method):
                 async_method = async_wrapper(method, obj=self)
                 setattr(self, f"_{method_name}", async_method)
 
