@@ -7,7 +7,6 @@ import numbers
 import os
 import re
 import threading
-from contextlib import contextmanager
 from glob import has_magic
 from typing import TYPE_CHECKING, Iterable
 
