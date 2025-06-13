@@ -43,11 +43,11 @@ class AbstractPutTests:
         assert not fs.exists(target_subfile1)
 
         # Repeat with trailing slash on target
-        fs.put(local_join(source, "file2"), target + "/")
+        fs.put(local_join(source, "file2"), f"{target}/")
         assert fs.isdir(target)
         assert fs.isfile(target_file2)
 
-        fs.put(local_join(source, "subdir", "subfile1"), target + "/")
+        fs.put(local_join(source, "subdir", "subfile1"), f"{target}/")
         assert fs.isfile(target_subfile1)
 
     def test_put_file_to_new_directory(
@@ -127,7 +127,7 @@ class AbstractPutTests:
             s = fs_join(source, "subdir")
             if source_slash:
                 s += "/"
-            t = target + "/" if target_slash else target
+            t = f"{target}/" if target_slash else target
 
             # Without recursive does nothing
             fs.put(s, t)
@@ -264,7 +264,7 @@ class AbstractPutTests:
         assert fs.isdir(target)
 
         for target_slash in [False, True]:
-            t = target + "/" if target_slash else target
+            t = f"{target}/" if target_slash else target
 
             # Without recursive
             fs.put(local_join(source, "subdir", "*"), t)
@@ -413,7 +413,7 @@ class AbstractPutTests:
             fs.mkdir(target)
 
             t = fs_join(target, "newdir") if new_dir else target
-            t = t + "/" if target_slash else t
+            t = f"{t}/" if target_slash else t
 
             fs.put(local_join(source, path), t, recursive=recursive, maxdepth=maxdepth)
 
@@ -460,7 +460,7 @@ class AbstractPutTests:
         ]
 
         for target_slash in [False, True]:
-            t = target + "/" if target_slash else target
+            t = f"{target}/" if target_slash else target
 
             fs.put(source_files, t)
             assert fs.isfile(fs_join(target, "file1"))
@@ -530,8 +530,8 @@ class AbstractPutTests:
 
         # put with slash
         assert not fs.exists(target)
-        for loop in range(2):
-            fs.put(src + "/", target, recursive=True)
+        for _loop in range(2):
+            fs.put(f"{src}/", target, recursive=True)
             assert fs.isdir(target)
             assert fs.isfile(fs_join(target, "file"))
             assert not fs.exists(fs_join(target, "src"))

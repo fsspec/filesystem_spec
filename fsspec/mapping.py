@@ -60,8 +60,8 @@ class FSMap(MutableMapping):
                     f"Path {root} does not exist. Create "
                     f" with the ``create=True`` keyword"
                 )
-            self.fs.touch(root + "/a")
-            self.fs.rm(root + "/a")
+            self.fs.touch(f"{root}/a")
+            self.fs.rm(f"{root}/a")
 
     @cached_property
     def dirfs(self):

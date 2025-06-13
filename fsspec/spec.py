@@ -200,9 +200,9 @@ class AbstractFileSystem(metaclass=_Cached):
         path = stringify_path(path)
         protos = (cls.protocol,) if isinstance(cls.protocol, str) else cls.protocol
         for protocol in protos:
-            if path.startswith(protocol + "://"):
+            if path.startswith(f"{protocol}://"):
                 path = path[len(protocol) + 3 :]
-            elif path.startswith(protocol + "::"):
+            elif path.startswith(f"{protocol}::"):
                 path = path[len(protocol) + 2 :]
         path = path.rstrip("/")
         # use of root_marker to make minimum required path, e.g., "/"
@@ -277,7 +277,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         # Not necessary to implement invalidation mechanism, may have no cache.
         # But if have, you should call this method of parent class from your
-        # subclass to ensure expiring caches after transacations correctly.
+        # subclass to ensure expiring caches after transactions correctly.
         # See the implementation of FTPFileSystem in ftp.py
         if self._intrans:
             self._invalidated_caches_in_transaction.append(path)
@@ -430,7 +430,7 @@ class AbstractFileSystem(metaclass=_Cached):
         detail = kwargs.pop("detail", False)
         try:
             listing = self.ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, OSError) as e:
+        except OSError as e:
             if on_error == "raise":
                 raise
             if callable(on_error):
@@ -602,7 +602,7 @@ class AbstractFileSystem(metaclass=_Cached):
         ends_with_sep = path.endswith(seps)  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
         append_slash_to_dirname = ends_with_sep or path.endswith(
-            tuple(sep + "**" for sep in seps)
+            tuple(f"{sep}**" for sep in seps)
         )
         idx_star = path.find("*") if path.find("*") >= 0 else len(path)
         idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
@@ -648,7 +648,7 @@ class AbstractFileSystem(metaclass=_Cached):
             p: info
             for p, info in sorted(allpaths.items())
             if pattern.match(
-                p + "/"
+                f"{p}/"
                 if append_slash_to_dirname and info["type"] == "directory"
                 else p
             )
@@ -1126,10 +1126,11 @@ class AbstractFileSystem(metaclass=_Cached):
             not-found exceptions will cause the path to be skipped; defaults to
             raise unless recursive is true, where the default is ignore
         """
-        if on_error is None and recursive:
-            on_error = "ignore"
-        elif on_error is None:
-            on_error = "raise"
+        if on_error is None:
+            if recursive:
+                on_error = "ignore"
+            else:
+                on_error = "raise"
 
         if isinstance(path1, list) and isinstance(path2, list):
             # No need to expand paths when both source and destination
@@ -2000,7 +2001,7 @@ class AbstractBufferedFile(io.IOBase):
             from start of file, current location or end of file, resp.
         """
         loc = int(loc)
-        if not self.mode == "rb":
+        if self.mode != "rb":
             raise OSError(ESPIPE, "Seek only available in read mode")
         if whence == 0:
             nloc = loc

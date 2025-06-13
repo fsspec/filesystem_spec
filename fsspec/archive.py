@@ -43,8 +43,8 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
             return {"name": "", "type": "directory", "size": 0}
         if path in self.dir_cache:
             return self.dir_cache[path]
-        elif path + "/" in self.dir_cache:
-            return self.dir_cache[path + "/"]
+        elif f"{path}/" in self.dir_cache:
+            return self.dir_cache[f"{path}/"]
         else:
             raise FileNotFoundError(path)
 
@@ -69,7 +69,6 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                     out = {"name": ppath, "size": 0, "type": "directory"}
                     paths[ppath] = out
         if detail:
-            out = sorted(paths.values(), key=operator.itemgetter("name"))
-            return out
+            return sorted(paths.values(), key=operator.itemgetter("name"))
         else:
             return sorted(paths)

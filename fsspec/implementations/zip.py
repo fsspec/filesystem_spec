@@ -161,9 +161,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 continue
 
             if file_info["type"] == "directory":
-                if withdirs:
-                    if file_path not in result:
-                        result[file_path.strip("/")] = file_info
+                if withdirs and file_path not in result:
+                    result[file_path.strip("/")] = file_info
                 continue
 
             if file_path not in result:

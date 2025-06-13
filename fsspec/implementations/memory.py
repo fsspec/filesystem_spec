@@ -38,7 +38,7 @@ class MemoryFileSystem(AbstractFileSystem):
         if "::" in path or "://" in path:
             return path.rstrip("/")
         path = path.lstrip("/").rstrip("/")
-        return "/" + path if path else ""
+        return f"/{path}" if path else ""
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
@@ -55,7 +55,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 }
             ]
         paths = set()
-        starter = path + "/"
+        starter = f"{path}/"
         out = []
         for p2 in tuple(self.store):
             if p2.startswith(starter):
@@ -150,7 +150,7 @@ class MemoryFileSystem(AbstractFileSystem):
         logger.debug("info: %s", path)
         path = self._strip_protocol(path)
         if path in self.pseudo_dirs or any(
-            p.startswith(path + "/") for p in list(self.store) + self.pseudo_dirs
+            p.startswith(f"{path}/") for p in list(self.store) + self.pseudo_dirs
         ):
             return {
                 "name": path,

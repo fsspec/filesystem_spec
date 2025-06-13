@@ -826,7 +826,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             if f:
                 size = os.path.getsize(f[0].fn) if f[0].closed else f[0].tell()
                 return {"name": path, "size": size, "type": "file"}
-            f = any(_.path.startswith(path + "/") for _ in self.transaction.files)
+            f = any(_.path.startswith(f"{path}/") for _ in self.transaction.files)
             if f:
                 return {"name": path, "size": 0, "type": "directory"}
         return self.fs.info(path, **kwargs)

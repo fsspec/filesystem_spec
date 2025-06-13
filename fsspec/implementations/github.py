@@ -153,7 +153,7 @@ class GithubFileSystem(AbstractFileSystem):
             _sha = sha or self.root
             for part in parts:
                 out = self.ls(so_far, True, sha=sha, _sha=_sha)
-                so_far += "/" + part if so_far else part
+                so_far += f"/{part}" if so_far else part
                 out = [o for o in out if o["name"] == so_far]
                 if not out:
                     raise FileNotFoundError(path)

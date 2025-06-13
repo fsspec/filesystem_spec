@@ -27,8 +27,7 @@ def fs(request):
     pyarrow_fs = pytest.importorskip("pyarrow.fs")
     FileSystem = pyarrow_fs.FileSystem
     if request.param == "arrow":
-        fs = ArrowFSWrapper(FileSystem.from_uri("file:///")[0])
-        return fs
+        return ArrowFSWrapper(FileSystem.from_uri("file:///")[0])
     cls = FILESYSTEMS[request.param]
     return cls()
 
@@ -36,4 +35,4 @@ def fs(request):
 @pytest.fixture(scope="function")
 def temp_file():
     with tempfile.TemporaryDirectory() as temp_dir:
-        return temp_dir + "test-file"
+        return f"{temp_dir}test-file"
