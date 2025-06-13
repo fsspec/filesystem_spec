@@ -254,7 +254,7 @@ class HTTPFileSystem(AsyncFileSystem):
             if isfilelike(lpath):
                 outfile = lpath
             else:
-                outfile = open(lpath, "wb")  # noqa: ASYNC101, ASYNC230
+                outfile = open(lpath, "wb")  # noqa: ASYNC230
 
             try:
                 chunk = True
@@ -286,7 +286,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 context = nullcontext(lpath)
                 use_seek = False  # might not support seeking
             else:
-                context = open(lpath, "rb")  # noqa: ASYNC101, ASYNC230
+                context = open(lpath, "rb")  # noqa: ASYNC230
                 use_seek = True
 
             with context as f:
@@ -812,7 +812,7 @@ async def get_range(session, url, start, end, file=None, **kwargs):
     async with r:
         out = await r.read()
     if file:
-        with open(file, "r+b") as f:  # noqa: ASYNC101, ASYNC230
+        with open(file, "r+b") as f:  # noqa: ASYNC230
             f.seek(start)
             f.write(out)
     else:
