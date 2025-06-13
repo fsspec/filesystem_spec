@@ -1167,7 +1167,7 @@ def test_strip_protocol_custom_protocols(protocol, uri, expected, cwd, current_d
     assert fs_cls._strip_protocol(uri) == expected
 
 
-def test_mkdir_twice_faile(tmpdir):
+def test_mkdir_twice_fails(tmpdir):
     fn = os.path.join(tmpdir, "test")
     fs = fsspec.filesystem("file")
     fs.mkdir(fn)
