@@ -243,10 +243,9 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             # NT
             path_ = path.rsplit("/", 1)[0]
-            if len(path_) <= 3:
-                if path_[1:2] == ":":
-                    # nt root (something like c:/)
-                    return path_[0] + ":/"
+            if len(path_) <= 3 and path_[1:2] == ":":
+                # nt root (something like c:/)
+                return path_[0] + ":/"
             # More cases may be required here
             return path_
 
