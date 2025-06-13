@@ -41,11 +41,11 @@ class AbstractGetTests:
         assert not local_fs.exists(target_subfile1)
 
         # Repeat with trailing slash on target
-        fs.get(fs_join(source, "file2"), target + "/")
+        fs.get(fs_join(source, "file2"), f"{target}/")
         assert local_fs.isdir(target)
         assert local_fs.isfile(target_file2)
 
-        fs.get(fs_join(source, "subdir", "subfile1"), target + "/")
+        fs.get(fs_join(source, "subdir", "subfile1"), f"{target}/")
         assert local_fs.isfile(target_subfile1)
 
     def test_get_file_to_new_directory(
@@ -131,7 +131,7 @@ class AbstractGetTests:
             s = fs_join(source, "subdir")
             if source_slash:
                 s += "/"
-            t = target + "/" if target_slash else target
+            t = f"{target}/" if target_slash else target
 
             # Without recursive does nothing
             fs.get(s, t)
@@ -258,7 +258,7 @@ class AbstractGetTests:
         local_fs.mkdir(target)
 
         for target_slash in [False, True]:
-            t = target + "/" if target_slash else target
+            t = f"{target}/" if target_slash else target
 
             # Without recursive
             fs.get(fs_join(source, "subdir", "*"), t)
@@ -447,7 +447,7 @@ class AbstractGetTests:
         ]
 
         for target_slash in [False, True]:
-            t = target + "/" if target_slash else target
+            t = f"{target}/" if target_slash else target
 
             fs.get(source_files, t)
             assert local_fs.isfile(local_join(target, "file1"))
