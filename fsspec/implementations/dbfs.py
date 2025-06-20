@@ -73,7 +73,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             for entry in self.dircache[parent]:
                 if entry["name"] == path.rstrip("/"):
                     if entry["type"] != "directory":
-                        return entry
+                        return [entry]
                     return []
             raise FileNotFoundError(path)
 
