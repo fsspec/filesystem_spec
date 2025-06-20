@@ -7,6 +7,7 @@ import os
 import threading
 import warnings
 import weakref
+from contextlib import suppress
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
@@ -56,7 +57,7 @@ class _Cached(type):
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
         if conf.get("weakref_instance_cache"):  # pragma: no cover
-            # debug option for analysing fork/spawn conditions
+            # debug option for analyzing fork/spawn conditions
             cls._cache = weakref.WeakValueDictionary()
         else:
             cls._cache = {}
@@ -359,14 +360,12 @@ class AbstractFileSystem(metaclass=_Cached):
     def _ls_from_cache(self, path):
         """Check cache for listing
 
-        Returns listing, if found (may be empty list for a directly that exists
-        but contains nothing), None if not in cache.
+        Returns listing, if found (may be empty list for a directory that
+        exists but contains nothing), None if not in cache.
         """
-        parent = self._parent(path)
-        try:
+        with suppress(KeyError):
             return self.dircache[path.rstrip("/")]
-        except KeyError:
-            pass
+        parent = self._parent(path)
         try:
             files = [
                 f

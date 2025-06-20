@@ -71,6 +71,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             and types.
         """
         out = self._ls_from_cache(path)
+        out = [o for o in out or [] if o["type"] != "directory"]
         if not out:
             try:
                 r = self._send_to_api(
@@ -460,7 +461,7 @@ class DatabricksFile(AbstractBufferedFile):
         return return_buffer
 
     def _to_sized_blocks(self, length, start=0):
-        """Helper function to split a range from 0 to total_length into bloksizes"""
+        """Helper function to split a range from 0 to total_length into blocksizes"""
         end = start + length
         for data_chunk in range(start, end, self.blocksize):
             data_start = data_chunk
