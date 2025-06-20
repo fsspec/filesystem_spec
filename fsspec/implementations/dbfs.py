@@ -90,7 +90,16 @@ class DatabricksFileSystem(AbstractFileSystem):
             but also additional information on file sizes
             and types.
         """
-        out = self._ls_from_cache(path)
+        try:
+            out = self._ls_from_cache(path)
+        except FileNotFoundError:
+            # This happens if the `path`'s parent was cached, but `path` is not
+            # there. This suggests that `path` is new since the parent was
+            # cached. Attempt to invalidate parent's cache before continuing.
+            with suppress(Exception):
+                del self.dircache[self._parent(path)]
+            out = None
+
         if not out:
             try:
                 r = self._send_to_api(
