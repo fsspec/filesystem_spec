@@ -1,9 +1,10 @@
 import base64
 import urllib
+from contextlib import suppress
 
 import requests
-import requests.exceptions
 from requests.adapters import HTTPAdapter, Retry
+from typing_extensions import override
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
@@ -57,6 +58,25 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         super().__init__(**kwargs)
 
+    @override
+    def _ls_from_cache(self, path) -> list[dict[str, str | int]] | None:
+        """Check cache for listing
+
+        Returns listing, if found (may be empty list for a directory that
+        exists but contains nothing), None if not in cache.
+        """
+        with suppress(KeyError):
+            return self.dircache[path.rstrip("/")]
+
+        parent = self._parent(path)
+        if parent in self.dircache:
+            for entry in self.dircache[parent]:
+                if entry["name"] == path.rstrip("/"):
+                    if entry["type"] != "directory":
+                        return entry
+                    return []
+            raise FileNotFoundError(path)
+
     def ls(self, path, detail=True, **kwargs):
         """
         List the contents of the given path.
@@ -71,7 +91,6 @@ class DatabricksFileSystem(AbstractFileSystem):
             and types.
         """
         out = self._ls_from_cache(path)
-        out = [o for o in out or [] if o["type"] != "directory"]
         if not out:
             try:
                 r = self._send_to_api(
