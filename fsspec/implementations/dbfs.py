@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import urllib
-from contextlib import suppress
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -67,8 +66,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         Returns listing, if found (may be empty list for a directory that
         exists but contains nothing), None if not in cache.
         """
-        with suppress(KeyError):
-            return self.dircache[path.rstrip("/")]
+        _ = self.dircache.pop(path.rstrip("/"), None)
 
         parent = self._parent(path)
         if parent in self.dircache:
@@ -98,8 +96,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             # This happens if the `path`'s parent was cached, but `path` is not
             # there. This suggests that `path` is new since the parent was
             # cached. Attempt to invalidate parent's cache before continuing.
-            with suppress(Exception):
-                del self.dircache[self._parent(path)]
+            _ = self.dircache.pop(self._parent(path), None)
             out = None
 
         if not out:
