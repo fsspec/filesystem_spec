@@ -235,6 +235,7 @@ documentation carefully before using any particular package.
 - `irods`_ for access to iRODS servers, with protocol "irods://"
 - `lakefs`_ for lakeFS data lakes, with protocol "lakefs://"
 - `morefs`_ for `OverlayFileSystem`, `DictFileSystem`, and others
+- `obstore`_: zero-dependency access to Amazon S3, Google Cloud Storage, and Azure Blob Storage using the underlying Rust `object_store`_ library, with protocols "s3://", "gs://", and "abfs://".
 - `ocifs`_ for access to Oracle Cloud Object Storage, with protocol "oci://"
 - `ocilake`_ for OCI Data Lake storage
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
@@ -271,6 +272,8 @@ documentation carefully before using any particular package.
 .. _irods: https://github.com/xwcl/irods_fsspec
 .. _lakefs: https://github.com/aai-institute/lakefs-spec
 .. _morefs: https://github.com/iterative/morefs
+.. _object_store: https://docs.rs/object_store/latest/object_store/
+.. _obstore: https://developmentseed.org/obstore/latest/
 .. _ocifs: https://ocifs.readthedocs.io/en/latest/
 .. _ocilake: https://github.com/oracle/ocifs
 .. _ossfs: https://github.com/fsspec/ossfs
