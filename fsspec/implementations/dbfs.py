@@ -66,7 +66,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         Returns listing, if found (may be empty list for a directory that
         exists but contains nothing), None if not in cache.
         """
-        _ = self.dircache.pop(path.rstrip("/"), None)
+        self.dircache.pop(path.rstrip("/"), None)
 
         parent = self._parent(path)
         if parent in self.dircache:
