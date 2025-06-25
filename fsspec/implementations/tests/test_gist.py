@@ -1,7 +1,12 @@
+import sys
+
 import pytest
 
 import fsspec
 from fsspec.implementations.gist import GistFileSystem
+
+if (3, 12) < sys.version_info < (3, 14):
+    pytest.skip("Too many tests bust rate limit", allow_module_level=True)
 
 
 @pytest.mark.parametrize(
