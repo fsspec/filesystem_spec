@@ -217,6 +217,10 @@ known_implementations = {
         "class": "tosfs.TosFileSystem",
         "err": "Install tosfs to access ByteDance volcano engine Tinder Object Storage",
     },
+    "tos": {
+        "class": "tosfs.TosFileSystem",
+        "err": "Install tosfs to access ByteDance volcano engine Tinder Object Storage",
+    },
     "wandb": {"class": "wandbfs.WandbFS", "err": "Install wandbfs to access wandb"},
     "webdav": {
         "class": "webdav4.fsspec.WebdavFileSystem",
