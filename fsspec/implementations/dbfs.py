@@ -96,7 +96,7 @@ class DatabricksFileSystem(AbstractFileSystem):
             # This happens if the `path`'s parent was cached, but `path` is not
             # there. This suggests that `path` is new since the parent was
             # cached. Attempt to invalidate parent's cache before continuing.
-            _ = self.dircache.pop(self._parent(path), None)
+            self.dircache.pop(self._parent(path), None)
             out = None
 
         if not out:
