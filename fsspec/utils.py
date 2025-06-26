@@ -410,15 +410,16 @@ def other_paths(
         path2 = path2.rstrip("/")
 
         if flatten:
-            path2 = ["/".join((path2, p.split("/")[-1])) for p in paths]
+            # For URLs with query params, take just the path part before '?'
+            path2 = ["/".join((path2, p.split("?")[0].split("/")[-1])) for p in paths]
         else:
-            cp = common_prefix(paths)
+            cp = common_prefix([p.split("?")[0] for p in paths])
             if exists:
                 cp = cp.rsplit("/", 1)[0]
             if not cp and all(not s.startswith("/") for s in paths):
-                path2 = ["/".join([path2, p]) for p in paths]
+                path2 = ["/".join([path2, p.split("?")[0]]) for p in paths]
             else:
-                path2 = [p.replace(cp, path2, 1) for p in paths]
+                path2 = [p.split("?")[0].replace(cp, path2, 1) for p in paths]
     else:
         assert len(paths) == len(path2)
     return path2
