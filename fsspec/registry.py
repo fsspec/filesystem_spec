@@ -213,11 +213,11 @@ known_implementations = {
         "err": 'SFTPFileSystem requires "paramiko" to be installed',
     },
     "tar": {"class": "fsspec.implementations.tar.TarFileSystem"},
-    "tosfs": {
+    "tos": {
         "class": "tosfs.TosFileSystem",
         "err": "Install tosfs to access ByteDance volcano engine Tinder Object Storage",
     },
-    "tos": {
+    "tosfs": {
         "class": "tosfs.TosFileSystem",
         "err": "Install tosfs to access ByteDance volcano engine Tinder Object Storage",
     },
