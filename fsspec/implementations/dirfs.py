@@ -12,6 +12,40 @@ class DirFileSystem(AsyncFileSystem):
 
     protocol = "dir"
 
+    # ----------------------------------------------------------------
+    # Transaction delegation: use the wrapped FS’s transaction
+    transaction_type = property(lambda self: self.fs.transaction_type)
+
+    @property
+    def transaction(self):
+        """
+        Delegate `with fs.transaction:` to the underlying filesystem
+        so that dir:// writes participate in the base FS’s transaction.
+        """
+        return self.fs.transaction
+
+    def start_transaction(self):
+        """Start a transaction and propagate to the base filesystem."""
+        if hasattr(self.fs, 'start_transaction'):
+            self.fs.start_transaction()
+        super().start_transaction()  # Base class handles self._intrans    
+
+    def end_transaction(self):
+        """End a transaction and propagate to the base filesystem."""
+        if hasattr(self.fs, 'end_transaction'):
+            self.fs.end_transaction()
+        super().end_transaction()  # Base class handles self._intrans
+    
+    def invalidate_cache(self, path=None):
+        """
+        Discard any cached directory information
+        And delegate to the base filesystem
+        """
+        if hasattr(self.fs, 'invalidate_cache'):
+            self.fs.invalidate_cache(path)
+        super().invalidate_cache(path)
+    # ----------------------------------------------------------------    
+
     def __init__(
         self,
         path=None,
