@@ -80,12 +80,12 @@ class HTTPFileSystem(AsyncFileSystem):
             https://docs.aiohttp.org/en/stable/client_reference.html
             For example, ``{'auth': aiohttp.BasicAuth('user', 'pass')}``
         get_client: Callable[..., aiohttp.ClientSession]
-            A callable which takes keyword arguments and constructs
-            an aiohttp.ClientSession. It's state will be managed by
+            A callable, which takes keyword arguments and constructs
+            an aiohttp.ClientSession. Its state will be managed by
             the HTTPFileSystem class.
         storage_options: key-value
             Any other parameters passed on to requests
-        cache_type, cache_options: defaults used in open
+        cache_type, cache_options: defaults used in open()
         """
         super().__init__(self, asynchronous=asynchronous, loop=loop, **storage_options)
         self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
