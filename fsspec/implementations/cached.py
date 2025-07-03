@@ -16,6 +16,7 @@ from fsspec.core import BaseCache, MMapCache
 from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cache_metadata import CacheMetadata
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.transaction import Transaction
 from fsspec.utils import infer_compression
@@ -433,7 +434,9 @@ class CachingFileSystem(AbstractFileSystem):
             "open",
             "cat",
             "cat_file",
+            "_cat_file",
             "cat_ranges",
+            "_cat_ranges",
             "get",
             "read_block",
             "tail",
@@ -835,14 +838,55 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         else:
             raise ValueError("path must be str or dict")
 
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        logger.debug("async cat_file %s", path)
+        path = self._strip_protocol(path)
+        sha = self._mapper(path)
+        fn = self._check_file(path)
+
+        if not fn:
+            fn = os.path.join(self.storage[-1], sha)
+            await self.fs._get_file(path, fn, **kwargs)
+
+        with open(fn, "rb") as f:  # noqa ASYNC230
+            if start:
+                f.seek(start)
+            size = -1 if end is None else end - f.tell()
+            return f.read(size)
+
+    async def _cat_ranges(
+        self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
+    ):
+        logger.debug("async cat ranges %s", paths)
+        lpaths = []
+        rset = set()
+        download = []
+        rpaths = []
+        for p in paths:
+            fn = self._check_file(p)
+            if fn is None and p not in rset:
+                sha = self._mapper(p)
+                fn = os.path.join(self.storage[-1], sha)
+                download.append(fn)
+                rset.add(p)
+                rpaths.append(p)
+            lpaths.append(fn)
+        if download:
+            await self.fs._get(rpaths, download, on_error=on_error)
+
+        return LocalFileSystem().cat_ranges(
+            lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
+        )
+
     def cat_ranges(
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
+        logger.debug("cat ranges %s", paths)
         lpaths = [self._check_file(p) for p in paths]
         rpaths = [p for l, p in zip(lpaths, paths) if l is False]
         lpaths = [l for l, p in zip(lpaths, paths) if l is False]
         self.fs.get(rpaths, lpaths)
-        return super().cat_ranges(
+        return LocalFileSystem().cat_ranges(
             paths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
 
@@ -940,7 +984,7 @@ class LocalTempFile:
 
     def commit(self):
         self.fs.put(self.fn, self.path, **self.kwargs)
-        # we do not delete local copy - it's still in the cache
+        # we do not delete the local copy, it's still in the cache.
 
     @property
     def name(self):
