@@ -110,12 +110,8 @@ class LocalFileSystem(AbstractFileSystem):
             else:
                 t = "other"
 
-        # Check for the 'st_birthtime' attribute, which is not always present.
-        if hasattr(out, 'st_birthtime'):
-            created_time = out.st_birthtime
-        else:
-            # Fallback to 'st_ctime' for systems without birth time support.
-            created_time = out.st_ctime
+        # Check for the 'st_birthtime' attribute, which is not always present; fallback to st_ctime
+        created_time = getattr(out, "st_birthtime", out.st_ctime)
 
         result = {
             "name": path,
