@@ -109,11 +109,15 @@ class LocalFileSystem(AbstractFileSystem):
                 t = "file"
             else:
                 t = "other"
+
+        # Check for the 'st_birthtime' attribute, which is not always present; fallback to st_ctime
+        created_time = getattr(out, "st_birthtime", out.st_ctime)
+
         result = {
             "name": path,
             "size": size,
             "type": t,
-            "created": out.st_ctime,
+            "created": created_time,
             "islink": link,
         }
         for field in ["mode", "uid", "gid", "mtime", "ino", "nlink"]:
