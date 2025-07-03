@@ -109,11 +109,19 @@ class LocalFileSystem(AbstractFileSystem):
                 t = "file"
             else:
                 t = "other"
+
+        # Check for the 'st_birthtime' attribute, which is not always present.
+        if hasattr(out, 'st_birthtime'):
+            created_time = out.st_birthtime
+        else:
+            # Fallback to 'st_ctime' for systems without birth time support.
+            created_time = out.st_ctime
+
         result = {
             "name": path,
             "size": size,
             "type": t,
-            "created": out.st_ctime,
+            "created": created_time,
             "islink": link,
         }
         for field in ["mode", "uid", "gid", "mtime", "ino", "nlink"]:
