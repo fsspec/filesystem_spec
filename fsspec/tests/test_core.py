@@ -428,9 +428,10 @@ def test_target_protocol_options(ftp_writable):
     host, port, username, password = ftp_writable
     data = {"afile": b"hello"}
     options = {"host": host, "port": port, "username": username, "password": password}
-    with tempzip(data) as lfile, fsspec.open(
-        "ftp:///archive.zip", "wb", **options
-    ) as f:
+    with (
+        tempzip(data) as lfile,
+        fsspec.open("ftp:///archive.zip", "wb", **options) as f,
+    ):
         f.write(open(lfile, "rb").read())
     with fsspec.open(
         "zip://afile",
