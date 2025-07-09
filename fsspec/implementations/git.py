@@ -62,8 +62,7 @@ class GitFileSystem(AbstractFileSystem):
 
     @staticmethod
     def _get_kwargs_from_urls(path):
-        if path.startswith("git://"):
-            path = path[6:]
+        path = path.removeprefix("git://")
         out = {}
         if ":" in path:
             out["path"], path = path.split(":", 1)
