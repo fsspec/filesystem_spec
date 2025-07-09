@@ -5,7 +5,6 @@ import logging
 import os
 import shutil
 import uuid
-from typing import Optional
 
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import DEFAULT_CALLBACK
@@ -289,7 +288,7 @@ class GenericFileSystem(AsyncFileSystem):
         url2,
         blocksize=2**20,
         callback=DEFAULT_CALLBACK,
-        tempdir: Optional[str] = None,
+        tempdir: str | None = None,
         **kwargs,
     ):
         fs = _resolve_fs(url, self.method)
@@ -319,9 +318,9 @@ class GenericFileSystem(AsyncFileSystem):
         path2: list[str],
         recursive: bool = False,
         on_error: str = "ignore",
-        maxdepth: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        tempdir: Optional[str] = None,
+        maxdepth: int | None = None,
+        batch_size: int | None = None,
+        tempdir: str | None = None,
         **kwargs,
     ):
         # TODO: special case for one FS being local, which can use get/put

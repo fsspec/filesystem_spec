@@ -18,7 +18,6 @@ from typing import (
     ClassVar,
     Generic,
     NamedTuple,
-    Optional,
     TypeVar,
 )
 
@@ -629,7 +628,7 @@ class KnownPartsOfAFile(BaseCache):
         blocksize: int,
         fetcher: Fetcher,
         size: int,
-        data: Optional[dict[tuple[int, int], bytes]] = None,
+        data: dict[tuple[int, int], bytes] | None = None,
         strict: bool = True,
         **_: Any,
     ):
