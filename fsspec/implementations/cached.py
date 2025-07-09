@@ -339,7 +339,7 @@ class CachingFileSystem(AbstractFileSystem):
         # explicitly submitting the size to the open call will avoid extra
         # operations when opening. This is particularly relevant
         # for any file that is read over a network, e.g. S3.
-        size = detail.get("size", None)
+        size = detail.get("size")
 
         # call target filesystems open
         self._mkcache()
