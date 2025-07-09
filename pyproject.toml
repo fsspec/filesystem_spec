@@ -144,7 +144,6 @@ version-file = "fsspec/_version.py"
 exclude = ["**/tests/*", "!**/tests/abstract/"]
 
 [tool.ruff]
-target-version = "py38"
 exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version"]
 line-length = 88
 
