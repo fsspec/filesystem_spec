@@ -1,16 +1,12 @@
 import json
+from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from pathlib import PurePath
 from typing import (
     Any,
     Callable,
     ClassVar,
-    Dict,
-    List,
-    Mapping,
     Optional,
-    Sequence,
-    Tuple,
 )
 
 from .registry import _import_class, get_filesystem_class

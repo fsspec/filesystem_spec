@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Iterable, Iterator, Sequence
 from functools import partial
 from hashlib import md5
 from importlib.metadata import version
@@ -15,9 +16,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Iterable,
-    Iterator,
-    Sequence,
     TypeVar,
 )
 from urllib.parse import urlsplit

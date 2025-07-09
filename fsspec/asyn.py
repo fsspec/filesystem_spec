@@ -7,8 +7,9 @@ import numbers
 import os
 import re
 import threading
+from collections.abc import Iterable
 from glob import has_magic
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 from .callbacks import DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError

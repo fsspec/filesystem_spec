@@ -7,6 +7,7 @@ import math
 import os
 import threading
 import warnings
+from collections import OrderedDict
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import groupby
 from operator import itemgetter
@@ -18,7 +19,6 @@ from typing import (
     Generic,
     NamedTuple,
     Optional,
-    OrderedDict,
     TypeVar,
 )
 
