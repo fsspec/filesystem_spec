@@ -49,12 +49,12 @@ class FilesystemJSONDecoder(json.JSONDecoder):
     def __init__(
         self,
         *,
-        object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+        object_hook: Optional[Callable[[dict[str, Any]], Any]] = None,
         parse_float: Optional[Callable[[str], Any]] = None,
         parse_int: Optional[Callable[[str], Any]] = None,
         parse_constant: Optional[Callable[[str], Any]] = None,
         strict: bool = True,
-        object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
+        object_pairs_hook: Optional[Callable[[list[tuple[str, Any]]], Any]] = None,
     ) -> None:
         self.original_object_hook = object_hook
 
@@ -68,7 +68,7 @@ class FilesystemJSONDecoder(json.JSONDecoder):
         )
 
     @classmethod
-    def try_resolve_path_cls(cls, dct: Dict[str, Any]):
+    def try_resolve_path_cls(cls, dct: dict[str, Any]):
         with suppress(Exception):
             fqp = dct["cls"]
 
@@ -80,7 +80,7 @@ class FilesystemJSONDecoder(json.JSONDecoder):
         return None
 
     @classmethod
-    def try_resolve_fs_cls(cls, dct: Dict[str, Any]):
+    def try_resolve_fs_cls(cls, dct: dict[str, Any]):
         with suppress(Exception):
             if "cls" in dct:
                 try:
@@ -95,7 +95,7 @@ class FilesystemJSONDecoder(json.JSONDecoder):
 
         return None
 
-    def custom_object_hook(self, dct: Dict[str, Any]):
+    def custom_object_hook(self, dct: dict[str, Any]):
         if "cls" in dct:
             if (obj_cls := self.try_resolve_fs_cls(dct)) is not None:
                 return AbstractFileSystem.from_dict(dct)

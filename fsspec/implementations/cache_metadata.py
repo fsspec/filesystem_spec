@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from .cached import CachingFileSystem
 
-    Detail: TypeAlias = Dict[str, Any]
+    Detail: TypeAlias = dict[str, Any]
 
 
 class CacheMetadata:
