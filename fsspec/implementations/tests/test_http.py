@@ -139,6 +139,11 @@ def test_glob_return_subfolders(server):
 
 
 def test_isdir(server):
+    h = fsspec.filesystem("http", headers={"give_mimetype": "true"})
+    assert h.isdir(server.address + "/index/")
+    assert not h.isdir(server.realfile)
+    assert not h.isdir(server.address + "doesnotevenexist")
+
     h = fsspec.filesystem("http")
     assert h.isdir(server.address + "/index/")
     assert not h.isdir(server.realfile)

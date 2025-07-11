@@ -158,11 +158,15 @@ class HTTPFileSystem(AsyncFileSystem):
         session = await self.set_session()
         async with session.get(self.encode_url(url), **self.kwargs) as r:
             self._raise_not_found_for_status(r, url)
-            url_info = await self._info(url, **kwargs)
-            mimetype = url_info.get("mimetype", None)
+
+            if "Content-Type" in r.headers:
+                mimetype = r.headers["Content-Type"].partition(";")[0]
+            else:
+                mimetype = None
+
             if mimetype in ("text/html", None):
                 try:
-                    text = await r.text()
+                    text = await r.text(errors="ignore")
                     if self.simple_links:
                         links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
                     else:
