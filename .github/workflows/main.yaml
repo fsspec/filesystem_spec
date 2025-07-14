@@ -75,22 +75,6 @@ jobs:
           python-version: "3.11"
       - uses: pre-commit/action@main
 
-#  typecheck:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v4
-#
-#      - name: Setup conda
-#        uses: conda-incubator/setup-miniconda@v3
-#        with:
-#          environment-file: ci/environment-typecheck.yml
-#
-#      - name: mypy
-#        shell: bash -l {0}
-#        run: |
-#          mypy fsspec
-#
   downstream:
     name: downstream
     runs-on: ubuntu-24.04
