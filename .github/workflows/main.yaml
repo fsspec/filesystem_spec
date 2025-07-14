@@ -32,7 +32,7 @@ jobs:
       - name: Setup conda
         uses: conda-incubator/setup-miniconda@v3
         with:
-          environment-file: ci/environment-py39.yml
+          environment-file: ci/environment-linux.yml
           python-version: ${{ matrix.PY }}
 
       - name: Run Tests
