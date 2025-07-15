@@ -34,8 +34,7 @@ class MemoryFileSystem(AbstractFileSystem):
             else:
                 path = stringify_path(path)
 
-        if path.startswith("memory://"):
-            path = path[len("memory://") :]
+        path = path.removeprefix("memory://")
         if "::" in path or "://" in path:
             return path.rstrip("/")
         path = path.lstrip("/").rstrip("/")

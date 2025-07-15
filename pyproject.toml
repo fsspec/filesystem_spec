@@ -144,7 +144,6 @@ version-file = "fsspec/_version.py"
 exclude = ["**/tests/*", "!**/tests/abstract/"]
 
 [tool.ruff]
-target-version = "py38"
 exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version"]
 line-length = 88
 
@@ -209,6 +208,7 @@ ignore = [
     # Fix these codes later
     "G004",
     "PERF203",
+    "PLC0415",
     "UP007",
     "UP011",
     "UP015",
@@ -219,6 +219,7 @@ ignore = [
     "SIM114",
     "SIM115",
     "SIM117",
+    "TC003",
     # https://github.com/astral-sh/ruff/issues/7871
     "UP038",
     # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules

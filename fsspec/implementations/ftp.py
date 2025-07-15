@@ -1,7 +1,5 @@
 import os
-import sys
 import uuid
-import warnings
 from ftplib import FTP, FTP_TLS, Error, error_perm
 from typing import Any
 
@@ -81,13 +79,7 @@ class FTPFileSystem(AbstractFileSystem):
             ftp_cls = FTP_TLS
         else:
             ftp_cls = FTP
-        if sys.version_info >= (3, 9):
-            self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding)
-        elif self.encoding:
-            warnings.warn("`encoding` not supported for python<3.9, ignoring")
-            self.ftp = ftp_cls(timeout=self.timeout)
-        else:
-            self.ftp = ftp_cls(timeout=self.timeout)
+        self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding)
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 

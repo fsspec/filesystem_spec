@@ -7,6 +7,7 @@ import math
 import os
 import threading
 import warnings
+from collections import OrderedDict
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import groupby
 from operator import itemgetter
@@ -17,8 +18,6 @@ from typing import (
     ClassVar,
     Generic,
     NamedTuple,
-    Optional,
-    OrderedDict,
     TypeVar,
 )
 
@@ -629,7 +628,7 @@ class KnownPartsOfAFile(BaseCache):
         blocksize: int,
         fetcher: Fetcher,
         size: int,
-        data: Optional[dict[tuple[int, int], bytes]] = None,
+        data: dict[tuple[int, int], bytes] | None = None,
         strict: bool = True,
         **_: Any,
     ):
