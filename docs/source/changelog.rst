@@ -1,6 +1,35 @@
 Changelog
 =========
 
+2025.7.0
+--------
+
+Enhancements
+
+- only download HTML mime for http listing (#1889)
+- add tos:// to registry (#1878)
+
+Fixes
+
+- use st_birthtime in localFS, if available (#1883)
+- allow cat_* in simplecache (#1881)
+- remove deprecated asyncio use (#1862)
+- create event loop if it doesn't exist (#1857)
+
+Other
+
+- remove references to py38 (#1888)
+- ruff updates (#1887, 1864)
+- github rate limits in CI (#1879, 1877)
+- acknowledge Anaconda support (#1876)
+- add obstore to known implementations (#1875)
+- add Microsoft storage to known implementations (#1853)
+- use builtins zstd for py3.14 (#1874)
+- gdrivefs -> gdrive_fsspec (#1858)
+- windows version in CI (#1855)
+- error message typo (#1854)
+
+
 2025.5.1
 --------
 
