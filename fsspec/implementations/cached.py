@@ -886,6 +886,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         rpaths = [p for l, p in zip(lpaths, paths) if l is False]
         lpaths = [l for l, p in zip(lpaths, paths) if l is False]
         self.fs.get(rpaths, lpaths)
+        paths = [self._check_file(p) for p in paths]
         return LocalFileSystem().cat_ranges(
             paths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
