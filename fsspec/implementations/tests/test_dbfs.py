@@ -9,7 +9,7 @@ This however means, that when you change the tests (or when the API
 itself changes, which is very unlikely to occur as it is versioned),
 you need to re-record the answers. This can be done as follows:
 
-1. Delete all casettes files in the "./cassettes/test_dbfs" folder
+1. Delete all cassettes files in the "./cassettes/test_dbfs" folder
 2. Spin up a databricks cluster. For example,
    you can use an Azure Databricks instance for this.
 3. Take note of the instance details (the instance URL. For example for an Azure
