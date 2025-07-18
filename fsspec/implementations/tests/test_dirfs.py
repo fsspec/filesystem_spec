@@ -1,5 +1,7 @@
+import os
 import pytest
 
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.asyn import AsyncFileSystem
 from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.spec import AbstractFileSystem
@@ -615,3 +617,38 @@ def test_from_url(m):
     assert fs.ls("", False) == ["file"]
     assert fs.ls("", True)[0]["name"] == "file"
     assert fs.cat("file") == b"data"
+
+
+def test_dirfs_transaction_propagation(tmpdir):
+    # Setup
+    path = str(tmpdir)
+    base = LocalFileSystem()
+    fs = DirFileSystem(path=path, fs=base)
+    
+    # Test file path
+    test_file = "transaction_test.txt"
+    full_path = os.path.join(path, test_file)
+    
+    # Before transaction, both filesystems should have _intrans=False
+    assert not base._intrans
+    assert not fs._intrans
+    
+    # Enter transaction and write file
+    with fs.transaction:
+        # After fix, both filesystems should have _intrans=True
+        assert base._intrans, "Base filesystem transaction flag not set"
+        assert fs._intrans, "DirFileSystem transaction flag not set"
+        
+        # Write to file
+        with fs.open(test_file, "wb") as f:
+            f.write(b"hello world")
+            
+        # Check if file exists on disk - it should not until transaction commits
+        assert not os.path.exists(full_path), "File exists during transaction, not deferred to temp file"
+        
+    # After transaction commits, file should exist
+    assert os.path.exists(full_path), "File not created after transaction commit"
+    
+    # Verify content
+    with open(full_path, "rb") as f:
+        assert f.read() == b"hello world"

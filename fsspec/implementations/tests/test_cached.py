@@ -19,7 +19,10 @@ from fsspec.implementations.cached import (
     LocalTempFile,
     WholeFileCacheFileSystem,
 )
-from fsspec.implementations.local import make_path_posix
+from fsspec.implementations.local import (
+    LocalFileSystem,
+    make_path_posix,
+)
 from fsspec.implementations.zip import ZipFileSystem
 from fsspec.tests.conftest import win
 
@@ -1337,3 +1340,43 @@ def test_filecache_write(tmpdir, m):
 
     assert m.cat(fn) == data.encode()
     assert fs.cat(fn) == data.encode()
+
+
+def test_cachingfs_transaction_missing_propagation(tmpdir):
+    # Setup temp directories
+    storage_dir = str(tmpdir / "storage")
+    cache_dir = str(tmpdir / "cache")
+    os.mkdir(storage_dir)
+    os.mkdir(cache_dir)
+    
+    # Create a local filesystem and wrap it with CachingFileSystem
+    base = LocalFileSystem()
+    cachefs = CachingFileSystem(
+        fs=base,
+        cache_storage=cache_dir,
+        cache_check=0,
+        same_names=True
+    )
+    
+    # Test file path
+    test_file = os.path.join(storage_dir, "cache_transaction_test.txt")
+    
+    # Before transaction, both filesystems should have _intrans=False
+    assert not base._intrans
+    assert not cachefs._intrans
+    
+    # Enter transaction and write file
+    with cachefs.transaction:
+        # CachingFileSystem's transaction flag is set
+        assert cachefs._intrans
+        
+        # But the base filesystem's transaction flag is not - this is the bug
+        assert not base._intrans, "Base filesystem's transaction flag is not propagated"
+        
+        # Write to file
+        with cachefs.open(test_file, "wb") as f:
+            f.write(b"cached data")
+            
+        # Check if file exists on disk - bug: it will exist immediately since
+        # transaction context was not propagated
+        assert os.path.exists(test_file), "File exists during transaction - bug confirmed"
