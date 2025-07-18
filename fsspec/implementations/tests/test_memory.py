@@ -380,3 +380,20 @@ def test_open_path_windows(m):
         f.write(b"some\nlines\nof\ntext")
 
     assert m.read_text(path) == "some\nlines\nof\ntext"
+
+def test_save_and_load(m):
+    from io import BytesIO    
+    internal = BytesIO()
+    with m.open("/foo/bar/file", "wb") as f:
+        f.write(b"some\nlines\nof\ntext")
+    with m.open("/foo/file", "wb") as f:
+        f.write(b"some\nlines\nof\ntext")
+    m.makedirs("/foo/foo")
+    m.save(internal)
+    m.store = None
+    m.pseudo_dirs = None
+    internal.seek(0)
+    m.load(internal)
+    assert m.cat("/foo/file") == b"some\nlines\nof\ntext"
+    assert m.ls("/", False) == ["/foo"]
+    assert sorted(m.ls("/foo", False)) == sorted(["/foo/foo", "/foo/bar", "/foo/file"])
