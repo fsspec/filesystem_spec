@@ -13,7 +13,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: POST
@@ -43,6 +43,8 @@ interactions:
       - max-age=31536000; includeSubDomains; preload
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - 34902aa7-5f42-4f06-9864-c04355ce1874
     status:
       code: 200
       message: OK
@@ -60,7 +62,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: GET
@@ -68,11 +70,10 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsH6AW6rCJrWkhDaxcLJoraKHcvtbehUmE5Ev9/3nyu
-        cPSTSzA8X2EhPsEAu8c8eeIQ3c4S00QfDhrwabQ+wsDx7Jr10pj8t4NBNDAH64/+ldiHz5H9nKfS
-        iFYhivXcmnvifl5C5IfE9FZjgFIo1Fq12eK+wTvFVJFc96iV7NAUhfN73VQjjUYp7CV2RellClyl
-        LDqt2y5DKdFYvijGcKkAklfZC6nbMul0oujseM7pydbFN53e4x/xmV5+e/r/Im49MX2ZzBY759++
-        QpWFFLgXK6DD7QcAAP//AwD4cmNjVAMAAA==
+        H4sIAAAAAAAEA5zQTQrCMBAF4LvMOmBSJ/3JAbyAS5GQNgmOWFuScaGld7d1bTfdPngfjzdBpEfI
+        YC4TjI5vYOBwWpIzDykcYs5j6KxvYwYBlK2nBIbTK4hfz2b6BDBSQD94itQ5puFpmfolVZUuVC1R
+        llLKWfzz7y7tglHquqjKYhPu396x27MZm6rEo1KbNLt2PWzHHUo3qLHBlb7OXwAAAP//AwCF/1Z8
+        egEAAA==
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -99,6 +100,8 @@ interactions:
       - Accept-Encoding
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - 3bb2c377-37b9-4fd0-a63f-42315fd14616
     status:
       code: 200
       message: OK
@@ -116,14 +119,14 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: POST
     uri: https://my_instance.com/api/2.0/dbfs/create
   response:
     body:
-      string: '{"handle":2535467031369232}'
+      string: '{"handle":5831327167864429}'
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -146,11 +149,13 @@ interactions:
       - max-age=31536000; includeSubDomains; preload
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - 5b736ede-b1c6-44bf-b0bb-80b562dca9fb
     status:
       code: 200
       message: OK
 - request:
-    body: '{"handle": 2535467031369232, "data": "VGhpcyBpcyBhIHRlc3QK"}'
+    body: '{"handle": 5831327167864429, "data": "VGhpcyBpcyBhIHRlc3QK"}'
     headers:
       Accept:
       - '*/*'
@@ -163,7 +168,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: POST
@@ -193,11 +198,13 @@ interactions:
       - max-age=31536000; includeSubDomains; preload
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - e8923a09-f65a-4552-8570-4556eaef5ccc
     status:
       code: 200
       message: OK
 - request:
-    body: '{"handle": 2535467031369232}'
+    body: '{"handle": 5831327167864429}'
     headers:
       Accept:
       - '*/*'
@@ -210,7 +217,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: POST
@@ -240,6 +247,8 @@ interactions:
       - max-age=31536000; includeSubDomains; preload
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - 75f29c0b-3b70-41f1-941c-fd786fa614da
     status:
       code: 200
       message: OK
@@ -257,7 +266,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: GET
@@ -265,11 +274,10 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA5yTy27DIBBF/4W1m0Aw48cH9Ae6rCJrWuOGBhcLJuojyr8X25tUClULy5E49+ow
-        nNlgrA6sfTyzCenAWra9j5MHcl5veyS0eNSsYCZ0vfGsJX/SxXKpC+ZLs5YXbHS9GcwzknFvHZkx
-        TkXFSwnAl3MpbsHn4A190BV8QBt+0oVK4hsulKpjwG28GSfn6S4QvuT0B8ElKCXLZMAr+nDV/a9i
-        VANKihqqJDjq1DYHDZWU0AhIS5msoywyr5Uq6yglpXv6RO/de4aQuCnzU5Zp0+GAXvfdKbbHPq9+
-        Vasd/FKf8Gn+Bv/f83VPqiZtZq0d+68/LStCcNjxRdD+8g0AAP//AwAGXIvvswMAAA==
+        H4sIAAAAAAAEA5yRzQ6CMBCE32XPRNra8tMH8AU8GkMKLXENCKFrohLeXetFTcQYrrPZbyYzI9TY
+        OA96N0Jv6AAa4s1D2VI3uDjcVnQhiAB9YXEAXZvGu+j5VXi8OdBcRdB2FmusDGF3KgjbIKdK8IwL
+        kTDGpugr3vveVYUta//mQMP504D94DPJ5vlHMywCS6YykSZiNnh7tYbMkswyTxO55nwWTaYMe7wK
+        /7sOrnKpZC4Dej/dAQAA//8DAIMOnlnZAQAA
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -296,6 +304,65 @@ interactions:
       - Accept-Encoding
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - e5c61cd8-b951-4767-97e8-25a29973c60a
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"path": "/FileStore"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '22'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.4
+      authorization:
+      - DUMMY
+    method: GET
+    uri: https://my_instance.com/api/2.0/dbfs/list
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAEA5yRzQ6CMBCE32XPRNra8tMH8AU8GkMKLXENCKFrohLeXetFTcQYrrPZbyYzI9TY
+        OA96N0Jv6AAa4s1D2VI3uDjcVnQhiAB9YXEAXZvGu+j5VXi8OdBcRdB2FmusDGF3KgjbIKdK8IwL
+        kTDGpugr3vveVYUta//mQMP504D94DPJ5vlHMywCS6YykSZiNnh7tYbMkswyTxO55nwWTaYMe7wK
+        /7sOrnKpZC4Dej/dAQAA//8DAIMOnlnZAQAA
+    headers:
+      access-control-allow-headers:
+      - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
+        Content-Type
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - no-cache, no-store, must-revalidate
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      expires:
+      - '0'
+      pragma:
+      - no-cache
+      server:
+      - databricks
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-content-type-options:
+      - nosniff
+      x-request-id:
+      - 26e7e5c5-c876-40d3-8d4f-edf6ed7a9828
     status:
       code: 200
       message: OK
@@ -313,7 +380,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: GET
@@ -349,6 +416,8 @@ interactions:
       - Accept-Encoding
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - c73e592a-dd67-497c-a9fa-dc1d3b8449e2
     status:
       code: 200
       message: OK
@@ -366,7 +435,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: POST
@@ -396,6 +465,8 @@ interactions:
       - max-age=31536000; includeSubDomains; preload
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - 74752e1c-0e37-4b7f-9c07-9b98baa0116a
     status:
       code: 200
       message: OK
@@ -413,7 +484,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.31.0
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: GET
@@ -421,11 +492,10 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEA5yTQW7DIBBF7zJrV4FgBtsH6AW6rCJrWkhDaxcLJoraKHcvtbehUmE5Ev9/3nyu
-        cPSTSzA8X2EhPsEAu8c8eeIQ3c4S00QfDhrwabQ+wsDx7Jr10pj8t4NBNDAH64/+ldiHz5H9nKfS
-        iFYhivXcmnvifl5C5IfE9FZjgFIo1Fq12eK+wTvFVJFc96iV7NAUhfN73VQjjUYp7CV2RellClyl
-        LDqt2y5DKdFYvijGcKkAklfZC6nbMul0oujseM7pydbFN53e4x/xmV5+e/r/Im49MX2ZzBY759++
-        QpWFFLgXK6DD7QcAAP//AwD4cmNjVAMAAA==
+        H4sIAAAAAAAEA5zQTQrCMBAF4LvMOmBSJ/3JAbyAS5GQNgmOWFuScaGld7d1bTfdPngfjzdBpEfI
+        YC4TjI5vYOBwWpIzDykcYs5j6KxvYwYBlK2nBIbTK4hfz2b6BDBSQD94itQ5puFpmfolVZUuVC1R
+        llLKWfzz7y7tglHquqjKYhPu396x27MZm6rEo1KbNLt2PWzHHUo3qLHBlb7OXwAAAP//AwCF/1Z8
+        egEAAA==
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -452,6 +522,8 @@ interactions:
       - Accept-Encoding
       x-content-type-options:
       - nosniff
+      x-request-id:
+      - 4dc6c763-6bc7-4202-8ea7-0ade7354dd3a
     status:
       code: 200
       message: OK

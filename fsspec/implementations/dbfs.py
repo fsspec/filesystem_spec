@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import base64
 import urllib
 
 import requests
-import requests.exceptions
 from requests.adapters import HTTPAdapter, Retry
+from typing_extensions import override
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
@@ -57,6 +59,24 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         super().__init__(**kwargs)
 
+    @override
+    def _ls_from_cache(self, path) -> list[dict[str, str | int]] | None:
+        """Check cache for listing
+
+        Returns listing, if found (may be empty list for a directory that
+        exists but contains nothing), None if not in cache.
+        """
+        self.dircache.pop(path.rstrip("/"), None)
+
+        parent = self._parent(path)
+        if parent in self.dircache:
+            for entry in self.dircache[parent]:
+                if entry["name"] == path.rstrip("/"):
+                    if entry["type"] != "directory":
+                        return [entry]
+                    return []
+            raise FileNotFoundError(path)
+
     def ls(self, path, detail=True, **kwargs):
         """
         List the contents of the given path.
@@ -70,7 +90,15 @@ class DatabricksFileSystem(AbstractFileSystem):
             but also additional information on file sizes
             and types.
         """
-        out = self._ls_from_cache(path)
+        try:
+            out = self._ls_from_cache(path)
+        except FileNotFoundError:
+            # This happens if the `path`'s parent was cached, but `path` is not
+            # there. This suggests that `path` is new since the parent was
+            # cached. Attempt to invalidate parent's cache before continuing.
+            self.dircache.pop(self._parent(path), None)
+            out = None
+
         if not out:
             try:
                 r = self._send_to_api(
@@ -460,7 +488,7 @@ class DatabricksFile(AbstractBufferedFile):
         return return_buffer
 
     def _to_sized_blocks(self, length, start=0):
-        """Helper function to split a range from 0 to total_length into bloksizes"""
+        """Helper function to split a range from 0 to total_length into blocksizes"""
         end = start + length
         for data_chunk in range(start, end, self.blocksize):
             data_start = data_chunk
