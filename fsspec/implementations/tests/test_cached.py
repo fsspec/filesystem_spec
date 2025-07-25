@@ -1337,3 +1337,8 @@ def test_filecache_write(tmpdir, m):
 
     assert m.cat(fn) == data.encode()
     assert fs.cat(fn) == data.encode()
+
+
+def test_cache_protocol_is_preserved():
+    fs = fsspec.filesystem("filecache", target_protocol="file")
+    assert fs.protocol == "filecache"
