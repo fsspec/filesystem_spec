@@ -483,6 +483,8 @@ class CachingFileSystem(AbstractFileSystem):
             return getattr(type(self), item)
         if item == "__class__":
             return type(self)
+        if item == "protocol":
+            return type(self).protocol
         d = object.__getattribute__(self, "__dict__")
         fs = d.get("fs", None)  # fs is not immediately defined
         if item in d:
