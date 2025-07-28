@@ -478,13 +478,11 @@ class CachingFileSystem(AbstractFileSystem):
         if item in ["transaction"]:
             # property
             return type(self).transaction.__get__(self)
-        if item in ["_cache", "transaction_type"]:
+        if item in {"_cache", "transaction_type", "protocol"}:
             # class attributes
             return getattr(type(self), item)
         if item == "__class__":
             return type(self)
-        if item == "protocol":
-            return type(self).protocol
         d = object.__getattribute__(self, "__dict__")
         fs = d.get("fs", None)  # fs is not immediately defined
         if item in d:
