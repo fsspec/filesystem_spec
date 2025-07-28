@@ -478,7 +478,7 @@ class CachingFileSystem(AbstractFileSystem):
         if item in ["transaction"]:
             # property
             return type(self).transaction.__get__(self)
-        if item in ["_cache", "transaction_type"]:
+        if item in {"_cache", "transaction_type", "protocol"}:
             # class attributes
             return getattr(type(self), item)
         if item == "__class__":
