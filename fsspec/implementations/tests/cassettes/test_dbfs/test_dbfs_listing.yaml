@@ -13,7 +13,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.32.3
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: POST
@@ -44,7 +44,7 @@ interactions:
       x-content-type-options:
       - nosniff
       x-request-id:
-      - e71bb75f-b05a-4523-b8bc-ce331812fbf0
+      - 8b8f96eb-6260-476f-9bee-5579fe95ce97
     status:
       code: 200
       message: OK
@@ -62,7 +62,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.32.3
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: GET
@@ -70,9 +70,9 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEAxzMMQ7CMAwF0Lv8OVKYcwAuwIiQ1SaOMKI4ss3SqncvZX3D29DlzY5y3zCmeKIg
-        X39yCzXO3X1wpTZ3z8P0xTXIVAMJ4tTEUMK+nP4JuayMcklYtEmXOoXoh0KWU/fHfgAAAP//AwCB
-        uORhbAAAAA==
+        H4sIAAAAAAAEAxzMOw7CMAwA0Lt4jhQX8VMOwAUYURWVxBFGFEe2Wah6dyrWN7wFGr/IIN0W6JM/
+        IEG8bHJ1UYrNrFPJ9d4sdpUnFc8q4hCALVdWSK4fCv8kG38JEgaYpXLjMjnLOzvPmw6nw2444x6P
+        iLiO6w8AAP//AwBhkoZWeAAAAA==
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -100,7 +100,7 @@ interactions:
       x-content-type-options:
       - nosniff
       x-request-id:
-      - 6e66514c-c883-49c7-b215-2fecc5ef8222
+      - 4dab76b2-a193-45d7-8000-642f1c003aa6
     status:
       code: 200
       message: OK
@@ -118,7 +118,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.32.3
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: GET
@@ -149,7 +149,7 @@ interactions:
       x-content-type-options:
       - nosniff
       x-request-id:
-      - 59b8c763-be19-4402-8d37-135a7d6c7aed
+      - 9a476bcf-3900-47ca-b21d-412419e70a11
     status:
       code: 200
       message: OK
@@ -167,7 +167,7 @@ interactions:
       Content-Type:
       - application/json
       User-Agent:
-      - python-requests/2.32.3
+      - python-requests/2.32.4
       authorization:
       - DUMMY
     method: GET
@@ -175,11 +175,11 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAEAzyOwWrDMBBEf0XoXNtx4hqSU6B1IZcY4hQKpQhFWrkqtlfdVUtDyL9XbqCnZdh5
-        M3ORQISkDFqQG3louvb58NCox7bp1L49quZl1x3lnRyBWfezZ4/C+QEEkrCewESks4Afz5EFTiLo
-        +C6Kp+To0gcKxxzAKHtyXATCjwQoQozF6Jn91Kv/kDzVWIjaDyw3rxe5jecwF84n7xH7AXTwnBsc
-        i5vMKZj8AJ9fwHE3OUwBdFPK20TWTjuoa8jK2q6yamGq7ATrZbYuYelW9aLU91ViGOj7b4mOOlHy
-        +nb9BQAA//8DADr+FHAYAQAA
+        H4sIAAAAAAAEAzyOUUvEMBCE/0rIs20VC7nek3BWuJcrtCcIIiFNtjXSduNuFI/j/rupBz4tw843
+        M2cJREjaogO5lW3dNc/trtaPTd3pQ3PU9cu+O8obOQOzGVfPAcXgJxBIwnkCG5FOAn48Rxa4iGDi
+        uyiekqNLHygG5gBWu37gIhB+JEATYixmz+yXUf+H5KnGQTR+Yrl9PcuHeApr4XryEXGcwATPucW5
+        uMqcgs1b+PwCjvtlwBRAV6W9S2R/V92qsiwzZXqTlRu1yYy5d1mvKuhLU1m1UYlhoO+/JSaaRMnL
+        2+UXAAD//wMA9nt9bhgBAAA=
     headers:
       access-control-allow-headers:
       - Authorization, X-Databricks-Azure-Workspace-Resource-Id, X-Databricks-Org-Id,
@@ -207,7 +207,7 @@ interactions:
       x-content-type-options:
       - nosniff
       x-request-id:
-      - 6fafe66e-16d3-40c4-be92-91e2f3601a54
+      - b1907444-7aba-4878-aa3d-b79eb4a9c787
     status:
       code: 404
       message: Not Found
