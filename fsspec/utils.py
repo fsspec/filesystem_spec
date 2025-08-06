@@ -1,41 +1,13 @@
-from __future__ import annotations
-
-import contextlib
-import logging
 import math
 import os
 import re
-import sys
-import tempfile
-from collections.abc import Iterable, Iterator, Sequence
-from functools import partial
 from hashlib import md5
-from importlib.metadata import version
-from typing import (
-    IO,
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    TypeVar,
-)
 from urllib.parse import urlsplit
-
-if TYPE_CHECKING:
-    import pathlib
-
-    from typing_extensions import TypeGuard
-
-    from fsspec.spec import AbstractFileSystem
-
 
 DEFAULT_BLOCK_SIZE = 5 * 2**20
 
-T = TypeVar("T")
 
-
-def infer_storage_options(
-    urlpath: str, inherit_storage_options: dict[str, Any] | None = None
-) -> dict[str, Any]:
+def infer_storage_options(urlpath: str, inherit_storage_options=None):
     """Infer storage options from URL path and merge it with existing storage
     options.
 
@@ -88,7 +60,7 @@ def infer_storage_options(
         # for HTTP, we don't want to parse, as requests will anyway
         return {"protocol": protocol, "path": urlpath}
 
-    options: dict[str, Any] = {"protocol": protocol, "path": path}
+    options = {"protocol": protocol, "path": path}
 
     if parsed_path.netloc:
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
@@ -118,9 +90,7 @@ def infer_storage_options(
     return options
 
 
-def update_storage_options(
-    options: dict[str, Any], inherited: dict[str, Any] | None = None
-) -> None:
+def update_storage_options(options, inherited=None) -> None:
     if not inherited:
         inherited = {}
     collisions = set(options) & set(inherited)
@@ -151,7 +121,7 @@ def infer_compression(filename: str) -> str | None:
     return None
 
 
-def build_name_function(max_int: float) -> Callable[[int], str]:
+def build_name_function(max_int: float):
     """Returns a function that receives a single integer
     and returns it as a string padded by enough zero characters
     to align with maximum possible integer
@@ -180,7 +150,7 @@ def build_name_function(max_int: float) -> Callable[[int], str]:
     return name_function
 
 
-def seek_delimiter(file: IO[bytes], delimiter: bytes, blocksize: int) -> bool:
+def seek_delimiter(file, delimiter: bytes, blocksize: int) -> bool:
     r"""Seek current file to file start, file end, or byte after delimiter seq.
 
     Seeks file to next chunk delimiter, where chunks are defined on file start,
@@ -230,7 +200,7 @@ def seek_delimiter(file: IO[bytes], delimiter: bytes, blocksize: int) -> bool:
 
 
 def read_block(
-    f: IO[bytes],
+    f,
     offset: int,
     length: int | None,
     delimiter: bytes | None = None,
@@ -303,7 +273,7 @@ def read_block(
     return b
 
 
-def tokenize(*args: Any, **kwargs: Any) -> str:
+def tokenize(*args, **kwargs) -> str:
     """Deterministic token
 
     (modified from dask.base)
@@ -324,7 +294,7 @@ def tokenize(*args: Any, **kwargs: Any) -> str:
     return h.hexdigest()
 
 
-def stringify_path(filepath: str | os.PathLike[str] | pathlib.Path) -> str:
+def stringify_path(filepath: str | os.PathLike[str]) -> str:
     """Attempt to convert a path-like object to a string.
 
     Parameters
@@ -356,15 +326,13 @@ def stringify_path(filepath: str | os.PathLike[str] | pathlib.Path) -> str:
         return filepath  # type: ignore[return-value]
 
 
-def make_instance(
-    cls: Callable[..., T], args: Sequence[Any], kwargs: dict[str, Any]
-) -> T:
+def make_instance(cls, args, kwargs):
     inst = cls(*args, **kwargs)
     inst._determine_worker()  # type: ignore[attr-defined]
     return inst
 
 
-def common_prefix(paths: Iterable[str]) -> str:
+def common_prefix(paths) -> str:
     """For a list of paths, find the shortest prefix common to all"""
     parts = [p.split("/") for p in paths]
     lmax = min(len(p) for p in parts)
@@ -422,11 +390,11 @@ def other_paths(
     return path2
 
 
-def is_exception(obj: Any) -> bool:
+def is_exception(obj) -> bool:
     return isinstance(obj, BaseException)
 
 
-def isfilelike(f: Any) -> TypeGuard[IO[bytes]]:
+def isfilelike(f):
     return all(hasattr(f, attr) for attr in ["read", "close", "tell"])
 
 
@@ -449,80 +417,29 @@ def can_be_local(path: str) -> bool:
         return False
 
 
-def get_package_version_without_import(name: str) -> str | None:
-    """For given package name, try to find the version without importing it
-
-    Import and package.__version__ is still the backup here, so an import
-    *might* happen.
-
-    Returns either the version string, or None if the package
-    or the version was not readily  found.
-    """
-    if name in sys.modules:
-        mod = sys.modules[name]
-        if hasattr(mod, "__version__"):
-            return mod.__version__
-    try:
-        return version(name)
-    except:  # noqa: E722
-        pass
-    try:
-        import importlib
-
-        mod = importlib.import_module(name)
-        return mod.__version__
-    except (ImportError, AttributeError):
-        return None
-
-
-def setup_logging(
-    logger: logging.Logger | None = None,
-    logger_name: str | None = None,
-    level: str = "DEBUG",
-    clear: bool = True,
-) -> logging.Logger:
-    if logger is None and logger_name is None:
-        raise ValueError("Provide either logger object or logger name")
-    logger = logger or logging.getLogger(logger_name)
-    handle = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s -- %(message)s"
-    )
-    handle.setFormatter(formatter)
-    if clear:
-        logger.handlers.clear()
-    logger.addHandler(handle)
-    logger.setLevel(level)
-    return logger
-
-
-def _unstrip_protocol(name: str, fs: AbstractFileSystem) -> str:
+def _unstrip_protocol(name: str, fs) -> str:
     return fs.unstrip_protocol(name)
 
 
-def mirror_from(
-    origin_name: str, methods: Iterable[str]
-) -> Callable[[type[T]], type[T]]:
+def mirror_from(origin_name: str, methods):
     """Mirror attributes and methods from the given
     origin_name attribute of the instance to the
     decorated class"""
 
-    def origin_getter(method: str, self: Any) -> Any:
+    def origin_getter(method: str, self):
         origin = getattr(self, origin_name)
         return getattr(origin, method)
 
-    def wrapper(cls: type[T]) -> type[T]:
+    def wrapper(cls):
         for method in methods:
-            wrapped_method = partial(origin_getter, method)
+
+            def wrapped_method(*args, mr=method, **kwargs):
+                return origin_getter(mr, *args, **kwargs)
+
             setattr(cls, method, property(wrapped_method))
         return cls
 
     return wrapper
-
-
-@contextlib.contextmanager
-def nullcontext(obj: T) -> Iterator[T]:
-    yield obj
 
 
 def merge_offset_ranges(
@@ -595,34 +512,13 @@ def merge_offset_ranges(
     return paths, starts, ends
 
 
-def file_size(filelike: IO[bytes]) -> int:
+def file_size(filelike) -> int:
     """Find length of any open read-mode file-like"""
     pos = filelike.tell()
     try:
         return filelike.seek(0, 2)
     finally:
         filelike.seek(pos)
-
-
-@contextlib.contextmanager
-def atomic_write(path: str, mode: str = "wb"):
-    """
-    A context manager that opens a temporary file next to `path` and, on exit,
-    replaces `path` with the temporary file, thereby updating `path`
-    atomically.
-    """
-    fd, fn = tempfile.mkstemp(
-        dir=os.path.dirname(path), prefix=os.path.basename(path) + "-"
-    )
-    try:
-        with open(fd, mode) as fp:
-            yield fp
-    except BaseException:
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(fn)
-        raise
-    else:
-        os.replace(fn, path)
 
 
 def _translate(pat, STAR, QUESTION_MARK):
