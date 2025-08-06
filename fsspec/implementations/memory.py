@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
-from typing import Any, ClassVar, Sequence
+from typing import Any, ClassVar
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import LocalFileSystem
