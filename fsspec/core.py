@@ -9,7 +9,6 @@ from fsspec.caching import (  # noqa: F401
     ReadAheadCache,
     caches,
 )
-from fsspec.config import conf
 from fsspec.registry import filesystem, get_filesystem_class
 from fsspec.utils import (
     _unstrip_protocol,
@@ -310,8 +309,6 @@ def open_files(
 
 def _un_chain(path, kwargs):
     # Avoid a circular import
-    from fsspec.implementations.cached import CachingFileSystem
-
     if "::" in path:
         x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
         bits = []
@@ -324,7 +321,6 @@ def _un_chain(path, kwargs):
         bits = [path]
     # [[url, protocol, kwargs], ...]
     out = []
-    previous_bit = None
     kwargs = kwargs.copy()
     for bit in reversed(bits):
         protocol = kwargs.pop("protocol", None) or split_protocol(bit)[0] or "file"
@@ -338,10 +334,7 @@ def _un_chain(path, kwargs):
             **kws,
         )
         bit = cls._strip_protocol(bit)
-        if "target_protocol" not in kw and issubclass(cls, CachingFileSystem):
-            bit = previous_bit
         out.append((bit, protocol, kw))
-        previous_bit = bit
     out.reverse()
     return out
 
@@ -396,7 +389,7 @@ def url_to_fs(url, **kwargs):
     return fs, urlpath
 
 
-DEFAULT_EXPAND = conf.get("open_expand", False)
+DEFAULT_EXPAND = False
 
 
 def open(
