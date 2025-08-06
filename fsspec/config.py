@@ -1,12 +1,7 @@
-from __future__ import annotations
-
-import configparser
 import json
 import os
-import warnings
-from typing import Any
 
-conf: dict[str, dict[str, Any]] = {}
+conf = {}
 default_conf_dir = os.path.join(os.path.expanduser("~"), ".config/fsspec")
 conf_dir = os.environ.get("FSSPEC_CONFIG_DIR", default_conf_dir)
 
@@ -38,23 +33,12 @@ def set_conf_env(conf_dict, envdict=os.environ):
                 continue
             try:
                 value = json.loads(envdict[key])
-            except json.decoder.JSONDecodeError as ex:
-                warnings.warn(
-                    f"Ignoring environment variable {key} due to a parse failure: {ex}"
-                )
+            except json.decoder.JSONDecodeError:
+                pass
             else:
                 if isinstance(value, dict):
                     _, proto = key.split("_", 1)
                     conf_dict.setdefault(proto.lower(), {}).update(value)
-                else:
-                    warnings.warn(
-                        f"Ignoring environment variable {key} due to not being a dict:"
-                        f" {type(value)}"
-                    )
-        elif key.startswith("FSSPEC"):
-            warnings.warn(
-                f"Ignoring environment variable {key} due to having an unexpected name"
-            )
 
     for key in kwarg_keys:
         _, proto, kwarg = key.split("_", 2)
@@ -82,13 +66,6 @@ def set_conf_files(cdir, conf_dict):
         return
     allfiles = sorted(os.listdir(cdir))
     for fn in allfiles:
-        if fn.endswith(".ini"):
-            ini = configparser.ConfigParser()
-            ini.read(os.path.join(cdir, fn))
-            for key in ini:
-                if key == "DEFAULT":
-                    continue
-                conf_dict.setdefault(key, {}).update(dict(ini[key]))
         if fn.endswith(".json"):
             with open(os.path.join(cdir, fn)) as f:
                 js = json.load(f)

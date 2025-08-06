@@ -1,22 +1,14 @@
-from __future__ import annotations
-
 import io
-import logging
 import os
 import re
-from glob import has_magic
-from pathlib import Path
 
 # for backwards compat, we export cache things from here too
 from fsspec.caching import (  # noqa: F401
     BaseCache,
-    BlockCache,
     BytesCache,
-    MMapCache,
     ReadAheadCache,
     caches,
 )
-from fsspec.compression import compr
 from fsspec.config import conf
 from fsspec.registry import filesystem, get_filesystem_class
 from fsspec.utils import (
@@ -25,8 +17,6 @@ from fsspec.utils import (
     infer_compression,
     stringify_path,
 )
-
-logger = logging.getLogger("fsspec")
 
 
 class OpenFile:
@@ -103,23 +93,13 @@ class OpenFile:
 
         try:
             f = self.fs.open(self.path, mode=mode)
-        except FileNotFoundError as e:
-            if has_magic(self.path):
-                raise FileNotFoundError(
-                    "%s not found. The URL contains glob characters: you maybe needed\n"
-                    "to pass expand=True in fsspec.open() or the storage_options of \n"
-                    "your library. You can also set the config value 'open_expand'\n"
-                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
-                    self.path,
-                ) from e
+        except FileNotFoundError:
             raise
 
         self.fobjects = [f]
 
         if self.compression is not None:
-            compress = compr[self.compression]
-            f = compress(f, mode=mode[0])
-            self.fobjects.append(f)
+            raise NotImplementedError
 
         if "b" not in self.mode:
             # assume, for example, that 'r' is equivalent to 'rt' as in builtin
@@ -505,7 +485,7 @@ def open(
 
 
 def open_local(
-    url: str | list[str] | Path | list[Path],
+    url: str | list[str],
     mode: str = "rb",
     **storage_options: dict,
 ) -> str | list[str]:
@@ -532,7 +512,7 @@ def open_local(
         )
     with of as files:
         paths = [f.name for f in files]
-    if (isinstance(url, str) and not has_magic(url)) or isinstance(url, Path):
+    if isinstance(url, str):
         return paths[0]
     return paths
 
@@ -540,7 +520,7 @@ def open_local(
 def get_compression(urlpath, compression):
     if compression == "infer":
         compression = infer_compression(urlpath)
-    if compression is not None and compression not in compr:
+    if compression is not None:
         raise ValueError(f"Compression type {compression} not supported")
     return compression
 
@@ -603,7 +583,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
 
     else:  # read mode
         for curr_path in paths:
-            if has_magic(curr_path):
+            if "*" in curr_path:
                 # expand using glob
                 expanded_paths.extend(fs.glob(curr_path))
             else:
@@ -701,12 +681,6 @@ def _expand_paths(path, name_function, num):
             name_function = build_name_function(num - 1)
 
         paths = [path.replace("*", name_function(i)) for i in range(num)]
-        if paths != sorted(paths):
-            logger.warning(
-                "In order to preserve order between partitions"
-                " paths created with ``name_function`` should "
-                "sort to partition order"
-            )
     elif isinstance(path, (tuple, list)):
         assert len(path) == num
         paths = list(path)
