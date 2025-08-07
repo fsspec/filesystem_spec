@@ -25,6 +25,7 @@ class MemoryFileSystem(AbstractFileSystem):
     pseudo_dirs = [""]  # global, do not overwrite!
     protocol = "memory"
     root_marker = "/"
+    _intrans = False
 
     @classmethod
     def _strip_protocol(cls, path):
