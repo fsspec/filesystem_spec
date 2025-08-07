@@ -27,6 +27,10 @@ class MemoryFileSystem(AbstractFileSystem):
     root_marker = "/"
     _intrans = False
 
+    def __init__(self, *args, **kwargs):
+        self.logger = logger
+        super().__init__(*args, **kwargs)
+
     @classmethod
     def _strip_protocol(cls, path):
         if isinstance(path, PurePath):
@@ -148,7 +152,7 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def info(self, path, **kwargs):
-        logger.debug("info: %s", path)
+        self.logger.debug("info: %s", path)
         path = self._strip_protocol(path)
         if path in self.pseudo_dirs or any(
             p.startswith(path + "/") for p in list(self.store) + self.pseudo_dirs
@@ -203,7 +207,7 @@ class MemoryFileSystem(AbstractFileSystem):
         elif mode in {"wb", "xb"}:
             if mode == "xb" and self.exists(path):
                 raise FileExistsError
-            m = MemoryFile(self, path, kwargs.get("data"))
+            m = MemoryFile(self, path, kwargs.get("data"), self.logger)
             if not self._intrans:
                 m.commit()
             return m
@@ -216,7 +220,7 @@ class MemoryFileSystem(AbstractFileSystem):
         path2 = self._strip_protocol(path2)
         if self.isfile(path1):
             self.store[path2] = MemoryFile(
-                self, path2, self.store[path1].getvalue()
+                self, path2, self.store[path1].getvalue(), self.logger
             )  # implicit copy
         elif self.isdir(path1):
             if path2 not in self.pseudo_dirs:
@@ -225,7 +229,7 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path1)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
-        logger.debug("cat: %s", path)
+        self.logger.debug("cat: %s", path)
         path = self._strip_protocol(path)
         try:
             return bytes(self.store[path].getbuffer()[start:end])
@@ -284,8 +288,9 @@ class MemoryFile(BytesIO):
     No need to provide fs, path if auto-committing (default)
     """
 
-    def __init__(self, fs=None, path=None, data=None):
-        logger.debug("open file %s", path)
+    def __init__(self, fs=None, path=None, data=None, logger=logger):
+        self.logger = logger
+        self.logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
         self.created = datetime.now(tz=timezone.utc)
