@@ -1,5 +1,3 @@
-import pytest
-
 import fsspec
 from fsspec.implementations.localmemory import LocalMemoryFileSystem
 

@@ -14,7 +14,6 @@ class LocalMemoryFileSystem(MemoryFileSystem):
     point to different memory filesystems.
     """
 
-    store = None
     pseudo_dirs = None
     protocol = "localmemory"
     root_marker = "/"
@@ -23,6 +22,6 @@ class LocalMemoryFileSystem(MemoryFileSystem):
 
     def __init__(self, *args, **kwargs):
         self.logger = logger  # global
-        self.store: dict[str, Any] = {}  # local
+        self.store = {}  # local
         self.pseudo_dirs = [""]  # local
         super().__init__(*args, **kwargs)
