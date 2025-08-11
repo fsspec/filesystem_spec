@@ -63,6 +63,7 @@ class _Cached(type):
         cls._pid = os.getpid()
 
     def __call__(cls, *args, **kwargs):
+        # print("_Cached call kwargs", kwargs)
         kwargs = apply_config(cls, kwargs)
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
@@ -70,7 +71,9 @@ class _Cached(type):
         token = tokenize(
             cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs
         )
-        skip = kwargs.pop("skip_instance_cache", False)
+        # skip = kwargs.pop("skip_instance_cache", False)
+        skip = kwargs.get("skip_instance_cache", False)
+        assert skip in (True, False)
         if os.getpid() != cls._pid:
             cls._cache.clear()
             cls._pid = os.getpid()
@@ -81,8 +84,12 @@ class _Cached(type):
             obj = super().__call__(*args, **kwargs)
             # Setting _fs_token here causes some static linters to complain.
             obj._fs_token_ = token
+            # no. too late. must be passed to init
+            # obj._skip_instance_cache_ = skip
+            # print("_Cached call skip", skip)
             obj.storage_args = args
             obj.storage_options = kwargs
+            # setattr(obj, "_skip_instance_cache", skip)
             if obj.async_impl and obj.mirror_sync_methods:
                 from .asyn import mirror_sync_methods
 
@@ -160,6 +167,7 @@ class AbstractFileSystem(metaclass=_Cached):
             warnings.warn("add_aliases has been removed.", FutureWarning)
         # This is set in _Cached
         self._fs_token_ = None
+        # self._skip_instance_cache_ = None
 
     @property
     def fsid(self):
@@ -171,6 +179,10 @@ class AbstractFileSystem(metaclass=_Cached):
     @property
     def _fs_token(self):
         return self._fs_token_
+
+    # @property
+    # def _skip_instance_cache(self):
+    #     return self._skip_instance_cache_
 
     def __dask_tokenize__(self):
         return self._fs_token
