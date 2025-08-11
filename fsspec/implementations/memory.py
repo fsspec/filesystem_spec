@@ -21,15 +21,66 @@ class MemoryFileSystem(AbstractFileSystem):
     in memory filesystem.
     """
 
-    store: ClassVar[dict[str, Any]] = {}  # global, do not overwrite!
-    pseudo_dirs = [""]  # global, do not overwrite!
+    global_store: ClassVar[dict[str, Any]] = {}  # global, do not overwrite!
+    global_pseudo_dirs = [""]  # global, do not overwrite!
     protocol = "memory"
     root_marker = "/"
     _intrans = False
 
+    # never called
+    # def __call__(cls, *args, **kwargs):
+    #     print("MemoryFileSystem call kwargs", kwargs)
+    #     skip = kwargs.pop("skip_instance_cache", False)
+    #     instance = super().__call__(*args, **kwargs)
+    #     if skip:
+    #         instance.store = {}
+    #         instance.pseudo_dirs = [""]
+    #     else:
+    #         instance.store = instance.global_store
+    #         instance.pseudo_dirs = instance.global_pseudo_dirs
+    #     return instance
+
+    # FIXME AttributeError: 'MemoryFileSystem' object has no attribute '_skip_instance_cache'
+    # def __new__(cls, *args, **kwargs):
+    #     # print("new kwargs", kwargs)
+    #     # skip = kwargs.pop("skip_instance_cache", False)
+    #     instance = super().__new__(cls, *args, **kwargs)
+    #     # FIXME AttributeError: 'MemoryFileSystem' object has no attribute '_skip_instance_cache'
+    #     skip = instance._skip_instance_cache
+    #     print("new skip", skip)
+    #     if skip:
+    #         instance.store = {}
+    #         instance.pseudo_dirs = [""]
+    #     else:
+    #         instance.store = instance.global_store
+    #         instance.pseudo_dirs = instance.global_pseudo_dirs
+    #     return instance
+
     def __init__(self, *args, **kwargs):
-        self.logger = logger
+        # print("MemoryFileSystem init kwargs", kwargs)
         super().__init__(*args, **kwargs)
+        self.logger = logger
+        # print("MemoryFileSystem init kwargs", kwargs)
+        # skip = kwargs.pop("skip_instance_cache", False)
+        # if skip:
+        #     self.store = {}
+        #     self.pseudo_dirs = [""]
+        # local_memory = kwargs.pop("local_memory", False)
+        # if local_memory:
+        # skip = self._skip_instance_cache
+        skip = kwargs.get("skip_instance_cache", False)
+        # print("MemoryFileSystem init skip", skip)
+        # FIXME skip is None
+        # assert skip in (True, False)
+        if skip:
+            # local
+            self.store = {}
+            self.pseudo_dirs = [""]
+        else:
+            # global
+            self.store = self.global_store
+            self.pseudo_dirs = self.global_pseudo_dirs
+        # super().__init__(*args, **kwargs)
 
     @classmethod
     def _strip_protocol(cls, path):

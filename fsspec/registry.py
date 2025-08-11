@@ -171,9 +171,6 @@ known_implementations = {
         "err": "LibArchive requires to be installed",
     },
     "local": {"class": "fsspec.implementations.local.LocalFileSystem"},
-    "localmemory": {
-        "class": "fsspec.implementations.localmemory.LocalMemoryFileSystem"
-    },
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
     "oci": {
         "class": "ocifs.OCIFileSystem",

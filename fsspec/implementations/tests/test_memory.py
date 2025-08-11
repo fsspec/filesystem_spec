@@ -4,6 +4,66 @@ from pathlib import PurePosixPath, PureWindowsPath
 import pytest
 
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
+from fsspec.implementations.memory import MemoryFileSystem
+
+
+def test_identical_instances():
+    fs1 = MemoryFileSystem()
+    fs2 = MemoryFileSystem()
+
+    assert id(fs1) == id(fs2)
+    assert id(fs1.store) == id(fs2.store)
+
+    fs1.touch("/fs1.txt")
+    fs2.touch("/fs2.txt")
+    assert fs1.ls("/", detail=False) == ["/fs1.txt", "/fs2.txt"]
+    assert fs2.ls("/", detail=False) == ["/fs1.txt", "/fs2.txt"]
+
+
+def _clear(m):
+    m.store.clear()
+    m.pseudo_dirs.clear()
+    m.pseudo_dirs.append("")
+
+
+def test_separate_instances_1_1():
+    # fs1 = MemoryFileSystem(local_memory=True)
+    # fs2 = MemoryFileSystem(local_memory=True)
+    # FIXME only one param
+    # fs1 = MemoryFileSystem(skip_instance_cache=True, local_memory=True)
+    # fs2 = MemoryFileSystem(skip_instance_cache=True, local_memory=True)
+    fs1 = MemoryFileSystem(skip_instance_cache=True)
+    fs2 = MemoryFileSystem(skip_instance_cache=True)
+    assert id(fs1) != id(fs2)
+    assert id(fs1.store) != id(fs2.store)
+    fs1.touch("/fs1.txt")
+    fs2.touch("/fs2.txt")
+    assert fs1.ls("/", detail=False) == ["/fs1.txt"]
+    assert fs2.ls("/", detail=False) == ["/fs2.txt"]
+
+
+def test_separate_instances_1_0():
+    fs1 = MemoryFileSystem(skip_instance_cache=True)  # local
+    fs2 = MemoryFileSystem()  # global
+    _clear(fs2)
+    assert id(fs1) != id(fs2)
+    assert id(fs1.store) != id(fs2.store)
+    fs1.touch("/fs1.txt")
+    fs2.touch("/fs2.txt")
+    assert fs1.ls("/", detail=False) == ["/fs1.txt"]  # local
+    assert fs2.ls("/", detail=False) == ["/fs2.txt"]  # global
+
+
+def test_separate_instances_0_1():
+    fs1 = MemoryFileSystem()  # global
+    fs2 = MemoryFileSystem(skip_instance_cache=True)  # local
+    _clear(fs1)
+    assert id(fs1) != id(fs2)
+    assert id(fs1.store) != id(fs2.store)
+    fs1.touch("/fs1.txt")
+    fs2.touch("/fs2.txt")
+    assert fs2.ls("/", detail=False) == ["/fs2.txt"]  # local
+    assert fs1.ls("/", detail=False) == ["/fs1.txt"]  # global
 
 
 def test_1(m):
