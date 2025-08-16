@@ -199,7 +199,9 @@ def test_open(tmpdir):
 
 @pytest.mark.asyncio
 async def test_semaphore_synchronous():
-    fs = AsyncFileSystemWrapper(LockedFileSystem(), asynchronous=False)
+    fs = AsyncFileSystemWrapper(
+            LockedFileSystem(), asynchronous=False, semaphore=asyncio.Semaphore(1)
+    )
 
     paths = [f"path_{i}" for i in range(1, 3)]
     results = await asyncio.gather(*(fs._cat_file(path) for path in paths))
@@ -209,7 +211,7 @@ async def test_semaphore_synchronous():
 
 @pytest.mark.asyncio
 async def test_deadlock_when_asynchronous():
-    fs = AsyncFileSystemWrapper(LockedFileSystem(), asynchronous=True)
+    fs = AsyncFileSystemWrapper(LockedFileSystem(), asynchronous=False, semaphore=asyncio.Semaphore(3))
     paths = [f"path_{i}" for i in range(1, 3)]
 
     with pytest.raises(RuntimeError, match="Concurrent requests!"):

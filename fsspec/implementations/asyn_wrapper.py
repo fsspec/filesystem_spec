@@ -57,6 +57,8 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         asynchronous=None,
         target_protocol=None,
         target_options=None,
+        semaphore=None,
+        max_concurrent_tasks=None,
         **kwargs,
     ):
         if asynchronous is None:
@@ -67,7 +69,7 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         else:
             self.sync_fs = fsspec.filesystem(target_protocol, **target_options)
         self.protocol = self.sync_fs.protocol
-        self.semaphore = asyncio.Semaphore(1) if not asynchronous else None
+        self.semaphore = semaphore
         self._wrap_all_sync_methods()
 
     @property
