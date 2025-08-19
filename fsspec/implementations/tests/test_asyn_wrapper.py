@@ -1,13 +1,47 @@
 import asyncio
 import os
+from itertools import cycle
 
 import pytest
 
 import fsspec
+from fsspec.asyn import AsyncFileSystem
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.local import LocalFileSystem
 
 from .test_local import csv_files, filetexts
+
+
+class LockedFileSystem(AsyncFileSystem):
+    """
+    A mock file system that simulates a synchronous locking file systems with delays.
+    """
+
+    def __init__(
+        self,
+        asynchronous: bool = False,
+        delays=None,
+    ) -> None:
+        self.lock = asyncio.Lock()
+        self.delays = cycle((0.03, 0.01) if delays is None else delays)
+
+        super().__init__(asynchronous=asynchronous)
+
+    async def _cat_file(self, path, start=None, end=None) -> bytes:
+        await self._simulate_io_operation(path)
+        return path.encode()
+
+    async def _await_io(self) -> None:
+        await asyncio.sleep(next(self.delays))
+
+    async def _simulate_io_operation(self, path) -> None:
+        await self._check_active()
+        async with self.lock:
+            await self._await_io()
+
+    async def _check_active(self) -> None:
+        if self.lock.locked():
+            raise RuntimeError("Concurrent requests!")
 
 
 @pytest.mark.asyncio
@@ -161,3 +195,26 @@ def test_open(tmpdir):
     )
     with of as f:
         assert f.read() == b"hello"
+
+
+@pytest.mark.asyncio
+async def test_semaphore_synchronous():
+    fs = AsyncFileSystemWrapper(
+        LockedFileSystem(), asynchronous=False, semaphore=asyncio.Semaphore(1)
+    )
+
+    paths = [f"path_{i}" for i in range(1, 3)]
+    results = await asyncio.gather(*(fs._cat_file(path) for path in paths))
+
+    assert set(results) == {path.encode() for path in paths}
+
+
+@pytest.mark.asyncio
+async def test_deadlock_when_asynchronous():
+    fs = AsyncFileSystemWrapper(
+        LockedFileSystem(), asynchronous=False, semaphore=asyncio.Semaphore(3)
+    )
+    paths = [f"path_{i}" for i in range(1, 3)]
+
+    with pytest.raises(RuntimeError, match="Concurrent requests!"):
+        await asyncio.gather(*(fs._cat_file(path) for path in paths))

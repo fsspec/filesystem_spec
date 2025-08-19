@@ -6,7 +6,7 @@ import fsspec
 from fsspec.asyn import AsyncFileSystem, running_async
 
 
-def async_wrapper(func, obj=None):
+def async_wrapper(func, obj=None, semaphore=None):
     """
     Wraps a synchronous function to make it awaitable.
 
@@ -16,6 +16,8 @@ def async_wrapper(func, obj=None):
         The synchronous function to wrap.
     obj : object, optional
         The instance to bind the function to, if applicable.
+    semaphore : asyncio.Semaphore, optional
+        A semaphore to limit concurrent calls.
 
     Returns
     -------
@@ -25,6 +27,9 @@ def async_wrapper(func, obj=None):
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
+        if semaphore:
+            async with semaphore:
+                return await asyncio.to_thread(func, *args, **kwargs)
         return await asyncio.to_thread(func, *args, **kwargs)
 
     return wrapper
@@ -52,6 +57,8 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         asynchronous=None,
         target_protocol=None,
         target_options=None,
+        semaphore=None,
+        max_concurrent_tasks=None,
         **kwargs,
     ):
         if asynchronous is None:
@@ -62,6 +69,7 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
         else:
             self.sync_fs = fsspec.filesystem(target_protocol, **target_options)
         self.protocol = self.sync_fs.protocol
+        self.semaphore = semaphore
         self._wrap_all_sync_methods()
 
     @property
@@ -83,7 +91,7 @@ class AsyncFileSystemWrapper(AsyncFileSystem):
 
             method = getattr(self.sync_fs, method_name)
             if callable(method) and not inspect.iscoroutinefunction(method):
-                async_method = async_wrapper(method, obj=self)
+                async_method = async_wrapper(method, obj=self, semaphore=self.semaphore)
                 setattr(self, f"_{method_name}", async_method)
 
     @classmethod
