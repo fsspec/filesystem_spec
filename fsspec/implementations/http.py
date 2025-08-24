@@ -873,7 +873,7 @@ async def _file_info(url, session, size_policy="head", **kwargs):
 
         info["url"] = str(r.url)
 
-        for checksum_field in ["ETag", "Content-MD5", "Digest"]:
+        for checksum_field in ["ETag", "Content-MD5", "Digest", "Last-Modified"]:
             if r.headers.get(checksum_field):
                 info[checksum_field] = r.headers[checksum_field]
 
