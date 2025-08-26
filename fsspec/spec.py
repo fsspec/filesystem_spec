@@ -892,7 +892,7 @@ class AbstractFileSystem(metaclass=_Cached):
         dict of {path: contents} if there are multiple paths
         or the path has been otherwise expanded
         """
-        paths = self.expand_path(path, recursive=recursive)
+        paths = self.expand_path(path, recursive=recursive, **kwargs)
         if (
             len(paths) > 1
             or isinstance(path, list)
@@ -972,7 +972,9 @@ class AbstractFileSystem(metaclass=_Cached):
             )
 
             source_is_str = isinstance(rpath, str)
-            rpaths = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
+            rpaths = self.expand_path(
+                rpath, recursive=recursive, maxdepth=maxdepth, **kwargs
+            )
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
                 rpaths = [p for p in rpaths if not (trailing_sep(p) or self.isdir(p))]
@@ -1060,7 +1062,9 @@ class AbstractFileSystem(metaclass=_Cached):
             if source_is_str:
                 lpath = make_path_posix(lpath)
             fs = LocalFileSystem()
-            lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+            lpaths = fs.expand_path(
+                lpath, recursive=recursive, maxdepth=maxdepth, **kwargs
+            )
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
                 lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
@@ -1131,7 +1135,9 @@ class AbstractFileSystem(metaclass=_Cached):
             from .implementations.local import trailing_sep
 
             source_is_str = isinstance(path1, str)
-            paths1 = self.expand_path(path1, recursive=recursive, maxdepth=maxdepth)
+            paths1 = self.expand_path(
+                path1, recursive=recursive, maxdepth=maxdepth, **kwargs
+            )
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
                 paths1 = [p for p in paths1 if not (trailing_sep(p) or self.isdir(p))]
@@ -1172,7 +1178,7 @@ class AbstractFileSystem(metaclass=_Cached):
             raise ValueError("maxdepth must be at least 1")
 
         if isinstance(path, (str, os.PathLike)):
-            out = self.expand_path([path], recursive, maxdepth)
+            out = self.expand_path([path], recursive, maxdepth, **kwargs)
         else:
             out = set()
             path = [self._strip_protocol(p) for p in path]
