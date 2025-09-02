@@ -1,6 +1,24 @@
 Changelog
 =========
 
+2025.9.0
+--------
+
+Enhancements
+
+- include Last_modified info from HTTP headers to info (#1909)
+- add optional semaphore to async-wrapper (#1908)
+
+Fixes
+
+- ensure cachingFSs show correct protocol (#1897)
+- fix simplecache cat_ranges (#1892)
+
+Other
+
+- Style (#1894)
+
+
 2025.7.0
 --------
 
