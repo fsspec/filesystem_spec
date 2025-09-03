@@ -1,10 +1,11 @@
 import asyncio
 import io
 import logging
+import os
 import re
 import weakref
 from copy import copy
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import aiohttp
 import yarl
@@ -156,7 +157,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(url)
         session = await self.set_session()
-        async with session.get(self.encode_url(url), **self.kwargs) as r:
+        async with session.get(self.encode_url(url), **kw) as r:
             self._raise_not_found_for_status(r, url)
 
             if "Content-Type" in r.headers:
@@ -253,6 +254,9 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(rpath)
         session = await self.set_session()
+        if await self._isdir(rpath):
+            os.makedirs(unquote(lpath), exist_ok=True)
+            return
         async with session.get(self.encode_url(rpath), **kw) as r:
             try:
                 size = int(r.headers["content-length"])
@@ -264,7 +268,7 @@ class HTTPFileSystem(AsyncFileSystem):
             if isfilelike(lpath):
                 outfile = lpath
             else:
-                outfile = open(lpath, "wb")  # noqa: ASYNC230
+                outfile = open(unquote(lpath), "wb")  # noqa: ASYNC230
 
             try:
                 chunk = True
