@@ -1375,3 +1375,65 @@ def test_glob_posix_rules(path, expected, glob_fs):
     detailed_output = glob_fs.glob(path=f"mock://{path}", detail=True)
     for name, info in _clean_paths(detailed_output).items():
         assert info == glob_fs[name]
+
+
+class CustomLocalFS(LocalFileSystem):
+    def ls(self, *args, **kwargs):
+        files = super().ls(*args, **kwargs)
+        limit = kwargs.pop("limit", None)
+
+        return files[:limit] if limit else files
+
+
+def test_cat_wildcard_path_passthrough_kwargs_to_ls(tmpdir):
+    test_fs = CustomLocalFS()
+    get_files(tmpdir)
+
+    file_contents = test_fs.cat(tmpdir / "*", limit=2)
+
+    assert len(file_contents) == 2
+
+
+def test_get_wildcard_path_passthrough_kwargs_to_ls(tmpdir):
+    test_fs = CustomLocalFS(auto_mkdir=True)
+    dest = tmpdir / "dest"
+    get_files(tmpdir)
+
+    test_fs.get(tmpdir / "*", str(dest), limit=2)
+
+    assert len(dest.listdir()) == 2
+
+
+@pytest.mark.xfail(
+    reason=(
+        "`put` initialises its own LocalFileSystem inline, so custom `ls` "
+        "implementation is not called"
+    )
+)
+def test_put_wildcard_path_passthrough_kwargs_to_ls(tmpdir):
+    test_fs = CustomLocalFS(auto_mkdir=True)
+    dest = tmpdir / "dest"
+    get_files(tmpdir)
+
+    test_fs.put(tmpdir / "*", str(dest), limit=2)
+
+    assert len(dest.listdir()) == 2
+
+
+def test_copy_wildcard_path_passthrough_kwargs_to_ls(tmpdir):
+    test_fs = CustomLocalFS(auto_mkdir=True)
+    dest = tmpdir / "dest"
+    get_files(tmpdir)
+
+    test_fs.copy(tmpdir / "*", str(dest), limit=2)
+
+    assert len(dest.listdir()) == 2
+
+
+def test_expand_path_wildcard_path_passthrough_kwargs_to_ls(tmpdir):
+    test_fs = CustomLocalFS()
+    get_files(tmpdir)
+
+    expanded_paths = test_fs.expand_path(tmpdir / "*", limit=2)
+
+    assert len(expanded_paths) == 2
