@@ -47,7 +47,7 @@ def test_github_cat():
 
 
 def test_github_ls():
-    # test using ls to list the files in a resository
+    # test using ls to list the files in a repository
     fs = fsspec.filesystem("github", org="mwaskom", repo="seaborn-data")
     ls_result = set(fs.ls(""))
     expected = {"brain_networks.csv", "mpg.csv", "penguins.csv", "README.md", "raw"}
