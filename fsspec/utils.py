@@ -73,7 +73,7 @@ def infer_storage_options(
     parsed_path = urlsplit(urlpath)
     protocol = parsed_path.scheme or "file"
     if parsed_path.fragment:
-        path = "#".join([parsed_path.path, parsed_path.fragment])
+        path = f"{parsed_path.path}#{parsed_path.fragment}"
     else:
         path = parsed_path.path
     if protocol == "file":
@@ -414,7 +414,7 @@ def other_paths(
             if exists:
                 cp = cp.rsplit("/", 1)[0]
             if not cp and all(not s.startswith("/") for s in paths):
-                path2 = ["/".join([path2, p]) for p in paths]
+                path2 = [f"{path2}/{p}" for p in paths]
             else:
                 path2 = [p.replace(cp, path2, 1) for p in paths]
     else:
