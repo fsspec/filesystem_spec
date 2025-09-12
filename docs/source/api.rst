@@ -7,17 +7,17 @@ User Functions
 --------------
 
 .. autosummary::
-   fsspec.available_compressions
-   fsspec.available_protocols
-   fsspec.filesystem
-   fsspec.fuse.run
-   fsspec.generic.rsync
-   fsspec.get_filesystem_class
-   fsspec.get_mapper
-   fsspec.gui.FileSelector
-   fsspec.open
-   fsspec.open_files
-   fsspec.open_local
+   available_compressions
+   available_protocols
+   filesystem
+   fuse.run
+   generic.rsync
+   get_filesystem_class
+   get_mapper
+   gui.FileSelector
+   open
+   open_files
+   open_local
 
 .. autofunction:: fsspec.available_compressions
 .. autofunction:: fsspec.available_protocols
@@ -36,24 +36,24 @@ Base Classes
 ------------
 
 .. autosummary::
-   fsspec.archive.AbstractArchiveFileSystem
-   fsspec.asyn.AsyncFileSystem
-   fsspec.callbacks.Callback
-   fsspec.callbacks.DotPrinterCallback
-   fsspec.callbacks.NoOpCallback
-   fsspec.callbacks.TqdmCallback
-   fsspec.core.BaseCache
-   fsspec.core.OpenFile
-   fsspec.core.OpenFiles
-   fsspec.core.get_fs_token_paths
-   fsspec.core.url_to_fs
-   fsspec.dircache.DirCache
-   fsspec.FSMap
-   fsspec.generic.GenericFileSystem
-   fsspec.registry.register_implementation
-   fsspec.spec.AbstractBufferedFile
-   fsspec.spec.AbstractFileSystem
-   fsspec.spec.Transaction
+   archive.AbstractArchiveFileSystem
+   asyn.AsyncFileSystem
+   callbacks.Callback
+   callbacks.DotPrinterCallback
+   callbacks.NoOpCallback
+   callbacks.TqdmCallback
+   core.BaseCache
+   core.OpenFile
+   core.OpenFiles
+   core.get_fs_token_paths
+   core.url_to_fs
+   dircache.DirCache
+   FSMap
+   generic.GenericFileSystem
+   registry.register_implementation
+   spec.AbstractBufferedFile
+   spec.AbstractFileSystem
+   spec.Transaction
 
 .. autoclass:: fsspec.archive.AbstractArchiveFileSystem
    :members:
@@ -107,31 +107,31 @@ Built-in Implementations
 ------------------------
 
 .. autosummary::
-   fsspec.implementations.arrow.ArrowFSWrapper
-   fsspec.implementations.arrow.HadoopFileSystem
-   fsspec.implementations.cached.CachingFileSystem
-   fsspec.implementations.cached.SimpleCacheFileSystem
-   fsspec.implementations.cached.WholeFileCacheFileSystem
-   fsspec.implementations.dask.DaskWorkerFileSystem
-   fsspec.implementations.data.DataFileSystem
-   fsspec.implementations.dbfs.DatabricksFileSystem
-   fsspec.implementations.dirfs.DirFileSystem
-   fsspec.implementations.ftp.FTPFileSystem
-   fsspec.implementations.gist.GistFileSystem
-   fsspec.implementations.git.GitFileSystem
-   fsspec.implementations.github.GithubFileSystem
-   fsspec.implementations.http.HTTPFileSystem
-   fsspec.implementations.jupyter.JupyterFileSystem
-   fsspec.implementations.libarchive.LibArchiveFileSystem
-   fsspec.implementations.local.LocalFileSystem
-   fsspec.implementations.memory.MemoryFileSystem
-   fsspec.implementations.reference.ReferenceFileSystem
-   fsspec.implementations.reference.LazyReferenceMapper
-   fsspec.implementations.sftp.SFTPFileSystem
-   fsspec.implementations.smb.SMBFileSystem
-   fsspec.implementations.tar.TarFileSystem
-   fsspec.implementations.webhdfs.WebHDFS
-   fsspec.implementations.zip.ZipFileSystem
+   implementations.arrow.ArrowFSWrapper
+   implementations.arrow.HadoopFileSystem
+   implementations.cached.CachingFileSystem
+   implementations.cached.SimpleCacheFileSystem
+   implementations.cached.WholeFileCacheFileSystem
+   implementations.dask.DaskWorkerFileSystem
+   implementations.data.DataFileSystem
+   implementations.dbfs.DatabricksFileSystem
+   implementations.dirfs.DirFileSystem
+   implementations.ftp.FTPFileSystem
+   implementations.gist.GistFileSystem
+   implementations.git.GitFileSystem
+   implementations.github.GithubFileSystem
+   implementations.http.HTTPFileSystem
+   implementations.jupyter.JupyterFileSystem
+   implementations.libarchive.LibArchiveFileSystem
+   implementations.local.LocalFileSystem
+   implementations.memory.MemoryFileSystem
+   implementations.reference.ReferenceFileSystem
+   implementations.reference.LazyReferenceMapper
+   implementations.sftp.SFTPFileSystem
+   implementations.smb.SMBFileSystem
+   implementations.tar.TarFileSystem
+   implementations.webhdfs.WebHDFS
+   implementations.zip.ZipFileSystem
 
 .. autoclass:: fsspec.implementations.arrow.ArrowFSWrapper
    :members: __init__
@@ -296,12 +296,12 @@ Read Buffering
 --------------
 
 .. autosummary::
-   fsspec.caching.BlockCache
-   fsspec.caching.BytesCache
-   fsspec.caching.MMapCache
-   fsspec.caching.ReadAheadCache
-   fsspec.caching.FirstChunkCache
-   fsspec.caching.BackgroundBlockCache
+   caching.BlockCache
+   caching.BytesCache
+   caching.MMapCache
+   caching.ReadAheadCache
+   caching.FirstChunkCache
+   caching.BackgroundBlockCache
 
 .. autoclass:: fsspec.caching.BlockCache
    :members:
@@ -326,7 +326,7 @@ Utilities
 
 .. autosummary::
 
-   fsspec.utils.read_block
+   utils.read_block
 
 .. autofunction:: fsspec.utils.read_block
 

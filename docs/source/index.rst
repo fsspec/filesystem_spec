@@ -120,6 +120,10 @@ The current list of known implementations can be found as follows
    api.rst
    changelog.rst
 
+
+These docs pages collect anonymous tracking data using goatcounter, and the
+dashboard is available to the public: https://fsspec.goatcounter.com/ .
+
 .. raw:: html
 
     <script data-goatcounter="https://fsspec.goatcounter.com/count"
