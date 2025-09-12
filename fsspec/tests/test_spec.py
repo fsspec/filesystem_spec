@@ -1375,3 +1375,41 @@ def test_glob_posix_rules(path, expected, glob_fs):
     detailed_output = glob_fs.glob(path=f"mock://{path}", detail=True)
     for name, info in _clean_paths(detailed_output).items():
         assert info == glob_fs[name]
+
+
+@pytest.fixture(scope="function")
+def tmpfs(tmpdir):
+    get_files(tmpdir)
+
+    class CustomLocalFS(LocalFileSystem):
+        def ls(self, *args, **kwargs):
+            files = super().ls(*args, **kwargs)
+            limit = kwargs.pop("limit", None)
+
+            return files[:limit] if limit else files
+
+    return CustomLocalFS(auto_mkdir=True)
+
+
+def test_cat_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
+    file_contents = tmpfs.cat(tmpdir / "*", limit=2)
+    assert len(file_contents) == 2
+
+
+def test_get_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
+    dest = tmpdir / "dest"
+    tmpfs.get(tmpdir / "*", str(dest), limit=2)
+
+    assert len(dest.listdir()) == 2
+
+
+def test_copy_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
+    dest = tmpdir / "dest"
+    tmpfs.copy(tmpdir / "*", str(dest), limit=2)
+
+    assert len(dest.listdir()) == 2
+
+
+def test_expand_path_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
+    expanded_paths = tmpfs.expand_path(tmpdir / "*", limit=2)
+    assert len(expanded_paths) == 2
