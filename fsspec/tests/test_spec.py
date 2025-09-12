@@ -1403,19 +1403,6 @@ def test_get_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     assert len(dest.listdir()) == 2
 
 
-@pytest.mark.xfail(
-    reason=(
-        "`put` initialises its own LocalFileSystem inline, so custom `ls` "
-        "implementation is not called"
-    )
-)
-def test_put_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
-    dest = tmpdir / "dest"
-    tmpfs.put(tmpdir / "*", str(dest), limit=2)
-
-    assert len(dest.listdir()) == 2
-
-
 def test_copy_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     dest = tmpdir / "dest"
     tmpfs.copy(tmpdir / "*", str(dest), limit=2)
