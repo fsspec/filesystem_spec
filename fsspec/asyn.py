@@ -86,10 +86,8 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     result = [None]
     event = threading.Event()
     asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
-    while True:
-        # this loops allows thread to get interrupted
-        if event.wait(1):
-            break
+    while not event.wait(1):
+        # this loop allows thread to get interrupted
         if timeout is not None:
             timeout -= 1
             if timeout < 0:
@@ -357,10 +355,11 @@ class AsyncFileSystem(AbstractFileSystem):
         batch_size=None,
         **kwargs,
     ):
-        if on_error is None and recursive:
-            on_error = "ignore"
-        elif on_error is None:
-            on_error = "raise"
+        if on_error is None:
+            if recursive:
+                on_error = "ignore"
+            else:
+                on_error = "raise"
 
         if isinstance(path1, list) and isinstance(path2, list):
             # No need to expand paths when both source and destination
@@ -715,7 +714,7 @@ class AsyncFileSystem(AbstractFileSystem):
         detail = kwargs.pop("detail", False)
         try:
             listing = await self._ls(path, detail=True, **kwargs)
-        except (FileNotFoundError, OSError) as e:
+        except OSError as e:
             if on_error == "raise":
                 raise
             elif callable(on_error):
@@ -767,7 +766,7 @@ class AsyncFileSystem(AbstractFileSystem):
         ends_with_sep = path.endswith(seps)  # _strip_protocol strips trailing slash
         path = self._strip_protocol(path)
         append_slash_to_dirname = ends_with_sep or path.endswith(
-            tuple(sep + "**" for sep in seps)
+            tuple(f"{sep}**" for sep in seps)
         )
         idx_star = path.find("*") if path.find("*") >= 0 else len(path)
         idx_qmark = path.find("?") if path.find("?") >= 0 else len(path)
@@ -815,7 +814,7 @@ class AsyncFileSystem(AbstractFileSystem):
             p: info
             for p, info in sorted(allpaths.items())
             if pattern.match(
-                p + "/"
+                f"{p}/"
                 if append_slash_to_dirname and info["type"] == "directory"
                 else p
             )
