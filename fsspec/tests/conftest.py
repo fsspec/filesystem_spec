@@ -6,6 +6,7 @@ import threading
 from collections import ChainMap
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -45,7 +46,7 @@ def reset_files():
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):
-    static_files = {
+    static_files: ClassVar[dict[str, bytes]] = {
         "/index/realfile": data,
         "/index/otherfile": data,
         "/index": _make_index_listing,
@@ -55,7 +56,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         "/simple/dir/": _make_listing("/simple/dir/file"),
         "/simple/dir/file": data,
     }
-    dynamic_files = {}
+    dynamic_files: ClassVar[dict[str, bytes]] = {}
 
     files = ChainMap(dynamic_files, static_files)
 
