@@ -1,3 +1,4 @@
+import os
 import sys
 
 import pytest
@@ -8,13 +9,15 @@ from fsspec.implementations.gist import GistFileSystem
 if sys.version_info[:2] != (3, 12):
     pytest.skip("Too many tests bust rate limit", allow_module_level=True)
 
+token = os.getenv("GH_TOKEN", None)
+
 
 @pytest.mark.parametrize(
     "gist_id,sha",
     [("2656908684d3965b80c2", "2fb2f12f332f7e242b1a2af1f41e30ddf99f24c7")],
 )
 def test_gist_public_all_files(gist_id, sha):
-    fs = fsspec.filesystem("gist", gist_id=gist_id, sha=sha)
+    fs = fsspec.filesystem("gist", gist_id=gist_id, sha=sha, token=token)
     # Listing
     all_files = fs.ls("")
     assert len(all_files) == 2
@@ -36,7 +39,9 @@ def test_gist_public_all_files(gist_id, sha):
     ],
 )
 def test_gist_public_one_file(gist_id, sha, file):
-    fs = fsspec.filesystem("gist", gist_id=gist_id, sha=sha, filenames=[file])
+    fs = fsspec.filesystem(
+        "gist", gist_id=gist_id, sha=sha, filenames=[file], token=token
+    )
     # Listing
     all_files = fs.ls("")
     assert len(all_files) == 1
@@ -59,7 +64,9 @@ def test_gist_public_one_file(gist_id, sha, file):
 )
 def test_gist_public_missing_file(gist_id, sha, file):
     with pytest.raises(FileNotFoundError):
-        fsspec.filesystem("gist", gist_id=gist_id, sha=sha, filenames=[file])
+        fsspec.filesystem(
+            "gist", gist_id=gist_id, sha=sha, filenames=[file], token=token
+        )
 
 
 @pytest.mark.parametrize(

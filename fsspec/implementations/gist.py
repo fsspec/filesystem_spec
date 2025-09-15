@@ -23,9 +23,9 @@ class GistFileSystem(AbstractFileSystem):
         If provided, fetch a particular revision of the gist. If omitted,
         the latest revision is used.
     username : str (optional)
-        GitHub username for authentication (required if token is given).
+        GitHub username for authentication .
     token : str (optional)
-        GitHub personal access token (required if username is given).
+        GitHub personal access token (required if username is given), or .
     timeout : (float, float) or float, optional
         Connect and read timeouts for requests (default 60s each).
     kwargs : dict
@@ -51,10 +51,8 @@ class GistFileSystem(AbstractFileSystem):
         self.gist_id = gist_id
         self.filenames = filenames
         self.sha = sha  # revision of the gist (optional)
-        if (username is None) ^ (token is None):
-            # Both or neither must be set
-            if username or token:
-                raise ValueError("Auth requires both username and token, or neither.")
+        if username is not None and token is None:
+            raise ValueError("User auth requires a token")
         self.username = username
         self.token = token
         self.request_kw = kwargs
@@ -69,6 +67,8 @@ class GistFileSystem(AbstractFileSystem):
         """Auth parameters passed to 'requests' if we have username/token."""
         if self.username is not None and self.token is not None:
             return {"auth": (self.username, self.token), **self.request_kw}
+        elif self.token is not None:
+            return {"headers": {"Authorization": f"Bearer {self.token}"}}
         return self.request_kw
 
     def _fetch_gist_metadata(self):
