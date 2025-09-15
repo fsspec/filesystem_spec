@@ -1,4 +1,3 @@
-import os
 import sys
 
 import pytest
@@ -9,15 +8,13 @@ from fsspec.implementations.gist import GistFileSystem
 if sys.version_info[:2] != (3, 12):
     pytest.skip("Too many tests bust rate limit", allow_module_level=True)
 
-token = os.getenv("GH_TOKEN", None)
-
 
 @pytest.mark.parametrize(
     "gist_id,sha",
-    [("2656908684d3965b80c2", "2fb2f12f332f7e242b1a2af1f41e30ddf99f24c7")],
+    [("d5d7b521d0e5fec8adfc5652b8f3242c", None)],
 )
 def test_gist_public_all_files(gist_id, sha):
-    fs = fsspec.filesystem("gist", gist_id=gist_id, sha=sha, token=token)
+    fs = fsspec.filesystem("gist", gist_id=gist_id, sha=sha)
     # Listing
     all_files = fs.ls("")
     assert len(all_files) == 2
@@ -32,16 +29,14 @@ def test_gist_public_all_files(gist_id, sha):
     "gist_id,sha,file",
     [
         (
-            "2656908684d3965b80c2",
-            "2fb2f12f332f7e242b1a2af1f41e30ddf99f24c7",
-            "distributed_error_logs_PY3_7-3-2016",
+            "d5d7b521d0e5fec8adfc5652b8f3242c",
+            None,
+            "ex1.ipynb",
         )
     ],
 )
 def test_gist_public_one_file(gist_id, sha, file):
-    fs = fsspec.filesystem(
-        "gist", gist_id=gist_id, sha=sha, filenames=[file], token=token
-    )
+    fs = fsspec.filesystem("gist", gist_id=gist_id, sha=sha, filenames=[file])
     # Listing
     all_files = fs.ls("")
     assert len(all_files) == 1
@@ -57,16 +52,14 @@ def test_gist_public_one_file(gist_id, sha, file):
     [
         (
             "2656908684d3965b80c2",
-            "2fb2f12f332f7e242b1a2af1f41e30ddf99f24c7",
+            "d5d7b521d0e5fec8adfc5652b8f3242c",
             "file-that-doesnt-exist.py",
         )
     ],
 )
 def test_gist_public_missing_file(gist_id, sha, file):
     with pytest.raises(FileNotFoundError):
-        fsspec.filesystem(
-            "gist", gist_id=gist_id, sha=sha, filenames=[file], token=token
-        )
+        fsspec.filesystem("gist", gist_id=gist_id, sha=sha, filenames=[file])
 
 
 @pytest.mark.parametrize(

@@ -22,7 +22,6 @@ jobs:
 
     env:
       CIRUN: true
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout

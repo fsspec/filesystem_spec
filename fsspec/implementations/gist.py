@@ -65,16 +65,24 @@ class GistFileSystem(AbstractFileSystem):
     @property
     def kw(self):
         """Auth parameters passed to 'requests' if we have username/token."""
-        if self.username is not None and self.token is not None:
-            return {"auth": (self.username, self.token), **self.request_kw}
-        elif self.token is not None:
-            return {"headers": {"Authorization": f"Bearer {self.token}"}}
-        return self.request_kw
+        kw = {
+            "headers": {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            }
+        }
+        kw.update(self.request_kw)
+        if self.username and self.token:
+            kw["auth"] = (self.username, self.token)
+        elif self.token:
+            kw["headers"]["Authorization"] = f"Bearer {self.token}"
+        return kw
 
     def _fetch_gist_metadata(self):
         """
         Fetch the JSON metadata for this gist (possibly for a specific revision).
         """
+        breakpoint()
         if self.sha:
             url = self.gist_rev_url.format(gist_id=self.gist_id, sha=self.sha)
         else:
