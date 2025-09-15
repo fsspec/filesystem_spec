@@ -5,7 +5,7 @@ import pytest
 import fsspec
 from fsspec.implementations.gist import GistFileSystem
 
-if (3, 13) < sys.version_info < (3, 14):
+if sys.version_info[:2] != (3, 12):
     pytest.skip("Too many tests bust rate limit", allow_module_level=True)
 
 
