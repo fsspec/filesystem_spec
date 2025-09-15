@@ -4,7 +4,7 @@ import pytest
 
 import fsspec
 
-if (3, 11) < sys.version_info < (3, 13):
+if (3, 12) < sys.version_info < (3, 13):
     pytest.skip("Too many tests bust rate limit", allow_module_level=True)
 
 
