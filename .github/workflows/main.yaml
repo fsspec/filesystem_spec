@@ -24,10 +24,6 @@ jobs:
       CIRUN: true
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    permissions:
-      contents: read
-      gists: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
