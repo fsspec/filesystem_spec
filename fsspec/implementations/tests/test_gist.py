@@ -1,17 +1,18 @@
-import sys
-
 import pytest
 
 import fsspec
 from fsspec.implementations.gist import GistFileSystem
 
-if sys.version_info[:2] != (3, 12):
-    pytest.skip("Too many tests bust rate limit", allow_module_level=True)
+# if sys.version_info[:2] != (3, 12):
+#    pytest.skip("Too many tests bust rate limit", allow_module_level=True)
+pytest.skip(
+    "github requires a token right now, even for public gists", allow_module_level=True
+)
 
 
 @pytest.mark.parametrize(
     "gist_id,sha",
-    [("d5d7b521d0e5fec8adfc5652b8f3242c", None)],
+    [("863f2f06782788e349f2acfff31d77ed", None)],
 )
 def test_gist_public_all_files(gist_id, sha):
     fs = fsspec.filesystem("gist", gist_id=gist_id, sha=sha)
@@ -29,7 +30,7 @@ def test_gist_public_all_files(gist_id, sha):
     "gist_id,sha,file",
     [
         (
-            "d5d7b521d0e5fec8adfc5652b8f3242c",
+            "863f2f06782788e349f2acfff31d77ed",
             None,
             "ex1.ipynb",
         )
@@ -51,8 +52,8 @@ def test_gist_public_one_file(gist_id, sha, file):
     "gist_id,sha,file",
     [
         (
-            "2656908684d3965b80c2",
-            "d5d7b521d0e5fec8adfc5652b8f3242c",
+            "863f2f06782788e349f2acfff31d77ed",
+            None,
             "file-that-doesnt-exist.py",
         )
     ],

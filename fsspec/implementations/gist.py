@@ -14,21 +14,21 @@ class GistFileSystem(AbstractFileSystem):
 
     Parameters
     ----------
-    gist_id : str
+    gist_id: str
         The ID of the gist you want to access (the long hex value from the URL).
-    filenames : list[str] (optional)
+    filenames: list[str] (optional)
         If provided, only make a file system representing these files, and do not fetch
         the list of all files for this gist.
-    sha : str (optional)
+    sha: str (optional)
         If provided, fetch a particular revision of the gist. If omitted,
         the latest revision is used.
-    username : str (optional)
-        GitHub username for authentication .
-    token : str (optional)
-        GitHub personal access token (required if username is given), or .
-    timeout : (float, float) or float, optional
+    username: str (optional)
+        GitHub username for authentication.
+    token: str (optional)
+        GitHub personal access token (required if username is given), or.
+    timeout: (float, float) or float, optional
         Connect and read timeouts for requests (default 60s each).
-    kwargs : dict
+    kwargs: dict
         Stored on `self.request_kw` and passed to `requests.get` when fetching Gist
         metadata or reading ("opening") a file.
     """
@@ -82,7 +82,6 @@ class GistFileSystem(AbstractFileSystem):
         """
         Fetch the JSON metadata for this gist (possibly for a specific revision).
         """
-        breakpoint()
         if self.sha:
             url = self.gist_rev_url.format(gist_id=self.gist_id, sha=self.sha)
         else:
@@ -237,4 +236,6 @@ class GistFileSystem(AbstractFileSystem):
                     pass  # skip
                 else:
                     out[p] = e
+        if len(paths) == 1 and paths[0] == path:
+            return out[path]
         return out
