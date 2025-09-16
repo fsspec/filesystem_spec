@@ -14,21 +14,21 @@ class GistFileSystem(AbstractFileSystem):
 
     Parameters
     ----------
-    gist_id : str
+    gist_id: str
         The ID of the gist you want to access (the long hex value from the URL).
-    filenames : list[str] (optional)
+    filenames: list[str] (optional)
         If provided, only make a file system representing these files, and do not fetch
         the list of all files for this gist.
-    sha : str (optional)
+    sha: str (optional)
         If provided, fetch a particular revision of the gist. If omitted,
         the latest revision is used.
-    username : str (optional)
-        GitHub username for authentication (required if token is given).
-    token : str (optional)
-        GitHub personal access token (required if username is given).
-    timeout : (float, float) or float, optional
+    username: str (optional)
+        GitHub username for authentication.
+    token: str (optional)
+        GitHub personal access token (required if username is given), or.
+    timeout: (float, float) or float, optional
         Connect and read timeouts for requests (default 60s each).
-    kwargs : dict
+    kwargs: dict
         Stored on `self.request_kw` and passed to `requests.get` when fetching Gist
         metadata or reading ("opening") a file.
     """
@@ -51,10 +51,8 @@ class GistFileSystem(AbstractFileSystem):
         self.gist_id = gist_id
         self.filenames = filenames
         self.sha = sha  # revision of the gist (optional)
-        if (username is None) ^ (token is None):
-            # Both or neither must be set
-            if username or token:
-                raise ValueError("Auth requires both username and token, or neither.")
+        if username is not None and token is None:
+            raise ValueError("User auth requires a token")
         self.username = username
         self.token = token
         self.request_kw = kwargs
@@ -67,9 +65,18 @@ class GistFileSystem(AbstractFileSystem):
     @property
     def kw(self):
         """Auth parameters passed to 'requests' if we have username/token."""
-        if self.username is not None and self.token is not None:
-            return {"auth": (self.username, self.token), **self.request_kw}
-        return self.request_kw
+        kw = {
+            "headers": {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            }
+        }
+        kw.update(self.request_kw)
+        if self.username and self.token:
+            kw["auth"] = (self.username, self.token)
+        elif self.token:
+            kw["headers"]["Authorization"] = f"Bearer {self.token}"
+        return kw
 
     def _fetch_gist_metadata(self):
         """
@@ -229,4 +236,6 @@ class GistFileSystem(AbstractFileSystem):
                     pass  # skip
                 else:
                     out[p] = e
+        if len(paths) == 1 and paths[0] == path:
+            return out[path]
         return out
