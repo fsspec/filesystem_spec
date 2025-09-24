@@ -289,4 +289,4 @@ def test_cache_kwargs(mocker):
     # We don't care about the first parameter, just retrieve its expected value.
     # It is a random location that cannot be predicted.
     # The important thing is the 'overwrite' kwarg
-    fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], "/test", overwrite=True)
+    fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], ["/test"], overwrite=True)
