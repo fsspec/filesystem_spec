@@ -118,6 +118,8 @@ def rsync(
         if otherfile in otherfiles:
             if update_cond == "always":
                 allfiles[k] = otherfile
+            elif update_cond == "never":
+                allfiles.pop(k)
             elif update_cond == "different":
                 inf1 = source_field(v) if callable(source_field) else v[source_field]
                 v2 = otherfiles[otherfile]
