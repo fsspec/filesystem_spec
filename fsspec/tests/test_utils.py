@@ -9,8 +9,8 @@ import fsspec.utils
 from fsspec.utils import (
     can_be_local,
     common_prefix,
-    get_protocol,
     get_file_extension,
+    get_protocol,
     infer_storage_options,
     merge_offset_ranges,
     mirror_from,
