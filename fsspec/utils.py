@@ -437,6 +437,13 @@ def get_protocol(url: str) -> str:
         return parts[0]
     return "file"
 
+def get_file_extension(url: str) -> str:
+    url = stringify_path(url)
+    ext_parts = url.rsplit(".", 1) 
+    if len(ext_parts) > 1:
+        return ext_parts[-1]
+    return ""
+
 
 def can_be_local(path: str) -> bool:
     """Can the given URL be used with open_local?"""
