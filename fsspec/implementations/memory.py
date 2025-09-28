@@ -187,10 +187,10 @@ class MemoryFileSystem(AbstractFileSystem):
             parent = self._parent(parent)
             if self.isfile(parent):
                 raise FileExistsError(parent)
-        if mode in ["rb", "ab", "r+b"]:
+        if mode in ["rb", "ab", "r+b", "a+b"]:
             if path in self.store:
                 f = self.store[path]
-                if mode == "ab":
+                if "a" in mode:
                     # position at the end of file
                     f.seek(0, 2)
                 else:
@@ -199,8 +199,8 @@ class MemoryFileSystem(AbstractFileSystem):
                 return f
             else:
                 raise FileNotFoundError(path)
-        elif mode in {"wb", "xb"}:
-            if mode == "xb" and self.exists(path):
+        elif mode in {"wb", "w+b", "xb", "x+b"}:
+            if "x" in mode and self.exists(path):
                 raise FileExistsError
             m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
