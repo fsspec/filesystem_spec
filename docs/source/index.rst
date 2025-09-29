@@ -119,6 +119,7 @@ The current list of known implementations can be found as follows
    async.rst
    api.rst
    changelog.rst
+   code-of-conduct.rst
 
 
 These docs pages collect anonymous tracking data using goatcounter, and the
