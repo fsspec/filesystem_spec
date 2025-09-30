@@ -25,15 +25,19 @@ class LocalFileSystem(AbstractFileSystem):
         Whether, when opening a file, the directory containing it should
         be created (if it doesn't already exist). This is assumed by pyarrow
         code.
+    follow_symlinks: bool
+        follow symbolic links (default: False)
     """
 
     root_marker = "/"
     protocol = "file", "local"
     local_file = True
+    follow_symlinks: bool
 
-    def __init__(self, auto_mkdir=False, **kwargs):
+    def __init__(self, auto_mkdir=False, follow_symlinks=False, **kwargs):
         super().__init__(**kwargs)
         self.auto_mkdir = auto_mkdir
+        self.follow_symlinks = follow_symlinks
 
     @property
     def fsid(self):
@@ -78,11 +82,11 @@ class LocalFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         if isinstance(path, os.DirEntry):
             # scandir DirEntry
-            out = path.stat(follow_symlinks=False)
+            out = path.stat(follow_symlinks=self.follow_symlinks)
             link = path.is_symlink()
-            if path.is_dir(follow_symlinks=False):
+            if path.is_dir(follow_symlinks=self.follow_symlinks):
                 t = "directory"
-            elif path.is_file(follow_symlinks=False):
+            elif path.is_file(follow_symlinks=self.follow_symlinks):
                 t = "file"
             else:
                 t = "other"
