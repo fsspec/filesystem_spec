@@ -22,7 +22,11 @@ from fsspec.asyn import AsyncFileSystem
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.core import filesystem, open, split_protocol
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
-from fsspec.utils import isfilelike, merge_offset_ranges, other_paths
+from fsspec.utils import (
+    isfilelike,
+    merge_offset_ranges,
+    other_paths,
+)
 
 logger = logging.getLogger("fsspec.reference")
 
@@ -698,13 +702,9 @@ class ReferenceFileSystem(AsyncFileSystem):
                 **(ref_storage_args or target_options or {}), protocol=target_protocol
             )
             ref_fs, fo2 = fsspec.core.url_to_fs(fo, **dic)
-            if ref_fs.isfile(fo2):
-                # text JSON
-                with fsspec.open(fo, "rb", **dic) as f:
-                    logger.info("Read reference from URL %s", fo)
-                    text = json.load(f)
-                self._process_references(text, template_overrides)
-            else:
+            if ".json" not in fo2 and (
+                fo.endswith(("parq", "parquet", "/")) or ref_fs.isdir(fo2)
+            ):
                 # Lazy parquet refs
                 logger.info("Open lazy reference dict from URL %s", fo)
                 self.references = LazyReferenceMapper(
@@ -712,6 +712,12 @@ class ReferenceFileSystem(AsyncFileSystem):
                     fs=ref_fs,
                     cache_size=cache_size,
                 )
+            else:
+                # text JSON
+                with fsspec.open(fo, "rb", **dic) as f:
+                    logger.info("Read reference from URL %s", fo)
+                    text = json.load(f)
+                self._process_references(text, template_overrides)
         else:
             # dictionaries
             self._process_references(fo, template_overrides)

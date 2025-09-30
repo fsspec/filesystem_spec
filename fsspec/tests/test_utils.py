@@ -9,6 +9,7 @@ import fsspec.utils
 from fsspec.utils import (
     can_be_local,
     common_prefix,
+    get_file_extension,
     get_protocol,
     infer_storage_options,
     merge_offset_ranges,
@@ -336,6 +337,23 @@ def test_log():
 def test_get_protocol(par):
     url, outcome = par
     assert get_protocol(url) == outcome
+
+
+@pytest.mark.parametrize(
+    ["url", "expected"],
+    (
+        ("https://example.com/q.txt", "txt"),
+        ("https://example.com/foo.parquet", "parquet"),
+        ("https://example.com/foo.parq", "parq"),
+        ("file:///home/user/no_extension", ""),
+        ("/local/path/to/file.json", "json"),
+        ("relative/path/file.yaml", "yaml"),
+    ),
+)
+def test_get_file_extension(url, expected):
+    actual = get_file_extension(url)
+
+    assert actual == expected
 
 
 @pytest.mark.parametrize(
