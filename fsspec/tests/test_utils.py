@@ -338,6 +338,7 @@ def test_get_protocol(par):
     url, outcome = par
     assert get_protocol(url) == outcome
 
+
 @pytest.mark.parametrize(
     ["url", "expected"],
     (
@@ -347,12 +348,13 @@ def test_get_protocol(par):
         ("file:///home/user/no_extension", ""),
         ("/local/path/to/file.json", "json"),
         ("relative/path/file.yaml", "yaml"),
-    )
+    ),
 )
 def test_get_file_extension(url, expected):
     actual = get_file_extension(url)
 
     assert actual == expected
+
 
 @pytest.mark.parametrize(
     "par",
