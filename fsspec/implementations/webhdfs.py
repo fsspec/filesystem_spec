@@ -268,7 +268,7 @@ class WebHDFS(AbstractFileSystem):
         info["name"] = path
         return self._process_info(info)
 
-    def ls(self, path, detail=False):
+    def ls(self, path, detail=False, **kwargs):
         out = self._call("LISTSTATUS", path=path)
         infos = out.json()["FileStatuses"]["FileStatus"]
         for info in infos:
