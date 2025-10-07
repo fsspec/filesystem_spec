@@ -191,7 +191,7 @@ def pytest_generate_tests(metafunc):
         scenario: ArchiveTestScenario = scenario
         label = scenario.protocol
         if scenario.variant:
-            label += "-" + scenario.variant
+            label = f"{label}-{scenario.variant}"
         idlist.append(label)
         argvalues.append([scenario])
     metafunc.parametrize(argnames, argvalues, ids=idlist, scope="class")
