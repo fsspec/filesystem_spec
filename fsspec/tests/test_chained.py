@@ -1,7 +1,6 @@
 import pytest
 
-from fsspec import AbstractFileSystem, filesystem
-from fsspec import url_to_fs, register_implementation
+from fsspec import AbstractFileSystem, filesystem, register_implementation, url_to_fs
 from fsspec.implementations.cached import ChainedFileSystem
 
 
@@ -12,14 +11,17 @@ class MyChainedFS(ChainedFileSystem):
         super().__init__(**kwargs)
         self.fs = filesystem(target_protocol, **target_options)
 
+
 class MyNonChainedFS(AbstractFileSystem):
     protocol = "mynonchain"
+
 
 @pytest.fixture(scope="module")
 def register_fs():
     register_implementation(MyChainedFS.protocol, MyChainedFS)
     register_implementation(MyNonChainedFS.protocol, MyNonChainedFS)
     yield
+
 
 def test_token_passthrough_to_chained(register_fs):
     # First, run a sanity check
