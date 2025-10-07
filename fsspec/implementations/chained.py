@@ -6,4 +6,4 @@ __all__ = ("ChainedFileSystem",)
 
 
 class ChainedFileSystem(AbstractFileSystem):
-    chained: ClassVar[str] = "chained"
+    protocol: ClassVar[str] = "chained"
