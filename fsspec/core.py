@@ -330,7 +330,7 @@ def open_files(
 
 def _un_chain(path, kwargs):
     # Avoid a circular import
-    from fsspec.implementations.cached import CachingFileSystem
+    from fsspec.implementations.chained import ChainedFileSystem
 
     if "::" in path:
         x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
@@ -358,7 +358,7 @@ def _un_chain(path, kwargs):
             **kws,
         )
         bit = cls._strip_protocol(bit)
-        if "target_protocol" not in kw and issubclass(cls, CachingFileSystem):
+        if "target_protocol" not in kw and issubclass(cls, ChainedFileSystem):
             bit = previous_bit
         out.append((bit, protocol, kw))
         previous_bit = bit

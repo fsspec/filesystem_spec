@@ -241,7 +241,9 @@ reads the same zip-file, but extracts the CSV files and stores them locally in t
 **For developers**: this "chaining" methods works by formatting the arguments passed to ``open_*``
 into ``target_protocol`` (a simple string) and ``target_options`` (a dict) and also optionally
 ``fo`` (target path, if a specific file is required). In order for an implementation to chain
-successfully like this, it must look for exactly those named arguments.
+successfully like this, it must look for exactly those named arguments. Implementations that
+require access to the target path of their nested targets should inherit from ``ChainedFileSystem``,
+which will trigger pass-through of the nested path automatically.
 
 Caching Files Locally
 ---------------------

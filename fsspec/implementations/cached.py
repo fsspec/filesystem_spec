@@ -9,13 +9,14 @@ import weakref
 from shutil import rmtree
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
-from fsspec import AbstractFileSystem, filesystem
+from fsspec import filesystem
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
 from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cache_metadata import CacheMetadata
+from fsspec.implementations.chained import ChainedFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.transaction import Transaction
@@ -39,7 +40,7 @@ class WriteCachedTransaction(Transaction):
         self.fs = None  # break cycle
 
 
-class CachingFileSystem(AbstractFileSystem):
+class CachingFileSystem(ChainedFileSystem):
     """Locally caching filesystem, layer over any other FS
 
     This class implements chunk-wise local storage of remote files, for quick
