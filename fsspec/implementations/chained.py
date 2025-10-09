@@ -19,4 +19,5 @@ class ChainedFileSystem(AbstractFileSystem):
 
     Additional functionality may be added in the future.
     """
+
     protocol: ClassVar[str] = "chained"
