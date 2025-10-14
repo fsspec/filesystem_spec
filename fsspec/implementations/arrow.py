@@ -75,10 +75,13 @@ class ArrowFSWrapper(AbstractFileSystem):
         path = self._strip_protocol(path)
         from pyarrow.fs import FileSelector
 
-        entries = [
-            self._make_entry(entry)
-            for entry in self.fs.get_file_info(FileSelector(path))
-        ]
+        try:
+            entries = [
+                self._make_entry(entry)
+                for entry in self.fs.get_file_info(FileSelector(path))
+            ]
+        except (FileNotFoundError, NotADirectoryError):
+            entries = [self.info(path, **kwargs)]
         if detail:
             return entries
         else:

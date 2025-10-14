@@ -151,6 +151,17 @@ def test_ls(fs, remote_dir):
     assert dirs == expected
 
 
+def test_ls_one(fs, remote_dir):
+    if remote_dir != "/":
+        remote_dir = remote_dir + "/"
+    fs.mkdir(remote_dir + "dir/")
+    file = remote_dir + "dir/test_one"
+    fs.touch(file)
+
+    out = fs.ls(file, detail=True)
+    assert out[0] == fs.info(file)
+
+
 def test_mkdir(fs, remote_dir):
     if remote_dir != "/":
         remote_dir = remote_dir + "/"
