@@ -5,6 +5,8 @@ import inspect
 import fsspec
 from fsspec.asyn import AsyncFileSystem, running_async
 
+from .chained import ChainedFileSystem
+
 
 def async_wrapper(func, obj=None, semaphore=None):
     """
@@ -35,7 +37,7 @@ def async_wrapper(func, obj=None, semaphore=None):
     return wrapper
 
 
-class AsyncFileSystemWrapper(AsyncFileSystem):
+class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
     """
     A wrapper class to convert a synchronous filesystem into an asynchronous one.
 
