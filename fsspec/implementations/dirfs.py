@@ -1,8 +1,9 @@
 from .. import filesystem
 from ..asyn import AsyncFileSystem
+from .chained import ChainedFileSystem
 
 
-class DirFileSystem(AsyncFileSystem):
+class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     """Directory prefix filesystem
 
     The DirFileSystem is a filesystem-wrapper. It assumes every path it is dealing with
