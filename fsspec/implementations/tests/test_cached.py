@@ -1358,3 +1358,11 @@ def test_local_temp_file_put_by_list2(protocol, mocker, tmp_path) -> None:
     spy_put.assert_called_once_with([file.name], ["/some/file.txt"])
     # which avoids isdir() check
     spy_isdir.assert_not_called()
+
+
+def test_simplecache_tokenization_independent_of_path():
+    of0 = fsspec.open("simplecache::memory://foo/bar.txt")
+    of1 = fsspec.open("simplecache::memory://baz/qux.txt")
+    assert of0.path != of1.path
+    assert of0.fs._fs_token_ == of1.fs._fs_token_
+    assert of0.fs is of1.fs
