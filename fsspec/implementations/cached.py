@@ -61,6 +61,7 @@ class CachingFileSystem(ChainedFileSystem):
     """
 
     protocol: ClassVar[str | tuple[str, ...]] = ("blockcache", "cached")
+    _strip_tokenize_options = ("fo",)
 
     def __init__(
         self,

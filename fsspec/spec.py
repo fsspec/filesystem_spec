@@ -67,6 +67,9 @@ class _Cached(type):
         extra_tokens = tuple(
             getattr(cls, attr, None) for attr in cls._extra_tokenize_attributes
         )
+        strip_tokenize_options = {
+            k: kwargs.pop(k) for k in cls._strip_tokenize_options if k in kwargs
+        }
         token = tokenize(
             cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs
         )
@@ -78,7 +81,7 @@ class _Cached(type):
             cls._latest = token
             return cls._cache[token]
         else:
-            obj = super().__call__(*args, **kwargs)
+            obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
             # Setting _fs_token here causes some static linters to complain.
             obj._fs_token_ = token
             obj.storage_args = args
@@ -115,6 +118,8 @@ class AbstractFileSystem(metaclass=_Cached):
 
     #: Extra *class attributes* that should be considered when hashing.
     _extra_tokenize_attributes = ()
+    #: *storage options* that should not be considered when hashing.
+    _strip_tokenize_options = ()
 
     # Set by _Cached metaclass
     storage_args: tuple[Any, ...]
