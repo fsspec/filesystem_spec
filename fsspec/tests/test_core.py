@@ -20,19 +20,6 @@ from fsspec.core import (
 )
 
 
-@pytest.fixture(scope="function", autouse=True)
-def clear_cachingfilesystem_instance_caches():
-    # prevent test cross-contamination due to cached fs instances
-    from fsspec.implementations.cached import CachingFileSystem
-
-    classes = [CachingFileSystem]
-    while classes:
-        cls = classes.pop()
-        cls.clear_instance_cache()
-        classes.extend(cls.__subclasses__())
-    yield
-
-
 @contextmanager
 def tempzip(data=None):
     data = data or {}
