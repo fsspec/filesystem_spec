@@ -92,7 +92,7 @@ class InstanceCacheInspector:
 
     def gather_counts(
         self,
-        *cls_reference: str | type[fsspec.AbstractFileSystem],
+        *cls_reference: "str | type[fsspec.AbstractFileSystem]",
         omit_zero: bool = True,
         recursive: bool = True,
     ) -> dict[str, int]:
