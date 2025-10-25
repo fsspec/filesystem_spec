@@ -43,6 +43,7 @@ class HTTPFileSystem(AsyncFileSystem):
     HTML href tags will be used.
     """
 
+    protocol = ("http", "https")
     sep = "/"
 
     def __init__(
