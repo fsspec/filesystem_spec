@@ -13,7 +13,7 @@ from fsspec.implementations.reference import (
 from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
 
 
-def test_simple(server):
+def test_simple(server, instance_caches):
     # The dictionary in refs may be dumped with a different separator
     # depending on whether json or ujson is imported
     from fsspec.implementations.reference import json as json_impl
@@ -25,8 +25,16 @@ def test_simple(server):
         "d": b"base64:aGVsbG8=",
         "e": {"key": "value"},
     }
+
+    assert instance_caches.gather_counts() == {}
+
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
+
+    assert instance_caches.gather_counts() == {
+        "http": 1,
+        "reference": 1,
+    }
 
     assert {
         "protocol": h.protocol,
