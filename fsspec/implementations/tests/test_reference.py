@@ -28,8 +28,11 @@ def test_simple(server):
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
+    assert fs.fss == {"http": h, None: h}
     assert fs.cat("a") == b"data"
+    assert fs.fss == {"http": h, None: h}
     assert fs.cat("b") == data[:5]
+    assert fs.fss == {"http": h, None: h}
     assert fs.cat("c") == data[1 : 1 + 5]
     assert fs.cat("d") == b"hello"
     assert fs.cat("e") == json_impl.dumps(refs["e"]).encode("utf-8")
