@@ -39,7 +39,6 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install -e .[test_full]
-          pip freeze
           pytest -v
 
   win:
