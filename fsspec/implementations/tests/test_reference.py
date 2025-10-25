@@ -33,7 +33,7 @@ def test_simple(server, instance_caches):
 
     assert instance_caches.gather_counts() == {
         "http": 1,
-        "reference": 1,
+        # "reference": 1, <-- ReferenceFileSystem is not cachable
     }
 
     assert {
