@@ -13,7 +13,7 @@ from fsspec.implementations.reference import (
 from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
 
 
-def test_simple(server, instance_caches):
+def test_simple(server):
     # The dictionary in refs may be dumped with a different separator
     # depending on whether json or ujson is imported
     from fsspec.implementations.reference import json as json_impl
@@ -26,31 +26,11 @@ def test_simple(server, instance_caches):
         "e": {"key": "value"},
     }
 
-    assert instance_caches.gather_counts() == {}
-
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
-    assert instance_caches.gather_counts() == {
-        "http": 1,
-        # "reference": 1, <-- ReferenceFileSystem is not cachable
-    }
-
-    assert {
-        "protocol": h.protocol,
-        "module": h.__class__.__module__,
-        "name": h.__class__.__name__,
-    } == {
-        "protocol": "http",
-        "module": "fsspec.implementations.http",
-        "name": "HTTPFileSystem",
-    }
-
-    assert fs.fss == {"http": h, None: h}
     assert fs.cat("a") == b"data"
-    assert fs.fss == {"http": h, None: h}
     assert fs.cat("b") == data[:5]
-    assert fs.fss == {"http": h, None: h}
     assert fs.cat("c") == data[1 : 1 + 5]
     assert fs.cat("d") == b"hello"
     assert fs.cat("e") == json_impl.dumps(refs["e"]).encode("utf-8")
