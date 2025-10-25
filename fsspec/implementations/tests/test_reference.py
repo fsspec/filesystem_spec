@@ -28,6 +28,16 @@ def test_simple(server):
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
+    assert {
+        "protocol": h.protocol,
+        "module": h.__class__.__module__,
+        "name": h.__class__.__name__,
+    } == {
+        "protocol": "http",
+        "module": "fsspec.implementations.http",
+        "name": "HTTPFileSystem",
+    }
+
     assert fs.fss == {"http": h, None: h}
     assert fs.cat("a") == b"data"
     assert fs.fss == {"http": h, None: h}
