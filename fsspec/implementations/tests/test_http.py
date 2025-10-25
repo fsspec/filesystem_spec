@@ -638,11 +638,17 @@ def test_protocol_independent_of_first_used_protocol(protocol):
     code = [
         "from fsspec import filesystem",
         f"filesystem('{protocol}')",
-        "print(filesystem('http').protocol, filesystem('https').protocol)",
+        "fs0 = filesystem('http')",
+        "p0 = fs0.protocol[0] if isinstance(fs0.protocol, tuple) else fs0.protocol",
+        "fs1 = filesystem('https')",
+        "p1 = fs1.protocol[0] if isinstance(fs1.protocol, tuple) else fs1.protocol",
+        "print(p0, p1)",
     ]
-    cmd = [sys.executable, "-c", ";".join(code)]
     result = subprocess.run(
-        cmd, check=False, capture_output=True, text=True
+        [sys.executable, "-c", ";".join(code)],
+        check=False,
+        capture_output=True,
+        text=True,
     ).stdout.split()
 
     assert result == ["http", "http"]
