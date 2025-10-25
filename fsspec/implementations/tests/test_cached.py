@@ -1386,5 +1386,5 @@ def test_simplecache_instance_cache(instance_caches):
         "simplecache": 3,
         "memory": 1,
         "file": 1,
-        "https": 1,
+        "http": 1,
     }
