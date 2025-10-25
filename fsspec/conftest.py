@@ -35,7 +35,7 @@ class InstanceCacheInspector:
 
     @staticmethod
     def classes_from_refs(
-        cls_reference: tuple[str | type[fsspec.AbstractFileSystem], ...],
+        cls_reference: "tuple[str | type[fsspec.AbstractFileSystem], ...]",
         /,
         *,
         empty_is_all: bool = True,
