@@ -75,7 +75,7 @@ class InstanceCacheInspector:
 
     def clear(
         self,
-        *cls_reference: str | type[fsspec.AbstractFileSystem],
+        *cls_reference: "str | type[fsspec.AbstractFileSystem]",
         recursive: bool = True,
     ) -> None:
         """
