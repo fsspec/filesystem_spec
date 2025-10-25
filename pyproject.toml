@@ -90,7 +90,7 @@ test_full = [
     'dropboxdrivefs',
     'fastparquet',
     'fusepy',
-    'gcsfs',
+    'gcsfs>=2025.9.0',
     "kerchunk",
     'libarchive-c',
     'lz4',
