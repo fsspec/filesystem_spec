@@ -98,6 +98,11 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         }
         self.session.put(f"{self.url}/{path}", json=json)
 
+    def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
+        if path1 == path2:
+            return
+        self.session.patch(f"{self.url}/{path1}", json={"path": path2})
+
     def _rm(self, path):
         path = self._strip_protocol(path)
         self.session.delete(f"{self.url}/{path}")
