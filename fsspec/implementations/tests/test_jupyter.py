@@ -60,3 +60,7 @@ def test_simple(jupyter):
     fs.rm("afile")
 
     assert "afile" not in os.listdir(d)
+
+    fs.mv("bfile", "cfile")
+    assert "cfile" in os.listdir(d)
+    assert "bfile" not in os.listdir(d)
