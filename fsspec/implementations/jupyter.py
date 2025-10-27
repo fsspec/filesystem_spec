@@ -42,7 +42,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         path = self._strip_protocol(path)
         r = self.session.get(f"{self.url}/{path}")
         if r.status_code == 404:
-            return FileNotFoundError(path)
+            raise FileNotFoundError(path)
         r.raise_for_status()
         out = r.json()
 
@@ -63,7 +63,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         path = self._strip_protocol(path)
         r = self.session.get(f"{self.url}/{path}")
         if r.status_code == 404:
-            return FileNotFoundError(path)
+            raise FileNotFoundError(path)
         r.raise_for_status()
         out = r.json()
         if out["format"] == "text":

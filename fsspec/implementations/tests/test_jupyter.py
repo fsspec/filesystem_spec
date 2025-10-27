@@ -42,6 +42,11 @@ def test_simple(jupyter):
     fs = fsspec.filesystem("jupyter", url=url)
     assert fs.ls("") == []
 
+    with pytest.raises(FileNotFoundError):
+        fs.ls("not-exist")
+    with pytest.raises(FileNotFoundError):
+        fs.cat("not-exist")
+
     fs.pipe("afile", b"data")
     assert fs.cat("afile") == b"data"
     assert "afile" in os.listdir(d)
