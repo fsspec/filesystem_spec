@@ -25,7 +25,6 @@ def test_simple(server):
         "d": b"base64:aGVsbG8=",
         "e": {"key": "value"},
     }
-
     h = fsspec.filesystem("http")
     fs = fsspec.filesystem("reference", fo=refs, fs=h)
 
