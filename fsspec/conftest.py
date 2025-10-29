@@ -33,95 +33,38 @@ class InstanceCacheInspector:
     Helper class to inspect instance caches of filesystem classes in tests.
     """
 
-    @staticmethod
-    def classes_from_refs(
-        cls_reference: "tuple[str | type[fsspec.AbstractFileSystem], ...]",
-        /,
-        *,
-        empty_is_all: bool = True,
-    ) -> deque[type[fsspec.AbstractFileSystem]]:
+    def clear(self) -> None:
         """
-        Convert class references (strings or types) to a deque of filesystem classes.
-
-        Parameters
-        ----------
-        cls_reference:
-            Tuple of class references as strings or types.
-            Supports fqns, protocol names, or the class types themselves.
-        empty_is_all:
-            If True and no classes are specified, include all imported filesystem classes.
-
-        Returns
-        -------
-        fs_classes:
-            Deque of filesystem classes corresponding to the provided references.
+        Clear instance caches of all currently imported filesystem classes.
         """
-        classes: deque[type[fsspec.AbstractFileSystem]] = deque()
-
-        for ref in cls_reference:
-            if isinstance(ref, str):
-                try:
-                    cls = fsspec.get_filesystem_class(ref)
-                except ValueError:
-                    module_name, _, class_name = ref.rpartition(".")
-                    module = __import__(module_name, fromlist=[class_name])
-                    cls = getattr(module, class_name)
-                classes.append(cls)
-            else:
-                classes.append(ref)
-        if empty_is_all and not classes:
-            classes.append(fsspec.spec.AbstractFileSystem)
-        return classes
-
-    def clear(
-        self,
-        *cls_reference: "str | type[fsspec.AbstractFileSystem]",
-        recursive: bool = True,
-    ) -> None:
-        """
-        Clear instance caches of specified filesystem classes.
-        """
-        classes = self.classes_from_refs(cls_reference)
-        # Clear specified classes and optionally their subclasses
+        classes = deque([fsspec.spec.AbstractFileSystem])
         while classes:
             cls = classes.popleft()
             cls.clear_instance_cache()
-            if recursive:
-                subclasses = cls.__subclasses__()
-                classes.extend(subclasses)
+            classes.extend(cls.__subclasses__())
 
-    def gather_counts(
-        self,
-        *cls_reference: "str | type[fsspec.AbstractFileSystem]",
-        omit_zero: bool = True,
-        recursive: bool = True,
-    ) -> dict[str, int]:
+    def gather_counts(self, *, omit_zero: bool = True) -> dict[str, int]:
         """
-        Gather counts of filesystem instances in the instance caches of all loaded classes.
+        Gather counts of filesystem instances in the instance caches
+        of all currently imported filesystem classes.
 
         Parameters
         ----------
-        cls_reference:
-            class references as strings or types.
         omit_zero:
             Whether to omit instance types with no cached instances.
-        recursive:
-            Whether to include subclasses of the specified classes.
         """
         out: dict[str, int] = {}
-        classes = self.classes_from_refs(cls_reference)
+        classes = deque([fsspec.spec.AbstractFileSystem])
         while classes:
             cls = classes.popleft()
-            count = len(cls._cache)
+            count = len(cls._cache)  # there is no public interface for the cache
             # note: skip intermediate AbstractFileSystem subclasses
             #   if they proxy the protocol attribute via a property.
             if isinstance(cls.protocol, (Sequence, str)):
                 key = cls.protocol if isinstance(cls.protocol, str) else cls.protocol[0]
                 if count or not omit_zero:
                     out[key] = count
-            if recursive:
-                subclasses = cls.__subclasses__()
-                classes.extend(subclasses)
+            classes.extend(cls.__subclasses__())
         return out
 
 
