@@ -174,6 +174,7 @@ class SFTPFileSystem(AbstractFileSystem):
 
     def mv(self, old, new):
         new = self._strip_protocol(new)
+        old = self._strip_protocol(old)
         logger.debug("Renaming %s into %s", old, new)
         self.ftp.posix_rename(old, new)
 
