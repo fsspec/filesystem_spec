@@ -457,7 +457,7 @@ class HTTPFileSystem(AsyncFileSystem):
         """
         Find files by glob-matching.
 
-        This implementation is idntical to the one in AbstractFileSystem,
+        This implementation is identical to the one in AbstractFileSystem,
         but "?" is not considered as a character for globbing, because it is
         so common in URLs, often identifying the "query" part.
         """
