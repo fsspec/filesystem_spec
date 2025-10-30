@@ -66,6 +66,7 @@ class SFTPFileSystem(AbstractFileSystem):
         return out
 
     def mkdir(self, path, create_parents=True, mode=511):
+        path = self._strip_protocol(path)
         logger.debug("Creating folder %s", path)
         if self.exists(path):
             raise FileExistsError(f"File exists: {path}")
@@ -89,10 +90,12 @@ class SFTPFileSystem(AbstractFileSystem):
                     self.ftp.mkdir(new_path, mode)
 
     def rmdir(self, path):
+        path = self._strip_protocol(path)
         logger.debug("Removing folder %s", path)
         self.ftp.rmdir(path)
 
     def info(self, path):
+        path = self._strip_protocol(path)
         stat = self._decode_stat(self.ftp.stat(path))
         stat["name"] = path
         return stat
@@ -123,6 +126,7 @@ class SFTPFileSystem(AbstractFileSystem):
         return out
 
     def ls(self, path, detail=False):
+        path = self._strip_protocol(path)
         logger.debug("Listing folder %s", path)
         stats = [self._decode_stat(stat, path) for stat in self.ftp.listdir_iter(path)]
         if detail:
@@ -132,6 +136,7 @@ class SFTPFileSystem(AbstractFileSystem):
             return sorted(paths)
 
     def put(self, lpath, rpath, callback=None, **kwargs):
+        rpath = self._strip_protocol(rpath)
         logger.debug("Put file %s into %s", lpath, rpath)
         self.ftp.put(lpath, rpath)
 
@@ -168,6 +173,8 @@ class SFTPFileSystem(AbstractFileSystem):
             self.ftp.remove(path)
 
     def mv(self, old, new):
+        new = self._strip_protocol(new)
+        old = self._strip_protocol(old)
         logger.debug("Renaming %s into %s", old, new)
         self.ftp.posix_rename(old, new)
 
