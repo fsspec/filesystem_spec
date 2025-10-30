@@ -50,8 +50,40 @@ class SFTPFileSystem(AbstractFileSystem):
     def _connect(self):
         logger.debug("Connecting to SFTP server %s", self.host)
         self.client = paramiko.SSHClient()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(self.host, **self.ssh_kwargs)
+        self.config = paramiko.SSHConfig.from_path(os.path.expanduser("~/.ssh/config")).lookup(self.host)
+        if "hostname" in self.config:
+            self.host = self.config["hostname"]
+
+        # Can be yes, no, or ask (case-insensitive). Ask is not supported. RejectPolicy is the default.
+        if "StrictHostKeyChecking".lower() in self.config and self.config["stricthostkeychecking"].lower() == "no":
+            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        known_host_keys_file = "~/.ssh/known_hosts"
+        if "UserKnownHostsFile".lower() in self.config:
+            known_host_keys_file = self.config["UserKnownHostsFile".lower()]
+        try:
+            self.client.load_system_host_keys(os.path.expanduser(known_host_keys_file))
+        except (FileNotFoundError, PermissionError):
+            pass
+
+        # Dictionary to map ssh_config keys to paramiko.Client.connect argument names.
+        key_mappings = {
+            "Port": ("port", lambda x: int(x)),
+            "User": ("username", lambda x: x),
+            "Compression": ("compress", lambda x: x.lower() == "yes"),
+            "IdentityFile": ("key_filename", lambda x: x),
+            "ConnectTimeout": ("timeout", lambda x: float(x)),
+        }
+        connect_options = self.ssh_kwargs.copy()
+        for config_key, value in key_mappings.items():
+            argument_name, converter = value
+            if config_key.lower() in self.config and argument_name not in connect_options:
+                connect_options[argument_name] = converter(self.config[config_key.lower()])
+
+        if "key_filename" in connect_options:
+            connect_options["look_for_keys"] = False
+
+        self.client.connect(self.host, **connect_options)
         self.ftp = self.client.open_sftp()
 
     @classmethod
