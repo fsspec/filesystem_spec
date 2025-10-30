@@ -1,6 +1,33 @@
 Changelog
 =========
 
+2025.10.0
+---------
+
+Enhancements
+
+- specify storage_options not use use for tokenising; test instance cache (#1933)
+- base class "chained" for FSs that pass through operations (#1929)
+
+Fixes
+
+- strip protocol for sftp (#1940)
+- use one-step mv in jupyterfs (#1937)
+- raise errors in jupyterfs, not return (#1936)
+- add protocol attribute to http(#1935)
+- allow ls() on a single file for arrowFS (#1931)
+- support kwargs in webhdfs ls() (#1928)
+- better discrimination for parquet in referenceFS (#1923)
+- accept all mode= types in memoryFS (#1922)
+- pass path list to put() in localtempfile for efficiency (#1920)
+- fix docs errors (#1917)
+
+Other
+
+- add CoC (#1924)
+- restrict github/gist tests because of rate limiting (#1918)
+
+
 2025.9.0
 --------
 
