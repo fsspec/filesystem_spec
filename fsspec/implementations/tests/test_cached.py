@@ -1358,3 +1358,33 @@ def test_local_temp_file_put_by_list2(protocol, mocker, tmp_path) -> None:
     spy_put.assert_called_once_with([file.name], ["/some/file.txt"])
     # which avoids isdir() check
     spy_isdir.assert_not_called()
+
+
+def test_simplecache_tokenization_independent_of_path():
+    # check that the tokenization is independent of the path
+    of0 = fsspec.open("simplecache::memory://foo/bar.txt")
+    of1 = fsspec.open("simplecache::memory://baz/qux.txt")
+    assert of0.path != of1.path
+    assert of0.fs._fs_token_ == of1.fs._fs_token_
+    assert of0.fs is of1.fs
+
+
+def test_simplecache_instance_cache(instance_caches):
+    # check that the simplecache instance cache does not grow with every unique path
+
+    assert instance_caches.gather_counts() == {}
+
+    # check that the cache does not grow with multiple paths
+    fsspec.open("simplecache::memory://foo/bar.txt")
+    fsspec.open("simplecache::memory://bar/baz.txt")
+    fsspec.open("simplecache::memory://baz/qux.txt")
+    fsspec.open("simplecache::file:///foo/bar.txt")
+    fsspec.open("simplecache::memory://bar/baz.txt")
+    fsspec.open("simplecache::https://example.com/")
+
+    assert instance_caches.gather_counts() == {
+        "simplecache": 3,
+        "memory": 1,
+        "file": 1,
+        "http": 1,
+    }
