@@ -13,9 +13,8 @@ repos:
       - id: check-json
       - id: check-yaml
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.2
+    rev: v0.14.3
     hooks:
-      # Run the linter.
       - id: ruff-check
         args: [ --fix, "--show-fixes"]
       - id: ruff-format
