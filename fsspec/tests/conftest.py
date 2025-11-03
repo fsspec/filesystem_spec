@@ -93,7 +93,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         content_range = f"bytes 0-{len(file_data) - 1}/{len(file_data)}"
         if ("Range" in self.headers) and ("ignore_range" not in self.headers):
             ran = self.headers["Range"]
-            b, ran = ran.split("=")
+            _b, ran = ran.split("=")
             start, end = ran.split("-")
             if start:
                 content_range = f"bytes {start}-{end}/{len(file_data)}"
