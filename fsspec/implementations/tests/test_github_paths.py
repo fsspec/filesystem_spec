@@ -101,7 +101,7 @@ def test_reserved_ref_characters(github_contents):
 
 @pytest.mark.parametrize("github_contents", ["release#1"], indirect=True)
 def test_default_branch_reserved_characters(github_contents):
-    _, files, calls = github_contents
+    _, files, _calls = github_contents
     files["file.txt"] = b"default branch"
     fs = GithubFileSystem(org="example", repo="repo", skip_instance_cache=True)
     assert fs.root == "release#1"

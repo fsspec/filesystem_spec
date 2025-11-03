@@ -754,7 +754,7 @@ def test_auto_add_creates_the_file(sshd, home):
 
 
 def test_auto_add_keeps_the_other_lines(sshd, home):
-    port, host_key = sshd
+    port, _host_key = sshd
     known_hosts = home / "extra_known_hosts"
     # no newline at the end
     known_hosts.write_text("# kept\nother.example ssh-rsa AAAA")
