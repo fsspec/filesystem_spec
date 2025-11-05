@@ -91,8 +91,10 @@ class Callback:
 
         Parameters
         ----------
-        size: int
+        size: int or callable
         """
+        if callable(size):
+            size = size()
         self.size = size
         self.call()
 
