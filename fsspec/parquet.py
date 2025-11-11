@@ -3,6 +3,7 @@ import json
 import warnings
 
 from .core import url_to_fs
+from .spec import AbstractBufferedFile
 from .utils import merge_offset_ranges
 
 # Parquet-Specific Utilities for fsspec
@@ -14,6 +15,14 @@ from .utils import merge_offset_ranges
 # on remote file systems.
 
 
+class AlreadyBufferedFile(AbstractBufferedFile):
+    def _fetch_range(self, start, end):
+        raise NotImplementedError
+
+    def close(self):
+        pass
+
+
 def open_parquet_file(
     path,
     mode="rb",
@@ -22,11 +31,11 @@ def open_parquet_file(
     columns=None,
     row_groups=None,
     storage_options=None,
-    strict=False,
     engine="auto",
     max_gap=64_000,
     max_block=256_000_000,
     footer_sample_size=1_000_000,
+    filters=None,
     **kwargs,
 ):
     """
@@ -72,12 +81,6 @@ def open_parquet_file(
     storage_options : dict, optional
         Used to generate an `AbstractFileSystem` object if `fs` was
         not specified.
-    strict : bool, optional
-        Whether the resulting `KnownPartsOfAFile` cache should
-        fetch reads that go beyond a known byte-range boundary.
-        If `False` (the default), any read that ends outside a
-        known part will be zero padded. Note that using
-        `strict=True` may be useful for debugging.
     max_gap : int, optional
         Neighboring byte ranges will only be merged when their
         inter-range gap is <= `max_gap`. Default is 64KB.
@@ -89,6 +92,10 @@ def open_parquet_file(
         for the footer metadata. If the sampled bytes do not contain
         the footer, a second read request will be required, and
         performance will suffer. Default is 1MB.
+    filters : list[list], optional
+        List of filters to apply to prevent reading row groups, of the
+        same format as accepted by the loading engines. Ignored if
+        ``row_groups`` is specified.
     **kwargs :
         Optional key-word arguments to pass to `fs.open`
     """
@@ -98,10 +105,10 @@ def open_parquet_file(
     if fs is None:
         fs = url_to_fs(path, **(storage_options or {}))[0]
 
-    # For now, `columns == []` not supported. Just use
-    # default `open` command with `path` input
+    # For now, `columns == []` not supported, is the same
+    # as all columns
     if columns is not None and len(columns) == 0:
-        return fs.open(path, mode=mode)
+        columns = None
 
     # Set the engine
     engine = _set_engine(engine)
@@ -118,6 +125,7 @@ def open_parquet_file(
         max_gap=max_gap,
         max_block=max_block,
         footer_sample_size=footer_sample_size,
+        filters=filters,
     )
 
     # Extract file name from `data`
@@ -125,15 +133,16 @@ def open_parquet_file(
 
     # Call self.open with "parts" caching
     options = kwargs.pop("cache_options", {}).copy()
-    return fs.open(
-        fn,
+    return AlreadyBufferedFile(
+        fs=None,
+        path=fn,
         mode=mode,
         cache_type="parts",
         cache_options={
             **options,
             "data": data.get(fn, {}),
-            "strict": strict,
         },
+        size=max(_[1] for _ in data.get(fn, {})),
         **kwargs,
     )
 
@@ -148,6 +157,7 @@ def _get_parquet_byte_ranges(
     max_block=256_000_000,
     footer_sample_size=1_000_000,
     engine="auto",
+    filters=None,
 ):
     """Get a dictionary of the known byte ranges needed
     to read a specific column/row-group selection from a
@@ -172,6 +182,7 @@ def _get_parquet_byte_ranges(
             row_groups=row_groups,
             max_gap=max_gap,
             max_block=max_block,
+            filters=filters,
         )
 
     # Get file sizes asynchronously
@@ -183,17 +194,16 @@ def _get_parquet_byte_ranges(
     data_starts = []
     data_ends = []
     add_header_magic = True
-    if columns is None and row_groups is None:
+    if columns is None and row_groups is None and filters is None:
         # We are NOT selecting specific columns or row-groups.
         #
         # We can avoid sampling the footers, and just transfer
         # all file data with cat_ranges
         for i, path in enumerate(paths):
             result[path] = {}
-            for b in range(0, file_sizes[i], max_block):
-                data_paths.append(path)
-                data_starts.append(b)
-                data_ends.append(min(b + max_block, file_sizes[i]))
+            data_paths.append(path)
+            data_starts.append(0)
+            data_ends.append(file_sizes[i])
         add_header_magic = False  # "Magic" should already be included
     else:
         # We ARE selecting specific columns or row-groups.
@@ -238,14 +248,14 @@ def _get_parquet_byte_ranges(
             # Deal with small-file case.
             # Just include all remaining bytes of the file
             # in a single range.
-            if file_sizes[i] < max_block:
-                if footer_starts[i] > 0:
-                    # Only need to transfer the data if the
-                    # footer sample isn't already the whole file
-                    data_paths.append(path)
-                    data_starts.append(0)
-                    data_ends.append(footer_starts[i])
-                continue
+            # if file_sizes[i] < max_block:
+            #     if footer_starts[i] > 0:
+            #         # Only need to transfer the data if the
+            #         # footer sample isn't already the whole file
+            #         data_paths.append(path)
+            #         data_starts.append(0)
+            #         data_ends.append(footer_starts[i])
+            #     continue
 
             # Use "engine" to collect data byte ranges
             path_data_starts, path_data_ends = engine._parquet_byte_ranges(
@@ -253,11 +263,15 @@ def _get_parquet_byte_ranges(
                 row_groups=row_groups,
                 footer=footer_samples[i],
                 footer_start=footer_starts[i],
+                filters=filters,
             )
 
             data_paths += [path] * len(path_data_starts)
             data_starts += path_data_starts
             data_ends += path_data_ends
+            result.setdefault(path, {})[(footer_starts[i], file_sizes[i])] = (
+                footer_samples[i]
+            )
 
         # Merge adjacent offset ranges
         data_paths, data_starts, data_ends = merge_offset_ranges(
@@ -291,6 +305,7 @@ def _get_parquet_byte_ranges_from_metadata(
     row_groups=None,
     max_gap=64_000,
     max_block=256_000_000,
+    filters=None,
 ):
     """Simplified version of `_get_parquet_byte_ranges` for
     the case that an engine-specific `metadata` object is
@@ -300,9 +315,7 @@ def _get_parquet_byte_ranges_from_metadata(
 
     # Use "engine" to collect data byte ranges
     data_paths, data_starts, data_ends = engine._parquet_byte_ranges(
-        columns,
-        row_groups=row_groups,
-        metadata=metadata,
+        columns, row_groups=row_groups, metadata=metadata, filters=filters
     )
 
     # Merge adjacent offset ranges
@@ -401,16 +414,19 @@ class FastparquetEngine:
         metadata=None,
         footer=None,
         footer_start=None,
+        filters=None,
     ):
         # Initialize offset ranges and define ParqetFile metadata
         pf = metadata
         data_paths, data_starts, data_ends = [], [], []
+        if filters and row_groups:
+            raise ValueError("filters and row_groups cannot be used together")
         if pf is None:
             pf = self.fp.ParquetFile(io.BytesIO(footer))
 
         # Convert columns to a set and add any index columns
         # specified in the pandas metadata (just in case)
-        column_set = None if columns is None else set(columns)
+        column_set = None if columns is None else {c.split(".", 1)[0] for c in columns}
         if column_set is not None and hasattr(pf, "pandas_metadata"):
             md_index = [
                 ind
@@ -422,7 +438,12 @@ class FastparquetEngine:
 
         # Check if row_groups is a list of integers
         # or a list of row-group metadata
-        if row_groups and not isinstance(row_groups[0], int):
+        if filters:
+            from fastparquet.api import filter_row_groups
+
+            row_group_indices = None
+            row_groups = filter_row_groups(pf, filters)
+        elif row_groups and not isinstance(row_groups[0], int):
             # Input row_groups contains row-group metadata
             row_group_indices = None
         else:
@@ -486,9 +507,12 @@ class PyarrowEngine:
         metadata=None,
         footer=None,
         footer_start=None,
+        filters=None,
     ):
         if metadata is not None:
             raise ValueError("metadata input not supported for PyarrowEngine")
+        if filters:
+            raise NotImplementedError
 
         data_starts, data_ends = [], []
         md = self.pq.ParquetFile(io.BytesIO(footer)).metadata

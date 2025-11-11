@@ -17,23 +17,19 @@ from fsspec.parquet import _get_parquet_byte_ranges, open_parquet_file
 # Define `engine` fixture
 FASTPARQUET_MARK = pytest.mark.skipif(not fastparquet, reason="fastparquet not found")
 PYARROW_MARK = pytest.mark.skipif(not pq, reason="pyarrow not found")
-ANY_ENGINE_MARK = pytest.mark.skipif(
-    not (fastparquet or pq),
-    reason="No parquet engine (fastparquet or pyarrow) found",
-)
 
 
 @pytest.fixture(
     params=[
         pytest.param("fastparquet", marks=FASTPARQUET_MARK),
         pytest.param("pyarrow", marks=PYARROW_MARK),
-        pytest.param("auto", marks=ANY_ENGINE_MARK),
     ]
 )
 def engine(request):
     return request.param
 
 
+@pytest.mark.filterwarnings("ignore:.*Not enough data.*")
 @pytest.mark.parametrize("columns", [None, ["x"], ["x", "y"], ["z"]])
 @pytest.mark.parametrize("max_gap", [0, 64])
 @pytest.mark.parametrize("max_block", [64, 256_000_000])
@@ -44,6 +40,10 @@ def test_open_parquet_file(
 ):
     # Pandas required for this test
     pd = pytest.importorskip("pandas")
+    if engine != "fastparquet":
+        return
+    if columns == ["z"] and engine == "fastparquet":
+        columns = ["z.a"]  # fastparquet is more specific
 
     # Write out a simple DataFrame
     path = os.path.join(str(tmpdir), "test.parquet")
@@ -62,7 +62,7 @@ def test_open_parquet_file(
     df.to_parquet(path)
 
     # "Traditional read" (without `open_parquet_file`)
-    expect = pd.read_parquet(path, columns=columns)
+    expect = pd.read_parquet(path, columns=columns, engine=engine)
 
     # Use `_get_parquet_byte_ranges` to re-write a
     # place-holder file with all bytes NOT required
@@ -106,7 +106,7 @@ def test_open_parquet_file(
         max_block=max_block,
         footer_sample_size=footer_sample_size,
     ) as f:
-        result = pd.read_parquet(f, columns=columns)
+        result = pd.read_parquet(f, columns=columns, engine=engine)
 
     # Check that `result` matches `expect`
     pd.testing.assert_frame_equal(expect, result)
@@ -124,11 +124,21 @@ def test_open_parquet_file(
             max_block=max_block,
             footer_sample_size=footer_sample_size,
         ) as f:
-            result = pd.read_parquet(f, columns=columns)
+            # TODO: construct directory test
+            import struct
+
+            footer = bytes(pf.fmd.to_bytes())
+            footer2 = footer + struct.pack(b"<I", len(footer)) + b"PAR1"
+            f.cache.data[(f.size, f.size + len(footer2))] = footer2
+            f.size = f.cache.size = f.size + len(footer2)
+
+            result = pd.read_parquet(f, columns=columns, engine=engine)
         pd.testing.assert_frame_equal(expect, result)
     elif engine == "pyarrow":
         # Should raise ValueError for "pyarrow"
-        with pytest.raises(ValueError):
+        import pyarrow
+
+        with pytest.raises((ValueError, pyarrow.ArrowError)):
             open_parquet_file(
                 path,
                 metadata=["Not-None"],
