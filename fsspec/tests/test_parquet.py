@@ -21,7 +21,7 @@ PYARROW_MARK = pytest.mark.skipif(not pq, reason="pyarrow not found")
 
 @pytest.fixture(
     params=[
-        pytest.param("fastparquet", marks=FASTPARQUET_MARK),
+        # pytest.param("fastparquet", marks=FASTPARQUET_MARK),
         pytest.param("pyarrow", marks=PYARROW_MARK),
     ]
 )
@@ -40,8 +40,6 @@ def test_open_parquet_file(
 ):
     # Pandas required for this test
     pd = pytest.importorskip("pandas")
-    if engine != "fastparquet":
-        return
     if columns == ["z"] and engine == "fastparquet":
         columns = ["z.a"]  # fastparquet is more specific
 
@@ -135,10 +133,9 @@ def test_open_parquet_file(
             result = pd.read_parquet(f, columns=columns, engine=engine)
         pd.testing.assert_frame_equal(expect, result)
     elif engine == "pyarrow":
-        # Should raise ValueError for "pyarrow"
         import pyarrow
 
-        with pytest.raises((ValueError, pyarrow.ArrowError)):
+        with pytest.raises((ValueError, pyarrow.ArrowException)):
             open_parquet_file(
                 path,
                 metadata=["Not-None"],

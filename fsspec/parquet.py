@@ -19,9 +19,6 @@ class AlreadyBufferedFile(AbstractBufferedFile):
     def _fetch_range(self, start, end):
         raise NotImplementedError
 
-    def close(self):
-        pass
-
 
 def open_parquet_file(
     path,

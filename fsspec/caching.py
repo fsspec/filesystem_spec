@@ -628,7 +628,7 @@ class KnownPartsOfAFile(BaseCache):
         fetcher: Fetcher,
         size: int,
         data: dict[tuple[int, int], bytes] | None = None,
-        strict: bool = True,
+        strict: bool = False,
         **_: Any,
     ):
         super().__init__(blocksize, fetcher, size)
@@ -659,20 +659,30 @@ class KnownPartsOfAFile(BaseCache):
             stop = self.size
 
         out = b""
+        started = False
+        loc_old = 0
         for loc0, loc1 in sorted(self.data):
             if (loc0 <= start < loc1) and (loc0 <= stop <= loc1):
                 # entirely within the block
                 off = start - loc0
                 return self.data[(loc0, loc1)][off : off + stop - start]
+            if started and loc0 > loc_old:
+                # a gap where we need data
+                if self.strict:
+                    raise ValueError
+                out += b"\x00" * (loc0 - loc_old)
             if loc0 <= start < loc1:
                 # found the start
                 off = start - loc0
                 out = self.data[(loc0, loc1)][off : off + stop - start]
-            if start < loc0 and stop > loc1:
+                started = True
+            elif start < loc0 and stop > loc1:
                 # the whole block
                 out += self.data[(loc0, loc1)]
-            if loc0 <= stop <= loc1:
+            elif loc0 <= stop <= loc1:
+                # end block
                 return out + self.data[(loc0, loc1)][: stop - loc0]
+            loc_old = loc1
         raise ValueError
 
 
