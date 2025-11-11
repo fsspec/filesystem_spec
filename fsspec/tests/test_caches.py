@@ -225,24 +225,19 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
         assert result == expected
 
 
-@pytest.mark.parametrize("strict", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
-def test_known(sort, strict):
+def test_known(sort):
     parts = {(10, 20): b"1" * 10, (20, 30): b"2" * 10, (0, 10): b"0" * 10}
     if sort:
         parts = dict(sorted(parts.items()))
-    c = caches["parts"](None, None, 100, parts, strict=strict)
+    c = caches["parts"](None, None, 100, parts)
     assert (0, 30) in c.data  # got consolidated
     assert c._fetch(5, 15) == b"0" * 5 + b"1" * 5
     assert c._fetch(15, 25) == b"1" * 5 + b"2" * 5
-    if strict:
-        # Over-read will raise error
-        with pytest.raises(ValueError):
-            # tries to call None fetcher
-            c._fetch(25, 35)
-    else:
-        # Over-read will be zero-padded
-        assert c._fetch(25, 35) == b"2" * 5 + b"\x00" * 5
+    # Over-read will raise error
+    with pytest.raises(ValueError):
+        # tries to call None fetcher
+        c._fetch(25, 35)
 
 
 def test_background(server, monkeypatch):
