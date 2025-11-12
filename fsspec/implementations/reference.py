@@ -76,13 +76,13 @@ class RefsValuesView(collections.abc.ValuesView):
 
 class RefsItemsView(collections.abc.ItemsView):
     def __iter__(self):
-        return zip(self._mapping.keys(), self._mapping.values())
+        return zip(self._mapping.keys(), self._mapping.values(), strict=False)
 
 
 def ravel_multi_index(idx, sizes):
     val = 0
     mult = 1
-    for i, s in zip(idx[::-1], sizes[::-1]):
+    for i, s in zip(idx[::-1], sizes[::-1], strict=False):
         val += i * mult
         mult *= s
     return val
@@ -286,7 +286,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         recs = self._generate_all_records(field)
         recinfo = [
             {"name": name, "type": "file", "size": rec[-1]}
-            for name, rec in zip(keys, recs)
+            for name, rec in zip(keys, recs, strict=False)
             if rec[0]  # filters out path==None, deleted/missing
         ]
         return fileinfo + recinfo
@@ -349,7 +349,8 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if field not in self.chunk_sizes:
             zarray = self.zmetadata[f"{field}/.zarray"]
             size_ratio = [
-                math.ceil(s / c) for s, c in zip(zarray["shape"], zarray["chunks"])
+                math.ceil(s / c)
+                for s, c in zip(zarray["shape"], zarray["chunks"], strict=False)
             ]
             self.chunk_sizes[field] = size_ratio or [1]
         return self.chunk_sizes[field]
@@ -357,7 +358,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
     def _generate_record(self, field, record):
         """The references for a given parquet file of a given field"""
         refs = self.open_refs(field, record)
-        it = iter(zip(*refs.values()))
+        it = iter(zip(*refs.values(), strict=False))
         if len(refs) == 3:
             # All urls
             return (list(t) for t in it)
@@ -878,7 +879,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             data = self.cat([r for r in rpath if not self.isdir(r)])
         else:
             data = self.cat(rpath)
-        for remote, local in zip(rpath, targets):
+        for remote, local in zip(rpath, targets, strict=False):
             if remote in data:
                 fs.pipe_file(local, data[remote])
 
@@ -918,7 +919,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             ends2 = []
             paths2 = []
             whole_files = set()
-            for u, s, e, p in zip(urls, starts, ends, valid_paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths, strict=False):
                 if isinstance(u, bytes):
                     # data
                     out[p] = u
@@ -930,7 +931,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                     starts2.append(s)
                     ends2.append(e)
                     paths2.append(p)
-            for u, s, e, p in zip(urls, starts, ends, valid_paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths, strict=False):
                 # second run to account for files that are to be loaded whole
                 if s is not None and u not in whole_files:
                     urls2.append(u)
@@ -950,10 +951,12 @@ class ReferenceFileSystem(AsyncFileSystem):
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
 
             # unbundle from merged bytes - simple approach
-            for u, s, e, p in zip(urls, starts, ends, valid_paths):
+            for u, s, e, p in zip(urls, starts, ends, valid_paths, strict=False):
                 if p in out:
                     continue  # was bytes, already handled
-                for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
+                for np, ns, ne, b in zip(
+                    new_paths, new_starts, new_ends, bytes_out, strict=False
+                ):
                     if np == u and (ns is None or ne is None):
                         if isinstance(b, Exception):
                             out[p] = b
@@ -1061,7 +1064,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 for k, v in gen["dimensions"].items()
             }
             products = (
-                dict(zip(dimension.keys(), values))
+                dict(zip(dimension.keys(), values, strict=False))
                 for values in itertools.product(*dimension.values())
             )
             for pr in products:
@@ -1105,7 +1108,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 subdirs.append(par0)
 
             subdirs.reverse()
-            for parent, child in zip(subdirs, subdirs[1:]):
+            for parent, child in zip(subdirs, subdirs[1:], strict=False):
                 # register newly discovered directories
                 assert child not in self.dircache
                 assert parent in self.dircache

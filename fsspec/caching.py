@@ -642,7 +642,7 @@ class KnownPartsOfAFile(BaseCache):
                     offsets.append((start, stop))
                     blocks.append(data.pop((start, stop)))
 
-            self.data = dict(zip(offsets, blocks))
+            self.data = dict(zip(offsets, blocks, strict=False))
         else:
             self.data = {}
 

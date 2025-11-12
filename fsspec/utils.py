@@ -562,8 +562,9 @@ def merge_offset_ranges(
             list(v)
             for v in zip(
                 *sorted(
-                    zip(paths, starts, ends),
-                )
+                    zip(paths, starts, ends, strict=False),
+                ),
+                strict=False,
             )
         )
 

@@ -113,7 +113,7 @@ class FSMap(MutableMapping):
         }
         return {
             key: out[k2] if on_error == "raise" else out.get(k2, KeyError(k2))
-            for key, k2 in zip(keys, keys2)
+            for key, k2 in zip(keys, keys2, strict=False)
             if on_error == "return" or not isinstance(out[k2], BaseException)
         }
 

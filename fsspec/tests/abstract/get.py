@@ -127,7 +127,9 @@ class AbstractGetTests:
         local_fs.mkdir(target)
         assert local_fs.isdir(target)
 
-        for source_slash, target_slash in zip([False, True], [False, True]):
+        for source_slash, target_slash in zip(
+            [False, True], [False, True], strict=False
+        ):
             s = fs_join(source, "subdir")
             if source_slash:
                 s += "/"
@@ -205,7 +207,9 @@ class AbstractGetTests:
         target = local_target
         local_fs.mkdir(target)
 
-        for source_slash, target_slash in zip([False, True], [False, True]):
+        for source_slash, target_slash in zip(
+            [False, True], [False, True], strict=False
+        ):
             s = fs_join(source, "subdir")
             if source_slash:
                 s += "/"
@@ -278,7 +282,7 @@ class AbstractGetTests:
             assert local_fs.ls(target) == []
 
             # With recursive
-            for glob, recursive in zip(["*", "**"], [True, False]):
+            for glob, recursive in zip(["*", "**"], [True, False], strict=False):
                 fs.get(fs_join(source, "subdir", glob), t, recursive=recursive)
                 assert local_fs.isfile(local_join(target, "subfile1"))
                 assert local_fs.isfile(local_join(target, "subfile2"))
@@ -350,7 +354,7 @@ class AbstractGetTests:
             assert local_fs.ls(target) == []
 
             # With recursive
-            for glob, recursive in zip(["*", "**"], [True, False]):
+            for glob, recursive in zip(["*", "**"], [True, False], strict=False):
                 fs.get(fs_join(source, "subdir", glob), t, recursive=recursive)
                 assert local_fs.isdir(local_join(target, "newdir"))
                 assert local_fs.isfile(local_join(target, "newdir", "subfile1"))

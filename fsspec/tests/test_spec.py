@@ -1258,7 +1258,7 @@ def test_dummy_callbacks_files_branched(tmpdir):
     def check_events(lpaths, rpaths):
         from fsspec.implementations.local import make_path_posix
 
-        base_keys = zip(make_path_posix(lpaths), make_path_posix(rpaths))
+        base_keys = zip(make_path_posix(lpaths), make_path_posix(rpaths), strict=False)
         assert set(callback.events.keys()) == {("top-level",), *base_keys}
         assert callback.events["top-level",] == imitate_transfer(10, 10, file=False)
 
