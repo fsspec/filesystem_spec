@@ -652,11 +652,28 @@ class KnownPartsOfAFile(BaseCache):
         else:
             self.data = {}
 
+    @property
+    def size(self):
+        return sum(_[1] - _[0] for _ in self.data)
+
+    @size.setter
+    def size(self, value):
+        pass
+
+    @property
+    def nblocks(self):
+        return len(self.data)
+
+    @nblocks.setter
+    def nblocks(self, value):
+        pass
+
     def _fetch(self, start: int | None, stop: int | None) -> bytes:
         if start is None:
             start = 0
         if stop is None:
             stop = self.size
+        self.total_requested_bytes += stop - start
 
         out = b""
         started = False
@@ -665,24 +682,34 @@ class KnownPartsOfAFile(BaseCache):
             if (loc0 <= start < loc1) and (loc0 <= stop <= loc1):
                 # entirely within the block
                 off = start - loc0
+                self.hit_count += 1
                 return self.data[(loc0, loc1)][off : off + stop - start]
+            if stop <= loc0:
+                break
             if started and loc0 > loc_old:
                 # a gap where we need data
+                self.miss_count += 1
                 if self.strict:
                     raise ValueError
                 out += b"\x00" * (loc0 - loc_old)
             if loc0 <= start < loc1:
                 # found the start
+                self.hit_count += 1
                 off = start - loc0
                 out = self.data[(loc0, loc1)][off : off + stop - start]
                 started = True
             elif start < loc0 and stop > loc1:
                 # the whole block
+                self.hit_count += 1
                 out += self.data[(loc0, loc1)]
             elif loc0 <= stop <= loc1:
                 # end block
+                self.hit_count += 1
                 return out + self.data[(loc0, loc1)][: stop - loc0]
             loc_old = loc1
+        self.miss_count += 1
+        if started and not self.strict:
+            return out + b"\x00" * (stop - loc_old)
         raise ValueError
 
 

@@ -21,7 +21,7 @@ PYARROW_MARK = pytest.mark.skipif(not pq, reason="pyarrow not found")
 
 @pytest.fixture(
     params=[
-        # pytest.param("fastparquet", marks=FASTPARQUET_MARK),
+        pytest.param("fastparquet", marks=FASTPARQUET_MARK),
         pytest.param("pyarrow", marks=PYARROW_MARK),
     ]
 )
@@ -145,3 +145,32 @@ def test_open_parquet_file(
                 max_block=max_block,
                 footer_sample_size=footer_sample_size,
             )
+
+
+@FASTPARQUET_MARK
+def test_with_filter(tmpdir):
+    import pandas as pd
+
+    df = pd.DataFrame(
+        {
+            "a": [10, 1, 2, 3, 7, 8, 9],
+            "b": ["a", "a", "a", "b", "b", "b", "b"],
+        }
+    )
+    fn = os.path.join(str(tmpdir), "test.parquet")
+    df.to_parquet(fn, engine="fastparquet", row_group_offsets=[0, 3], stats=True)
+
+    expect = pd.read_parquet(fn, engine="fastparquet", filters=[["b", "==", "b"]])
+    f = open_parquet_file(
+        fn,
+        engine="fastparquet",
+        filters=[["b", "==", "b"]],
+        max_gap=1,
+        max_block=1,
+        footer_sample_size=8,
+    )
+    assert (0, 4) in f.cache.data
+    assert f.cache.size < os.path.getsize(fn)
+
+    result = pd.read_parquet(f, engine="fastparquet", filters=[["b", "==", "b"]])
+    pd.testing.assert_frame_equal(expect, result)
