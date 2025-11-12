@@ -145,5 +145,5 @@ jobs:
         shell: bash -l {0}
         run: |
           cd ${{ matrix.FRIEND }}
-          pytest -v
+          pytest -v -W ignore::pytest.PytestRemovedIn9Warning
           cd ..
