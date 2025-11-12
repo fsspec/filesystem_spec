@@ -6,8 +6,9 @@ import os
 import tempfile
 import time
 import weakref
+from collections.abc import Callable
 from shutil import rmtree
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from fsspec import filesystem
 from fsspec.callbacks import DEFAULT_CALLBACK

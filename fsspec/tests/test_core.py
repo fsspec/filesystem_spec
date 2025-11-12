@@ -304,14 +304,14 @@ def test_open_file_write_with_special_characters(tmp_path, char, monkeypatch):
     with fsspec.open(file_path, "w", expand=False) as f:
         f.write(expected_content)
 
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         actual_content = f.read()
 
     monkeypatch.setattr(fsspec.core, "DEFAULT_EXPAND", False)
     with fsspec.open(file_path, "w") as f:
         f.write(expected_content * 2)
 
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         assert f.read() == actual_content * 2
 
     assert actual_content == expected_content
@@ -347,7 +347,7 @@ def test_open_files_write_with_special_characters(tmp_path, char):
     )[0] as f:
         f.write(expected_content)
 
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         actual_content = f.read()
 
     assert actual_content == expected_content

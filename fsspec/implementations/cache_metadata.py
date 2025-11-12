@@ -15,9 +15,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Any, Literal
-
-    from typing_extensions import TypeAlias
+    from typing import Any, Literal, TypeAlias
 
     from .cached import CachingFileSystem
 
@@ -57,7 +55,7 @@ class CacheMetadata:
     def _load(self, fn: str) -> Detail:
         """Low-level function to load metadata from specific file"""
         try:
-            with open(fn, "r") as f:
+            with open(fn) as f:
                 loaded = json.load(f)
         except ValueError:
             with open(fn, "rb") as f:

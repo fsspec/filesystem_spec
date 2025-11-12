@@ -8,18 +8,11 @@ import os
 import threading
 import warnings
 from collections import OrderedDict
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import groupby
 from operator import itemgetter
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    ClassVar,
-    Generic,
-    NamedTuple,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
     import mmap

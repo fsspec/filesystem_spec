@@ -185,7 +185,7 @@ def test_metadata_replace_pickle_with_json(tmpdir):
         assert f.read(5) == b"test"
 
     # Confirm metadata is in json format
-    with open(cache_fn, "r") as f:
+    with open(cache_fn) as f:
         metadata = json.load(f)
     assert list(metadata.keys()) == [make_path_posix(afile)]
 
@@ -253,7 +253,7 @@ def test_blockcache_workflow(ftp_writable, tmp_path, force_save_pickle):
         with open(tmp_path / "cache", "rb") as f:
             cache = pickle.load(f)
     else:
-        with open(tmp_path / "cache", "r") as f:
+        with open(tmp_path / "cache") as f:
             cache = json.load(f)
     assert "/out" in cache
     assert cache["/out"]["blocks"] == [0, 1]
@@ -370,7 +370,7 @@ def test_clear_expired(tmp_path, force_save_pickle):
                 with open(cache_fn, "rb") as f:
                     cached_files = pickle.load(f)
             else:
-                with open(cache_fn, "r") as f:
+                with open(cache_fn) as f:
                     cached_files = json.load(f)
             fn_posix = pathlib.Path(fn).as_posix()
             cached_files[fn_posix]["time"] = cached_files[fn_posix]["time"] - 691200
