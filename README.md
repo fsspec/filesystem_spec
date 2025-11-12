@@ -47,7 +47,7 @@ CI runtime. For local use, pick a version suitable for you.
 
 ```bash
 # For a new environment (mamba / conda).
-mamba create -n fsspec -c conda-forge  python=3.9 -y
+mamba create -n fsspec -c conda-forge  python=3.10 -y
 conda activate fsspec
 
 # Standard dev install with docs and tests.
