@@ -1,13 +1,8 @@
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from pathlib import PurePath
-from typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Optional,
-)
+from typing import Any, ClassVar
 
 from .registry import _import_class, get_filesystem_class
 from .spec import AbstractFileSystem
@@ -45,12 +40,12 @@ class FilesystemJSONDecoder(json.JSONDecoder):
     def __init__(
         self,
         *,
-        object_hook: Optional[Callable[[dict[str, Any]], Any]] = None,
-        parse_float: Optional[Callable[[str], Any]] = None,
-        parse_int: Optional[Callable[[str], Any]] = None,
-        parse_constant: Optional[Callable[[str], Any]] = None,
+        object_hook: Callable[[dict[str, Any]], Any] | None = None,
+        parse_float: Callable[[str], Any] | None = None,
+        parse_int: Callable[[str], Any] | None = None,
+        parse_constant: Callable[[str], Any] | None = None,
         strict: bool = True,
-        object_pairs_hook: Optional[Callable[[list[tuple[str, Any]]], Any]] = None,
+        object_pairs_hook: Callable[[list[tuple[str, Any]]], Any] | None = None,
     ) -> None:
         self.original_object_hook = object_hook
 

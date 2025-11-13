@@ -15,9 +15,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Any, Literal
-
-    from typing_extensions import TypeAlias
+    from typing import Any, Literal, TypeAlias
 
     from .cached import CachingFileSystem
 

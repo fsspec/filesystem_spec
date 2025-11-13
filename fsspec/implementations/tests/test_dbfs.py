@@ -23,7 +23,6 @@ you need to re-record the answers. This can be done as follows:
 """
 
 import os
-import sys
 from urllib.parse import urlparse
 
 import numpy
@@ -31,8 +30,7 @@ import pytest
 
 import fsspec
 
-if sys.version_info >= (3, 10):
-    pytest.skip("These tests need to be re-recorded.", allow_module_level=True)
+pytest.skip("These tests need to be re-recorded.", allow_module_level=True)
 
 DUMMY_INSTANCE = "my_instance.com"
 INSTANCE = os.getenv("DBFS_INSTANCE", DUMMY_INSTANCE)
