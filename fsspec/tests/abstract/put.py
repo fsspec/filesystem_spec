@@ -123,9 +123,7 @@ class AbstractPutTests:
             fs.touch(dummy)
         assert fs.isdir(target)
 
-        for source_slash, target_slash in zip(
-            [False, True], [False, True], strict=False
-        ):
+        for source_slash, target_slash in zip([False, True], [False, True]):
             s = fs_join(source, "subdir")
             if source_slash:
                 s += "/"
@@ -206,9 +204,7 @@ class AbstractPutTests:
         target = fs_target
         fs.mkdir(target)
 
-        for source_slash, target_slash in zip(
-            [False, True], [False, True], strict=False
-        ):
+        for source_slash, target_slash in zip([False, True], [False, True]):
             s = fs_join(source, "subdir")
             if source_slash:
                 s += "/"
@@ -290,7 +286,7 @@ class AbstractPutTests:
             )
 
             # With recursive
-            for glob, recursive in zip(["*", "**"], [True, False], strict=False):
+            for glob, recursive in zip(["*", "**"], [True, False]):
                 fs.put(local_join(source, "subdir", glob), t, recursive=recursive)
                 assert fs.isfile(fs_join(target, "subfile1"))
                 assert fs.isfile(fs_join(target, "subfile2"))
@@ -361,7 +357,7 @@ class AbstractPutTests:
             assert not fs.exists(fs_join(target, "newdir"))
 
             # With recursive
-            for glob, recursive in zip(["*", "**"], [True, False], strict=False):
+            for glob, recursive in zip(["*", "**"], [True, False]):
                 fs.put(local_join(source, "subdir", glob), t, recursive=recursive)
                 assert fs.isdir(fs_join(target, "newdir"))
                 assert fs.isfile(fs_join(target, "newdir", "subfile1"))

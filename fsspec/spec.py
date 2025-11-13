@@ -866,7 +866,7 @@ class AbstractFileSystem(metaclass=_Cached):
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
         out = []
-        for p, s, e in zip(paths, starts, ends, strict=False):
+        for p, s, e in zip(paths, starts, ends):
             try:
                 out.append(self.cat_file(p, s, e))
             except Exception as e:
@@ -1006,7 +1006,7 @@ class AbstractFileSystem(metaclass=_Cached):
             )
 
         callback.set_size(len(lpaths))
-        for lpath, rpath in callback.wrap(zip(lpaths, rpaths, strict=False)):
+        for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
             with callback.branched(rpath, lpath) as child:
                 self.get_file(rpath, lpath, callback=child, **kwargs)
 
@@ -1098,7 +1098,7 @@ class AbstractFileSystem(metaclass=_Cached):
             )
 
         callback.set_size(len(rpaths))
-        for lpath, rpath in callback.wrap(zip(lpaths, rpaths, strict=False)):
+        for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
             with callback.branched(lpath, rpath) as child:
                 self.put_file(lpath, rpath, callback=child, **kwargs)
 
@@ -1165,7 +1165,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 flatten=not source_is_str,
             )
 
-        for p1, p2 in zip(paths1, paths2, strict=False):
+        for p1, p2 in zip(paths1, paths2):
             try:
                 self.cp_file(p1, p2, **kwargs)
             except FileNotFoundError:

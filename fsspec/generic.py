@@ -135,7 +135,7 @@ def rsync(
             allfiles[k] = otherfile
     logger.debug(f"{len(allfiles)} files to copy")
     if allfiles:
-        source_files, target_files = zip(*allfiles.items(), strict=False)
+        source_files, target_files = zip(*allfiles.items())
         fs.cp(source_files, target_files, **kwargs)
     logger.debug(f"{len(to_delete)} files to delete")
     if delete_missing and to_delete:
@@ -361,7 +361,7 @@ async def copy_file_op(
                 u2,
                 os.path.join(tempdir, uuid.uuid4().hex),
             )
-            for u1, u2 in zip(url1, url2, strict=False)
+            for u1, u2 in zip(url1, url2)
         ]
         out = await _run_coros_in_chunks(
             coros, batch_size=batch_size, return_exceptions=True

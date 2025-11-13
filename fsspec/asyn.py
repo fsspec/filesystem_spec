@@ -397,10 +397,7 @@ class AsyncFileSystem(AbstractFileSystem):
             )
 
         batch_size = batch_size or self.batch_size
-        coros = [
-            self._cp_file(p1, p2, **kwargs)
-            for p1, p2 in zip(paths1, paths2, strict=False)
-        ]
+        coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths1, paths2)]
         result = await _run_coros_in_chunks(
             coros, batch_size=batch_size, return_exceptions=True, nofiles=True
         )
@@ -472,7 +469,7 @@ class AsyncFileSystem(AbstractFileSystem):
         ):
             return {
                 k: v
-                for k, v in zip(paths, out, strict=False)
+                for k, v in zip(paths, out)
                 if on_error != "omit" or not is_exception(v)
             }
         else:
@@ -512,7 +509,7 @@ class AsyncFileSystem(AbstractFileSystem):
             raise ValueError
         coros = [
             self._cat_file(p, start=s, end=e, **kwargs)
-            for p, s, e in zip(paths, starts, ends, strict=False)
+            for p, s, e in zip(paths, starts, ends)
         ]
         batch_size = batch_size or self.batch_size
         return await _run_coros_in_chunks(
@@ -580,10 +577,8 @@ class AsyncFileSystem(AbstractFileSystem):
             )
 
         is_dir = {l: os.path.isdir(l) for l in lpaths}
-        rdirs = [r for l, r in zip(lpaths, rpaths, strict=False) if is_dir[l]]
-        file_pairs = [
-            (l, r) for l, r in zip(lpaths, rpaths, strict=False) if not is_dir[l]
-        ]
+        rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
+        file_pairs = [(l, r) for l, r in zip(lpaths, rpaths) if not is_dir[l]]
 
         await asyncio.gather(*[self._makedirs(d, exist_ok=True) for d in rdirs])
         batch_size = batch_size or self.batch_size
@@ -667,7 +662,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
         coros = []
         callback.set_size(len(lpaths))
-        for lpath, rpath in zip(lpaths, rpaths, strict=False):
+        for lpath, rpath in zip(lpaths, rpaths):
             get_file = callback.branch_coro(self._get_file)
             coros.append(get_file(rpath, lpath, **kwargs))
         return await _run_coros_in_chunks(

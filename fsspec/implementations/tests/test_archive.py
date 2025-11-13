@@ -322,7 +322,7 @@ class TestAnyArchive:
             # prior py3.10 zip() does not support strict=True, we need
             # a manual len check here
             assert len(result) == len(expected)
-            for lhs, rhs in zip(result, expected, strict=False):
+            for lhs, rhs in zip(result, expected):
                 assert lhs[0] == rhs[0]
                 assert sorted(lhs[1]) == sorted(rhs[1])
                 assert sorted(lhs[2]) == sorted(rhs[2])

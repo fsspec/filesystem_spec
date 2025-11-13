@@ -61,9 +61,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                 paths[p] = f
             elif all(
                 (a == b)
-                for a, b in zip(
-                    path.split("/"), [""] + p.strip("/").split("/"), strict=False
-                )
+                for a, b in zip(path.split("/"), [""] + p.strip("/").split("/"))
             ):
                 # root directory entry
                 ppath = p.rstrip("/").split("/", 1)[0]

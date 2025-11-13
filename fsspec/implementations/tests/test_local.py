@@ -172,13 +172,11 @@ def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
     _, _, paths = get_fs_token_paths("prefix-*.csv", mode="wb", num=2)
     assert all(
-        p.endswith(pa)
-        for p, pa in zip(paths, ["/prefix-0.csv", "/prefix-1.csv"], strict=False)
+        p.endswith(pa) for p, pa in zip(paths, ["/prefix-0.csv", "/prefix-1.csv"])
     )
     _, _, paths = get_fs_token_paths(["prefix-*.csv"], mode="wb", num=2)
     assert all(
-        p.endswith(pa)
-        for p, pa in zip(paths, ["/prefix-0.csv", "/prefix-1.csv"], strict=False)
+        p.endswith(pa) for p, pa in zip(paths, ["/prefix-0.csv", "/prefix-1.csv"])
     )
     # we can read with multiple masks, but not write
     with pytest.raises(ValueError):
@@ -191,7 +189,7 @@ def test_open_files():
     with filetexts(files, mode="b"):
         myfiles = open_files("./.test.accounts.*")
         assert len(myfiles) == len(files)
-        for lazy_file, data_file in zip(myfiles, sorted(files), strict=False):
+        for lazy_file, data_file in zip(myfiles, sorted(files)):
             with lazy_file as f:
                 x = f.read()
                 assert x == files[data_file]
@@ -293,7 +291,7 @@ def test_pickability_of_lazy_files(tmpdir):
         myfiles = open_files("./.test.accounts.*")
         myfiles2 = cloudpickle.loads(cloudpickle.dumps(myfiles))
 
-        for f, f2 in zip(myfiles, myfiles2, strict=False):
+        for f, f2 in zip(myfiles, myfiles2):
             assert f.path == f2.path
             assert isinstance(f.fs, type(f2.fs))
             with f as f_open, f2 as f2_open:

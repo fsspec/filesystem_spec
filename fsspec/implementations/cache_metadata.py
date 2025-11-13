@@ -105,9 +105,7 @@ class CacheMetadata:
         perform extra checks to reject possible matches, such as if they are
         too old.
         """
-        for (fn, base, _), cache in zip(
-            self._scan_locations(), self.cached_files, strict=False
-        ):
+        for (fn, base, _), cache in zip(self._scan_locations(), self.cached_files):
             if path not in cache:
                 continue
             detail = cache[path].copy()
@@ -194,9 +192,7 @@ class CacheMetadata:
 
     def save(self) -> None:
         """Save metadata to disk"""
-        for (fn, _, writable), cache in zip(
-            self._scan_locations(), self.cached_files, strict=False
-        ):
+        for (fn, _, writable), cache in zip(self._scan_locations(), self.cached_files):
             if not writable:
                 continue
 

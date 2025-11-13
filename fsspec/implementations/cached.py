@@ -574,12 +574,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         if self.compression:
             raise NotImplementedError
         details = [self._check_file(sp) for sp in paths]
-        downpath = [p for p, d in zip(paths, details, strict=False) if not d]
+        downpath = [p for p, d in zip(paths, details) if not d]
         downfn0 = [
             os.path.join(self.storage[-1], self._mapper(p))
-            for p, d in zip(paths, details, strict=False)
+            for p, d in zip(paths, details)
         ]  # keep these path names for opening later
-        downfn = [fn for fn, d in zip(downfn0, details, strict=False) if not d]
+        downfn = [fn for fn, d in zip(downfn0, details) if not d]
         if downpath:
             # skip if all files are already cached and up to date
             self.fs.get(downpath, downfn)
@@ -595,7 +595,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 }
                 for path in downpath
             ]
-            for path, detail in zip(downpath, newdetail, strict=False):
+            for path, detail in zip(downpath, newdetail):
                 self._metadata.update_file(path, detail)
             self.save_cache()
 
@@ -605,7 +605,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
         return [
             open(firstpart(fn0) if fn0 else fn1, mode=open_files.mode)
-            for fn0, fn1 in zip(details, downfn0, strict=False)
+            for fn0, fn1 in zip(details, downfn0)
         ]
 
     def commit_many(self, open_files):
@@ -670,7 +670,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             self.save_cache()
 
         callback.set_size(len(paths))
-        for p, fn in zip(paths, fns, strict=False):
+        for p, fn in zip(paths, fns):
             with open(fn, "rb") as f:
                 out[p] = f.read()
             callback.relative_update(1)
@@ -886,8 +886,8 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     ):
         logger.debug("cat ranges %s", paths)
         lpaths = [self._check_file(p) for p in paths]
-        rpaths = [p for l, p in zip(lpaths, paths, strict=False) if l is False]
-        lpaths = [l for l, p in zip(lpaths, paths, strict=False) if l is False]
+        rpaths = [p for l, p in zip(lpaths, paths) if l is False]
+        lpaths = [l for l, p in zip(lpaths, paths) if l is False]
         self.fs.get(rpaths, lpaths)
         paths = [self._check_file(p) for p in paths]
         return LocalFileSystem().cat_ranges(
