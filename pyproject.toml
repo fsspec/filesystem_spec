@@ -194,6 +194,8 @@ ignore = [
 	"B026",
 	# No explicit `stacklevel` keyword argument found
 	"B028",
+    # `zip` without explicit `strict` keyword
+    "B905",
     # Assigning lambda expression
     "E731",
     # Ambiguous variable names
