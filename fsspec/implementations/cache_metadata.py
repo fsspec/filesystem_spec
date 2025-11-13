@@ -55,7 +55,7 @@ class CacheMetadata:
     def _load(self, fn: str) -> Detail:
         """Low-level function to load metadata from specific file"""
         try:
-            with open(fn) as f:
+            with open(fn, "r") as f:
                 loaded = json.load(f)
         except ValueError:
             with open(fn, "rb") as f:
