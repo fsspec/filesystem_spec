@@ -318,3 +318,41 @@ def test_cat_file_seekable_override(fs, remote_dir):
     # Test with explicit seekable=False
     result = fs.cat_file(remote_dir + "/test_cat.txt", seekable=False)
     assert result == data
+
+
+def test_seekable_true_allows_size_method(fs, remote_dir):
+    """Test that size() method works when seekable=True."""
+    data = b"test data for size method" * 10
+
+    # Create a test file
+    test_file = remote_dir + "/test_size.txt"
+    with fs.open(test_file, "wb") as f:
+        f.write(data)
+
+    # Open with seekable=True - size() should work
+    with fs.open(test_file, "rb", seekable=True) as f:
+        assert f.seekable() is True
+        # Verify size() method works and returns correct size
+        file_size = f.size()
+        assert file_size == len(data)
+        # Also verify we can read the data
+        assert f.read() == data
+
+
+def test_seekable_false_prevents_size_method(fs, remote_dir):
+    """Test that size() method raises OSError when seekable=False."""
+    data = b"test data for size method" * 10
+
+    # Create a test file
+    test_file = remote_dir + "/test_size.txt"
+    with fs.open(test_file, "wb") as f:
+        f.write(data)
+
+    # Open with seekable=False - size() should raise OSError
+    with fs.open(test_file, "rb", seekable=False) as f:
+        assert f.seekable() is False
+        # Verify size() raises OSError
+        with pytest.raises(OSError, match="only valid on seekable files"):
+            f.size()
+        # Verify we can still read the data
+        assert f.read() == data
