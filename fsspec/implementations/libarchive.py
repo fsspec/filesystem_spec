@@ -195,7 +195,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
         if mode != "rb":
             raise NotImplementedError
 
-        data = bytes()
+        data = b""
         with self._open_archive() as arc:
             for entry in arc:
                 if entry.pathname != path:

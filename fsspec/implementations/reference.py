@@ -219,7 +219,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
 
-    @lru_cache()
+    @lru_cache
     def listdir(self):
         """List top-level directories"""
         dirs = (p.rsplit("/", 1)[0] for p in self.zmetadata if not p.startswith(".z"))

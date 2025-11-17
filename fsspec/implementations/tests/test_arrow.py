@@ -268,3 +268,91 @@ def test_get_kwargs_from_urls_hadoop_fs():
     assert kwargs["host"] == "localhost"
     assert kwargs["port"] == 8020
     assert "replication" not in kwargs
+
+
+def test_get_file_seekable_default(fs, remote_dir, tmp_path):
+    """Test that get_file defaults to seekable=False but allows override."""
+    data = b"test data for seekable"
+
+    # Create a test file
+    with fs.open(remote_dir + "/test_file.txt", "wb") as f:
+        f.write(data)
+
+    # Test default behavior (seekable=False)
+    local_file = tmp_path / "test_default.txt"
+    fs.get_file(remote_dir + "/test_file.txt", str(local_file))
+    with open(local_file, "rb") as f:
+        assert f.read() == data
+
+    # Test with explicit seekable=True
+    local_file_seekable = tmp_path / "test_seekable.txt"
+    fs.get_file(remote_dir + "/test_file.txt", str(local_file_seekable), seekable=True)
+    with open(local_file_seekable, "rb") as f:
+        assert f.read() == data
+
+    # Test with explicit seekable=False
+    local_file_not_seekable = tmp_path / "test_not_seekable.txt"
+    fs.get_file(
+        remote_dir + "/test_file.txt", str(local_file_not_seekable), seekable=False
+    )
+    with open(local_file_not_seekable, "rb") as f:
+        assert f.read() == data
+
+
+def test_cat_file_seekable_override(fs, remote_dir):
+    """Test that cat_file allows seekable to be overridden."""
+    data = b"test data for cat_file seekable"
+
+    # Create a test file
+    with fs.open(remote_dir + "/test_cat.txt", "wb") as f:
+        f.write(data)
+
+    # Test default behavior - when start is None, seekable should default to False
+    result = fs.cat_file(remote_dir + "/test_cat.txt")
+    assert result == data
+
+    # Test with explicit seekable=True even when start is None
+    result = fs.cat_file(remote_dir + "/test_cat.txt", seekable=True)
+    assert result == data
+
+    # Test with explicit seekable=False
+    result = fs.cat_file(remote_dir + "/test_cat.txt", seekable=False)
+    assert result == data
+
+
+def test_seekable_true_allows_size_method(fs, remote_dir):
+    """Test that size() method works when seekable=True."""
+    data = b"test data for size method" * 10
+
+    # Create a test file
+    test_file = remote_dir + "/test_size.txt"
+    with fs.open(test_file, "wb") as f:
+        f.write(data)
+
+    # Open with seekable=True - size() should work
+    with fs.open(test_file, "rb", seekable=True) as f:
+        assert f.seekable() is True
+        # Verify size() method works and returns correct size
+        file_size = f.size()
+        assert file_size == len(data)
+        # Also verify we can read the data
+        assert f.read() == data
+
+
+def test_seekable_false_prevents_size_method(fs, remote_dir):
+    """Test that size() method raises OSError when seekable=False."""
+    data = b"test data for size method" * 10
+
+    # Create a test file
+    test_file = remote_dir + "/test_size.txt"
+    with fs.open(test_file, "wb") as f:
+        f.write(data)
+
+    # Open with seekable=False - size() should raise OSError
+    with fs.open(test_file, "rb", seekable=False) as f:
+        assert f.seekable() is False
+        # Verify size() raises OSError
+        with pytest.raises(OSError, match="only valid on seekable files"):
+            f.size()
+        # Verify we can still read the data
+        assert f.read() == data
