@@ -73,6 +73,35 @@ def test_callbacks_wrap():
     assert events == [1] * 10
 
 
+def test_set_size_with_callable():
+    """Test that set_size accepts both int and callable parameters."""
+    callback = Callback()
+
+    # Test with integer
+    callback.set_size(100)
+    assert callback.size == 100
+
+    # Test with callable (lambda)
+    callback.set_size(lambda: 200)
+    assert callback.size == 200
+
+    # Test with callable (function)
+    def get_size():
+        return 300
+
+    callback.set_size(get_size)
+    assert callback.size == 300
+
+    # Test with callable that simulates a method attribute
+    class MockFileSystem:
+        def size(self):
+            return 400
+
+    fs = MockFileSystem()
+    callback.set_size(fs.size)
+    assert callback.size == 400
+
+
 @pytest.mark.parametrize("tqdm_kwargs", [{}, {"desc": "A custom desc"}])
 def test_tqdm_callback(tqdm_kwargs, mocker):
     pytest.importorskip("tqdm")
