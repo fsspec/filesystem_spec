@@ -91,29 +91,8 @@ class Callback:
 
         Parameters
         ----------
-        size: int or callable
-            The total size of the transfer. Can be either:
-            - An integer representing the total size directly
-            - A callable (function/method) that returns an integer when invoked
-
-            The callable option is useful when the size is only available as a
-            method on an object (e.g., filesystem objects that have a ``size()``
-            method instead of a ``size`` attribute).
-
-        Examples
-        --------
-        >>> callback = Callback()
-        >>> callback.set_size(1000)  # Direct integer
-        >>> callback.set_size(lambda: 1000)  # Callable returning integer
-
-        Notes
-        -----
-        If a callable is provided, it will be invoked immediately to obtain
-        the size value. The callable should take no arguments and return an
-        integer.
+        size: int
         """
-        if callable(size):
-            size = size()
         self.size = size
         self.call()
 
