@@ -223,7 +223,6 @@ class ArrowFSWrapper(AbstractFileSystem):
         "readable",
         "writable",
         "close",
-        "size",
         "seekable",
     ],
 )
