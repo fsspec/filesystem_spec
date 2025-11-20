@@ -333,7 +333,7 @@ def test_seekable_true_allows_size_method(fs, remote_dir):
     with fs.open(test_file, "rb", seekable=True) as f:
         assert f.seekable() is True
         # Verify size() method works and returns correct size
-        file_size = f.size()
+        file_size = f.size
         assert file_size == len(data)
         # Also verify we can read the data
         assert f.read() == data
@@ -353,6 +353,6 @@ def test_seekable_false_prevents_size_method(fs, remote_dir):
         assert f.seekable() is False
         # Verify size() raises OSError
         with pytest.raises(OSError, match="only valid on seekable files"):
-            f.size()
+            f.size
         # Verify we can still read the data
         assert f.read() == data
