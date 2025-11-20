@@ -280,9 +280,8 @@ def test_get_file_seekable_default(fs, remote_dir, tmp_path):
 
     # Test default behavior (seekable=False)
     local_file = tmp_path / "test_default.txt"
-    fs.get_file(remote_dir + "/test_file.txt", str(local_file))
-    with open(local_file, "rb") as f:
-        assert f.read() == data
+    with pytest.raises(OSError, match="only valid on seekable files"):
+        fs.get_file(remote_dir + "/test_file.txt", str(local_file))
 
     # Test with explicit seekable=True
     local_file_seekable = tmp_path / "test_seekable.txt"
@@ -292,11 +291,10 @@ def test_get_file_seekable_default(fs, remote_dir, tmp_path):
 
     # Test with explicit seekable=False
     local_file_not_seekable = tmp_path / "test_not_seekable.txt"
-    fs.get_file(
-        remote_dir + "/test_file.txt", str(local_file_not_seekable), seekable=False
-    )
-    with open(local_file_not_seekable, "rb") as f:
-        assert f.read() == data
+    with pytest.raises(OSError, match="only valid on seekable files"):
+        fs.get_file(
+            remote_dir + "/test_file.txt", str(local_file_not_seekable), seekable=False
+        )
 
 
 def test_cat_file_seekable_override(fs, remote_dir):
@@ -353,6 +351,6 @@ def test_seekable_false_prevents_size_method(fs, remote_dir):
         assert f.seekable() is False
         # Verify size() raises OSError
         with pytest.raises(OSError, match="only valid on seekable files"):
-            f.size
+            _ = f.size
         # Verify we can still read the data
         assert f.read() == data
