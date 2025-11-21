@@ -463,15 +463,22 @@ class HTTPFileSystem(AbstractFileSystem):
                 end -= 1  # bytes range is inclusive
         return f"bytes={start}-{end}"
 
-    def exists(self, path, **kwargs):
+    def exists(self, path, strict=False, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         try:
             logger.debug(path)
             r = self.session.get(self.encode_url(path), **kw)
+            if strict:
+                self._raise_not_found_for_status(r, path)
             return r.status_code < 400
-        except Exception:
-            return False
+        except Exception as e:
+            if strict and isinstance(e, FileNotFoundError):
+                return False
+            elif strict:
+                raise
+            else:
+                return False
 
     def isfile(self, path, **kwargs):
         return self.exists(path, **kwargs)

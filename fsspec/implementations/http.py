@@ -334,9 +334,13 @@ class HTTPFileSystem(AsyncFileSystem):
             session = await self.set_session()
             r = await session.get(self.encode_url(path), **kw)
             async with r:
+                if strict:
+                    self._raise_not_found_for_status(r, path)
                 return r.status < 400
-        except aiohttp.ClientError:
-            if strict:
+        except (FileNotFoundError, aiohttp.ClientError) as e:
+            if strict and isinstance(e, FileNotFoundError):
+                return False
+            elif strict:
                 raise
             else:
                 return False

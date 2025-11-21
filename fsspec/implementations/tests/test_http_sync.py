@@ -6,7 +6,7 @@ import time
 import pytest
 
 import fsspec.utils
-from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import data, reset_files, server, win, requests  # noqa: F401
 
 
 @pytest.fixture()
@@ -145,6 +145,14 @@ def test_exists(server, sync):
     assert not h.exists(server.address + "/notafile")
     with pytest.raises(FileNotFoundError):
         h.cat(server.address + "/notafile")
+
+
+def test_exists_strict(server, sync):
+    h = fsspec.filesystem("http")
+    assert not h.exists(server.address + "/notafile", strict=True)
+    with pytest.raises(requests.exceptions.HTTPError) as e:
+        h.exists(server.address + "/unauthorized", strict=True)
+    assert e.value.response.status_code == 401
 
 
 def test_read(server, sync):

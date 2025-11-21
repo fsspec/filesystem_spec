@@ -163,6 +163,14 @@ def test_exists(server):
         h.cat(server.address + "/notafile")
 
 
+def test_exists_strict(server):
+    h = fsspec.filesystem("http")
+    assert not h.exists(server.address + "/notafile", strict=True)
+    with pytest.raises(aiohttp.ClientResponseError) as e:
+        h.exists(server.address + "/unauthorized", strict=True)
+    assert e.value.status == 401
+
+
 def test_read(server):
     h = fsspec.filesystem("http")
     out = server.realfile
