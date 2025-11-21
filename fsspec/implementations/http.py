@@ -327,7 +327,7 @@ class HTTPFileSystem(AsyncFileSystem):
         async with meth(self.encode_url(rpath), data=gen_chunks(), **kw) as resp:
             self._raise_not_found_for_status(resp, rpath)
 
-    async def _exists(self, path, **kwargs):
+    async def _exists(self, path, strict=False, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         try:
@@ -335,8 +335,14 @@ class HTTPFileSystem(AsyncFileSystem):
             session = await self.set_session()
             r = await session.get(self.encode_url(path), **kw)
             async with r:
+                if strict:
+                    self._raise_not_found_for_status(r, path)
                 return r.status < 400
+        except FileNotFoundError:
+            return False
         except aiohttp.ClientError:
+            if strict:
+                raise
             return False
 
     async def _isfile(self, path, **kwargs):

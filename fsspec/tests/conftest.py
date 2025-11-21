@@ -54,6 +54,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         "/simple/file": data,
         "/simple/dir/": _make_listing("/simple/dir/file"),
         "/simple/dir/file": data,
+        "/unauthorized": AssertionError("shouldn't access"),
     }
     dynamic_files = {}
 
@@ -85,6 +86,8 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         if "redirect" in self.headers and file_path != "/index/realfile":
             new_url = _make_realfile(baseurl)
             return self._respond(301, {"Location": new_url})
+        if file_path == "/unauthorized":
+            return self._respond(401)
         if file_data is None:
             return self._respond(404)
 
