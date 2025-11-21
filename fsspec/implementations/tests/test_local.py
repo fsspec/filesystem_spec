@@ -929,37 +929,35 @@ def test_strip_protocol_no_authority(uri, expected, cwd, current_drive):
 
 @pytest.mark.parametrize(
     "uri, expected",
-    (
-        [
-            ("file:/path", "/path"),
-            ("file:///path", "/path"),
-            ("file:////path", "//path"),
-            ("local:/path", "/path"),
-            ("s3://bucket/key", "{cwd}/s3://bucket/key"),
-            ("/path", "/path"),
-            ("file:///", "/"),
-        ]
-        if not WIN
-        else [
-            ("file:c:/path", "c:/path"),
-            ("file:/c:/path", "c:/path"),
-            ("file:/C:/path", "C:/path"),
-            ("file://c:/path", "c:/path"),
-            ("file:///c:/path", "c:/path"),
-            ("local:/path", "{current_drive}/path"),
-            ("s3://bucket/key", "{cwd}/s3://bucket/key"),
-            ("c:/path", "c:/path"),
-            ("c:\\path", "c:/path"),
-            ("file:///", "{current_drive}/"),
-            pytest.param(
-                "file://localhost/c:/path",
-                "c:/path",
-                marks=pytest.mark.xfail(
-                    reason="rfc8089 section3 'localhost uri' not supported"
-                ),
+    [
+        ("file:/path", "/path"),
+        ("file:///path", "/path"),
+        ("file:////path", "//path"),
+        ("local:/path", "/path"),
+        ("s3://bucket/key", "{cwd}/s3://bucket/key"),
+        ("/path", "/path"),
+        ("file:///", "/"),
+    ]
+    if not WIN
+    else [
+        ("file:c:/path", "c:/path"),
+        ("file:/c:/path", "c:/path"),
+        ("file:/C:/path", "C:/path"),
+        ("file://c:/path", "c:/path"),
+        ("file:///c:/path", "c:/path"),
+        ("local:/path", "{current_drive}/path"),
+        ("s3://bucket/key", "{cwd}/s3://bucket/key"),
+        ("c:/path", "c:/path"),
+        ("c:\\path", "c:/path"),
+        ("file:///", "{current_drive}/"),
+        pytest.param(
+            "file://localhost/c:/path",
+            "c:/path",
+            marks=pytest.mark.xfail(
+                reason="rfc8089 section3 'localhost uri' not supported"
             ),
-        ]
-    ),
+        ),
+    ],
 )
 def test_strip_protocol_absolute_paths(uri, expected, current_drive, cwd):
     expected = expected.format(current_drive=current_drive, cwd=cwd)
