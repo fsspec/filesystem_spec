@@ -472,13 +472,12 @@ class HTTPFileSystem(AbstractFileSystem):
             if strict:
                 self._raise_not_found_for_status(r, path)
             return r.status_code < 400
-        except Exception as e:
-            if strict and isinstance(e, FileNotFoundError):
-                return False
-            elif strict:
+        except FileNotFoundError:
+            return False
+        except Exception:
+            if strict:
                 raise
-            else:
-                return False
+            return False
 
     def isfile(self, path, **kwargs):
         return self.exists(path, **kwargs)

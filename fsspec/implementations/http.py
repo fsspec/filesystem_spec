@@ -337,13 +337,12 @@ class HTTPFileSystem(AsyncFileSystem):
                 if strict:
                     self._raise_not_found_for_status(r, path)
                 return r.status < 400
-        except (FileNotFoundError, aiohttp.ClientError) as e:
-            if strict and isinstance(e, FileNotFoundError):
-                return False
-            elif strict:
+        except FileNotFoundError:
+            return False
+        except aiohttp.ClientError:
+            if strict:
                 raise
-            else:
-                return False
+            return False
 
     async def _isfile(self, path, **kwargs):
         return await self._exists(path, **kwargs)
