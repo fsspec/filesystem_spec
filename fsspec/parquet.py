@@ -1,6 +1,9 @@
 import io
 import json
 import warnings
+from typing import Literal
+
+import fsspec
 
 from .core import url_to_fs
 from .spec import AbstractBufferedFile
@@ -20,19 +23,19 @@ class AlreadyBufferedFile(AbstractBufferedFile):
         raise NotImplementedError
 
 
-def open_parquet_file(
-    path,
-    mode="rb",
-    fs=None,
+def open_parquet_files(
+    path: list[str],
+    mode: Literal["rb"] = "rb",
+    fs: None | fsspec.AbstractFileSystem = None,
     metadata=None,
-    columns=None,
-    row_groups=None,
-    storage_options=None,
-    engine="auto",
-    max_gap=64_000,
-    max_block=256_000_000,
-    footer_sample_size=1_000_000,
-    filters=None,
+    columns: None | list[str] = None,
+    row_groups: None | list[int] = None,
+    storage_options: None | dict = None,
+    engine: str = "auto",
+    max_gap: int = 64_000,
+    max_block: int = 256_000_000,
+    footer_sample_size: int = 1_000_000,
+    filters: None | list[list[list[str]]] = None,
     **kwargs,
 ):
     """
@@ -100,7 +103,12 @@ def open_parquet_file(
     # Make sure we have an `AbstractFileSystem` object
     # to work with
     if fs is None:
-        fs = url_to_fs(path, **(storage_options or {}))[0]
+        path0 = path
+        if isinstance(path, (list, tuple)):
+            path = path[0]
+        fs, path = url_to_fs(path, **(storage_options or {}))
+    else:
+        path0 = path
 
     # For now, `columns == []` not supported, is the same
     # as all columns
@@ -110,10 +118,21 @@ def open_parquet_file(
     # Set the engine
     engine = _set_engine(engine)
 
-    # Fetch the known byte ranges needed to read
-    # `columns` and/or `row_groups`
+    if isinstance(path0, (list, tuple)):
+        paths = path0
+    elif "*" in path:
+        paths = fs.glob(path)
+    elif path0.endswith("/"):  # or fs.isdir(path):
+        paths = [
+            _
+            for _ in fs.find(path, withdirs=False, detail=False)
+            if _.endswith((".parquet", ".parq"))
+        ]
+    else:
+        paths = [path]
+
     data = _get_parquet_byte_ranges(
-        [path],
+        paths,
         fs,
         metadata=metadata,
         columns=columns,
@@ -125,23 +144,34 @@ def open_parquet_file(
         filters=filters,
     )
 
-    # Extract file name from `data`
-    fn = next(iter(data)) if data else path
-
     # Call self.open with "parts" caching
     options = kwargs.pop("cache_options", {}).copy()
-    return AlreadyBufferedFile(
-        fs=None,
-        path=fn,
-        mode=mode,
-        cache_type="parts",
-        cache_options={
-            **options,
-            "data": data.get(fn, {}),
-        },
-        size=max(_[1] for _ in data.get(fn, {})),
-        **kwargs,
-    )
+    return [
+        AlreadyBufferedFile(
+            fs=None,
+            path=fn,
+            mode=mode,
+            cache_type="parts",
+            cache_options={
+                **options,
+                "data": data.get(fn, {}),
+            },
+            size=max(_[1] for _ in data.get(fn, {})),
+            **kwargs,
+        )
+        for fn in data
+    ]
+
+
+def open_parquet_file(*args, **kwargs):
+    """Create files tailed to reading specific parts of parquet files
+
+    Please see ``open_parquet_files`` for details of the arguments. The
+    difference is, this function always returns a single ``AleadyBufferedFile``,
+    whereas `open_parquet_files`` always returns a list of files, even if
+    there are one or zero matching parquet files.
+    """
+    return open_parquet_files(*args, **kwargs)[0]
 
 
 def _get_parquet_byte_ranges(
@@ -242,18 +272,6 @@ def _get_parquet_byte_ranges(
 
         # Calculate required byte ranges for each path
         for i, path in enumerate(paths):
-            # Deal with small-file case.
-            # Just include all remaining bytes of the file
-            # in a single range.
-            # if file_sizes[i] < max_block:
-            #     if footer_starts[i] > 0:
-            #         # Only need to transfer the data if the
-            #         # footer sample isn't already the whole file
-            #         data_paths.append(path)
-            #         data_starts.append(0)
-            #         data_ends.append(footer_starts[i])
-            #     continue
-
             # Use "engine" to collect data byte ranges
             path_data_starts, path_data_ends = engine._parquet_byte_ranges(
                 columns,

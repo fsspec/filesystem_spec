@@ -12,7 +12,11 @@ except ImportError:
     pq = None
 
 from fsspec.core import url_to_fs
-from fsspec.parquet import _get_parquet_byte_ranges, open_parquet_file
+from fsspec.parquet import (
+    _get_parquet_byte_ranges,
+    open_parquet_file,
+    open_parquet_files,
+)
 
 # Define `engine` fixture
 FASTPARQUET_MARK = pytest.mark.skipif(not fastparquet, reason="fastparquet not found")
@@ -174,3 +178,63 @@ def test_with_filter(tmpdir):
 
     result = pd.read_parquet(f, engine="fastparquet", filters=[["b", "==", "b"]])
     pd.testing.assert_frame_equal(expect, result)
+
+
+@FASTPARQUET_MARK
+def test_multiple(tmpdir):
+    import pandas as pd
+
+    df = pd.DataFrame(
+        {
+            "a": [10, 1, 2, 3, 7, 8, 9],
+            "b": ["a", "a", "a", "b", "b", "b", "b"],
+        }
+    )
+    fn = os.path.join(str(tmpdir), "test.parquet/")
+    df.to_parquet(
+        fn,
+        engine="fastparquet",
+        row_group_offsets=[0, 3],
+        stats=True,
+        file_scheme="hive",
+    )  # partition_on="b"
+
+    # path ending in "/"
+    expect = pd.read_parquet(fn, engine="fastparquet")[["a"]]
+    ofs = open_parquet_files(
+        fn,
+        engine="fastparquet",
+        columns=["a"],
+        max_gap=1,
+        max_block=1,
+        footer_sample_size=8,
+    )
+    dfs = [pd.read_parquet(f, engine="fastparquet", columns=["a"]) for f in ofs]
+    result = pd.concat(dfs).reset_index(drop=True)
+    assert expect.equals(result)
+
+    # glob
+    ofs = open_parquet_files(
+        fn + "*.parquet",
+        engine="fastparquet",
+        columns=["a"],
+        max_gap=1,
+        max_block=1,
+        footer_sample_size=8,
+    )
+    dfs = [pd.read_parquet(f, engine="fastparquet", columns=["a"]) for f in ofs]
+    result = pd.concat(dfs).reset_index(drop=True)
+    assert expect.equals(result)
+
+    # explicit
+    ofs = open_parquet_files(
+        [f"{fn}part.0.parquet", f"{fn}part.1.parquet"],
+        engine="fastparquet",
+        columns=["a"],
+        max_gap=1,
+        max_block=1,
+        footer_sample_size=8,
+    )
+    dfs = [pd.read_parquet(f, engine="fastparquet", columns=["a"]) for f in ofs]
+    result = pd.concat(dfs).reset_index(drop=True)
+    assert expect.equals(result)
