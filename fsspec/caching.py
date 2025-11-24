@@ -6,7 +6,6 @@ import logging
 import math
 import os
 import threading
-import warnings
 from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -622,7 +621,7 @@ class KnownPartsOfAFile(BaseCache):
         fetcher: Fetcher,
         size: int,
         data: dict[tuple[int, int], bytes] | None = None,
-        strict: bool = True,
+        strict: bool = False,
         **_: Any,
     ):
         super().__init__(blocksize, fetcher, size)
@@ -646,50 +645,65 @@ class KnownPartsOfAFile(BaseCache):
         else:
             self.data = {}
 
+    @property
+    def size(self):
+        return sum(_[1] - _[0] for _ in self.data)
+
+    @size.setter
+    def size(self, value):
+        pass
+
+    @property
+    def nblocks(self):
+        return len(self.data)
+
+    @nblocks.setter
+    def nblocks(self, value):
+        pass
+
     def _fetch(self, start: int | None, stop: int | None) -> bytes:
         if start is None:
             start = 0
         if stop is None:
             stop = self.size
+        self.total_requested_bytes += stop - start
 
         out = b""
-        for (loc0, loc1), data in self.data.items():
-            # If self.strict=False, use zero-padded data
-            # for reads beyond the end of a "known" buffer
-            if loc0 <= start < loc1:
+        started = False
+        loc_old = 0
+        for loc0, loc1 in sorted(self.data):
+            if (loc0 <= start < loc1) and (loc0 <= stop <= loc1):
+                # entirely within the block
                 off = start - loc0
-                out = data[off : off + stop - start]
-                if not self.strict or loc0 <= stop <= loc1:
-                    # The request is within a known range, or
-                    # it begins within a known range, and we
-                    # are allowed to pad reads beyond the
-                    # buffer with zero
-                    out += b"\x00" * (stop - start - len(out))
-                    self.hit_count += 1
-                    return out
-                else:
-                    # The request ends outside a known range,
-                    # and we are being "strict" about reads
-                    # beyond the buffer
-                    start = loc1
-                    break
-
-        # We only get here if there is a request outside the
-        # known parts of the file. In an ideal world, this
-        # should never happen
-        if self.fetcher is None:
-            # We cannot fetch the data, so raise an error
-            raise ValueError(f"Read is outside the known file parts: {(start, stop)}. ")
-        # We can fetch the data, but should warn the user
-        # that this may be slow
-        warnings.warn(
-            f"Read is outside the known file parts: {(start, stop)}. "
-            f"IO/caching performance may be poor!"
-        )
-        logger.debug(f"KnownPartsOfAFile cache fetching {start}-{stop}")
-        self.total_requested_bytes += stop - start
+                self.hit_count += 1
+                return self.data[(loc0, loc1)][off : off + stop - start]
+            if stop <= loc0:
+                break
+            if started and loc0 > loc_old:
+                # a gap where we need data
+                self.miss_count += 1
+                if self.strict:
+                    raise ValueError
+                out += b"\x00" * (loc0 - loc_old)
+            if loc0 <= start < loc1:
+                # found the start
+                self.hit_count += 1
+                off = start - loc0
+                out = self.data[(loc0, loc1)][off : off + stop - start]
+                started = True
+            elif start < loc0 and stop > loc1:
+                # the whole block
+                self.hit_count += 1
+                out += self.data[(loc0, loc1)]
+            elif loc0 <= stop <= loc1:
+                # end block
+                self.hit_count += 1
+                return out + self.data[(loc0, loc1)][: stop - loc0]
+            loc_old = loc1
         self.miss_count += 1
-        return out + super()._fetch(start, stop)
+        if started and not self.strict:
+            return out + b"\x00" * (stop - loc_old)
+        raise ValueError
 
 
 class UpdatableLRU(Generic[P, T]):
