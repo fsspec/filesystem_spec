@@ -699,7 +699,7 @@ def test_local_filecache_basic(local_filecache):
 
 
 def test_local_filecache_does_not_change_when_original_data_changed(local_filecache):
-    old_data, original_file, cache_location, fs = local_filecache
+    old_data, original_file, _cache_location, fs = local_filecache
     new_data = b"abc"
 
     with fs.open(original_file, "rb") as f:
@@ -899,7 +899,7 @@ def test_filecache_serialization(impl, fs):
 
 
 def test_add_file_to_cache_after_save(local_filecache):
-    (data, original_file, cache_location, fs) = local_filecache
+    (_data, original_file, cache_location, fs) = local_filecache
 
     fs.save_cache()
 
