@@ -205,3 +205,42 @@ async def test_async_streamed_file_read():
         == b"foo-bar" * 20
     )
     await streamed_file.close()
+
+
+def test_rm_file_with_rm_implementation():
+    class AsyncFSWithRm(fsspec.asyn.AsyncFileSystem):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.removed_paths = []
+
+        async def _rm(self, path, recursive=False, batch_size=None, **kwargs):
+            if isinstance(path, str):
+                path = [path]
+            for p in path:
+                self.removed_paths.append(p)
+            return None
+
+    fs = AsyncFSWithRm()
+    fs.rm_file("test/file.txt")
+    assert "test/file.txt" in fs.removed_paths
+
+
+def test_rm_file_with_rm_file_implementation():
+    class AsyncFSWithRmFile(fsspec.asyn.AsyncFileSystem):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.removed_paths = []
+
+        async def _rm_file(self, path, **kwargs):
+            self.removed_paths.append(path)
+            return None
+
+    fs = AsyncFSWithRmFile()
+    fs.rm_file("test/file.txt")
+    assert "test/file.txt" in fs.removed_paths
+
+
+def test_rm_file_without_implementation():
+    fs = fsspec.asyn.AsyncFileSystem()
+    with pytest.raises(NotImplementedError):
+        fs.rm_file("test/file.txt")

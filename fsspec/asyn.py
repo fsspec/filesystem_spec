@@ -328,6 +328,11 @@ class AsyncFileSystem(AbstractFileSystem):
         return self._loop
 
     async def _rm_file(self, path, **kwargs):
+        if (
+            inspect.iscoroutinefunction(self._rm)
+            and type(self)._rm is not AsyncFileSystem._rm
+        ):
+            return await self._rm(path, recursive=False, batch_size=1, **kwargs)
         raise NotImplementedError
 
     async def _rm(self, path, recursive=False, batch_size=None, **kwargs):
