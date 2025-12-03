@@ -781,6 +781,7 @@ class AsyncFileSystem(AbstractFileSystem):
         min_idx = min(idx_star, idx_qmark, idx_brace)
 
         detail = kwargs.pop("detail", False)
+        withdirs = kwargs.pop("withdirs", True)
 
         if not has_magic(path):
             if await self._exists(path, **kwargs):
@@ -810,7 +811,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 depth = None
 
         allpaths = await self._find(
-            root, maxdepth=depth, withdirs=True, detail=True, **kwargs
+            root, maxdepth=depth, withdirs=withdirs, detail=True, **kwargs
         )
 
         pattern = glob_translate(path + ("/" if ends_with_sep else ""))
