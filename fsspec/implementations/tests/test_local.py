@@ -1044,7 +1044,7 @@ def test_mv_recursive(tmpdir):
 
 
 def test_mv_auto_mkdir(tmpdir):
-    localfs: LocalFileSystem = fsspec.filesystem("file", auto_mkdir=True)
+    localfs = fsspec.filesystem("file", auto_mkdir=True)
     src = os.path.join(str(tmpdir), "src")
     dest_dir = os.path.join(str(tmpdir), "dest_dir")
     dest = os.path.join(dest_dir, "dest")
