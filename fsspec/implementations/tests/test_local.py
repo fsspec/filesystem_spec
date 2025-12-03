@@ -1050,8 +1050,8 @@ def test_mv_auto_mkdir(tmpdir):
     dest = os.path.join(dest_dir, "dest")
 
     assert localfs.exists(src) is False
-    assert localfs.exists(dest_dir) is False
     assert localfs.exists(dest) is False
+    assert localfs.exists(dest_dir) is False
 
     localfs.touch(src)
     localfs.mv(src, dest)
