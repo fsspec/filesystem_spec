@@ -1,6 +1,26 @@
 Changelog
 =========
 
+2025.12.0
+---------
+
+Enhancements
+
+- fsspec.parquet to support filters and multiple files (#1945)
+
+Fixes
+
+- passing withdirs in aync _glob() (#1953)
+- fix _rm_file/_rm redirection in async (#1951)
+- allow arrowFile to be seekable (#1950)
+- add size attribute to arrowFile (#1944)
+
+
+Other
+
+- support py3.14 and drop 3.9 (#1946)
+- avoid ruff warning (#1942)
+
 2025.10.0
 ---------
 
