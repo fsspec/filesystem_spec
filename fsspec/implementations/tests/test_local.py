@@ -1043,6 +1043,24 @@ def test_mv_recursive(tmpdir):
     assert localfs.info(os.path.join(dest, "afile"))
 
 
+def test_mv_auto_mkdir(tmpdir):
+    localfs = fsspec.filesystem("file", auto_mkdir=True)
+    src = os.path.join(str(tmpdir), "src")
+    dest_dir = os.path.join(str(tmpdir), "dest_dir")
+    dest = os.path.join(dest_dir, "dest")
+
+    assert localfs.exists(src) is False
+    assert localfs.exists(dest) is False
+    assert localfs.exists(dest_dir) is False
+
+    localfs.touch(src)
+    localfs.mv(src, dest)
+
+    assert localfs.exists(src) is False
+    assert localfs.isfile(dest)
+    assert localfs.info(dest)
+
+
 @pytest.mark.xfail(WIN, reason="windows expand path to be revisited")
 def test_copy_errors(tmpdir):
     localfs = fsspec.filesystem("file", auto_mkdir=True)

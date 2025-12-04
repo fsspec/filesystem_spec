@@ -166,6 +166,10 @@ class LocalFileSystem(AbstractFileSystem):
         """
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
+
+        if self.auto_mkdir:
+            self.makedirs(self._parent(path2), exist_ok=True)
+
         shutil.move(path1, path2)
 
     def link(self, src, dst, **kwargs):
