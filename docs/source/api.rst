@@ -235,23 +235,26 @@ documentation carefully before using any particular package.
 - `irods`_ for access to iRODS servers, with protocol "irods://"
 - `lakefs`_ for lakeFS data lakes, with protocol "lakefs://"
 - `morefs`_ for `OverlayFileSystem`, `DictFileSystem`, and others
+- `msgraphfs`_ for Microsoft storage (ie Sharepoint) using the drive API through Microsoft Graph, with protocol "msgd://"
 - `obstore`_: zero-dependency access to Amazon S3, Google Cloud Storage, and Azure Blob Storage using the underlying Rust `object_store`_ library, with protocols "s3://", "gs://", and "abfs://".
 - `ocifs`_ for access to Oracle Cloud Object Storage, with protocol "oci://"
 - `ocilake`_ for OCI Data Lake storage
 - `ossfs`_ for Alibaba Cloud (Aliyun) Object Storage System (OSS)
 - `p9fs`_ for 9P (Plan 9 Filesystem Protocol) servers
 - `PyAthena`_ for S3 access to Amazon Athena, with protocol "s3://" or "s3a://"
+- `fsspec-pydantic`_: Pydantic models to represent file and directory types
 - `PyDrive2`_ for Google Drive access
+- `fsspec-python`_: A chained filesystem that connects to Python's import system, to allow for importing from an fsspec backend
 - `fsspec-proxy`_ for "pyscript:" URLs via a proxy server
 - `s3fs`_ for Amazon S3 and other compatible stores, with protocol "s3://"
 - `sshfs`_ for access to SSH servers, with protocol "ssh://" or "sftp://"
 - `swiftspec`_ for OpenStack SWIFT, with protocol "swift://"
 - `tosfs`_ for ByteDance volcano engine Tinder Object Storage (TOS)
+- `fsspec-union`_: A chained filesystem that unions multiple fsspec backends as a read-through cache
 - `wandbfs`_ to access Wandb run data (experimental)
 - `wandbfsspec`_ to access Weights & Biases (experimental)
 - `webdav4`_ for WebDAV, with protocol "webdav://" or "dav://"
 - `xrootd`_ for xrootd, with protocol "root://"
-- `msgraphfs`_ for Microsoft storage (ie Sharepoint) using the drive API through Microsoft Graph, with protocol "msgd://"
 
 .. _abfs: https://github.com/dask/adlfs
 .. _adl: https://github.com/dask/adlfs
@@ -272,6 +275,7 @@ documentation carefully before using any particular package.
 .. _irods: https://github.com/xwcl/irods_fsspec
 .. _lakefs: https://github.com/aai-institute/lakefs-spec
 .. _morefs: https://github.com/iterative/morefs
+.. _msgraphfs: https://github.com/acsone/msgraphfs
 .. _object_store: https://docs.rs/object_store/latest/object_store/
 .. _obstore: https://developmentseed.org/obstore/latest/
 .. _ocifs: https://ocifs.readthedocs.io/en/latest/
@@ -279,16 +283,18 @@ documentation carefully before using any particular package.
 .. _ossfs: https://github.com/fsspec/ossfs
 .. _p9fs: https://github.com/pbchekin/p9fs-py
 .. _PyAthena: https://github.com/laughingman7743/PyAthena
+.. _fsspec-pydantic: https://github.com/1kbgz/fsspec-pydantic
 .. _PyDrive2: https://github.com/iterative/PyDrive2
+.. _fsspec-python: https://github.com/1kbgz/fsspec-python
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _sshfs: https://github.com/fsspec/sshfs
 .. _swiftspec: https://github.com/fsspec/swiftspec
 .. _tosfs: https://tosfs.readthedocs.io/en/latest/
+.. _fsspec-union: https://github.com/1kbgz/fsspec-union
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _wandbfsspec: https://github.com/alvarobartt/wandbfsspec
 .. _webdav4: https://github.com/skshetry/webdav4
 .. _xrootd: https://github.com/CoffeaTeam/fsspec-xrootd
-.. _msgraphfs: https://github.com/acsone/msgraphfs
 
 .. _readbuffering:
 
