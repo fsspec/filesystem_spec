@@ -8,7 +8,7 @@ import pytest
 
 import fsspec
 from fsspec import open_files
-from fsspec.implementations.ftp import FTPFileSystem
+from fsspec.implementations.ftp import FTPFileSystem, ImplicitFTPTLS
 
 ftplib = pytest.importorskip("ftplib")
 here = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +30,22 @@ def ftp():
         P.wait()
 
 
+@pytest.fixture()
+def ftp_tlsv12():
+    pytest.importorskip("pyftpdlib")
+    P = subprocess.Popen(
+        [sys.executable, os.path.join(here, "ftp_tlsv12.py")],
+        stderr=subprocess.STDOUT,
+        stdout=subprocess.PIPE,
+    )
+    try:
+        time.sleep(1)
+        yield "localhost", 2122
+    finally:
+        P.terminate()
+        P.wait()
+
+
 @pytest.mark.parametrize(
     "tls,exp_cls",
     (
@@ -41,6 +57,19 @@ def test_tls(ftp, tls, exp_cls):
     host, port = ftp
     fs = FTPFileSystem(host, port, tls=tls)
     assert isinstance(fs.ftp, exp_cls)
+
+
+@pytest.mark.parametrize(
+    "tls,exp_cls",
+    (("tlsv1_2", ImplicitFTPTLS),),
+)
+def test_tls_v12(ftp_tlsv12, tls, exp_cls):
+    host, port = ftp_tlsv12
+    fs = FTPFileSystem(host, port, tls=tls)
+    assert isinstance(fs.ftp, exp_cls)
+    assert fs.ls("/", detail=False) == sorted(os.listdir(here))
+    out = fs.cat(f"/{os.path.basename(__file__)}")
+    assert out == open(__file__, "rb").read()
 
 
 @pytest.mark.parametrize(
