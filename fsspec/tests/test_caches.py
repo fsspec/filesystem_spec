@@ -123,7 +123,7 @@ def test_readahead_cache():
     total_requested_bytes += (10 - 3) + block_size
     assert cache.total_requested_bytes == total_requested_bytes
 
-    # caache hit again
+    # cache hit again
     assert cache._fetch(3, 10) == letters_fetcher(3, 10)
     assert cache.miss_count == 2
     assert cache.hit_count == 1

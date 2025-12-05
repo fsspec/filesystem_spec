@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 try:
     import yarl
-except (ImportError, ModuleNotFoundError, OSError):
+except (ImportError, OSError):
     yarl = False
 
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -278,10 +278,9 @@ class HTTPFileSystem(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
         """For HTTP, we always want to keep the full URL"""
-        path = path.replace("sync-http://", "http://").replace(
+        return path.replace("sync-http://", "http://").replace(
             "sync-https://", "https://"
         )
-        return path
 
     @classmethod
     def _parent(cls, path):
@@ -310,7 +309,7 @@ class HTTPFileSystem(AbstractFileSystem):
                 l = l[1]
             if l.startswith("/") and len(l) > 1:
                 # absolute URL on this server
-                l = parts.scheme + "://" + parts.netloc + l
+                l = f"{parts.scheme}://{parts.netloc}{l}"
             if l.startswith("http"):
                 if self.same_schema and l.startswith(url.rstrip("/") + "/"):
                     out.add(l)
