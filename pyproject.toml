@@ -117,7 +117,7 @@ test_full = [
     'tqdm',
     'urllib3',
     'zarr',
-    'zstandard; python_version < "3.14"',
+    'backports.zstd; python_version < "3.14"',
 ]
 test_downstream = [
     "dask[dataframe,test]",

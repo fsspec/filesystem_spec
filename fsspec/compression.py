@@ -1,5 +1,6 @@
 """Helper functions for a standard streaming compression API"""
 
+import sys
 from zipfile import ZipFile
 
 import fsspec.utils
@@ -155,26 +156,14 @@ except ImportError:
     pass
 
 try:
-    # zstd in the standard library for python >= 3.14
-    from compression.zstd import ZstdFile
+    if sys.version_info >= (3, 14):
+        from compression import zstd
+    else:
+        from backports import zstd
 
-    register_compression("zstd", ZstdFile, "zst")
-
+    register_compression("zstd", zstd.ZstdFile, "zst")
 except ImportError:
-    try:
-        import zstandard as zstd
-
-        def zstandard_file(infile, mode="rb"):
-            if "r" in mode:
-                cctx = zstd.ZstdDecompressor()
-                return cctx.stream_reader(infile)
-            else:
-                cctx = zstd.ZstdCompressor(level=10)
-                return cctx.stream_writer(infile)
-
-        register_compression("zstd", zstandard_file, "zst")
-    except ImportError:
-        pass
+    pass
 
 
 def available_compressions():
