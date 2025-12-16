@@ -161,7 +161,7 @@ be possible to reach all paths on the remote.
 Instance Caching
 ----------------
 
-In a file-system implementation class is marked as *cachable* (attribute ``.cachable``),
+If a file-system implementation class is marked as *cachable* (attribute ``.cachable``),
 then its instances will
 get stored in a class attribute, to enable quick look-up instead of needing to regenerate
 potentially expensive connections and sessions. They key in the cache is a tokenisation of
