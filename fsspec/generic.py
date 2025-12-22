@@ -374,6 +374,7 @@ async def copy_file_op(
         for o in out:
             if isinstance(o, Exception):
                 raise o
+        return out
 
 
 async def _copy_file_op(fs1, url1, fs2, url2, local, on_error="ignore"):
