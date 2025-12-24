@@ -1,10 +1,42 @@
 import os
+import ssl
 import uuid
 from ftplib import FTP, FTP_TLS, Error, error_perm
 from typing import Any
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options, isfilelike
+
+SECURITY_PROTOCOL_MAP = {
+    "tls": ssl.PROTOCOL_TLS,
+    "tlsv1": ssl.PROTOCOL_TLSv1,
+    "tlsv1_1": ssl.PROTOCOL_TLSv1_1,
+    "tlsv1_2": ssl.PROTOCOL_TLSv1_2,
+    "sslv23": ssl.PROTOCOL_SSLv23,
+}
+
+
+class ImplicitFTPTLS(FTP_TLS):
+    """
+    FTP_TLS subclass that automatically wraps sockets in SSL
+    to support implicit FTPS.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._sock = None
+
+    @property
+    def sock(self):
+        """Return the socket."""
+        return self._sock
+
+    @sock.setter
+    def sock(self, value):
+        """When modifying the socket, ensure that it is ssl wrapped."""
+        if value is not None and not isinstance(value, ssl.SSLSocket):
+            value = self.context.wrap_socket(value)
+        self._sock = value
 
 
 class FTPFileSystem(AbstractFileSystem):
@@ -55,8 +87,14 @@ class FTPFileSystem(AbstractFileSystem):
             Timeout of the ftp connection in seconds
         encoding: str
             Encoding to use for directories and filenames in FTP connection
-        tls: bool
-            Use FTP-TLS, by default False
+        tls: bool or str
+            Enable FTP-TLS for secure connections:
+                - False: Plain FTP (default)
+                - True: Explicit TLS (FTPS with AUTH TLS command)
+                - "tls": Auto-negotiate highest protocol
+                - "tlsv1": TLS v1.0
+                - "tlsv1_1": TLS v1.1
+                - "tlsv1_2": TLS v1.2
         """
         super().__init__(**kwargs)
         self.host = host
@@ -71,15 +109,27 @@ class FTPFileSystem(AbstractFileSystem):
             self.blocksize = 2**16
         self.tls = tls
         self._connect()
-        if self.tls:
+        if isinstance(self.tls, bool) and self.tls:
             self.ftp.prot_p()
 
     def _connect(self):
+        security = None
         if self.tls:
-            ftp_cls = FTP_TLS
+            if isinstance(self.tls, str):
+                ftp_cls = ImplicitFTPTLS
+                security = SECURITY_PROTOCOL_MAP.get(
+                    self.tls,
+                    f"Not supported {self.tls} protocol",
+                )
+                if isinstance(security, str):
+                    raise ValueError(security)
+            else:
+                ftp_cls = FTP_TLS
         else:
             ftp_cls = FTP
         self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding)
+        if security:
+            self.ftp.ssl_version = security
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
 
