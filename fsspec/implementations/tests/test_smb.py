@@ -20,8 +20,6 @@ def delay_rerun(*args):
     return True
 
 
-# ruff: noqa: F821
-
 if os.environ.get("WSL_INTEROP"):
     # Running on WSL (Windows)
     port_test = [9999]
