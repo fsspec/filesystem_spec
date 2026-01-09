@@ -189,7 +189,7 @@ known_implementations = {
     },
     "pyscript": {
         "class": "pyscript_fsspec_client.client.PyscriptFileSystem",
-        "err": "Install requests (cpython) or run in pyscript",
+        "err": "This only runs in a pyscript context",
     },
     "reference": {"class": "fsspec.implementations.reference.ReferenceFileSystem"},
     "root": {

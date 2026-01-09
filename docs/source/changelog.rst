@@ -1,6 +1,26 @@
 Changelog
 =========
 
+2026.1.0
+--------
+
+Put limits on install extras for s3fs/gcsfs to prevent installing
+ancient versions via pip.
+
+Enhancements
+
+- configure TLS protocol version for FTP (#1958)
+
+Fixes
+
+- Respect auto_mkdir in mv for local (#1957)
+
+Other
+
+- link to pydantic, code and union implementations ($1956)
+- use backport.zstd or builtin (#1962)
+- docs typo (#1963)
+
 2025.12.0
 ---------
 

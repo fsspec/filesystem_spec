@@ -18,6 +18,7 @@ dependencies:
   - google-auth-oauthlib
   - flake8
   - black
+  - psutil
   - google-cloud-core
   - google-cloud-storage
   - google-api-core
