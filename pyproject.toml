@@ -40,7 +40,7 @@ full = [
     'dropbox',
     'dropboxdrivefs',
     'fusepy',
-    'gcsfs',
+    'gcsfs >2024.2.0',
     'libarchive-c',
     'ocifs',
     'panel',
@@ -48,7 +48,7 @@ full = [
     'pyarrow >= 1',
     'pygit2',
     'requests',
-    's3fs',
+    's3fs >2024.2.0',
     'smbprotocol',
     'tqdm',
 ]
