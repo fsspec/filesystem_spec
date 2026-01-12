@@ -19,6 +19,7 @@ dependencies:
   - flake8
   - black
   - psutil
+  - numpy
   - google-cloud-core
   - google-cloud-storage
   - google-api-core
