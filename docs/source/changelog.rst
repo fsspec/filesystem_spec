@@ -217,7 +217,7 @@ Enhancements
 - "tree" text display of filesystem contents (#1750)
 - async wrapper for sync FSs (#1745)
 - new known implementation: tosfs (#1739)
-- consilidate block fetch requests (#1733)
+- consolidate block fetch requests (#1733)
 
 Fixes
 

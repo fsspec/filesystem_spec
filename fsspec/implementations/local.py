@@ -243,10 +243,9 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             # NT
             path_ = path.rsplit("/", 1)[0]
-            if len(path_) <= 3:
-                if path_[1:2] == ":":
-                    # nt root (something like c:/)
-                    return path_[0] + ":/"
+            if len(path_) <= 3 and path_[1:2] == ":":
+                # nt root (something like c:/)
+                return path_[0] + ":/"
             # More cases may be required here
             return path_
 
@@ -330,7 +329,7 @@ def make_path_posix(path):
             # windows full path like "C:\\local\\path"
             if len(path) <= 3:
                 # nt root (something like c:/)
-                return path[0] + ":/"
+                return f"{path[0]}:/"
             path = path.replace("\\", "/")
             return path
         elif path[0:1] == "~":
