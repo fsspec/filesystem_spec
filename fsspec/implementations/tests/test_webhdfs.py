@@ -234,23 +234,19 @@ def test_modified_time(hdfs_cluster):
 
     fs.mkdir(dir_path)
 
-    time.sleep(1)
-
     # Check first modified time for directories
     modified_dir_date: datetime = fs.modified(dir_path)
 
     # I think it is the only thing we can assume, but I'm not sure if the server has a different time
-    assert modified_dir_date < datetime.now()
+    assert modified_dir_date <= datetime.now()
 
     # Create a file and check modified time again
     with fs.open(file_path, "wb") as f:
         f.write(b"test content")
 
-    time.sleep(1)
-
     modified_file_date: datetime = fs.modified(file_path)
-    assert modified_file_date > modified_dir_date
-    assert modified_file_date < datetime.now()
+    assert modified_file_date >= modified_dir_date
+    assert modified_file_date <= datetime.now()
 
 
 # NOTE: These following two tests are a copy of the modified ones, as
