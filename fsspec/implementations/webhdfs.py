@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import uuid
 from contextlib import suppress
+from datetime import datetime
 from urllib.parse import quote
 
 import requests
@@ -267,6 +268,23 @@ class WebHDFS(AbstractFileSystem):
         info = out.json()["FileStatus"]
         info["name"] = path
         return self._process_info(info)
+
+    def created(self, path):
+        """Return the created timestamp of a file as a datetime.datetime"""
+        # The API does not provide creation time, so we use modification time
+        info = self.info(path)
+        mtime = info.get("modificationTime", None)
+        if mtime is not None:
+            return datetime.fromtimestamp(mtime / 1000)
+        raise RuntimeError("Could not retrieve creation time (modification time).")
+
+    def modified(self, path):
+        """Return the modified timestamp of a file as a datetime.datetime"""
+        info = self.info(path)
+        mtime = info.get("modificationTime", None)
+        if mtime is not None:
+            return datetime.fromtimestamp(mtime / 1000)
+        raise RuntimeError("Could not retrieve modification time.")
 
     def ls(self, path, detail=False, **kwargs):
         out = self._call("LISTSTATUS", path=path)
