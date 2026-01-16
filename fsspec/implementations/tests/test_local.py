@@ -1,5 +1,4 @@
 import bz2
-import errno
 import gzip
 import os
 import os.path
@@ -563,23 +562,21 @@ def test_multiple_filesystems_use_umask_cache(tmpdir):
     assert get_umask.cache_info().hits == 1
 
 
-def test_transaction_cross_device_but_mock_temp_dir_on_wrong_device(tmpdir):
-    # If the temporary file for a transaction is not on the correct device,
-    # os.rename in shutil.move will raise EXDEV and lookup('chmod') will raise
-    # a PermissionError.
+def test_transaction_temp_file_in_target_dir(tmpdir):
+    # Temporary file should be created in the same directory as the target
+    # to avoid cross-device link errors when committing.
     fs = LocalFileSystem()
-    with (
-        patch(
-            "os.rename",
-            side_effect=OSError(errno.EXDEV, "Invalid cross-device link"),
-        ),
-        patch(
-            "os.chmod",
-            side_effect=PermissionError("Operation not permitted"),
-        ),
-    ):
-        with fs.transaction, fs.open(tmpdir + "/afile", "wb") as f:
+    target = str(tmpdir) + "/subdir/file.txt"
+    os.makedirs(os.path.dirname(target))
+
+    with fs.transaction:
+        with fs.open(target, "wb") as f:
+            assert os.path.dirname(f.temp) == os.path.dirname(target)
+            assert os.path.basename(f.temp).startswith("file.txt-")
             f.write(b"data")
+
+    with fs.open(target, "rb") as f:
+        assert f.read() == b"data"
 
 
 def test_make_path_posix():
