@@ -168,6 +168,7 @@ def zip_file_fixture2(tmp_path):
 
     with zipfile.ZipFile(file_path, "w") as z:
         z.writestr("a/b/c", "")
+        z.writestr("a/b/d/e", "")
 
     return file_path
 
@@ -503,8 +504,13 @@ def test_find_returns_expected_result_recursion_depth_set(zip_file):
         ),
         pytest.param(
             ("a/b", None, True),
-            ["a/b", "a/b/c"],
+            ["a/b", "a/b/c", "a/b/d", "a/b/d/e"],
             id="find-withdirs-should-not-include-parents",
+        ),
+        pytest.param(
+            ("a/b", 1, True),
+            ["a/b", "a/b/c", "a/b/d"],
+            id="find-withdirs-maxdepth",
         ),
     ],
 )
