@@ -147,7 +147,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         # Remove the leading slash, as the zip file paths are always
         # given without a leading slash
         path = path.lstrip("/")
-        path_depth = len(path_parts := to_parts(path))
+        path_parts = to_parts(path)
+        path_depth = len(path_parts)
 
         self._get_dirs()
 
