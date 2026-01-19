@@ -139,7 +139,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             raise ValueError("maxdepth must be at least 1")
 
         def to_parts(_path: str):
-            return list(filter(None, _path.split("/")))
+            return list(filter(None, _path.replace("\\", "/").split("/")))
 
         if not isinstance(path, str):
             path = str(path)

@@ -512,6 +512,21 @@ def test_find_returns_expected_result_recursion_depth_set(zip_file):
             ["a/b", "a/b/c", "a/b/d"],
             id="find-withdirs-maxdepth",
         ),
+        pytest.param(
+            ("/a//b///", 1, True),
+            ["a/b", "a/b/c", "a/b/d"],
+            id="find-ill-formed-path",
+        ),
+        pytest.param(
+            ("\\a\\\\b\\", 1, True),
+            ["a/b", "a/b/c", "a/b/d"],
+            id="find-ill-formed-path-windows",
+        ),
+        pytest.param(
+            (Path("\\a\\\\b\\"), 1, True),
+            ["a/b", "a/b/c", "a/b/d"],
+            id="find-using-pathobj",
+        ),
     ],
 )
 def test_find_generic(zip_file2, args, expected_result):
