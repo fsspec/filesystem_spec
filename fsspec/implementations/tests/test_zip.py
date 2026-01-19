@@ -1,5 +1,6 @@
 import collections.abc
 import os.path
+import zipfile
 from pathlib import Path
 from shutil import make_archive
 
@@ -159,6 +160,16 @@ def zip_file_fixture(tmp_path):
 
     zip_file = tmp_path / "test"
     return Path(make_archive(zip_file, "zip", data_dir))
+
+
+@pytest.fixture(name="zip_file2")
+def zip_file_fixture2(tmp_path):
+    file_path = tmp_path / "zip_file2.zip"
+
+    with zipfile.ZipFile(file_path, "w") as z:
+        z.writestr("a/b/c", "")
+
+    return file_path
 
 
 def _assert_all_except_context_dependent_variables(result, expected_result):
@@ -480,3 +491,23 @@ def test_find_returns_expected_result_recursion_depth_set(zip_file):
     ]
 
     assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "args,expected_result",
+    [
+        pytest.param(
+            ("a/b", 1),
+            ["a/b/c"],
+            id="find-maxdepth-correct-depth",
+        ),
+        pytest.param(
+            ("a/b", None, True),
+            ["a/b", "a/b/c"],
+            id="find-withdirs-should-not-include-parents",
+        ),
+    ],
+)
+def test_find_generic(zip_file2, args, expected_result):
+    zip_file_system = ZipFileSystem(zip_file2)
+    assert zip_file_system.find(*args) == expected_result
