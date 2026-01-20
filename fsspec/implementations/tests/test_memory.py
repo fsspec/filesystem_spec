@@ -172,7 +172,7 @@ def test_moves(m):
     assert m.find("") == ["/target.txt", "/target2.txt"]
 
 
-def test_rm_reursive_empty_subdir(m):
+def test_rm_recursive_empty_subdir(m):
     # https://github.com/fsspec/filesystem_spec/issues/500
     m.mkdir("recdir")
     m.mkdir("recdir/subdir2")
@@ -211,7 +211,7 @@ def test_cp_directory_recursive(m):
     # https://github.com/fsspec/filesystem_spec/issues/1062
     # Recursive cp/get/put of source directory into non-existent target directory.
     src = "/src"
-    src_file = src + "/file"
+    src_file = f"{src}/file"
     m.mkdir(src)
     m.touch(src_file)
 

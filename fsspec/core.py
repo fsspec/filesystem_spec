@@ -344,7 +344,7 @@ def _un_chain(path, kwargs):
             elif "://" in p or x.match(p):
                 bits.append(p)
             else:
-                bits.append(p + "://")
+                bits.append(f"{p}://")
     else:
         bits = [path]
 

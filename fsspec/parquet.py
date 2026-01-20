@@ -363,11 +363,7 @@ def _transfer_ranges(fs, blocks, paths, starts, ends):
 def _add_header_magic(data):
     # Add b"PAR1" to file headers
     for path in list(data.keys()):
-        add_magic = True
-        for k in data[path]:
-            if k[0] == 0 and k[1] >= 4:
-                add_magic = False
-                break
+        add_magic = not any(k[0] == 0 and k[1] >= 4 for k in data[path])
         if add_magic:
             data[path][(0, 4)] = b"PAR1"
 
@@ -482,8 +478,8 @@ class FastparquetEngine:
                         file_offset0 = column.meta_data.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.meta_data.data_page_offset
-                        num_bytes = column.meta_data.total_compressed_size
                         if footer_start is None or file_offset0 < footer_start:
+                            num_bytes = column.meta_data.total_compressed_size
                             data_paths.append(fn)
                             data_starts.append(file_offset0)
                             data_ends.append(

@@ -165,7 +165,7 @@ class CacheMetadata:
 
         The actual closing of the file is the responsibility of the caller.
         """
-        # File must be writeble, so in self.cached_files[-1]
+        # File must be writeable, so in self.cached_files[-1]
         c = self.cached_files[-1][path]
         if c["blocks"] is not True and len(c["blocks"]) * f.blocksize >= f.size:
             c["blocks"] = True
