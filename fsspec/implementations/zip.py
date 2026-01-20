@@ -138,14 +138,17 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
+        def to_parts(_path: str):
+            return list(filter(None, _path.replace("\\", "/").split("/")))
+
+        if not isinstance(path, str):
+            path = str(path)
+
         # Remove the leading slash, as the zip file paths are always
         # given without a leading slash
         path = path.lstrip("/")
-        path_parts = list(filter(lambda s: bool(s), path.split("/")))
-
-        def _matching_starts(file_path):
-            file_parts = filter(lambda s: bool(s), file_path.split("/"))
-            return all(a == b for a, b in zip(path_parts, file_parts))
+        path_parts = to_parts(path)
+        path_depth = len(path_parts)
 
         self._get_dirs()
 
@@ -157,21 +160,22 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             return result if detail else [path]
 
         for file_path, file_info in self.dir_cache.items():
-            if not (path == "" or _matching_starts(file_path)):
+            if len(file_parts := to_parts(file_path)) < path_depth or any(
+                a != b for a, b in zip(path_parts, file_parts)
+            ):
+                # skip parent folders and mismatching paths
                 continue
 
             if file_info["type"] == "directory":
-                if withdirs:
-                    if file_path not in result:
-                        result[file_path.strip("/")] = file_info
+                if withdirs and file_path not in result:
+                    result[file_path.strip("/")] = file_info
                 continue
 
             if file_path not in result:
                 result[file_path] = file_info if detail else None
 
         if maxdepth:
-            path_depth = path.count("/")
             result = {
-                k: v for k, v in result.items() if k.count("/") - path_depth < maxdepth
+                k: v for k, v in result.items() if k.count("/") < maxdepth + path_depth
             }
         return result if detail else sorted(result)
