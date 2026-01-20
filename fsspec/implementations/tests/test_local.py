@@ -566,7 +566,7 @@ def test_transaction_temp_file_in_target_dir(tmpdir):
     # Temporary file should be created in the same directory as the target
     # to avoid cross-device link errors when committing.
     fs = LocalFileSystem()
-    target = str(tmpdir) + "/subdir/file.txt"
+    target = os.path.join(str(tmpdir), "subdir", "file.txt")
     os.makedirs(os.path.dirname(target))
 
     with fs.transaction:
