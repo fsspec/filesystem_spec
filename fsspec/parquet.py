@@ -595,9 +595,4 @@ class PyarrowEngine:
 
 
 def _cmp(name, column_set):
-    lname = len(name)
-    return any(
-        (len(_) >= lname and all(a == b for a, b in zip(name, _)))
-        or (len(_) < lname and all(a == b for a, b in zip(_, name)))
-        for _ in column_set
-    )
+    return any(all(a == b for a, b in zip(name, _)) for _ in column_set)
