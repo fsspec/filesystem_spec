@@ -242,7 +242,9 @@ class ArrowFile(io.IOBase):
 
     @property
     def size(self):
-        return self.stream.size()
+        if self.stream.seekable():
+            return self.stream.size()
+        return None
 
     def __exit__(self, *args):
         return self.close()
