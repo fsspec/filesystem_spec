@@ -465,6 +465,10 @@ class FastparquetEngine:
             # Input row_groups contains row-group indices
             row_group_indices = row_groups
             row_groups = pf.row_groups
+        if column_set is not None:
+            column_set = [
+                _ if isinstance(_, list) else _.split(".") for _ in column_set
+            ]
 
         # Loop through column chunks to add required byte ranges
         for r, row_group in enumerate(row_groups):
@@ -475,10 +479,9 @@ class FastparquetEngine:
                 fn = self._row_group_filename(row_group, pf)
 
                 for column in row_group.columns:
-                    name = column.meta_data.path_in_schema[0]
-                    # Skip this column if we are targeting a
-                    # specific columns
-                    if column_set is None or name in column_set:
+                    name = column.meta_data.path_in_schema
+                    # Skip this column if we are targeting specific columns
+                    if column_set is None or _cmp(name, column_set):
                         file_offset0 = column.meta_data.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.meta_data.data_page_offset
@@ -550,6 +553,10 @@ class PyarrowEngine:
                     if not isinstance(ind, dict)
                 ]
                 column_set |= set(md_index)
+        if column_set is not None:
+            column_set = [
+                _ if isinstance(_, list) else _.split(".") for _ in column_set
+            ]
 
         # Loop through column chunks to add required byte ranges
         for r in range(md.num_row_groups):
@@ -559,22 +566,38 @@ class PyarrowEngine:
                 row_group = md.row_group(r)
                 for c in range(row_group.num_columns):
                     column = row_group.column(c)
-                    name = column.path_in_schema
-                    # Skip this column if we are targeting a
-                    # specific columns
-                    split_name = name.split(".")[0]
-                    if (
-                        column_set is None
-                        or name in column_set
-                        or split_name in column_set
-                    ):
-                        file_offset0 = column.dictionary_page_offset
-                        if file_offset0 is None:
-                            file_offset0 = column.data_page_offset
-                        num_bytes = column.total_compressed_size
-                        if file_offset0 < footer_start:
+                    name = column.path_in_schema.split(".")
+                    # Skip this column if we are targeting specific columns
+                    if column_set is None or _cmp(name, column_set):
+                        meta = column.to_dict()
+                        # Any offset could be the first one
+                        file_offset0 = min(
+                            _
+                            for _ in [
+                                meta.get("dictionary_page_offset"),
+                                meta.get("data_page_offset"),
+                                meta.get("index_page_offset"),
+                            ]
+                            if _ is not None
+                        )
+                        if footer_start is None or file_offset0 < footer_start:
                             data_starts.append(file_offset0)
                             data_ends.append(
-                                min(file_offset0 + num_bytes, footer_start)
+                                min(
+                                    meta["total_compressed_size"] + file_offset0,
+                                    footer_start
+                                    or (meta["total_compressed_size"] + file_offset0),
+                                )
                             )
+        data_starts.append(footer_start)
+        data_ends.append(footer_start + len(footer))
         return data_starts, data_ends
+
+
+def _cmp(name, column_set):
+    lname = len(name)
+    return any(
+        (len(_) >= lname and all(a == b for a, b in zip(name, _)))
+        or (len(_) < lname and all(a == b for a, b in zip(_, name)))
+        for _ in column_set
+    )
