@@ -3,8 +3,6 @@ import random
 
 import pytest
 
-import fsspec.utils
-
 try:
     import fastparquet
 except ImportError:
@@ -206,9 +204,8 @@ def test_multiple(tmpdir):
     assert expect.equals(result)
 
 
-@pytest.mark.parametrize("n", [1_000_000])
+@pytest.mark.parametrize("n", [100, 10_000, 1_000_000])
 def test_nested(n, tmpdir, engine):
-    fsspec.utils.setup_logging(logger_name="fsspec.caching")
     path = os.path.join(str(tmpdir), "test.parquet")
     pa = pytest.importorskip("pyarrow")
     flat = pa.array([random.random() for _ in range(n)])
