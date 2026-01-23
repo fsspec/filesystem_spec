@@ -215,7 +215,6 @@ def test_nested(n, tmpdir, engine):
     table = pa.table({"flat": flat, "nested": nested})
     pq.write_table(table, path)
     with open_parquet_file(path, columns=["nested.a"], engine=engine) as fh:
-        print(list(fh.cache.data), os.path.getsize(path))
         col = pd.read_parquet(fh, engine=engine, columns=["nested.a"])
     name = "a" if engine == "pyarrow" else "nested.a"
     assert (col[name] == a).all()
