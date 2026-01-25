@@ -18,9 +18,12 @@ from fsspec.parquet import (
 )
 
 pd = pytest.importorskip("pandas")
+pd_gt_3 = pd.__version__ > "3"
 
 # Define `engine` fixture
-FASTPARQUET_MARK = pytest.mark.skipif(not fastparquet, reason="fastparquet not found")
+FASTPARQUET_MARK = pytest.mark.skipif(
+    pd_gt_3 or not fastparquet, reason="fastparquet not found"
+)
 PYARROW_MARK = pytest.mark.skipif(not pq, reason="pyarrow not found")
 
 
