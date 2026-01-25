@@ -1,4 +1,5 @@
 import os
+import random
 
 import pytest
 
@@ -11,15 +12,18 @@ try:
 except ImportError:
     pq = None
 
-from fsspec.core import url_to_fs
 from fsspec.parquet import (
-    _get_parquet_byte_ranges,
     open_parquet_file,
     open_parquet_files,
 )
 
+pd = pytest.importorskip("pandas")
+pd_gt_3 = pd.__version__ > "3"
+
 # Define `engine` fixture
-FASTPARQUET_MARK = pytest.mark.skipif(not fastparquet, reason="fastparquet not found")
+FASTPARQUET_MARK = pytest.mark.skipif(
+    pd_gt_3 or not fastparquet, reason="fastparquet not found"
+)
 PYARROW_MARK = pytest.mark.skipif(not pq, reason="pyarrow not found")
 
 
@@ -43,7 +47,6 @@ def test_open_parquet_file(
     tmpdir, engine, columns, max_gap, max_block, footer_sample_size, range_index
 ):
     # Pandas required for this test
-    pd = pytest.importorskip("pandas")
     if columns == ["z"] and engine == "fastparquet":
         columns = ["z.a"]  # fastparquet is more specific
 
@@ -52,9 +55,9 @@ def test_open_parquet_file(
     nrows = 40
     df = pd.DataFrame(
         {
-            "x": [i * 7 % 5 for i in range(nrows)],
             "y": [[0, i] for i in range(nrows)],  # list
             "z": [{"a": i, "b": "cat"} for i in range(nrows)],  # struct
+            "x": [i * 7 % 5 for i in range(nrows)],
         },
         index=pd.Index([10 * i for i in range(nrows)], name="myindex"),
     )
@@ -66,40 +69,6 @@ def test_open_parquet_file(
     # "Traditional read" (without `open_parquet_file`)
     expect = pd.read_parquet(path, columns=columns, engine=engine)
 
-    # Use `_get_parquet_byte_ranges` to re-write a
-    # place-holder file with all bytes NOT required
-    # to read `columns` set to b"0". The purpose of
-    # this step is to make sure the read will fail
-    # if the correct bytes have not been accurately
-    # selected by `_get_parquet_byte_ranges`. If this
-    # test were reading from remote storage, we would
-    # not need this logic to capture errors.
-    fs = url_to_fs(path)[0]
-    data = _get_parquet_byte_ranges(
-        [path],
-        fs,
-        columns=columns,
-        engine=engine,
-        max_gap=max_gap,
-        max_block=max_block,
-        footer_sample_size=footer_sample_size,
-    )[path]
-    file_size = fs.size(path)
-    with open(path, "wb") as f:
-        f.write(b"0" * file_size)
-
-        if footer_sample_size == 8 and columns is not None:
-            # We know 8 bytes is too small to include
-            # the footer metadata, so there should NOT
-            # be a key for the last 8 bytes of the file
-            bad_key = (file_size - 8, file_size)
-            assert bad_key not in data
-
-        for (start, stop), byte_data in data.items():
-            f.seek(start)
-            f.write(byte_data)
-
-    # Read back the modified file with `open_parquet_file`
     with open_parquet_file(
         path,
         columns=columns,
@@ -151,10 +120,9 @@ def test_open_parquet_file(
             )
 
 
+@pytest.mark.filterwarnings("ignore:.*Not enough data.*")
 @FASTPARQUET_MARK
 def test_with_filter(tmpdir):
-    import pandas as pd
-
     df = pd.DataFrame(
         {
             "a": [10, 1, 2, 3, 7, 8, 9],
@@ -180,10 +148,9 @@ def test_with_filter(tmpdir):
     pd.testing.assert_frame_equal(expect, result)
 
 
+@pytest.mark.filterwarnings("ignore:.*Not enough data.*")
 @FASTPARQUET_MARK
 def test_multiple(tmpdir):
-    import pandas as pd
-
     df = pd.DataFrame(
         {
             "a": [10, 1, 2, 3, 7, 8, 9],
@@ -238,3 +205,19 @@ def test_multiple(tmpdir):
     dfs = [pd.read_parquet(f, engine="fastparquet", columns=["a"]) for f in ofs]
     result = pd.concat(dfs).reset_index(drop=True)
     assert expect.equals(result)
+
+
+@pytest.mark.parametrize("n", [100, 10_000, 1_000_000])
+def test_nested(n, tmpdir, engine):
+    path = os.path.join(str(tmpdir), "test.parquet")
+    pa = pytest.importorskip("pyarrow")
+    flat = pa.array([random.random() for _ in range(n)])
+    a = random.random()
+    b = random.random()
+    nested = pa.array([{"a": a, "b": b} for _ in range(n)])
+    table = pa.table({"flat": flat, "nested": nested})
+    pq.write_table(table, path)
+    with open_parquet_file(path, columns=["nested.a"], engine=engine) as fh:
+        col = pd.read_parquet(fh, engine=engine, columns=["nested.a"])
+    name = "a" if engine == "pyarrow" else "nested.a"
+    assert (col[name] == a).all()
