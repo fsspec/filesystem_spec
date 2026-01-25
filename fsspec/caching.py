@@ -25,7 +25,7 @@ else:
 T = TypeVar("T")
 
 
-logger = logging.getLogger("fsspec")
+logger = logging.getLogger("fsspec.caching")
 
 Fetcher = Callable[[int, int], bytes]  # Maps (start, end) to bytes
 MultiFetcher = Callable[[list[int, int]], bytes]  # Maps [(start, end)] to bytes
@@ -662,6 +662,7 @@ class KnownPartsOfAFile(BaseCache):
         pass
 
     def _fetch(self, start: int | None, stop: int | None) -> bytes:
+        logger.debug("Known parts request %s %s", start, stop)
         if start is None:
             start = 0
         if stop is None:
