@@ -97,7 +97,7 @@ test_full = [
     'notebook',
     'numpy',
     'ocifs',
-    'pandas',
+    'pandas <3.0.0',
     'panel',
     'paramiko',
     'pyarrow',
