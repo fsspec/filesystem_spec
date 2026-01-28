@@ -668,7 +668,6 @@ class KnownPartsOfAFile(BaseCache):
         if stop is None:
             stop = self.size
         self.total_requested_bytes += stop - start
-
         out = b""
         started = False
         loc_old = 0
@@ -699,11 +698,13 @@ class KnownPartsOfAFile(BaseCache):
             elif loc0 <= stop <= loc1:
                 # end block
                 self.hit_count += 1
-                return out + self.data[(loc0, loc1)][: stop - loc0]
+                out = out + self.data[(loc0, loc1)][: stop - loc0]
+                return out
             loc_old = loc1
         self.miss_count += 1
         if started and not self.strict:
-            return out + b"\x00" * (stop - loc_old)
+            out = out + b"\x00" * (stop - loc_old)
+            return out
         raise ValueError
 
 
