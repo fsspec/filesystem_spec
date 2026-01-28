@@ -207,17 +207,31 @@ def test_multiple(tmpdir):
     assert expect.equals(result)
 
 
-@pytest.mark.parametrize("n", [100, 10_000, 1_000_000])
+@pytest.mark.parametrize("n", [1_000, 1_000_000])
 def test_nested(n, tmpdir, engine):
     path = os.path.join(str(tmpdir), "test.parquet")
     pa = pytest.importorskip("pyarrow")
     flat = pa.array([random.random() for _ in range(n)])
-    a = random.random()
-    b = random.random()
-    nested = pa.array([{"a": a, "b": b} for _ in range(n)])
+    nested = pa.array([{"a": random.random(), "b": random.random()} for _ in range(n)])
+    data = [float(_[0]) for _ in nested]
     table = pa.table({"flat": flat, "nested": nested})
     pq.write_table(table, path)
     with open_parquet_file(path, columns=["nested.a"], engine=engine) as fh:
         col = pd.read_parquet(fh, engine=engine, columns=["nested.a"])
     name = "a" if engine == "pyarrow" else "nested.a"
-    assert (col[name] == a).all()
+    assert (col[name] == data).all()
+
+
+@PYARROW_MARK
+def test_nested_arrow_nodict(tmpdir):
+    pa = pytest.importorskip("pyarrow")
+    n = 1_000_000
+    path = os.path.join(str(tmpdir), "test.parquet")
+    flat = pa.array([random.random() for _ in range(n)])
+    nested = pa.array([{"a": random.random(), "b": random.random()} for _ in range(n)])
+    data = [float(_[0]) for _ in nested]
+    table = pa.table({"flat": flat, "nested": nested})
+    pq.write_table(table, path, use_dictionary=False)
+    with open_parquet_file(path, columns=["nested"], engine="pyarrow") as fh:
+        col = pd.read_parquet(fh, engine="pyarrow", columns=["nested.a"])
+    assert (col["a"] == data).all()

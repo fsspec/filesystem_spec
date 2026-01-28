@@ -566,6 +566,16 @@ def merge_offset_ranges(
                 )
             )
         )
+    remove = []
+    for i, (path, start, end) in enumerate(zip(paths, starts, ends)):
+        if any(
+            p == path and start >= s and end <= e and i != i2
+            for i2, (p, s, e) in enumerate(zip(paths, starts, ends))
+        ):
+            remove.append(i)
+    paths = [p for i, p in enumerate(paths) if i not in remove]
+    starts = [s for i, s in enumerate(starts) if i not in remove]
+    ends = [e for i, e in enumerate(ends) if i not in remove]
 
     if paths:
         # Loop through the coupled `paths`, `starts`, and
@@ -587,7 +597,7 @@ def merge_offset_ranges(
                 new_starts.append(starts[i])
                 new_ends.append(ends[i])
             else:
-                # Merge with previous block by updating the
+                # Merge with the previous block by updating the
                 # last element of `ends`
                 new_ends[-1] = ends[i]
         return new_paths, new_starts, new_ends
