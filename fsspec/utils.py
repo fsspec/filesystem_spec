@@ -569,7 +569,7 @@ def merge_offset_ranges(
     remove = []
     for i, (path, start, end) in enumerate(zip(paths, starts, ends)):
         if any(
-            p == path and start >= s and end <= e and i != i2
+            e is not None and p == path and start >= s and end <= e and i != i2
             for i2, (p, s, e) in enumerate(zip(paths, starts, ends))
         ):
             remove.append(i)
