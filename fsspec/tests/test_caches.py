@@ -65,6 +65,16 @@ def test_block_cache_lru():
     assert cache.total_requested_bytes == block_size * cache.miss_count
 
 
+def test_block_cache_lru_no_redundant_reads():
+    block_size = 4
+    maxblocks = 2
+    cache = BlockCache(
+        block_size, letters_fetcher, len(string.ascii_letters), maxblocks=maxblocks
+    )
+    cache._fetch(0, block_size * (maxblocks + 1))
+    assert cache.cache_info().misses == 3
+
+
 def test_first_cache():
     """
     FirstChunkCache is a cache that only caches the first chunk of data
