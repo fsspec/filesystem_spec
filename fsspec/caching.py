@@ -391,19 +391,8 @@ class BlockCache(BaseCache):
         if start >= self.size or start >= end:
             return b""
 
-        # byte position -> block numbers
-        start_block_number = start // self.blocksize
-        end_block_number = end // self.blocksize
-
-        # these are cached, so safe to do multiple calls for the same start and end.
-        for block_number in range(start_block_number, end_block_number + 1):
-            self._fetch_block_cached(block_number)
-
         return self._read_cache(
-            start,
-            end,
-            start_block_number=start_block_number,
-            end_block_number=end_block_number,
+            start, end, start // self.blocksize, end // self.blocksize
         )
 
     def _fetch_block(self, block_number: int) -> bytes:
