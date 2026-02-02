@@ -214,7 +214,7 @@ class MMapCache(BaseCache):
         if self.multi_fetcher:
             logger.debug(f"MMap get blocks {ranges}")
             for idx, r in enumerate(self.multi_fetcher(ranges)):
-                (sstart, send) = ranges[idx]
+                sstart, send = ranges[idx]
                 logger.debug(f"MMap copy block ({sstart}-{send}")
                 self.cache[sstart:send] = r
         else:
@@ -392,7 +392,7 @@ class BlockCache(BaseCache):
             return b""
 
         return self._read_cache(
-            start, end, start // self.blocksize, end // self.blocksize
+            start, end, start // self.blocksize, (end - 1) // self.blocksize
         )
 
     def _fetch_block(self, block_number: int) -> bytes:
@@ -428,6 +428,8 @@ class BlockCache(BaseCache):
         """
         start_pos = start % self.blocksize
         end_pos = end % self.blocksize
+        if end_pos == 0:
+            end_pos = self.blocksize
 
         self.hit_count += 1
         if start_block_number == end_block_number:
