@@ -157,6 +157,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if self.engine == "pyarrow" and find_spec("pyarrow") is None:
             raise ImportError("engine choice `pyarrow` is not installed.")
 
+        # apply `lru_cache` decorator manually per instance
+        # This way `self` reference is not held on class level
+        self.listdir = lru_cache()(self.listdir)
+        self._key_to_record = lru_cache(maxsize=4096)(self._key_to_record)
+
     def __getattr__(self, item):
         if item in ("_items", "record_size", "zmetadata"):
             self.setup()
@@ -219,7 +224,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
 
-    @lru_cache
     def listdir(self):
         """List top-level directories"""
         dirs = (p.rsplit("/", 1)[0] for p in self.zmetadata if not p.startswith(".z"))
@@ -331,7 +335,6 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # URL, offset, size
         return selection[:3]
 
-    @lru_cache(4096)
     def _key_to_record(self, key):
         """Details needed to construct a reference for one key"""
         field, chunk = key.rsplit("/", 1)
