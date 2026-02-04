@@ -157,6 +157,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if self.engine == "pyarrow" and find_spec("pyarrow") is None:
             raise ImportError("engine choice `pyarrow` is not installed.")
 
+        # apply `lru_cache` decorator manually per instance
+        # This way `self` reference is not held on class level
+        self.listdir = lru_cache()(self.listdir)
+        self._key_to_record = lru_cache(maxsize=4096)(self._key_to_record)
+
     def __getattr__(self, item):
         if item in ("_items", "record_size", "zmetadata"):
             self.setup()
@@ -219,16 +224,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         fs.pipe("/".join([root, ".zmetadata"]), json.dumps(met).encode())
         return LazyReferenceMapper(root, fs, **kwargs)
 
-    @lru_cache()
-    @staticmethod
-    def _listdir(zmetadata):
-        """Cached static helper that lists top-level directories"""
-        dirs = (p.rsplit("/", 1)[0] for p in zmetadata if not p.startswith(".z"))
-        return set(dirs)
-
     def listdir(self):
         """List top-level directories"""
-        return LazyReferenceMapper._listdir(self.zmetadata)
+        dirs = (p.rsplit("/", 1)[0] for p in self.zmetadata if not p.startswith(".z"))
+        return set(dirs)
 
     def ls(self, path="", detail=True):
         """Shortcut file listings"""
@@ -336,50 +335,27 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         # URL, offset, size
         return selection[:3]
 
-    @lru_cache(4096)
-    @staticmethod
-    def _key_to_record_static(chunk_sizes, zmetadata, record_size, key):
-        """Details needed to construct a reference for one key.
-
-        This mehotd is static and cached.
-        """
-        field, chunk = key.rsplit("/", 1)
-        field_chunk_sizes = LazyReferenceMapper._get_chunk_sizes_static(
-            chunk_sizes, zmetadata, field
-        )
-        if len(field_chunk_sizes) == 0:
-            return 0, 0, 0
-        chunk_idx = [int(c) for c in chunk.split(".")]
-        chunk_number = ravel_multi_index(chunk_idx, field_chunk_sizes)
-        record = chunk_number // record_size
-        ri = chunk_number % record_size
-        return record, ri, len(field_chunk_sizes)
-
     def _key_to_record(self, key):
         """Details needed to construct a reference for one key"""
-        return LazyReferenceMapper._key_to_record_static(
-            self.chunk_sizes, self.zmetadata, self.record_size, key
-        )
-
-    @staticmethod
-    def _get_chunk_sizes_static(chunk_sizes, zmetadata, field):
-        """The number of chunks along each axis for a given field.
-
-        This method is static.
-        """
-        if field not in chunk_sizes:
-            zarray = zmetadata[f"{field}/.zarray"]
-            size_ratio = [
-                math.ceil(s / c) for s, c in zip(zarray["shape"], zarray["chunks"])
-            ]
-            chunk_sizes[field] = size_ratio or [1]
-        return chunk_sizes[field]
+        field, chunk = key.rsplit("/", 1)
+        chunk_sizes = self._get_chunk_sizes(field)
+        if len(chunk_sizes) == 0:
+            return 0, 0, 0
+        chunk_idx = [int(c) for c in chunk.split(".")]
+        chunk_number = ravel_multi_index(chunk_idx, chunk_sizes)
+        record = chunk_number // self.record_size
+        ri = chunk_number % self.record_size
+        return record, ri, len(chunk_sizes)
 
     def _get_chunk_sizes(self, field):
         """The number of chunks along each axis for a given field"""
-        return LazyReferenceMapper._get_chunk_sizes_static(
-            self.chunk_sizes, self.zmetadata, field
-        )
+        if field not in self.chunk_sizes:
+            zarray = self.zmetadata[f"{field}/.zarray"]
+            size_ratio = [
+                math.ceil(s / c) for s, c in zip(zarray["shape"], zarray["chunks"])
+            ]
+            self.chunk_sizes[field] = size_ratio or [1]
+        return self.chunk_sizes[field]
 
     def _generate_record(self, field, record):
         """The references for a given parquet file of a given field"""
