@@ -22,9 +22,9 @@ pd_gt_3 = pd.__version__ > "3"
 
 # Define `engine` fixture
 FASTPARQUET_MARK = pytest.mark.skipif(
-    pd_gt_3 or not fastparquet, reason="fastparquet not found"
+    pd_gt_3 or fastparquet is None, reason="fastparquet not found or new pandas"
 )
-PYARROW_MARK = pytest.mark.skipif(not pq, reason="pyarrow not found")
+PYARROW_MARK = pytest.mark.skipif(pq is None, reason="pyarrow not found")
 
 
 @pytest.fixture(
