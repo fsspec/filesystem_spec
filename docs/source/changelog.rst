@@ -1,6 +1,23 @@
 Changelog
 =========
 
+2026.2.0
+--------
+
+Enhancements
+
+- support append and update mode for cachedFSs (#1980)
+- implement created()/modified() for webHDFS (#1971)
+
+Fixes
+
+- recover support for old zstandard package (#1987)
+- remove prefetching loop in block-cache causing double read (#1984)
+- fixes to parquet and known-cache (#1982, 1988, 1979)
+- return None for streamed arrow file size (#1981)
+- correct find() for ZipFS (#1976)
+
+
 2026.1.0
 --------
 
