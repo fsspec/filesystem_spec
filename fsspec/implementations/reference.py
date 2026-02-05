@@ -157,8 +157,10 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if self.engine == "pyarrow" and find_spec("pyarrow") is None:
             raise ImportError("engine choice `pyarrow` is not installed.")
 
-        # apply `lru_cache` decorator manually per instance
-        # This way `self` reference is not held on class level
+        # Apply `lru_cache` decorator manually per instance.
+        # This way `self` reference is not held on class level.
+        # WARNING: However, this means that self and its members are not reflected
+        # in the cache key, so we expect they won't be mutated once a value is cached.
         self.listdir = lru_cache()(self.listdir)
         self._key_to_record = lru_cache(maxsize=4096)(self._key_to_record)
 
