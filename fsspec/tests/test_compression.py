@@ -96,10 +96,13 @@ def test_zstd_compression(tmpdir):
     """Infer zstd compression for .zst files if zstandard is available."""
     tmp_path = pathlib.Path(str(tmpdir))
 
-    if sys.version_info >= (3, 14):
-        from compression import zstd
-    else:
-        zstd = pytest.importorskip("backports.zstd")
+    try:
+        if sys.version_info >= (3, 14):
+            from compression import zstd
+        else:
+            zstd = pytest.importorskip("backports.zstd")
+    except ImportError:
+        zstd = pytest.importorskip("zstandard")
 
     tmp_path.mkdir(exist_ok=True)
 
