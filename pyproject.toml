@@ -118,6 +118,7 @@ test_full = [
     'urllib3',
     'zarr',
     'backports.zstd; python_version < "3.14"',
+    'zstandard; python_version < "3.14"',
 ]
 test_downstream = [
     "dask[dataframe,test]",
@@ -135,7 +136,7 @@ Homepage = "https://github.com/fsspec/filesystem_spec"
 
 [tool.hatch.version]
 source = "vcs"
-raw-options = {'version_scheme'='post-release'}
+raw-options = { 'version_scheme' = 'post-release' }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "fsspec/_version.py"
@@ -186,12 +187,12 @@ select = [
     "UP",
 ]
 ignore = [
-	# Loop control variable `loop` not used within loop body
-	"B007",
-	# Star-arg unpacking after a keyword argument is strongly discouraged
-	"B026",
-	# No explicit `stacklevel` keyword argument found
-	"B028",
+    # Loop control variable `loop` not used within loop body
+    "B007",
+    # Star-arg unpacking after a keyword argument is strongly discouraged
+    "B026",
+    # No explicit `stacklevel` keyword argument found
+    "B028",
     # `zip` without explicit `strict` keyword
     "B905",
     # Assigning lambda expression

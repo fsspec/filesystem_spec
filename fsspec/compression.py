@@ -163,6 +163,20 @@ try:
 
     register_compression("zstd", zstd.ZstdFile, "zst")
 except ImportError:
+    try:
+        import zstandard as zstd
+
+        def zstandard_file(infile, mode="rb"):
+            if "r" in mode:
+                cctx = zstd.ZstdDecompressor()
+                return cctx.stream_reader(infile)
+            else:
+                cctx = zstd.ZstdCompressor(level=10)
+                return cctx.stream_writer(infile)
+
+        register_compression("zstd", zstandard_file, "zst")
+    except ImportError:
+        pass
     pass
 
 
