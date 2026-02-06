@@ -327,6 +327,16 @@ def test_download(server, tmpdir):
     assert open(fn, "rb").read() == data
 
 
+def test_download_dir(server, tmpdir):
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    url = server.address + "/index/"
+    fn = os.path.join(tmpdir, "adir")
+    h.get(url, fn, recursive=True)
+    assert os.path.exists(fn)
+    assert os.path.exists(os.path.join(fn, "realfile"))
+    assert open(os.path.join(fn, "realfile"), "rb").read() == data
+
+
 def test_multi_download(server, tmpdir):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
     urla = server.realfile
