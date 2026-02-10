@@ -147,6 +147,21 @@ def test_put_file(ssh, tmp_path, root_path):
 
     f = fsspec.get_filesystem_class("sftp")(**ssh)
     f.put_file(lpath=tmp_file, rpath=root_path + "a.txt")
+    assert f.exists(root_path + "a.txt")
+
+
+def test_put_many_files(ssh, tmp_path, root_path):
+    tmp_file_a = tmp_path / "a.txt"
+    with open(tmp_file_a, mode="w") as fd:
+        fd.write("blabla")
+    tmp_file_b = tmp_path / "b.txt"
+    with open(tmp_file_b, mode="w") as fd:
+        fd.write("blabla")
+
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+    f.put(lpath=[tmp_file_a, tmp_file_b], rpath=root_path)
+    assert f.exists(root_path + "a.txt")
+    assert f.exists(root_path + "b.txt")
 
 
 def test_simple_with_tar(ssh, netloc, tmp_path, root_path):
