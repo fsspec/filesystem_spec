@@ -107,7 +107,7 @@ Implementing new backends
 
 Async file systems should derive from ``AsyncFileSystem``, and implement the
 ``async def _*`` coroutines there. These functions will either have sync versions
-automatically generated is the name is in the ``async_methods`` list, or
+automatically generated if the name is in the ``async_methods`` list, or
 can be directly created using ``sync_wrapper``.
 
 .. code-block:: python
