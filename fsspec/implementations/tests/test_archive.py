@@ -214,14 +214,14 @@ class TestAnyArchive:
     will adhere to the same specification.
     """
 
-    scenarios = [
+    scenarios = (
         scenario_zip,
         scenario_tar,
         scenario_targz,
         scenario_tarbz2,
         scenario_tarxz,
         scenario_libarchive,
-    ]
+    )
 
     def test_repr(self, scenario: ArchiveTestScenario):
         with scenario.provider() as archive:

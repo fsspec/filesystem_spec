@@ -396,7 +396,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def __setitem__(self, key, value):
         if "/" in key and not self._is_meta(key):
-            field, chunk = key.rsplit("/", 1)
+            field, _chunk = key.rsplit("/", 1)
             record, i, _ = self._key_to_record(key)
             subdict = self._items.setdefault((field, record), {})
             subdict[i] = value
