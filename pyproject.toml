@@ -189,8 +189,6 @@ select = [
 ignore = [
     # Loop control variable `loop` not used within loop body
     "B007",
-    # Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
-    "B019",
     # Star-arg unpacking after a keyword argument is strongly discouraged
     "B026",
     # No explicit `stacklevel` keyword argument found
