@@ -1091,6 +1091,58 @@ def test_cached_write(protocol):
     assert not os.path.exists(fn)
 
 
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_cached_append_text(protocol):
+    fn = "memory://afile"
+    with fsspec.open(fn, "w") as f:
+        f.write("hello")
+    with fsspec.open(f"{protocol}::{fn}", mode="a") as f:
+        assert isinstance(f.buffer, LocalTempFile)
+        f.write("world")
+    with fsspec.open(fn, "r") as f:
+        assert f.read() == "helloworld"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_cached_append_binary(protocol):
+    fn = "memory://afile"
+    with fsspec.open(fn, "wb") as f:
+        f.write(b"hello")
+    with fsspec.open(f"{protocol}::{fn}", mode="ab") as f:
+        assert isinstance(f, LocalTempFile)
+        f.write(b"world")
+    with fsspec.open(fn, "rb") as f:
+        assert f.read() == b"helloworld"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_cached_update_text(protocol):
+    fn = "memory://afile"
+    with fsspec.open(fn, "w") as f:
+        f.write("hello")
+    with fsspec.open(f"{protocol}::{fn}", mode="r+") as f:
+        assert isinstance(f.buffer, LocalTempFile)
+        assert f.read() == "hello"
+        f.seek(1)
+        f.write("world")
+    with fsspec.open(fn, "r") as f:
+        assert f.read() == "hworld"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_cached_update_binary(protocol):
+    fn = "memory://afile"
+    with fsspec.open(fn, "wb") as f:
+        f.write(b"hello")
+    with fsspec.open(f"{protocol}::{fn}", mode="r+b") as f:
+        assert isinstance(f, LocalTempFile)
+        assert f.read() == b"hello"
+        f.seek(1)
+        f.write(b"world")
+    with fsspec.open(fn, "rb") as f:
+        assert f.read() == b"hworld"
+
+
 def test_expiry():
     import time
 

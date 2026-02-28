@@ -1,7 +1,6 @@
 import io
 import json
 import warnings
-from typing import Literal
 
 import fsspec
 
@@ -25,7 +24,6 @@ class AlreadyBufferedFile(AbstractBufferedFile):
 
 def open_parquet_files(
     path: list[str],
-    mode: Literal["rb"] = "rb",
     fs: None | fsspec.AbstractFileSystem = None,
     metadata=None,
     columns: None | list[str] = None,
@@ -54,8 +52,6 @@ def open_parquet_files(
     ----------
     path: str
         Target file path.
-    mode: str, optional
-        Mode option to be passed through to `fs.open`. Default is "rb".
     metadata: Any, optional
         Parquet metadata object. Object type must be supported
         by the backend parquet engine. For now, only the "fastparquet"
@@ -150,16 +146,16 @@ def open_parquet_files(
         AlreadyBufferedFile(
             fs=None,
             path=fn,
-            mode=mode,
+            mode="rb",
             cache_type="parts",
             cache_options={
                 **options,
-                "data": data.get(fn, {}),
+                "data": ranges,
             },
-            size=max(_[1] for _ in data.get(fn, {})),
+            size=max(_[1] for _ in ranges),
             **kwargs,
         )
-        for fn in data
+        for fn, ranges in data.items()
     ]
 
 
@@ -197,7 +193,7 @@ def _get_parquet_byte_ranges(
     if isinstance(engine, str):
         engine = _set_engine(engine)
 
-    # Pass to specialized function if metadata is defined
+    # Pass to a specialized function if metadata is defined
     if metadata is not None:
         # Use the provided parquet metadata object
         # to avoid transferring/parsing footer metadata
@@ -212,63 +208,54 @@ def _get_parquet_byte_ranges(
             filters=filters,
         )
 
-    # Get file sizes asynchronously
-    file_sizes = fs.sizes(paths)
-
     # Populate global paths, starts, & ends
-    result = {}
-    data_paths = []
-    data_starts = []
-    data_ends = []
-    add_header_magic = True
     if columns is None and row_groups is None and filters is None:
         # We are NOT selecting specific columns or row-groups.
         #
         # We can avoid sampling the footers, and just transfer
         # all file data with cat_ranges
-        for i, path in enumerate(paths):
-            result[path] = {}
-            data_paths.append(path)
-            data_starts.append(0)
-            data_ends.append(file_sizes[i])
-        add_header_magic = False  # "Magic" should already be included
+        result = {path: {(0, len(data)): data} for path, data in fs.cat(paths).items()}
     else:
         # We ARE selecting specific columns or row-groups.
         #
+        # Get file sizes asynchronously
+        file_sizes = fs.sizes(paths)
+        data_paths = []
+        data_starts = []
+        data_ends = []
         # Gather file footers.
         # We just take the last `footer_sample_size` bytes of each
         # file (or the entire file if it is smaller than that)
-        footer_starts = []
-        footer_ends = []
-        for i, path in enumerate(paths):
-            footer_ends.append(file_sizes[i])
-            sample_size = max(0, file_sizes[i] - footer_sample_size)
-            footer_starts.append(sample_size)
-        footer_samples = fs.cat_ranges(paths, footer_starts, footer_ends)
+        footer_starts = [
+            max(0, file_size - footer_sample_size) for file_size in file_sizes
+        ]
+        footer_samples = fs.cat_ranges(paths, footer_starts, file_sizes)
 
         # Check our footer samples and re-sample if necessary.
-        missing_footer_starts = footer_starts.copy()
-        large_footer = 0
+        large_footer = []
         for i, path in enumerate(paths):
             footer_size = int.from_bytes(footer_samples[i][-8:-4], "little")
             real_footer_start = file_sizes[i] - (footer_size + 8)
             if real_footer_start < footer_starts[i]:
-                missing_footer_starts[i] = real_footer_start
-                large_footer = max(large_footer, (footer_size + 8))
+                large_footer.append((i, real_footer_start))
         if large_footer:
             warnings.warn(
                 f"Not enough data was used to sample the parquet footer. "
                 f"Try setting footer_sample_size >= {large_footer}."
             )
-            for i, block in enumerate(
-                fs.cat_ranges(
-                    paths,
-                    missing_footer_starts,
-                    footer_starts,
-                )
-            ):
+            path0 = [paths[i] for i, _ in large_footer]
+            starts = [_[1] for _ in large_footer]
+            ends = [file_sizes[i] - footer_sample_size for i, _ in large_footer]
+            data = fs.cat_ranges(path0, starts, ends)
+            for i, (path, start, block) in enumerate(zip(path0, starts, data)):
                 footer_samples[i] = block + footer_samples[i]
-                footer_starts[i] = missing_footer_starts[i]
+                footer_starts[i] = start
+        result = {
+            path: {(start, size): data}
+            for path, start, size, data in zip(
+                paths, footer_starts, file_sizes, footer_samples
+            )
+        }
 
         # Calculate required byte ranges for each path
         for i, path in enumerate(paths):
@@ -284,9 +271,6 @@ def _get_parquet_byte_ranges(
             data_paths += [path] * len(path_data_starts)
             data_starts += path_data_starts
             data_ends += path_data_ends
-            result.setdefault(path, {})[(footer_starts[i], file_sizes[i])] = (
-                footer_samples[i]
-            )
 
         # Merge adjacent offset ranges
         data_paths, data_starts, data_ends = merge_offset_ranges(
@@ -295,19 +279,14 @@ def _get_parquet_byte_ranges(
             data_ends,
             max_gap=max_gap,
             max_block=max_block,
-            sort=False,  # Should already be sorted
+            sort=True,
         )
 
-        # Start by populating `result` with footer samples
-        for i, path in enumerate(paths):
-            result[path] = {(footer_starts[i], footer_ends[i]): footer_samples[i]}
+        # Transfer the data byte-ranges into local memory
+        _transfer_ranges(fs, result, data_paths, data_starts, data_ends)
 
-    # Transfer the data byte-ranges into local memory
-    _transfer_ranges(fs, result, data_paths, data_starts, data_ends)
-
-    # Add b"PAR1" to header if necessary
-    if add_header_magic:
-        _add_header_magic(result)
+    # Add b"PAR1" to headers
+    _add_header_magic(result)
 
     return result
 
@@ -362,7 +341,7 @@ def _transfer_ranges(fs, blocks, paths, starts, ends):
 
 def _add_header_magic(data):
     # Add b"PAR1" to file headers
-    for path in list(data.keys()):
+    for path in list(data):
         add_magic = True
         for k in data[path]:
             if k[0] == 0 and k[1] >= 4:
@@ -419,9 +398,6 @@ class FastparquetEngine:
 
         self.fp = fp
 
-    def _row_group_filename(self, row_group, pf):
-        return pf.row_group_filename(row_group)
-
     def _parquet_byte_ranges(
         self,
         columns,
@@ -465,6 +441,10 @@ class FastparquetEngine:
             # Input row_groups contains row-group indices
             row_group_indices = row_groups
             row_groups = pf.row_groups
+        if column_set is not None:
+            column_set = [
+                _ if isinstance(_, list) else _.split(".") for _ in column_set
+            ]
 
         # Loop through column chunks to add required byte ranges
         for r, row_group in enumerate(row_groups):
@@ -472,13 +452,12 @@ class FastparquetEngine:
             # specific row-groups
             if row_group_indices is None or r in row_group_indices:
                 # Find the target parquet-file path for `row_group`
-                fn = self._row_group_filename(row_group, pf)
+                fn = pf.row_group_filename(row_group)
 
                 for column in row_group.columns:
-                    name = column.meta_data.path_in_schema[0]
-                    # Skip this column if we are targeting a
-                    # specific columns
-                    if column_set is None or name in column_set:
+                    name = column.meta_data.path_in_schema
+                    # Skip this column if we are targeting specific columns
+                    if column_set is None or _cmp(name, column_set):
                         file_offset0 = column.meta_data.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.meta_data.data_page_offset
@@ -512,9 +491,6 @@ class PyarrowEngine:
 
         self.pq = pq
 
-    def _row_group_filename(self, row_group, metadata):
-        raise NotImplementedError
-
     def _parquet_byte_ranges(
         self,
         columns,
@@ -527,6 +503,7 @@ class PyarrowEngine:
         if metadata is not None:
             raise ValueError("metadata input not supported for PyarrowEngine")
         if filters:
+            # there must be a way!
             raise NotImplementedError
 
         data_starts, data_ends = [], []
@@ -550,6 +527,10 @@ class PyarrowEngine:
                     if not isinstance(ind, dict)
                 ]
                 column_set |= set(md_index)
+        if column_set is not None:
+            column_set = [
+                _[:1] if isinstance(_, list) else _.split(".")[:1] for _ in column_set
+            ]
 
         # Loop through column chunks to add required byte ranges
         for r in range(md.num_row_groups):
@@ -559,22 +540,33 @@ class PyarrowEngine:
                 row_group = md.row_group(r)
                 for c in range(row_group.num_columns):
                     column = row_group.column(c)
-                    name = column.path_in_schema
-                    # Skip this column if we are targeting a
-                    # specific columns
-                    split_name = name.split(".")[0]
-                    if (
-                        column_set is None
-                        or name in column_set
-                        or split_name in column_set
-                    ):
-                        file_offset0 = column.dictionary_page_offset
-                        if file_offset0 is None:
-                            file_offset0 = column.data_page_offset
-                        num_bytes = column.total_compressed_size
+                    name = column.path_in_schema.split(".")
+                    # Skip this column if we are targeting specific columns
+                    if column_set is None or _cmp(name, column_set):
+                        meta = column.to_dict()
+                        # Any offset could be the first one
+                        file_offset0 = min(
+                            _
+                            for _ in [
+                                meta.get("dictionary_page_offset"),
+                                meta.get("data_page_offset"),
+                                meta.get("index_page_offset"),
+                            ]
+                            if _ is not None
+                        )
                         if file_offset0 < footer_start:
                             data_starts.append(file_offset0)
                             data_ends.append(
-                                min(file_offset0 + num_bytes, footer_start)
+                                min(
+                                    meta["total_compressed_size"] + file_offset0,
+                                    footer_start,
+                                )
                             )
+
+        data_starts.append(footer_start)
+        data_ends.append(footer_start + len(footer))
         return data_starts, data_ends
+
+
+def _cmp(name, column_set):
+    return any(all(a == b for a, b in zip(name, _)) for _ in column_set)

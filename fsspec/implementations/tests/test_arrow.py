@@ -280,8 +280,9 @@ def test_get_file_seekable_default(fs, remote_dir, tmp_path):
 
     # Test default behavior (seekable=False)
     local_file = tmp_path / "test_default.txt"
-    with pytest.raises(OSError, match="only valid on seekable files"):
-        fs.get_file(remote_dir + "/test_file.txt", str(local_file))
+    fs.get_file(remote_dir + "/test_file.txt", str(local_file))
+    with open(local_file, "rb") as f:
+        assert f.read() == data
 
     # Test with explicit seekable=True
     local_file_seekable = tmp_path / "test_seekable.txt"
@@ -291,10 +292,11 @@ def test_get_file_seekable_default(fs, remote_dir, tmp_path):
 
     # Test with explicit seekable=False
     local_file_not_seekable = tmp_path / "test_not_seekable.txt"
-    with pytest.raises(OSError, match="only valid on seekable files"):
-        fs.get_file(
-            remote_dir + "/test_file.txt", str(local_file_not_seekable), seekable=False
-        )
+    fs.get_file(
+        remote_dir + "/test_file.txt", str(local_file_not_seekable), seekable=False
+    )
+    with open(local_file_not_seekable, "rb") as f:
+        assert f.read() == data
 
 
 def test_cat_file_seekable_override(fs, remote_dir):
@@ -338,7 +340,7 @@ def test_seekable_true_allows_size_method(fs, remote_dir):
 
 
 def test_seekable_false_prevents_size_method(fs, remote_dir):
-    """Test that size() method raises OSError when seekable=False."""
+    """Test that size() method returns None when seekable=False."""
     data = b"test data for size method" * 10
 
     # Create a test file
@@ -349,8 +351,7 @@ def test_seekable_false_prevents_size_method(fs, remote_dir):
     # Open with seekable=False - size() should raise OSError
     with fs.open(test_file, "rb", seekable=False) as f:
         assert f.seekable() is False
-        # Verify size() raises OSError
-        with pytest.raises(OSError, match="only valid on seekable files"):
-            _ = f.size
+        # Verify size() returns None
+        assert f.size is None
         # Verify we can still read the data
         assert f.read() == data
