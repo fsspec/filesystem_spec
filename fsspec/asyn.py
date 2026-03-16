@@ -263,9 +263,22 @@ async def _run_coros_in_chunks(
             break
 
         done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        first_exc = None
         while done:
-            result, k = await done.pop()
-            results[k] = result
+            task = done.pop()
+            try:
+                result, k = await task
+                results[k] = result
+            except Exception as exc:
+                if first_exc is None:
+                    first_exc = exc
+
+        if first_exc is not None:
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            raise first_exc
 
     return results
 
