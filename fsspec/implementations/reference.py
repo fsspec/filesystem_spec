@@ -1110,7 +1110,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 subdirs.append(par0)
 
             subdirs.reverse()
-            for parent, child in zip(subdirs, subdirs[1:]):
+            for parent, child in itertools.pairwise(subdirs):
                 # register newly discovered directories
                 assert child not in self.dircache
                 assert parent in self.dircache
