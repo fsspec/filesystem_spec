@@ -703,7 +703,7 @@ class UpdatableLRU(Generic[P, T]):
     """
     Custom implementation of LRU cache that allows updating keys
 
-    Used by BackgroudBlockCache
+    Used by BackgroundBlockCache
     """
 
     class CacheInfo(NamedTuple):
