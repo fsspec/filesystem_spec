@@ -797,12 +797,16 @@ class AsyncFileSystem(AbstractFileSystem):
         elif "/" in path[:min_idx]:
             first_wildcard_idx = min_idx
             min_idx = path[:min_idx].rindex("/")
-            root = path[: min_idx + 1] # everything up to the last / before the first wildcard
-            prefix = path[min_idx + 1 : first_wildcard_idx]  # stem between last "/" and first wildcard
+            root = path[
+                : min_idx + 1
+            ]  # everything up to the last / before the first wildcard
+            prefix = path[
+                min_idx + 1 : first_wildcard_idx
+            ]  # stem between last "/" and first wildcard
             depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
-            prefix = path[:min_idx] # stem up to the first wildcard
+            prefix = path[:min_idx]  # stem up to the first wildcard
             depth = path[min_idx + 1 :].count("/") + 1
 
         if "**" in path:
@@ -813,7 +817,7 @@ class AsyncFileSystem(AbstractFileSystem):
             else:
                 depth = None
 
-        # Pass the filename stem as prefix= so backends that support it such as 
+        # Pass the filename stem as prefix= so backends that support it such as
         # gcsfs, s3fs and adlfs can filter server-side up to the first wildcard.
         if prefix:
             kwargs["prefix"] = prefix
