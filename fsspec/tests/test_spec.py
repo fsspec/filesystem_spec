@@ -1376,6 +1376,15 @@ def test_glob_posix_rules(path, expected, glob_fs):
     for name, info in _clean_paths(detailed_output).items():
         assert info == glob_fs[name]
 
+    withdirs_output = glob_fs.glob(path=f"mock://{path}", detail=True, withdirs=False)
+    path_output = _clean_paths(withdirs_output)
+    for name, info in path_output.items():
+        # withdirs only respected when path has magic
+        # otherwise glob returns the path regardless of the type of the path
+        if glob.has_magic(path):
+            assert info["type"] == "file"
+        assert info == glob_fs[name]
+
 
 @pytest.fixture(scope="function")
 def tmpfs(tmpdir):
