@@ -640,7 +640,9 @@ class AbstractFileSystem(metaclass=_Cached):
             else:
                 depth = None
 
-        allpaths = self.find(root, maxdepth=depth, withdirs=withdirs, detail=True, **kwargs)
+        allpaths = self.find(
+            root, maxdepth=depth, withdirs=withdirs, detail=True, **kwargs
+        )
 
         pattern = glob_translate(path + ("/" if ends_with_sep else ""))
         pattern = re.compile(pattern)
