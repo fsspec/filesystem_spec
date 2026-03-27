@@ -37,10 +37,8 @@ def set_conf_env(conf_dict, envdict=os.environ):
             try:
                 value = json.loads(envdict[key])
                 envdict[key] = value
-            except json.decoder.JSONDecodeError as ex:
-                warnings.warn(
-                    f"Ignoring environment variable {key} due to a parse failure: {ex}"
-                )
+            except json.decoder.JSONDecodeError:
+                value = envdict[key]
             if key.count("_") > 1:
                 kwarg_keys.append(key)
                 continue

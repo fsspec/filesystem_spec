@@ -30,7 +30,7 @@ def test_from_env_ignored(clean_conf):
         assert "unexpected name" in str(w[0].message)
         assert "unexpected name" in str(w[1].message)
         assert "unexpected name" in str(w[2].message)
-        assert "parse failure" in str(w[3].message)
+        assert "not being a dict" in str(w[3].message)
         assert "not being a dict" in str(w[4].message)
     assert cd == {}
 
@@ -45,7 +45,7 @@ def test_from_env_kwargs(clean_conf):
     with catch_warnings(record=True) as w:
         set_conf_env(conf_dict=cd, envdict=env)
         assert len(w) == 1
-        assert "parse failure" in str(w[0].message)
+        assert "not being a dict" in str(w[0].message)
     assert cd == {"proto": {"key": "value", "long_key": "othervalue"}}
 
 
