@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2026.3.0
+--------
+
+Fixes
+
+- non-string types in individual cond kwarg value env-vars (#2004)
+- allow withdirs in glob (#1998)
+- multi-file put in sftp (#1991)
+
 2026.2.0
 --------
 
