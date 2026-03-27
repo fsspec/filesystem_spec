@@ -30,18 +30,20 @@ def set_conf_env(conf_dict, envdict=os.environ):
     envdict : dict-like(str, str)
         Source for the values - usually the real environment
     """
+    envdict = dict(envdict)
     kwarg_keys = []
     for key in envdict:
         if key.startswith("FSSPEC_") and len(key) > 7 and key[7] != "_":
-            if key.count("_") > 1:
-                kwarg_keys.append(key)
-                continue
             try:
                 value = json.loads(envdict[key])
+                envdict[key] = value
             except json.decoder.JSONDecodeError as ex:
                 warnings.warn(
                     f"Ignoring environment variable {key} due to a parse failure: {ex}"
                 )
+            if key.count("_") > 1:
+                kwarg_keys.append(key)
+                continue
             else:
                 if isinstance(value, dict):
                     _, proto = key.split("_", 1)
