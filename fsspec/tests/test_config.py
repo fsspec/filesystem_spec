@@ -30,7 +30,7 @@ def test_from_env_ignored(clean_conf):
         assert "unexpected name" in str(w[0].message)
         assert "unexpected name" in str(w[1].message)
         assert "unexpected name" in str(w[2].message)
-        assert "parse failure" in str(w[3].message)
+        assert "not being a dict" in str(w[3].message)
         assert "not being a dict" in str(w[4].message)
     assert cd == {}
 
@@ -45,7 +45,7 @@ def test_from_env_kwargs(clean_conf):
     with catch_warnings(record=True) as w:
         set_conf_env(conf_dict=cd, envdict=env)
         assert len(w) == 1
-        assert "parse failure" in str(w[0].message)
+        assert "not being a dict" in str(w[0].message)
     assert cd == {"proto": {"key": "value", "long_key": "othervalue"}}
 
 
@@ -62,15 +62,13 @@ def test_from_env_protocol_dict(clean_conf):
 
 def test_from_env_kwargs_override_protocol_dict(clean_conf):
     env = {
-        "FSSPEC_PROTO_LONG_KEY": "override1",
+        "FSSPEC_PROTO_LONG_KEY": "1",
         "FSSPEC_PROTO": '{"key": "value1", "long_key": "value2", "otherkey": "value3"}',
         "FSSPEC_PROTO_KEY": "override2",
     }
     cd = {}
     set_conf_env(conf_dict=cd, envdict=env)
-    assert cd == {
-        "proto": {"key": "override2", "long_key": "override1", "otherkey": "value3"}
-    }
+    assert cd == {"proto": {"key": "override2", "long_key": 1, "otherkey": "value3"}}
 
 
 def test_from_file_ini(clean_conf, tmpdir):
