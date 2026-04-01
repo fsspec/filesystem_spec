@@ -263,9 +263,22 @@ async def _run_coros_in_chunks(
             break
 
         done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        first_exc = None
         while done:
-            result, k = await done.pop()
-            results[k] = result
+            task = done.pop()
+            try:
+                result, k = await task
+                results[k] = result
+            except Exception as exc:
+                if first_exc is None:
+                    first_exc = exc
+
+        if first_exc is not None:
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            raise first_exc
 
     return results
 
@@ -795,11 +808,18 @@ class AsyncFileSystem(AbstractFileSystem):
                 else:
                     return {}
         elif "/" in path[:min_idx]:
+            first_wildcard_idx = min_idx
             min_idx = path[:min_idx].rindex("/")
-            root = path[: min_idx + 1]
+            root = path[
+                : min_idx + 1
+            ]  # everything up to the last / before the first wildcard
+            prefix = path[
+                min_idx + 1 : first_wildcard_idx
+            ]  # stem between last "/" and first wildcard
             depth = path[min_idx + 1 :].count("/") + 1
         else:
             root = ""
+            prefix = path[:min_idx]  # stem up to the first wildcard
             depth = path[min_idx + 1 :].count("/") + 1
 
         if "**" in path:
@@ -810,6 +830,10 @@ class AsyncFileSystem(AbstractFileSystem):
             else:
                 depth = None
 
+        # Pass the filename stem as prefix= so backends that support it such as
+        # gcsfs, s3fs and adlfs can filter server-side up to the first wildcard.
+        if prefix:
+            kwargs["prefix"] = prefix
         allpaths = await self._find(
             root, maxdepth=depth, withdirs=withdirs, detail=True, **kwargs
         )
