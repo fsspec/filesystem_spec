@@ -1440,3 +1440,21 @@ def test_simplecache_instance_cache(instance_caches):
         "file": 1,
         "http": 1,
     }
+
+
+@pytest.mark.parametrize(
+    "protocol", ["filecache", "simplecache"]
+)
+def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
+    """Ensure _cat_file and _cat_ranges are available on the class, not just
+    instances, so that external code inspecting ``type(fs)`` (e.g.
+    universal_pathlib, zarr) can discover these capabilities.
+
+    Regression test for https://github.com/fsspec/filesystem_spec/issues/2009
+    """
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    for attr in ("_cat_file", "_cat_ranges"):
+        assert hasattr(fs, attr), f"instance missing {attr}"
+        assert hasattr(type(fs), attr), f"class missing {attr}"
