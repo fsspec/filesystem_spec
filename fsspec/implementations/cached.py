@@ -474,9 +474,12 @@ class CachingFileSystem(ChainedFileSystem):
         }:
             # all the methods defined in this class. Note `open` here, since
             # it calls `_open`, but is actually in superclass
-            return lambda *args, **kw: getattr(type(self), item).__get__(self)(
-                *args, **kw
-            )
+            if hasattr(type(self), item):
+                return lambda *args, **kw: getattr(type(self), item).__get__(self)(
+                    *args, **kw
+                )
+            # method is in the whitelist but not defined on this subclass;
+            # fall through to delegate to the wrapped filesystem below
         if item in ["__reduce_ex__"]:
             raise AttributeError
         if item in ["transaction"]:
@@ -744,6 +747,46 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         }
         return LocalTempFile(self, path, mode=mode, fn=fn, **user_specified_kwargs)
 
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        logger.debug("async cat_file %s", path)
+        path = self._strip_protocol(path)
+        sha = self._mapper(path)
+        fn = self._check_file(path)
+
+        if not fn:
+            fn = os.path.join(self.storage[-1], sha)
+            await self.fs._get_file(path, fn, **kwargs)
+
+        with open(fn, "rb") as f:  # noqa ASYNC230
+            if start:
+                f.seek(start)
+            size = -1 if end is None else end - f.tell()
+            return f.read(size)
+
+    async def _cat_ranges(
+        self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
+    ):
+        logger.debug("async cat ranges %s", paths)
+        lpaths = []
+        rset = set()
+        download = []
+        rpaths = []
+        for p in paths:
+            fn = self._check_file(p)
+            if fn is None and p not in rset:
+                sha = self._mapper(p)
+                fn = os.path.join(self.storage[-1], sha)
+                download.append(fn)
+                rset.add(p)
+                rpaths.append(p)
+            lpaths.append(fn)
+        if download:
+            await self.fs._get(rpaths, download, on_error=on_error)
+
+        return LocalFileSystem().cat_ranges(
+            lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
+        )
+
 
 class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     """Caches whole remote files on first access
@@ -847,46 +890,6 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                 self.pipe_file(self._strip_protocol(k), v, **kwargs)
         else:
             raise ValueError("path must be str or dict")
-
-    async def _cat_file(self, path, start=None, end=None, **kwargs):
-        logger.debug("async cat_file %s", path)
-        path = self._strip_protocol(path)
-        sha = self._mapper(path)
-        fn = self._check_file(path)
-
-        if not fn:
-            fn = os.path.join(self.storage[-1], sha)
-            await self.fs._get_file(path, fn, **kwargs)
-
-        with open(fn, "rb") as f:  # noqa ASYNC230
-            if start:
-                f.seek(start)
-            size = -1 if end is None else end - f.tell()
-            return f.read(size)
-
-    async def _cat_ranges(
-        self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
-    ):
-        logger.debug("async cat ranges %s", paths)
-        lpaths = []
-        rset = set()
-        download = []
-        rpaths = []
-        for p in paths:
-            fn = self._check_file(p)
-            if fn is None and p not in rset:
-                sha = self._mapper(p)
-                fn = os.path.join(self.storage[-1], sha)
-                download.append(fn)
-                rset.add(p)
-                rpaths.append(p)
-            lpaths.append(fn)
-        if download:
-            await self.fs._get(rpaths, download, on_error=on_error)
-
-        return LocalFileSystem().cat_ranges(
-            lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
-        )
 
     def cat_ranges(
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
