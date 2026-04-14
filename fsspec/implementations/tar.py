@@ -122,3 +122,14 @@ class TarFileSystem(AbstractArchiveFileSystem):
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
         return self.tar.extractfile(path)
+
+    def close(self):
+        """Commits any write changes to the file. Done on ``del`` too."""
+        self.tar.close()
+
+    def __del__(self):
+        if hasattr(self, "tar"):
+            self.close()
+            del self.tar
+        if hasattr(self, "of") and hasattr(self.of, "__exit__"):
+            self.of.__exit__(None, None, None)

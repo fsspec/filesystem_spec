@@ -78,6 +78,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if hasattr(self, "zip"):
             self.close()
             del self.zip
+        if hasattr(self, "of") and hasattr(self.of, "__exit__"):
+            self.of.__exit__(None, None, None)
 
     def close(self):
         """Commits any write changes to the file. Done on ``del`` too."""
