@@ -1442,9 +1442,7 @@ def test_simplecache_instance_cache(instance_caches):
     }
 
 
-@pytest.mark.parametrize(
-    "protocol", ["filecache", "simplecache"]
-)
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
 def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     """Ensure _cat_file and _cat_ranges are available on the class, not just
     instances, so that external code inspecting ``type(fs)`` (e.g.
