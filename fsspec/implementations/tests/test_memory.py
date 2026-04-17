@@ -172,7 +172,7 @@ def test_moves(m):
     assert m.find("") == ["/target.txt", "/target2.txt"]
 
 
-def test_rm_reursive_empty_subdir(m):
+def test_rm_recursive_empty_subdir(m):
     # https://github.com/fsspec/filesystem_spec/issues/500
     m.mkdir("recdir")
     m.mkdir("recdir/subdir2")
