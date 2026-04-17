@@ -204,8 +204,9 @@ class LocalFileSystem(AbstractFileSystem):
                 os.remove(p)
 
     def unstrip_protocol(self, name):
+        protocol = self.protocol if isinstance(self.protocol, str) else self.protocol[0]
         name = self._strip_protocol(name)  # normalise for local/win/...
-        return f"file://{name}"
+        return f"{protocol}://{name}"
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
@@ -253,14 +254,12 @@ class LocalFileSystem(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         path = stringify_path(path)
-        if path.startswith("file://"):
-            path = path[7:]
-        elif path.startswith("file:"):
-            path = path[5:]
-        elif path.startswith("local://"):
-            path = path[8:]
-        elif path.startswith("local:"):
-            path = path[6:]
+        protos = (cls.protocol,) if isinstance(cls.protocol, str) else cls.protocol
+        prefixes = (protocol + sep for protocol in protos for sep in ("://", ":"))
+        for prefix in prefixes:
+            if path.startswith(prefix):
+                path = path.removeprefix(prefix)
+                break
 
         path = make_path_posix(path)
         if os.sep != "/":
