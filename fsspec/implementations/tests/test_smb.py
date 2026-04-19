@@ -2,6 +2,7 @@
 Test SMBFileSystem class using a docker container
 """
 
+import copy
 import logging
 import os
 import shlex
@@ -94,13 +95,22 @@ def test_simple(smb_params):
     fsmb.rm(adir, recursive=True)
     assert not fsmb.exists(adir)
 
+    # test with a second SMB FS object wo using the password
+    smb_params_wopass = dict(**smb_params)
+    del smb_params_wopass["password"]
+    fsmb_wopass = fsspec.get_filesystem_class("smb")(**smb_params_wopass)
+    fsmb_wopass.mkdirs("/home/adir/justanotherdir/")
+
 
 @pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_auto_mkdir(smb_params):
     adir = "/home/adir"
     adir2 = "/home/adir/otherdir/"
     afile = "/home/adir/otherdir/afile"
-    fsmb = fsspec.get_filesystem_class("smb")(**smb_params, auto_mkdir=True)
+    
+    smb_params_wopass = dict(**smb_params)
+    del smb_params_wopass["password"]
+    fsmb = fsspec.get_filesystem_class("smb")(**smb_params_wopass, auto_mkdir=True)
     fsmb.touch(afile)
     assert fsmb.exists(adir)
     assert fsmb.exists(adir2)
