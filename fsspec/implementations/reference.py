@@ -396,7 +396,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
 
     def __setitem__(self, key, value):
         if "/" in key and not self._is_meta(key):
-            field, chunk = key.rsplit("/", 1)
+            field, _chunk = key.rsplit("/", 1)
             record, i, _ = self._key_to_record(key)
             subdict = self._items.setdefault((field, record), {})
             subdict[i] = value
@@ -1110,7 +1110,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 subdirs.append(par0)
 
             subdirs.reverse()
-            for parent, child in zip(subdirs, subdirs[1:]):
+            for parent, child in itertools.pairwise(subdirs):
                 # register newly discovered directories
                 assert child not in self.dircache
                 assert parent in self.dircache
