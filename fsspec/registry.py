@@ -66,7 +66,10 @@ known_implementations = {
     },
     "adl": {
         "class": "adlfs.AzureDatalakeFileSystem",
-        "err": "Install adlfs to access Azure Datalake Gen1",
+        "err": (
+            "ADLS Gen1 is no longer supported. Please install adlfs and use the "
+            "`az` protocol for Azure Datalake Gen2 and Azure Blob Storage."
+        ),
     },
     "arrow_hdfs": {
         "class": "fsspec.implementations.arrow.HadoopFileSystem",
