@@ -44,7 +44,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
     URLs are passed unfiltered to aiohttp, so all addresses are accessible. Where URLs are
     supplied by a user, the calling application may wish to filter to prevent scanning.
-   """
+    """
 
     protocol = ("http", "https")
     sep = "/"

@@ -24,13 +24,34 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# user-facing
 abfs = ["adlfs"]
 adl = ["adlfs"]
 arrow = ["pyarrow >= 1"]
 dask = ["dask", "distributed"]
+dev = ["ruff >= 0.5", "pre-commit"]
+doc = ["sphinx", "numpydoc", "sphinx-design", "sphinx-rtd-theme", "yarl"]
 dropbox = ["dropbox", "dropboxdrivefs", "requests"]
 entrypoints = []
+full = [
+    'adlfs',
+    'aiohttp !=4.0.0a0, !=4.0.0a1',
+    'dask',
+    'distributed',
+    'dropbox',
+    'dropboxdrivefs',
+    'fusepy',
+    'gcsfs >2024.2.0',
+    'libarchive-c',
+    'ocifs',
+    'panel',
+    'paramiko',
+    'pyarrow >= 1',
+    'pygit2',
+    'requests',
+    's3fs >2024.2.0',
+    'smbprotocol',
+    'tqdm',
+]
 fuse = ["fusepy"]
 gcs = ["gcsfs >2024.2.0"]
 git = ["pygit2"]
@@ -45,42 +66,8 @@ s3 = ["s3fs >2024.2.0"]
 sftp = ["paramiko"]
 smb = ["smbprotocol"]
 ssh = ["paramiko"]
-tqdm = ["tqdm"]
-full = [
-    'fsspec[abfs]',
-    'fsspec[adl]',
-    'fsspec[arrow]',
-    'fsspec[dask]',
-    'fsspec[dropbox]',
-    'fsspec[entrypoints]',
-    'fsspec[fuse]',
-    'fsspec[gcs]',
-    'fsspec[git]',
-    'fsspec[github]',
-    'fsspec[gs]',
-    'fsspec[gui]',
-    'fsspec[hdfs]',
-    'fsspec[http]',
-    'fsspec[libarchive]',
-    'fsspec[oci]',
-    'fsspec[s3]',
-    'fsspec[sftp]',
-    'fsspec[smb]',
-    'fsspec[ssh]',
-    'fsspec[tqdm]',
-]
-
-# dev-only
-dev = ["ruff >= 0.5", "pre-commit"]
-doc = [
-    'sphinx',
-    'numpydoc',
-    'sphinx-design',
-    'sphinx-rtd-theme',
-    'yarl',
-]
 test = [
-    "fsspec[http]",
+    "aiohttp!=4.0.0a0, !=4.0.0a1",
     "numpy",
     "pytest",
     "requests",
@@ -92,20 +79,42 @@ test = [
     "pytest-asyncio !=0.22.0",
 ]
 test_full = [
-    'fsspec[test]',
-    'fsspec[full]',
     'Jinja2',
+    'adlfs',
+    'aiohttp !=4.0.0a0, !=4.0.0a1',
+    'aiohttp!=4.0.0a0, !=4.0.0a1',
     'cloudpickle',
+    'dask',
+    'distributed',
+    'dropbox',
+    'dropboxdrivefs',
     'fastparquet',
+    'fusepy',
+    'gcsfs',
     "kerchunk",
+    'libarchive-c',
     'lz4',
     'notebook',
     'numpy',
+    'ocifs',
     'pandas <3.0.0',
     'panel',
+    'paramiko',
+    'pyarrow',
+    'pyarrow >= 1',
     'pyftpdlib',
+    'pygit2',
     'pytest',
+    'pytest-asyncio !=0.22.0',
+    'pytest-benchmark',
+    'pytest-cov',
+    'pytest-mock',
+    'pytest-rerunfailures',
+    'pytest-recording',
+    'requests',
+    'smbprotocol',
     'python-snappy',
+    'tqdm',
     'urllib3',
     'zarr',
     'backports.zstd; python_version < "3.14"',
@@ -118,6 +127,7 @@ test_downstream = [
     "xarray",
     "aiobotocore>=2.5.4,<3.0.0",
 ]
+tqdm = ["tqdm"]
 
 [project.urls]
 Changelog = "https://filesystem-spec.readthedocs.io/en/latest/changelog.html"
