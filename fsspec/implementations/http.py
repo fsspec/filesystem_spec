@@ -560,7 +560,9 @@ class HTTPFileSystem(AsyncFileSystem):
 
         session = await self.set_session()
 
-        async with session.put(url, data=value, headers=headers, **kwargs) as r:
+        async with session.put(
+            self.encode_url(url), data=value, headers=headers, **kwargs
+        ) as r:
             r.raise_for_status()
 
 
