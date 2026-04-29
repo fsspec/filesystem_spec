@@ -41,21 +41,8 @@ class HTTPFileSystem(AsyncFileSystem):
     match on the result. If simple_link=True, anything of the form
     "http(s)://server.com/stuff?thing=other"; otherwise only links within
     HTML href tags will be used.
-
-    Note on URL handling
-    --------------------
-    Like any HTTP client library, this class passes URLs directly to the
-    underlying ``aiohttp`` session without filtering or restricting the
-    target host. URLs pointing to loopback addresses (``127.x.x.x``),
-    link-local addresses (``169.254.x.x``, used by cloud Instance Metadata
-    Services), or private network ranges (RFC 1918) are therefore
-    reachable, which is intentional for use cases such as accessing
-    internal S3-compatible storage or local development servers.
-
-    Applications that construct URLs from user-supplied input are
-    responsible for validating those URLs before passing them to
-    ``HTTPFileSystem``. Failing to do so may expose the application to
-    Server-Side Request Forgery (SSRF).
+    URLs are passed unfiltered to aiohttp, so all addresses are accessible. Where URLs are
+    supplied by a user, the calling application may with to filter to prevent scanning.
     """
 
     protocol = ("http", "https")
