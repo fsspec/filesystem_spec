@@ -141,6 +141,13 @@ def test_rm(dirfs):
     dirfs.fs.rm.assert_called_once_with("path/to/dir/file", *ARGS, **KWARGS)
 
 
+def test_delete(dirfs):
+    dirfs.delete("file", recursive=True, maxdepth=2)
+    dirfs.fs.delete.assert_called_once_with(
+        "path/to/dir/file", recursive=True, maxdepth=2
+    )
+
+
 @pytest.mark.asyncio
 async def test_async_cp_file(adirfs):
     await adirfs._cp_file("one", "two", **KWARGS)
@@ -190,6 +197,13 @@ async def test_async_pipe_file(adirfs):
 def test_pipe_file(dirfs):
     dirfs.pipe_file("file", *ARGS, **KWARGS)
     dirfs.fs.pipe_file.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+
+
+def test_write_text(dirfs):
+    dirfs.write_text("file", "value", encoding="utf-8", newline="\n")
+    dirfs.fs.write_text.assert_called_once_with(
+        "path/to/dir/file", "value", encoding="utf-8", errors=None, newline="\n"
+    )
 
 
 @pytest.mark.asyncio

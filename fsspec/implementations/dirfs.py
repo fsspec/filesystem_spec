@@ -97,6 +97,9 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     def rm(self, path, *args, **kwargs):
         return self.fs.rm(self._join(path), *args, **kwargs)
 
+    def delete(self, path, recursive=False, maxdepth=None):
+        return self.fs.delete(self._join(path), recursive=recursive, maxdepth=maxdepth)
+
     async def _cp_file(self, path1, path2, **kwargs):
         return await self.fs._cp_file(self._join(path1), self._join(path2), **kwargs)
 
@@ -136,6 +139,18 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
     def pipe_file(self, path, *args, **kwargs):
         return self.fs.pipe_file(self._join(path), *args, **kwargs)
+
+    def write_text(
+        self, path, value, encoding=None, errors=None, newline=None, **kwargs
+    ):
+        return self.fs.write_text(
+            self._join(path),
+            value,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+            **kwargs,
+        )
 
     async def _cat_file(self, path, *args, **kwargs):
         return await self.fs._cat_file(self._join(path), *args, **kwargs)
