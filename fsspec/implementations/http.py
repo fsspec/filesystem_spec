@@ -41,7 +41,10 @@ class HTTPFileSystem(AsyncFileSystem):
     match on the result. If simple_link=True, anything of the form
     "http(s)://server.com/stuff?thing=other"; otherwise only links within
     HTML href tags will be used.
-    """
+
+    URLs are passed unfiltered to aiohttp, so all addresses are accessible. Where URLs are
+    supplied by a user, the calling application may wish to filter to prevent scanning.
+   """
 
     protocol = ("http", "https")
     sep = "/"
