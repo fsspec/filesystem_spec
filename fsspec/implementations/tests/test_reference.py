@@ -961,3 +961,20 @@ def test_parquet_no_references(m):
     lz.flush()
 
     assert arr[...].tolist() == 1  #  scalar, equal to fill value
+
+
+def test_no_default_jinja_execution():
+    manifest = {
+        "version": 1,
+        "templates": {},
+        "refs": {},
+        "gen": [
+            {"key": "{{ 1 / 0 }}", "url": "file:///dev/null", "dimensions": {"i": [0]}}
+        ],
+    }
+
+    # no error - not evaluated
+    fsspec.filesystem("reference", fo=manifest)
+
+    with pytest.raises(ZeroDivisionError):
+        fsspec.filesystem("reference", fo=manifest, simple_templates=False)
