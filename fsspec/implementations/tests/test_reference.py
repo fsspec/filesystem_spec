@@ -365,7 +365,12 @@ def test_spec1_gen_variants():
                 },
             ],
         }
-        fsspec.filesystem("reference", fo=missing_length_spec, target_protocol="http")
+        fsspec.filesystem(
+            "reference",
+            fo=missing_length_spec,
+            simple_templates=False,
+            target_protocol="http",
+        )
 
     with pytest.raises(ValueError):
         missing_offset_spec = {
@@ -380,7 +385,12 @@ def test_spec1_gen_variants():
                 },
             ],
         }
-        fsspec.filesystem("reference", fo=missing_offset_spec, target_protocol="http")
+        fsspec.filesystem(
+            "reference",
+            simple_templates=False,
+            fo=missing_offset_spec,
+            target_protocol="http",
+        )
 
     url_only_gen_spec = {
         "version": 1,
@@ -394,7 +404,12 @@ def test_spec1_gen_variants():
         ],
     }
 
-    fs = fsspec.filesystem("reference", fo=url_only_gen_spec, target_protocol="http")
+    fs = fsspec.filesystem(
+        "reference",
+        simple_templates=False,
+        fo=url_only_gen_spec,
+        target_protocol="http",
+    )
     assert fs.references == {
         "gen_key0": ["http://server.domain/path_0"],
         "gen_key1": ["http://server.domain/path_1"],
@@ -964,6 +979,7 @@ def test_parquet_no_references(m):
 
 
 def test_no_default_jinja_execution():
+    pytest.importorskip("jinja2")
     manifest = {
         "version": 1,
         "templates": {},
