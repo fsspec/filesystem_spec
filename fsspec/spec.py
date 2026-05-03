@@ -1230,7 +1230,7 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             # explicitly raise exception to prevent data corruption
             self.copy(
-                path1, path2, recursive=recursive, maxdepth=maxdepth, onerror="raise"
+                path1, path2, recursive=recursive, maxdepth=maxdepth, on_error="raise"
             )
             self.rm(path1, recursive=recursive)
 
