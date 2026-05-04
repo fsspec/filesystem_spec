@@ -860,7 +860,7 @@ def test_deep_parq(m, engine):
     if zarr.__version__.split(".") >= ["3", "2"]:
         kw = {}
     else:
-        kw = {"zarr_version": 2}
+        kw = {"zarr_format": 2}
 
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq",
