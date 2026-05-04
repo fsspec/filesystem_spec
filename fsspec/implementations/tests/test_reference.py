@@ -857,7 +857,7 @@ def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
     skip_zarr_2()
-    if zarr.__version__.split() >= ["3", "2"]:
+    if zarr.__version__.split(".") >= ["3", "2"]:
         kw = {}
     else:
         kw = {"zarr_version": 2}
