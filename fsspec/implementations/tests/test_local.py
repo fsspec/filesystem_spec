@@ -997,7 +997,7 @@ def test_strip_protocol_windows_remote_shares(uri, stripped, cwd):
     assert LocalFileSystem._strip_protocol(uri) == stripped
 
 
-def test_mkdir_twice_faile(tmpdir):
+def test_mkdir_twice_fails(tmpdir):
     fn = os.path.join(tmpdir, "test")
     fs = fsspec.filesystem("file")
     fs.mkdir(fn)
