@@ -615,6 +615,9 @@ class ReferenceFileSystem(AsyncFileSystem):
     Reference dict format:
     {path0: bytes_data, path1: (target_url, offset, size)}
     https://github.com/fsspec/kerchunk/blob/main/README.md
+
+    simple_references: if True (default), no jinja interpreting is done,
+        which is the safe option.
     """
 
     protocol = "reference"
@@ -1056,6 +1059,8 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _process_gen(self, gens):
         out = {}
+        if self.simple_templates:
+            return out
         for gen in gens:
             dimension = {
                 k: (
