@@ -116,7 +116,7 @@ test_full = [
     'python-snappy',
     'tqdm',
     'urllib3',
-    'zarr',
+    'zarr <3.2.0',
     'backports.zstd; python_version < "3.14"',
     'zstandard; python_version < "3.14"',
 ]
