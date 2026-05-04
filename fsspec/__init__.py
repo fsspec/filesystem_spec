@@ -16,21 +16,21 @@ from .spec import AbstractFileSystem
 
 __all__ = [
     "AbstractFileSystem",
-    "FSTimeoutError",
+    "Callback",
     "FSMap",
+    "FSTimeoutError",
+    "available_compressions",
+    "available_protocols",
+    "caching",
     "filesystem",
-    "register_implementation",
     "get_filesystem_class",
     "get_fs_token_paths",
     "get_mapper",
     "open",
     "open_files",
     "open_local",
+    "register_implementation",
     "registry",
-    "caching",
-    "Callback",
-    "available_protocols",
-    "available_compressions",
     "url_to_fs",
 ]
 
