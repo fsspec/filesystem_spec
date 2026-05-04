@@ -313,7 +313,7 @@ def _import_class(fqp: str):
 
 
 def filesystem(protocol, **storage_options):
-    """Instantiate filesystems for given protocol and arguments
+    """Instantiate a filesystem for a given protocol and arguments
 
     ``storage_options`` are specific to the protocol being chosen, and are
     passed directly to the class.
