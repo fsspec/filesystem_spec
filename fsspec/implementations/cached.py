@@ -480,9 +480,9 @@ class CachingFileSystem(ChainedFileSystem):
                 )
             # method is in the whitelist but not defined on this subclass;
             # fall through to delegate to the wrapped filesystem below
-        if item == "__reduce_ex__":
+        if item in ["__reduce_ex__"]:
             raise AttributeError
-        if item == "transaction":
+        if item in ["transaction"]:
             # property
             return type(self).transaction.__get__(self)
         if item in {"_cache", "transaction_type", "protocol"}:

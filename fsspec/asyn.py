@@ -49,7 +49,7 @@ def reset_lock():
 
 
 async def _runner(event, coro, result, timeout=None):
-    timeout = timeout or None  # convert 0 or 0.0 to None
+    timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     if timeout is not None:
         coro = asyncio.wait_for(coro, timeout=timeout)
     try:
@@ -69,7 +69,7 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     >>> fsspec.asyn.sync(fsspec.asyn.get_loop(), func, *args,
                          timeout=timeout, **kwargs)
     """
-    timeout = timeout or None  # convert 0 or 0.0 to None
+    timeout = timeout if timeout else None  # convert 0 or 0.0 to None
     # NB: if the loop is not running *yet*, it is OK to submit work
     # and we will wait for it
     if loop is None or loop.is_closed():
@@ -594,9 +594,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 flatten=not source_is_str,
             )
 
-        loop = asyncio.get_running_loop()
-        is_dir_results = await asyncio.gather(*[loop.run_in_executor(None, os.path.isdir, l) for l in lpaths])
-        is_dir = dict(zip(lpaths, is_dir_results))
+        is_dir = {l: os.path.isdir(l) for l in lpaths}
         rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
         file_pairs = [(l, r) for l, r in zip(lpaths, rpaths) if not is_dir[l]]
 

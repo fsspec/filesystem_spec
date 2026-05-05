@@ -192,7 +192,7 @@ class WebHDFS(AbstractFileSystem):
                     raise ValueError(msg)
                 elif exp in ["SecurityException", "AccessControlException"]:
                     raise PermissionError(msg)
-                elif exp == "FileNotFoundException":
+                elif exp in ["FileNotFoundException"]:
                     raise FileNotFoundError(msg)
                 else:
                     raise RuntimeError(msg)

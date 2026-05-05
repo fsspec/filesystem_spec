@@ -156,14 +156,14 @@ class SFTPFileSystem(AbstractFileSystem):
         if kwargs.get("autocommit", True) is False:
             # writes to temporary file, move on commit
             path2 = "/".join([self.temppath, str(uuid.uuid4())])
-            f = self.ftp.open(path2, mode, bufsize=block_size or -1)
+            f = self.ftp.open(path2, mode, bufsize=block_size if block_size else -1)
             f.temppath = path2
             f.targetpath = path
             f.fs = self
             f.commit = types.MethodType(commit_a_file, f)
             f.discard = types.MethodType(discard_a_file, f)
         else:
-            f = self.ftp.open(path, mode, bufsize=block_size or -1)
+            f = self.ftp.open(path, mode, bufsize=block_size if block_size else -1)
         return f
 
     def _rm(self, path):
