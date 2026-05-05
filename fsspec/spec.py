@@ -71,9 +71,7 @@ class _Cached(type):
             k: kwargs.pop(k) for k in cls._strip_tokenize_options if k in kwargs
         }
         if getattr(cls, "async_impl", False) and not kwargs.get("asynchronous", False):
-            token = tokenize(
-                cls, cls._pid, *args, *extra_tokens, **kwargs
-            )
+            token = tokenize(cls, cls._pid, *args, *extra_tokens, **kwargs)
         else:
             token = tokenize(
                 cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs

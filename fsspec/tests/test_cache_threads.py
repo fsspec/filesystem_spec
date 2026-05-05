@@ -41,7 +41,7 @@ def test_async_fs_sync_mode_shares_instance():
 
     t1 = threading.Thread(target=worker, args=(1,))
     t2 = threading.Thread(target=worker, args=(2,))
-    
+
     t1.start()
     t2.start()
     t1.join()
@@ -61,7 +61,7 @@ def test_async_fs_async_mode_does_not_share():
 
     t1 = threading.Thread(target=worker, args=(1,))
     t2 = threading.Thread(target=worker, args=(2,))
-    
+
     t1.start()
     t2.start()
     t1.join()
@@ -81,7 +81,7 @@ def test_sync_fs_does_not_share():
 
     t1 = threading.Thread(target=worker, args=(1,))
     t2 = threading.Thread(target=worker, args=(2,))
-    
+
     t1.start()
     t2.start()
     t1.join()
