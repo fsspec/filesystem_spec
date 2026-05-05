@@ -70,9 +70,14 @@ class _Cached(type):
         strip_tokenize_options = {
             k: kwargs.pop(k) for k in cls._strip_tokenize_options if k in kwargs
         }
-        token = tokenize(
-            cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs
-        )
+        if getattr(cls, "async_impl", False) and not kwargs.get("asynchronous", False):
+            token = tokenize(
+                cls, cls._pid, *args, *extra_tokens, **kwargs
+            )
+        else:
+            token = tokenize(
+                cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs
+            )
         skip = kwargs.pop("skip_instance_cache", False)
         if os.getpid() != cls._pid:
             cls._cache.clear()
