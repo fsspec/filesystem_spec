@@ -113,7 +113,8 @@ def test_mv_same_paths(m):
 
 
 def test_mv_recursive_propagates_cp_file_errors(m, monkeypatch):
-    m.pipe("/src/a.txt", b"hello")
+    m.mkdir("src")
+    m.touch("src/file.txt")
 
     def failing_cp_file(path1, path2, **kwargs):
         raise FileNotFoundError(path1)
@@ -122,6 +123,7 @@ def test_mv_recursive_propagates_cp_file_errors(m, monkeypatch):
 
     with pytest.raises(FileNotFoundError):
         m.mv("/src", "/dst", recursive=True)
+    assert m.exists("/src/file.txt")
 
 
 def test_rm_no_pseudo_dir(m):
