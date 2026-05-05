@@ -146,7 +146,7 @@ class RequestsSessionShim:
         if data and json:
             raise ValueError("Use json= or data=, not both")
         req = XMLHttpRequest.new()
-        extra = auth if auth else ()
+        extra = auth or ()
         if params:
             url = f"{url}?{urllib.parse.urlencode(params)}"
         req.open(method, url, False, *extra)
