@@ -24,7 +24,7 @@ dependencies:
   - google-api-python-client
   - httpretty
   - aiobotocore
-  - moto
+  - moto !=5.2.0
   - flask
   - pip:
     - git+https://github.com/fsspec/s3fs
