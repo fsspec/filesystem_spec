@@ -3,6 +3,7 @@ import io
 from urllib.parse import unquote
 
 from fsspec import AbstractFileSystem
+from fsspec.utils import stringify_path
 
 
 class DataFileSystem(AbstractFileSystem):
@@ -22,6 +23,19 @@ class DataFileSystem(AbstractFileSystem):
     def __init__(self, **kwargs):
         """No parameters for this filesystem"""
         super().__init__(**kwargs)
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        if isinstance(path, list):
+            return [cls._strip_protocol(p) for p in path]
+        path = stringify_path(path)
+        if path.startswith("data://"):
+            path = path[7:]
+        elif path.startswith("data:"):
+            path = path[5:]
+        # Do NOT strip trailing slashes, as they may be meaningful base64 characters
+        # or percent-encoded data content
+        return path
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         pref, data = path.split(",", 1)
