@@ -892,7 +892,9 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             return {name: out[name] for name in names}
 
-    async def _expand_path(self, path, recursive=False, maxdepth=None, assume_literal=False):
+    async def _expand_path(
+        self, path, recursive=False, maxdepth=None, assume_literal=False
+    ):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 

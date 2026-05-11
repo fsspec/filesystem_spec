@@ -1175,7 +1175,9 @@ class AbstractFileSystem(metaclass=_Cached):
                 if on_error == "raise":
                     raise
 
-    def expand_path(self, path, recursive=False, maxdepth=None, assume_literal=False, **kwargs):
+    def expand_path(
+        self, path, recursive=False, maxdepth=None, assume_literal=False, **kwargs
+    ):
         """Turn one or more globs or directories into a list of all matching paths
         to files or directories.
 
