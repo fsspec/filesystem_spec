@@ -53,8 +53,10 @@ def test_async_fs_sync_mode_shares_instance():
 def test_async_fs_async_mode_does_not_share():
     results = {}
     lock = threading.Lock()
+    barrier = threading.Barrier(2)
 
     def worker(thread_id):
+        barrier.wait()
         with lock:
             fs = fsspec.filesystem("asyncdummy", asynchronous=True)
         results[thread_id] = id(fs)
@@ -73,8 +75,10 @@ def test_async_fs_async_mode_does_not_share():
 def test_sync_fs_does_not_share():
     results = {}
     lock = threading.Lock()
+    barrier = threading.Barrier(2)
 
     def worker(thread_id):
+        barrier.wait()
         with lock:
             fs = fsspec.filesystem("syncdummy")
         results[thread_id] = id(fs)
