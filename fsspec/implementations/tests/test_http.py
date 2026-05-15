@@ -320,7 +320,7 @@ def test_content_encoding_gzip(server):
 
 
 def test_download(server, tmpdir):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     url = server.realfile
     fn = os.path.join(tmpdir, "afile")
     h.get(url, fn)
@@ -328,7 +328,7 @@ def test_download(server, tmpdir):
 
 
 def test_multi_download(server, tmpdir):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.realfile
     urlb = server.address + "/index/otherfile"
     fna = os.path.join(tmpdir, "afile")
@@ -349,7 +349,7 @@ def test_ls(server):
 
 
 def test_mcat(server):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.realfile
     urlb = server.address + "/index/otherfile"
     out = h.cat([urla, urlb])
@@ -357,7 +357,7 @@ def test_mcat(server):
 
 
 def test_cat_file_range(server):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.realfile
     assert h.cat(urla, start=1, end=10) == data[1:10]
     assert h.cat(urla, start=1) == data[1:]
@@ -370,7 +370,7 @@ def test_cat_file_range(server):
 
 def test_cat_file_range_numpy(server):
     np = pytest.importorskip("numpy")
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.realfile
     assert h.cat(urla, start=np.int8(1), end=np.int8(10)) == data[1:10]
     out = h.cat_ranges([urla, urla], starts=np.array([1, 5]), ends=np.array([10, 15]))
@@ -385,7 +385,7 @@ def test_mcat_cache(server):
 
 
 def test_mcat_expand(server):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     out = h.cat(server.address + "/index/*")
     assert out == {server.realfile: data}
 

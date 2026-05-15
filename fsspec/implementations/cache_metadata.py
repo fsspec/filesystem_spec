@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import pickle
 import time
 from typing import TYPE_CHECKING
 
@@ -29,8 +28,7 @@ class CacheMetadata:
     accessing the cached files and blocks is not.
 
     Metadata is stored in a single file per storage directory in JSON format.
-    For backward compatibility, also reads metadata stored in pickle format
-    which is converted to JSON when next saved.
+    For backward compatibility. No longer supports pickle.
     """
 
     def __init__(self, storage: list[str]):
@@ -48,18 +46,10 @@ class CacheMetadata:
         self._storage = storage
         self.cached_files: list[Detail] = [{}]
 
-        # Private attribute to force saving of metadata in pickle format rather than
-        # JSON for use in tests to confirm can read both pickle and JSON formats.
-        self._force_save_pickle = False
-
     def _load(self, fn: str) -> Detail:
         """Low-level function to load metadata from specific file"""
-        try:
-            with open(fn, "r") as f:
-                loaded = json.load(f)
-        except ValueError:
-            with open(fn, "rb") as f:
-                loaded = pickle.load(f)
+        with open(fn, "r") as f:
+            loaded = json.load(f)
         for c in loaded.values():
             if isinstance(c.get("blocks"), list):
                 c["blocks"] = set(c["blocks"])
@@ -67,12 +57,8 @@ class CacheMetadata:
 
     def _save(self, metadata_to_save: Detail, fn: str) -> None:
         """Low-level function to save metadata to specific file"""
-        if self._force_save_pickle:
-            with atomic_write(fn) as f:
-                pickle.dump(metadata_to_save, f)
-        else:
-            with atomic_write(fn, mode="w") as f:
-                json.dump(metadata_to_save, f)
+        with atomic_write(fn, mode="w") as f:
+            json.dump(metadata_to_save, f)
 
     def _scan_locations(
         self, writable_only: bool = False
