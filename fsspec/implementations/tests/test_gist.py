@@ -1,6 +1,9 @@
 import pytest
 
 import fsspec
+
+pytest.importorskip("requests")
+
 from fsspec.implementations.gist import GistFileSystem
 
 # if sys.version_info[:2] != (3, 12):
@@ -8,7 +11,6 @@ from fsspec.implementations.gist import GistFileSystem
 pytest.skip(
     "github requires a token right now, even for public gists", allow_module_level=True
 )
-pytest.importorskip("requests")
 
 
 @pytest.mark.parametrize(
