@@ -4,4 +4,3 @@ channels:
 dependencies:
   - python=3.11
   - s3fs
-  - pytest
