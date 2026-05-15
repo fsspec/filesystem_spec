@@ -8,3 +8,4 @@ dependencies:
   - pytest-asyncio
   - pytest-mock
   - requests
+  - numpy
