@@ -872,10 +872,7 @@ def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
     skip_zarr_2()
-    if zarr.__version__.split(".") >= ["3", "2"]:
-        kw = {}
-    else:
-        kw = {"zarr_format": 2}
+    kw = {"zarr_format": 2}
 
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq",
@@ -901,7 +898,7 @@ def test_deep_parq(m, engine):
     g = zarr.open_group(
         "reference://",
         storage_options={"fo": "memory://out.parq", "remote_protocol": "memory"},
-        zarr_version=2,
+        **kw,
     )
     assert g["instant"]["one"][:].tolist() == [1, 2, 3]
     assert sorted(_["name"] for _ in lz.ls("")) == [
