@@ -5,3 +5,5 @@ dependencies:
   - python=3.13
   - s3fs
   - pytest
+  - pytest-asyncio
+  - pytest-mock
