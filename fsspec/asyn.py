@@ -236,8 +236,8 @@ async def _run_coros_in_chunks(
 
     if batch_size == -1:
         batch_size = len(coros)
-
-    assert batch_size > 0
+    elif batch_size <= 0:
+        raise ValueError
 
     async def _run_coro(coro, i):
         try:

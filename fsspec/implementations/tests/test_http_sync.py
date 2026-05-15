@@ -250,7 +250,7 @@ def test_content_length_zero(server, sync):
 
 
 def test_download(server, tmpdir, sync):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     url = server.address + "/index/realfile"
     fn = os.path.join(tmpdir, "afile")
     h.get(url, fn)
@@ -258,7 +258,7 @@ def test_download(server, tmpdir, sync):
 
 
 def test_multi_download(server, tmpdir, sync):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.address + "/index/realfile"
     urlb = server.address + "/index/otherfile"
     fna = os.path.join(tmpdir, "afile")
@@ -279,7 +279,7 @@ def test_ls(server, sync):
 
 
 def test_mcat(server, sync):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.address + "/index/realfile"
     urlb = server.address + "/index/otherfile"
     out = h.cat([urla, urlb])
@@ -287,7 +287,7 @@ def test_mcat(server, sync):
 
 
 def test_cat_file_range(server, sync):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.address + "/index/realfile"
     assert h.cat(urla, start=1, end=10) == data[1:10]
     assert h.cat(urla, start=1) == data[1:]
@@ -306,7 +306,7 @@ def test_mcat_cache(server, sync):
 
 
 def test_mcat_expand(server, sync):
-    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true "})
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     out = h.cat(server.address + "/index/*")
     assert out == {server.address + "/index/realfile": data}
 
