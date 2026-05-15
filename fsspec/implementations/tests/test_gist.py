@@ -1,6 +1,9 @@
 import pytest
 
 import fsspec
+
+pytest.importorskip("requests")
+
 from fsspec.implementations.gist import GistFileSystem
 
 # if sys.version_info[:2] != (3, 12):

@@ -365,7 +365,12 @@ def test_spec1_gen_variants():
                 },
             ],
         }
-        fsspec.filesystem("reference", fo=missing_length_spec, target_protocol="http")
+        fsspec.filesystem(
+            "reference",
+            fo=missing_length_spec,
+            simple_templates=False,
+            target_protocol="http",
+        )
 
     with pytest.raises(ValueError):
         missing_offset_spec = {
@@ -380,7 +385,12 @@ def test_spec1_gen_variants():
                 },
             ],
         }
-        fsspec.filesystem("reference", fo=missing_offset_spec, target_protocol="http")
+        fsspec.filesystem(
+            "reference",
+            simple_templates=False,
+            fo=missing_offset_spec,
+            target_protocol="http",
+        )
 
     url_only_gen_spec = {
         "version": 1,
@@ -394,7 +404,12 @@ def test_spec1_gen_variants():
         ],
     }
 
-    fs = fsspec.filesystem("reference", fo=url_only_gen_spec, target_protocol="http")
+    fs = fsspec.filesystem(
+        "reference",
+        simple_templates=False,
+        fo=url_only_gen_spec,
+        target_protocol="http",
+    )
     assert fs.references == {
         "gen_key0": ["http://server.domain/path_0"],
         "gen_key1": ["http://server.domain/path_1"],
@@ -857,10 +872,7 @@ def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
     skip_zarr_2()
-    if zarr.__version__.split(".") >= ["3", "2"]:
-        kw = {}
-    else:
-        kw = {"zarr_format": 2}
+    kw = {"zarr_format": 2}
 
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq",
@@ -886,7 +898,7 @@ def test_deep_parq(m, engine):
     g = zarr.open_group(
         "reference://",
         storage_options={"fo": "memory://out.parq", "remote_protocol": "memory"},
-        zarr_version=2,
+        **kw,
     )
     assert g["instant"]["one"][:].tolist() == [1, 2, 3]
     assert sorted(_["name"] for _ in lz.ls("")) == [
@@ -965,3 +977,21 @@ def test_parquet_no_references(m):
     lz.flush()
 
     assert arr[...].tolist() == 1  #  scalar, equal to fill value
+
+
+def test_no_default_jinja_execution():
+    pytest.importorskip("jinja2")
+    manifest = {
+        "version": 1,
+        "templates": {},
+        "refs": {},
+        "gen": [
+            {"key": "{{ 1 / 0 }}", "url": "file:///dev/null", "dimensions": {"i": [0]}}
+        ],
+    }
+
+    # no error - not evaluated
+    fsspec.filesystem("reference", fo=manifest)
+
+    with pytest.raises(ZeroDivisionError):
+        fsspec.filesystem("reference", fo=manifest, simple_templates=False)
