@@ -892,7 +892,9 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             return {name: out[name] for name in names}
 
-    async def _expand_path(self, path, recursive=False, maxdepth=None):
+    async def _expand_path(
+        self, path, recursive=False, maxdepth=None, assume_literal=False
+    ):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
@@ -902,7 +904,7 @@ class AsyncFileSystem(AbstractFileSystem):
             out = set()
             path = [self._strip_protocol(p) for p in path]
             for p in path:  # can gather here
-                if has_magic(p):
+                if not assume_literal and has_magic(p):
                     bit = set(await self._glob(p, maxdepth=maxdepth))
                     out |= bit
                     if recursive:
@@ -916,6 +918,7 @@ class AsyncFileSystem(AbstractFileSystem):
                                 list(bit),
                                 recursive=recursive,
                                 maxdepth=maxdepth - 1 if maxdepth is not None else None,
+                                assume_literal=True,
                             )
                         )
                     continue

@@ -823,7 +823,7 @@ def lazy_refs(m):
         zarr_format=2,
         mode="w",
     )
-    g.create_dataset(name="data", shape=(100,), chunks=(10,), dtype="int64")
+    g.create_array(name="data", shape=(100,), chunks=(10,), dtype="int64")
     g.store.fs.references.flush()
     return l
 
@@ -872,6 +872,10 @@ def test_deep_parq(m, engine):
     pytest.importorskip("kerchunk")
     zarr = pytest.importorskip("zarr")
     skip_zarr_2()
+    if zarr.__version__.split(".") >= ["3", "2"]:
+        kw = {}
+    else:
+        kw = {"zarr_format": 2}
 
     lz = fsspec.implementations.reference.LazyReferenceMapper.create(
         "memory://out.parq",
@@ -882,11 +886,11 @@ def test_deep_parq(m, engine):
         "reference://",
         mode="w",
         storage_options={"fo": "memory://out.parq", "remote_protocol": "memory"},
-        zarr_version=2,
+        **kw,
     )
 
     g2 = g.create_group("instant")
-    arr = g2.create_dataset(name="one", shape=(3,), dtype="int64")
+    arr = g2.create_array(name="one", shape=(3,), dtype="int64")
     arr[:] = [1, 2, 3]
     g.store.fs.references.flush()
     lz.flush()
@@ -935,7 +939,7 @@ def test_parquet_no_data(m):
         zarr_format=2,
         mode="w",
     )
-    arr = g.create_dataset(
+    arr = g.create_array(
         name="one",
         dtype="int32",
         shape=(10,),
@@ -965,7 +969,7 @@ def test_parquet_no_references(m):
         zarr_format=2,
         mode="w",
     )
-    arr = g.create_dataset(
+    arr = g.create_array(
         name="one",
         dtype="int32",
         shape=(),

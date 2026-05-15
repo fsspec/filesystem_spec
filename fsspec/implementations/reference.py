@@ -188,7 +188,7 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
             data = io.BytesIO(self.fs.cat_file(path))
             try:
                 df = self.pd.read_parquet(data, engine=self.engine)
-                refs = {c: df[c].to_numpy() for c in df.columns}
+                refs = {c: df[c].to_numpy(copy=True) for c in df.columns}
             except OSError:
                 refs = None
             return refs

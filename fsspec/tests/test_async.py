@@ -270,22 +270,23 @@ class _PrefixCapturingFS(fsspec.asyn.AsyncFileSystem):
 
     protocol = "prefixmock"
 
-    def __init__(self, **kwargs):
+    def __init__(self, fs_files=None, **kwargs):
         super().__init__(**kwargs)
         self.find_calls = []
+        self.fs_files = fs_files if fs_files is not None else _GLOB_PREFIX_FILES
 
     async def _find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
         self.find_calls.append({"path": path, "kwargs": dict(kwargs)})
         root = (path.rstrip("/") + "/") if path else ""
         results = {
             f: {"name": f, "type": "file", "size": 0}
-            for f in _GLOB_PREFIX_FILES
+            for f in self.fs_files
             if f.startswith(root)
         }
         return results if detail else list(results)
 
     async def _info(self, path, **kwargs):
-        for f in _GLOB_PREFIX_FILES:
+        for f in self.fs_files:
             if f == path:
                 return {"name": f, "type": "file", "size": 0}
         raise FileNotFoundError(path)
@@ -366,3 +367,39 @@ def test_glob_prefix_hint(prefix_fs, pattern, expected_results, expected_prefix)
             f"expected prefix={expected_prefix!r} for pattern {pattern!r}, "
             f"got {forwarded.get('prefix')!r}"
         )
+
+
+@pytest.mark.asyncio
+async def test_expand_path_special_characters_async():
+    fs_files = [
+        "bucket",
+        "bucket/file[1].txt",
+        "bucket/file?.txt",
+        "bucket/normal.txt",
+    ]
+    fs = _PrefixCapturingFS(fs_files=fs_files)
+    paths = await fs._expand_path("bucket", recursive=True)
+    expected = [
+        "bucket",
+        "bucket/file[1].txt",
+        "bucket/file?.txt",
+        "bucket/normal.txt",
+    ]
+    assert sorted(paths) == sorted(expected)
+
+
+@pytest.mark.asyncio
+async def test_expand_path_with_magic_input_async():
+    fs_files = [
+        "bucket",
+        "bucket/file[1].txt",
+        "bucket/file?.txt",
+        "bucket/normal.txt",
+    ]
+    fs = _PrefixCapturingFS(fs_files=fs_files)
+    paths = await fs._expand_path("bucket/file*.txt", recursive=True)
+    expected = [
+        "bucket/file[1].txt",
+        "bucket/file?.txt",
+    ]
+    assert sorted(paths) == sorted(expected)

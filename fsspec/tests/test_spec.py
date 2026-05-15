@@ -1422,3 +1422,37 @@ def test_copy_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
 def test_expand_path_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     expanded_paths = tmpfs.expand_path(tmpdir / "*", limit=2)
     assert len(expanded_paths) == 2
+
+
+def test_expand_path_special_characters():
+    fs_contents = (
+        {"name": "bucket", "type": "directory"},
+        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
+        {"name": "bucket/file?.txt", "type": "file", "size": 100},
+        {"name": "bucket/normal.txt", "type": "file", "size": 100},
+    )
+    fs = DummyTestFS(fs_content=fs_contents)
+    paths = fs.expand_path("bucket", recursive=True)
+    expected = [
+        "bucket",
+        "bucket/file[1].txt",
+        "bucket/file?.txt",
+        "bucket/normal.txt",
+    ]
+    assert sorted(paths) == sorted(expected)
+
+
+def test_expand_path_with_magic_input():
+    fs_contents = (
+        {"name": "bucket", "type": "directory"},
+        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
+        {"name": "bucket/file?.txt", "type": "file", "size": 100},
+        {"name": "bucket/normal.txt", "type": "file", "size": 100},
+    )
+    fs = DummyTestFS(fs_content=fs_contents)
+    paths = fs.expand_path("bucket/file*.txt", recursive=True)
+    expected = [
+        "bucket/file[1].txt",
+        "bucket/file?.txt",
+    ]
+    assert sorted(paths) == sorted(expected)

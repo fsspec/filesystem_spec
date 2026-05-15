@@ -8,6 +8,13 @@ def test_1():
     with fsspec.open("data:,Hello%2C%20World%21") as f:
         assert f.read() == b"Hello, World!"
 
+    # Trailing slashed should not be stripped
+    with fsspec.open("data:text/plain;base64,YWI/") as f:
+        assert f.read() == b"ab?"
+
+    with fsspec.open("data:text/plain,/") as f:
+        assert f.read() == b"/"
+
 
 def test_info():
     fs = fsspec.filesystem("data")
