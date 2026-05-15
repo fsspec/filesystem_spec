@@ -8,6 +8,7 @@ from fsspec.implementations.gist import GistFileSystem
 pytest.skip(
     "github requires a token right now, even for public gists", allow_module_level=True
 )
+pytest.importorskip("requests")
 
 
 @pytest.mark.parametrize(
