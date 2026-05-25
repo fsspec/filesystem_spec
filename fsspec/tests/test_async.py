@@ -16,6 +16,7 @@ def test_sync_methods():
     assert hasattr(inst, "info")
     assert inst.info.__qualname__ == "AsyncFileSystem._info"
     assert not inspect.iscoroutinefunction(inst.info)
+    assert inst.walk is not fsspec.AbstractFileSystem.walk
 
 
 def test_when_sync_methods_are_disabled():

@@ -959,12 +959,13 @@ def mirror_sync_methods(obj):
     """
     from fsspec import AbstractFileSystem
 
-    for method in async_methods + dir(AsyncFileSystem):
+    for method in set(async_methods + dir(AsyncFileSystem)):
         if not method.startswith("_"):
             continue
         smethod = method[1:]
         if private.match(method):
             isco = inspect.iscoroutinefunction(getattr(obj, method, None))
+            isco = isco or inspect.isasyncgenfunction(getattr(obj, method, None))
             unsync = getattr(getattr(obj, smethod, False), "__func__", None)
             is_default = unsync is getattr(AbstractFileSystem, smethod, "")
             if isco and is_default:
