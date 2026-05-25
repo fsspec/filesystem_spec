@@ -18,6 +18,14 @@ def test_sync_methods():
     assert not inspect.iscoroutinefunction(inst.info)
 
 
+def test_async_gen():
+    inst = fsspec.asyn.AsyncFileSystem()
+    assert inst.walk is not fsspec.AbstractFileSystem.walk
+    gen = inst.walk("path")  # does not raise yet
+    with pytest.raises(NotImplementedError):
+        list(gen)
+
+
 def test_when_sync_methods_are_disabled():
     class TestFS(fsspec.asyn.AsyncFileSystem):
         mirror_sync_methods = False

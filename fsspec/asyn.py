@@ -120,6 +120,22 @@ def sync_wrapper(func, obj=None):
     return wrapper
 
 
+def async_gen_wrapper(func, obj=None):
+    """Given a async generator, make so can be called in blocking contexts"""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        self = obj or args[0]
+        gen = func(*args, **kwargs)
+        while True:
+            try:
+                yield sync(self.loop, gen.__anext__)
+            except StopAsyncIteration:
+                break
+
+    return wrapper
+
+
 def get_loop():
     """Create or return the default fsspec IO loop
 
@@ -959,7 +975,7 @@ def mirror_sync_methods(obj):
     """
     from fsspec import AbstractFileSystem
 
-    for method in async_methods + dir(AsyncFileSystem):
+    for method in set(async_methods + dir(AsyncFileSystem)):
         if not method.startswith("_"):
             continue
         smethod = method[1:]
@@ -969,11 +985,15 @@ def mirror_sync_methods(obj):
             is_default = unsync is getattr(AbstractFileSystem, smethod, "")
             if isco and is_default:
                 mth = sync_wrapper(getattr(obj, method), obj=obj)
-                setattr(obj, smethod, mth)
-                if not mth.__doc__:
-                    mth.__doc__ = getattr(
-                        getattr(AbstractFileSystem, smethod, None), "__doc__", ""
-                    )
+            elif inspect.isasyncgenfunction(getattr(obj, method, None)) and is_default:
+                mth = async_gen_wrapper(getattr(obj, method), obj=obj)
+            else:
+                continue
+            setattr(obj, smethod, mth)
+            if not mth.__doc__:
+                mth.__doc__ = getattr(
+                    getattr(AbstractFileSystem, smethod, None), "__doc__", ""
+                )
 
 
 class FSSpecCoroutineCancel(Exception):
