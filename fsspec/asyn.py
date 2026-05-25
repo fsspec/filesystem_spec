@@ -120,6 +120,19 @@ def sync_wrapper(func, obj=None):
     return wrapper
 
 
+def async_gen_wrapper(func, obj=None):
+    """Given a async generator, make so can be called in blocking contexts"""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        self = obj or args[0]
+        gen = func(*args, **kwargs)
+        while True:
+            yield sync(self.loop, gen.__anext__)
+
+    return wrapper
+
+
 def get_loop():
     """Create or return the default fsspec IO loop
 
@@ -965,16 +978,19 @@ def mirror_sync_methods(obj):
         smethod = method[1:]
         if private.match(method):
             isco = inspect.iscoroutinefunction(getattr(obj, method, None))
-            isco = isco or inspect.isasyncgenfunction(getattr(obj, method, None))
             unsync = getattr(getattr(obj, smethod, False), "__func__", None)
             is_default = unsync is getattr(AbstractFileSystem, smethod, "")
             if isco and is_default:
                 mth = sync_wrapper(getattr(obj, method), obj=obj)
-                setattr(obj, smethod, mth)
-                if not mth.__doc__:
-                    mth.__doc__ = getattr(
-                        getattr(AbstractFileSystem, smethod, None), "__doc__", ""
-                    )
+            elif inspect.isasyncgenfunction(getattr(obj, method, None)):
+                mth = async_gen_wrapper(getattr(obj, method), obj=obj)
+            else:
+                continue
+            setattr(obj, smethod, mth)
+            if not mth.__doc__:
+                mth.__doc__ = getattr(
+                    getattr(AbstractFileSystem, smethod, None), "__doc__", ""
+                )
 
 
 class FSSpecCoroutineCancel(Exception):
