@@ -128,7 +128,10 @@ def async_gen_wrapper(func, obj=None):
         self = obj or args[0]
         gen = func(*args, **kwargs)
         while True:
-            yield sync(self.loop, gen.__anext__)
+            try:
+                yield sync(self.loop, gen.__anext__)
+            except StopAsyncIteration:
+                break
 
     return wrapper
 
@@ -982,7 +985,7 @@ def mirror_sync_methods(obj):
             is_default = unsync is getattr(AbstractFileSystem, smethod, "")
             if isco and is_default:
                 mth = sync_wrapper(getattr(obj, method), obj=obj)
-            elif inspect.isasyncgenfunction(getattr(obj, method, None)):
+            elif inspect.isasyncgenfunction(getattr(obj, method, None)) and is_default:
                 mth = async_gen_wrapper(getattr(obj, method), obj=obj)
             else:
                 continue

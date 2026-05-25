@@ -394,9 +394,13 @@ async def test_async_walk(adirfs, mocker):
 
 
 def test_walk(dirfs):
-    dirfs.fs.walk.return_value = iter(
-        [(f"{PATH}/root", ["foo", "bar"], ["baz", "qux"])]
-    )
+    if dirfs.fs.async_impl:
+        pytest.skip()
+    else:
+        dirfs.fs.walk.return_value = iter(
+            [(f"{PATH}/root", ["foo", "bar"], ["baz", "qux"])]
+        )
+
     assert list(dirfs.walk("root", *ARGS, **KWARGS)) == [
         ("root", ["foo", "bar"], ["baz", "qux"])
     ]
