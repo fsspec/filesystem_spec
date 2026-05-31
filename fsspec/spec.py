@@ -2222,6 +2222,10 @@ class AbstractBufferedFile(io.IOBase):
             if self.mode == "rb":
                 self.cache = None
             else:
+                if not hasattr(self, "forced"):
+                    # the field is not available if NotImplementedError is thrown in constructor
+                    return
+
                 if not self.forced:
                     self.flush(force=True)
 
