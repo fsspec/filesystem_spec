@@ -8,7 +8,7 @@ import pytest
 
 import fsspec
 from fsspec import open_files
-from fsspec.implementations.ftp import FTPFileSystem, ImplicitFTPTLS
+from fsspec.implementations.ftp import FTPFileSystem, ImplicitFTPTLS, _mlsd2
 
 ftplib = pytest.importorskip("ftplib")
 here = os.path.dirname(os.path.abspath(__file__))
@@ -246,3 +246,85 @@ def test_rm_get_recursive(ftp_writable, tmpdir):
 
     fs.rm("/tmp/topdir", recursive=True)
     assert not fs.exists("/tmp/topdir")
+
+
+class _FakeDirFTP:
+    """Minimal stand-in for ftplib.FTP whose .dir(path, callback) replays
+    a canned `ls -l` style listing — enough to exercise the _mlsd2 parser
+    without needing an FTP server that disables MLSD."""
+
+    def __init__(self, lines):
+        self._lines = lines
+
+    def dir(self, path, callback):
+        for line in self._lines:
+            callback(line)
+
+
+def test_mlsd2_parses_filename_without_spaces():
+    ftp = _FakeDirFTP(["-rw-r--r-- 1 owner group 38283 Jan 12 07:08 plain.pdf"])
+    out = _mlsd2(ftp, "/data")
+    assert out == [
+        (
+            "plain.pdf",
+            {
+                "modify": "Jan 12 07:08",
+                "unix.owner": "owner",
+                "unix.group": "group",
+                "unix.mode": "-rw-r--r--",
+                "size": "38283",
+                "type": "file",
+            },
+        )
+    ]
+
+
+def test_mlsd2_parses_filename_with_spaces():
+    # Regression test: when the FTP server doesn't support MLSD, _mlsd2 falls
+    # back to parsing `dir` output. Previously it took split_line[-1] as the
+    # filename, which truncated names containing whitespace.
+    ftp = _FakeDirFTP(
+        [
+            "-rw-r--r-- 1 owner group 38283 Jan 12 07:08 my file.pdf",
+            "drwxr-xr-x 2 owner group  4096 Mar 15 10:30 a dir with spaces",
+            "-rw-r--r-- 1 owner group   100 Feb  3 09:15 trailing   spaces.txt",
+        ]
+    )
+    out = _mlsd2(ftp, "/data")
+    names = [name for name, _ in out]
+    assert names == [
+        "my file.pdf",
+        "a dir with spaces",
+        "trailing   spaces.txt",
+    ]
+    assert out[0][1]["type"] == "file"
+    # _mlsd2 itself reports "dir"; ls() promotes it to "directory" later.
+    assert out[1][1]["type"] == "dir"
+    assert out[2][1]["size"] == "100"
+
+
+def test_mlsd2_parses_symlink_name_without_target():
+    # `ls -l` formats symlinks as "<name> -> <target>". Only the link's own
+    # name should be returned; the previous parser took split_line[-1] and so
+    # returned the target instead of the name.
+    ftp = _FakeDirFTP(
+        ["lrwxrwxrwx 1 owner group 10 Jan 12 07:08 link name -> some/target"]
+    )
+    out = _mlsd2(ftp, "/data")
+    assert len(out) == 1
+    name, info = out[0]
+    assert name == "link name"
+    assert info["unix.mode"].startswith("l")
+
+
+def test_mlsd2_skips_short_lines():
+    # The `total N` summary line emitted by some servers has fewer than 9
+    # fields and should be ignored.
+    ftp = _FakeDirFTP(
+        [
+            "total 4",
+            "-rw-r--r-- 1 owner group 1 Jan 12 07:08 keep.txt",
+        ]
+    )
+    out = _mlsd2(ftp, "/data")
+    assert [name for name, _ in out] == ["keep.txt"]

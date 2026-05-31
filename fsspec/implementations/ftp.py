@@ -416,16 +416,21 @@ def _mlsd2(ftp, path="."):
     minfo = []
     ftp.dir(path, lines.append)
     for line in lines:
-        split_line = line.split()
+        split_line = line.split(maxsplit=8)
         if len(split_line) < 9:
             continue
+        name = split_line[8]
+        unix_mode = split_line[0]
+        if unix_mode[0] == "l" and " -> " in name:
+            # Symbolic link: "<name> -> <target>"; keep only the link name.
+            name = name.split(" -> ", 1)[0]
         this = (
-            split_line[-1],
+            name,
             {
                 "modify": " ".join(split_line[5:8]),
                 "unix.owner": split_line[2],
                 "unix.group": split_line[3],
-                "unix.mode": split_line[0],
+                "unix.mode": unix_mode,
                 "size": split_line[4],
             },
         )
