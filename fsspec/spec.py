@@ -2222,7 +2222,7 @@ class AbstractBufferedFile(io.IOBase):
             if self.mode == "rb":
                 self.cache = None
             else:
-                if not self.forced:
+                if not getattr(self, "forced", True):
                     self.flush(force=True)
 
                 if self.fs is not None:
