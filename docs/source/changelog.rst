@@ -74,7 +74,7 @@ Enhancements
 
 Fixes
 
-- passing withdirs in aync _glob() (#1953)
+- passing withdirs in async _glob() (#1953)
 - fix _rm_file/_rm redirection in async (#1951)
 - allow arrowFile to be seekable (#1950)
 - add size attribute to arrowFile (#1944)
@@ -209,7 +209,7 @@ Enhancements
 
 Fixes
 
-- json should be a method fo requests shim (#1814)
+- json should be a method of requests shim (#1814)
 - don't raise if known_implementation has no given error string (#1804)
 
 Other
@@ -261,7 +261,7 @@ Enhancements
 - "tree" text display of filesystem contents (#1750)
 - async wrapper for sync FSs (#1745)
 - new known implementation: tosfs (#1739)
-- consilidate block fetch requests (#1733)
+- consolidate block fetch requests (#1733)
 
 Fixes
 
@@ -340,7 +340,7 @@ Fixes
 Enhancements
 
 - allow dicts (not just bytes) for referenceFS (#1616
-- make filesystems JSON serializeable (#1612)
+- make filesystems JSON serializable (#1612)
 - implement multifile cat() for github (#1620)
 
 Fixes
@@ -584,7 +584,7 @@ Other
 
 Enhancements
 
-- #1259, add maxdepth fo cp/get/put
+- #1259, add maxdepth to cp/get/put
 - #1263, allow dir modification during walk()
 - #1264, add boxfs to registry
 - #1266, optimise referenceFS lazy lookups, especially for writing parquet
@@ -764,7 +764,7 @@ Other
 2022.8.1
 --------
 
-- revert #1024 (#1029), with strciter requirements on OpenFile usage
+- revert #1024 (#1029), with stricter requirements on OpenFile usage
 
 2022.8.0
 --------
