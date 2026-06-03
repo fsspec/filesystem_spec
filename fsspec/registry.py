@@ -4,7 +4,7 @@ import importlib
 import types
 import warnings
 
-__all__ = ["registry", "get_filesystem_class", "default"]
+__all__ = ["default", "get_filesystem_class", "registry"]
 
 # internal, mutable
 _registry: dict[str, type] = {}

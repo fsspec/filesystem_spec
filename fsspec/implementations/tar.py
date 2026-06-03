@@ -118,7 +118,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         if mode != "rb":
             raise ValueError("Read-only filesystem implementation")
-        details, offset = self.index[path]
+        details, _offset = self.index[path]
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
         return self.tar.extractfile(path)

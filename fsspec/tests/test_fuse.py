@@ -132,7 +132,7 @@ def test_chmod(mount_local):
 
 
 def test_seek_rw(mount_local):
-    source_dir, mount_dir = mount_local
+    _source_dir, mount_dir = mount_local
     fh = open(mount_dir / "text", "w")
     fh.write("teST")
     fh.seek(2)
