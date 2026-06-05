@@ -1456,3 +1456,21 @@ def test_expand_path_with_magic_input():
         "bucket/file?.txt",
     ]
     assert sorted(paths) == sorted(expected)
+
+
+def test_cat_ranges_forwards_kwargs():
+    # See GH#2016: cat_ranges must forward **kwargs to cat_file, otherwise
+    # parameters such as a cache's block_size are silently dropped.
+    received = []
+
+    class RecordingFS(AbstractFileSystem):
+        cachable = False
+
+        def cat_file(self, path, start=None, end=None, **kwargs):
+            received.append(kwargs)
+            return b""
+
+    fs = RecordingFS()
+    fs.cat_ranges(["a", "b"], [0, 0], [1, 1], block_size=42)
+
+    assert received == [{"block_size": 42}, {"block_size": 42}]
