@@ -528,8 +528,11 @@ class AsyncFileSystem(AbstractFileSystem):
         starts, ends: int or list
             Bytes limits of the read. If using a single int, the same value will be
             used to read all the specified files.
+        on_error: "return" or "raise"
+            If "return" (default), any per-range exception is placed in the output
+            list at the corresponding position. Otherwise the first such exception
+            is raised. Matches ``AbstractFileSystem.cat_ranges``.
         """
-        # TODO: on_error
         if max_gap is not None:
             # use utils.merge_offset_ranges
             raise NotImplementedError
@@ -546,9 +549,14 @@ class AsyncFileSystem(AbstractFileSystem):
             for p, s, e in zip(paths, starts, ends)
         ]
         batch_size = batch_size or self.batch_size
-        return await _run_coros_in_chunks(
+        out = await _run_coros_in_chunks(
             coros, batch_size=batch_size, nofiles=True, return_exceptions=True
         )
+        if on_error != "return":
+            ex = next(filter(is_exception, out), None)
+            if ex is not None:
+                raise ex
+        return out
 
     async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):
         raise NotImplementedError

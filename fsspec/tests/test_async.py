@@ -254,6 +254,33 @@ def test_rm_file_without_implementation():
         fs.rm_file("test/file.txt")
 
 
+class _CatRangesFS(fsspec.asyn.AsyncFileSystem):
+    # Mirrors the gcsfs/s3fs pattern: overrides _cat_file, inherits _cat_ranges.
+    cachable = False
+    store = {"ok": b"0123456789"}
+
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        if path not in self.store:
+            raise FileNotFoundError(path)
+        return self.store[path][start:end]
+
+
+def test_cat_ranges_on_error_return_keeps_exceptions_inline():
+    # Default on_error="return": a failed range comes back as an exception value,
+    # positionally aligned with the inputs (matches AbstractFileSystem.cat_ranges).
+    fs = _CatRangesFS()
+    out = fs.cat_ranges(["ok", "missing"], [0, 0], [4, 4])
+    assert out[0] == b"0123"
+    assert isinstance(out[1], FileNotFoundError)
+
+
+def test_cat_ranges_on_error_raise_propagates():
+    # on_error="raise" must raise the first error instead of returning it inline.
+    fs = _CatRangesFS()
+    with pytest.raises(FileNotFoundError):
+        fs.cat_ranges(["ok", "missing"], [0, 0], [4, 4], on_error="raise")
+
+
 # ---------------------------------------------------------------------------
 # Tests for the prefix= hint that _glob passes to _find
 # ---------------------------------------------------------------------------
