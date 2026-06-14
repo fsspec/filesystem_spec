@@ -137,7 +137,7 @@ class CachingFileSystem(ChainedFileSystem):
                 storage = [cache_storage]
             else:
                 storage = cache_storage
-        os.makedirs(storage[-1], exist_ok=True)
+        os.makedirs(storage[-1], exist_ok=True, mode=0o700)
         self.storage = storage
         self.kwargs = target_options or {}
         self.cache_check = cache_check
@@ -185,7 +185,7 @@ class CachingFileSystem(ChainedFileSystem):
             pass
 
     def _mkcache(self):
-        os.makedirs(self.storage[-1], exist_ok=True)
+        os.makedirs(self.storage[-1], exist_ok=True, mode=0o700)
 
     def cache_size(self):
         """Return size of cache in bytes.
@@ -815,7 +815,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         super().__init__(**kw)
         for storage in self.storage:
             if not os.path.exists(storage):
-                os.makedirs(storage, exist_ok=True)
+                os.makedirs(storage, exist_ok=True, mode=0o700)
 
     def _check_file(self, path):
         self._check_cache()
