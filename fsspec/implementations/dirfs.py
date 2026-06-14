@@ -3,6 +3,19 @@ from ..asyn import AsyncFileSystem
 from .chained import ChainedFileSystem
 
 
+def _escapes_root(path):
+    """Whether a relative path would resolve above its root via ".." segments."""
+    depth = 0
+    for part in path.split("/"):
+        if part == "..":
+            depth -= 1
+            if depth < 0:
+                return True
+        elif part and part != ".":
+            depth += 1
+    return False
+
+
 class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     """Directory prefix filesystem
 
@@ -54,7 +67,12 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 return path
             if not path:
                 return self.path
-            return self.fs.sep.join((self.path, self._strip_protocol(path)))
+            path = self._strip_protocol(path)
+            if _escapes_root(path):
+                raise ValueError(
+                    f"path {path!r} escapes the {self.path!r} root of the filesystem"
+                )
+            return self.fs.sep.join((self.path, path))
         if isinstance(path, dict):
             return {self._join(_path): value for _path, value in path.items()}
         return [self._join(_path) for _path in path]

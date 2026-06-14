@@ -104,6 +104,30 @@ def test_path_no_leading_slash(fs, root, rel, full):
     assert dirfs._relpath(full) == rel
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["..", "../", "../secret", "foo/../..", "foo/../../secret", "/../secret"],
+)
+def test_join_rejects_escape(fs, path):
+    dirfs = DirFileSystem("root", fs)
+    with pytest.raises(ValueError):
+        dirfs._join(path)
+
+
+@pytest.mark.parametrize(
+    "path, full",
+    [
+        ("foo", "root/foo"),
+        ("foo/bar", "root/foo/bar"),
+        ("./foo", "root/./foo"),
+        ("foo/../bar", "root/foo/../bar"),
+    ],
+)
+def test_join_allows_internal(fs, path, full):
+    dirfs = DirFileSystem("root", fs)
+    assert dirfs._join(path) == full
+
+
 def test_sep(mocker, dirfs):
     sep = mocker.Mock()
     dirfs.fs.sep = sep
