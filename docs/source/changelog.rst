@@ -1,6 +1,27 @@
 Changelog
 =========
 
+2026.6.0
+--------
+
+Fixes
+
+- FTP: preserve filenames containing whitespace in _mlsd2 (#2043)
+- Prevent attribute error for 'forced' before flushing cache (#2042)
+- Reflect async _walk correctly (#2040)
+- Fix infinite recursion in expand_path with glob magic characters (#2038)
+- Do not strip trailing slashes from data URIs (#2037)
+- Fix referenceFS for new zarr and pandas (#2034)
+- Omit get_ident() from cache token for async impl in sync mode (#2028)
+
+Other
+
+- Fix AsyncFileSystem._cat_ranges on_error handling (#2045)
+- Forward kwargs from cat_ranges to cat_file (#2044)
+- Don't parse refFS templates by default (#2039, 2029)
+- fix s3fs ci (#2035)
+- fix: pass on_error when mv calls copy (#2030)
+
 2026.4.0
 --------
 
