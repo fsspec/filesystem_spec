@@ -155,5 +155,5 @@ jobs:
         run: |
           cd ${{ matrix.FRIEND }}
           pip install -e . --no-deps
-          pytest -v -W ignore::pytest.PytestRemovedIn9Warning --ignore=gcsfs/tests/perf
+          pytest -v -W ignore::pytest.PytestRemovedIn10Warning --ignore=gcsfs/tests/perf
           cd ..
