@@ -745,7 +745,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _ls(self, path, detail=True, **kwargs):
         raise NotImplementedError
 
-    async def _walk(self, path, maxdepth=None, on_error="omit", **kwargs):
+    async def _walk(self, path, maxdepth=None, topdown=True, on_error="omit", **kwargs):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
@@ -783,21 +783,34 @@ class AsyncFileSystem(AbstractFileSystem):
             else:
                 files[name] = info
 
-        if detail:
+        if not detail:
+            dirs = list(dirs)
+            files = list(files)
+
+        if topdown:
+            # Yield before recursion if walking top down
             yield path, dirs, files
-        else:
-            yield path, list(dirs), list(files)
 
         if maxdepth is not None:
             maxdepth -= 1
             if maxdepth < 1:
+                if not topdown:
+                    yield path, dirs, files
                 return
 
         for d in dirs:
             async for _ in self._walk(
-                full_dirs[d], maxdepth=maxdepth, detail=detail, **kwargs
+                full_dirs[d],
+                maxdepth=maxdepth,
+                detail=detail,
+                topdown=topdown,
+                **kwargs,
             ):
                 yield _
+
+        if not topdown:
+            # Yield after recursion if walking bottom up
+            yield path, dirs, files
 
     async def _glob(self, path, maxdepth=None, **kwargs):
         if maxdepth is not None and maxdepth < 1:
