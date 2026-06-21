@@ -40,6 +40,76 @@ class MemoryFileSystem(AbstractFileSystem):
         path = path.lstrip("/").rstrip("/")
         return "/" + path if path else ""
 
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        # The base implementation calls ls() once per directory, and each ls()
+        # scans the whole (global) store, giving O(n_dirs * n_entries) behaviour
+        # for a tree. Since the store is a flat mapping of every path, the same
+        # result can be produced with a single pass over it.
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+        path = self._strip_protocol(path)
+        if path in self.store:
+            # path is itself a file
+            if not detail:
+                return [path]
+            filelike = self.store[path]
+            return {
+                path: {
+                    "name": path,
+                    "size": filelike.size,
+                    "type": "file",
+                    "created": filelike.created.timestamp(),
+                }
+            }
+
+        # Uniform prefix so that the search root "" (the filesystem root) and a
+        # nested path are handled the same way; rel depth is rel.count("/") + 1.
+        prefix = path + "/" if path else "/"
+        out = {}
+        dirs = {}
+
+        def add_ancestor_dirs(name):
+            # Register every directory implied between ``path`` and ``name`` that
+            # is within maxdepth, mirroring how walk() surfaces implied dirs.
+            idx = name.rfind("/")
+            while idx > len(path):
+                parent = name[:idx]
+                if parent in dirs:
+                    break
+                rel = parent[len(prefix) :]
+                if maxdepth is None or rel.count("/") + 1 <= maxdepth:
+                    dirs[parent] = {"name": parent, "size": 0, "type": "directory"}
+                idx = parent.rfind("/")
+
+        for name, filelike in self.store.items():
+            if not name.startswith(prefix):
+                continue
+            rel = name[len(prefix) :]
+            if withdirs:
+                add_ancestor_dirs(name)
+            if maxdepth is not None and rel.count("/") + 1 > maxdepth:
+                continue
+            out[name] = {
+                "name": name,
+                "size": filelike.size,
+                "type": "file",
+                "created": filelike.created.timestamp(),
+            }
+
+        if withdirs:
+            # Explicitly-created (possibly empty) directories live in pseudo_dirs.
+            for pdir in self.pseudo_dirs:
+                if pdir and pdir.startswith(prefix):
+                    add_ancestor_dirs(pdir + "/")
+            out.update(dirs)
+            # Mirror the base find(): include the search root itself when it is
+            # a directory (needed for posix glob compliance).
+            if path != "" and self.isdir(path):
+                out[path] = self.info(path)
+
+        names = sorted(out)
+        return {name: out[name] for name in names} if detail else names
+
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         if path in self.store:
