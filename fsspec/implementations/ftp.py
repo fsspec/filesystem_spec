@@ -9,11 +9,11 @@ from ..utils import infer_storage_options, isfilelike
 
 SECURITY_PROTOCOL_MAP = {
     "tls": ssl.PROTOCOL_TLS,
-    "tlsv1": ssl.PROTOCOL_TLSv1,
-    "tlsv1_1": ssl.PROTOCOL_TLSv1_1,
-    "tlsv1_2": ssl.PROTOCOL_TLSv1_2,
     "sslv23": ssl.PROTOCOL_SSLv23,
 }
+for protocol in ["TLSv1", "TLSv1_1", "TLSv1_2"]:
+    if hasattr(ssl, f"PROTOCOL_{protocol}"):
+        SECURITY_PROTOCOL_MAP[protocol.lower()] = getattr(ssl, f"PROTOCOL_{protocol}")
 
 
 class ImplicitFTPTLS(FTP_TLS):
