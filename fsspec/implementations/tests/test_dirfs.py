@@ -2,6 +2,7 @@ import pytest
 
 from fsspec.asyn import AsyncFileSystem
 from fsspec.implementations.dirfs import DirFileSystem
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractFileSystem
 
 PATH = "path/to/dir"
@@ -108,24 +109,24 @@ def test_path_no_leading_slash(fs, root, rel, full):
     "path",
     ["..", "../", "../secret", "foo/../..", "foo/../../secret", "/../secret"],
 )
-def test_join_rejects_escape(fs, path):
-    dirfs = DirFileSystem("root", fs)
+def test_join_rejects_escape_local(tmp_path, path):
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
     with pytest.raises(ValueError):
         dirfs._join(path)
 
 
-@pytest.mark.parametrize(
-    "path, full",
-    [
-        ("foo", "root/foo"),
-        ("foo/bar", "root/foo/bar"),
-        ("./foo", "root/./foo"),
-        ("foo/../bar", "root/foo/../bar"),
-    ],
-)
-def test_join_allows_internal(fs, path, full):
+@pytest.mark.parametrize("path", ["foo", "foo/bar", "foo/../bar"])
+def test_join_allows_internal_local(tmp_path, path):
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+    assert dirfs._join(path) == f"{dirfs.path}/{path}"
+
+
+@pytest.mark.parametrize("path", ["../secret", "foo/../../secret", ".."])
+def test_join_keeps_dotdot_for_non_local(fs, path):
+    # ".." is only special on local-style filesystems; elsewhere it is a
+    # legitimate path part and must not be rejected.
     dirfs = DirFileSystem("root", fs)
-    assert dirfs._join(path) == full
+    assert dirfs._join(path) == f"root/{path}"
 
 
 def test_sep(mocker, dirfs):

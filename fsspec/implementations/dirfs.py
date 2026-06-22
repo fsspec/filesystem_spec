@@ -1,6 +1,7 @@
 from .. import filesystem
 from ..asyn import AsyncFileSystem
 from .chained import ChainedFileSystem
+from .local import LocalFileSystem
 
 
 def _escapes_root(path):
@@ -68,7 +69,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
             if not path:
                 return self.path
             path = self._strip_protocol(path)
-            if _escapes_root(path):
+            # ".." only navigates above the root on filesystems that resolve it
+            # against a real directory tree; on object stores it is a literal
+            # path part, so only guard the local case here.
+            if isinstance(self.fs, LocalFileSystem) and _escapes_root(path):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )
