@@ -109,7 +109,7 @@ jobs:
       - name: Run fsspec tests
         shell: bash -l {0}
         run: |
-          pytest -v fsspec/tests/test_downstream.py
+          pytest -v tests/test_downstream.py
 
       - name: Run dask tests
         shell: bash -l {0}

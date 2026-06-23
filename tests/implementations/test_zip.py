@@ -7,8 +7,9 @@ from shutil import make_archive
 import pytest
 
 import fsspec
-from fsspec.implementations.tests.test_archive import archive_data, tempzip
 from fsspec.implementations.zip import ZipFileSystem
+
+from .test_archive import archive_data, tempzip
 
 
 def test_info():

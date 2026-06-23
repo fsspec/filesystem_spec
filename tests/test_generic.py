@@ -1,7 +1,8 @@
 import pytest
 
 import fsspec
-from fsspec.tests.conftest import data, server  # noqa: F401
+
+from .conftest import data, server  # noqa: F401
 
 
 def test_remote_async_ops(server):

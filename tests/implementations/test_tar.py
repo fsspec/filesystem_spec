@@ -13,7 +13,8 @@ import fsspec
 from fsspec.core import OpenFile
 from fsspec.implementations.cached import WholeFileCacheFileSystem
 from fsspec.implementations.tar import TarFileSystem
-from fsspec.implementations.tests.test_archive import archive_data, temptar
+
+from .test_archive import archive_data, temptar
 
 if TYPE_CHECKING:
     from pathlib import Path

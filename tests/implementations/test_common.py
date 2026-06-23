@@ -4,7 +4,8 @@ import time
 import pytest
 
 from fsspec import AbstractFileSystem
-from fsspec.implementations.tests.conftest import READ_ONLY_FILESYSTEMS
+
+from .conftest import READ_ONLY_FILESYSTEMS
 
 
 @pytest.mark.parametrize("fs", ["local"], indirect=["fs"])

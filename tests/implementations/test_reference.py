@@ -10,7 +10,8 @@ from fsspec.implementations.reference import (
     ReferenceFileSystem,
     ReferenceNotReachable,
 )
-from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
+
+from ..conftest import data, reset_files, server, win  # noqa: F401
 
 
 def test_simple(server):

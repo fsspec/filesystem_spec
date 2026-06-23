@@ -9,9 +9,9 @@ import aiohttp
 import pytest
 
 import fsspec.asyn
-import fsspec.utils
 from fsspec.implementations.http import HTTPStreamFile
-from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
+
+from ..conftest import data, reset_files, server, win  # noqa: F401
 
 
 def test_list(server):

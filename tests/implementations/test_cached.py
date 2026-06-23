@@ -20,8 +20,8 @@ from fsspec.implementations.cached import (
 )
 from fsspec.implementations.local import make_path_posix
 from fsspec.implementations.zip import ZipFileSystem
-from fsspec.tests.conftest import win
 
+from ..conftest import win
 from .test_ftp import FTPFileSystem
 
 
