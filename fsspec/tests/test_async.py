@@ -296,11 +296,10 @@ _GLOB_PREFIX_FILES = [
 
 
 class _PrefixCapturingFS(fsspec.asyn.AsyncFileSystem):
-    """Minimal AsyncFileSystem that records every _find call's kwargs.
-
-    _find ignores the prefix hint and returns all files under *root* so that
-    the client-side glob pattern-matching in _glob still works correctly.
-    This simulates a "naive" backend that silently absorbs unknown kwargs.
+    """AsyncFileSystem that records _find calls and simulates cloud backend
+    dircache behaviour (s3fs, gcsfs, adlfs): prefix-filtered _find stores only
+    matching files in dircache; a second call to the same directory returns the
+    cached partial listing filtered by the new prefix.
     """
 
     protocol = "prefixmock"
@@ -312,15 +311,35 @@ class _PrefixCapturingFS(fsspec.asyn.AsyncFileSystem):
 
     async def _find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
         self.find_calls.append({"path": path, "kwargs": dict(kwargs)})
-        root = (path.rstrip("/") + "/") if path else ""
+        prefix = kwargs.get("prefix", "")
+        stripped = path.rstrip("/")
+        # Empty stripped means a root-level glob ("top_*"); no dir prefix.
+        root_prefix = (stripped + "/") if stripped else ""
+
+        if stripped in self.dircache:
+            cached = self.dircache[stripped]
+            results = {
+                e["name"]: e
+                for e in cached
+                if e["name"][len(root_prefix) :].startswith(prefix)
+            }
+            return results if detail else list(results)
+
         results = {
             f: {"name": f, "type": "file", "size": 0}
             for f in self.fs_files
-            if f.startswith(root)
+            if f.startswith(root_prefix) and f[len(root_prefix) :].startswith(prefix)
         }
+        self.dircache[stripped] = list(results.values())
         return results if detail else list(results)
 
     async def _info(self, path, **kwargs):
+        parent = self._parent(path)
+        if parent in self.dircache:
+            for entry in self.dircache[parent]:
+                if entry["name"] == path:
+                    return entry
+            raise FileNotFoundError(path)
         for f in self.fs_files:
             if f == path:
                 return {"name": f, "type": "file", "size": 0}
@@ -402,6 +421,13 @@ def test_glob_prefix_hint(prefix_fs, pattern, expected_results, expected_prefix)
             f"expected prefix={expected_prefix!r} for pattern {pattern!r}, "
             f"got {forwarded.get('prefix')!r}"
         )
+
+
+def test_glob_prefix_does_not_poison_dircache(prefix_fs):
+    """Two consecutive prefix globs on the same directory must both return correct results."""
+    assert prefix_fs.glob("data/2024/res*") == ["data/2024/results.csv"]
+    assert prefix_fs.glob("data/2024/rep*") == ["data/2024/report.txt"]
+    assert prefix_fs.exists("data/2024/report.txt")
 
 
 @pytest.mark.asyncio

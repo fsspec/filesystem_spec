@@ -871,9 +871,18 @@ class AsyncFileSystem(AbstractFileSystem):
         # gcsfs, s3fs and adlfs can filter server-side up to the first wildcard.
         if prefix:
             kwargs["prefix"] = prefix
+        root_key = root.rstrip("/")
+        pre_cached = prefix and root and root_key in self.dircache
         allpaths = await self._find(
             root, maxdepth=depth, withdirs=withdirs, detail=True, **kwargs
         )
+        # Backends store only prefix-matching files in dircache when prefix= is
+        # used, so a newly created entry is a partial listing that would mislead
+        # subsequent lookups.  Only discard it when _find created it; if the
+        # entry existed before the call the backend served it from cache without
+        # overwriting, so it already holds a full legitimate listing.
+        if prefix and root and not pre_cached:
+            self.dircache.pop(root_key, None)
 
         pattern = glob_translate(path + ("/" if ends_with_sep else ""))
         pattern = re.compile(pattern)
