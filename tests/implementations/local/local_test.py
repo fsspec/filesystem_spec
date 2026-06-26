@@ -1,5 +1,6 @@
 import fsspec.tests.abstract as abstract
-from fsspec.implementations.tests.local.local_fixtures import LocalFixtures
+
+from .local_fixtures import LocalFixtures
 
 
 class TestLocalCopy(abstract.AbstractCopyTests, LocalFixtures):

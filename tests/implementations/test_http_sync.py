@@ -6,7 +6,8 @@ import time
 import pytest
 
 import fsspec.utils
-from fsspec.tests.conftest import data, requests, reset_files, server, win  # noqa: F401
+
+from ..conftest import data, requests, reset_files, server, win  # noqa: F401
 
 
 @pytest.fixture()

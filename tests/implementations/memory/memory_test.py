@@ -1,5 +1,6 @@
 import fsspec.tests.abstract as abstract
-from fsspec.implementations.tests.memory.memory_fixtures import MemoryFixtures
+
+from .memory_fixtures import MemoryFixtures
 
 
 class TestMemoryCopy(abstract.AbstractCopyTests, MemoryFixtures):

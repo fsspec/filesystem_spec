@@ -17,7 +17,8 @@ import fsspec
 from fsspec import compression
 from fsspec.core import OpenFile, get_fs_token_paths, open_files
 from fsspec.implementations.local import LocalFileSystem, get_umask, make_path_posix
-from fsspec.tests.test_utils import WIN
+
+from ..test_utils import WIN
 
 files = {
     ".test.accounts.1.json": (

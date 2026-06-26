@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from fsspec.conftest import ftp_writable, instance_caches, m  # noqa: F401
+
 requests = pytest.importorskip("requests")
 data = b"\n".join([b"some test data"] * 1000)
 listing = open(

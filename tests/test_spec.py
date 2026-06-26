@@ -15,7 +15,8 @@ from fsspec.implementations.ftp import FTPFileSystem
 from fsspec.implementations.http import HTTPFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
-from fsspec.tests.conftest import data
+
+from .conftest import data
 
 PATHS_FOR_GLOB_TESTS = (
     {"name": "test0.json", "type": "file", "size": 100},
@@ -1039,10 +1040,14 @@ def test_serialize_with_password():
 
 
 def test_from_dict_valid():
-    fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS"})
+    fs = DummyTestFS.from_dict(
+        {"cls": f"{test_from_dict_valid.__module__}.DummyTestFS"}
+    )
     assert isinstance(fs, DummyTestFS)
 
-    fs = DummyTestFS.from_dict({"cls": "fsspec.tests.test_spec.DummyTestFS", "bar": 1})
+    fs = DummyTestFS.from_dict(
+        {"cls": f"{test_from_dict_valid.__module__}.DummyTestFS", "bar": 1}
+    )
     assert fs.storage_options["bar"] == 1
 
     fs = DummyTestFS.from_dict({"cls": "fsspec.implementations.local.LocalFileSystem"})
