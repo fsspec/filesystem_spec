@@ -430,6 +430,32 @@ def test_glob_prefix_does_not_poison_dircache(prefix_fs):
     assert prefix_fs.exists("data/2024/report.txt")
 
 
+def test_glob_prefix_preserves_existing_full_listing(prefix_fs):
+    """A prefix glob must not discard a pre-existing *full* dircache entry.
+
+    When the directory was already fully listed (e.g. by a prior ls/find with
+    no prefix), the backend serves _find from that cache without overwriting it,
+    so _glob must leave the entry intact (pre_cached branch).
+    """
+    # Simulate a prior full listing of "data/2024".
+    full_listing = [
+        {"name": "data/2024/results.csv", "type": "file", "size": 0},
+        {"name": "data/2024/report.txt", "type": "file", "size": 0},
+    ]
+    prefix_fs.dircache["data/2024"] = list(full_listing)
+
+    assert prefix_fs.glob("data/2024/res*") == ["data/2024/results.csv"]
+
+    # The full listing must survive the prefix glob untouched.
+    assert "data/2024" in prefix_fs.dircache
+    assert {e["name"] for e in prefix_fs.dircache["data/2024"]} == {
+        "data/2024/results.csv",
+        "data/2024/report.txt",
+    }
+    # And a subsequent prefix glob for the other file still resolves correctly.
+    assert prefix_fs.glob("data/2024/rep*") == ["data/2024/report.txt"]
+
+
 @pytest.mark.asyncio
 async def test_expand_path_special_characters_async():
     fs_files = [
