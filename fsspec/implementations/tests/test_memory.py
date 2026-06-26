@@ -4,6 +4,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 import pytest
 
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
+from fsspec.implementations.memory import MemoryFileSystem
 
 
 def test_1(m):
@@ -394,3 +395,53 @@ def test_open_path_windows(m):
         f.write(b"some\nlines\nof\ntext")
 
     assert m.read_text(path) == "some\nlines\nof\ntext"
+
+
+def test_find_matches_generic(m):
+    # MemoryFileSystem overrides find() with a single-pass implementation; make
+    # sure it agrees with the generic ls()-based AbstractFileSystem.find() across
+    # roots, maxdepth, withdirs and detail.
+    from fsspec.spec import AbstractFileSystem
+
+    for path in [
+        "/data/a/f1.txt",
+        "/data/a/f2.txt",
+        "/data/a/b/deep.txt",
+        "/data/a/b/c/deepest.txt",
+        "/data/x.txt",
+        "/data/y/z.txt",
+        "/other/o.txt",
+    ]:
+        m.pipe_file(path, b"hello")
+    m.mkdir("/data/emptydir")  # empty (pseudo) directory
+    m.mkdir("/data/a/b/emptysub")
+
+    for root in ["", "/data", "/data/a", "/data/a/b", "/data/x.txt", "/nope"]:
+        for maxdepth in [None, 1, 2, 3]:
+            for withdirs in [False, True]:
+                for detail in [False, True]:
+                    got = m.find(
+                        root, maxdepth=maxdepth, withdirs=withdirs, detail=detail
+                    )
+                    expected = AbstractFileSystem.find(
+                        m, root, maxdepth=maxdepth, withdirs=withdirs, detail=detail
+                    )
+                    assert got == expected, (root, maxdepth, withdirs, detail)
+
+
+def test_find_does_not_scan_per_directory(m):
+    # Regression guard: the old find() called ls() once per directory and each
+    # ls() re-scanned the whole (global) store, giving O(n_dirs * n_files) work.
+    # The single-pass implementation must not call ls() at all, so total work
+    # stays O(n_files) regardless of how many directories there are.
+    from unittest import mock
+
+    for d in range(20):
+        for f in range(5):
+            m.pipe_file(f"/data/dir{d}/file{f}.txt", b"x")
+
+    with mock.patch.object(MemoryFileSystem, "ls", wraps=m.ls) as spy:
+        out = m.find("/data")
+
+    assert len(out) == 100
+    assert spy.call_count == 0
