@@ -172,6 +172,27 @@ def test_constructor_kwargs(tmpdir):
         )
 
 
+@pytest.mark.skipif(win, reason="POSIX file permissions")
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache", "blockcache"])
+def test_cache_storage_mode(tmp_path, protocol):
+    import stat
+
+    cache = tmp_path / "cache"  # does not exist yet, fsspec must create it
+    old = os.umask(0o022)
+    try:
+        fsspec.filesystem(
+            protocol,
+            target_protocol="file",
+            cache_storage=str(cache),
+            cache_storage_mode=0o700,
+        )
+    finally:
+        os.umask(old)
+
+    mode = stat.S_IMODE(os.stat(cache).st_mode)
+    assert mode & (stat.S_IRWXG | stat.S_IRWXO) == 0, oct(mode)
+
+
 def test_idempotent():
     import pickle
 

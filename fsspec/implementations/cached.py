@@ -76,6 +76,7 @@ class CachingFileSystem(ChainedFileSystem):
         same_names: bool | None = None,
         compression=None,
         cache_mapper: AbstractCacheMapper | None = None,
+        cache_storage_mode=None,
         **kwargs,
     ):
         """
@@ -118,6 +119,13 @@ class CachingFileSystem(ChainedFileSystem):
         cache_mapper: AbstractCacheMapper (optional)
             The object use to map from original filenames to cached filenames.
             Only one of this and ``same_names`` should be specified.
+        cache_storage_mode: int (optional)
+            Permission mode used when creating the cache storage directory,
+            e.g. ``0o700``. The default of ``None`` leaves the directory at
+            the system default (governed by the umask), which is the existing
+            behaviour. Pass an octal mode such as ``0o700`` to keep the cache
+            directory, and so the cached data files within it, readable by the
+            owner only.
         """
         super().__init__(**kwargs)
         if fs is None and target_protocol is None:
@@ -137,7 +145,8 @@ class CachingFileSystem(ChainedFileSystem):
                 storage = [cache_storage]
             else:
                 storage = cache_storage
-        os.makedirs(storage[-1], exist_ok=True)
+        self.cache_storage_mode = cache_storage_mode
+        self._makedirs(storage[-1])
         self.storage = storage
         self.kwargs = target_options or {}
         self.cache_check = cache_check
@@ -184,8 +193,14 @@ class CachingFileSystem(ChainedFileSystem):
         except Exception:
             pass
 
+    def _makedirs(self, path):
+        if self.cache_storage_mode is None:
+            os.makedirs(path, exist_ok=True)
+        else:
+            os.makedirs(path, exist_ok=True, mode=self.cache_storage_mode)
+
     def _mkcache(self):
-        os.makedirs(self.storage[-1], exist_ok=True)
+        self._makedirs(self.storage[-1])
 
     def cache_size(self):
         """Return size of cache in bytes.
@@ -452,6 +467,7 @@ class CachingFileSystem(ChainedFileSystem):
             "isdir",
             "_check_file",
             "_check_cache",
+            "_makedirs",
             "_mkcache",
             "clear_cache",
             "clear_expired_cache",
@@ -815,7 +831,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         super().__init__(**kw)
         for storage in self.storage:
             if not os.path.exists(storage):
-                os.makedirs(storage, exist_ok=True)
+                self._makedirs(storage)
 
     def _check_file(self, path):
         self._check_cache()
