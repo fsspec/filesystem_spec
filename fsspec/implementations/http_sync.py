@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 try:
     import yarl
-except (ImportError, ModuleNotFoundError, OSError):
+except (ImportError, OSError):
     yarl = False
 
 from fsspec.callbacks import _DEFAULT_CALLBACK
@@ -278,10 +278,9 @@ class HTTPFileSystem(AbstractFileSystem):
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
         """For HTTP, we always want to keep the full URL"""
-        path = path.replace("sync-http://", "http://").replace(
+        return path.replace("sync-http://", "http://").replace(
             "sync-https://", "https://"
         )
-        return path
 
     @classmethod
     def _parent(cls, path):
