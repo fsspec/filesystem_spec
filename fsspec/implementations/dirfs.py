@@ -1,6 +1,20 @@
 from .. import filesystem
 from ..asyn import AsyncFileSystem
 from .chained import ChainedFileSystem
+from .local import LocalFileSystem
+
+
+def _escapes_root(path):
+    """Whether a relative path would resolve above its root via ".." segments."""
+    depth = 0
+    for part in path.split("/"):
+        if part == "..":
+            depth -= 1
+            if depth < 0:
+                return True
+        elif part and part != ".":
+            depth += 1
+    return False
 
 
 class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
@@ -54,7 +68,15 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 return path
             if not path:
                 return self.path
-            return self.fs.sep.join((self.path, self._strip_protocol(path)))
+            path = self._strip_protocol(path)
+            # ".." only navigates above the root on filesystems that resolve it
+            # against a real directory tree; on object stores it is a literal
+            # path part, so only guard the local case here.
+            if isinstance(self.fs, LocalFileSystem) and _escapes_root(path):
+                raise ValueError(
+                    f"path {path!r} escapes the {self.path!r} root of the filesystem"
+                )
+            return self.fs.sep.join((self.path, path))
         if isinstance(path, dict):
             return {self._join(_path): value for _path, value in path.items()}
         return [self._join(_path) for _path in path]
