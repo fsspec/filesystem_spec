@@ -177,6 +177,17 @@ def test_no_rewind_append_mode(m):
         assert f.tell() == 7
 
 
+@pytest.mark.parametrize("mode", ["a", "ab", "a+b"])
+def test_append_creates_missing_file(m, mode):
+    # append modes create the file if it does not exist, matching builtin
+    # open() and LocalFileSystem
+    filename = "newfile.txt"
+    assert not m.exists(filename)
+    with m.open(filename, mode) as f:
+        f.write(b"data" if "b" in mode else "data")
+    assert m.cat(filename) == b"data"
+
+
 def test_moves(m):
     m.touch("source.txt")
     m.mv("source.txt", "target.txt")
