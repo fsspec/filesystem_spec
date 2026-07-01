@@ -197,6 +197,13 @@ class MemoryFileSystem(AbstractFileSystem):
                     # position at the beginning of file
                     f.seek(0)
                 return f
+            elif "a" in mode:
+                # append modes create the file if it does not exist, matching
+                # builtin open() and LocalFileSystem
+                m = MemoryFile(self, path, kwargs.get("data"))
+                if not self._intrans:
+                    m.commit()
+                return m
             else:
                 raise FileNotFoundError(path)
         elif mode in {"wb", "w+b", "xb", "x+b"}:
