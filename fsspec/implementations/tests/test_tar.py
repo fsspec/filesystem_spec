@@ -244,3 +244,50 @@ def test_ls_with_folders(compression: str, tmp_path: Path):
             "d/e/f.pdf",
             "d/g.pdf",
         ]
+
+
+@pytest.mark.parametrize(
+    "compression", ["", "gz", "bz2", "xz"], ids=["tar", "tar-gz", "tar-bz2", "tar-xz"]
+)
+def test_ls_with_duplicate_slashes(compression: str, tmp_path: Path):
+    """
+    Members whose names contain redundant duplicate slashes (e.g.
+    ``"a/b//c.txt"``) must still be reachable through the directory listing
+    and openable, rather than becoming silently invisible to
+    ``find``/``glob``/``ls``/``walk``. Regression test for
+    https://github.com/fsspec/filesystem_spec/issues/1947.
+    """
+    tar_data: dict[str, bytes] = {
+        "path/with/extra/slash//test.txt": b"Hello slash!",
+        "regular/file.txt": b"Hello regular!",
+    }
+    if compression:
+        temp_archive_file = tmp_path / f"test_tar_file.tar.{compression}"
+    else:
+        temp_archive_file = tmp_path / "test_tar_file.tar"
+    with open(temp_archive_file, "wb") as fd:
+        with tarfile.open(fileobj=fd, mode=f"w:{compression}") as tf:
+            for tar_file_path, data in tar_data.items():
+                info = tarfile.TarInfo(name=tar_file_path)
+                info.size = len(data)
+                tf.addfile(info, BytesIO(data))
+
+    with open(temp_archive_file, "rb") as fd:
+        fs = TarFileSystem(fd)
+
+        # The duplicate-slash member is discoverable with its slashes collapsed.
+        assert fs.find("/") == [
+            "path/with/extra/slash/test.txt",
+            "regular/file.txt",
+        ]
+        assert fs.glob("path/**/*.txt") == ["path/with/extra/slash/test.txt"]
+        assert fs.ls("path/with/extra/slash", detail=False) == [
+            "path/with/extra/slash/test.txt"
+        ]
+
+        # The intermediate directory is inferred without a trailing slash.
+        assert fs.isdir("path/with/extra/slash")
+
+        # It can be opened both by its normalised name and its original name.
+        assert fs.cat("path/with/extra/slash/test.txt") == b"Hello slash!"
+        assert fs.cat("path/with/extra/slash//test.txt") == b"Hello slash!"
