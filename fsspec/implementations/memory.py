@@ -203,6 +203,8 @@ class MemoryFileSystem(AbstractFileSystem):
                 m = MemoryFile(self, path, kwargs.get("data"))
                 if not self._intrans:
                     m.commit()
+                # position at the end of file, like the existing-file path above
+                m.seek(0, 2)
                 return m
             else:
                 raise FileNotFoundError(path)

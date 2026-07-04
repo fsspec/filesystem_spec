@@ -184,6 +184,8 @@ def test_append_creates_missing_file(m, mode):
     filename = "newfile.txt"
     assert not m.exists(filename)
     with m.open(filename, mode) as f:
+        # append mode must position at the end of the (newly created) file
+        assert f.tell() == f.seek(0, 2)
         f.write(b"data" if "b" in mode else "data")
     assert m.cat(filename) == b"data"
 
