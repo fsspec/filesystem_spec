@@ -1,4 +1,6 @@
+import json
 import logging
+import pathlib
 import tarfile
 
 import fsspec
@@ -84,21 +86,39 @@ class TarFileSystem(AbstractArchiveFileSystem):
         self.tar = tarfile.TarFile(fileobj=self.fo)
         self.dir_cache = None
 
-        self.index_store = index_store
+        if isinstance(index_store, (str, pathlib.Path)):
+            self.index_store = pathlib.Path(index_store)
+        elif bool(index_store) is True:
+            # TODO: How to handle a hashed filename from FileCache?
+            self.index_store = pathlib.Path(f"{name}.index.json")
+        else:
+            self.index_store = index_store
         self.index = None
         self._index()
 
     def _index(self):
-        # TODO: load and set saved index, if exists
-        out = {}
-        for ti in self.tar:
-            info = ti.get_info()
-            info["type"] = typemap.get(info["type"], "file")
-            name = ti.get_info()["name"].rstrip("/")
-            out[name] = (info, ti.offset_data)
+        if self.index_store is not None and self.index_store.exists():
+            # NOTE(PG): Not sure if JSON is the best way to go here, but it's
+            #           simple and human-readable.
+            logger.debug(f"Reloading from {self.index_store}")
+            with self.index_store.open("r") as f:
+                self.index = json.load(f)
+        else:
+            logger.debug(f"Populating {self.index_store}")
+            out = {}
+            for ti in self.tar:
+                info = ti.get_info()
+                info["type"] = typemap.get(info["type"], "file")
+                info["name"] = name = info["name"].rstrip("/")
+                out[name] = (info, ti.offset_data)
 
-        self.index = out
-        # TODO: save index to self.index_store here, if set
+            self.index = out
+            if self.index_store is not None:
+                with self.index_store.open("w") as f:
+                    try:
+                        json.dump(out, f)
+                    except Exception as e:
+                        logger.warning(f"Failed to write index: {e}")
 
     def _get_dirs(self):
         if self.dir_cache is not None:
@@ -107,13 +127,10 @@ class TarFileSystem(AbstractArchiveFileSystem):
         # This enables ls to get directories as children as well as files
         self.dir_cache = {
             dirname: {"name": dirname, "size": 0, "type": "directory"}
-            for dirname in self._all_dirnames(self.tar.getnames())
+            for dirname in self._all_dirnames(self.index.keys())
         }
-        for member in self.tar.getmembers():
-            info = member.get_info()
-            info["name"] = info["name"].rstrip("/")
-            info["type"] = typemap.get(info["type"], "file")
-            self.dir_cache[info["name"]] = info
+        for name, (info, _) in self.index.items():
+            self.dir_cache[name] = info
 
     def _open(self, path, mode="rb", **kwargs):
         if mode != "rb":
