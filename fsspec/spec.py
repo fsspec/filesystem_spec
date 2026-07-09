@@ -61,6 +61,7 @@ class _Cached(type):
         else:
             cls._cache = {}
         cls._pid = os.getpid()
+        cls._instantiation_lock = threading.Lock()
 
     def __call__(cls, *args, **kwargs):
         kwargs = apply_config(cls, kwargs)
@@ -83,7 +84,12 @@ class _Cached(type):
         if not skip and cls.cachable and token in cls._cache:
             cls._latest = token
             return cls._cache[token]
-        else:
+            
+        with cls._instantiation_lock:
+            if not skip and cls.cachable and token in cls._cache:
+                cls._latest = token
+                return cls._cache[token]
+
             obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
             # Setting _fs_token here causes some static linters to complain.
             obj._fs_token_ = token
