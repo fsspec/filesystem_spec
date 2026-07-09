@@ -748,14 +748,14 @@ def test_cache():
 def test_instance_cache_concurrency():
     import concurrent.futures
     import time
-    
+
     class SleepyFS(DummyTestFS):
         async_impl = True
-        
+
         def __init__(self, *args, **kwargs):
             time.sleep(0.1)
             super().__init__(*args, **kwargs)
-            
+
     SleepyFS.clear_instance_cache()
 
     def instantiate():
