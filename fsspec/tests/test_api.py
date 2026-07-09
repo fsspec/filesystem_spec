@@ -42,7 +42,7 @@ def test_class_methods():
 
 def test_multi(m):
     m.pipe("/afile", b"data")
-    fs, token, paths = fsspec.core.get_fs_token_paths(["/afile", "/afile"])
+    _fs, _token, paths = fsspec.core.get_fs_token_paths(["/afile", "/afile"])
     assert len(paths) == 2
 
 

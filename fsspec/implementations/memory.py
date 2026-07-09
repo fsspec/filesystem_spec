@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
@@ -22,7 +23,7 @@ class MemoryFileSystem(AbstractFileSystem):
     """
 
     store: ClassVar[dict[str, Any]] = {}  # global, do not overwrite!
-    pseudo_dirs = [""]  # global, do not overwrite!
+    pseudo_dirs: ClassVar[Sequence[str]] = [""]  # global, do not overwrite!
     protocol = "memory"
     root_marker = "/"
 

@@ -292,7 +292,7 @@ def open_files(
     - For implementations in separate packages see
       https://filesystem-spec.readthedocs.io/en/latest/api.html#other-known-implementations
     """
-    fs, fs_token, paths = get_fs_token_paths(
+    fs, _fs_token, paths = get_fs_token_paths(
         urlpath,
         mode,
         num=num,

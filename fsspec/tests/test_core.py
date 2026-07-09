@@ -399,11 +399,11 @@ def test_url_to_fs(ftp_writable):
     data = b"hello"
     with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile", "wb") as f:
         f.write(data)
-    fs, url = fsspec.core.url_to_fs(
+    _fs, url = fsspec.core.url_to_fs(
         f"simplecache::ftp://{username}:{password}@{host}:{port}/afile"
     )
     assert url == "/afile"
-    fs, url = fsspec.core.url_to_fs(f"ftp://{username}:{password}@{host}:{port}/afile")
+    _fs, url = fsspec.core.url_to_fs(f"ftp://{username}:{password}@{host}:{port}/afile")
     assert url == "/afile"
 
     with fsspec.open(f"ftp://{username}:{password}@{host}:{port}/afile.zip", "wb") as f:
@@ -414,11 +414,11 @@ def test_url_to_fs(ftp_writable):
                 f2.write(b"hello")
         f.write(data)
 
-    fs, url = fsspec.core.url_to_fs(
+    _fs, url = fsspec.core.url_to_fs(
         f"zip://inner::ftp://{username}:{password}@{host}:{port}/afile.zip"
     )
     assert url == "inner"
-    fs, url = fsspec.core.url_to_fs(
+    _fs, url = fsspec.core.url_to_fs(
         f"simplecache::zip::ftp://{username}:{password}@{host}:{port}/afile.zip"
     )
     assert url == ""
@@ -472,7 +472,7 @@ def test_repeated_argument():
     pytest.importorskip("adlfs")
     from fsspec.core import url_to_fs
 
-    fs, url = url_to_fs(
+    fs, _url = url_to_fs(
         "az://DIR@ACCOUNT.blob.core.windows.net/DATA",
         anon=False,
         account_name="ACCOUNT",
