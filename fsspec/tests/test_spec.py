@@ -745,6 +745,30 @@ def test_cache():
     assert len(DummyTestFS._cache) == 0
 
 
+def test_instance_cache_concurrency():
+    import concurrent.futures
+    import time
+    
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+        
+        def __init__(self, *args, **kwargs):
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+            
+    SleepyFS.clear_instance_cache()
+
+    def instantiate():
+        return SleepyFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(instantiate) for _ in range(50)]
+        results = [f.result() for f in futures]
+
+    assert len(SleepyFS._cache) == 1
+    assert all(r is results[0] for r in results)
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",
