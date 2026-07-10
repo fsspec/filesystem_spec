@@ -61,7 +61,7 @@ class _Cached(type):
         else:
             cls._cache = {}
         cls._pid = os.getpid()
-        cls._instantiation_lock = threading.Lock()
+        cls._instantiation_lock = threading.RLock()
 
     def __call__(cls, *args, **kwargs):
         kwargs = apply_config(cls, kwargs)
