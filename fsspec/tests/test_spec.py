@@ -769,6 +769,63 @@ def test_instance_cache_concurrency():
     assert all(r is results[0] for r in results)
 
 
+def test_clear_instance_cache_concurrency():
+    import concurrent.futures
+
+    for i in range(10):
+        DummyTestFS(i)
+
+    def clear_cache():
+        DummyTestFS.clear_instance_cache()
+
+    def instantiate():
+        return DummyTestFS(100)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for _ in range(20):
+            futures.append(executor.submit(clear_cache))
+            futures.append(executor.submit(instantiate))
+        concurrent.futures.wait(futures)
+
+    assert True
+
+
+def test_fork_deadlock():
+    import multiprocessing
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("Fork method is not available on this platform")
+
+    DummyTestFS._instantiation_lock.acquire()
+
+    def child_process(q):
+        try:
+            DummyTestFS(12345)
+            q.put(True)
+        except Exception as e:
+            q.put(str(e))
+
+    q = multiprocessing.Queue()
+    ctx = multiprocessing.get_context("fork")
+    p = ctx.Process(target=child_process, args=(q,))
+    p.start()
+    p.join(timeout=3)
+
+    try:
+        DummyTestFS._instantiation_lock.release()
+    except Exception:
+        pass
+
+    if p.is_alive():
+        p.terminate()
+        p.join()
+        pytest.fail("Child process deadlocked during instantiation")
+
+    result = q.get()
+    assert result is True
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",
