@@ -61,7 +61,7 @@ class _Cached(type):
         else:
             cls._cache = {}
         cls._pid = os.getpid()
-        cls._instantiation_lock = threading.RLock()
+        cls._cache_lock = threading.Lock()
 
     def __call__(cls, *args, **kwargs):
         kwargs = apply_config(cls, kwargs)
@@ -71,46 +71,41 @@ class _Cached(type):
         strip_tokenize_options = {
             k: kwargs.pop(k) for k in cls._strip_tokenize_options if k in kwargs
         }
+        pid = os.getpid()
+        if pid != cls._pid:
+            cls._pid = pid
+            cls._cache.clear()
+            cls._cache_lock = threading.Lock()
+
         if getattr(cls, "async_impl", False) and not kwargs.get("asynchronous", False):
-            token = tokenize(cls, os.getpid(), *args, *extra_tokens, **kwargs)
+            token = tokenize(cls, cls._pid, *args, *extra_tokens, **kwargs)
         else:
             token = tokenize(
-                cls, os.getpid(), threading.get_ident(), *args, *extra_tokens, **kwargs
+                cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs
             )
         skip = kwargs.pop("skip_instance_cache", False)
 
-        if (
-            not skip
-            and cls.cachable
-            and os.getpid() == cls._pid
-            and token in cls._cache
-        ):
-            cls._latest = token
-            return cls._cache[token]
+        if not skip and cls.cachable:
+            with cls._cache_lock:
+                if token in cls._cache:
+                    cls._latest = token
+                    return cls._cache[token]
 
-        with cls._instantiation_lock:
-            if os.getpid() != cls._pid:
-                cls._cache.clear()
-                cls._pid = os.getpid()
+        obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
+        # Setting _fs_token here causes some static linters to complain.
+        obj._fs_token_ = token
+        obj.storage_args = args
+        obj.storage_options = kwargs
+        if obj.async_impl and obj.mirror_sync_methods:
+            from .asyn import mirror_sync_methods
 
-            if not skip and cls.cachable and token in cls._cache:
-                cls._latest = token
-                return cls._cache[token]
+            mirror_sync_methods(obj)
 
-            obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
-            # Setting _fs_token here causes some static linters to complain.
-            obj._fs_token_ = token
-            obj.storage_args = args
-            obj.storage_options = kwargs
-            if obj.async_impl and obj.mirror_sync_methods:
-                from .asyn import mirror_sync_methods
-
-                mirror_sync_methods(obj)
-
-            if cls.cachable and not skip:
+        if cls.cachable and not skip:
+            with cls._cache_lock:
                 cls._latest = token
                 cls._cache[token] = obj
-            return obj
+        return obj
 
 
 class AbstractFileSystem(metaclass=_Cached):
@@ -1627,7 +1622,8 @@ class AbstractFileSystem(metaclass=_Cached):
         since the instances refcount will not drop to zero until
         ``clear_instance_cache`` is called.
         """
-        cls._cache.clear()
+        with getattr(cls, "_cache_lock", threading.Lock()):
+            cls._cache.clear()
 
     def created(self, path):
         """Return the created timestamp of a file as a datetime.datetime"""
