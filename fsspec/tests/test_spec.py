@@ -793,11 +793,11 @@ def test_clear_instance_cache_concurrency():
 
 def test_fork_deadlock():
     import multiprocessing
+    import threading
+    import time
 
     if "fork" not in multiprocessing.get_all_start_methods():
         pytest.skip("Fork method is not available on this platform")
-
-    DummyTestFS._instantiation_lock.acquire()
 
     def child_process(q):
         try:
@@ -806,19 +806,30 @@ def test_fork_deadlock():
         except Exception as e:
             q.put(str(e))
 
+    def locker_thread(started_event):
+        DummyTestFS._instantiation_lock.acquire()
+        started_event.set()
+        time.sleep(2)
+        try:
+            DummyTestFS._instantiation_lock.release()
+        except Exception:
+            pass
+
+    t_event = threading.Event()
+    t = threading.Thread(target=locker_thread, args=(t_event,))
+    t.start()
+    t_event.wait()
+
     q = multiprocessing.Queue()
     ctx = multiprocessing.get_context("fork")
     p = ctx.Process(target=child_process, args=(q,))
     p.start()
     p.join(timeout=3)
-
-    try:
-        DummyTestFS._instantiation_lock.release()
-    except Exception:
-        pass
+    t.join()
 
     if p.is_alive():
         p.terminate()
+        p.join()
         p.join()
         pytest.fail("Child process deadlocked during instantiation")
 

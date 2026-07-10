@@ -63,6 +63,15 @@ class _Cached(type):
         cls._pid = os.getpid()
         cls._instantiation_lock = threading.RLock()
 
+        if hasattr(os, "register_at_fork"):
+
+            def _reset_lock():
+                cls._instantiation_lock = threading.RLock()
+                cls._cache.clear()
+                cls._pid = os.getpid()
+
+            os.register_at_fork(after_in_child=_reset_lock)
+
     def __call__(cls, *args, **kwargs):
         kwargs = apply_config(cls, kwargs)
         extra_tokens = tuple(
