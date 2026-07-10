@@ -81,12 +81,7 @@ class _Cached(type):
             )
         skip = kwargs.pop("skip_instance_cache", False)
 
-        if (
-            not skip
-            and cls.cachable
-            and pid == cls._pid
-            and token in cls._cache
-        ):
+        if not skip and cls.cachable and pid == cls._pid and token in cls._cache:
             cls._latest = token
             return cls._cache[token]
 
