@@ -922,21 +922,25 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, outfile=None, **kwargs):
+    def get_file(
+        self, rpath, lpath=None, callback=DEFAULT_CALLBACK, outfile=None, **kwargs
+    ):
         """Copy single remote file to local"""
         from .implementations.local import LocalFileSystem
 
-        if isfilelike(lpath):
+        if outfile is None and isfilelike(lpath):
             outfile = lpath
-        elif self.isdir(rpath):
+        elif outfile is None and self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
             return None
 
-        fs = LocalFileSystem(auto_mkdir=True)
-        fs.makedirs(fs._parent(lpath), exist_ok=True)
+        if outfile is None:
+            fs = LocalFileSystem(auto_mkdir=True)
+            fs.makedirs(fs._parent(lpath), exist_ok=True)
 
         with self.open(rpath, "rb", **kwargs) as f1:
-            if outfile is None:
+            close_outfile = outfile is None
+            if close_outfile:
                 outfile = open(lpath, "wb")
 
             try:
@@ -949,7 +953,7 @@ class AbstractFileSystem(metaclass=_Cached):
                         segment_len = len(data)
                     callback.relative_update(segment_len)
             finally:
-                if not isfilelike(lpath):
+                if close_outfile:
                     outfile.close()
 
     def get(
