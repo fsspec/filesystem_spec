@@ -830,7 +830,6 @@ def test_fork_deadlock():
     if p.is_alive():
         p.terminate()
         p.join()
-        p.join()
         pytest.fail("Child process deadlocked during instantiation")
 
     result = q.get()

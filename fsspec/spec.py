@@ -64,11 +64,16 @@ class _Cached(type):
         cls._instantiation_lock = threading.RLock()
 
         if hasattr(os, "register_at_fork"):
+            import weakref
+
+            cls_ref = weakref.ref(cls)
 
             def _reset_lock():
-                cls._instantiation_lock = threading.RLock()
-                cls._cache.clear()
-                cls._pid = os.getpid()
+                c = cls_ref()
+                if c is not None:
+                    c._instantiation_lock = threading.RLock()
+                    c._cache.clear()
+                    c._pid = os.getpid()
 
             os.register_at_fork(after_in_child=_reset_lock)
 
@@ -1637,7 +1642,11 @@ class AbstractFileSystem(metaclass=_Cached):
         since the instances refcount will not drop to zero until
         ``clear_instance_cache`` is called.
         """
-        with getattr(cls, "_instantiation_lock", threading.RLock()):
+        lock = getattr(cls, "_instantiation_lock", None)
+        if lock is not None:
+            with lock:
+                cls._cache.clear()
+        else:
             cls._cache.clear()
 
     def created(self, path):
