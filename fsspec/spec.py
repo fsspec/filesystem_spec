@@ -90,19 +90,22 @@ class _Cached(type):
             )
         skip = kwargs.pop("skip_instance_cache", False)
 
-        if not skip and cls.cachable and pid == cls._pid and token in cls._cache:
-            cls._latest = token
-            return cls._cache[token]
+        if not skip and cls.cachable and pid == cls._pid:
+            inst = cls._cache.get(token)
+            if inst is not None:
+                cls._latest = token
+                return inst
 
         with cls._instantiation_lock:
             if pid != cls._pid:
                 cls._pid = pid
                 cls._cache.clear()
-                cls._instantiation_lock = threading.RLock()
 
-            if not skip and cls.cachable and token in cls._cache:
-                cls._latest = token
-                return cls._cache[token]
+            if not skip and cls.cachable:
+                inst = cls._cache.get(token)
+                if inst is not None:
+                    cls._latest = token
+                    return inst
 
             obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
             # Setting _fs_token here causes some static linters to complain.
