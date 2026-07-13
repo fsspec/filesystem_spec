@@ -98,8 +98,8 @@ class _Cached(type):
 
         with cls._instantiation_lock:
             if pid != cls._pid:
-                cls._pid = pid
                 cls._cache.clear()
+                cls._pid = pid
 
             if not skip and cls.cachable:
                 inst = cls._cache.get(token)
