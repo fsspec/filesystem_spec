@@ -886,6 +886,7 @@ def test_fork_deadlock():
         pytest.fail("Child process deadlocked during instantiation")
 
     import queue
+
     try:
         result = q.get(timeout=1)
     except queue.Empty:
