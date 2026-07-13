@@ -840,9 +840,8 @@ def test_clear_instance_cache_concurrency():
         for _ in range(20):
             futures.append(executor.submit(clear_cache))
             futures.append(executor.submit(instantiate))
-        concurrent.futures.wait(futures)
-
-    assert True
+        for f in futures:
+            f.result()
 
 
 def test_fork_deadlock():
@@ -886,7 +885,11 @@ def test_fork_deadlock():
         p.join()
         pytest.fail("Child process deadlocked during instantiation")
 
-    result = q.get()
+    import queue
+    try:
+        result = q.get(timeout=1)
+    except queue.Empty:
+        pytest.fail("Child process crashed before writing to queue")
     assert result is True
 
 
