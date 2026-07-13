@@ -172,6 +172,14 @@ def test_constructor_kwargs(tmpdir):
         )
 
 
+def test_whole_file_cache_ls_forwards_kwargs(tmp_path, m, mocker):
+    fs = WholeFileCacheFileSystem(fs=m, cache_storage=str(tmp_path))
+    backend_ls = mocker.spy(m, "ls")
+
+    assert fs.ls("/", detail=False, refresh=True) == []
+    backend_ls.assert_called_once_with("/", False, refresh=True)
+
+
 @pytest.mark.skipif(win, reason="POSIX file permissions")
 @pytest.mark.parametrize("protocol", ["filecache", "simplecache", "blockcache"])
 def test_cache_storage_mode(tmp_path, protocol):
