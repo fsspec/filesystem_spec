@@ -76,7 +76,7 @@ class _Cached(type):
 
             os.register_at_fork(after_in_child=_reset_lock)
 
-    def _check_cache(cls, token):
+    def _check_instance_cache(cls, token):
         inst = cls._cache.get(token)
         if inst is not None:
             cls._latest = token
@@ -102,7 +102,7 @@ class _Cached(type):
 
         if not skip and cls.cachable:
             if pid == cls._pid:
-                inst = cls._check_cache(token)
+                inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
 
@@ -111,7 +111,7 @@ class _Cached(type):
                     cls._cache.clear()
                     cls._pid = pid
 
-                inst = cls._check_cache(token)
+                inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
 
@@ -127,7 +127,7 @@ class _Cached(type):
 
         if cls.cachable and not skip:
             with cls._instantiation_lock:
-                inst = cls._check_cache(token)
+                inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
 
