@@ -33,6 +33,20 @@ def make_instance(cls, args, kwargs):
     return cls(*args, **kwargs)
 
 
+_register_instances = weakref.WeakSet()
+
+
+def _reset_instances_lock():
+    for c in _register_instances:
+        c._instantiation_lock = threading.RLock()
+        c._cache.clear()
+        c._pid = os.getpid()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_instances_lock)
+
+
 class _Cached(type):
     """
     Metaclass for caching file system instances.
@@ -65,16 +79,7 @@ class _Cached(type):
         cls._instantiation_lock = threading.RLock()
 
         if hasattr(os, "register_at_fork"):
-            cls_ref = weakref.ref(cls)
-
-            def _reset_lock():
-                c = cls_ref()
-                if c is not None:
-                    c._instantiation_lock = threading.RLock()
-                    c._cache.clear()
-                    c._pid = os.getpid()
-
-            os.register_at_fork(after_in_child=_reset_lock)
+            _register_instances.add(cls)
 
     def _check_instance_cache(cls, token):
         inst = cls._cache.get(token)
