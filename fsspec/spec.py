@@ -123,9 +123,9 @@ class _Cached(type):
 
         if cls.cachable and not skip:
             with cls._instantiation_lock:
-                if os.getpid() != cls._pid:
+                if pid != cls._pid:
                     cls._cache.clear()
-                    cls._pid = os.getpid()
+                    cls._pid = pid
 
                 inst = cls._cache.get(token)
                 if inst is not None:
