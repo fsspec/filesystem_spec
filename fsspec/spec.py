@@ -95,37 +95,47 @@ class _Cached(type):
             )
         skip = kwargs.pop("skip_instance_cache", False)
 
-        if not skip and cls.cachable and pid == cls._pid:
-            inst = cls._cache.get(token)
-            if inst is not None:
-                cls._latest = token
-                return inst
-
-        with cls._instantiation_lock:
-            if pid != cls._pid:
-                cls._cache.clear()
-                cls._pid = pid
-
-            if not skip and cls.cachable:
+        if not skip and cls.cachable:
+            if pid == cls._pid:
                 inst = cls._cache.get(token)
                 if inst is not None:
                     cls._latest = token
                     return inst
 
-            obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
-            # Setting _fs_token here causes some static linters to complain.
-            obj._fs_token_ = token
-            obj.storage_args = args
-            obj.storage_options = kwargs
-            if obj.async_impl and obj.mirror_sync_methods:
-                from .asyn import mirror_sync_methods
+            with cls._instantiation_lock:
+                if pid != cls._pid:
+                    cls._cache.clear()
+                    cls._pid = pid
 
-                mirror_sync_methods(obj)
+                inst = cls._cache.get(token)
+                if inst is not None:
+                    cls._latest = token
+                    return inst
 
-            if cls.cachable and not skip:
+        obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
+        # Setting _fs_token here causes some static linters to complain.
+        obj._fs_token_ = token
+        obj.storage_args = args
+        obj.storage_options = kwargs
+        if obj.async_impl and obj.mirror_sync_methods:
+            from .asyn import mirror_sync_methods
+
+            mirror_sync_methods(obj)
+
+        if cls.cachable and not skip:
+            with cls._instantiation_lock:
+                if os.getpid() != cls._pid:
+                    cls._cache.clear()
+                    cls._pid = os.getpid()
+
+                inst = cls._cache.get(token)
+                if inst is not None:
+                    cls._latest = token
+                    return inst
+
                 cls._latest = token
                 cls._cache[token] = obj
-            return obj
+        return obj
 
 
 class AbstractFileSystem(metaclass=_Cached):
