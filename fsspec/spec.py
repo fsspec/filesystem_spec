@@ -6,6 +6,7 @@ import logging
 import os
 import threading
 import warnings
+import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
@@ -51,7 +52,6 @@ class _Cached(type):
 
     def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        import weakref
 
         # Note: we intentionally create a reference here, to avoid garbage
         # collecting instances when all other references are gone. To really
