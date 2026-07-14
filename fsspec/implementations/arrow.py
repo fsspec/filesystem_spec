@@ -52,6 +52,8 @@ class ArrowFSWrapper(AbstractFileSystem):
         global PYARROW_VERSION
         PYARROW_VERSION = get_package_version_without_import("pyarrow")
         self.fs = fs
+        if fs.type_name == "s3":
+            self.root_marker = ""
         super().__init__(**kwargs)
 
     @property
@@ -61,6 +63,13 @@ class ArrowFSWrapper(AbstractFileSystem):
     @cached_property
     def fsid(self):
         return "hdfs_" + tokenize(self.fs.host, self.fs.port)
+
+    def _parent(self, path):
+        if self.root_marker:
+            return super()._parent(path)
+
+        path = self._strip_protocol(path).lstrip("/")
+        return path.rsplit("/", 1)[0] if "/" in path else self.root_marker
 
     @classmethod
     def _strip_protocol(cls, path):

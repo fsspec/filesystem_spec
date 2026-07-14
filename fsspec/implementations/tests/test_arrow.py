@@ -28,6 +28,21 @@ def test_protocol():
     assert fss.protocol == "mock"
 
 
+def test_s3_parent_has_no_leading_slash():
+    class S3FileSystem:
+        type_name = "s3"
+
+        def create_dir(self, path, recursive):
+            self.created_path = path
+
+    backend = S3FileSystem()
+    fs = ArrowFSWrapper(backend, skip_instance_cache=True)
+    fs.makedirs(fs._parent("bucket/path/file"))
+
+    assert backend.created_path == "bucket/path"
+    assert fs.root_marker == ""
+
+
 def strip_keys(original_entry):
     entry = original_entry.copy()
     entry.pop("mtime")
