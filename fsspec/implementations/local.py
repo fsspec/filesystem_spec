@@ -194,7 +194,7 @@ class LocalFileSystem(AbstractFileSystem):
 
         for p in path:
             p = self._strip_protocol(p)
-            if self.isdir(p):
+            if self.isdir(p) and not self.islink(p):
                 if not recursive:
                     raise ValueError("Cannot delete directory, set recursive=True")
                 if osp.abspath(p) == os.getcwd():

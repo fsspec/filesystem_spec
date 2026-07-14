@@ -834,6 +834,13 @@ def test_linked_directories(tmpdir):
     assert fs.info(subdir1)["islink"]
     assert fs.info(subdir2)["islink"]
 
+    fs.rm(subdir1)
+    fs.rm(subdir2, recursive=True)
+
+    assert not fs.lexists(subdir1)
+    assert not fs.lexists(subdir2)
+    assert fs.isdir(subdir0)
+
 
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
