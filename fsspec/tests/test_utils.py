@@ -348,6 +348,10 @@ def test_get_protocol(par):
         ("file:///home/user/no_extension", ""),
         ("/local/path/to/file.json", "json"),
         ("relative/path/file.yaml", "yaml"),
+        # A "." in a parent directory name is not the file's extension
+        ("/path/to.dir/file", ""),
+        ("s3://bucket.name/data/file", ""),
+        ("/path/to.dir/file.parquet", "parquet"),
     ),
 )
 def test_get_file_extension(url, expected):
