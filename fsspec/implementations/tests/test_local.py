@@ -509,6 +509,19 @@ def test_commit_discard(tmpdir):
         assert not fs.exists(tmpdir + "/bfile")
 
 
+def test_transaction_with_compression(tmpdir):
+    path = str(tmpdir / "afile.gz")
+    fs = LocalFileSystem()
+
+    with fs.transaction:
+        with fs.open(path, "wt", compression="gzip") as f:
+            f.write("data")
+        assert not fs.exists(path)
+
+    with gzip.open(path, "rt") as f:
+        assert f.read() == "data"
+
+
 def test_same_permissions_with_and_without_transaction(tmpdir):
     tmpdir = str(tmpdir)
 
