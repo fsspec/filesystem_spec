@@ -260,7 +260,8 @@ class AbstractFixtures(BaseAbstractFixtures):
         raise NotImplementedError("This function must be overridden in derived classes")
 
     @pytest.fixture(scope="class")
-    def local_fs(self):
+    @classmethod
+    def local_fs(cls):
         # Maybe need an option for auto_mkdir=False?  This is only relevant
         # for certain implementations.
         return LocalFileSystem(auto_mkdir=True)
