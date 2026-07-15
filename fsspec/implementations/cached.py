@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import os
@@ -784,20 +785,25 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     ):
         logger.debug("async cat ranges %s", paths)
         lpaths = []
-        rset = set()
-        download = []
-        rpaths = []
+        need = {}
         for p in paths:
             fn = self._check_file(p)
-            if fn is None and p not in rset:
-                sha = self._mapper(p)
-                fn = os.path.join(self.storage[-1], sha)
-                download.append(fn)
-                rset.add(p)
-                rpaths.append(p)
+            if isinstance(fn, tuple):
+                fn = fn[1]
+            if not fn:
+                fn = need.setdefault(p, os.path.join(self.storage[-1], self._mapper(p)))
             lpaths.append(fn)
-        if download:
-            await self.fs._get(rpaths, download, on_error=on_error)
+        if need:
+            # a batch self.fs._get would forward on_error to the target
+            # filesystem's _get_file, which does not accept it
+            results = await asyncio.gather(
+                *(self.fs._get_file(rpath, lpath) for rpath, lpath in need.items()),
+                return_exceptions=True,
+            )
+            if on_error == "raise":
+                for res in results:
+                    if isinstance(res, BaseException):
+                        raise res
 
         return LocalFileSystem().cat_ranges(
             lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
@@ -912,12 +918,16 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     ):
         logger.debug("cat ranges %s", paths)
         lpaths = [self._check_file(p) for p in paths]
-        rpaths = [p for l, p in zip(lpaths, paths) if l is False]
-        lpaths = [l for l, p in zip(lpaths, paths) if l is False]
-        self.fs.get(rpaths, lpaths)
-        paths = [self._check_file(p) for p in paths]
+        need = {
+            p: os.path.join(self.storage[-1], self._mapper(p))
+            for l, p in zip(lpaths, paths)
+            if l is None
+        }
+        if need:
+            self.fs.get(list(need), list(need.values()))
+        lpaths = [need[p] if l is None else l for l, p in zip(lpaths, paths)]
         return LocalFileSystem().cat_ranges(
-            paths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
+            lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
 
     def _get_cached_file_before_open(self, path, **kwargs):

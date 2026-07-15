@@ -1,7 +1,12 @@
+import asyncio
 import json
 import os
+import random
 import shutil
 import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -1405,3 +1410,87 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     for attr in ("_cat_file", "_cat_ranges"):
         assert hasattr(fs, attr), f"instance missing {attr}"
         assert hasattr(type(fs), attr), f"class missing {attr}"
+
+
+@pytest.fixture(scope="module")
+def slow_http_server():
+    """A local HTTP server that streams a 1 MiB payload slowly.
+
+    Downloads take long enough that staggered concurrent reads of the same
+    URL overlap with an in-flight download, exercising the cache-write race
+    of issue #639.
+    """
+    pytest.importorskip("aiohttp")
+
+    payload = random.Random(42).randbytes(2**20)
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_HEAD(self):
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            for i in range(0, len(payload), 2**16):
+                try:
+                    self.wfile.write(payload[i : i + 2**16])
+                except (BrokenPipeError, ConnectionResetError):
+                    return
+                time.sleep(0.005)
+
+        def log_message(self, format, *args):
+            pass
+
+    class QuietServer(ThreadingHTTPServer):
+        def handle_error(self, request, client_address):
+            pass
+
+    server = QuietServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}/data", payload
+    server.shutdown()
+
+
+def test_simplecache_cat_ranges_cold_cache(tmp_path):
+    # SimpleCacheFileSystem.cat_ranges compared _check_file() results with
+    # ``is False``, but _check_file returns None for missing entries, so
+    # uncached files were never downloaded and cat_ranges failed on a cold
+    # cache
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/raw/one", b"0123456789")
+    mem.pipe("/raw/two", b"abcdefghij")
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=mem,
+        cache_storage=str(tmp_path / "cr"),
+        skip_instance_cache=True,
+    )
+    out = fs.cat_ranges(["/raw/one", "/raw/two", "/raw/one"], [0, 2, 4], [4, 6, 8])
+    assert out == [b"0123", b"cdef", b"4567"]
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_async_cat_ranges_cold_cache(slow_http_server, tmp_path, protocol):
+    # _cat_ranges compared _check_file() results with ``is None``, but
+    # filecache's _check_file returns False for missing entries, so uncached
+    # files were never downloaded; and repeats of one path within a single
+    # call (e.g. several ranges of one file) got no local path at all
+    url, payload = slow_http_server
+
+    async def run():
+        fs = fsspec.filesystem(
+            protocol,
+            target_protocol="http",
+            cache_storage=str(tmp_path / "cr"),
+            asynchronous=True,
+            target_options={"asynchronous": True, "skip_instance_cache": True},
+            skip_instance_cache=True,
+        )
+        return await fs._cat_ranges([url, url], [0, 10], [10, 20])
+
+    assert asyncio.run(run()) == [payload[0:10], payload[10:20]]
