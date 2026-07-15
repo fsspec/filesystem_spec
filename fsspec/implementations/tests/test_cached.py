@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -1454,6 +1455,84 @@ def slow_http_server():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{server.server_address[1]}/data", payload
     server.shutdown()
+
+
+def _staggered_async_cat_file(protocol, url, cache_dir, n):
+    # readers must start while a download is still in flight: simultaneous
+    # starts all miss the cache and write identical bytes to identical
+    # offsets, which would hide the race
+    async def run():
+        fs = fsspec.filesystem(
+            protocol,
+            target_protocol="http",
+            cache_storage=cache_dir,
+            asynchronous=True,
+            target_options={"asynchronous": True, "skip_instance_cache": True},
+            skip_instance_cache=True,
+        )
+
+        async def one(i):
+            await asyncio.sleep(i * 0.03)
+            return await fs._cat_file(url)
+
+        return await asyncio.gather(*[one(i) for i in range(n)])
+
+    return asyncio.run(run())
+
+
+def _staggered_threaded_cat_file(protocol, url, cache_dir, n):
+    fs = fsspec.filesystem(
+        protocol,
+        target_protocol="http",
+        cache_storage=cache_dir,
+        target_options={"skip_instance_cache": True},
+        skip_instance_cache=True,
+    )
+
+    def one(i):
+        time.sleep(i * 0.03)
+        return fs.cat_file(url)
+
+    with ThreadPoolExecutor(n) as pool:
+        return list(pool.map(one, range(n)))
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_concurrent_cat_file_async(slow_http_server, tmp_path, protocol):
+    """Concurrent reads of one uncached URL must all see complete bytes.
+
+    Regression test for https://github.com/fsspec/filesystem_spec/issues/639:
+    cache misses were downloaded directly to the final cache filename, so a
+    concurrent reader of the same key could observe (and return) a
+    partially-written file.
+    """
+    url, payload = slow_http_server
+    for trial in range(3):
+        data = _staggered_async_cat_file(
+            protocol, url, str(tmp_path / f"async{trial}"), 8
+        )
+        assert [len(d) for d in data] == [len(payload)] * 8
+        assert all(d == payload for d in data)
+
+
+def test_concurrent_cat_file_threads(slow_http_server, tmp_path):
+    """Same as test_concurrent_cat_file_async, for the sync open() path."""
+    url, payload = slow_http_server
+    for trial in range(3):
+        data = _staggered_threaded_cat_file(
+            "simplecache", url, str(tmp_path / f"thr{trial}"), 8
+        )
+        assert [len(d) for d in data] == [len(payload)] * 8
+        assert all(d == payload for d in data)
+
+
+def test_concurrent_downloads_leave_no_tempfiles(slow_http_server, tmp_path):
+    url, payload = slow_http_server
+    cache_dir = str(tmp_path / "clean")
+    _staggered_async_cat_file("simplecache", url, cache_dir, 4)
+    entries = os.listdir(cache_dir)
+    assert [fn for fn in entries if fn.endswith(".part")] == []
+    assert len(entries) == 1
 
 
 def test_simplecache_cat_ranges_cold_cache(tmp_path):

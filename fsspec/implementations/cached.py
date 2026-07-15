@@ -30,6 +30,86 @@ if TYPE_CHECKING:
 logger = logging.getLogger("fsspec.cached")
 
 
+# Cache misses are downloaded to a temporary file in the cache directory and
+# then renamed into place, so that a partially-written download is never
+# visible under its final cache filename: readers treat the existence of that
+# filename as "download complete" (see issue #639). The rename is atomic, and
+# a concurrent duplicate download of the same path is harmless: both
+# temporary files hold identical bytes and the last rename wins. These
+# helpers are module-level functions rather than methods because
+# CachingFileSystem.__getattribute__ dispatches only known method names to
+# the caching class, delegating anything else to the wrapped filesystem.
+
+
+def _temppath(lpath):
+    fd, tmp = tempfile.mkstemp(
+        dir=os.path.dirname(lpath),
+        prefix=os.path.basename(lpath) + ".",
+        suffix=".part",
+    )
+    os.close(fd)
+    return tmp
+
+
+def _remove_tempfile(tmp):
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+
+
+def _atomic_get_file(fs, rpath, lpath):
+    tmp = _temppath(lpath)
+    try:
+        fs.get_file(rpath, tmp)
+        os.replace(tmp, lpath)
+    except BaseException:
+        _remove_tempfile(tmp)
+        raise
+
+
+async def _atomic_get_file_async(fs, rpath, lpath, **kwargs):
+    tmp = _temppath(lpath)
+    try:
+        await fs._get_file(rpath, tmp, **kwargs)
+        os.replace(tmp, lpath)
+    except BaseException:
+        _remove_tempfile(tmp)
+        raise
+
+
+def _atomic_get(fs, rpaths, lpaths):
+    tmps = [_temppath(lpath) for lpath in lpaths]
+    try:
+        fs.get(rpaths, tmps)
+        for tmp, lpath in zip(tmps, lpaths):
+            os.replace(tmp, lpath)
+    except BaseException:
+        for tmp in tmps:
+            _remove_tempfile(tmp)
+        raise
+
+
+def _atomic_get_file_decompressed(fs, rpath, lpath, compression, **kwargs):
+    tmp = _temppath(lpath)
+    try:
+        with fs._open(rpath, mode="rb", **kwargs) as f, open(tmp, "wb") as f2:
+            if isinstance(f, AbstractBufferedFile):
+                # want no type of caching if just downloading whole thing
+                f.cache = BaseCache(0, f.cache.fetcher, f.size)
+            comp = infer_compression(rpath) if compression == "infer" else compression
+            f = compr[comp](f, mode="rb")
+            data = True
+            while data:
+                block = getattr(f, "blocksize", 5 * 2**20)
+                data = f.read(block)
+                f2.write(data)
+        os.replace(tmp, lpath)
+    except BaseException:
+        _remove_tempfile(tmp)
+        raise
+
+
 class WriteCachedTransaction(Transaction):
     def complete(self, commit=True):
         rpaths = [f.path for f in self.files]
@@ -603,7 +683,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         downfn = [fn for fn, d in zip(downfn0, details) if not d]
         if downpath:
             # skip if all files are already cached and up to date
-            self.fs.get(downpath, downfn)
+            _atomic_get(self.fs, downpath, downfn)
 
             # update metadata - only happens when downloads are successful
             newdetail = [
@@ -687,7 +767,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 paths.remove(p)
 
         if getpaths:
-            self.fs.get(getpaths, storepaths)
+            _atomic_get(self.fs, getpaths, storepaths)
             self.save_cache()
 
         callback.set_size(len(paths))
@@ -704,23 +784,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         # call target filesystems open
         self._mkcache()
         if self.compression:
-            with self.fs._open(path, mode="rb", **kwargs) as f, open(fn, "wb") as f2:
-                if isinstance(f, AbstractBufferedFile):
-                    # want no type of caching if just downloading whole thing
-                    f.cache = BaseCache(0, f.cache.fetcher, f.size)
-                comp = (
-                    infer_compression(path)
-                    if self.compression == "infer"
-                    else self.compression
-                )
-                f = compr[comp](f, mode="rb")
-                data = True
-                while data:
-                    block = getattr(f, "blocksize", 5 * 2**20)
-                    data = f.read(block)
-                    f2.write(data)
+            _atomic_get_file_decompressed(self.fs, path, fn, self.compression, **kwargs)
         else:
-            self.fs.get_file(path, fn)
+            _atomic_get_file(self.fs, path, fn)
         self.save_cache()
 
     def _open(self, path, mode="rb", **kwargs):
@@ -772,7 +838,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
         if not fn:
             fn = os.path.join(self.storage[-1], sha)
-            await self.fs._get_file(path, fn, **kwargs)
+            await _atomic_get_file_async(self.fs, path, fn, **kwargs)
 
         with open(fn, "rb") as f:  # noqa ASYNC230
             if start:
@@ -797,7 +863,10 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # a batch self.fs._get would forward on_error to the target
             # filesystem's _get_file, which does not accept it
             results = await asyncio.gather(
-                *(self.fs._get_file(rpath, lpath) for rpath, lpath in need.items()),
+                *(
+                    _atomic_get_file_async(self.fs, rpath, lpath)
+                    for rpath, lpath in need.items()
+                ),
                 return_exceptions=True,
             )
             if on_error == "raise":
@@ -924,7 +993,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             if l is None
         }
         if need:
-            self.fs.get(list(need), list(need.values()))
+            _atomic_get(self.fs, list(need), list(need.values()))
         lpaths = [need[p] if l is None else l for l, p in zip(lpaths, paths)]
         return LocalFileSystem().cat_ranges(
             lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
@@ -939,23 +1008,9 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         self._cache_size = None
 
         if self.compression:
-            with self.fs._open(path, mode="rb", **kwargs) as f, open(fn, "wb") as f2:
-                if isinstance(f, AbstractBufferedFile):
-                    # want no type of caching if just downloading whole thing
-                    f.cache = BaseCache(0, f.cache.fetcher, f.size)
-                comp = (
-                    infer_compression(path)
-                    if self.compression == "infer"
-                    else self.compression
-                )
-                f = compr[comp](f, mode="rb")
-                data = True
-                while data:
-                    block = getattr(f, "blocksize", 5 * 2**20)
-                    data = f.read(block)
-                    f2.write(data)
+            _atomic_get_file_decompressed(self.fs, path, fn, self.compression, **kwargs)
         else:
-            self.fs.get_file(path, fn)
+            _atomic_get_file(self.fs, path, fn)
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
