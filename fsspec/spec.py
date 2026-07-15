@@ -112,10 +112,9 @@ class _Cached(type):
                     cls._pid = pid
 
         if not skip and cls.cachable:
-            if pid == cls._pid:
-                inst = cls._check_instance_cache(token)
-                if inst is not None:
-                    return inst
+            inst = cls._check_instance_cache(token)
+            if inst is not None:
+                return inst
 
             with cls._instantiation_lock:
                 inst = cls._check_instance_cache(token)
