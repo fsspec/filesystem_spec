@@ -105,6 +105,12 @@ class _Cached(type):
             )
         skip = kwargs.pop("skip_instance_cache", False)
 
+        if pid != cls._pid:
+            with cls._instantiation_lock:
+                if pid != cls._pid:
+                    cls._cache.clear()
+                    cls._pid = pid
+
         if not skip and cls.cachable:
             if pid == cls._pid:
                 inst = cls._check_instance_cache(token)
@@ -112,10 +118,6 @@ class _Cached(type):
                     return inst
 
             with cls._instantiation_lock:
-                if pid != cls._pid:
-                    cls._cache.clear()
-                    cls._pid = pid
-
                 inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
@@ -279,8 +281,10 @@ class AbstractFileSystem(metaclass=_Cached):
 
         If no instance has been created, then create one with defaults
         """
-        if cls._latest in cls._cache:
-            return cls._cache[cls._latest]
+        with cls._instantiation_lock:
+            inst = cls._cache.get(cls._latest)
+            if inst is not None:
+                return inst
         return cls()
 
     @property
