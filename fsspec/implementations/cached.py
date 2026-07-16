@@ -42,6 +42,8 @@ logger = logging.getLogger("fsspec.cached")
 
 
 def _temppath(lpath):
+    # mkstemp inserts a random token between prefix and suffix and creates the
+    # file with O_EXCL, so concurrent downloads of the same key never clash.
     fd, tmp = tempfile.mkstemp(
         dir=os.path.dirname(lpath),
         prefix=os.path.basename(lpath) + ".",
