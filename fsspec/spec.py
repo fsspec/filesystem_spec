@@ -33,17 +33,18 @@ def make_instance(cls, args, kwargs):
     return cls(*args, **kwargs)
 
 
-_register_instances = weakref.WeakSet()
+FORK_AVAILABLE = hasattr(os, "register_at_fork")
 
 
-def _reset_instances_lock():
-    for c in _register_instances:
-        c._instantiation_lock = threading.RLock()
-        c._cache.clear()
-        c._pid = os.getpid()
+if FORK_AVAILABLE:
+    _registered_classes = weakref.WeakSet()
 
+    def _reset_instances_lock():
+        for cls in _registered_classes:
+            cls._instantiation_lock = threading.RLock()
+            cls._cache.clear()
+            cls._pid = os.getpid()
 
-if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_instances_lock)
 
 
@@ -78,8 +79,8 @@ class _Cached(type):
         cls._pid = os.getpid()
         cls._instantiation_lock = threading.RLock()
 
-        if hasattr(os, "register_at_fork"):
-            _register_instances.add(cls)
+        if FORK_AVAILABLE:
+            _registered_classes.add(cls)
 
     def _check_instance_cache(cls, token):
         inst = cls._cache.get(token)
@@ -117,6 +118,8 @@ class _Cached(type):
                 return inst
 
             with cls._instantiation_lock:
+                # protect against the race condition that a new instance was created
+                # and inserted into the cache since the initial check just above
                 inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
@@ -133,6 +136,8 @@ class _Cached(type):
 
         if cls.cachable and not skip:
             with cls._instantiation_lock:
+                # another thread may have created the instance while we were calling
+                # super().__call__(), so we check again.
                 inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
@@ -280,10 +285,9 @@ class AbstractFileSystem(metaclass=_Cached):
 
         If no instance has been created, then create one with defaults
         """
-        with cls._instantiation_lock:
-            inst = cls._cache.get(cls._latest)
-            if inst is not None:
-                return inst
+        inst = cls._cache.get(cls._latest)
+        if inst is not None:
+            return inst
         return cls()
 
     @property
@@ -1658,12 +1662,7 @@ class AbstractFileSystem(metaclass=_Cached):
         since the instances refcount will not drop to zero until
         ``clear_instance_cache`` is called.
         """
-        lock = getattr(cls, "_instantiation_lock", None)
-        if lock is not None:
-            with lock:
-                cls._cache.clear()
-        else:
-            cls._cache.clear()
+        cls._cache.clear()
 
     def created(self, path):
         """Return the created timestamp of a file as a datetime.datetime"""
