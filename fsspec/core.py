@@ -601,7 +601,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     expanded_paths = []
     paths = list(paths)
 
-    if "w" in mode:  # read mode
+    if "w" in mode or "x" in mode:  # write mode
         if sum(1 for p in paths if "*" in p) > 1:
             raise ValueError(
                 "When writing data, only one filename mask can be specified."
