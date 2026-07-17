@@ -35,6 +35,7 @@ def wrap_exceptions(func):
 
 
 PYARROW_VERSION = None
+_EMPTY_ROOT_MARKER_FILESYSTEMS = {"gcs", "s3"}
 
 
 class ArrowFSWrapper(AbstractFileSystem):
@@ -52,7 +53,7 @@ class ArrowFSWrapper(AbstractFileSystem):
         global PYARROW_VERSION
         PYARROW_VERSION = get_package_version_without_import("pyarrow")
         self.fs = fs
-        if fs.type_name == "s3":
+        if fs.type_name in _EMPTY_ROOT_MARKER_FILESYSTEMS:
             self.root_marker = ""
         super().__init__(**kwargs)
 
@@ -69,7 +70,7 @@ class ArrowFSWrapper(AbstractFileSystem):
             return super()._parent(path)
 
         path = self._strip_protocol(path).lstrip("/")
-        return path.rsplit("/", 1)[0] if "/" in path else self.root_marker
+        return path.rsplit("/", 1)[0] if "/" in path else ""
 
     @classmethod
     def _strip_protocol(cls, path):

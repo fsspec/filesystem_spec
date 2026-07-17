@@ -28,14 +28,16 @@ def test_protocol():
     assert fss.protocol == "mock"
 
 
-def test_s3_parent_has_no_leading_slash():
-    class S3FileSystem:
-        type_name = "s3"
+@pytest.mark.parametrize("type_name", ["gcs", "s3"])
+def test_object_store_parent_has_no_leading_slash(type_name):
+    class ObjectStoreFileSystem:
+        def __init__(self, type_name):
+            self.type_name = type_name
 
         def create_dir(self, path, recursive):
             self.created_path = path
 
-    backend = S3FileSystem()
+    backend = ObjectStoreFileSystem(type_name)
     fs = ArrowFSWrapper(backend, skip_instance_cache=True)
     fs.makedirs(fs._parent("bucket/path/file"))
 
