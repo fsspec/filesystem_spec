@@ -92,7 +92,7 @@ def test_expand_fs_token_paths(mode):
     assert len(get_fs_token_paths("path", mode, num=2, expand=True)[-1]) == 2
 
 
-@pytest.mark.parametrize("pattern", ["apath*", "apath?", "apath[12]"])
+@pytest.mark.parametrize("pattern", ["apath*", "apath[12]"])
 def test_get_fs_token_paths_single_string_read_mode_globs(pattern):
     d = str(tempfile.mkdtemp())
     for f in ["apath1", "apath2"]:
@@ -101,6 +101,14 @@ def test_get_fs_token_paths_single_string_read_mode_globs(pattern):
     _, _, paths = get_fs_token_paths(os.path.join(d, pattern), mode="rb")
 
     assert sorted(os.path.basename(p) for p in paths) == ["apath1", "apath2"]
+
+
+def test_get_fs_token_paths_read_mode_keeps_question_mark_literal():
+    # "?" is the URL query delimiter, so it must not be treated as a glob
+    # wildcard here; the path is passed through untouched rather than globbed.
+    url = "memory://host/file?download=1"
+    _, _, paths = get_fs_token_paths(url, mode="rb")
+    assert paths == ["/host/file?download=1"]
 
 
 def test_openfile_api(m):
