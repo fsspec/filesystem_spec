@@ -386,7 +386,7 @@ class BlockCache(BaseCache):
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
             start = 0
-        if end is None:
+        if end is None or end > self.size:
             end = self.size
         if start >= self.size or start >= end:
             return b""
@@ -831,7 +831,7 @@ class BackgroundBlockCache(BaseCache):
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
             start = 0
-        if end is None:
+        if end is None or end > self.size:
             end = self.size
         if start >= self.size or start >= end:
             return b""
