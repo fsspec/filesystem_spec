@@ -33,6 +33,21 @@ def make_instance(cls, args, kwargs):
     return cls(*args, **kwargs)
 
 
+FORK_AVAILABLE = hasattr(os, "register_at_fork")
+
+
+if FORK_AVAILABLE:
+    _registered_classes = weakref.WeakSet()
+
+    def _reset_instances_lock():
+        for cls in _registered_classes:
+            cls._instantiation_lock = threading.RLock()
+            cls._cache.clear()
+            cls._pid = os.getpid()
+
+    os.register_at_fork(after_in_child=_reset_instances_lock)
+
+
 class _Cached(type):
     """
     Metaclass for caching file system instances.
@@ -52,6 +67,7 @@ class _Cached(type):
 
     def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         # Note: we intentionally create a reference here, to avoid garbage
         # collecting instances when all other references are gone. To really
         # delete a FileSystem, the cache must be cleared.
@@ -61,6 +77,16 @@ class _Cached(type):
         else:
             cls._cache = {}
         cls._pid = os.getpid()
+        cls._instantiation_lock = threading.RLock()
+
+        if FORK_AVAILABLE:
+            _registered_classes.add(cls)
+
+    def _check_instance_cache(cls, token):
+        inst = cls._cache.get(token)
+        if inst is not None:
+            cls._latest = token
+        return inst
 
     def __call__(cls, *args, **kwargs):
         kwargs = apply_config(cls, kwargs)
@@ -70,34 +96,55 @@ class _Cached(type):
         strip_tokenize_options = {
             k: kwargs.pop(k) for k in cls._strip_tokenize_options if k in kwargs
         }
+        pid = os.getpid()
+
         if getattr(cls, "async_impl", False) and not kwargs.get("asynchronous", False):
-            token = tokenize(cls, cls._pid, *args, *extra_tokens, **kwargs)
+            token = tokenize(cls, pid, *args, *extra_tokens, **kwargs)
         else:
             token = tokenize(
-                cls, cls._pid, threading.get_ident(), *args, *extra_tokens, **kwargs
+                cls, pid, threading.get_ident(), *args, *extra_tokens, **kwargs
             )
         skip = kwargs.pop("skip_instance_cache", False)
-        if os.getpid() != cls._pid:
-            cls._cache.clear()
-            cls._pid = os.getpid()
-        if not skip and cls.cachable and token in cls._cache:
-            cls._latest = token
-            return cls._cache[token]
-        else:
-            obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
-            # Setting _fs_token here causes some static linters to complain.
-            obj._fs_token_ = token
-            obj.storage_args = args
-            obj.storage_options = kwargs
-            if obj.async_impl and obj.mirror_sync_methods:
-                from .asyn import mirror_sync_methods
 
-                mirror_sync_methods(obj)
+        if pid != cls._pid:
+            with cls._instantiation_lock:
+                if pid != cls._pid:
+                    cls._cache.clear()
+                    cls._pid = pid
 
-            if cls.cachable and not skip:
+        if not skip and cls.cachable:
+            inst = cls._check_instance_cache(token)
+            if inst is not None:
+                return inst
+
+            with cls._instantiation_lock:
+                # protect against the race condition that a new instance was created
+                # and inserted into the cache since the initial check just above
+                inst = cls._check_instance_cache(token)
+                if inst is not None:
+                    return inst
+
+        obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
+        # Setting _fs_token here causes some static linters to complain.
+        obj._fs_token_ = token
+        obj.storage_args = args
+        obj.storage_options = kwargs
+        if obj.async_impl and obj.mirror_sync_methods:
+            from .asyn import mirror_sync_methods
+
+            mirror_sync_methods(obj)
+
+        if cls.cachable and not skip:
+            with cls._instantiation_lock:
+                # another thread may have created the instance while we were calling
+                # super().__call__(), so we check again.
+                inst = cls._check_instance_cache(token)
+                if inst is not None:
+                    return inst
+
                 cls._latest = token
                 cls._cache[token] = obj
-            return obj
+        return obj
 
 
 class AbstractFileSystem(metaclass=_Cached):
@@ -238,8 +285,9 @@ class AbstractFileSystem(metaclass=_Cached):
 
         If no instance has been created, then create one with defaults
         """
-        if cls._latest in cls._cache:
-            return cls._cache[cls._latest]
+        inst = cls._cache.get(cls._latest)
+        if inst is not None:
+            return inst
         return cls()
 
     @property

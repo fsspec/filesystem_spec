@@ -745,6 +745,155 @@ def test_cache():
     assert len(DummyTestFS._cache) == 0
 
 
+def test_instance_cache_concurrency():
+    import concurrent.futures
+    import time
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    def instantiate():
+        return SleepyFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(instantiate) for _ in range(50)]
+        results = [f.result() for f in futures]
+
+    assert len(SleepyFS._cache) == 1
+    assert all(r is results[0] for r in results)
+
+
+def test_uncached_instantiation_concurrency():
+    import concurrent.futures
+    import time
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    def instantiate(i):
+        return SleepyFS(skip_instance_cache=True, i=i)
+
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(instantiate, i) for i in range(10)]
+        results = [f.result() for f in futures]
+    t1 = time.time()
+
+    assert len(SleepyFS._cache) == 0
+    assert len(set(results)) == 10
+    assert t1 - t0 < 0.5
+
+
+def test_different_tokens_concurrency():
+    import concurrent.futures
+    import time
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    def instantiate(i):
+        return SleepyFS(i=i)
+
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(instantiate, i) for i in range(10)]
+        results = [f.result() for f in futures]
+    t1 = time.time()
+
+    assert len(SleepyFS._cache) == 10
+    assert len(set(results)) == 10
+    assert t1 - t0 < 0.5
+
+
+def test_clear_instance_cache_concurrency():
+    import concurrent.futures
+
+    for i in range(10):
+        DummyTestFS(i)
+
+    def clear_cache():
+        DummyTestFS.clear_instance_cache()
+
+    def instantiate():
+        return DummyTestFS(100)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for _ in range(20):
+            futures.append(executor.submit(clear_cache))
+            futures.append(executor.submit(instantiate))
+        for f in futures:
+            f.result()
+
+
+def test_fork_deadlock():
+    import multiprocessing
+    import threading
+    import time
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("Fork method is not available on this platform")
+
+    def child_process(q):
+        try:
+            DummyTestFS(12345)
+            q.put(True)
+        except Exception as e:
+            q.put(str(e))
+
+    def locker_thread(started_event):
+        DummyTestFS._instantiation_lock.acquire()
+        started_event.set()
+        time.sleep(2)
+        try:
+            DummyTestFS._instantiation_lock.release()
+        except Exception:
+            pass
+
+    t_event = threading.Event()
+    t = threading.Thread(target=locker_thread, args=(t_event,))
+    t.start()
+    t_event.wait()
+
+    q = multiprocessing.Queue()
+    ctx = multiprocessing.get_context("fork")
+    p = ctx.Process(target=child_process, args=(q,))
+    p.start()
+    p.join(timeout=3)
+    t.join()
+
+    if p.is_alive():
+        p.terminate()
+        p.join()
+        pytest.fail("Child process deadlocked during instantiation")
+
+    import queue
+
+    try:
+        result = q.get(timeout=1)
+    except queue.Empty:
+        pytest.fail("Child process crashed before writing to queue")
+    assert result is True
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",
