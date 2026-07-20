@@ -372,6 +372,17 @@ def test_touch(tmpdir):
         assert info2["mtime"] > info["mtime"]
 
 
+@pytest.mark.parametrize("mode", ["wb", "xb", "ab"])
+def test_open_auto_mkdir_create_modes(tmpdir, mode):
+    # auto_mkdir must create the parent dir for every file-creating mode, not
+    # just "w": "x" (exclusive create) and "a" (append) create a file too.
+    fn = str(tmpdir) + f"/{mode}_dir/file"
+    fs = fsspec.filesystem("file", auto_mkdir=True)
+    with fs.open(fn, mode) as f:
+        f.write(b"data")
+    assert fs.cat_file(fn) == b"data"
+
+
 def test_touch_truncate(tmpdir):
     fn = str(tmpdir + "/tfile")
     fs = fsspec.filesystem("file")
