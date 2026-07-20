@@ -178,6 +178,16 @@ def test_cache_empty_file(Cache_imp):
     assert cache._fetch(0, 0) == b""
 
 
+def test_cache_fetch_past_end_of_file(Cache_imp):
+    # Reading past the end of the file returns the available bytes rather than
+    # raising: `read(n)` yields at most n bytes. BlockCache/BackgroundBlockCache
+    # used to overflow their block count and raise ValueError here.
+    blocksize = 5
+    size = len(string.ascii_letters)
+    cache = Cache_imp(blocksize, letters_fetcher, size)
+    assert cache._fetch(0, size + 3 * blocksize) == string.ascii_letters.encode()
+
+
 def test_cache_pickleable(Cache_imp):
     blocksize = 5
     size = 100
