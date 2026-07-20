@@ -304,6 +304,8 @@ class FirstChunkCache(BaseCache):
             logger.debug("FirstChunkCache: requested start > file size")
             return b""
 
+        if end is None:
+            end = self.size
         end = min(end, self.size)
 
         if start < self.blocksize:

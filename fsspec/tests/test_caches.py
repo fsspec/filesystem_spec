@@ -19,6 +19,7 @@ def test_cache_getitem(Cache_imp):
     assert cacher._fetch(0, 4) == b"abcd"
     assert cacher._fetch(None, 4) == b"abcd"
     assert cacher._fetch(2, 4) == b"cd"
+    assert cacher._fetch(0, None) == string.ascii_letters.encode()
 
 
 def test_block_cache_lru():
