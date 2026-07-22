@@ -587,11 +587,7 @@ class AbstractFileSystem(metaclass=_Cached):
         Special behaviors:
         - If the path ends with '/', only folders are returned
         - Consecutive '*' characters are compressed into a single '*'
-        - Empty brackets '[]' never match anything
-        - A bare '[!]' is treated as the literal string '[!]', matching the
-          behaviour of Python's ``glob``/``fnmatch``; to negate a character
-          class the brackets must contain at least one character (e.g. '[!a]'
-          matches any single character other than 'a')
+        - Empty set '[]' or negated empty negated set '[!]' never match anything
         - Special characters in character classes are escaped properly
 
         Limitations:
