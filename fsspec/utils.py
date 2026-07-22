@@ -56,11 +56,18 @@ def infer_storage_options(
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
     """
-    # Handle Windows paths including disk name in this special case
-    if (
-        re.match(r"^[a-zA-Z]:[\\/]", urlpath)
-        or re.match(r"^[a-zA-Z0-9]+://", urlpath) is None
-    ):
+
+    # Discover Windows paths including disk name in this special case.
+    is_filesystem = re.match(r"^[a-zA-Z]:[\\/]", urlpath)
+
+    # Discover URI according to RFC 3986: Scheme names consist of a
+    # sequence of characters beginning with a letter and followed by
+    # any combination of letters, digits, plus ("+"), period ("."),
+    # or hyphen ("-").
+    # https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
+    is_uri = re.match(r"^[a-zA-Z0-9+.-]+://", urlpath)
+
+    if is_filesystem or is_uri is None:
         return {"protocol": "file", "path": urlpath}
 
     parsed_path = urlsplit(urlpath)

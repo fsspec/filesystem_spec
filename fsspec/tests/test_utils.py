@@ -223,6 +223,13 @@ def test_infer_simple():
     assert out.get("host", None) is None
 
 
+def test_infer_composite_protocol():
+    out = infer_storage_options("foo+bar-baz://db.example.org")
+    assert out["protocol"] == "foo+bar-baz"
+    assert out["host"] == "db.example.org"
+    assert out["path"] == ""
+
+
 @pytest.mark.parametrize(
     "urlpath, expected_path",
     (
