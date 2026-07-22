@@ -63,6 +63,12 @@ GLOB_POSIX_TESTS = {
     "argnames": ("path", "expected"),
     "argvalues": [
         ("nonexistent", []),
+        # bare "[!]" is the literal string "[!]" (an empty negated class),
+        # and "[]" is an empty class; neither matches anything -- matching
+        # Python's glob/fnmatch and bash. See glob() docstring.
+        ("test0/[!]", []),
+        ("[]", []),
+        ("test[]0.json", []),
         ("test0.json", ["test0.json"]),
         ("test0", ["test0"]),
         ("test0/", ["test0"]),

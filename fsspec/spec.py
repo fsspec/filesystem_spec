@@ -635,8 +635,7 @@ class AbstractFileSystem(metaclass=_Cached):
         Special behaviors:
         - If the path ends with '/', only folders are returned
         - Consecutive '*' characters are compressed into a single '*'
-        - Empty brackets '[]' never match anything
-        - Negated empty brackets '[!]' match any single character
+        - Empty set '[]' or negated empty negated set '[!]' never match anything
         - Special characters in character classes are escaped properly
 
         Limitations:
