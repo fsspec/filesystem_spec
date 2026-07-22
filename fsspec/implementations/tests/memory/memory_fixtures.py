@@ -6,7 +6,8 @@ from fsspec.tests.abstract import AbstractFixtures
 
 class MemoryFixtures(AbstractFixtures):
     @pytest.fixture(scope="class")
-    def fs(self):
+    @classmethod
+    def fs(cls):
         m = filesystem("memory")
         m.store.clear()
         m.pseudo_dirs.clear()

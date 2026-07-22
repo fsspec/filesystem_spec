@@ -6,7 +6,8 @@ from fsspec.tests.abstract import AbstractFixtures
 
 class LocalFixtures(AbstractFixtures):
     @pytest.fixture(scope="class")
-    def fs(self):
+    @classmethod
+    def fs(cls):
         return LocalFileSystem(auto_mkdir=True)
 
     @pytest.fixture
