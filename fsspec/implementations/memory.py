@@ -81,7 +81,10 @@ class MemoryFileSystem(AbstractFileSystem):
                     dirs[parent] = {"name": parent, "size": 0, "type": "directory"}
                 idx = parent.rfind("/")
 
-        for name, filelike in self.store.items():
+        # `store` is shared by every MemoryFileSystem instance, so iterate a
+        # snapshot: a concurrent create/delete would otherwise raise
+        # "dictionary changed size during iteration". ls() does the same.
+        for name, filelike in tuple(self.store.items()):
             if not name.startswith(prefix):
                 continue
             rel = name[len(prefix) :]

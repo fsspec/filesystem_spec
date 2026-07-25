@@ -442,6 +442,48 @@ def test_find_matches_generic(m):
                     assert got == expected, (root, maxdepth, withdirs, detail)
 
 
+def test_find_snapshots_store_before_iterating(m):
+    # `store` is a class attribute shared by every MemoryFileSystem instance, so
+    # another instance can add or remove a path while find() is walking it.
+    # ls() iterates over a snapshot for this reason; find() must too, or it dies
+    # with "dictionary changed size during iteration".
+    for f in range(5):
+        m.pipe_file(f"/data/file{f}.txt", b"x")
+
+    class MutatesStoreOnRead:
+        """Stands in for a real entry, but writes to the store when read.
+
+        Reading ``size`` happens inside find()'s loop, so this reproduces a
+        concurrent write landing mid-iteration without needing a second thread.
+        """
+
+        def __init__(self, real, store):
+            self._real = real
+            self._store = store
+            self._fired = False
+
+        @property
+        def created(self):
+            return self._real.created
+
+        @property
+        def size(self):
+            if not self._fired:
+                self._fired = True
+                self._store["/data/concurrent.txt"] = self._real
+            return self._real.size
+
+    real = m.store["/data/file0.txt"]
+    m.store["/data/file0.txt"] = MutatesStoreOnRead(real, m.store)
+
+    out = m.find("/data")
+
+    # The snapshot is taken before the concurrent write, so the new path is not
+    # part of this result; the point is that find() completes instead of raising.
+    assert "/data/file4.txt" in out
+    assert len(out) == 5
+
+
 def test_find_does_not_scan_per_directory(m):
     # Regression guard: the old find() called ls() once per directory and each
     # ls() re-scanned the whole (global) store, giving O(n_dirs * n_files) work.
