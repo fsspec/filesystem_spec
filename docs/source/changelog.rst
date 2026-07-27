@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Dev
+---
+
+Enhancements
+
+- Single-pass ``MemoryFileSystem.find()`` to avoid O(n_dirs * n_entries) listing; ``ls()`` previously scanned the whole store once per directory, now one pass over the flat store suffices (#2055)
+
 2026.6.0
 --------
 
