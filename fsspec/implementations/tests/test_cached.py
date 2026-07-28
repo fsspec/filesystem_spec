@@ -23,6 +23,7 @@ from fsspec.implementations.cached import (
     CachingFileSystem,
     LocalTempFile,
     WholeFileCacheFileSystem,
+    _replace_tempfile,
 )
 from fsspec.implementations.local import make_path_posix
 from fsspec.implementations.zip import ZipFileSystem
@@ -1619,3 +1620,86 @@ def test_async_cat_ranges_cold_cache(slow_http_server, tmp_path, protocol):
         return await fs._cat_ranges([url, url], [0, 10], [10, 20])
 
     assert asyncio.run(run()) == [payload[0:10], payload[10:20]]
+
+
+def _async_caching_fs(protocol, cache_dir):
+    return fsspec.filesystem(
+        protocol,
+        target_protocol="http",
+        cache_storage=cache_dir,
+        asynchronous=True,
+        target_options={"asynchronous": True, "skip_instance_cache": True},
+        skip_instance_cache=True,
+    )
+
+
+def _count_downloads(fs):
+    downloads = []
+    inner_get_file = fs.fs._get_file
+
+    async def counting_get_file(rpath, lpath, **kwargs):
+        downloads.append(rpath)
+        return await inner_get_file(rpath, lpath, **kwargs)
+
+    fs.fs._get_file = counting_get_file
+    return downloads
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_async_cat_file_downloads_once(slow_http_server, tmp_path, protocol):
+    # filecache's _cat_file did not record the download in its metadata, so
+    # every subsequent _cat_file was a fresh cache miss and downloaded the
+    # file again; and once metadata was recorded (e.g. by cat()), the
+    # (detail, fn) tuple from _check_file was passed straight to open()
+    url, payload = slow_http_server
+
+    async def run():
+        fs = _async_caching_fs(protocol, str(tmp_path / "once"))
+        downloads = _count_downloads(fs)
+        out = [await fs._cat_file(url), await fs._cat_file(url)]
+        return out, len(downloads)
+
+    out, n_downloads = asyncio.run(run())
+    assert out == [payload, payload]
+    assert n_downloads == 1
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_async_cat_ranges_downloads_once(slow_http_server, tmp_path, protocol):
+    # same as test_async_cat_file_downloads_once, for _cat_ranges
+    url, payload = slow_http_server
+    url2 = url + "2"
+
+    async def run():
+        fs = _async_caching_fs(protocol, str(tmp_path / "ranges_once"))
+        downloads = _count_downloads(fs)
+        out1 = await fs._cat_ranges([url, url2, url], [0, 5, 10], [10, 15, 20])
+        out2 = await fs._cat_ranges([url, url2], [0, 5], [10, 15])
+        return out1, out2, len(downloads)
+
+    out1, out2, n_downloads = asyncio.run(run())
+    assert out1 == [payload[0:10], payload[5:15], payload[10:20]]
+    assert out2 == [payload[0:10], payload[5:15]]
+    assert n_downloads == 2
+
+
+def test_replace_tempfile_busy_destination(tmp_path, monkeypatch):
+    # on Windows, os.replace onto a destination another process holds open
+    # raises PermissionError; the redundant temp copy must be discarded,
+    # while a failure with no destination in place must still propagate
+    def busy_replace(src, dst):
+        raise PermissionError("destination is open in another process")
+
+    monkeypatch.setattr(os, "replace", busy_replace)
+
+    tmp, dst = tmp_path / "x.abcd1234.part", tmp_path / "x"
+    tmp.write_bytes(b"data")
+    dst.write_bytes(b"data")
+    _replace_tempfile(str(tmp), str(dst))
+    assert not tmp.exists()
+    assert dst.read_bytes() == b"data"
+
+    tmp.write_bytes(b"data")
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(tmp_path / "missing"))
+    assert tmp.exists()
