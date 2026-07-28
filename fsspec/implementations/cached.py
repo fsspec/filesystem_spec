@@ -4,6 +4,7 @@ import asyncio
 import inspect
 import logging
 import os
+import secrets
 import tempfile
 import time
 import weakref
@@ -35,22 +36,22 @@ logger = logging.getLogger("fsspec.cached")
 # visible under its final cache filename: readers treat the existence of that
 # filename as "download complete" (see issue #639). The rename is atomic, and
 # a concurrent duplicate download of the same path is harmless: both
-# temporary files hold identical bytes and the last rename wins. These
-# helpers are module-level functions rather than methods because
+# temporary files hold identical bytes and the last rename wins. Temporary
+# files are removed when a download raises, but not on early exit (e.g. the
+# process being killed mid-download): stale "*.part" files may then be left
+# in the cache directory, are ignored by the cache, and are safe to delete.
+# These helpers are module-level functions rather than methods because
 # CachingFileSystem.__getattribute__ dispatches only known method names to
 # the caching class, delegating anything else to the wrapped filesystem.
 
 
 def _temppath(lpath):
-    # mkstemp inserts a random token between prefix and suffix and creates the
-    # file with O_EXCL, so concurrent downloads of the same key never clash.
-    fd, tmp = tempfile.mkstemp(
-        dir=os.path.dirname(lpath),
-        prefix=os.path.basename(lpath) + ".",
-        suffix=".part",
-    )
-    os.close(fd)
-    return tmp
+    # Only generates a name; the file itself is created by whatever plain
+    # open() downloads it, so it gets ordinary umask-derived permissions
+    # (mkstemp's fd handling and 0o600 mode are not portable choices for a
+    # shared cache directory). The random token keeps concurrent downloads
+    # of the same key on distinct temp files.
+    return f"{lpath}.{secrets.token_hex(8)}.part"
 
 
 def _remove_tempfile(tmp):
