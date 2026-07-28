@@ -37,9 +37,10 @@ logger = logging.getLogger("fsspec.cached")
 # filename as "download complete" (see issue #639). The rename is atomic, and
 # a concurrent duplicate download of the same path is harmless: both
 # temporary files hold identical bytes and the last rename wins. Temporary
-# files are removed when a download raises, but not on early exit (e.g. the
-# process being killed mid-download): stale "*.part" files may then be left
-# in the cache directory, are ignored by the cache, and are safe to delete.
+# files are removed when the download or the final rename raises, but not on
+# early exit (e.g. the process being killed mid-download): stale "*.part"
+# files may then be left in the cache directory, are ignored by the cache,
+# and are safe to delete.
 # These helpers are module-level functions rather than methods because
 # CachingFileSystem.__getattribute__ dispatches only known method names to
 # the caching class, delegating anything else to the wrapped filesystem.
@@ -48,9 +49,10 @@ logger = logging.getLogger("fsspec.cached")
 def _temppath(lpath):
     # Only generates a name; the file itself is created by whatever plain
     # open() downloads it, so it gets ordinary umask-derived permissions
-    # (mkstemp's fd handling and 0o600 mode are not portable choices for a
-    # shared cache directory). The random token keeps concurrent downloads
-    # of the same key on distinct temp files.
+    # (unlike mkstemp, whose open fd is awkward to hand to a downloader and
+    # whose 0o600 mode is too restrictive for a shared cache directory). The
+    # random token keeps concurrent downloads of the same key on distinct
+    # temp files.
     return f"{lpath}.{secrets.token_hex(8)}.part"
 
 

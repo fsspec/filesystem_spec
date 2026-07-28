@@ -1535,6 +1535,52 @@ def test_concurrent_downloads_leave_no_tempfiles(slow_http_server, tmp_path):
     assert len(entries) == 1
 
 
+@pytest.mark.parametrize("failure_mode", ["before_write", "mid_write"])
+def test_failed_download_cleans_up_tempfiles(tmp_path, monkeypatch, failure_mode):
+    # a failing download must leave neither a .part temp file nor the final
+    # cache filename behind, and the next read must succeed; "before_write"
+    # covers cleanup of a temp path that was never created
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/raw/data", b"0123456789")
+    cache_dir = str(tmp_path / "fail")
+    fs = fsspec.filesystem(
+        "simplecache", fs=mem, cache_storage=cache_dir, skip_instance_cache=True
+    )
+
+    def boom(rpath, lpath, **kwargs):
+        if failure_mode == "mid_write":
+            with open(lpath, "wb") as f:
+                f.write(b"0123")
+        raise OSError("simulated download failure")
+
+    with monkeypatch.context() as m:
+        m.setattr(mem, "get_file", boom)
+        with pytest.raises(OSError, match="simulated download failure"):
+            with fs.open("/raw/data", "rb") as f:
+                f.read()
+    assert os.listdir(cache_dir) == []
+
+    with fs.open("/raw/data", "rb") as f:
+        assert f.read() == b"0123456789"
+
+
+def test_stale_part_file_is_ignored(tmp_path):
+    # a *.part file left behind by a hard kill mid-download must not be
+    # mistaken for a cache entry
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/raw/stale", b"real content")
+    cache_dir = tmp_path / "stale"
+    fs = fsspec.filesystem(
+        "simplecache", fs=mem, cache_storage=str(cache_dir), skip_instance_cache=True
+    )
+    sha = fs._mapper("/raw/stale")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / f"{sha}.0123456789abcdef.part").write_bytes(b"garbage")
+
+    with fs.open("/raw/stale", "rb") as f:
+        assert f.read() == b"real content"
+
+
 def test_simplecache_cat_ranges_cold_cache(tmp_path):
     # SimpleCacheFileSystem.cat_ranges compared _check_file() results with
     # ``is False``, but _check_file returns None for missing entries, so
