@@ -1460,19 +1460,23 @@ def slow_http_server():
     server.shutdown()
 
 
+def _async_caching_fs(protocol, cache_dir):
+    return fsspec.filesystem(
+        protocol,
+        target_protocol="http",
+        cache_storage=cache_dir,
+        asynchronous=True,
+        target_options={"asynchronous": True, "skip_instance_cache": True},
+        skip_instance_cache=True,
+    )
+
+
 def _staggered_async_cat_file(protocol, url, cache_dir, n):
     # readers must start while a download is still in flight: simultaneous
     # starts all miss the cache and write identical bytes to identical
     # offsets, which would hide the race
     async def run():
-        fs = fsspec.filesystem(
-            protocol,
-            target_protocol="http",
-            cache_storage=cache_dir,
-            asynchronous=True,
-            target_options={"asynchronous": True, "skip_instance_cache": True},
-            skip_instance_cache=True,
-        )
+        fs = _async_caching_fs(protocol, cache_dir)
 
         async def one(i):
             await asyncio.sleep(i * 0.03)
@@ -1516,6 +1520,11 @@ def test_concurrent_cat_file_async(slow_http_server, tmp_path, protocol):
         )
         assert [len(d) for d in data] == [len(payload)] * 8
         assert all(d == payload for d in data)
+        # no leftover .part temp files; only the payload (plus filecache's
+        # "cache" metadata file) remains
+        entries = os.listdir(str(tmp_path / f"async{trial}"))
+        assert [fn for fn in entries if fn.endswith(".part")] == []
+        assert len(entries) == (1 if protocol == "simplecache" else 2)
 
 
 def test_concurrent_cat_file_threads(slow_http_server, tmp_path):
@@ -1527,15 +1536,6 @@ def test_concurrent_cat_file_threads(slow_http_server, tmp_path):
         )
         assert [len(d) for d in data] == [len(payload)] * 8
         assert all(d == payload for d in data)
-
-
-def test_concurrent_downloads_leave_no_tempfiles(slow_http_server, tmp_path):
-    url, payload = slow_http_server
-    cache_dir = str(tmp_path / "clean")
-    _staggered_async_cat_file("simplecache", url, cache_dir, 4)
-    entries = os.listdir(cache_dir)
-    assert [fn for fn in entries if fn.endswith(".part")] == []
-    assert len(entries) == 1
 
 
 @pytest.mark.parametrize("failure_mode", ["before_write", "mid_write"])
@@ -1611,28 +1611,10 @@ def test_async_cat_ranges_cold_cache(slow_http_server, tmp_path, protocol):
     url, payload = slow_http_server
 
     async def run():
-        fs = fsspec.filesystem(
-            protocol,
-            target_protocol="http",
-            cache_storage=str(tmp_path / "cr"),
-            asynchronous=True,
-            target_options={"asynchronous": True, "skip_instance_cache": True},
-            skip_instance_cache=True,
-        )
+        fs = _async_caching_fs(protocol, str(tmp_path / "cr"))
         return await fs._cat_ranges([url, url], [0, 10], [10, 20])
 
     assert asyncio.run(run()) == [payload[0:10], payload[10:20]]
-
-
-def _async_caching_fs(protocol, cache_dir):
-    return fsspec.filesystem(
-        protocol,
-        target_protocol="http",
-        cache_storage=cache_dir,
-        asynchronous=True,
-        target_options={"asynchronous": True, "skip_instance_cache": True},
-        skip_instance_cache=True,
-    )
 
 
 def _count_downloads(fs):
