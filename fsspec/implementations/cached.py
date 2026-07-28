@@ -436,8 +436,8 @@ class CachingFileSystem(ChainedFileSystem):
         close()
         f.closed = True
 
-    def ls(self, path, detail=True):
-        return self.fs.ls(path, detail)
+    def ls(self, path, detail=True, **kwargs):
+        return self.fs.ls(path, detail, **kwargs)
 
     def __getattribute__(self, item):
         if item in {
