@@ -1,12 +1,40 @@
 Changelog
 =========
 
-Dev
----
+2026.7.0
+--------
 
 Enhancements
 
-- Single-pass ``MemoryFileSystem.find()`` to avoid O(n_dirs * n_entries) listing; ``ls()`` previously scanned the whole store once per directory, now one pass over the flat store suffices (#2055)
+- Single-pass ``MemoryFileSystem.find()`` to avoid O(n_dirs * n_entries) listing (#2055)
+- Permit composite URL protocol schemes in infer_storage_options (#2085)
+- Implement topdown in async walk() (#2052)
+
+Fixes
+
+- Fix incorrect glob docstring for '[!]' (#2084)
+- Propagate storage_options to all backends resolved by GenericFileSystem (#2083)
+- Handle end=None in FirstChunkCache._fetch like the other caches (#2082)
+- Clamp read end to file size in BlockCache and BackgroundBlockCache(#2081)
+- Create the parent dir for "x" and "a" modes under auto_mkdir (#2079)
+- Expand paths for mode="x" when urlpath is a list (#2078)
+- fix: correctly pass 'start' and 'end' parameters to super().cat_file() (#2077)
+- Fix LocalFileSystem directory symlink removal (#2074)
+- Fix ArrowFSWrapper parent paths for S3 (#2072)
+- Fix get_file_extension when a parent directory name contains a dot (#2071)
+- tar: make members with duplicate slashes reachable via ls/find/glob (#2063)
+- MemoryFileSystem: create the file when appending to a missing path (#2062)
+
+Other
+
+- fixes for pytest deprecation (#2076)
+- Shut down background cache workers on file close (#2069)
+- Forward ls kwargs from cached filesystems (#2068)
+- Fix bare except: use except Exception in upload cleanup handler (#2067)
+- fix: Make Cached metaclass instance instantiation thread-safe and fork-safe (#2064)
+- ci: fix test collection in fsspec_friends job (#2061)
+- ftp: Make deprecated TLS versions optional (#2056)
+- restrict cache storage directory permissions to owner (#2048)
 
 2026.6.0
 --------

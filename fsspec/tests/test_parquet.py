@@ -213,7 +213,7 @@ def test_nested(n, tmpdir, engine):
     pa = pytest.importorskip("pyarrow")
     flat = pa.array([random.random() for _ in range(n)])
     nested = pa.array([{"a": random.random(), "b": random.random()} for _ in range(n)])
-    data = [float(_[0]) for _ in nested]
+    data = [float(_[0].as_py()) for _ in nested]
     table = pa.table({"flat": flat, "nested": nested})
     pq.write_table(table, path)
     with open_parquet_file(path, columns=["nested.a"], engine=engine) as fh:
@@ -229,7 +229,7 @@ def test_nested_arrow_nodict(tmpdir):
     path = os.path.join(str(tmpdir), "test.parquet")
     flat = pa.array([random.random() for _ in range(n)])
     nested = pa.array([{"a": random.random(), "b": random.random()} for _ in range(n)])
-    data = [float(_[0]) for _ in nested]
+    data = [float(_[0].as_py()) for _ in nested]
     table = pa.table({"flat": flat, "nested": nested})
     pq.write_table(table, path, use_dictionary=False)
     with open_parquet_file(path, columns=["nested"], engine="pyarrow") as fh:

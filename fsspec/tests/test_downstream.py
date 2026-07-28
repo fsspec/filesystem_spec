@@ -11,7 +11,7 @@ try:
         test_bucket_name,
     )
 except ImportError:
-    pytest.skip("s3 tests not available.")
+    pytest.skip("s3 tests not available.", allow_module_level=True)
 
 so = {"anon": False, "client_kwargs": {"endpoint_url": endpoint_uri}}
 
