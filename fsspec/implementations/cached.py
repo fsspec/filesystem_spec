@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import filecmp
 import inspect
 import logging
 import os
@@ -37,9 +38,10 @@ logger = logging.getLogger("fsspec.cached")
 # visible under its final cache filename: readers treat the existence of that
 # filename as "download complete" (see issue #639). The rename is atomic, and
 # a concurrent duplicate download of the same path is harmless: both
-# temporary files hold identical bytes and the last rename wins (except on
-# Windows, where replacing a file that a reader holds open fails, and the
-# redundant copy is discarded instead — see _replace_tempfile). Temporary
+# temporary files hold identical bytes and the last rename wins (on Windows,
+# where replacing a file that a reader holds open fails, an identical
+# redundant copy is discarded instead, while a differing one — a cache
+# refresh racing a reader — raises; see _replace_tempfile). Temporary
 # files are removed when the download or the final rename raises, but not on
 # early exit (e.g. the process being killed mid-download): stale "*.part"
 # files may then be left in the cache directory, are ignored by the cache,
@@ -71,10 +73,12 @@ def _replace_tempfile(tmp, lpath):
         os.replace(tmp, lpath)
     except OSError:
         # On Windows, replacing a file that another process holds open
-        # raises PermissionError. The destination can then only already
-        # exist because a concurrent download of the same path renamed
-        # identical bytes into place, so this copy is redundant.
-        if not os.path.exists(lpath):
+        # raises PermissionError. If a concurrent download of the same
+        # path already renamed identical bytes into place, this copy is
+        # redundant and safe to discard; a differing destination (e.g. a
+        # cache refresh racing a reader of the stale copy) must surface
+        # the error rather than let stale bytes pass for fresh ones.
+        if not (os.path.exists(lpath) and filecmp.cmp(tmp, lpath, shallow=False)):
             raise
         _remove_tempfile(tmp)
 
@@ -554,6 +558,7 @@ class CachingFileSystem(ChainedFileSystem):
             "_make_local_details",
             "_make_local_details_async",
             "_ukey_async",
+            "_check_file_async",
             "open",
             "cat",
             "cat_file",
@@ -764,8 +769,32 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # the caller's running event loop
             return sha256(str(await self.fs._info(path)).encode()).hexdigest()
         # an overriding ukey (e.g. http's, which does no I/O) is called
-        # directly, as there is no async counterpart to delegate to
+        # directly: there is no async counterpart to delegate to, and an
+        # override that itself performs sync I/O will surface the usual
+        # sync-within-running-loop error
         return self.fs.ukey(path)
+
+    async def _check_file_async(self, path):
+        # _check_file validates check_files with a sync self.fs.ukey call,
+        # which for a target created with asynchronous=True would fail
+        # inside the caller's running event loop; redo the checks here
+        # with the async-safe ukey. Unlike _check_file, a failed check on
+        # one storage location rejects the entry outright instead of
+        # falling through to the next location.
+        self._check_cache()
+        detail = self._metadata.check_file(path, None)
+        if not detail:
+            return False
+        detail, fn = detail
+        if self.check_files and detail["uid"] != await self._ukey_async(path):
+            return False
+        if self.expiry and time.time() - detail["time"] > self.expiry:
+            return False
+        if detail["blocks"] is not True:
+            # a partial (block-cache) entry sharing this cache directory;
+            # re-download the whole file rather than serve sparse bytes
+            return False
+        return detail, fn
 
     async def _make_local_details_async(self, path):
         hash = self._mapper(path)
@@ -880,14 +909,21 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         logger.debug("async cat_file %s", path)
         path = self._strip_protocol(path)
-        fn = self._check_file(path)
+        fn = await self._check_file_async(path)
         if isinstance(fn, tuple):
             fn = fn[1]
 
         if not fn:
-            fn = await self._make_local_details_async(path)
-            await _atomic_get_file_async(self.fs, path, fn, **kwargs)
-            self.save_cache()
+            if self.compression:
+                # a decompressing download would need a sync self.fs._open;
+                # record no metadata for the raw copy, so the sync open()
+                # path can still download and decompress it properly
+                fn = os.path.join(self.storage[-1], self._mapper(path))
+                await _atomic_get_file_async(self.fs, path, fn, **kwargs)
+            else:
+                fn = await self._make_local_details_async(path)
+                await _atomic_get_file_async(self.fs, path, fn, **kwargs)
+                self.save_cache()
 
         with open(fn, "rb") as f:  # noqa ASYNC230
             if start:
@@ -902,22 +938,27 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         lpaths = []
         need = {}
         for p in paths:
-            fn = self._check_file(p)
+            p = self._strip_protocol(p)
+            fn = await self._check_file_async(p)
             if isinstance(fn, tuple):
                 fn = fn[1]
             if not fn:
-                if p not in need:
-                    need[p] = await self._make_local_details_async(p)
-                fn = need[p]
+                fn = need.setdefault(p, os.path.join(self.storage[-1], self._mapper(p)))
             lpaths.append(fn)
         if need:
+
+            async def _get_one(rpath, lpath):
+                if not self.compression:
+                    # recorded inside the gather so a failure (e.g. the
+                    # ukey lookup on a missing path) honors on_error
+                    # instead of escaping the whole call
+                    await self._make_local_details_async(rpath)
+                await _atomic_get_file_async(self.fs, rpath, lpath)
+
             # a batch self.fs._get would forward on_error to the target
             # filesystem's _get_file, which does not accept it
             results = await asyncio.gather(
-                *(
-                    _atomic_get_file_async(self.fs, rpath, lpath)
-                    for rpath, lpath in need.items()
-                ),
+                *(_get_one(rpath, lpath) for rpath, lpath in need.items()),
                 return_exceptions=True,
             )
             if on_error == "raise":
@@ -980,6 +1021,11 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         # no metadata is kept, so only the local filename is needed; this
         # also skips the remote ukey call the metadata would require
         return os.path.join(self.storage[-1], self._mapper(path))
+
+    async def _check_file_async(self, path):
+        # existence-based and performs no remote I/O, so the sync version
+        # is safe inside a running event loop
+        return self._check_file(path)
 
     def pipe_file(self, path, value=None, **kwargs):
         if self._intrans:

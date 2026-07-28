@@ -14,6 +14,7 @@ import pytest
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.cache_mapper import (
     BasenameCacheMapper,
     HashCacheMapper,
@@ -26,6 +27,7 @@ from fsspec.implementations.cached import (
     _replace_tempfile,
 )
 from fsspec.implementations.local import make_path_posix
+from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.zip import ZipFileSystem
 from fsspec.tests.conftest import win
 
@@ -1650,7 +1652,9 @@ def test_async_cat_file_downloads_once(slow_http_server, tmp_path, protocol):
     # filecache's _cat_file did not record the download in its metadata, so
     # every subsequent _cat_file was a fresh cache miss and downloaded the
     # file again; and once metadata was recorded (e.g. by cat()), the
-    # (detail, fn) tuple from _check_file was passed straight to open()
+    # (detail, fn) tuple from _check_file was passed straight to open().
+    # simplecache never had the bug (existence-based _check_file) and is
+    # included as a regression guard.
     url, payload = slow_http_server
 
     async def run():
@@ -1685,21 +1689,123 @@ def test_async_cat_ranges_downloads_once(slow_http_server, tmp_path, protocol):
 
 def test_replace_tempfile_busy_destination(tmp_path, monkeypatch):
     # on Windows, os.replace onto a destination another process holds open
-    # raises PermissionError; the redundant temp copy must be discarded,
-    # while a failure with no destination in place must still propagate
+    # raises PermissionError; an identical redundant temp copy must be
+    # discarded, while a differing destination (cache refresh racing a
+    # reader of the stale copy) or an absent one must still propagate
     def busy_replace(src, dst):
         raise PermissionError("destination is open in another process")
 
     monkeypatch.setattr(os, "replace", busy_replace)
 
     tmp, dst = tmp_path / "x.abcd1234.part", tmp_path / "x"
-    tmp.write_bytes(b"data")
-    dst.write_bytes(b"data")
+    tmp.write_bytes(b"same bytes")
+    dst.write_bytes(b"same bytes")
     _replace_tempfile(str(tmp), str(dst))
     assert not tmp.exists()
-    assert dst.read_bytes() == b"data"
+    assert dst.read_bytes() == b"same bytes"
 
-    tmp.write_bytes(b"data")
+    tmp.write_bytes(b"fresh bytes")
+    dst.write_bytes(b"stale bytes")
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(dst))
+    assert tmp.exists()
+    assert dst.read_bytes() == b"stale bytes"
+
     with pytest.raises(PermissionError):
         _replace_tempfile(str(tmp), str(tmp_path / "missing"))
     assert tmp.exists()
+
+
+class _AsyncMemoryFileSystem(AsyncFileSystemWrapper):
+    # gives the wrapper memory's protocol handling, so _strip_protocol is
+    # NOT the identity ("memory://afile" -> "/afile") — unlike http's —
+    # and the default AbstractFileSystem.ukey (no override) is exercised
+    protocol = "memory"
+    _strip_protocol = MemoryFileSystem._strip_protocol
+
+
+def _async_mem_caching_fs(cache_dir, **kwargs):
+    return fsspec.filesystem(
+        "filecache",
+        fs=_AsyncMemoryFileSystem(fs=fsspec.filesystem("memory")),
+        cache_storage=cache_dir,
+        skip_instance_cache=True,
+        **kwargs,
+    )
+
+
+def test_filecache_async_nonidentity_strip_and_persistence(tmp_path):
+    # exercises what the http-based tests cannot: a target whose
+    # _strip_protocol is not the identity (metadata must be recorded under
+    # the stripped path or every read is a miss), the default-ukey branch
+    # of _ukey_async, and persistence via save_cache (a fresh instance
+    # must hit the cache without downloading)
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/afile", b"0123456789")
+    cache_dir = str(tmp_path / "strip")
+
+    async def run():
+        fs = _async_mem_caching_fs(cache_dir)
+        downloads = _count_downloads(fs)
+        out1 = await fs._cat_ranges(
+            ["memory://afile", "memory://afile"], [0, 4], [4, 8]
+        )
+        out2 = await fs._cat_file("memory://afile")
+        n_first = len(downloads)
+
+        fs2 = _async_mem_caching_fs(cache_dir)
+        downloads2 = _count_downloads(fs2)
+        out3 = await fs2._cat_file("memory://afile")
+        return out1, out2, n_first, out3, len(downloads2)
+
+    out1, out2, n_first, out3, n_second = asyncio.run(run())
+    assert out1 == [b"0123", b"4567"]
+    assert out2 == b"0123456789" == out3
+    assert n_first == 1
+    assert n_second == 0
+
+
+def test_filecache_async_check_files(tmp_path):
+    # check_files=True must work on the async paths: the uid recorded by
+    # _make_local_details_async has to round-trip through
+    # _check_file_async's async-safe comparison (a sync ukey call here
+    # would fail inside the running loop), and a remote change must
+    # trigger a re-download
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/cfile", b"version one")
+
+    async def run():
+        fs = _async_mem_caching_fs(str(tmp_path / "cf"), check_files=True)
+        downloads = _count_downloads(fs)
+        first = await fs._cat_file("memory://cfile")
+        again = await fs._cat_file("memory://cfile")
+        mem.pipe("/cfile", b"version two, longer")
+        refreshed = await fs._cat_file("memory://cfile")
+        return first, again, refreshed, len(downloads)
+
+    first, again, refreshed, n_downloads = asyncio.run(run())
+    assert (first, again) == (b"version one", b"version one")
+    assert refreshed == b"version two, longer"
+    assert n_downloads == 2
+
+
+def test_filecache_async_cat_ranges_on_error(tmp_path):
+    # a missing remote path must be reported per-range with
+    # on_error="return" (the default), not raised out of the whole call:
+    # the metadata/ukey lookup for a miss runs inside the gathered
+    # download so its failure is captured like a download failure
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/exists", b"0123456789")
+
+    async def run():
+        fs = _async_mem_caching_fs(str(tmp_path / "oe"))
+        returned = await fs._cat_ranges(
+            ["memory://exists", "memory://missing"], [0, 0], [4, 4], on_error="return"
+        )
+        with pytest.raises(FileNotFoundError):
+            await fs._cat_ranges(["memory://missing"], [0], [4], on_error="raise")
+        return returned
+
+    returned = asyncio.run(run())
+    assert returned[0] == b"0123"
+    assert isinstance(returned[1], Exception)
