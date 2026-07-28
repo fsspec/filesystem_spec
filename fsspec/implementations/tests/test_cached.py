@@ -1542,7 +1542,7 @@ def test_concurrent_cat_file_threads(slow_http_server, tmp_path):
 def test_failed_download_cleans_up_tempfiles(tmp_path, monkeypatch, failure_mode):
     # a failing download must leave neither a .part temp file nor the final
     # cache filename behind, and the next read must succeed; "before_write"
-    # covers cleanup of a temp path that was never created
+    # fails before the downloader itself writes anything to the temp path
     mem = fsspec.filesystem("memory")
     mem.pipe("/raw/data", b"0123456789")
     cache_dir = str(tmp_path / "fail")
@@ -1671,30 +1671,50 @@ def test_async_cat_ranges_downloads_once(slow_http_server, tmp_path, protocol):
 
 def test_replace_tempfile_busy_destination(tmp_path, monkeypatch):
     # on Windows, os.replace onto a destination another process holds open
-    # raises PermissionError; an identical redundant temp copy must be
-    # discarded, while a differing destination (cache refresh racing a
-    # reader of the stale copy) or an absent one must still propagate
+    # raises PermissionError; a same-size destination written at or after
+    # our download start is a redundant concurrent download and the temp
+    # copy is discarded, while an older destination (cache refresh racing
+    # a reader of the stale copy), a different size, a non-file, or an
+    # absent one must propagate
     def busy_replace(src, dst):
         raise PermissionError("destination is open in another process")
 
     monkeypatch.setattr(os, "replace", busy_replace)
 
     tmp, dst = tmp_path / "x.abcd1234.part", tmp_path / "x"
-    tmp.write_bytes(b"same bytes")
-    dst.write_bytes(b"same bytes")
-    _replace_tempfile(str(tmp), str(dst))
+    tmp.write_bytes(b"payload")
+    dst.write_bytes(b"payload")
+    _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime - 1)
     assert not tmp.exists()
-    assert dst.read_bytes() == b"same bytes"
+    assert dst.read_bytes() == b"payload"
+
+    # the tie discards too: on coarse-granularity filesystems a concurrent
+    # duplicate's mtime commonly equals the captured start exactly
+    tmp.write_bytes(b"payload")
+    _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime)
+    assert not tmp.exists()
 
     tmp.write_bytes(b"fresh bytes")
     dst.write_bytes(b"stale bytes")
     with pytest.raises(PermissionError):
-        _replace_tempfile(str(tmp), str(dst))
+        _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime + 1)
     assert tmp.exists()
     assert dst.read_bytes() == b"stale bytes"
 
+    tmp.write_bytes(b"short")
+    dst.write_bytes(b"much longer content")
     with pytest.raises(PermissionError):
-        _replace_tempfile(str(tmp), str(tmp_path / "missing"))
+        _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime - 1)
+    assert tmp.exists()
+
+    dst_dir = tmp_path / "adir"
+    dst_dir.mkdir()
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(dst_dir), start=0.0)
+    assert tmp.exists()
+
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(tmp_path / "missing"), start=0.0)
     assert tmp.exists()
 
 

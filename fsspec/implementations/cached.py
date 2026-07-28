@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import filecmp
 import inspect
 import logging
 import os
 import secrets
+import stat
 import tempfile
 import time
 import weakref
@@ -40,7 +40,7 @@ logger = logging.getLogger("fsspec.cached")
 # filename as "download complete" (see issue #639). The rename is atomic, and
 # a concurrent duplicate download of the same path is harmless: both
 # temporary files hold identical bytes and the last rename wins (or, on
-# Windows, a redundant identical copy is discarded; see _replace_tempfile).
+# Windows, a redundant concurrent copy is discarded; see _replace_tempfile).
 # Temporary files are removed when the download or the final rename raises,
 # but not on early exit (e.g. the process being killed mid-download): stale
 # "*.part" files may then be left in the cache directory, are ignored by the
@@ -51,12 +51,12 @@ logger = logging.getLogger("fsspec.cached")
 
 
 def _temppath(lpath):
-    # Only generates a name; the file itself is created by whatever plain
-    # open() downloads it, so it gets ordinary umask-derived permissions
-    # (unlike mkstemp, whose open fd is awkward to hand to a downloader and
-    # whose 0o600 mode is too restrictive for a shared cache directory). The
-    # random token keeps concurrent downloads of the same key on distinct
-    # temp files.
+    # Only generates a name; the file is created by plain open() calls
+    # (pre-created empty in _tempfile, then written by the downloader), so
+    # it gets ordinary umask-derived permissions (unlike mkstemp, whose
+    # open fd is awkward to hand to a downloader and whose 0o600 mode is
+    # too restrictive for a shared cache directory). The random token
+    # keeps concurrent downloads of the same key on distinct temp files.
     return f"{lpath}.{secrets.token_hex(8)}.part"
 
 
@@ -67,17 +67,35 @@ def _remove_tempfile(tmp):
         pass
 
 
-def _replace_tempfile(tmp, lpath):
+def _replace_tempfile(tmp, lpath, start):
     try:
         os.replace(tmp, lpath)
-    except OSError:
+    except PermissionError:
         # On Windows, replacing a file that another process holds open
-        # raises PermissionError. If a concurrent download of the same
-        # path already renamed identical bytes into place, this copy is
-        # redundant and safe to discard; a differing destination (e.g. a
-        # cache refresh racing a reader of the stale copy) must surface
-        # the error rather than let stale bytes pass for fresh ones.
-        if not (os.path.exists(lpath) and filecmp.cmp(tmp, lpath, shallow=False)):
+        # raises PermissionError. Only complete downloads are ever renamed
+        # onto the final name, so a regular file of the same size written
+        # there after this download started can only be a complete, recent
+        # download of the same remote path, making this copy redundant.
+        # Anything else — notably an older destination, i.e. a cache
+        # refresh racing a reader of the stale copy — re-raises rather
+        # than let stale bytes pass for fresh ones. `start` is the mtime
+        # of the pre-created temp file, so both timestamps come from the
+        # cache filesystem's clock (in-tree get_file implementations all
+        # write the local copy in place, so its mtime is the local write
+        # time, not the remote object's). The check is deliberately
+        # narrower than a byte comparison: a duplicate whose writes all
+        # landed before this download began raises a loud spurious error
+        # instead of being discarded.
+        try:
+            st_dst, st_tmp = os.stat(lpath), os.stat(tmp)
+            redundant = (
+                stat.S_ISREG(st_dst.st_mode)
+                and st_dst.st_size == st_tmp.st_size
+                and st_dst.st_mtime >= start
+            )
+        except OSError:
+            redundant = False
+        if not redundant:
             raise
         _remove_tempfile(tmp)
 
@@ -85,11 +103,17 @@ def _replace_tempfile(tmp, lpath):
 @contextmanager
 def _tempfile(lpath):
     # yield a temp name to download into; rename it to lpath on success,
-    # remove it on error
+    # remove it on error. The temp file is pre-created empty (with a plain
+    # open(), keeping umask-derived permissions) so the download start is
+    # stamped on the cache filesystem's own clock, comparable with the
+    # destination's mtime in _replace_tempfile.
     tmp = _temppath(lpath)
     try:
+        with open(tmp, "wb"):
+            pass
+        start = os.stat(tmp).st_mtime
         yield tmp
-        _replace_tempfile(tmp, lpath)
+        _replace_tempfile(tmp, lpath, start)
     except BaseException:
         _remove_tempfile(tmp)
         raise
