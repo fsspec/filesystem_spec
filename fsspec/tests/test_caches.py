@@ -4,6 +4,7 @@ import string
 import pytest
 
 from fsspec.caching import (
+    BackgroundBlockCache,
     BlockCache,
     FirstChunkCache,
     MMapCache,
@@ -301,6 +302,40 @@ def test_background(server, monkeypatch):
     f.read(1)
     time.sleep(0.1)  # second block is loading
     assert len(thread_ids) == 2
+
+
+def test_background_shutdown_on_close():
+    import weakref
+
+    from fsspec.spec import AbstractBufferedFile
+
+    data = b"abcdefgh"
+
+    class TestFile(AbstractBufferedFile):
+        DEFAULT_BLOCK_SIZE = 4
+
+        def _fetch_range(self, start, end):
+            return data[start:end]
+
+    f = TestFile(
+        None,
+        "test",
+        mode="rb",
+        cache_type="background",
+        size=len(data),
+    )
+    f.read(1)
+    cache = f.cache
+    assert isinstance(cache, BackgroundBlockCache)
+    cache_ref = weakref.ref(cache)
+    executor = cache._thread_executor
+    del cache
+
+    f.close()
+
+    with pytest.raises(RuntimeError, match="cannot schedule new futures"):
+        executor.submit(lambda: None)
+    assert cache_ref() is None
 
 
 def test_register_cache():

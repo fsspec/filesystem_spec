@@ -801,6 +801,7 @@ class BackgroundBlockCache(BaseCache):
         self._fetch_future_block_number: int | None = None
         self._fetch_future: Future[bytes] | None = None
         self._fetch_future_lock = threading.Lock()
+        self._closed = False
 
     def cache_info(self) -> UpdatableLRU.CacheInfo:
         """
@@ -812,6 +813,23 @@ class BackgroundBlockCache(BaseCache):
             Returned directly from the LRU Cache used internally.
         """
         return self._fetch_block_cached.cache_info()
+
+    def close(self) -> None:
+        """Cancel pending work and shut down the background worker."""
+        with self._fetch_future_lock:
+            if self._closed:
+                return
+            self._closed = True
+            future = self._fetch_future
+            self._fetch_future = None
+            self._fetch_future_block_number = None
+
+        if future is not None:
+            future.cancel()
+        self._thread_executor.shutdown(wait=True, cancel_futures=True)
+
+        # UpdatableLRU stores a bound method and otherwise forms a reference cycle.
+        del self._fetch_block_cached
 
     def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__
@@ -829,6 +847,7 @@ class BackgroundBlockCache(BaseCache):
         self._fetch_future_block_number = None
         self._fetch_future = None
         self._fetch_future_lock = threading.Lock()
+        self._closed = False
 
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:

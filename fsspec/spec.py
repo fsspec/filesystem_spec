@@ -2267,6 +2267,11 @@ class AbstractBufferedFile(io.IOBase):
             return
         try:
             if self.mode == "rb":
+                cache = getattr(self, "cache", None)
+                if cache is not None:
+                    close = getattr(cache, "close", None)
+                    if callable(close):
+                        close()
                 self.cache = None
             else:
                 if not getattr(self, "forced", True):
