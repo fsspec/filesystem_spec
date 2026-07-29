@@ -537,17 +537,19 @@ def nullcontext(obj: T) -> Iterator[T]:
 
 def merge_offset_ranges(
     paths: list[str],
-    starts: list[int] | int,
-    ends: list[int] | int,
+    starts: list[int | None] | int | None,
+    ends: list[int | None] | int | None,
     max_gap: int = 0,
     max_block: int | None = None,
     sort: bool = True,
-) -> tuple[list[str], list[int], list[int]]:
+) -> tuple[list[str], list[int], list[int | None]]:
     """Merge adjacent byte-offset ranges when the inter-range
     gap is <= `max_gap`, and when the merged byte range does not
-    exceed `max_block` (if specified). By default, this function
-    will re-order the input paths and byte ranges to ensure sorted
-    order. If the user can guarantee that the inputs are already
+    exceed `max_block` (if specified). Overlapping ranges are always
+    merged, even past `max_block`, so returned ranges never overlap.
+    An `end` of `None` means to the end of the file. By default, this
+    function will re-order the input paths and byte ranges to ensure
+    sorted order. If the user can guarantee that the inputs are already
     sorted, passing `sort=False` will skip the re-ordering.
     """
     # Check input
@@ -560,59 +562,57 @@ def merge_offset_ranges(
     if len(starts) != len(paths) or len(ends) != len(paths):
         raise ValueError
 
-    # Early Return
-    if len(starts) <= 1:
-        return paths, starts, ends
+    starts_i: list[int] = [s or 0 for s in starts]
+    ends_i: list[int | None] = ends
 
-    starts = [s or 0 for s in starts]
+    # Early Return
+    if len(starts_i) <= 1:
+        return paths, starts_i, ends_i
+
     # Sort by paths and then ranges if `sort=True`
     if sort:
-        paths, starts, ends = (
-            list(v)
-            for v in zip(
-                *sorted(
-                    zip(paths, starts, ends),
-                )
-            )
+        ranges = sorted(
+            zip(paths, starts_i, ends_i),
+            # None end sorts last (covers furthest into the file)
+            key=lambda pse: (pse[0], pse[1], math.inf if pse[2] is None else pse[2]),
         )
-    remove = []
-    for i, (path, start, end) in enumerate(zip(paths, starts, ends)):
-        if any(
-            e is not None and p == path and start >= s and end <= e and i != i2
-            for i2, (p, s, e) in enumerate(zip(paths, starts, ends))
+        paths = [r[0] for r in ranges]
+        starts_i = [r[1] for r in ranges]
+        ends_i = [r[2] for r in ranges]
+
+    # Loop through the coupled `paths`, `starts`, and
+    # `ends`, and merge adjacent blocks when appropriate
+    new_paths = paths[:1]
+    new_starts = starts_i[:1]
+    new_ends = ends_i[:1]
+    for path, start, end in zip(paths[1:], starts_i[1:], ends_i[1:]):
+        prev_end = new_ends[-1]
+        if path != new_paths[-1]:
+            # Cannot merge with previous block
+            new_paths.append(path)
+            new_starts.append(start)
+            new_ends.append(end)
+        elif prev_end is None:
+            # Previous block already covers the rest of the file
+            continue
+        elif start < prev_end:
+            # Overlap / nested: merge into the union even past max_block
+            new_starts[-1] = min(new_starts[-1], start)
+            if end is None or end > prev_end:
+                new_ends[-1] = end
+        elif (start - prev_end) > max_gap or (
+            max_block is not None
+            and (end is None or (end - new_starts[-1]) > max_block)
         ):
-            remove.append(i)
-    paths = [p for i, p in enumerate(paths) if i not in remove]
-    starts = [s for i, s in enumerate(starts) if i not in remove]
-    ends = [e for i, e in enumerate(ends) if i not in remove]
+            # Gap too large, or merging would exceed `max_block`
+            new_paths.append(path)
+            new_starts.append(start)
+            new_ends.append(end)
+        else:
+            # Merge with the previous block
+            new_ends[-1] = end
 
-    if paths:
-        # Loop through the coupled `paths`, `starts`, and
-        # `ends`, and merge adjacent blocks when appropriate
-        new_paths = paths[:1]
-        new_starts = starts[:1]
-        new_ends = ends[:1]
-        for i in range(1, len(paths)):
-            if paths[i] == paths[i - 1] and new_ends[-1] is None:
-                continue
-            elif (
-                paths[i] != paths[i - 1]
-                or ((starts[i] - new_ends[-1]) > max_gap)
-                or (max_block is not None and (ends[i] - new_starts[-1]) > max_block)
-            ):
-                # Cannot merge with previous block.
-                # Add new `paths`, `starts`, and `ends` elements
-                new_paths.append(paths[i])
-                new_starts.append(starts[i])
-                new_ends.append(ends[i])
-            else:
-                # Merge with the previous block by updating the
-                # last element of `ends`
-                new_ends[-1] = ends[i]
-        return new_paths, new_starts, new_ends
-
-    # `paths` is empty. Just return input lists
-    return paths, starts, ends
+    return new_paths, new_starts, new_ends
 
 
 def file_size(filelike: IO[bytes]) -> int:
