@@ -472,9 +472,8 @@ def test_merge_offset_ranges_drops_nested():
     [
         # Exact duplicates: keep one
         ([0, 0], [50, 50], [(0, 50)]),
-        # Nested in either order
+        # Nested range
         ([0, 10], [80, 20], [(0, 80)]),
-        ([10, 0], [20, 80], [(0, 80)]),
         # None end covers to EOF
         ([0, 0], [None, 50], [(0, None)]),
         ([0, 0], [50, None], [(0, None)]),
@@ -493,6 +492,19 @@ def test_merge_offset_ranges_edges(starts, ends, expected, sort):
     )
 
     assert list(zip(*result)) == [("f", *rng) for rng in expected]
+
+
+def test_merge_offset_ranges_sorts_unsorted_nested_ranges():
+    result = merge_offset_ranges(
+        ["f", "f"],
+        [10, 0],
+        [20, 80],
+        max_gap=100,
+        max_block=1000,
+        sort=True,
+    )
+
+    assert list(zip(*result)) == [("f", 0, 80)]
 
 
 @pytest.mark.parametrize("max_block", [None, 4, 128])
@@ -537,21 +549,24 @@ def test_merge_offset_ranges_covers_every_input_range():
 
 def test_merge_offset_ranges_many_sequential_is_fast():
     # Regression: O(n²) nested-range filter added in #1982
-    n = 20_000
-    paths = ["file"] * n
-    starts = list(range(0, n * 240, 240))
-    ends = [s + 240 for s in starts]
+    def run(n):
+        paths = ["file"] * n
+        starts = list(range(0, n * 240, 240))
+        ends = [s + 240 for s in starts]
+        t0 = time.perf_counter()
+        result = merge_offset_ranges(
+            paths, starts, ends, max_block=8_388_608, sort=True
+        )
+        return time.perf_counter() - t0, result, ends[-1]
 
-    t0 = time.perf_counter()
-    result_paths, result_starts, result_ends = merge_offset_ranges(
-        paths, starts, ends, max_block=8_388_608, sort=True
-    )
-    elapsed = time.perf_counter() - t0
+    small_elapsed, _, _ = run(5_000)
+    large_elapsed, result, expected_end = run(20_000)
+    result_paths, result_starts, result_ends = result
 
-    assert elapsed < 1.0
+    assert large_elapsed < small_elapsed * 8
     assert result_paths == ["file"]
     assert result_starts == [0]
-    assert result_ends == [ends[-1]]
+    assert result_ends == [expected_end]
 
 
 def test_size():
