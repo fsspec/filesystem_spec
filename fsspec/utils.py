@@ -546,11 +546,12 @@ def merge_offset_ranges(
     """Merge adjacent byte-offset ranges when the inter-range
     gap is <= `max_gap`, and when the merged byte range does not
     exceed `max_block` (if specified). Overlapping ranges are always
-    merged, even past `max_block`, so returned ranges never overlap.
-    An `end` of `None` means to the end of the file. By default, this
-    function will re-order the input paths and byte ranges to ensure
-    sorted order. If the user can guarantee that the inputs are already
-    sorted, passing `sort=False` will skip the re-ordering.
+    merged, even past `max_block`, so returned ranges never overlap
+    when the input is sorted. An `end` of `None` means to the end of
+    the file. By default, this function will re-order the input paths
+    and byte ranges to ensure sorted order. If the user can guarantee
+    that the inputs are already sorted, passing `sort=False` will skip
+    the re-ordering.
     """
     # Check input
     if not isinstance(paths, list):
