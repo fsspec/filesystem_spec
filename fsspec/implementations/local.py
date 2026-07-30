@@ -437,6 +437,11 @@ class LocalFileOpener(io.IOBase):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
+        if not self.f.closed:
+            # a compression wrapper (e.g., GzipFile) does not close the file
+            # object it was given, so buffered bytes and any trailer may still
+            # be pending here. Windows also refuses to rename an open file.
+            self.f.close()
         try:
             shutil.move(self.temp, self.path)
         except PermissionError as e:
