@@ -1,14 +1,25 @@
-name: Upload Python Package
+name: Release Python Package
 
+# Triggered by a tag push, this workflow creates a GitHub release
+# and publishes the package to PyPI.
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - '2[0-9][0-9][0-9].[0-9].[0-9]*'
+      - '2[0-9][0-9][0-9].[0-9][0-9].[0-9]*'
 
 jobs:
-  deploy:
+  ci:
+    uses: ./.github/workflows/main.yaml
+
+  build:
+    name: Build artifacts
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -16,11 +27,46 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install hatch twine
-      - name: Build and publish
-        env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          hatch build
-          twine upload dist/*
+          pip install build
+      - name: Build
+        run: python -m build
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  release:
+    name: Create Release
+    needs: build
+    if: "!contains(github.ref_name, 'dev') && github.event_name == 'push'"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
+
+  publish:
+    name: Upload release to PyPI
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment: pypi
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
