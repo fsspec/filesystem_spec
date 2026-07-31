@@ -546,12 +546,17 @@ def merge_offset_ranges(
     """Merge adjacent byte-offset ranges when the inter-range
     gap is <= `max_gap`, and when the merged byte range does not
     exceed `max_block` (if specified). Overlapping ranges are always
-    merged, even past `max_block`, so returned ranges never overlap
-    when the input is sorted. An `end` of `None` means to the end of
-    the file. By default, this function will re-order the input paths
-    and byte ranges to ensure sorted order. If the user can guarantee
-    that the inputs are already sorted, passing `sort=False` will skip
-    the re-ordering.
+    merged, even past `max_block`, so with `sort=True` the returned
+    ranges never overlap. An `end` of `None` means to the end of the
+    file. By default, this function will re-order the input paths and
+    byte ranges to ensure sorted order.
+
+    Passing `sort=False` skips the re-ordering, and requires the caller
+    to guarantee that the inputs are grouped by path and ascending by
+    start within each path. Descending starts within a path raise
+    ``ValueError`` rather than silently emitting overlapping ranges;
+    a path that re-appears after a different path is treated as a new
+    group, so ranges for it may overlap an earlier group.
     """
     # Check input
     if not isinstance(paths, list):
@@ -593,12 +598,19 @@ def merge_offset_ranges(
             new_paths.append(path)
             new_starts.append(start)
             new_ends.append(end)
+        elif start < new_starts[-1]:
+            # Starts must be non-decreasing within a path; walking the
+            # current block start backwards can overlap a prior emitted
+            # block when sort=False.
+            raise ValueError(
+                "starts must be sorted ascending within each path; "
+                f"got start={start} before current block start={new_starts[-1]}"
+            )
         elif prev_end is None:
             # Previous block already covers the rest of the file
             continue
         elif start < prev_end:
             # Overlap / nested: merge into the union even past max_block
-            new_starts[-1] = min(new_starts[-1], start)
             if end is None or end > prev_end:
                 new_ends[-1] = end
         elif (start - prev_end) > max_gap or (

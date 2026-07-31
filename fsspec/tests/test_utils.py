@@ -507,6 +507,19 @@ def test_merge_offset_ranges_sorts_unsorted_nested_ranges():
     assert list(zip(*result)) == [("f", 0, 80)]
 
 
+def test_merge_offset_ranges_unsorted_sort_false_raises():
+    # Walking start backwards after emitting a later block would produce
+    # overlapping output; fail loud instead of silent min().
+    with pytest.raises(ValueError, match="sorted ascending"):
+        merge_offset_ranges(
+            ["f"] * 3,
+            [0, 100, 5],
+            [10, 110, 7],
+            max_gap=0,
+            sort=False,
+        )
+
+
 @pytest.mark.parametrize("max_block", [None, 4, 128])
 def test_merge_offset_ranges_never_overlap(max_block):
     # Overlaps must merge even past max_block
