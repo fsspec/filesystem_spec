@@ -559,11 +559,12 @@ def test_merge_offset_ranges_many_sequential_is_fast():
         )
         return time.perf_counter() - t0, result, ends[-1]
 
-    small_elapsed, _, _ = run(5_000)
     large_elapsed, result, expected_end = run(20_000)
     result_paths, result_starts, result_ends = result
 
-    assert large_elapsed < small_elapsed * 8
+    # Generous ceiling: the linear implementation needs ~10ms here, while the
+    # quadratic one needs tens of seconds.
+    assert large_elapsed < 1.0
     assert result_paths == ["file"]
     assert result_starts == [0]
     assert result_ends == [expected_end]
