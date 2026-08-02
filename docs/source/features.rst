@@ -290,6 +290,14 @@ except without the options for cache expiry and to check the original source - i
 target can be considered static, and particularly where a large number of target files are expected
 (because no metadata is written to disc). Only "simplecache" is guaranteed thread/process-safe.
 
+With "filecache" and "simplecache", each file is first downloaded to a temporary file in the
+cache directory (the final cache filename plus a random token and a ``.part`` suffix) and then
+renamed into place, so that a partially-downloaded file is never visible under its final cache
+name. The temporary file is removed if the download (or the final rename) raises an
+exception, but *not* if the process exits abruptly (e.g., it is killed) mid-download:
+leftover ``*.part`` files may then remain in the cache directory. They are ignored by the
+cache and are safe to delete.
+
 Remote Write Caching
 --------------------
 

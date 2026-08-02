@@ -1,13 +1,20 @@
+import asyncio
 import json
 import os
+import random
 import shutil
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.cache_mapper import (
     BasenameCacheMapper,
     HashCacheMapper,
@@ -17,8 +24,10 @@ from fsspec.implementations.cached import (
     CachingFileSystem,
     LocalTempFile,
     WholeFileCacheFileSystem,
+    _replace_tempfile,
 )
 from fsspec.implementations.local import make_path_posix
+from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.zip import ZipFileSystem
 from fsspec.tests.conftest import win
 
@@ -1413,3 +1422,400 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     for attr in ("_cat_file", "_cat_ranges"):
         assert hasattr(fs, attr), f"instance missing {attr}"
         assert hasattr(type(fs), attr), f"class missing {attr}"
+
+
+@pytest.fixture(scope="module")
+def slow_http_server():
+    """A local HTTP server that streams a 1 MiB payload slowly.
+
+    Downloads take long enough that staggered concurrent reads of the same
+    URL overlap with an in-flight download, exercising the cache-write race
+    of issue #639.
+    """
+    pytest.importorskip("aiohttp")
+
+    payload = random.Random(42).randbytes(2**20)
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_HEAD(self):
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            for i in range(0, len(payload), 2**16):
+                try:
+                    self.wfile.write(payload[i : i + 2**16])
+                except (BrokenPipeError, ConnectionResetError):
+                    return
+                time.sleep(0.005)
+
+        def log_message(self, format, *args):
+            pass
+
+    class QuietServer(ThreadingHTTPServer):
+        def handle_error(self, request, client_address):
+            pass
+
+    server = QuietServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}/data", payload
+    server.shutdown()
+
+
+def _async_caching_fs(protocol, cache_dir):
+    return fsspec.filesystem(
+        protocol,
+        target_protocol="http",
+        cache_storage=cache_dir,
+        asynchronous=True,
+        target_options={"asynchronous": True, "skip_instance_cache": True},
+        skip_instance_cache=True,
+    )
+
+
+def _staggered_async_cat_file(protocol, url, cache_dir, n):
+    # readers must start while a download is still in flight: simultaneous
+    # starts all miss the cache and write identical bytes to identical
+    # offsets, which would hide the race
+    async def run():
+        fs = _async_caching_fs(protocol, cache_dir)
+
+        async def one(i):
+            await asyncio.sleep(i * 0.03)
+            return await fs._cat_file(url)
+
+        return await asyncio.gather(*[one(i) for i in range(n)])
+
+    return asyncio.run(run())
+
+
+def _staggered_threaded_cat_file(protocol, url, cache_dir, n):
+    fs = fsspec.filesystem(
+        protocol,
+        target_protocol="http",
+        cache_storage=cache_dir,
+        target_options={"skip_instance_cache": True},
+        skip_instance_cache=True,
+    )
+
+    def one(i):
+        time.sleep(i * 0.03)
+        return fs.cat_file(url)
+
+    with ThreadPoolExecutor(n) as pool:
+        return list(pool.map(one, range(n)))
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_concurrent_cat_file_async(slow_http_server, tmp_path, protocol):
+    """Concurrent reads of one uncached URL must all see complete bytes.
+
+    Regression test for https://github.com/fsspec/filesystem_spec/issues/639:
+    cache misses were downloaded directly to the final cache filename, so a
+    concurrent reader of the same key could observe (and return) a
+    partially-written file.
+    """
+    url, payload = slow_http_server
+    for trial in range(3):
+        data = _staggered_async_cat_file(
+            protocol, url, str(tmp_path / f"async{trial}"), 8
+        )
+        assert [len(d) for d in data] == [len(payload)] * 8
+        assert all(d == payload for d in data)
+        # no leftover .part temp files; only the payload (plus filecache's
+        # "cache" metadata file) remains
+        entries = os.listdir(str(tmp_path / f"async{trial}"))
+        assert [fn for fn in entries if fn.endswith(".part")] == []
+        assert len(entries) == (1 if protocol == "simplecache" else 2)
+
+
+def test_concurrent_cat_file_threads(slow_http_server, tmp_path):
+    """Same as test_concurrent_cat_file_async, for the sync open() path."""
+    url, payload = slow_http_server
+    for trial in range(3):
+        data = _staggered_threaded_cat_file(
+            "simplecache", url, str(tmp_path / f"thr{trial}"), 8
+        )
+        assert [len(d) for d in data] == [len(payload)] * 8
+        assert all(d == payload for d in data)
+
+
+@pytest.mark.parametrize("failure_mode", ["before_write", "mid_write"])
+def test_failed_download_cleans_up_tempfiles(tmp_path, monkeypatch, failure_mode):
+    # a failing download must leave neither a .part temp file nor the final
+    # cache filename behind, and the next read must succeed; "before_write"
+    # fails before the downloader itself writes anything to the temp path
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/raw/data", b"0123456789")
+    cache_dir = str(tmp_path / "fail")
+    fs = fsspec.filesystem(
+        "simplecache", fs=mem, cache_storage=cache_dir, skip_instance_cache=True
+    )
+
+    def boom(rpath, lpath, **kwargs):
+        if failure_mode == "mid_write":
+            with open(lpath, "wb") as f:
+                f.write(b"0123")
+        raise OSError("simulated download failure")
+
+    with monkeypatch.context() as m:
+        m.setattr(mem, "get_file", boom)
+        with pytest.raises(OSError, match="simulated download failure"):
+            with fs.open("/raw/data", "rb") as f:
+                f.read()
+    assert os.listdir(cache_dir) == []
+
+    with fs.open("/raw/data", "rb") as f:
+        assert f.read() == b"0123456789"
+
+
+def test_stale_part_file_is_ignored(tmp_path):
+    # a *.part file left behind by a hard kill mid-download must not be
+    # mistaken for a cache entry
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/raw/stale", b"real content")
+    cache_dir = tmp_path / "stale"
+    fs = fsspec.filesystem(
+        "simplecache", fs=mem, cache_storage=str(cache_dir), skip_instance_cache=True
+    )
+    sha = fs._mapper("/raw/stale")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / f"{sha}.0123456789abcdef.part").write_bytes(b"garbage")
+
+    with fs.open("/raw/stale", "rb") as f:
+        assert f.read() == b"real content"
+
+
+def test_simplecache_cat_ranges_cold_cache(tmp_path):
+    # SimpleCacheFileSystem.cat_ranges compared _check_file() results with
+    # ``is False``, but _check_file returns None for missing entries, so
+    # uncached files were never downloaded and cat_ranges failed on a cold
+    # cache
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/raw/one", b"0123456789")
+    mem.pipe("/raw/two", b"abcdefghij")
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=mem,
+        cache_storage=str(tmp_path / "cr"),
+        skip_instance_cache=True,
+    )
+    out = fs.cat_ranges(["/raw/one", "/raw/two", "/raw/one"], [0, 2, 4], [4, 6, 8])
+    assert out == [b"0123", b"cdef", b"4567"]
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_async_cat_ranges_cold_cache(slow_http_server, tmp_path, protocol):
+    # _cat_ranges compared _check_file() results with ``is None``, but
+    # filecache's _check_file returns False for missing entries, so uncached
+    # files were never downloaded; and repeats of one path within a single
+    # call (e.g. several ranges of one file) got no local path at all
+    url, payload = slow_http_server
+
+    async def run():
+        fs = _async_caching_fs(protocol, str(tmp_path / "cr"))
+        return await fs._cat_ranges([url, url], [0, 10], [10, 20])
+
+    assert asyncio.run(run()) == [payload[0:10], payload[10:20]]
+
+
+def _count_downloads(fs):
+    downloads = []
+    inner_get_file = fs.fs._get_file
+
+    async def counting_get_file(rpath, lpath, **kwargs):
+        downloads.append(rpath)
+        return await inner_get_file(rpath, lpath, **kwargs)
+
+    fs.fs._get_file = counting_get_file
+    return downloads
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_async_cat_file_downloads_once(slow_http_server, tmp_path, protocol):
+    # filecache's _cat_file did not record the download in its metadata, so
+    # every subsequent _cat_file was a fresh cache miss and downloaded the
+    # file again; and once metadata was recorded (e.g. by cat()), the
+    # (detail, fn) tuple from _check_file was passed straight to open().
+    # simplecache never had the bug (existence-based _check_file) and is
+    # included as a regression guard.
+    url, payload = slow_http_server
+
+    async def run():
+        fs = _async_caching_fs(protocol, str(tmp_path / "once"))
+        downloads = _count_downloads(fs)
+        out = [await fs._cat_file(url), await fs._cat_file(url)]
+        return out, len(downloads)
+
+    out, n_downloads = asyncio.run(run())
+    assert out == [payload, payload]
+    assert n_downloads == 1
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_async_cat_ranges_downloads_once(slow_http_server, tmp_path, protocol):
+    # same as test_async_cat_file_downloads_once, for _cat_ranges
+    url, payload = slow_http_server
+    url2 = url + "2"
+
+    async def run():
+        fs = _async_caching_fs(protocol, str(tmp_path / "ranges_once"))
+        downloads = _count_downloads(fs)
+        out1 = await fs._cat_ranges([url, url2, url], [0, 5, 10], [10, 15, 20])
+        out2 = await fs._cat_ranges([url, url2], [0, 5], [10, 15])
+        return out1, out2, len(downloads)
+
+    out1, out2, n_downloads = asyncio.run(run())
+    assert out1 == [payload[0:10], payload[5:15], payload[10:20]]
+    assert out2 == [payload[0:10], payload[5:15]]
+    assert n_downloads == 2
+
+
+def test_replace_tempfile_busy_destination(tmp_path, monkeypatch):
+    # on Windows, os.replace onto a destination another process holds open
+    # raises PermissionError; a same-size destination written at or after
+    # our download start is a redundant concurrent download and the temp
+    # copy is discarded, while an older destination (cache refresh racing
+    # a reader of the stale copy), a different size, a non-file, or an
+    # absent one must propagate
+    def busy_replace(src, dst):
+        raise PermissionError("destination is open in another process")
+
+    monkeypatch.setattr(os, "replace", busy_replace)
+
+    tmp, dst = tmp_path / "x.abcd1234.part", tmp_path / "x"
+    tmp.write_bytes(b"payload")
+    dst.write_bytes(b"payload")
+    _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime - 1)
+    assert not tmp.exists()
+    assert dst.read_bytes() == b"payload"
+
+    # the tie discards too: on coarse-granularity filesystems a concurrent
+    # duplicate's mtime commonly equals the captured start exactly
+    tmp.write_bytes(b"payload")
+    _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime)
+    assert not tmp.exists()
+
+    tmp.write_bytes(b"fresh bytes")
+    dst.write_bytes(b"stale bytes")
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime + 1)
+    assert tmp.exists()
+    assert dst.read_bytes() == b"stale bytes"
+
+    tmp.write_bytes(b"short")
+    dst.write_bytes(b"much longer content")
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(dst), start=dst.stat().st_mtime - 1)
+    assert tmp.exists()
+
+    dst_dir = tmp_path / "adir"
+    dst_dir.mkdir()
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(dst_dir), start=0.0)
+    assert tmp.exists()
+
+    with pytest.raises(PermissionError):
+        _replace_tempfile(str(tmp), str(tmp_path / "missing"), start=0.0)
+    assert tmp.exists()
+
+
+class _AsyncMemoryFileSystem(AsyncFileSystemWrapper):
+    # gives the wrapper memory's protocol handling, so _strip_protocol is
+    # NOT the identity ("memory://afile" -> "/afile") — unlike http's —
+    # and the default AbstractFileSystem.ukey (no override) is exercised
+    protocol = "memory"
+    _strip_protocol = MemoryFileSystem._strip_protocol
+
+
+def _async_mem_caching_fs(cache_dir, **kwargs):
+    return fsspec.filesystem(
+        "filecache",
+        fs=_AsyncMemoryFileSystem(fs=fsspec.filesystem("memory")),
+        cache_storage=cache_dir,
+        skip_instance_cache=True,
+        **kwargs,
+    )
+
+
+def test_filecache_async_nonidentity_strip_and_persistence(tmp_path):
+    # exercises what the http-based tests cannot: a target whose
+    # _strip_protocol is not the identity (metadata must be recorded under
+    # the stripped path or every read is a miss), the default-ukey branch
+    # of _ukey_async, and persistence via save_cache (a fresh instance
+    # must hit the cache without downloading)
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/afile", b"0123456789")
+    cache_dir = str(tmp_path / "strip")
+
+    async def run():
+        fs = _async_mem_caching_fs(cache_dir)
+        downloads = _count_downloads(fs)
+        out1 = await fs._cat_ranges(
+            ["memory://afile", "memory://afile"], [0, 4], [4, 8]
+        )
+        out2 = await fs._cat_file("memory://afile")
+        n_first = len(downloads)
+
+        fs2 = _async_mem_caching_fs(cache_dir)
+        downloads2 = _count_downloads(fs2)
+        out3 = await fs2._cat_file("memory://afile")
+        return out1, out2, n_first, out3, len(downloads2)
+
+    out1, out2, n_first, out3, n_second = asyncio.run(run())
+    assert out1 == [b"0123", b"4567"]
+    assert out2 == b"0123456789" == out3
+    assert n_first == 1
+    assert n_second == 0
+
+
+def test_filecache_async_check_files(tmp_path):
+    # check_files=True must work on the async paths: the uid recorded by
+    # _make_local_details_async has to round-trip through
+    # _check_file_async's async-safe comparison (a sync ukey call here
+    # would fail inside the running loop), and a remote change must
+    # trigger a re-download
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/cfile", b"version one")
+
+    async def run():
+        fs = _async_mem_caching_fs(str(tmp_path / "cf"), check_files=True)
+        downloads = _count_downloads(fs)
+        first = await fs._cat_file("memory://cfile")
+        again = await fs._cat_file("memory://cfile")
+        mem.pipe("/cfile", b"version two, longer")
+        refreshed = await fs._cat_file("memory://cfile")
+        return first, again, refreshed, len(downloads)
+
+    first, again, refreshed, n_downloads = asyncio.run(run())
+    assert (first, again) == (b"version one", b"version one")
+    assert refreshed == b"version two, longer"
+    assert n_downloads == 2
+
+
+def test_filecache_async_cat_ranges_on_error(tmp_path):
+    # a missing remote path must be reported per-range with
+    # on_error="return" (the default), not raised out of the whole call:
+    # the metadata/ukey lookup for a miss runs inside the gathered
+    # download so its failure is captured like a download failure
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/exists", b"0123456789")
+
+    async def run():
+        fs = _async_mem_caching_fs(str(tmp_path / "oe"))
+        returned = await fs._cat_ranges(
+            ["memory://exists", "memory://missing"], [0, 0], [4, 4], on_error="return"
+        )
+        with pytest.raises(FileNotFoundError):
+            await fs._cat_ranges(["memory://missing"], [0], [4], on_error="raise")
+        return returned
+
+    returned = asyncio.run(run())
+    assert returned[0] == b"0123"
+    assert isinstance(returned[1], Exception)
