@@ -507,17 +507,30 @@ def test_merge_offset_ranges_sorts_unsorted_nested_ranges():
     assert list(zip(*result)) == [("f", 0, 80)]
 
 
-def test_merge_offset_ranges_unsorted_sort_false_raises():
-    # Walking start backwards after emitting a later block would produce
-    # overlapping output; fail loud instead of silent min().
-    with pytest.raises(ValueError, match="sorted ascending"):
-        merge_offset_ranges(
-            ["f"] * 3,
-            [0, 100, 5],
-            [10, 110, 7],
-            max_gap=0,
-            sort=False,
+@pytest.mark.parametrize(
+    "starts,ends",
+    [
+        # Range starting behind an already emitted block
+        ([0, 100, 5], [10, 110, 7]),
+        # Range nested inside an earlier block, not the current one
+        ([102, 267, 108], [174, 286, 152]),
+        # Fully reversed
+        ([200, 100, 0], [210, 110, 10]),
+    ],
+)
+def test_merge_offset_ranges_unsorted_keeps_coverage(starts, ends):
+    # `sort=False` with out-of-order input must still cover every range
+    result = merge_offset_ranges(
+        ["f"] * len(starts), list(starts), list(ends), max_gap=0, sort=False
+    )
+
+    blocks = list(zip(*result))
+    for start, end in zip(starts, ends):
+        assert any(
+            block_start <= start and end <= block_end
+            for _, block_start, block_end in blocks
         )
+        assert all(block_end >= block_start for _, block_start, block_end in blocks)
 
 
 @pytest.mark.parametrize("max_block", [None, 4, 128])

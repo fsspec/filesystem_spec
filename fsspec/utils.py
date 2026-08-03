@@ -551,12 +551,11 @@ def merge_offset_ranges(
     file. By default, this function will re-order the input paths and
     byte ranges to ensure sorted order.
 
-    Passing `sort=False` skips the re-ordering, and requires the caller
-    to guarantee that the inputs are grouped by path and ascending by
-    start within each path. Descending starts within a path raise
-    ``ValueError`` rather than silently emitting overlapping ranges;
-    a path that re-appears after a different path is treated as a new
-    group, so ranges for it may overlap an earlier group.
+    Passing `sort=False` skips the re-ordering, which is only worthwhile
+    when the inputs are already grouped by path and ascending by start
+    within each path. Ranges that break that order still appear in the
+    output, as their own range rather than merged, so coverage holds for
+    any input order.
     """
     # Check input
     if not isinstance(paths, list):
@@ -599,13 +598,12 @@ def merge_offset_ranges(
             new_starts.append(start)
             new_ends.append(end)
         elif start < new_starts[-1]:
-            # Starts must be non-decreasing within a path; walking the
-            # current block start backwards can overlap a prior emitted
-            # block when sort=False.
-            raise ValueError(
-                "starts must be sorted ascending within each path; "
-                f"got start={start} before current block start={new_starts[-1]}"
-            )
+            # Out of order (only possible when `sort=False`). Walking the
+            # current block start backwards would uncover bytes already
+            # attributed to it, so give this range its own block
+            new_paths.append(path)
+            new_starts.append(start)
+            new_ends.append(end)
         elif prev_end is None:
             # Previous block already covers the rest of the file
             continue
