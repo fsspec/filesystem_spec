@@ -533,24 +533,28 @@ def test_merge_offset_ranges_unsorted_keeps_coverage(starts, ends):
         assert all(block_end >= block_start for _, block_start, block_end in blocks)
 
 
-@pytest.mark.parametrize("max_block", [None, 4, 128])
-def test_merge_offset_ranges_never_overlap(max_block):
-    # Overlaps must merge even past max_block
-    paths = ["f"] * 3
-    starts = [0, 8, 12]
-    ends = [10, 40, 20]
-
-    result_paths, result_starts, result_ends = merge_offset_ranges(
-        paths, starts, ends, max_gap=0, max_block=max_block
+@pytest.mark.parametrize(
+    "max_block,expected",
+    [
+        # Overlaps merge when the block stays within `max_block`
+        (None, [(0, 40)]),
+        (128, [(0, 40)]),
+        # Merging (8, 40) would exceed `max_block`, so it becomes its own
+        # block, overlapping the first. (12, 20) is already covered by it
+        (4, [(0, 10), (8, 40)]),
+    ],
+)
+def test_merge_offset_ranges_overlap_respects_max_block(max_block, expected):
+    result = merge_offset_ranges(
+        ["f"] * 3, [0, 8, 12], [10, 40, 20], max_gap=0, max_block=max_block
     )
 
-    assert result_paths == ["f"]
-    assert result_starts == [0]
-    assert result_ends == [40]
+    assert list(zip(*result)) == [("f", *rng) for rng in expected]
 
 
 def test_merge_offset_ranges_covers_every_input_range():
-    # Output ranges must not overlap; every input must be covered
+    # Every input must be covered, and no block may exceed max_block
+    # when every input range is itself smaller than max_block
     rand = random.Random(42)
     paths, starts, ends = [], [], []
     for _ in range(200):
@@ -563,13 +567,37 @@ def test_merge_offset_ranges_covers_every_input_range():
     result = merge_offset_ranges(paths, starts, ends, max_gap=8, max_block=512)
 
     blocks = sorted(zip(*result))
-    for (path1, _, end1), (path2, start2, _) in zip(blocks, blocks[1:]):
-        assert path1 != path2 or start2 >= end1
+    for _, block_start, block_end in blocks:
+        assert block_end - block_start <= 512
 
     for path, start, end in zip(paths, starts, ends):
         assert any(
             path == block_path and block_start <= start and end <= block_end
             for block_path, block_start, block_end in blocks
+        )
+
+
+def test_merge_offset_ranges_overlap_chain_is_bounded():
+    # Regression: chained overlaps each extended the open block, so the
+    # merged block grew past max_block without bound
+    n = 20_000
+    max_block = 8_192
+    starts = list(range(0, n * 100, 100))
+    ends = [s + 150 for s in starts]
+
+    result = merge_offset_ranges(
+        ["f"] * n, starts, ends, max_gap=0, max_block=max_block
+    )
+
+    blocks = list(zip(*result))
+    assert len(blocks) > 1
+    for _, block_start, block_end in blocks:
+        assert block_end - block_start <= max_block
+
+    for start, end in zip(starts, ends):
+        assert any(
+            block_start <= start and end <= block_end
+            for _, block_start, block_end in blocks
         )
 
 

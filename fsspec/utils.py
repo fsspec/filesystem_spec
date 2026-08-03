@@ -545,11 +545,15 @@ def merge_offset_ranges(
 ) -> tuple[list[str], list[int], list[int | None]]:
     """Merge adjacent byte-offset ranges when the inter-range
     gap is <= `max_gap`, and when the merged byte range does not
-    exceed `max_block` (if specified). Overlapping ranges are always
-    merged, even past `max_block`, so with `sort=True` the returned
-    ranges never overlap. An `end` of `None` means to the end of the
-    file. By default, this function will re-order the input paths and
-    byte ranges to ensure sorted order.
+    exceed `max_block` (if specified). Every input range is covered by
+    at least one returned range. Overlapping input ranges are merged
+    where `max_block` allows it, so returned ranges may overlap once a
+    chain of overlapping inputs reaches `max_block`; a single input
+    range larger than `max_block` is still returned whole.
+
+    An `end` of `None` means to the end of the file. By default, this
+    function will re-order the input paths and byte ranges to ensure
+    sorted order.
 
     Passing `sort=False` skips the re-ordering, which is only worthwhile
     when the inputs are already grouped by path and ascending by start
@@ -608,8 +612,24 @@ def merge_offset_ranges(
             # Previous block already covers the rest of the file
             continue
         elif start < prev_end:
-            # Overlap / nested: merge into the union even past max_block
-            if end is None or end > prev_end:
+            # Overlap / nested
+            if end is not None and end <= prev_end:
+                # Already covered by the current block
+                continue
+            elif (
+                end is not None
+                and max_block is not None
+                and (end - new_starts[-1]) > max_block
+            ):
+                # Extending would exceed `max_block`. Start a new block,
+                # which overlaps the previous one, rather than letting a
+                # chain of overlaps grow the block without bound
+                new_paths.append(path)
+                new_starts.append(start)
+                new_ends.append(end)
+            else:
+                # An `end` of None extends the block to EOF; a separate
+                # block would subsume the current one anyway
                 new_ends[-1] = end
         elif (start - prev_end) > max_gap or (
             max_block is not None
