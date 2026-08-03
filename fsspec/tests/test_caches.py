@@ -1,3 +1,4 @@
+import asyncio
 import pickle
 import string
 
@@ -359,3 +360,32 @@ def test_cache_kwargs(mocker):
     # It is a random location that cannot be predicted.
     # The important thing is the 'overwrite' kwarg
     fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], ["/test"], overwrite=True)
+
+
+def test_adaptive_readahead_cache_with_async_fetcher():
+    data = string.ascii_letters.encode()
+
+    cache = caches["adaptive_readahead"](
+        8,
+        letters_fetcher,
+        len(data),
+        # Keep this below the default prefetch minimum so behavior is deterministic
+        # and bounded for unit testing.
+        concurrency=2,
+        max_prefetch_size=64,
+    )
+    try:
+        assert cache._fetch(0, 0) == b""
+        assert cache._fetch(0, 5) == data[0:5]
+        assert cache._fetch(5, 12) == data[5:12]
+        assert cache._fetch(12, 20) == data[12:20]
+    finally:
+        cache.close()
+
+
+def test_adaptive_readahead_cache_fallback_without_loop():
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive_readahead"](8, letters_fetcher, len(data))
+
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]
