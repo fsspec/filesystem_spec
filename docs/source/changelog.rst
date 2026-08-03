@@ -12,6 +12,7 @@ Enhancements
 
 Fixes
 
+- Make ``merge_offset_ranges`` `O(n log n)` and keep merged blocks within ``max_block``, replacing the quadratic nested-range filter added in #1982 (#2091)
 - Fix incorrect glob docstring for '[!]' (#2084)
 - Propagate storage_options to all backends resolved by GenericFileSystem (#2083)
 - Handle end=None in FirstChunkCache._fetch like the other caches (#2082)
