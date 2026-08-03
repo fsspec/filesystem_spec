@@ -51,6 +51,10 @@ jobs:
           pip install -e .[test_full]
           pytest -v
 
+      - name: Run Stub Tests
+        shell: bash -l {0}
+        run: stubtest fsspec.spec
+
   win:
     name: pytest-win
     runs-on: windows-2022
