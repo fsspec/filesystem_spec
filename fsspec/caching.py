@@ -412,8 +412,7 @@ class BlockCache(BaseCache):
         self.total_requested_bytes += end - start
         self.miss_count += 1
         logger.info("BlockCache fetching block %d", block_number)
-        block_contents = super()._fetch(start, end)
-        return block_contents
+        return super()._fetch(start, end)
 
     def _read_cache(
         self, start: int, end: int, start_block_number: int, end_block_number: int
@@ -877,7 +876,7 @@ class BackgroundBlockCache(BaseCache):
                     self._fetch_future = None
                 else:
                     # Must join if we need the block for the current fetch
-                    must_join = bool(
+                    must_join = (
                         start_block_number
                         <= self._fetch_future_block_number
                         <= end_block_number
@@ -940,8 +939,7 @@ class BackgroundBlockCache(BaseCache):
         logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
         self.total_requested_bytes += end - start
         self.miss_count += 1
-        block_contents = super()._fetch(start, end)
-        return block_contents
+        return super()._fetch(start, end)
 
     def _read_cache(
         self, start: int, end: int, start_block_number: int, end_block_number: int

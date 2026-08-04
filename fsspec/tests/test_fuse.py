@@ -24,7 +24,7 @@ def host_fuse(mountdir):
 def test_basic(tmpdir, capfd):
     mountdir = str(tmpdir.mkdir("mount"))
 
-    fuse_process = Process(target=host_fuse, args=(str(mountdir),))
+    fuse_process = Process(target=host_fuse, args=(mountdir,))
     fuse_process.start()
 
     try:
