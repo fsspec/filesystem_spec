@@ -14,6 +14,8 @@ from itertools import groupby
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, NamedTuple, TypeVar
 
+import fsspec.asyn
+
 if TYPE_CHECKING:
     import mmap
 
@@ -284,14 +286,28 @@ class ReadAheadCache(BaseCache):
 
 
 class AdaptiveReadaheadCache(BaseCache):
-    """Adaptive readahead cache using the generic prefetch engine.
+    """Cache with adaptive asynchronous prefetching.
 
-    This cache remains API-compatible with existing fsspec cache wiring and
-    falls back to classic ``ReadAheadCache`` when async prefetching is not
-    available.
+    Optimized for sequential and near-sequential reads by dynamically
+    adjusting the amount of data prefetched in the background. The cache
+    uses the generic prefetch engine when async loop support is available,
+    and falls back to ``ReadAheadCache`` when it is not.
+
+    Parameters
+    ----------
+    blocksize: int
+        Nominal read size used by callers.
+    fetcher: Fetcher
+        Function of the form ``f(start, end)`` that returns bytes.
+    size: int
+        Total size of the file.
+    concurrency: int
+        Maximum number of concurrent background fetch tasks.
+    max_prefetch_size: int | None
+        Optional upper bound for adaptive prefetch size in bytes.
     """
 
-    name = "adaptive_readahead"
+    name = "adaptive"
 
     def __init__(
         self,
@@ -316,8 +332,6 @@ class AdaptiveReadaheadCache(BaseCache):
             )
 
         try:
-            import fsspec.asyn
-
             from .prefetch import BackgroundPrefetcher
 
             self._prefetcher = BackgroundPrefetcher(
@@ -327,9 +341,16 @@ class AdaptiveReadaheadCache(BaseCache):
                 max_prefetch_size=max_prefetch_size,
                 loop=fsspec.asyn.get_loop(),
             )
+            logger.info(
+                "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",
+                blocksize,
+                size,
+                concurrency,
+                max_prefetch_size,
+            )
         except Exception as e:
-            logger.debug(
-                "AdaptiveReadaheadCache falling back to ReadAheadCache: %s",
+            logger.info(
+                "AdaptiveReadaheadCache fallback to ReadAheadCache: %s",
                 e,
                 exc_info=True,
             )

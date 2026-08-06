@@ -362,10 +362,10 @@ def test_cache_kwargs(mocker):
     fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], ["/test"], overwrite=True)
 
 
-def test_adaptive_readahead_cache_with_async_fetcher():
+def test_adaptive_cache_with_async_fetcher():
     data = string.ascii_letters.encode()
 
-    cache = caches["adaptive_readahead"](
+    cache = caches["adaptive"](
         8,
         letters_fetcher,
         len(data),
@@ -383,9 +383,9 @@ def test_adaptive_readahead_cache_with_async_fetcher():
         cache.close()
 
 
-def test_adaptive_readahead_cache_fallback_without_loop():
+def test_adaptive_cache_fallback_without_loop():
     data = string.ascii_letters.encode()
-    cache = caches["adaptive_readahead"](8, letters_fetcher, len(data))
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
 
     assert cache._fetch(0, 10) == data[0:10]
     assert cache._fetch(10, 17) == data[10:17]
