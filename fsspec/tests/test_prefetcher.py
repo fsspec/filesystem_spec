@@ -1,9 +1,9 @@
 import asyncio
 from unittest import mock
 
-import fsspec.asyn
 import pytest
 
+import fsspec.asyn
 from fsspec.prefetcher import BackgroundPrefetcher, RunningAverageTracker, _fast_slice
 
 
@@ -368,7 +368,8 @@ def test_producer_loop_exception(prefetcher_factory):
     error_object = ValueError("Producer crash")
 
     with mock.patch(
-        "fsspec.prefetcher.RunningAverageTracker.average", new_callable=mock.PropertyMock
+        "fsspec.prefetcher.RunningAverageTracker.average",
+        new_callable=mock.PropertyMock,
     ) as mocked_avg:
         mocked_avg.side_effect = error_object
         with pytest.raises(ValueError, match="Producer crash"):

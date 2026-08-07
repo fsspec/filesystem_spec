@@ -237,9 +237,7 @@ class PrefetchProducer:
             self._producer_task.cancel()
             tasks_to_wait.append(self._producer_task)
 
-        for task in list(self._active_tasks):
-            if not task.done():
-                tasks_to_wait.append(task)
+        tasks_to_wait.extend(task for task in self._active_tasks if not task.done())
 
         # We do not cancel the network task, instead we wait on them.
         # This is intentionally done to avoid MRD stream disruption.
@@ -301,10 +299,9 @@ class PrefetchProducer:
         except asyncio.CancelledError:
             logger.debug("PrefetchProducer loop was cancelled.")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "PrefetchProducer loop encountered an unexpected error: %s",
                 e,
-                exc_info=True,
             )
             self.is_stopped = True
             self.orchestrator.set_error(e)
@@ -560,7 +557,7 @@ class PrefetchConsumer:
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    logger.error("Consumer caught an error: %s", e, exc_info=True)
+                    logger.exception("Consumer caught an error: %s", e)
                     self.orchestrator.set_error(e)
                     raise e
 
@@ -820,9 +817,7 @@ class BackgroundPrefetcher:
                 self._error = e
                 raise
             except Exception as e:
-                logger.error(
-                    "Exception raised during asynchronous fetch: %s", e, exc_info=True
-                )
+                logger.exception("Exception raised during asynchronous fetch: %s", e)
                 self._error = e
                 if self.producer and not self.producer.is_stopped:
                     await self.producer.stop()

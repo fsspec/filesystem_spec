@@ -1,8 +1,6 @@
-import asyncio
 import pickle
 import string
 
-import fsspec
 import pytest
 
 from fsspec.caching import (
