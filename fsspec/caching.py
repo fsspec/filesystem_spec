@@ -337,7 +337,7 @@ class AdaptiveReadaheadCache(BaseCache):
             ) from e
 
         try:
-            from .prefetch import BackgroundPrefetcher
+            from .prefetcher import BackgroundPrefetcher
 
             self._prefetcher = BackgroundPrefetcher(
                 fetcher=_default_fetcher_async,
