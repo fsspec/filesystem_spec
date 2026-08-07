@@ -359,3 +359,70 @@ def test_cache_kwargs(mocker):
     # It is a random location that cannot be predicted.
     # The important thing is the 'overwrite' kwarg
     fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], ["/test"], overwrite=True)
+
+
+def test_adaptive_cache_with_async_fetcher():
+    data = string.ascii_letters.encode()
+
+    cache = caches["adaptive"](
+        8,
+        letters_fetcher,
+        len(data),
+        # Keep this below the default prefetch minimum so behavior is deterministic
+        # and bounded for unit testing.
+        concurrency=2,
+        max_prefetch_size=64,
+    )
+    try:
+        assert cache._fetch(0, 0) == b""
+        assert cache._fetch(0, 5) == data[0:5]
+        assert cache._fetch(5, 12) == data[5:12]
+        assert cache._fetch(12, 20) == data[12:20]
+    finally:
+        cache.close()
+
+
+def test_adaptive_cache_registered():
+    assert "adaptive" in caches
+
+
+def test_adaptive_cache_fallback_when_prefetcher_init_fails(monkeypatch):
+    import fsspec.prefetcher as prefetcher_mod
+
+    class FailingPrefetcher:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("prefetch init failed")
+
+    monkeypatch.setattr(prefetcher_mod, "BackgroundPrefetcher", FailingPrefetcher)
+
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
+
+    # On prefetch setup failure, adaptive must still serve reads through readahead.
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]
+    assert cache._prefetcher is None
+
+
+def test_adaptive_cache_selected_in_open_flow():
+    from fsspec.spec import AbstractBufferedFile
+
+    data = string.ascii_letters.encode()
+
+    class TestFile(AbstractBufferedFile):
+        DEFAULT_BLOCK_SIZE = 8
+
+        def _fetch_range(self, start, end):
+            return data[start:end]
+
+    with TestFile(None, "afile", mode="rb", cache_type="adaptive", size=len(data)) as f:
+        assert f.cache.name == "adaptive"
+        assert f.read(12) == data[:12]
+
+
+def test_adaptive_cache_fallback_without_loop():
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
+
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]
