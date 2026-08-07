@@ -2,6 +2,7 @@ import asyncio
 import pickle
 import string
 
+import fsspec
 import pytest
 
 from fsspec.caching import (
@@ -381,6 +382,44 @@ def test_adaptive_cache_with_async_fetcher():
         assert cache._fetch(12, 20) == data[12:20]
     finally:
         cache.close()
+
+
+def test_adaptive_cache_registered():
+    assert "adaptive" in caches
+
+
+def test_adaptive_cache_fallback_when_prefetcher_init_fails(monkeypatch):
+    import fsspec.prefetcher as prefetcher_mod
+
+    class FailingPrefetcher:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("prefetch init failed")
+
+    monkeypatch.setattr(prefetcher_mod, "BackgroundPrefetcher", FailingPrefetcher)
+
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
+
+    # On prefetch setup failure, adaptive must still serve reads through readahead.
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]
+    assert cache._prefetcher is None
+
+
+def test_adaptive_cache_selected_in_open_flow():
+    from fsspec.spec import AbstractBufferedFile
+
+    data = string.ascii_letters.encode()
+
+    class TestFile(AbstractBufferedFile):
+        DEFAULT_BLOCK_SIZE = 8
+
+        def _fetch_range(self, start, end):
+            return data[start:end]
+
+    with TestFile(None, "afile", mode="rb", cache_type="adaptive", size=len(data)) as f:
+        assert f.cache.name == "adaptive"
+        assert f.read(12) == data[:12]
 
 
 def test_adaptive_cache_fallback_without_loop():
