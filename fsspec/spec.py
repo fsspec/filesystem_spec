@@ -744,19 +744,42 @@ class AbstractFileSystem(metaclass=_Cached):
         directory, or something else) and other FS-specific keys.
         """
         path = self._strip_protocol(path)
+        if not kwargs.get("refresh", False):
+            try:
+                cached_info = self.dircache.get_info(path)
+                if cached_info is not None:
+                    return cached_info
+            except AttributeError:
+                pass
+
         out = self.ls(self._parent(path), detail=True, **kwargs)
         out = [o for o in out if o["name"].rstrip("/") == path]
         if out:
-            return out[0]
+            res = out[0]
+            try:
+                self.dircache.save_info(path, res)
+            except AttributeError:
+                pass
+            return res
         out = self.ls(path, detail=True, **kwargs)
         path = path.rstrip("/")
         out1 = [o for o in out if o["name"].rstrip("/") == path]
         if len(out1) == 1:
             if "size" not in out1[0]:
                 out1[0]["size"] = None
-            return out1[0]
+            res = out1[0]
+            try:
+                self.dircache.save_info(path, res)
+            except AttributeError:
+                pass
+            return res
         elif len(out1) > 1 or out:
-            return {"name": path, "size": 0, "type": "directory"}
+            res = {"name": path, "size": 0, "type": "directory"}
+            try:
+                self.dircache.save_info(path, res)
+            except AttributeError:
+                pass
+            return res
         else:
             raise FileNotFoundError(path)
 
