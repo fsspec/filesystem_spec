@@ -14,8 +14,6 @@ from itertools import groupby
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, NamedTuple, TypeVar
 
-import fsspec.asyn
-
 if TYPE_CHECKING:
     import mmap
 
@@ -332,6 +330,13 @@ class AdaptiveReadaheadCache(BaseCache):
             )
 
         try:
+            from . import asyn as fsspec_asyn
+        except ImportError as e:
+            raise ImportError(
+                "AdaptiveReadaheadCache requires fsspec.asyn to be available"
+            ) from e
+
+        try:
             from .prefetch import BackgroundPrefetcher
 
             self._prefetcher = BackgroundPrefetcher(
@@ -339,7 +344,7 @@ class AdaptiveReadaheadCache(BaseCache):
                 size=size,
                 concurrency=concurrency,
                 max_prefetch_size=max_prefetch_size,
-                loop=fsspec.asyn.get_loop(),
+                loop=fsspec_asyn.get_loop(),
             )
             logger.info(
                 "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",

@@ -8,7 +8,7 @@ import stat
 import tempfile
 from functools import lru_cache
 
-from fsspec import AbstractFileSystem
+from ..spec import AbstractFileSystem
 from fsspec.compression import compr
 from fsspec.core import get_compression
 from fsspec.utils import isfilelike, stringify_path
