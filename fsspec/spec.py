@@ -1297,15 +1297,14 @@ class AbstractFileSystem(metaclass=_Cached):
         raise NotImplementedError
 
     def rm(self, path, recursive=False, maxdepth=None):
-        """Delete files.
+        """Delete files or directories.
 
         Parameters
         ----------
         path: str or list of str
-            File(s) to delete.
+            Files or directories to delete.
         recursive: bool
-            If file(s) are directories, recursively delete contents and then
-            also remove the directory
+            If True, recursively delete directories and their contents.
         maxdepth: int or None
             Depth to pass to walk for finding files to delete, if recursive.
             If None, there will be no limit and infinite recursion may be
