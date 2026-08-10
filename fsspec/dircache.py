@@ -42,7 +42,7 @@ class DirCache(MutableMapping):
         max_paths=None,
         **kwargs,
     ):
-        self._cache = OrderedDict()
+        self._cache = OrderedDict() if max_paths else {}
         self._times = {}
         self.use_listings_cache = use_listings_cache
         self.listings_expiry_time = listings_expiry_time
@@ -55,7 +55,8 @@ class DirCache(MutableMapping):
                 raise KeyError(item)
 
         val = self._cache[item]  # maybe raises KeyError
-        self._cache.move_to_end(item)
+        if self.max_paths:
+            self._cache.move_to_end(item)
         return val
 
     def clear(self):
@@ -74,13 +75,14 @@ class DirCache(MutableMapping):
 
     def __setitem__(self, key, value):
         self._cache[key] = value
-        self._cache.move_to_end(key)
         if self.listings_expiry_time is not None:
             self._times[key] = time.time()
 
-        if self.max_paths and len(self._cache) > self.max_paths:
-            oldest, _ = self._cache.popitem(last=False)
-            self._times.pop(oldest, None)
+        if self.max_paths:
+            self._cache.move_to_end(key)
+            if len(self._cache) > self.max_paths:
+                oldest, _ = self._cache.popitem(last=False)
+                self._times.pop(oldest, None)
 
     def __delitem__(self, key):
         del self._cache[key]

@@ -59,3 +59,20 @@ def test_nulldircache():
     assert list(dc) == []
     with pytest.raises(KeyError):
         _ = dc["a"]
+
+
+def test_dircache_no_max_paths():
+    from collections import OrderedDict
+
+    dc_no_max = DirCache(max_paths=None)
+    assert type(dc_no_max._cache) is dict
+
+    dc_max = DirCache(max_paths=10)
+    assert type(dc_max._cache) is OrderedDict
+
+    dc_no_max["a"] = 1
+    dc_no_max["b"] = 2
+    assert dc_no_max["a"] == 1
+    assert dc_no_max["b"] == 2
+    assert len(dc_no_max) == 2
+    assert list(dc_no_max) == ["a", "b"]
