@@ -156,7 +156,7 @@ available as the attribute ``.loop``.
 AsyncFileSystemWrapper
 ----------------------
 
-The `AsyncFileSystemWrapper` class is an experimental feature that allows you to convert
+The `AsyncFileSystemWrapper` class allows you to convert
 a synchronous filesystem into an asynchronous one. This is useful for quickly integrating
 synchronous filesystems into workflows that may expect `AsyncFileSystem` instances.
 
@@ -183,6 +183,6 @@ backed by the normal, synchronous methods of `LocalFileSystem`:
 Limitations
 -----------
 
-This is experimental. Users should not expect this wrapper to magically make things faster.
+Users should not expect this wrapper to magically make things faster.
 It is primarily provided to allow usage of synchronous filesystems with interfaces that expect
 `AsyncFileSystem` instances.
