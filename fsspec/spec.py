@@ -1280,12 +1280,71 @@ class AbstractFileSystem(metaclass=_Cached):
         """Move file(s) from one location to another"""
         if path1 == path2:
             logger.debug("%s mv: The paths are the same, so no files were moved.", self)
+            return
+
+        if isinstance(path1, list) and isinstance(path2, list):
+            # No need to expand paths when both source and destination are provided as lists
+            paths1 = path1
+            paths2 = path2
         else:
-            # explicitly raise exception to prevent data corruption
+            from .implementations.local import trailing_sep
+
+            source_is_str = isinstance(path1, str)
+            paths1 = self.expand_path(
+                path1, recursive=recursive, maxdepth=maxdepth, **kwargs
+            )
+            if source_is_str and (not recursive or maxdepth is not None):
+                # Non-recursive glob does not move directories
+                paths1 = [p for p in paths1 if not (trailing_sep(p) or self.isdir(p))]
+                if not paths1:
+                    # Preserve the existing error behavior for directory moves
+                    # that are not recursive.
+                    self.copy(
+                        path1,
+                        path2,
+                        recursive=recursive,
+                        maxdepth=maxdepth,
+                        on_error="raise",
+                    )
+                    self.rm(path1, recursive=recursive)
+                    return
+
+            source_is_file = len(paths1) == 1
+            dest_is_dir = isinstance(path2, str) and (
+                trailing_sep(path2) or self.isdir(path2)
+            )
+
+            exists = source_is_str and (
+                (has_magic(path1) and source_is_file)
+                or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
+            )
+            paths2 = other_paths(
+                paths1,
+                path2,
+                exists=exists,
+                flatten=not source_is_str,
+            )
+
+        if any(self.isdir(p1) for p1 in paths1):
+            # mv_file handles individual files. Keep the existing recursive
+            # copy-and-remove behavior for directory trees.
             self.copy(
-                path1, path2, recursive=recursive, maxdepth=maxdepth, on_error="raise"
+                path1,
+                path2,
+                recursive=recursive,
+                maxdepth=maxdepth,
+                on_error="raise",
             )
             self.rm(path1, recursive=recursive)
+            return
+
+        for p1, p2 in zip(paths1, paths2):
+            self.mv_file(p1, p2, **kwargs)
+
+    def mv_file(self, path1, path2, **kwargs):
+        """Move a single file, allowing implementations to provide an atomic operation."""
+        self.cp_file(path1, path2, **kwargs)
+        self.rm_file(path1)
 
     def rm_file(self, path):
         """Delete a file"""
