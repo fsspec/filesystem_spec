@@ -748,9 +748,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # infer the compression from the original filename, like
             # the `TarFileSystem`, let's extend the `io.BufferedReader`
             # fileobject protocol by adding a dedicated attribute
-            # `original`.
+            # `original`. `size` is added for the same reason: callers such
+            # as `AbstractFileSystem.cat_file` need it to resolve negative
+            # offsets, and `LocalFileOpener` exposes it the same way.
             f = open(fn, mode)
             f.original = detail.get("original")
+            f.size = os.fstat(f.fileno()).st_size
             return f
 
         hash = self._mapper(path)
@@ -768,12 +771,26 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         path = self._strip_protocol(path)
         sha = self._mapper(path)
         fn = self._check_file(path)
+        if isinstance(fn, tuple):
+            # `WholeFileCacheFileSystem._check_file` returns `(detail, fn)`;
+            # the `SimpleCacheFileSystem` override returns just the path.
+            _, fn = fn
 
         if not fn:
             fn = os.path.join(self.storage[-1], sha)
             await self.fs._get_file(path, fn, **kwargs)
 
         with open(fn, "rb") as f:  # noqa ASYNC230
+            if (start is not None and start < 0) or (end is not None and end < 0):
+                # Negative offsets count backwards from the end of the file, as
+                # documented on ``AbstractFileSystem.cat_file``. They must be
+                # resolved against the file size first: seeking to a negative
+                # absolute position raises ``OSError(EINVAL)``.
+                file_size = os.fstat(f.fileno()).st_size
+                if start is not None and start < 0:
+                    start = max(0, file_size + start)
+                if end is not None and end < 0:
+                    end = max(0, file_size + end)
             if start:
                 f.seek(start)
             size = -1 if end is None else end - f.tell()
@@ -789,7 +806,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         rpaths = []
         for p in paths:
             fn = self._check_file(p)
-            if fn is None and p not in rset:
+            if isinstance(fn, tuple):
+                # see `_cat_file`: the two subclasses differ in what
+                # `_check_file` returns for a cached path
+                _, fn = fn
+            if not fn and p not in rset:
                 sha = self._mapper(p)
                 fn = os.path.join(self.storage[-1], sha)
                 download.append(fn)
@@ -963,7 +984,11 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         fn = self._check_file(path)
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:
-            return open(fn, mode)
+            f = open(fn, mode)
+            # `AbstractFileSystem.cat_file` needs `size` to resolve negative
+            # offsets; `LocalFileOpener` exposes it on the raw file the same way.
+            f.size = os.fstat(f.fileno()).st_size
+            return f
 
         fn = os.path.join(self.storage[-1], sha)
         user_specified_kwargs = {

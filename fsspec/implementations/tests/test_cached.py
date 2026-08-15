@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import shutil
@@ -1413,3 +1414,60 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     for attr in ("_cat_file", "_cat_ranges"):
         assert hasattr(fs, attr), f"instance missing {attr}"
         assert hasattr(type(fs), attr), f"class missing {attr}"
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_cat_file_negative_offsets(tmp_path, protocol):
+    """Negative start/end count backwards from the end of the file.
+
+    ``AbstractFileSystem.cat_file`` documents this, and remote backends such as
+    S3 implement it as an HTTP suffix range. Whole-file caches serve ranges from
+    the local copy instead, so they must resolve negative offsets against the
+    file size rather than seeking to a negative absolute position, which raises
+    ``OSError(EINVAL)``.
+    """
+    data = b"0123456789"
+    fsspec.filesystem("memory").pipe_file("/afile", data)
+
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+
+    assert fs.cat_file("/afile", start=-3) == data[-3:]
+    assert fs.cat_file("/afile", start=-3, end=-1) == data[-3:-1]
+    assert fs.cat_file("/afile", start=2, end=-2) == data[2:-2]
+    # out-of-range suffixes clamp to the whole file, as in the base class
+    assert fs.cat_file("/afile", start=-100) == data
+
+    # non-negative offsets are unaffected
+    assert fs.cat_file("/afile") == data
+    assert fs.cat_file("/afile", start=2) == data[2:]
+    assert fs.cat_file("/afile", start=2, end=5) == data[2:5]
+
+    # async consumers (e.g. zarr's FsspecStore) await ``_cat_file`` directly.
+    # The file is cached by now, so no download is awaited on this path.
+    assert asyncio.run(fs._cat_file("/afile", start=-3)) == data[-3:]
+    assert asyncio.run(fs._cat_file("/afile", start=-3, end=-1)) == data[-3:-1]
+    assert asyncio.run(fs._cat_file("/afile", start=2, end=-2)) == data[2:-2]
+    assert asyncio.run(fs._cat_file("/afile", start=-100)) == data
+    assert asyncio.run(fs._cat_file("/afile", start=2, end=5)) == data[2:5]
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_cat_ranges_of_cached_file(tmp_path, protocol):
+    """``_cat_ranges`` must accept what ``_check_file`` returns.
+
+    ``WholeFileCacheFileSystem._check_file`` returns a ``(detail, path)`` tuple
+    for a cached file, while the ``SimpleCacheFileSystem`` override returns the
+    path alone; the shared implementation has to handle both.
+    """
+    data = b"0123456789"
+    fsspec.filesystem("memory").pipe_file("/afile", data)
+
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    fs.cat_file("/afile")  # populate the cache
+
+    assert fs.cat_ranges(["/afile"], [2], [5]) == [data[2:5]]
+    assert asyncio.run(fs._cat_ranges(["/afile"], [2], [5])) == [data[2:5]]
