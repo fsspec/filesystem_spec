@@ -375,7 +375,7 @@ class BlockCache(BaseCache):
         return self._fetch_block_cached.cache_info()
 
     def __getstate__(self) -> dict[str, Any]:
-        state = self.__dict__
+        state = self.__dict__.copy()
         del state["_fetch_block_cached"]
         return state
 
@@ -832,7 +832,7 @@ class BackgroundBlockCache(BaseCache):
         del self._fetch_block_cached
 
     def __getstate__(self) -> dict[str, Any]:
-        state = self.__dict__
+        state = self.__dict__.copy()
         del state["_fetch_block_cached"]
         del state["_thread_executor"]
         del state["_fetch_future_block_number"]

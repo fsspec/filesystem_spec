@@ -1,6 +1,14 @@
 Changelog
 =========
 
+Dev
+---
+
+Fixes
+
+- Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
+  when pickling (#2102)
+
 2026.7.0
 --------
 
