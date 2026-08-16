@@ -861,7 +861,10 @@ class AbstractFileSystem(metaclass=_Cached):
             if end is not None:
                 if end < 0:
                     end = f.size + end
-                return f.read(end - f.tell())
+                # a crossed range reads nothing, like a python slice. Without
+                # the clamp, a range crossed by exactly one byte computes -1,
+                # which ``read`` takes as "to the end of the file"
+                return f.read(max(0, end - f.tell()))
             return f.read()
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
