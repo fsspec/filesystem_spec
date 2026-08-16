@@ -853,19 +853,24 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         # explicitly set buffering off?
         with self.open(path, "rb", **kwargs) as f:
-            if start is not None:
-                if start >= 0:
-                    f.seek(start)
-                else:
-                    f.seek(max(0, f.size + start))
-            if end is not None:
-                if end < 0:
-                    end = f.size + end
-                # a crossed range reads nothing, like a python slice. Without
-                # the clamp, a range crossed by exactly one byte computes -1,
-                # which ``read`` takes as "to the end of the file"
-                return f.read(max(0, end - f.tell()))
-            return f.read()
+            if (start is not None and start < 0) or (end is not None and end < 0):
+                # A negative offset counts backwards from the end of the file,
+                # so resolve both to absolute positions -- which is precisely
+                # what a python slice does, clamping included. Only this case
+                # needs the file size, and not every file object carries one
+                # (``tarfile.ExFileObject``, for instance), so nothing else
+                # may touch it.
+                start, end, _ = slice(start, end).indices(f.size)
+
+            if start:
+                f.seek(start)
+            if end is None:
+                # no upper bound: read to the end of the file
+                return f.read()
+            # a crossed range reads nothing. Without the clamp, a range
+            # crossed by exactly one byte gives a length of -1, which ``read``
+            # takes as "to the end of the file"
+            return f.read(max(0, end - f.tell()))
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
         """Set the bytes of given file"""
