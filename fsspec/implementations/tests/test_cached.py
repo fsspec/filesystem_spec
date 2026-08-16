@@ -9,6 +9,7 @@ import pytest
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.cache_mapper import (
     BasenameCacheMapper,
     HashCacheMapper,
@@ -1452,6 +1453,12 @@ def test_cat_file_negative_offsets(tmp_path, protocol):
     assert asyncio.run(fs._cat_file("/afile", start=-100)) == data
     assert asyncio.run(fs._cat_file("/afile", start=2, end=5)) == data[2:5]
 
+    # a range crossed by exactly one byte must not compute a read size of -1,
+    # which would read the rest of the file instead of returning nothing
+    assert asyncio.run(fs._cat_file("/afile", start=6, end=-5)) == b""
+    assert asyncio.run(fs._cat_file("/afile", start=8, end=-5)) == b""
+    assert asyncio.run(fs._cat_file("/afile", start=6, end=5)) == b""
+
 
 @pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
 def test_cat_ranges_of_cached_file(tmp_path, protocol):
@@ -1471,3 +1478,26 @@ def test_cat_ranges_of_cached_file(tmp_path, protocol):
 
     assert fs.cat_ranges(["/afile"], [2], [5]) == [data[2:5]]
     assert asyncio.run(fs._cat_ranges(["/afile"], [2], [5])) == [data[2:5]]
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_cat_ranges_repeated_uncached_path(tmp_path, protocol):
+    """Several ranges of one uncached object all resolve to the local copy.
+
+    Readers of sharded formats routinely ask for many ranges of the same
+    object, so only the first occurrence schedules a download and the rest
+    must still be given the local path rather than the cache-miss sentinel.
+    """
+    data = b"0123456789"
+    memfs = fsspec.filesystem("memory")
+    memfs.pipe_file("/afile", data)
+
+    fs = fsspec.filesystem(
+        protocol, fs=AsyncFileSystemWrapper(memfs), cache_storage=str(tmp_path)
+    )
+
+    paths = ["/afile", "/afile", "/afile"]
+    expected = [data[2:5], data[0:3], data[7:9]]
+    assert asyncio.run(fs._cat_ranges(paths, [2, 0, 7], [5, 3, 9])) == expected
+    # and again now that the file is cached
+    assert asyncio.run(fs._cat_ranges(paths, [2, 0, 7], [5, 3, 9])) == expected

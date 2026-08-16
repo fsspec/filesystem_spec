@@ -793,7 +793,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     end = max(0, file_size + end)
             if start:
                 f.seek(start)
-            size = -1 if end is None else end - f.tell()
+            # a crossed range reads nothing; clamp so that a range crossed by
+            # exactly one byte cannot produce ``-1``, the read-everything sentinel
+            size = -1 if end is None else max(0, end - f.tell())
             return f.read(size)
 
     async def _cat_ranges(
@@ -801,21 +803,28 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     ):
         logger.debug("async cat ranges %s", paths)
         lpaths = []
-        rset = set()
+        # local path per unique remote path: the same path may appear in
+        # ``paths`` more than once (readers of sharded formats ask for several
+        # ranges of one object), and every occurrence needs the local path,
+        # not just the one that scheduled the download
+        resolved = {}
         download = []
         rpaths = []
         for p in paths:
+            if p in resolved:
+                lpaths.append(resolved[p])
+                continue
             fn = self._check_file(p)
             if isinstance(fn, tuple):
                 # see `_cat_file`: the two subclasses differ in what
                 # `_check_file` returns for a cached path
                 _, fn = fn
-            if not fn and p not in rset:
+            if not fn:
                 sha = self._mapper(p)
                 fn = os.path.join(self.storage[-1], sha)
                 download.append(fn)
-                rset.add(p)
                 rpaths.append(p)
+            resolved[p] = fn
             lpaths.append(fn)
         if download:
             await self.fs._get(rpaths, download, on_error=on_error)
