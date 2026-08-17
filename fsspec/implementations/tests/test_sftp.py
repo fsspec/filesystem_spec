@@ -280,8 +280,9 @@ def test_modified_time(ssh, root_path):
     assert modified_file_date <= datetime.now(timezone.utc)
 
 
-# NOTE: These following two tests are a copy of the modified ones, as
-# WebHDFS does not have a created time API, we are using modified as a proxy.
+# NOTE: These following two tests are a copy of the modified ones, as we are using
+# modified as a proxy for created. This is due to paramiko only returning st_atime
+# and st_mtime.
 
 
 def test_created_nonexistent_path(ssh, root_path):
