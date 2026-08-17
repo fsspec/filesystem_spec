@@ -18,6 +18,7 @@ from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
+    check_contained,
     glob_translate,
     isfilelike,
     other_paths,
@@ -1057,6 +1058,11 @@ class AbstractFileSystem(metaclass=_Cached):
                 exists=exists,
                 flatten=not source_is_str,
             )
+            if isinstance(lpath, str):
+                # The names came from the source listing; ".." in one of them
+                # would otherwise place the copy above the destination. When
+                # lpath is a list the caller named every destination itself.
+                check_contained(lpath, lpaths)
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):

@@ -15,7 +15,7 @@ from .callbacks import DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
 from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
-from .utils import glob_translate, is_exception, other_paths
+from .utils import check_contained, glob_translate, is_exception, other_paths
 
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
@@ -698,6 +698,11 @@ class AsyncFileSystem(AbstractFileSystem):
                 exists=exists,
                 flatten=not source_is_str,
             )
+            if isinstance(lpath, str):
+                # The names came from the source listing; ".." in one of them
+                # would otherwise place the copy above the destination. When
+                # lpath is a list the caller named every destination itself.
+                check_contained(lpath, lpaths)
 
         [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
         batch_size = kwargs.pop("batch_size", self.batch_size)
