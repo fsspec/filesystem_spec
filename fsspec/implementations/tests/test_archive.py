@@ -393,24 +393,10 @@ class TestAnyArchive:
 
         with scenario.provider(data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
-            try:
-                fs.get("*", str(dest), recursive=True)
-            except ValueError:
-                pass
-
-        assert not outside.exists(), f"copy wrote {outside}, above {dest}"
-
-    def test_get_rejects_member_pointing_above_destination(
-        self, scenario: ArchiveTestScenario, tmp_path
-    ):
-        data = {"readme.txt": b"ok", "../escaped.txt": b"escaped"}
-        dest = tmp_path / "dest"
-        dest.mkdir()
-
-        with scenario.provider(data) as archive:
-            fs = fsspec.filesystem(scenario.protocol, fo=archive)
             with pytest.raises(ValueError, match="outside the destination"):
                 fs.get("*", str(dest), recursive=True)
+
+        assert not outside.exists(), f"copy wrote {outside}, above {dest}"
 
     def test_get_keeps_dotdot_inside_destination(
         self, scenario: ArchiveTestScenario, tmp_path
