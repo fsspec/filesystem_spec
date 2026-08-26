@@ -1416,6 +1416,8 @@ class AbstractFileSystem(metaclass=_Cached):
                 cache_options=cache_options,
                 **kwargs,
             )
+            if not ac and "r" not in mode:
+                self.transaction.files.append(f)
             if compression is not None:
                 from fsspec.compression import compr
                 from fsspec.core import get_compression
@@ -1423,9 +1425,6 @@ class AbstractFileSystem(metaclass=_Cached):
                 compression = get_compression(path, compression)
                 compress = compr[compression]
                 f = compress(f, mode=mode[0])
-
-            if not ac and "r" not in mode:
-                self.transaction.files.append(f)
             return f
 
     def touch(self, path, truncate=True, **kwargs):

@@ -2,6 +2,7 @@ import os
 import shlex
 import subprocess
 import time
+from datetime import datetime, timezone
 from tarfile import TarFile
 
 import pytest
@@ -246,3 +247,70 @@ def test_makedirs_exist_ok(ssh, path):
     f.makedirs(path, exist_ok=True)
     f.rm(path, recursive=True)
     assert not f.exists(path)
+
+
+def test_modified_nonexistent_path(ssh, root_path):
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+
+    nonexistent_path = root_path + "nonexistent_file.txt"
+
+    with pytest.raises(FileNotFoundError):
+        f.modified(nonexistent_path)
+
+
+def test_modified_time(ssh, root_path):
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+    dir_path = root_path + "modified_dir/"
+    file_path = dir_path + "testfile_modified.txt"
+
+    f.mkdir(dir_path)
+
+    # Check first modified time for directories
+    modified_dir_date: datetime = f.modified(dir_path)
+
+    # I think it is the only thing we can assume, but I'm not sure if the server has a different time
+    assert modified_dir_date <= datetime.now(timezone.utc)
+
+    # Create a file and check modified time again
+    with f.open(file_path, "wb") as wf:
+        wf.write(b"test content")
+
+    modified_file_date: datetime = f.modified(file_path)
+    assert modified_file_date >= modified_dir_date
+    assert modified_file_date <= datetime.now(timezone.utc)
+
+
+# NOTE: These following two tests are a copy of the modified ones, as we are using
+# modified as a proxy for created. This is due to paramiko only returning st_atime
+# and st_mtime.
+
+
+def test_created_nonexistent_path(ssh, root_path):
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+
+    nonexistent_path = root_path + "nonexistent_file.txt"
+
+    with pytest.raises(FileNotFoundError):
+        f.created(nonexistent_path)
+
+
+def test_created_time(ssh, root_path):
+    f = fsspec.get_filesystem_class("sftp")(**ssh)
+    dir_path = root_path + "created_dir/"
+    file_path = dir_path + "testfile_created.txt"
+
+    f.mkdir(dir_path)
+
+    # Check first created time for directories
+    created_dir_date: datetime = f.created(dir_path)
+
+    # I think it is the only thing we can assume, but I'm not sure if the server has a different time
+    assert created_dir_date <= datetime.now(timezone.utc)
+
+    # Create a file and check modified time again
+    with f.open(file_path, "wb") as wf:
+        wf.write(b"test content")
+
+    created_file_date: datetime = f.created(file_path)
+    assert created_file_date >= created_dir_date
+    assert created_file_date <= datetime.now(timezone.utc)

@@ -194,7 +194,9 @@ def test_cache_pickleable(Cache_imp):
     size = 100
     cache = Cache_imp(blocksize, _fetcher, size)
     cache._fetch(0, 5)  # fill in cache
-    unpickled = pickle.loads(pickle.dumps(cache))
+    payload = pickle.dumps(cache)
+    assert cache._fetch(0, 10) == b"0" * 10
+    unpickled = pickle.loads(payload)
     assert isinstance(unpickled, Cache_imp)
     assert unpickled.blocksize == blocksize
     assert unpickled.size == size
