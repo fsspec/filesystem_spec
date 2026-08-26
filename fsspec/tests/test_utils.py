@@ -1,4 +1,5 @@
 import io
+import os
 import sys
 from pathlib import Path, PurePath
 from unittest.mock import Mock
@@ -8,6 +9,7 @@ import pytest
 import fsspec.utils
 from fsspec.utils import (
     can_be_local,
+    check_contained,
     common_prefix,
     get_file_extension,
     get_protocol,
@@ -490,3 +492,26 @@ def test_stringify_path(path, expected):
     path = fsspec.utils.stringify_path(path)
 
     assert path == expected
+
+
+@pytest.mark.parametrize(
+    "root, path, contained",
+    (
+        ("/dest", "/dest/inside.txt", True),
+        ("/dest", "/dest/a/b/inside.txt", True),
+        ("/dest", "/dest", True),
+        ("/dest", "/dest/a/../inside.txt", True),
+        ("/dest", "/escaped.txt", False),
+        ("/dest", "/dest/../escaped.txt", False),
+        # A sibling whose name starts with the root must not count as inside.
+        ("/dest", "/destination/escaped.txt", False),
+    ),
+)
+def test_check_contained(root, path, contained):
+    root = os.path.abspath(root)
+    path = os.path.abspath(path)
+    if contained:
+        check_contained(root, [path])
+    else:
+        with pytest.raises(ValueError, match="outside the destination"):
+            check_contained(root, [path])
