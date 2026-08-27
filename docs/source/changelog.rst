@@ -9,6 +9,9 @@ Fixes
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
   when pickling (#2102)
 
+- End the transaction even when a commit or discard raises, so the filesystem
+  is not left in transaction mode and deferred temporary files are cleaned up
+
 2026.7.0
 --------
 

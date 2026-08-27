@@ -1,5 +1,6 @@
 import bz2
 import errno
+import glob
 import gzip
 import os
 import os.path
@@ -16,7 +17,12 @@ import pytest
 import fsspec
 from fsspec import compression
 from fsspec.core import OpenFile, get_fs_token_paths, open_files
-from fsspec.implementations.local import LocalFileSystem, get_umask, make_path_posix
+from fsspec.implementations.local import (
+    LocalFileOpener,
+    LocalFileSystem,
+    get_umask,
+    make_path_posix,
+)
 from fsspec.tests.test_utils import WIN
 
 files = {
@@ -531,6 +537,37 @@ def test_transaction_with_compression(tmpdir):
 
     with gzip.open(path, "rt") as f:
         assert f.read() == "data"
+
+
+def test_transaction_ends_when_a_commit_fails(tmpdir):
+    # A failed commit must not leave the filesystem mid-transaction: instances
+    # are cached, so every later write would be deferred into a temporary file
+    # that nothing commits, and would vanish without an error.
+    fs = LocalFileSystem()
+    real_commit = LocalFileOpener.commit
+    tmp_before = set(glob.glob(os.path.join(tempfile.gettempdir(), "tmp*")))
+
+    def commit(self):
+        if os.path.basename(self.path) == "b":
+            raise PermissionError(self.path)
+        real_commit(self)
+
+    with patch.object(LocalFileOpener, "commit", commit):
+        with pytest.raises(PermissionError):
+            with fs.transaction:
+                for name in ("a", "b", "c"):
+                    with fs.open(str(tmpdir / name), "wb") as f:
+                        f.write(b"data")
+
+    assert fs._intrans is False
+    assert fs._transaction is None
+    assert not set(glob.glob(os.path.join(tempfile.gettempdir(), "tmp*"))) - tmp_before
+
+    # the instance is still usable, and a later write is not swallowed
+    path = str(tmpdir / "later")
+    with fs.open(path, "wb") as f:
+        f.write(b"data")
+    assert fs.cat(path) == b"data"
 
 
 def test_same_permissions_with_and_without_transaction(tmpdir):
