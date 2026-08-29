@@ -136,6 +136,7 @@ class LocalFileSystem(AbstractFileSystem):
             self.makedirs(self._parent(path2), exist_ok=True)
         if self.isfile(path1):
             shutil.copyfile(path1, path2)
+            shutil.copystat(path1, path2)
         elif self.isdir(path1):
             self.mkdirs(path2, exist_ok=True)
         else:
