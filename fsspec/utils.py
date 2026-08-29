@@ -299,8 +299,7 @@ def read_block(
 
     # TODO: allow length to be None and read to the end of the file?
     assert length is not None
-    b = f.read(length)
-    return b
+    return f.read(length)
 
 
 def tokenize(*args: Any, **kwargs: Any) -> str:
