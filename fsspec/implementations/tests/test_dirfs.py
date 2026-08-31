@@ -129,6 +129,31 @@ def test_join_keeps_dotdot_for_non_local(fs, path):
     assert dirfs._join(path) == f"root/{path}"
 
 
+def test_join_preserves_trailing_slash(tmp_path):
+    # a trailing slash requests "copy the contents" in bulk operations
+    # (docs/source/copying.rst), so it must survive the join
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+    assert dirfs._join("foo/") == f"{dirfs.path}/foo/"
+
+
+def test_get_directory_contents_to_existing_directory(tmp_path):
+    # https://github.com/fsspec/filesystem_spec/issues/1851: without the
+    # trailing slash preserved, the second get() nests a fresh copy inside
+    # the existing target instead of copying the contents (copying.rst 1e)
+    source = tmp_path / "source"
+    (source / "dir").mkdir(parents=True)
+    (source / "dir" / "file.txt").write_text("data")
+    target = tmp_path / "target"
+    target.mkdir()
+
+    dirfs = DirFileSystem(str(source), LocalFileSystem())
+    for _ in range(2):
+        dirfs.get("dir/", str(target / "dir"), recursive=True)
+
+    assert (target / "dir" / "file.txt").is_file()
+    assert not (target / "dir" / "dir").exists()
+
+
 def test_sep(mocker, dirfs):
     sep = mocker.Mock()
     dirfs.fs.sep = sep
