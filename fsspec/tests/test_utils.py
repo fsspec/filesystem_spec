@@ -1,4 +1,5 @@
 import io
+import os.path
 import random
 import sys
 import time
@@ -13,6 +14,7 @@ from fsspec.utils import (
     common_prefix,
     get_file_extension,
     get_protocol,
+    glob_translate,
     infer_storage_options,
     merge_offset_ranges,
     mirror_from,
@@ -664,3 +666,42 @@ def test_stringify_path(path, expected):
     path = fsspec.utils.stringify_path(path)
 
     assert path == expected
+
+
+@pytest.mark.parametrize(
+    "sep,altsep",
+    [
+        ("/", None),  # posix
+        ("\\", "/"),  # windows
+    ],
+)
+def test_glob_translate_does_not_depend_on_the_host_os(monkeypatch, sep, altsep):
+    # fsspec paths always use "/", so the pattern a given glob compiles to has to be
+    # the same everywhere. Deriving the separators from os.path made a backslash a
+    # separator on Windows only.
+    monkeypatch.setattr(os.path, "sep", sep)
+    monkeypatch.setattr(os.path, "altsep", altsep)
+
+    assert glob_translate("*") == r"(?s:[^/]+)\Z"
+    assert glob_translate("a/b*") == r"(?s:a/b[^/]*)\Z"
+    # a backslash is an ordinary character in a key, not a separator
+    assert glob_translate("we\\ird.txt") == r"(?s:we\\ird\.txt)\Z"
+
+
+def test_glob_matches_a_name_containing_a_backslash():
+    # A backslash is a legal character in an object store key. It must not be treated
+    # as a path separator, on any platform.
+    fs = fsspec.filesystem("memory")
+    for name in ["/data/plain.txt", "/data/we\\ird.txt"]:
+        with fs.open(name, "wb") as f:
+            f.write(b"x")
+
+    try:
+        assert sorted(fs.glob("/data/*")) == ["/data/plain.txt", "/data/we\\ird.txt"]
+        assert fs.glob("/data/we*") == ["/data/we\\ird.txt"]
+        assert sorted(fs.glob("/data/*.txt")) == [
+            "/data/plain.txt",
+            "/data/we\\ird.txt",
+        ]
+    finally:
+        fs.store.clear()
