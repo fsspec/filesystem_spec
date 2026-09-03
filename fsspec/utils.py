@@ -13,7 +13,7 @@ from functools import partial
 from hashlib import md5
 from importlib.metadata import version
 from typing import IO, TYPE_CHECKING, Any, TypeVar
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 if TYPE_CHECKING:
     import pathlib
@@ -25,6 +25,18 @@ if TYPE_CHECKING:
 DEFAULT_BLOCK_SIZE = 5 * 2**20
 
 T = TypeVar("T")
+
+
+def _unquote_userinfo(value: str) -> str:
+    # Percent-decode a URL userinfo component (username or password).
+    # Falls back to the raw input when the decoded bytes do not form valid
+    # UTF-8, so that a literal ``%`` followed by two hex digits that happens
+    # to produce a non-UTF-8 byte (e.g. a password containing ``%ab``) is
+    # preserved instead of being replaced by U+FFFD or raising downstream.
+    try:
+        return unquote(value, errors="strict")
+    except UnicodeDecodeError:
+        return value
 
 
 def infer_storage_options(
@@ -104,9 +116,9 @@ def infer_storage_options(
         if parsed_path.port:
             options["port"] = parsed_path.port
         if parsed_path.username:
-            options["username"] = parsed_path.username
+            options["username"] = _unquote_userinfo(parsed_path.username)
         if parsed_path.password:
-            options["password"] = parsed_path.password
+            options["password"] = _unquote_userinfo(parsed_path.password)
 
     if parsed_path.query:
         options["url_query"] = parsed_path.query

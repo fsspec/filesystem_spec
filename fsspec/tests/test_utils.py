@@ -235,6 +235,36 @@ def test_infer_composite_protocol():
     assert out["path"] == ""
 
 
+def test_infer_options_percent_encoded_userinfo():
+    # Percent-encoded characters in the userinfo component must be decoded
+    # so that backends (ftp, sftp, smb, ...) receive the real credentials
+    # rather than the encoded form that appeared in the URL.
+    so = infer_storage_options(
+        "sftp://user%40corp:p%23ass%2Fword%20!@example.com:22/path"
+    )
+    assert so["username"] == "user@corp"
+    assert so["password"] == "p#ass/word !"
+    assert so["host"] == "example.com"
+    assert so["port"] == 22
+    assert so["path"] == "/path"
+
+    # Unencoded credentials pass through unchanged.
+    so = infer_storage_options("ftp://plainuser:plainpw@example.com/f")
+    assert so["username"] == "plainuser"
+    assert so["password"] == "plainpw"
+
+    # Backwards-compat: URLs whose password contains a bare ``%`` that is
+    # not a valid percent-escape must be preserved.  ``50%off`` (no hex
+    # after the %) and ``pass%`` (trailing %) already round-trip through
+    # ``urllib.parse.unquote``; ``pass%ab`` decodes to the byte 0xAB which
+    # is not valid UTF-8, so the loose default ``errors='replace'`` would
+    # silently corrupt it to U+FFFD.  We fall back to the raw form in that
+    # case so the caller still sees the original password.
+    for pw in ("50%off", "pass%", "pass%ab"):
+        so = infer_storage_options(f"sftp://user:{pw}@example.com/f")
+        assert so["password"] == pw, pw
+
+
 @pytest.mark.parametrize(
     "urlpath, expected_path",
     (
