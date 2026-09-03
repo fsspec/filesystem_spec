@@ -12,7 +12,7 @@ from functools import partial
 from hashlib import md5
 from importlib.metadata import version
 from typing import IO, TYPE_CHECKING, Any, TypeVar
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 if TYPE_CHECKING:
     import pathlib
@@ -103,9 +103,9 @@ def infer_storage_options(
         if parsed_path.port:
             options["port"] = parsed_path.port
         if parsed_path.username:
-            options["username"] = parsed_path.username
+            options["username"] = unquote(parsed_path.username)
         if parsed_path.password:
-            options["password"] = parsed_path.password
+            options["password"] = unquote(parsed_path.password)
 
     if parsed_path.query:
         options["url_query"] = parsed_path.query

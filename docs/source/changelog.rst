@@ -12,6 +12,10 @@ Fixes
 - End the transaction even when a commit or discard raises, so the filesystem
   is not left in transaction mode and deferred temporary files are cleaned up
 
+- Percent-decode the username and password parsed from URLs in
+  ``infer_storage_options`` so that backends (ftp, sftp, smb, ...) receive
+  the real credentials rather than their URL-encoded form (#1871)
+
 2026.7.0
 --------
 

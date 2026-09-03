@@ -232,6 +232,25 @@ def test_infer_composite_protocol():
     assert out["path"] == ""
 
 
+def test_infer_options_percent_encoded_userinfo():
+    # Percent-encoded characters in the userinfo component must be decoded
+    # so that backends (ftp, sftp, smb, ...) receive the real credentials
+    # rather than the encoded form that appeared in the URL.
+    so = infer_storage_options(
+        "sftp://user%40corp:p%23ass%2Fword%20!@example.com:22/path"
+    )
+    assert so["username"] == "user@corp"
+    assert so["password"] == "p#ass/word !"
+    assert so["host"] == "example.com"
+    assert so["port"] == 22
+    assert so["path"] == "/path"
+
+    # Unencoded credentials pass through unchanged.
+    so = infer_storage_options("ftp://plainuser:plainpw@example.com/f")
+    assert so["username"] == "plainuser"
+    assert so["password"] == "plainpw"
+
+
 @pytest.mark.parametrize(
     "urlpath, expected_path",
     (
