@@ -1477,10 +1477,12 @@ def test_local_glob_is_unaffected_by_the_forward_slash_translator(tmp_path):
     (tmp_path / "sub" / "c.txt").write_text("c")
 
     assert sorted(fs.glob(f"{root}/*.txt")) == [f"{root}/a.txt"]
-    assert sorted(fs.glob(f"{root}/*")) == [f"{root}/a.txt", f"{root}/b.log",
-                                            f"{root}/sub"]
-    assert sorted(fs.glob(f"{root}/**/*.txt")) == [f"{root}/a.txt",
-                                                   f"{root}/sub/c.txt"]
+    assert sorted(fs.glob(f"{root}/*")) == [
+        f"{root}/a.txt",
+        f"{root}/b.log",
+        f"{root}/sub",
+    ]
+    assert sorted(fs.glob(f"{root}/**/*.txt")) == [f"{root}/a.txt", f"{root}/sub/c.txt"]
     # every path out is posix, which is what lets the translator assume "/"
     assert all("\\" not in p for p in fs.glob(f"{root}/**"))
 
@@ -1498,12 +1500,14 @@ def test_a_native_windows_pattern_is_normalised_before_the_translator_sees_it(tm
     (tmp_path / "a.txt").write_text("a")
     (tmp_path / "sub" / "b.txt").write_text("b")
 
-    native = f"{tmp_path}\\*.txt"          # C:\...\*.txt
+    native = f"{tmp_path}\\*.txt"  # C:\...\*.txt
     assert "\\" in native
     root = make_path_posix(str(tmp_path))
     assert sorted(fs.glob(native)) == [f"{root}/a.txt"]
-    assert sorted(fs.glob(f"{tmp_path}\\**\\*.txt")) == [f"{root}/a.txt",
-                                                         f"{root}/sub/b.txt"]
+    assert sorted(fs.glob(f"{tmp_path}\\**\\*.txt")) == [
+        f"{root}/a.txt",
+        f"{root}/sub/b.txt",
+    ]
 
     # the mechanism itself, so it cannot rot silently
     assert "\\" not in make_path_posix(native)
