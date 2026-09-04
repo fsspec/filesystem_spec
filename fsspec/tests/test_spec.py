@@ -1,4 +1,5 @@
 import glob
+import io
 import json
 import os
 import pickle
@@ -1366,6 +1367,31 @@ def test_dummy_callbacks_file(tmpdir):
     callback.events.clear()
 
     assert destination.read_text("utf-8") == "x" * 100
+
+
+def test_get_file_to_supplied_outfile(tmpdir):
+    fs = DummyOpenFS()
+    source = tmpdir / "source.txt"
+    source.write_text("data", "utf-8")
+    outfile = io.BytesIO()
+
+    fs.get_file(source, outfile=outfile)
+
+    assert not outfile.closed
+    assert outfile.getvalue() == b"data"
+
+
+def test_get_file_explicit_outfile_takes_precedence(tmpdir):
+    fs = DummyOpenFS()
+    source = tmpdir / "source.txt"
+    source.write_text("data", "utf-8")
+    lpath = io.BytesIO()
+    outfile = io.BytesIO()
+
+    fs.get_file(source, lpath, outfile=outfile)
+
+    assert lpath.getvalue() == b""
+    assert outfile.getvalue() == b"data"
 
 
 def test_dummy_callbacks_files(tmpdir):
