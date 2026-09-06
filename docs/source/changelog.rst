@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Allow filesystem implementations to assign ``protocol`` per instance
+
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
   when pickling (#2102)
 
