@@ -847,6 +847,38 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
     def load_cache(self):
         pass
 
+    def clear_expired_cache(self, expiry_time=None):
+        """Remove cached files older than ``expiry_time`` seconds.
+
+        SimpleCache does not store metadata, so cached file modification times
+        are used instead. Only the last (writable) cache location is changed.
+
+        Parameters
+        ----------
+        expiry_time: int or float
+            Maximum age of a cached file in seconds. This must be supplied
+            explicitly because SimpleCache has no configured expiry time.
+        """
+        if expiry_time is None:
+            raise ValueError("expiry_time must be provided for simplecache")
+        if expiry_time < 0:
+            raise ValueError("expiry_time must be non-negative")
+
+        self._mkcache()
+        cutoff = time.time() - expiry_time
+        with os.scandir(self.storage[-1]) as entries:
+            for entry in entries:
+                try:
+                    if (
+                        entry.is_file(follow_symlinks=False)
+                        and entry.stat(follow_symlinks=False).st_mtime < cutoff
+                    ):
+                        os.remove(entry.path)
+                except FileNotFoundError:
+                    # Another process may be using the same simple cache.
+                    pass
+        self._cache_size = None
+
     def pipe_file(self, path, value=None, **kwargs):
         if self._intrans:
             with self.open(path, "wb") as f:

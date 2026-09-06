@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Allow ``simplecache`` files to be removed by age using their modification times
+
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
   when pickling (#2102)
 

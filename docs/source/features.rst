@@ -289,6 +289,9 @@ should not mix block- and file-caches in the same directory. "simplecache" is th
 except without the options for cache expiry and to check the original source - it can be used where the
 target can be considered static, and particularly where a large number of target files are expected
 (because no metadata is written to disc). Only "simplecache" is guaranteed thread/process-safe.
+Cached files can still be removed by age using their local modification times, for example
+``fs.clear_expired_cache(expiry_time=7 * 24 * 60 * 60)``. This only changes the writable cache
+location when multiple cache directories are configured.
 
 Remote Write Caching
 --------------------
