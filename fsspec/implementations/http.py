@@ -806,13 +806,56 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none")
         self.size = size
 
+    async def _open_response(self):
+        kwargs = self.kwargs.copy()
+        headers = kwargs.pop("headers", {}).copy()
+        if self.loc:
+            headers["Range"] = f"bytes={self.loc}-"
+        if headers:
+            kwargs["headers"] = headers
+
+        r = await self.session.get(self.fs.encode_url(self.url), **kwargs).__aenter__()
+        try:
+            self.fs._raise_not_found_for_status(r, self.url)
+            if self.loc:
+                content_range = r.headers.get("Content-Range", "")
+                content_start = content_range.partition(" ")[2].partition("-")[0]
+                if r.status != 206 and content_start != str(self.loc):
+                    # The server did not prove that it honored the Range header.
+                    # Reopen from the beginning and discard bytes so that the
+                    # response position still matches the logical file position.
+                    r.close()
+                    headers.pop("Range")
+                    if headers:
+                        kwargs["headers"] = headers
+                    else:
+                        kwargs.pop("headers", None)
+                    r = await self.session.get(
+                        self.fs.encode_url(self.url), **kwargs
+                    ).__aenter__()
+                    self.fs._raise_not_found_for_status(r, self.url)
+                    remaining = self.loc
+                    while remaining:
+                        chunk = await r.content.read(min(remaining, 1024**2))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+        except Exception:
+            r.close()
+            raise
+        self.r = r
+
+    def seek(self, loc, whence=0):
+        previous = self.loc
+        location = super().seek(loc, whence)
+        if location != previous and self.r is not None:
+            self.r.close()
+            self.r = None
+        return location
+
     async def read(self, num=-1):
         if self.r is None:
-            r = await self.session.get(
-                self.fs.encode_url(self.url), **self.kwargs
-            ).__aenter__()
-            self.fs._raise_not_found_for_status(r, self.url)
-            self.r = r
+            await self._open_response()
         out = await self.r.content.read(num)
         self.loc += len(out)
         return out

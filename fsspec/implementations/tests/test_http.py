@@ -540,6 +540,25 @@ async def test_async_file(server):
     await fs._session.close()
 
 
+@pytest.mark.asyncio
+async def test_async_file_seek(server):
+    fs = fsspec.filesystem(
+        "http",
+        asynchronous=True,
+        skip_instance_cache=True,
+    )
+    try:
+        of = await fs.open_async(server.realfile)
+        async with of as f:
+            assert await f.read(5) == data[:5]
+            assert f.seek(31) == 31
+            assert await f.read(5) == data[31:36]
+            assert f.seek(3) == 3
+            assert await f.read(5) == data[3:8]
+    finally:
+        await fs._session.close()
+
+
 def test_encoded(server):
     fs = fsspec.filesystem("http", encoded=True)
     out = fs.cat(
