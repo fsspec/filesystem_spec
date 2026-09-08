@@ -28,6 +28,19 @@ def test_mapping_prefix(tmpdir):
     assert m == m2 == m3
 
 
+@pytest.mark.parametrize("protocol", ["file", "memory"])
+@pytest.mark.parametrize("key", ["a", "a/nested"])
+def test_check_preserves_contents(tmp_path, protocol, key):
+    url = f"{protocol}://{tmp_path.as_posix()}/mapping"
+    mapper = fsspec.get_mapper(url, create=True)
+    contents = {key: b"existing data", "other": b"more data"}
+    mapper.update(contents)
+
+    checked = fsspec.get_mapper(url, check=True)
+
+    assert dict(checked) == contents
+
+
 def test_getitems_errors(tmpdir):
     tmpdir = str(tmpdir)
     os.makedirs(os.path.join(tmpdir, "afolder"))
