@@ -1,6 +1,7 @@
 import array
 import logging
 import posixpath
+import uuid
 import warnings
 from collections.abc import MutableMapping
 from functools import cached_property
@@ -60,8 +61,9 @@ class FSMap(MutableMapping):
                     f"Path {root} does not exist. Create "
                     f" with the ``create=True`` keyword"
                 )
-            self.fs.touch(root + "/a")
-            self.fs.rm(root + "/a")
+            check_path = f"{root}/{uuid.uuid4().hex}"
+            self.fs.touch(check_path)
+            self.fs.rm(check_path)
 
     @cached_property
     def dirfs(self):
