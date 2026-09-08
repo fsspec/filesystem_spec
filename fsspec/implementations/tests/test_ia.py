@@ -1,12 +1,15 @@
 """ia://<identifier>/<filename>: the Internet Archive filesystem.
 
 Offline: the URI mapping, credential loading from ``ia.ini`` and the environment, reads
-through the local HTTP test server, and the cookie-jar scoping. One opt-in network test
+through the local HTTP test server, and the cookie-jar scoping, including a stand-in
+archive.org whose download URL redirects to a data node on another origin. One opt-in network test
 (``IA_NETWORK_TESTS=1``; not ``FSSPEC_IA_*``, which fsspec.config would turn into a constructor
 argument) reads the first bytes of a public item.
 """
 
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
@@ -58,6 +61,78 @@ def ini(tmp_path):
     path = tmp_path / "ia.ini"
     path.write_text(INI, encoding="utf-8")
     return str(path)
+
+
+class _CrossOriginHandler(BaseHTTPRequestHandler):
+    """``/download/<path>`` on 127.0.0.1 redirects to ``/items/<path>`` on ``localhost``:
+    the same server, but another origin, which is where aiohttp drops any ``Cookie`` or
+    ``Authorization`` header. The item route serves ``files`` by Range and, when
+    ``required`` is set, only to a request carrying that cookie."""
+
+    files = {}
+    required = None
+    hits = []
+
+    def log_message(self, *args):
+        pass
+
+    def do_GET(self):
+        self.hits.append((self.path, dict(self.headers)))
+        if self.path.startswith("/download/"):
+            port = self.server.server_port
+            self.send_response(302)
+            self.send_header(
+                "Location", f"http://localhost:{port}/items/{self.path[10:]}"
+            )
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        body = self.files.get(self.path)
+        if body is None:
+            self.send_error(404)
+            return
+        required = self.required
+        if required and f"{required[0]}={required[1]}" not in self.headers.get(
+            "Cookie", ""
+        ):
+            self.send_error(403)
+            return
+        status, start, end = 200, 0, len(body) - 1
+        if "Range" in self.headers:
+            first, _, last = self.headers["Range"][len("bytes=") :].partition("-")
+            start, end = int(first), (min(int(last), end) if last else end)
+            status = 206
+        chunk = body[start : end + 1]
+        self.send_response(status)
+        self.send_header("Content-Length", str(len(chunk)))
+        self.send_header("Accept-Ranges", "bytes")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+        self.end_headers()
+        if self.command == "GET":
+            self.wfile.write(chunk)
+
+    do_HEAD = do_GET
+
+
+@pytest.fixture
+def ia_server(monkeypatch):
+    handler = type(
+        "Handler", (_CrossOriginHandler,), {"files": {}, "required": None, "hits": []}
+    )
+    httpd = HTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    monkeypatch.setattr(
+        InternetArchiveFileSystem,
+        "download_url",
+        f"http://127.0.0.1:{httpd.server_port}/download/",
+    )
+    monkeypatch.setattr(InternetArchiveFileSystem, "cookie_domain", "localhost")
+    try:
+        yield handler
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 def test_uri_maps_to_download_url_and_back():
@@ -178,6 +253,35 @@ def test_refusal_is_a_permission_error(server, monkeypatch):
         fs.open("ia://unauthorized", "rb")
     with pytest.raises(FileNotFoundError):
         fs.cat("ia://index/missing")
+
+
+def test_cookies_survive_the_cross_origin_redirect(ia_server):
+    """The login must reach the data node, which sits behind a cross-origin redirect where
+    aiohttp has already dropped any Cookie/Authorization *header*; the jar re-attaches it."""
+    ia_server.files["/items/restricted/file"] = data
+    ia_server.required = ("logged-in-sig", "sig")
+
+    anonymous = InternetArchiveFileSystem(cookies={})
+    with pytest.raises(PermissionError):
+        anonymous.cat("ia://restricted/file")
+    with pytest.raises(PermissionError):
+        anonymous.open("ia://restricted/file", "rb")
+
+    fs = InternetArchiveFileSystem(
+        access_key="k",
+        secret_key="s",
+        cookies={"logged-in-sig": "sig", "logged-in-user": "u"},
+    )
+    ia_server.hits.clear()
+    assert fs.cat("ia://restricted/file") == data
+    assert fs.cat_file("ia://restricted/file", start=2, end=5) == data[2:5]
+    first_hop = next(h for p, h in ia_server.hits if p.startswith("/download/"))
+    assert first_hop.get("Authorization") == "LOW k:s"
+    assert "logged-in-sig" not in first_hop.get(
+        "Cookie", ""
+    )  # 127.0.0.1 is not `localhost`
+    data_hop = next(h for p, h in ia_server.hits if p.startswith("/items/"))
+    assert "logged-in-sig=sig" in data_hop.get("Cookie", "")
 
 
 @pytest.mark.skipif(not os.environ.get("IA_NETWORK_TESTS"), reason="needs archive.org")
