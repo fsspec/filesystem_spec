@@ -111,6 +111,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
 
     def pipe_file(self, path, value, **kwargs):
         # override upstream, because we know the exact file size in this case
+        path = self._strip_protocol(path)
         self.zip.writestr(path, value, **kwargs)
 
     def _open(
@@ -146,9 +147,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if not isinstance(path, str):
             path = str(path)
 
-        # Remove the leading slash, as the zip file paths are always
-        # given without a leading slash
-        path = path.lstrip("/")
+        path = self._strip_protocol(path)
         path_parts = to_parts(path)
         path_depth = len(path_parts)
 
