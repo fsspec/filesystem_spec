@@ -4,6 +4,12 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- ``ia://`` filesystem for files in Internet Archive items: an
+  ``HTTPFileSystem`` reading from ``archive.org/download`` with credentials from
+  ``ia configure``'s ``ia.ini``
+
 Fixes
 
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
