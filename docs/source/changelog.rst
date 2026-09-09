@@ -4,6 +4,14 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- HTTP: retry transient failures (408/425/429/5xx, dropped connections,
+  timeouts, truncated range bodies, a 416 inside the file) of ``cat_file``
+  and ``HTTPFile`` block reads, controlled by the new ``retries``,
+  ``retry_wait`` and ``retry_statuses`` options; subclasses can override
+  ``HTTPFileSystem._is_retryable`` to change the decision (#2124)
+
 Fixes
 
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances

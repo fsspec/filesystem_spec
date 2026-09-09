@@ -1,6 +1,7 @@
 import asyncio
 import io
 import logging
+import random
 import re
 import weakref
 from copy import copy
@@ -27,6 +28,78 @@ from ..caching import AllBytes
 ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
+
+_RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
+_RETRY_MAX_WAIT = 60.0
+_retry_sleep = asyncio.sleep  # module attribute so tests can substitute a fake
+
+
+def _is_retryable(exc, statuses=_RETRYABLE_STATUSES):
+    """Whether a failed HTTP read is worth repeating.
+
+    A response error is retried when its status is in ``statuses``; dropped
+    or reset connections, timeouts and truncated bodies are always transient;
+    anything else (including the ``FileNotFoundError``/``PermissionError`` a
+    subclass may map 4xx codes to) is deterministic and propagates at once.
+    """
+    if isinstance(exc, aiohttp.ClientResponseError):
+        return exc.status in statuses
+    if isinstance(exc, aiohttp.ClientSSLError):
+        return False
+    return isinstance(
+        exc,
+        (
+            aiohttp.ClientConnectionError,
+            aiohttp.ClientPayloadError,
+            asyncio.TimeoutError,
+        ),
+    )
+
+
+def _retry_after(exc):
+    """Delta-seconds ``Retry-After`` carried by a response error, else None."""
+    headers = getattr(exc, "headers", None)
+    if not headers:
+        return None
+    try:
+        return max(0.0, float(headers.get("Retry-After")))
+    except (TypeError, ValueError):
+        return None
+
+
+async def _with_retries(
+    attempt, retries, retry_wait, label, is_retryable=_is_retryable
+):
+    """Await ``attempt()``, repeating it on transient failures.
+
+    ``attempt`` is a zero-argument coroutine function covering the whole
+    request *and* body read, so a connection dropped mid-body counts as a
+    failure too. ``is_retryable(exc)`` decides whether a failure is worth
+    repeating. A ``Retry-After`` header is honoured when present; otherwise
+    the wait doubles from ``retry_wait`` on each retry, capped at
+    ``_RETRY_MAX_WAIT`` seconds and jittered. Non-retryable errors and the
+    final failure propagate unchanged.
+    """
+    for n in range(retries + 1):
+        try:
+            return await attempt()
+        except Exception as exc:
+            if n >= retries or not is_retryable(exc):
+                raise
+            delay = _retry_after(exc)
+            if delay is None:
+                delay = min(_RETRY_MAX_WAIT, retry_wait * 2**n) * (
+                    0.5 + random.random()
+                )
+            logger.warning(
+                "%s: attempt %d/%d failed (%r); retrying in %.1fs",
+                label,
+                n + 1,
+                retries + 1,
+                exc,
+                delay,
+            )
+            await _retry_sleep(delay)
 
 
 async def get_client(**kwargs):
@@ -62,6 +135,9 @@ class HTTPFileSystem(AsyncFileSystem):
         client_kwargs=None,
         get_client=get_client,
         encoded=False,
+        retries=3,
+        retry_wait=1.0,
+        retry_statuses=None,
         **storage_options,
     ):
         """
@@ -87,6 +163,20 @@ class HTTPFileSystem(AsyncFileSystem):
             A callable, which takes keyword arguments and constructs
             an aiohttp.ClientSession. Its state will be managed by
             the HTTPFileSystem class.
+        retries: int
+            How many times a transient failure of a read (HTTP 408/425/429/5xx,
+            a dropped or reset connection, a timeout, a truncated range body)
+            is retried in ``cat_file`` and ``HTTPFile`` block reads; 0 disables
+            retries.
+        retry_wait: float
+            Seconds to wait before the first retry; doubled on each further
+            retry (capped at 60 s, with jitter). A ``Retry-After`` header sent
+            by the server takes precedence.
+        retry_statuses: iterable of int or None
+            HTTP status codes of a failed read that are retried; default
+            (None) is 408, 425, 429, 500, 502, 503 and 504. Dropped
+            connections, timeouts and truncated bodies are retried regardless.
+            Override ``_is_retryable`` in a subclass for finer control.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open()
@@ -100,6 +190,26 @@ class HTTPFileSystem(AsyncFileSystem):
         self.client_kwargs = client_kwargs or {}
         self.get_client = get_client
         self.encoded = encoded
+        if retries < 0:
+            raise ValueError(f"retries must be >= 0, got {retries!r}")
+        if retry_wait < 0:
+            raise ValueError(f"retry_wait must be >= 0, got {retry_wait!r}")
+        self.retries = retries
+        self.retry_wait = retry_wait
+        if retry_statuses is None:
+            self.retry_statuses = _RETRYABLE_STATUSES
+        else:
+            if isinstance(retry_statuses, str):
+                # "503" would otherwise iterate to {5, 0, 3}
+                raise ValueError(
+                    f"retry_statuses must be an iterable of ints, got {retry_statuses!r}"
+                )
+            try:
+                self.retry_statuses = frozenset(int(s) for s in retry_statuses)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"retry_statuses must be an iterable of ints, got {retry_statuses!r}"
+                ) from None
         self.kwargs = storage_options
         self._session = None
 
@@ -232,6 +342,16 @@ class HTTPFileSystem(AsyncFileSystem):
             raise FileNotFoundError(url)
         response.raise_for_status()
 
+    def _is_retryable(self, exc):
+        """Whether a failed read should be tried again.
+
+        Consulted by ``cat_file`` and ``HTTPFile`` block reads after each
+        failure. Response errors are retried when their status is in
+        ``retry_statuses``; connection errors, timeouts and truncated bodies
+        always are. Override to change the decision for a particular server.
+        """
+        return _is_retryable(exc, self.retry_statuses)
+
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -245,10 +365,16 @@ class HTTPFileSystem(AsyncFileSystem):
             headers["Range"] = await self._process_limits(url, start, end)
             kw["headers"] = headers
         session = await self.set_session()
-        async with session.get(self.encode_url(url), **kw) as r:
-            out = await r.read()
-            self._raise_not_found_for_status(r, url)
-        return out
+
+        async def _once():
+            async with session.get(self.encode_url(url), **kw) as r:
+                out = await r.read()
+                self._raise_not_found_for_status(r, url)
+            return out
+
+        return await _with_retries(
+            _once, self.retries, self.retry_wait, url, self._is_retryable
+        )
 
     async def _get_file(
         self, rpath, lpath, chunk_size=5 * 2**20, callback=DEFAULT_CALLBACK, **kwargs
@@ -379,6 +505,8 @@ class HTTPFileSystem(AsyncFileSystem):
         if mode != "rb":
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
+        # per-open retry overrides are for HTTPFile only, never request options
+        retry_kw = {k: kwargs.pop(k) for k in ("retries", "retry_wait") if k in kwargs}
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
@@ -396,6 +524,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 cache_type=cache_type or self.cache_type,
                 cache_options=cache_options or self.cache_options,
                 loop=self.loop,
+                **retry_kw,
                 **kw,
             )
         else:
@@ -591,6 +720,12 @@ class HTTPFile(AbstractBufferedFile):
     size: None or int
         If given, this is the size of the file in bytes, and we don't attempt
         to call the server to find the value.
+    retries: int or None
+        Retries for a transient failure of a block read; None (default) uses
+        the value configured on the filesystem.
+    retry_wait: float or None
+        Wait before the first retry, doubled on each further retry; None
+        (default) uses the value configured on the filesystem.
     kwargs: all other key-values are passed to requests calls.
     """
 
@@ -606,6 +741,8 @@ class HTTPFile(AbstractBufferedFile):
         size=None,
         loop=None,
         asynchronous=False,
+        retries=None,
+        retry_wait=None,
         **kwargs,
     ):
         if mode != "rb":
@@ -614,6 +751,11 @@ class HTTPFile(AbstractBufferedFile):
         self.loop = loop
         self.url = url
         self.session = session
+        self.retries = getattr(fs, "retries", 0) if retries is None else retries
+        self.retry_wait = (
+            getattr(fs, "retry_wait", 1.0) if retry_wait is None else retry_wait
+        )
+        self._is_retryable = getattr(fs, "_is_retryable", _is_retryable)
         self.details = {"name": url, "size": size, "type": "file"}
         super().__init__(
             fs=fs,
@@ -694,51 +836,80 @@ class HTTPFile(AbstractBufferedFile):
         headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = f"bytes={start}-{end - 1}"
         logger.debug(f"{self.url} : {headers['Range']}")
-        r = await self.session.get(
-            self.fs.encode_url(self.url), headers=headers, **kwargs
-        )
-        async with r:
-            if r.status == 416:
-                # range request outside file
-                return b""
-            r.raise_for_status()
 
-            # If the server has handled the range request, it should reply
-            # with status 206 (partial content). But we'll guess that a suitable
-            # Content-Range header or a Content-Length no more than the
-            # requested range also mean we have got the desired range.
-            response_is_range = (
-                r.status == 206
-                or self._parse_content_range(r.headers)[0] == start
-                or int(r.headers.get("Content-Length", end + 1)) <= end - start
+        async def _once():
+            r = await self.session.get(
+                self.fs.encode_url(self.url), headers=headers, **kwargs
             )
+            async with r:
+                if r.status == 416:
+                    if self.size is not None and start < self.size:
+                        # Some servers (CloudFront under load, see #1895)
+                        # answer 416 to a range that lies inside the file;
+                        # treating it as EOF would silently truncate the read.
+                        raise aiohttp.ClientPayloadError(
+                            f"{headers['Range']} of {self.url} reported "
+                            f"unsatisfiable, but the file has {self.size} bytes"
+                        )
+                    # range request outside file
+                    return b""
+                r.raise_for_status()
 
-            if response_is_range:
-                # partial content, as expected
-                out = await r.read()
-            elif start > 0:
-                raise ValueError(
-                    "The HTTP server doesn't appear to support range requests. "
-                    "Only reading this file from the beginning is supported. "
-                    "Open with block_size=0 for a streaming file interface."
+                # If the server has handled the range request, it should reply
+                # with status 206 (partial content). But we'll guess that a
+                # suitable Content-Range header or a Content-Length no more
+                # than the requested range also mean we have got the desired
+                # range.
+                response_is_range = (
+                    r.status == 206
+                    or self._parse_content_range(r.headers)[0] == start
+                    or int(r.headers.get("Content-Length", end + 1)) <= end - start
                 )
-            else:
-                # Response is not a range, but we want the start of the file,
-                # so we can read the required amount anyway.
-                cl = 0
-                out = []
-                while True:
-                    chunk = await r.content.read(2**20)
-                    # data size unknown, let's read until we have enough
-                    if chunk:
-                        out.append(chunk)
-                        cl += len(chunk)
-                        if cl > end - start:
+
+                if response_is_range:
+                    # partial content, as expected
+                    out = await r.read()
+                    if self.size is not None:
+                        expected = min(end, self.size) - start
+                        if len(out) < expected:
+                            # short body with consistent headers: a truncated
+                            # block would otherwise be served from the cache
+                            raise aiohttp.ClientPayloadError(
+                                f"{headers['Range']} of {self.url} returned "
+                                f"{len(out)} bytes, expected {expected}"
+                            )
+                elif start > 0:
+                    raise ValueError(
+                        "The HTTP server doesn't appear to support range "
+                        "requests. Only reading this file from the beginning "
+                        "is supported. Open with block_size=0 for a streaming "
+                        "file interface."
+                    )
+                else:
+                    # Response is not a range, but we want the start of the
+                    # file, so we can read the required amount anyway.
+                    cl = 0
+                    out = []
+                    while True:
+                        chunk = await r.content.read(2**20)
+                        # data size unknown, let's read until we have enough
+                        if chunk:
+                            out.append(chunk)
+                            cl += len(chunk)
+                            if cl > end - start:
+                                break
+                        else:
                             break
-                    else:
-                        break
-                out = b"".join(out)[: end - start]
-            return out
+                    out = b"".join(out)[: end - start]
+                return out
+
+        return await _with_retries(
+            _once,
+            self.retries,
+            self.retry_wait,
+            f"{self.url} ({headers['Range']})",
+            self._is_retryable,
+        )
 
     _fetch_range = sync_wrapper(async_fetch_range)
 

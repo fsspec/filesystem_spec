@@ -10,8 +10,19 @@ import pytest
 
 import fsspec.asyn
 import fsspec.utils
-from fsspec.implementations.http import HTTPStreamFile
-from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
+from fsspec.implementations.http import (
+    _RETRYABLE_STATUSES,
+    HTTPFileSystem,
+    HTTPStreamFile,
+)
+from fsspec.tests.conftest import (  # noqa: F401
+    HTTPTestHandler,
+    data,
+    reset_faults,
+    reset_files,
+    server,
+    win,
+)
 
 
 def test_list(server):
@@ -650,3 +661,229 @@ def test_protocol_independent_of_first_used_protocol(protocol):
     fs1 = filesystem("https")
     p1 = fs1.protocol[0] if isinstance(fs1.protocol, tuple) else fs1.protocol
     assert p0 == p1 == "http"
+
+
+# --- retries -----------------------------------------------------------------
+# The server faults are driven by request headers, see HTTPTestHandler._serve_fault.
+
+_RETRY_HEADERS = {"give_length": "true", "head_ok": "true", "use_206": "true"}
+_REALFILE_PATH = "/index/realfile"
+
+
+def _retry_fs(fault_headers=None, **kwargs):
+    headers = dict(_RETRY_HEADERS, **(fault_headers or {}))
+    kwargs.setdefault("retry_wait", 0)
+    return fsspec.filesystem(
+        "http", headers=headers, skip_instance_cache=True, **kwargs
+    )
+
+
+def _gets(path=_REALFILE_PATH):
+    return HTTPTestHandler.get_counts.get(path, 0)
+
+
+def _faults(path=_REALFILE_PATH):
+    return HTTPTestHandler.fault_counts.get(path, 0)
+
+
+def _rearm():
+    """Restore the fault budget and GET counter for a second read in a test."""
+    HTTPTestHandler.fault_counts.clear()
+    HTTPTestHandler.get_counts.clear()
+
+
+def test_retry_503_then_succeeds(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+
+def test_retry_cat_file(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503", "fail_times": "2"})
+    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
+    assert _gets() == 3
+    HTTPTestHandler.fault_counts.clear()
+    HTTPTestHandler.get_counts.clear()
+    assert fs.cat_file(server.realfile) == data
+    assert _gets() == 3
+
+
+@pytest.mark.parametrize("status", [400, 403, 416])
+def test_retry_not_for_4xx(server, reset_faults, status):
+    # via cat_file, which has no notion of file size: a 416 there is final
+    fs = _retry_fs({"fail_status": str(status), "fail_times": "5"})
+    with pytest.raises(aiohttp.ClientResponseError) as e:
+        fs.cat_file(server.realfile)
+    assert e.value.status == status
+    assert _gets() == 1
+
+
+def test_retry_not_for_404(server, reset_faults):
+    fs = _retry_fs()
+    url = server.address + "/index/missing"
+    with pytest.raises(FileNotFoundError):
+        fs.cat_file(url)
+    assert _gets("/index/missing") == 1
+
+
+def test_retry_exhausted_raises_original(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503", "fail_times": "10"}, retries=2)
+    with pytest.raises(aiohttp.ClientResponseError) as e:
+        fs.cat_file(server.realfile)
+    assert e.value.status == 503
+    assert _gets() == 3
+
+
+def test_retry_disabled_keeps_old_behaviour(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503"}, retries=0)
+    with pytest.raises(aiohttp.ClientResponseError) as e:
+        fs.cat_file(server.realfile)
+    assert e.value.status == 503
+    assert _gets() == 1
+
+
+def test_retry_truncated_body(server, reset_faults):
+    fs = _retry_fs({"truncate_body": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+    HTTPTestHandler.fault_counts.clear()
+    fs = _retry_fs({"truncate_body": "true"}, retries=0)
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError):
+            f.read(len(data))
+
+
+def test_retry_short_206_body(server, reset_faults):
+    # headers are self-consistent, so only the length check can notice
+    fs = _retry_fs({"short_body": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+    HTTPTestHandler.fault_counts.clear()
+    fs = _retry_fs({"short_body": "true"}, retries=0)
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError, match="expected"):
+            f.read(len(data))
+
+
+def test_retry_416_inside_file(server, reset_faults):
+    # gh-1895: a 416 for a range that lies inside the file is not EOF
+    fs = _retry_fs({"fail_status": "416"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+    HTTPTestHandler.fault_counts.clear()
+    fs = _retry_fs({"fail_status": "416"}, retries=0)
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError, match="unsatisfiable"):
+            f.read(len(data))
+
+
+def test_retry_honours_retry_after(server, reset_faults, monkeypatch):
+    sleeps = []
+
+    async def fake_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(fsspec.implementations.http, "_retry_sleep", fake_sleep)
+    fs = _retry_fs({"fail_status": "429", "retry_after": "7"}, retry_wait=1)
+    assert fs.cat_file(server.realfile) == data
+    assert sleeps == [7.0]
+
+
+def test_retry_backoff_sequence(server, reset_faults, monkeypatch):
+    sleeps = []
+
+    async def fake_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(fsspec.implementations.http, "_retry_sleep", fake_sleep)
+    monkeypatch.setattr(fsspec.implementations.http.random, "random", lambda: 0.5)
+    fs = _retry_fs({"fail_status": "503", "fail_times": "3"}, retry_wait=1)
+    assert fs.cat_file(server.realfile) == data
+    assert sleeps == [1, 2, 4]
+    assert _gets() == 4
+
+
+def test_retry_option_validation():
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retries=-1, skip_instance_cache=True)
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_wait=-1, skip_instance_cache=True)
+
+
+def test_retry_per_open_override(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503"}, retries=3)
+    with fs.open(server.realfile, retries=0) as f:
+        assert f.retries == 0
+        with pytest.raises(aiohttp.ClientResponseError):
+            f.read(len(data))
+    assert _gets() == 1
+
+    # the override must not leak into request kwargs on the streaming branch
+    with fs.open(server.realfile, block_size=0, retries=1) as f:
+        assert isinstance(f, HTTPStreamFile)
+        assert f.read() == data
+
+
+def test_retry_custom_statuses(server, reset_faults):
+    # 403 is not retried by default, but can be opted in
+    fs = _retry_fs({"fail_status": "403"}, retry_statuses=[403])
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _gets() == 2
+    _rearm()
+    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
+    assert _gets() == 2
+
+    # ... and the default codes can be opted out
+    fs = _retry_fs({"fail_status": "503"}, retry_statuses=[403])
+    _rearm()
+    with pytest.raises(aiohttp.ClientResponseError):
+        fs.cat_file(server.realfile)
+    assert _gets() == 1
+
+
+def test_retry_statuses_validation():
+    fs = fsspec.filesystem("http", skip_instance_cache=True)
+    assert fs.retry_statuses == _RETRYABLE_STATUSES
+    fs = fsspec.filesystem(
+        "http", retry_statuses=(500, "503"), skip_instance_cache=True
+    )
+    assert fs.retry_statuses == frozenset({500, 503})
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_statuses=["abc"], skip_instance_cache=True)
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_statuses=503, skip_instance_cache=True)
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_statuses="503", skip_instance_cache=True)
+
+
+def test_retry_is_retryable_override(server, reset_faults):
+    class BusyCDNFileSystem(HTTPFileSystem):
+        def _is_retryable(self, exc):
+            # a CDN that answers 403 under load
+            if isinstance(exc, aiohttp.ClientResponseError) and exc.status == 403:
+                return True
+            return super()._is_retryable(exc)
+
+    fs = BusyCDNFileSystem(
+        headers=dict(_RETRY_HEADERS, fail_status="403"),
+        retry_wait=0,
+        skip_instance_cache=True,
+    )
+    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
+    assert _gets() == 2
+    _rearm()
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _gets() == 2
