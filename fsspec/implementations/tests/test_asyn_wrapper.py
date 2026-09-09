@@ -1,5 +1,7 @@
 import asyncio
+import io
 import os
+import tarfile
 from itertools import cycle
 
 import pytest
@@ -218,3 +220,28 @@ async def test_deadlock_when_asynchronous():
 
     with pytest.raises(RuntimeError, match="Concurrent requests!"):
         await asyncio.gather(*(fs._cat_file(path) for path in paths))
+
+
+def test_get_does_not_write_above_destination(tmp_path):
+    # The async copy builds its destinations the same way the sync one does,
+    # so a source name holding ".." must not escape the destination there
+    # either. tar is synchronous, so it is wrapped to exercise
+    # AsyncFileSystem._get.
+    archive = tmp_path / "traversal.tar"
+    with tarfile.open(archive, "w") as t:
+        for name, data in [("readme.txt", b"ok"), ("../escaped.txt", b"escaped")]:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            t.addfile(info, io.BytesIO(data))
+
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    outside = tmp_path / "escaped.txt"
+
+    fs = AsyncFileSystemWrapper(fsspec.filesystem("tar", fo=str(archive)))
+    try:
+        fs.get("*", str(dest), recursive=True)
+    except ValueError:
+        pass
+
+    assert not outside.exists(), f"async copy wrote {outside}, above {dest}"
