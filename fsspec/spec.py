@@ -793,7 +793,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """Is this entry file-like?"""
         try:
             return self.info(path)["type"] == "file"
-        except:  # noqa: E722
+        except Exception:
             return False
 
     def read_text(self, path, encoding=None, errors=None, newline=None, **kwargs):
