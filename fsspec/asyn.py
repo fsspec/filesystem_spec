@@ -364,10 +364,12 @@ class AsyncFileSystem(AbstractFileSystem):
             return await self._rm(path, recursive=False, batch_size=1, **kwargs)
         raise NotImplementedError
 
-    async def _rm(self, path, recursive=False, batch_size=None, **kwargs):
+    async def _rm(
+        self, path, recursive=False, batch_size=None, maxdepth=None, **kwargs
+    ):
         # TODO: implement on_error
         batch_size = batch_size or self.batch_size
-        path = await self._expand_path(path, recursive=recursive)
+        path = await self._expand_path(path, recursive=recursive, maxdepth=maxdepth)
         return await _run_coros_in_chunks(
             [self._rm_file(p, **kwargs) for p in reversed(path)],
             batch_size=batch_size,

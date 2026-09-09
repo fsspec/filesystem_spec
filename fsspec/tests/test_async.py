@@ -254,6 +254,46 @@ def test_rm_file_without_implementation():
         fs.rm_file("test/file.txt")
 
 
+class _MaxDepthFS(fsspec.asyn.AsyncFileSystem):
+    # Mirrors the gcsfs/s3fs pattern: implements the primitives, inherits _rm.
+    def __init__(self, files, **kwargs):
+        super().__init__(**kwargs)
+        self.files = set(files)
+        self.removed_paths = []
+
+    async def _ls(self, path, detail=True, **kwargs):
+        path = path.rstrip("/")
+        kids = {}
+        for f in self.files:
+            if not f.startswith(path + "/"):
+                continue
+            head = f[len(path) + 1 :].split("/")[0]
+            full = f"{path}/{head}"
+            kids[full] = {
+                "name": full,
+                "size": 0,
+                "type": "file" if full in self.files else "directory",
+            }
+        return list(kids.values()) if detail else sorted(kids)
+
+    async def _info(self, path, **kwargs):
+        path = path.rstrip("/")
+        typ = "file" if path in self.files else "directory"
+        return {"name": path, "size": 0, "type": typ}
+
+    async def _rm_file(self, path, **kwargs):
+        self.removed_paths.append(path)
+        self.files.discard(path)
+
+
+def test_rm_honours_maxdepth():
+    tree = ["/root/a.txt", "/root/d1/b.txt", "/root/d1/d2/c.txt"]
+    fs = _MaxDepthFS(tree)
+    fs.rm("/root", recursive=True, maxdepth=1)
+    assert "/root/d1/b.txt" not in fs.removed_paths
+    assert "/root/d1/d2/c.txt" not in fs.removed_paths
+
+
 class _CatRangesFS(fsspec.asyn.AsyncFileSystem):
     # Mirrors the gcsfs/s3fs pattern: overrides _cat_file, inherits _cat_ranges.
     cachable = False
