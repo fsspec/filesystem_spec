@@ -44,6 +44,17 @@ def reset_files():
     HTTPTestHandler.dynamic_files.clear()
 
 
+@pytest.fixture
+def reset_faults():
+    # Per-path counters behind the fault-injection request headers
+    # (fail_status / truncate_body / short_body, see HTTPTestHandler._serve_fault)
+    HTTPTestHandler.fault_counts.clear()
+    HTTPTestHandler.get_counts.clear()
+    yield
+    HTTPTestHandler.fault_counts.clear()
+    HTTPTestHandler.get_counts.clear()
+
+
 class HTTPTestHandler(BaseHTTPRequestHandler):
     static_files = {
         "/index/realfile": data,
@@ -57,6 +68,9 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         "/unauthorized": AssertionError("shouldn't access"),
     }
     dynamic_files = {}
+    # fault injection, keyed by request path; cleared by the reset_faults fixture
+    fault_counts = {}
+    get_counts = {}
 
     files = ChainMap(dynamic_files, static_files)
 
@@ -73,9 +87,49 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         if data:
             self.wfile.write(data)
 
+    def _serve_fault(self, status, content_range, file_data):
+        """Serve the fault the client asked for, while its budget lasts.
+
+        Request headers: ``fail_status: <code>`` answers with that status (and
+        ``Retry-After: <retry_after>`` when given); ``truncate_body: true``
+        announces the full Content-Length but sends only half the body before
+        the connection closes; ``short_body: true`` sends half the body with a
+        matching (short) Content-Length. ``fail_times: <n>`` (default 1) is
+        how many GETs of this path fault before it is served normally.
+        Returns True when a fault was served.
+        """
+        modes = [
+            k
+            for k in ("fail_status", "truncate_body", "short_body")
+            if k in self.headers
+        ]
+        if not modes:
+            return False
+        budget = int(self.headers.get("fail_times", 1))
+        if self.fault_counts.get(self.path, 0) >= budget:
+            return False
+        self.fault_counts[self.path] = self.fault_counts.get(self.path, 0) + 1
+        if "fail_status" in self.headers:
+            headers = {"Content-Length": 0}
+            if "retry_after" in self.headers:
+                headers["Retry-After"] = self.headers["retry_after"]
+            self._respond(int(self.headers["fail_status"]), headers)
+        elif "truncate_body" in self.headers:
+            half = file_data[: len(file_data) // 2]
+            headers = {"Content-Length": len(file_data), "Content-Range": content_range}
+            self._respond(status, headers, half)
+            self.wfile.flush()
+            self.close_connection = True
+        else:
+            half = file_data[: len(file_data) // 2]
+            headers = {"Content-Length": len(half), "Content-Range": content_range}
+            self._respond(status, headers, half)
+        return True
+
     def do_GET(self):
         baseurl = f"http://127.0.0.1:{self.server.server_port}"
         file_path = self.path
+        self.get_counts[self.path] = self.get_counts.get(self.path, 0) + 1
         if file_path.endswith("/") and file_path.rstrip("/") in self.files:
             file_path = file_path.rstrip("/")
         file_data = self.files.get(file_path)
@@ -107,6 +161,8 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
                 file_data = file_data[-int(end) :]
             if "use_206" in self.headers:
                 status = 206
+        if self._serve_fault(status, content_range, file_data):
+            return
         if "give_length" in self.headers:
             if "gzip_encoding" in self.headers:
                 file_data = gzip.compress(file_data)
