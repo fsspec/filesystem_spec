@@ -721,7 +721,7 @@ class AsyncFileSystem(AbstractFileSystem):
     async def _isfile(self, path):
         try:
             return (await self._info(path))["type"] == "file"
-        except:  # noqa: E722
+        except Exception:
             return False
 
     async def _isdir(self, path):
