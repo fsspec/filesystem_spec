@@ -29,6 +29,11 @@ Enhancements
 - Allow ``simplecache`` files to be removed by age using their modification
   times (#2118)
 
+- HTTP: retry transient failures (408/425/429/5xx, dropped connections,
+  timeouts, truncated range bodies, a 416 inside the file) of ``cat_file``
+  and ``HTTPFile`` block reads, controlled by the new ``retries`` and
+  ``retry_wait`` options (#NNNN)
+
 Fixes
 
 - Make ``merge_offset_ranges`` ``O(n log n)`` and keep merged blocks within
