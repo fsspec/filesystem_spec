@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Close the underlying file when closing a stream opened with compression
+  through ``AbstractFileSystem.open``, and propagate errors raised on close (#1672)
+
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
   when pickling (#2102)
 

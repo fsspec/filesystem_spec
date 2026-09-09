@@ -11,6 +11,43 @@ def noop_file(file, mode, **kwargs):
     return file
 
 
+class _ClosingFile:
+    """A compression stream that owns its underlying file."""
+
+    def __init__(self, file, raw):
+        self._file = file
+        self._raw = raw
+
+    def __getattr__(self, name):
+        return getattr(self._file, name)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._file)
+
+    def __enter__(self):
+        self._file.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def close(self):
+        try:
+            # Finalize the compression stream before flushing the raw file.
+            if not self._file.closed:
+                self._file.close()
+        finally:
+            # Some codecs already close their input, while others leave it open.
+            if not self._raw.closed:
+                self._raw.close()
+
+    def __del__(self):
+        self.close()
+
+
 # TODO: files should also be available as contexts
 # should be functions of the form func(infile, mode=, **kwargs) -> file-like
 compr = {None: noop_file}

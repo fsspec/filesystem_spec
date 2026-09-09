@@ -1423,12 +1423,14 @@ class AbstractFileSystem(metaclass=_Cached):
             if not ac and "r" not in mode:
                 self.transaction.files.append(f)
             if compression is not None:
-                from fsspec.compression import compr
+                from fsspec.compression import _ClosingFile, compr
                 from fsspec.core import get_compression
 
                 compression = get_compression(path, compression)
                 compress = compr[compression]
-                f = compress(f, mode=mode[0])
+                compressed = compress(f, mode=mode[0])
+                if compressed is not f:
+                    f = _ClosingFile(compressed, f)
             return f
 
     def touch(self, path, truncate=True, **kwargs):
