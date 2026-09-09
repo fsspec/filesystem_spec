@@ -753,12 +753,14 @@ def _translate(pat, STAR, QUESTION_MARK):
 def glob_translate(pat):
     # Copied from: https://github.com/python/cpython/pull/106703.
     # The keyword parameters' values are fixed to:
-    # recursive=True, include_hidden=True, seps=None
+    # recursive=True, include_hidden=True, seps="/"
     """Translate a pathname with shell wildcards to a regular expression."""
-    if os.path.altsep:
-        seps = os.path.sep + os.path.altsep
-    else:
-        seps = os.path.sep
+    # fsspec paths always use "/" as their separator (AbstractFileSystem.sep), on every
+    # platform, and glob() has already put the pattern through _strip_protocol by the
+    # time it reaches here. Taking the separators from os.path instead would make a
+    # backslash a separator on Windows only, so a key containing one, which is an
+    # ordinary character on an object store, would stop matching there.
+    seps = "/"
     escaped_seps = "".join(map(re.escape, seps))
     any_sep = f"[{escaped_seps}]" if len(seps) > 1 else escaped_seps
     not_sep = f"[^{escaped_seps}]"

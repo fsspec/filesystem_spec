@@ -1459,3 +1459,55 @@ def test_issue_1447():
             assert isinstance(fs, fsspec.implementations.local.LocalFileSystem)
             with fs.open(urlpath, "rb") as f:
                 assert f.read() == contents
+
+
+def test_local_glob_is_unaffected_by_the_forward_slash_translator(tmp_path):
+    """The counterpart to `test_glob_translate_does_not_depend_on_the_host_os`.
+
+    That test pins the translator to "/" whatever the host says. This one pins
+    the other half: local globbing still resolves the same afterwards. On posix
+    nothing could change, because `seps` was already "/" there; the property
+    worth holding is that it did not change on Windows either.
+    """
+    fs = LocalFileSystem()
+    root = make_path_posix(str(tmp_path))
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "b.log").write_text("b")
+    (tmp_path / "sub" / "c.txt").write_text("c")
+
+    assert sorted(fs.glob(f"{root}/*.txt")) == [f"{root}/a.txt"]
+    assert sorted(fs.glob(f"{root}/*")) == [
+        f"{root}/a.txt",
+        f"{root}/b.log",
+        f"{root}/sub",
+    ]
+    assert sorted(fs.glob(f"{root}/**/*.txt")) == [f"{root}/a.txt", f"{root}/sub/c.txt"]
+    # every path out is posix, which is what lets the translator assume "/"
+    assert all("\\" not in p for p in fs.glob(f"{root}/**"))
+
+
+@pytest.mark.skipif(not WIN, reason="a native backslash pattern only exists on Windows")
+def test_a_native_windows_pattern_is_normalised_before_the_translator_sees_it(tmp_path):
+    """Why fixing `seps` to "/" cannot affect a local path.
+
+    `glob()` runs `_strip_protocol` first, and `LocalFileSystem._strip_protocol`
+    calls `make_path_posix`, which replaces every backslash. So a native pattern
+    full of them still globs, and the translator never receives one.
+    """
+    fs = LocalFileSystem()
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "sub" / "b.txt").write_text("b")
+
+    native = f"{tmp_path}\\*.txt"  # C:\...\*.txt
+    assert "\\" in native
+    root = make_path_posix(str(tmp_path))
+    assert sorted(fs.glob(native)) == [f"{root}/a.txt"]
+    assert sorted(fs.glob(f"{tmp_path}\\**\\*.txt")) == [
+        f"{root}/a.txt",
+        f"{root}/sub/b.txt",
+    ]
+
+    # the mechanism itself, so it cannot rot silently
+    assert "\\" not in make_path_posix(native)
