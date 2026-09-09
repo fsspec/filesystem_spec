@@ -10,7 +10,11 @@ import pytest
 
 import fsspec.asyn
 import fsspec.utils
-from fsspec.implementations.http import HTTPStreamFile
+from fsspec.implementations.http import (
+    _RETRYABLE_STATUSES,
+    HTTPFileSystem,
+    HTTPStreamFile,
+)
 from fsspec.tests.conftest import (  # noqa: F401
     HTTPTestHandler,
     data,
@@ -682,6 +686,12 @@ def _faults(path=_REALFILE_PATH):
     return HTTPTestHandler.fault_counts.get(path, 0)
 
 
+def _rearm():
+    """Restore the fault budget and GET counter for a second read in a test."""
+    HTTPTestHandler.fault_counts.clear()
+    HTTPTestHandler.get_counts.clear()
+
+
 def test_retry_503_then_succeeds(server, reset_faults):
     fs = _retry_fs({"fail_status": "503"})
     with fs.open(server.realfile) as f:
@@ -823,3 +833,57 @@ def test_retry_per_open_override(server, reset_faults):
     with fs.open(server.realfile, block_size=0, retries=1) as f:
         assert isinstance(f, HTTPStreamFile)
         assert f.read() == data
+
+
+def test_retry_custom_statuses(server, reset_faults):
+    # 403 is not retried by default, but can be opted in
+    fs = _retry_fs({"fail_status": "403"}, retry_statuses=[403])
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _gets() == 2
+    _rearm()
+    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
+    assert _gets() == 2
+
+    # ... and the default codes can be opted out
+    fs = _retry_fs({"fail_status": "503"}, retry_statuses=[403])
+    _rearm()
+    with pytest.raises(aiohttp.ClientResponseError):
+        fs.cat_file(server.realfile)
+    assert _gets() == 1
+
+
+def test_retry_statuses_validation():
+    fs = fsspec.filesystem("http", skip_instance_cache=True)
+    assert fs.retry_statuses == _RETRYABLE_STATUSES
+    fs = fsspec.filesystem(
+        "http", retry_statuses=(500, "503"), skip_instance_cache=True
+    )
+    assert fs.retry_statuses == frozenset({500, 503})
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_statuses=["abc"], skip_instance_cache=True)
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_statuses=503, skip_instance_cache=True)
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_statuses="503", skip_instance_cache=True)
+
+
+def test_retry_is_retryable_override(server, reset_faults):
+    class BusyCDNFileSystem(HTTPFileSystem):
+        def _is_retryable(self, exc):
+            # a CDN that answers 403 under load
+            if isinstance(exc, aiohttp.ClientResponseError) and exc.status == 403:
+                return True
+            return super()._is_retryable(exc)
+
+    fs = BusyCDNFileSystem(
+        headers=dict(_RETRY_HEADERS, fail_status="403"),
+        retry_wait=0,
+        skip_instance_cache=True,
+    )
+    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
+    assert _gets() == 2
+    _rearm()
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _gets() == 2
