@@ -455,6 +455,49 @@ def test_clear_expired(tmp_path):
         fs.clear_expired_cache()
 
 
+def test_simplecache_clear_expired_uses_file_times(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    old_source = source / "old"
+    recent_source = source / "recent"
+    cache = tmp_path / "cache"
+    fs = fsspec.filesystem(
+        "simplecache",
+        target_protocol="file",
+        cache_storage=str(cache),
+        skip_instance_cache=True,
+    )
+
+    with fs.open(str(old_source), "wb") as f:
+        f.write(b"old")
+    with fs.open(str(recent_source), "wb") as f:
+        f.write(b"recent")
+    old_cached = fs._check_file(str(old_source))
+    recent_cached = fs._check_file(str(recent_source))
+    os.utime(old_cached, (1, 1))
+
+    fs.clear_expired_cache(expiry_time=60)
+
+    assert not os.path.exists(old_cached)
+    assert os.path.exists(recent_cached)
+    assert cache.is_dir()
+
+
+def test_simplecache_clear_expired_requires_age(tmp_path):
+    fs = fsspec.filesystem(
+        "simplecache",
+        target_protocol="file",
+        cache_storage=str(tmp_path / "cache"),
+        skip_instance_cache=True,
+    )
+
+    with pytest.raises(ValueError, match="expiry_time must be provided"):
+        fs.clear_expired_cache()
+
+    with pytest.raises(ValueError, match="expiry_time must be non-negative"):
+        fs.clear_expired_cache(expiry_time=-1)
+
+
 def test_pop():
     import tempfile
 
