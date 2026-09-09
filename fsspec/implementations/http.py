@@ -34,16 +34,16 @@ _RETRY_MAX_WAIT = 60.0
 _retry_sleep = asyncio.sleep  # module attribute so tests can substitute a fake
 
 
-def _is_retryable(exc):
+def _is_retryable(exc, statuses=_RETRYABLE_STATUSES):
     """Whether a failed HTTP read is worth repeating.
 
-    Throttling and server-side errors, dropped or reset connections, timeouts
-    and truncated bodies are transient; anything else (including the
-    ``FileNotFoundError``/``PermissionError`` a subclass may map 4xx codes to)
-    is deterministic and propagates at once.
+    A response error is retried when its status is in ``statuses``; dropped
+    or reset connections, timeouts and truncated bodies are always transient;
+    anything else (including the ``FileNotFoundError``/``PermissionError`` a
+    subclass may map 4xx codes to) is deterministic and propagates at once.
     """
     if isinstance(exc, aiohttp.ClientResponseError):
-        return exc.status in _RETRYABLE_STATUSES
+        return exc.status in statuses
     if isinstance(exc, aiohttp.ClientSSLError):
         return False
     return isinstance(
@@ -67,12 +67,15 @@ def _retry_after(exc):
         return None
 
 
-async def _with_retries(attempt, retries, retry_wait, label):
+async def _with_retries(
+    attempt, retries, retry_wait, label, is_retryable=_is_retryable
+):
     """Await ``attempt()``, repeating it on transient failures.
 
     ``attempt`` is a zero-argument coroutine function covering the whole
     request *and* body read, so a connection dropped mid-body counts as a
-    failure too. A ``Retry-After`` header is honoured when present; otherwise
+    failure too. ``is_retryable(exc)`` decides whether a failure is worth
+    repeating. A ``Retry-After`` header is honoured when present; otherwise
     the wait doubles from ``retry_wait`` on each retry, capped at
     ``_RETRY_MAX_WAIT`` seconds and jittered. Non-retryable errors and the
     final failure propagate unchanged.
@@ -81,7 +84,7 @@ async def _with_retries(attempt, retries, retry_wait, label):
         try:
             return await attempt()
         except Exception as exc:
-            if n >= retries or not _is_retryable(exc):
+            if n >= retries or not is_retryable(exc):
                 raise
             delay = _retry_after(exc)
             if delay is None:
@@ -134,6 +137,7 @@ class HTTPFileSystem(AsyncFileSystem):
         encoded=False,
         retries=3,
         retry_wait=1.0,
+        retry_statuses=None,
         **storage_options,
     ):
         """
@@ -168,6 +172,11 @@ class HTTPFileSystem(AsyncFileSystem):
             Seconds to wait before the first retry; doubled on each further
             retry (capped at 60 s, with jitter). A ``Retry-After`` header sent
             by the server takes precedence.
+        retry_statuses: iterable of int or None
+            HTTP status codes of a failed read that are retried; default
+            (None) is 408, 425, 429, 500, 502, 503 and 504. Dropped
+            connections, timeouts and truncated bodies are retried regardless.
+            Override ``_is_retryable`` in a subclass for finer control.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open()
@@ -187,6 +196,20 @@ class HTTPFileSystem(AsyncFileSystem):
             raise ValueError(f"retry_wait must be >= 0, got {retry_wait!r}")
         self.retries = retries
         self.retry_wait = retry_wait
+        if retry_statuses is None:
+            self.retry_statuses = _RETRYABLE_STATUSES
+        else:
+            if isinstance(retry_statuses, str):
+                # "503" would otherwise iterate to {5, 0, 3}
+                raise ValueError(
+                    f"retry_statuses must be an iterable of ints, got {retry_statuses!r}"
+                )
+            try:
+                self.retry_statuses = frozenset(int(s) for s in retry_statuses)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"retry_statuses must be an iterable of ints, got {retry_statuses!r}"
+                ) from None
         self.kwargs = storage_options
         self._session = None
 
@@ -319,6 +342,16 @@ class HTTPFileSystem(AsyncFileSystem):
             raise FileNotFoundError(url)
         response.raise_for_status()
 
+    def _is_retryable(self, exc):
+        """Whether a failed read should be tried again.
+
+        Consulted by ``cat_file`` and ``HTTPFile`` block reads after each
+        failure. Response errors are retried when their status is in
+        ``retry_statuses``; connection errors, timeouts and truncated bodies
+        always are. Override to change the decision for a particular server.
+        """
+        return _is_retryable(exc, self.retry_statuses)
+
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -339,7 +372,9 @@ class HTTPFileSystem(AsyncFileSystem):
                 self._raise_not_found_for_status(r, url)
             return out
 
-        return await _with_retries(_once, self.retries, self.retry_wait, url)
+        return await _with_retries(
+            _once, self.retries, self.retry_wait, url, self._is_retryable
+        )
 
     async def _get_file(
         self, rpath, lpath, chunk_size=5 * 2**20, callback=DEFAULT_CALLBACK, **kwargs
@@ -720,6 +755,7 @@ class HTTPFile(AbstractBufferedFile):
         self.retry_wait = (
             getattr(fs, "retry_wait", 1.0) if retry_wait is None else retry_wait
         )
+        self._is_retryable = getattr(fs, "_is_retryable", _is_retryable)
         self.details = {"name": url, "size": size, "type": "file"}
         super().__init__(
             fs=fs,
@@ -868,7 +904,11 @@ class HTTPFile(AbstractBufferedFile):
                 return out
 
         return await _with_retries(
-            _once, self.retries, self.retry_wait, f"{self.url} ({headers['Range']})"
+            _once,
+            self.retries,
+            self.retry_wait,
+            f"{self.url} ({headers['Range']})",
+            self._is_retryable,
         )
 
     _fetch_range = sync_wrapper(async_fetch_range)
