@@ -10,7 +10,7 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import Any, ClassVar
+from typing import Any
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -160,7 +160,9 @@ class AbstractFileSystem(metaclass=_Cached):
     _cached = False
     blocksize = 2**22
     sep = "/"
-    protocol: ClassVar[str | tuple[str, ...]] = "abstract"
+    # Implementations may select their protocol per instance (for example, a
+    # single adapter class backed by different storage implementations).
+    protocol: str | tuple[str, ...] = "abstract"
     _latest = None
     async_impl = False
     mirror_sync_methods = False
