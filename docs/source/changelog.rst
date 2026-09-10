@@ -14,6 +14,11 @@ Fixes
 - End the transaction even when a commit or discard raises, so the filesystem
   is not left in transaction mode and deferred temporary files are cleaned up
 
+- The SFTP host key policy is configurable with the new ``host_key_policy``
+  argument of ``SFTPFileSystem``, which accepts ``"auto_add"`` (default,
+  unchanged behaviour), ``"warning"`` or ``"reject"``, or any
+  ``paramiko.MissingHostKeyPolicy`` (#2119)
+
 2026.7.0
 --------
 
