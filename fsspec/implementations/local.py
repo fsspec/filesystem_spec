@@ -150,6 +150,28 @@ class LocalFileSystem(AbstractFileSystem):
         return os.path.isdir(path)
 
     def get_file(self, path1, path2, callback=None, **kwargs):
+        if (
+            kwargs.get("start") is not None
+            or kwargs.get("end") is not None
+            or kwargs.get("resume", False)
+        ):
+            from fsspec.callbacks import DEFAULT_CALLBACK
+
+            path1 = self._strip_protocol(path1)
+            if not isfilelike(path2):
+                path2 = self._strip_protocol(path2)
+                try:
+                    same_file = os.path.samefile(path1, path2)
+                except FileNotFoundError:
+                    same_file = False
+                if same_file:
+                    raise shutil.SameFileError(path1, path2)
+            return super().get_file(
+                path1,
+                path2,
+                callback=DEFAULT_CALLBACK if callback is None else callback,
+                **kwargs,
+            )
         if isfilelike(path2):
             with open(path1, "rb") as f:
                 shutil.copyfileobj(f, path2)

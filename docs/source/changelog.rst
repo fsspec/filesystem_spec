@@ -4,6 +4,11 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Add byte-range and resumable ``get_file`` / ``get`` downloads (#1617),
+  with validated HTTP range responses and progress reporting.
+
 Fixes
 
 - Allow filesystem implementations to assign ``protocol`` per instance

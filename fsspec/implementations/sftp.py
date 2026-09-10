@@ -158,6 +158,12 @@ class SFTPFileSystem(AbstractFileSystem):
         self.ftp.put(lpath, rpath)
 
     def get_file(self, rpath, lpath, **kwargs):
+        if (
+            kwargs.get("start") is not None
+            or kwargs.get("end") is not None
+            or kwargs.get("resume", False)
+        ):
+            return super().get_file(rpath, lpath, **kwargs)
         if self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
         else:

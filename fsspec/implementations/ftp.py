@@ -195,6 +195,12 @@ class FTPFileSystem(AbstractFileSystem):
         return out
 
     def get_file(self, rpath, lpath, **kwargs):
+        if (
+            kwargs.get("start") is not None
+            or kwargs.get("end") is not None
+            or kwargs.get("resume", False)
+        ):
+            return super().get_file(rpath, lpath, **kwargs)
         if self.isdir(rpath):
             if not os.path.exists(lpath):
                 os.mkdir(lpath)

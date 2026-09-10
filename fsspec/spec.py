@@ -973,9 +973,39 @@ class AbstractFileSystem(metaclass=_Cached):
             return self.cat_file(paths[0], **kwargs)
 
     def get_file(
-        self, rpath, lpath=None, callback=DEFAULT_CALLBACK, outfile=None, **kwargs
+        self,
+        rpath,
+        lpath=None,
+        callback=DEFAULT_CALLBACK,
+        outfile=None,
+        *,
+        start=None,
+        end=None,
+        resume=False,
+        **kwargs,
     ):
-        """Copy single remote file to local"""
+        """Copy a remote file, optionally selecting a range or resuming a download.
+
+        Parameters
+        ----------
+        start, end : int, optional
+            Half-open byte offsets, as for ``cat_file``. Negative offsets are
+            relative to the remote file's end. Without ``resume``, a filename
+            destination is overwritten with only the selected bytes.
+        resume : bool, default False
+            Append bytes starting at the current local file size. A missing
+            local file starts at zero. Requires a filename destination and
+            cannot be combined with ``start``. ``end`` remains an absolute
+            remote offset. The remote file must not have changed since the
+            partial download; its existing prefix is not compared.
+        outfile : file-like, optional
+            Caller-owned binary output stream. It is not closed by this method.
+            File-like destinations cannot be used with ``resume``.
+
+        Other keyword arguments are passed to ``open``. Backends overriding
+        this method must implement or delegate the range/resume options.
+        """
+        from ._download import _Download
         from .implementations.local import LocalFileSystem
 
         if outfile is None and isfilelike(lpath):
@@ -984,27 +1014,45 @@ class AbstractFileSystem(metaclass=_Cached):
             os.makedirs(lpath, exist_ok=True)
             return None
 
-        if outfile is None:
-            fs = LocalFileSystem(auto_mkdir=True)
-            fs.makedirs(fs._parent(lpath), exist_ok=True)
-
-        with self.open(rpath, "rb", **kwargs) as f1:
-            close_outfile = outfile is None
-            if close_outfile:
-                outfile = open(lpath, "wb")
-
-            try:
-                callback.set_size(getattr(f1, "size", None))
-                data = True
-                while data:
-                    data = f1.read(self.blocksize)
-                    segment_len = outfile.write(data)
-                    if segment_len is None:
-                        segment_len = len(data)
-                    callback.relative_update(segment_len)
-            finally:
-                if close_outfile:
-                    outfile.close()
+        download = _Download(
+            lpath,
+            outfile=outfile,
+            start=start,
+            end=end,
+            resume=resume,
+            callback=callback,
+        )
+        with self.open(rpath, "rb", **kwargs) as source:
+            size = getattr(source, "size", None)
+            if size is None and (
+                download.needs_size
+                or resume
+                or (download.ranged and getattr(source, "seekable", lambda: False)())
+            ):
+                source.seek(0, 2)
+                size = source.tell()
+                source.seek(0)
+            download.set_size(size)
+            if download.start:
+                source.seek(download.start)
+            if outfile is None:
+                fs = LocalFileSystem(auto_mkdir=True)
+                fs.makedirs(fs._parent(lpath), exist_ok=True)
+            with download.open() as target:
+                while (
+                    not download.ranged
+                    or download.length is None
+                    or (download.count < download.length)
+                ):
+                    count = self.blocksize
+                    if download.ranged and download.length is not None:
+                        count = min(count, download.length - download.count)
+                    data = source.read(count)
+                    if not data:
+                        break
+                    download.write(target, data)
+                if not download.ranged:
+                    callback.relative_update(0)
 
     def get(
         self,

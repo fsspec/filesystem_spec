@@ -219,7 +219,12 @@ class ArrowFSWrapper(AbstractFileSystem):
         return super().cat_file(path, start, end, **kwargs)
 
     def get_file(self, rpath, lpath, **kwargs):
-        kwargs.setdefault("seekable", False)
+        kwargs.setdefault(
+            "seekable",
+            kwargs.get("start") is not None
+            or kwargs.get("end") is not None
+            or kwargs.get("resume", False),
+        )
         super().get_file(rpath, lpath, **kwargs)
 
 

@@ -10,6 +10,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Literal
 
 import fsspec.core
+from fsspec._download import _Download
 from fsspec.spec import AbstractBufferedFile
 
 try:
@@ -18,7 +19,7 @@ except ImportError:
     if not TYPE_CHECKING:
         import json
 
-from fsspec.asyn import AsyncFileSystem
+from fsspec.asyn import AsyncFileSystem, sync
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.core import filesystem, open, split_protocol
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
@@ -856,14 +857,48 @@ class ReferenceFileSystem(AsyncFileSystem):
         """Temporarily add binary data or reference as a file"""
         self.references[path] = value
 
-    async def _get_file(self, rpath, lpath, **kwargs):
+    async def _get_file(
+        self,
+        rpath,
+        lpath,
+        callback=DEFAULT_CALLBACK,
+        *,
+        start=None,
+        end=None,
+        resume=False,
+        **kwargs,
+    ):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
-        data = await self._cat_file(rpath)
-        with open(lpath, "wb") as f:
-            f.write(data)
+        if start is None and end is None and not resume:
+            data = await self._cat_file(rpath)
+            with open(lpath, "wb") as f:
+                f.write(data)
+            return
+        download = _Download(
+            lpath, start=start, end=end, resume=resume, callback=callback
+        )
+        part_or_url, _, _ = self._cat_common(rpath)
+        if isinstance(part_or_url, bytes):
+            size = len(part_or_url)
+        else:
+            size = (await self._info(rpath)).get("size")
+        download.set_size(size)
+        data = b""
+        if download.length != 0:
+            data = await self._cat_file(
+                rpath, start=download.start, end=download.end, **kwargs
+            )
+        with download.open() as outfile:
+            download.write(outfile, data)
 
     def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, **kwargs):
+        if (
+            kwargs.get("start") is not None
+            or kwargs.get("end") is not None
+            or kwargs.get("resume", False)
+        ):
+            return super().get_file(rpath, lpath, callback=callback, **kwargs)
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = self.cat_file(rpath, **kwargs)
@@ -876,6 +911,14 @@ class ReferenceFileSystem(AsyncFileSystem):
         callback.absolute_update(len(data))
 
     def get(self, rpath, lpath, recursive=False, **kwargs):
+        if (
+            kwargs.get("start") is not None
+            or kwargs.get("end") is not None
+            or kwargs.get("resume", False)
+        ):
+            return sync(
+                self.loop, self._get, rpath, lpath, recursive=recursive, **kwargs
+            )
         if recursive:
             # trigger directory build
             self.ls("")

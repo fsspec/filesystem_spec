@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 from copy import copy
 from json import dumps, loads
+from operator import index
 from urllib.parse import urlparse
 
 try:
@@ -14,10 +15,11 @@ try:
 except (ImportError, ModuleNotFoundError, OSError):
     yarl = False
 
+from fsspec._download import _Download
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.registry import register_implementation
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
-from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
+from fsspec.utils import DEFAULT_BLOCK_SIZE, nullcontext, tokenize
 
 from ..caching import AllBytes
 
@@ -370,27 +372,48 @@ class HTTPFileSystem(AbstractFileSystem):
         return r.content
 
     def get_file(
-        self, rpath, lpath, chunk_size=5 * 2**20, callback=_DEFAULT_CALLBACK, **kwargs
+        self,
+        rpath,
+        lpath,
+        chunk_size=5 * 2**20,
+        callback=_DEFAULT_CALLBACK,
+        *,
+        start=None,
+        end=None,
+        resume=False,
+        **kwargs,
     ):
+        chunk_size = index(chunk_size)
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        download = _Download(
+            lpath, start=start, end=end, resume=resume, callback=callback
+        )
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        if download.needs_size or download.length == 0:
+            info = self.info(rpath, **kwargs)
+            download.set_size(info.get("size"))
+            if download.length == 0:
+                with download.open():
+                    return
+        if download.ranged:
+            download.request_headers(kw)
+            kw.setdefault("stream", True)
         logger.debug(rpath)
-        r = self.session.get(self.encode_url(rpath), **kw)
+        response = self.session.get(self.encode_url(rpath), **kw)
         try:
-            size = int(
-                r.headers.get("content-length", None)
-                or r.headers.get("Content-Length", None)
-            )
-        except (ValueError, KeyError, TypeError):
-            size = None
-
-        callback.set_size(size)
-        self._raise_not_found_for_status(r, rpath)
-        if not isfilelike(lpath):
-            lpath = open(lpath, "wb")
-        for chunk in r.iter_content(chunk_size, decode_unicode=False):
-            lpath.write(chunk)
-            callback.relative_update(len(chunk))
+            if response.status_code != 416 or not download.ranged:
+                self._raise_not_found_for_status(response, rpath)
+            read_body = download.response(response.status_code, response.headers)
+            with download.open() as outfile:
+                if read_body:
+                    for chunk in response.iter_content(
+                        chunk_size, decode_unicode=False
+                    ):
+                        download.write(outfile, chunk)
+        finally:
+            response.close()
 
     def put_file(
         self,

@@ -4,11 +4,13 @@ import logging
 import re
 import weakref
 from copy import copy
+from operator import index
 from urllib.parse import urlparse
 
 import aiohttp
 import yarl
 
+from fsspec._download import _Download
 from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.exceptions import FSTimeoutError
@@ -16,7 +18,6 @@ from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import (
     DEFAULT_BLOCK_SIZE,
     glob_translate,
-    isfilelike,
     nullcontext,
     tokenize,
 )
@@ -251,34 +252,47 @@ class HTTPFileSystem(AsyncFileSystem):
         return out
 
     async def _get_file(
-        self, rpath, lpath, chunk_size=5 * 2**20, callback=DEFAULT_CALLBACK, **kwargs
+        self,
+        rpath,
+        lpath,
+        chunk_size=5 * 2**20,
+        callback=DEFAULT_CALLBACK,
+        *,
+        start=None,
+        end=None,
+        resume=False,
+        **kwargs,
     ):
+        chunk_size = index(chunk_size)
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        download = _Download(
+            lpath, start=start, end=end, resume=resume, callback=callback
+        )
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        if download.needs_size or download.length == 0:
+            info = await self._info(rpath, **kwargs)
+            download.set_size(info.get("size"))
+            if download.length == 0:
+                with download.open():
+                    return
+        if download.ranged:
+            download.request_headers(kw)
+            kw["auto_decompress"] = False
         logger.debug(rpath)
         session = await self.set_session()
-        async with session.get(self.encode_url(rpath), **kw) as r:
-            try:
-                size = int(r.headers["content-length"])
-            except (ValueError, KeyError):
-                size = None
-
-            callback.set_size(size)
-            self._raise_not_found_for_status(r, rpath)
-            if isfilelike(lpath):
-                outfile = lpath
-            else:
-                outfile = open(lpath, "wb")  # noqa: ASYNC230
-
-            try:
-                chunk = True
-                while chunk:
-                    chunk = await r.content.read(chunk_size)
-                    outfile.write(chunk)
-                    callback.relative_update(len(chunk))
-            finally:
-                if not isfilelike(lpath):
-                    outfile.close()
+        async with session.get(self.encode_url(rpath), **kw) as response:
+            if response.status != 416 or not download.ranged:
+                self._raise_not_found_for_status(response, rpath)
+            read_body = download.response(response.status, response.headers)
+            with download.open() as outfile:
+                if read_body:
+                    while True:
+                        chunk = await response.content.read(chunk_size)
+                        if not chunk:
+                            break
+                        download.write(outfile, chunk)
 
     async def _put_file(
         self,
