@@ -9,7 +9,7 @@ import pytest
 
 import fsspec
 
-pytest.importorskip("paramiko")
+paramiko = pytest.importorskip("paramiko")
 
 
 def stop_docker(name):
@@ -314,3 +314,92 @@ def test_created_time(ssh, root_path):
     created_file_date: datetime = f.created(file_path)
     assert created_file_date >= created_dir_date
     assert created_file_date <= datetime.now(timezone.utc)
+
+
+# The tests below do not need a server: they check how the client is set up
+# before connecting, using a stand-in for ``paramiko.SSHClient``.
+
+
+class _FakeSSHClient:
+    """Record what is requested from ``paramiko.SSHClient``."""
+
+    def __init__(self):
+        self.policy = None
+        self.host = None
+        self.connect_kwargs = None
+
+    def set_missing_host_key_policy(self, policy):
+        self.policy = policy
+
+    def connect(self, host, **kwargs):
+        self.host = host
+        self.connect_kwargs = kwargs
+
+    def open_sftp(self):
+        return object()
+
+
+@pytest.fixture
+def fake_client(monkeypatch):
+    monkeypatch.setattr(paramiko, "SSHClient", _FakeSSHClient)
+    return _FakeSSHClient
+
+
+def test_host_key_policy_default(fake_client):
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+
+    assert isinstance(fs.client.policy, paramiko.AutoAddPolicy)
+
+
+@pytest.mark.parametrize(
+    ("name", "cls"),
+    [
+        ("auto_add", paramiko.AutoAddPolicy),
+        ("reject", paramiko.RejectPolicy),
+        ("warning", paramiko.WarningPolicy),
+    ],
+)
+def test_host_key_policy_by_name(fake_client, name, cls):
+    fs = fsspec.filesystem(
+        "sftp", host="host", host_key_policy=name, skip_instance_cache=True
+    )
+
+    assert isinstance(fs.client.policy, cls)
+
+
+@pytest.mark.parametrize("as_instance", [False, True])
+def test_host_key_policy_passed_through(fake_client, as_instance):
+    policy = paramiko.RejectPolicy() if as_instance else paramiko.RejectPolicy
+    fs = fsspec.filesystem(
+        "sftp", host="host", host_key_policy=policy, skip_instance_cache=True
+    )
+
+    assert isinstance(fs.client.policy, paramiko.RejectPolicy)
+
+
+def test_host_key_policy_not_passed_to_connect(fake_client):
+    fs = fsspec.filesystem(
+        "sftp",
+        host="host",
+        host_key_policy="reject",
+        username="user",
+        port=2222,
+        skip_instance_cache=True,
+    )
+
+    assert fs.client.host == "host"
+    assert fs.client.connect_kwargs == {"username": "user", "port": 2222}
+
+
+def test_host_key_policy_unknown_name(fake_client):
+    with pytest.raises(ValueError, match="Unknown host_key_policy 'letmein'"):
+        fsspec.filesystem(
+            "sftp", host="host", host_key_policy="letmein", skip_instance_cache=True
+        )
+
+
+def test_host_key_policy_wrong_type(fake_client):
+    with pytest.raises(TypeError, match="host_key_policy must be one of"):
+        fsspec.filesystem(
+            "sftp", host="host", host_key_policy=42, skip_instance_cache=True
+        )
