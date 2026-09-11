@@ -97,6 +97,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")
+            if start and int(start) >= len(file_data) and "use_206" in self.headers:
+                return self._respond(
+                    416, {"Content-Range": f"bytes */{len(file_data)}"}
+                )
             if start:
                 content_range = f"bytes {start}-{end}/{len(file_data)}"
                 file_data = file_data[int(start) : (int(end) + 1) if end else None]
