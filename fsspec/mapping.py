@@ -9,6 +9,7 @@ from functools import cached_property
 from fsspec.core import url_to_fs
 
 logger = logging.getLogger("fsspec.mapping")
+_MISSING = object()
 
 
 class FSMap(MutableMapping):
@@ -161,9 +162,14 @@ class FSMap(MutableMapping):
             raise KeyError(key) from exc
         return result
 
-    def pop(self, key, default=None):
+    def pop(self, key, default=_MISSING):
         """Pop data"""
-        result = self.__getitem__(key, default)
+        try:
+            result = self[key]
+        except KeyError:
+            if default is _MISSING:
+                raise
+            return default
         try:
             del self[key]
         except KeyError:
