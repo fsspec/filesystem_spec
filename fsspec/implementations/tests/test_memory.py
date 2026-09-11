@@ -113,6 +113,24 @@ def test_mv_same_paths(m):
     assert m.exists("src/file.txt")
 
 
+def test_mv_uses_mv_file(m, monkeypatch):
+    m.touch("source.txt")
+    calls = []
+
+    def mv_file(path1, path2, **kwargs):
+        calls.append((path1, path2, kwargs))
+        m.cp_file(path1, path2, **kwargs)
+        m.rm_file(path1)
+
+    monkeypatch.setattr(m, "mv_file", mv_file)
+
+    m.mv("source.txt", "target.txt")
+
+    assert calls == [("/source.txt", "target.txt", {})]
+    assert m.exists("target.txt")
+    assert not m.exists("source.txt")
+
+
 def test_mv_recursive_propagates_cp_file_errors(m, monkeypatch):
     m.mkdir("src")
     m.touch("src/file.txt")
