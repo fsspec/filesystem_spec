@@ -1,8 +1,13 @@
+import tarfile
+from io import BytesIO
+
 import pytest
 
 from fsspec.asyn import AsyncFileSystem
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.tar import TarFileSystem
 from fsspec.spec import AbstractFileSystem
 
 PATH = "path/to/dir"
@@ -454,25 +459,29 @@ def test_glob_with_protocol(dirfs):
 @pytest.mark.asyncio
 async def test_async_glob_detail(adirfs):
     adirfs.fs._glob.return_value = {
-        f"{PATH}/one": {"foo": "bar"},
-        f"{PATH}/two": {"baz": "qux"},
+        f"{PATH}/one": {"name": f"{PATH}/one", "foo": "bar"},
+        f"{PATH}/two": {"name": f"{PATH}/two", "baz": "qux"},
     }
     assert await adirfs._glob("*", detail=True, **KWARGS) == {
-        "one": {"foo": "bar"},
-        "two": {"baz": "qux"},
+        "one": {"name": "one", "foo": "bar"},
+        "two": {"name": "two", "baz": "qux"},
     }
+    for name, info in adirfs.fs._glob.return_value.items():
+        assert info["name"] == name
     adirfs.fs._glob.assert_called_once_with(f"{PATH}/*", detail=True, **KWARGS)
 
 
 def test_glob_detail(dirfs):
     dirfs.fs.glob.return_value = {
-        f"{PATH}/one": {"foo": "bar"},
-        f"{PATH}/two": {"baz": "qux"},
+        f"{PATH}/one": {"name": f"{PATH}/one", "foo": "bar"},
+        f"{PATH}/two": {"name": f"{PATH}/two", "baz": "qux"},
     }
     assert dirfs.glob("*", detail=True, **KWARGS) == {
-        "one": {"foo": "bar"},
-        "two": {"baz": "qux"},
+        "one": {"name": "one", "foo": "bar"},
+        "two": {"name": "two", "baz": "qux"},
     }
+    for name, info in dirfs.fs.glob.return_value.items():
+        assert info["name"] == name
     dirfs.fs.glob.assert_called_once_with(f"{PATH}/*", detail=True, **KWARGS)
 
 
@@ -521,25 +530,29 @@ def test_find(dirfs):
 @pytest.mark.asyncio
 async def test_async_find_detail(adirfs):
     adirfs.fs._find.return_value = {
-        f"{PATH}/dir/one": {"foo": "bar"},
-        f"{PATH}/dir/two": {"baz": "qux"},
+        f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
+        f"{PATH}/dir/two": {"name": f"{PATH}/dir/two", "baz": "qux"},
     }
     assert await adirfs._find("dir", *ARGS, detail=True, **KWARGS) == {
-        "dir/one": {"foo": "bar"},
-        "dir/two": {"baz": "qux"},
+        "dir/one": {"name": "dir/one", "foo": "bar"},
+        "dir/two": {"name": "dir/two", "baz": "qux"},
     }
+    for name, info in adirfs.fs._find.return_value.items():
+        assert info["name"] == name
     adirfs.fs._find.assert_called_once_with(f"{PATH}/dir", *ARGS, detail=True, **KWARGS)
 
 
 def test_find_detail(dirfs):
     dirfs.fs.find.return_value = {
-        f"{PATH}/dir/one": {"foo": "bar"},
-        f"{PATH}/dir/two": {"baz": "qux"},
+        f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
+        f"{PATH}/dir/two": {"name": f"{PATH}/dir/two", "baz": "qux"},
     }
     assert dirfs.find("dir", *ARGS, detail=True, **KWARGS) == {
-        "dir/one": {"foo": "bar"},
-        "dir/two": {"baz": "qux"},
+        "dir/one": {"name": "dir/one", "foo": "bar"},
+        "dir/two": {"name": "dir/two", "baz": "qux"},
     }
+    for name, info in dirfs.fs.find.return_value.items():
+        assert info["name"] == name
     dirfs.fs.find.assert_called_once_with(f"{PATH}/dir", *ARGS, detail=True, **KWARGS)
 
 
@@ -650,6 +663,40 @@ def test_open(mocker, dirfs):
     dirfs.fs.open.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
 
 
+@pytest.mark.parametrize("method, pattern", [("glob", "**/*.txt"), ("find", "")])
+def test_detailed_listing_names_can_be_read(tmp_path, method, pattern):
+    (tmp_path / "nested").mkdir()
+    (tmp_path / "nested" / "report.txt").write_bytes(b"hello")
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+
+    listing = getattr(dirfs, method)
+    details = listing(pattern, detail=True)
+    assert list(details) == listing(pattern) == ["nested/report.txt"]
+    for name, info in details.items():
+        assert dirfs.cat_file(info["name"]) == b"hello"
+        assert info["name"] == dirfs.info(name)["name"] == name
+        assert info["size"] == 5
+        assert info["type"] == "file"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method, pattern", [("_glob", "**/*.txt"), ("_find", "")])
+async def test_async_detailed_listing_names_can_be_read(tmp_path, method, pattern):
+    (tmp_path / "nested").mkdir()
+    (tmp_path / "nested" / "report.txt").write_bytes(b"hello")
+    fs = AsyncFileSystemWrapper(LocalFileSystem(), asynchronous=True)
+    dirfs = DirFileSystem(tmp_path.as_posix(), fs, asynchronous=True)
+
+    listing = getattr(dirfs, method)
+    details = await listing(pattern, detail=True)
+    assert list(details) == await listing(pattern) == ["nested/report.txt"]
+    for name, info in details.items():
+        assert await dirfs._cat_file(info["name"]) == b"hello"
+        assert info["name"] == (await dirfs._info(name))["name"] == name
+        assert info["size"] == 5
+        assert info["type"] == "file"
+
+
 def test_from_url(m):
     from fsspec.core import url_to_fs
 
@@ -658,3 +705,40 @@ def test_from_url(m):
     assert fs.ls("", False) == ["file"]
     assert fs.ls("", True)[0]["name"] == "file"
     assert fs.cat("file") == b"data"
+
+
+def test_find_detail_single_tar_file():
+    with BytesIO() as data:
+        with tarfile.open(fileobj=data, mode="w") as archive:
+            entry = tarfile.TarInfo("root/report.txt")
+            entry.size = 5
+            archive.addfile(entry, BytesIO(b"hello"))
+        data.seek(0)
+        fs = TarFileSystem(fo=data)
+        try:
+            dirfs = DirFileSystem("root", fs)
+            details = dirfs.find("report.txt", detail=True)
+            assert details == {"report.txt": {"name": "report.txt"}}
+            assert dirfs.cat_file(details["report.txt"]["name"]) == b"hello"
+            assert fs.find("root/report.txt", detail=True) == {"root/report.txt": {}}
+        finally:
+            fs.close()
+
+
+@pytest.mark.parametrize("method", ["glob", "find"])
+def test_detail_without_name(dirfs, method):
+    wrapped = getattr(dirfs.fs, method)
+    wrapped.return_value = {f"{PATH}/file": {}}
+    assert getattr(dirfs, method)("file", detail=True) == {"file": {"name": "file"}}
+    assert wrapped.return_value == {f"{PATH}/file": {}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["_glob", "_find"])
+async def test_async_detail_without_name(adirfs, method):
+    wrapped = getattr(adirfs.fs, method)
+    wrapped.return_value = {f"{PATH}/file": {}}
+    assert await getattr(adirfs, method)("file", detail=True) == {
+        "file": {"name": "file"}
+    }
+    assert wrapped.return_value == {f"{PATH}/file": {}}
