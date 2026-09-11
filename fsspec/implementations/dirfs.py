@@ -103,8 +103,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         for path, info in paths.items():
             path = self._relpath(path)
             info = info.copy()
-            if "name" in info:
-                info["name"] = path
+            info["name"] = path
             out[path] = info
         return out
 

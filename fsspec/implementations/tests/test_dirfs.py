@@ -717,8 +717,10 @@ def test_find_detail_single_tar_file():
         fs = TarFileSystem(fo=data)
         try:
             dirfs = DirFileSystem("root", fs)
-            assert dirfs.find("report.txt", detail=True) == {"report.txt": {}}
-            assert dirfs.cat_file("report.txt") == b"hello"
+            details = dirfs.find("report.txt", detail=True)
+            assert details == {"report.txt": {"name": "report.txt"}}
+            assert dirfs.cat_file(details["report.txt"]["name"]) == b"hello"
+            assert fs.find("root/report.txt", detail=True) == {"root/report.txt": {}}
         finally:
             fs.close()
 
@@ -727,7 +729,7 @@ def test_find_detail_single_tar_file():
 def test_detail_without_name(dirfs, method):
     wrapped = getattr(dirfs.fs, method)
     wrapped.return_value = {f"{PATH}/file": {}}
-    assert getattr(dirfs, method)("file", detail=True) == {"file": {}}
+    assert getattr(dirfs, method)("file", detail=True) == {"file": {"name": "file"}}
     assert wrapped.return_value == {f"{PATH}/file": {}}
 
 
@@ -736,5 +738,7 @@ def test_detail_without_name(dirfs, method):
 async def test_async_detail_without_name(adirfs, method):
     wrapped = getattr(adirfs.fs, method)
     wrapped.return_value = {f"{PATH}/file": {}}
-    assert await getattr(adirfs, method)("file", detail=True) == {"file": {}}
+    assert await getattr(adirfs, method)("file", detail=True) == {
+        "file": {"name": "file"}
+    }
     assert wrapped.return_value == {f"{PATH}/file": {}}
