@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Close cached readers when exiting an ``open_files`` context
+
 - Allow filesystem implementations to assign ``protocol`` per instance
 
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances

@@ -192,7 +192,11 @@ class OpenFiles(list):
     def __exit__(self, *args):
         fs = self.fs
         [s.__exit__(*args) for s in self]
-        if "r" not in self.mode:
+        if "r" in self.mode:
+            # open_many() returns files without populating the OpenFile objects.
+            for f in self.files:
+                f.close()
+        else:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
