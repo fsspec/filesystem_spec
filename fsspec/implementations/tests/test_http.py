@@ -430,6 +430,41 @@ def test_put_file(server, tmp_path, method, reset_files):
     assert fs.cat(server.address + "/hey_3") == b"yyy"
 
 
+def test_get_file_resume(server, tmp_path):
+    url = server.address + "/index/realfile"
+    target = tmp_path / "target"
+    fs = fsspec.filesystem("http", headers={"give_length": "true", "use_206": "true"})
+
+    # partial local file: only the remainder is requested and appended
+    target.write_bytes(data[:100])
+    callback = fsspec.Callback()
+    fs.get_file(url, target, resume=True, callback=callback)
+    assert target.read_bytes() == data
+    assert callback.size == callback.value == len(data)
+
+    # complete local file: server answers 416, nothing is changed
+    fs.get_file(url, target, resume=True)
+    assert target.read_bytes() == data
+
+    # local file larger than the remote one: also 416, but refuse it
+    target.write_bytes(data + b"x")
+    with pytest.raises(ValueError, match="larger"):
+        fs.get_file(url, target, resume=True)
+    assert target.read_bytes() == data + b"x"
+    target.write_bytes(data)
+
+    with pytest.raises(ValueError, match="file-like"):
+        fs.get_file(url, io.BytesIO(), resume=True)
+
+    # a server that ignores Range requests: the download starts over
+    fs = fsspec.filesystem(
+        "http", headers={"give_length": "true", "ignore_range": "true"}
+    )
+    target.write_bytes(data[:100])
+    fs.get_file(url, target, resume=True)
+    assert target.read_bytes() == data
+
+
 async def get_aiohttp():
     from aiohttp import ClientSession
 
