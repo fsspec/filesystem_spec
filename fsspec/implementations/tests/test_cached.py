@@ -955,6 +955,36 @@ def test_again(protocol):
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("raise_in_context", [False, True])
+def test_multi_cache_closes_readers(tmp_path, m, protocol, raise_in_context):
+    m.pipe({"/first": b"first", "/second": b"second"})
+    open_files = fsspec.open_files(
+        [f"{protocol}::memory:///{name}" for name in ["first", "second"]],
+        cache_storage=str(tmp_path),
+    )
+
+    # Re-entering the context should close both cold- and warm-cache readers.
+    for _ in range(2):
+        try:
+            with open_files as files:
+                assert [f.read() for f in files] == [b"first", b"second"]
+                assert all(not f.closed for f in files)
+                if raise_in_context:
+                    raise RuntimeError("consumer failed")
+        except RuntimeError as exc:
+            assert raise_in_context
+            assert str(exc) == "consumer failed"
+        else:
+            assert not raise_in_context
+        try:
+            assert all(f.closed for f in files)
+        finally:
+            # Also release the descriptors when this regression fails.
+            for f in files:
+                f.close()
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_multi_cache(protocol):
     with fsspec.open_files("memory://file*", "wb", num=2) as files:
         for f in files:
