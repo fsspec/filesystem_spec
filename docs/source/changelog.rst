@@ -4,6 +4,10 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Add ``resume=True`` to ``get_file``/``get`` to continue interrupted downloads (#1617)
+
 Fixes
 
 - Allow filesystem implementations to assign ``protocol`` per instance
