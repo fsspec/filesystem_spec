@@ -27,7 +27,7 @@ remote, in a compressed store, etc.) which is portable, and can also apply any c
 text-mode to the file. These instances are also serialisable, because they do not contain any open
 files.
 
-The way to work with ``OpenFile`` s is to isolate interaction with in a ``with`` context. It is
+The way to work with ``OpenFile`` s is to isolate interaction within a ``with`` context. It is
 the initiation of the context which actually does the work of creating file-like instances.
 
 .. code-block:: python
@@ -45,7 +45,7 @@ Most implementations create file objects which derive from ``fsspec.spec.Abstrac
 have many behaviours in common. A subclass of ``AbstractBufferedFile`` provides
 random access for the underlying file-like data (without downloading the whole thing).
 This is a critical feature in the big-data access model, where each sub-task of an operation
-may need on a small part of a file, and does not, therefore want to be forced into downloading the
+may need only a small part of a file, and does not, therefore want to be forced into downloading the
 whole thing.
 
 These files offer buffering of both read and write operations, so that
@@ -77,11 +77,11 @@ thereafter happens transparently.
 Key-value stores
 ----------------
 
-File-systems are naturally like dict-like key-value mappings: each (string) path corresponds to some
+File-systems are naturally dict-like key-value mappings: each (string) path corresponds to some
 binary data on the storage back-end. For some use-cases, it is very convenient to be able to
 view some path within the file-system as a dict-like store, and the function :func:`fsspec.get_mapper`
 gives a one-stop way to return such an object. This has become useful, for example, in the
-context of the `zarr`_ project, which stores it array chunks in keys in any arbitrary mapping-like
+context of the `zarr`_ project, which stores its array chunks in values of any mapping-like
 object.
 
 .. code-block:: python
@@ -212,8 +212,8 @@ for the dask case something like
 
     of = fsspec.open('dask://bucket/key', target_protocol='s3', target_options={'anon': True})
 
-As a shorthand, particularly useful where you have multiple hops, is to "chain" the URLs with
-the special separator ``"::"``. The arguments to be passed on to each of the implementations referenced
+As a shorthand, particularly useful where you have multiple hops, you can "chain" the URLs with
+the special separator ``"::"``. The arguments to be passed onto each of the implementations referenced
 are keyed by the protocol names included in the URL. Here is the equivalent to the line above:
 
 .. code-block:: python
@@ -238,7 +238,7 @@ reads a zip-file from google, stores it locally, and gives access to the contain
 
 reads the same zip-file, but extracts the CSV files and stores them locally in the cache.
 
-**For developers**: this "chaining" methods works by formatting the arguments passed to ``open_*``
+**For developers**: this "chaining" methods works by parsing the arguments passed to ``open_*``
 into ``target_protocol`` (a simple string) and ``target_options`` (a dict) and also optionally
 ``fo`` (target path, if a specific file is required). In order for an implementation to chain
 successfully like this, it must look for exactly those named arguments. Implementations that
@@ -269,8 +269,8 @@ you can also set policies to have cached files expire after some time, or to che
 on each open, to see if the target file has changed since it was copied.
 
 With the top-level functions ``open``, ``open_local`` and ``open_files``, you can use the
-same set of kwargs as the example above, or you can chain the URL - the following would
-be the equivalent
+same set of kwargs as the example above, or you can chain the URL - the above would
+be equivalent to
 
 .. code-block:: python
 
