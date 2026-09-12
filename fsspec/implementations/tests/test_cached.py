@@ -472,8 +472,10 @@ def test_simplecache_clear_expired_uses_file_times(tmp_path):
         f.write(b"old")
     with fs.open(str(recent_source), "wb") as f:
         f.write(b"recent")
-    old_cached = fs._check_file(str(old_source))
-    recent_cached = fs._check_file(str(recent_source))
+    old_cached = fs._check_file(fs._strip_protocol(str(old_source)))
+    recent_cached = fs._check_file(fs._strip_protocol(str(recent_source)))
+    assert old_cached is not None
+    assert recent_cached is not None
     os.utime(old_cached, (1, 1))
 
     fs.clear_expired_cache(expiry_time=60)
