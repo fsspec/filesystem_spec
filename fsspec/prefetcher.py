@@ -1,46 +1,12 @@
 import asyncio
-import ctypes
 import logging
 import weakref
 from collections import deque
 
 from . import asyn as fsspec_asyn
+from .utils import HAS_CPYTHON_API, _fast_slice
 
 logger = logging.getLogger(__name__)
-
-try:
-    PyBytes_FromStringAndSize = ctypes.pythonapi.PyBytes_FromStringAndSize
-    PyBytes_FromStringAndSize.argtypes = (ctypes.c_void_p, ctypes.c_ssize_t)
-    PyBytes_FromStringAndSize.restype = ctypes.py_object
-
-    PyBytes_AsString = ctypes.pythonapi.PyBytes_AsString
-    PyBytes_AsString.argtypes = (ctypes.py_object,)
-    PyBytes_AsString.restype = ctypes.c_void_p
-    HAS_CPYTHON_API = True
-except Exception:
-    PyBytes_FromStringAndSize = None
-    PyBytes_AsString = None
-    HAS_CPYTHON_API = False
-
-
-# Please refer to following discussion to understand why this is required at this point
-# Discussion = https://github.com/fsspec/gcsfs/pull/795#discussion_r3032749881
-def _fast_slice(src_bytes, offset, read_size):
-    if read_size == 0:
-        return b""
-    if offset < 0 or offset + read_size > len(src_bytes):
-        raise ValueError("Slice indices out of bounds")
-
-    if HAS_CPYTHON_API:
-        dest_bytes = PyBytes_FromStringAndSize(None, read_size)
-        src_ptr = PyBytes_AsString(src_bytes)
-        dest_ptr = PyBytes_AsString(dest_bytes)
-        # Releases the GIL
-        ctypes.memmove(dest_ptr, src_ptr + offset, read_size)
-        return dest_bytes
-    else:
-        # Standard fallback for PyPy/non-CPython
-        return src_bytes[offset : offset + read_size]
 
 
 class RunningAverageTracker:
@@ -237,7 +203,7 @@ class PrefetchProducer:
             self._producer_task.cancel()
             tasks_to_wait.append(self._producer_task)
 
-        tasks_to_wait.extend(task for task in self._active_tasks if not task.done())
+        tasks_to_wait.extend(task for task in list(self._active_tasks) if not task.done())
 
         # We do not cancel the network task, instead we wait on them.
         # This is intentionally done to avoid MRD stream disruption.
@@ -300,8 +266,7 @@ class PrefetchProducer:
             logger.debug("PrefetchProducer loop was cancelled.")
         except Exception as e:
             logger.exception(
-                "PrefetchProducer loop encountered an unexpected error: %s",
-                e,
+                "PrefetchProducer loop encountered an unexpected error."
             )
             self.is_stopped = True
             self.orchestrator.set_error(e)
@@ -557,7 +522,7 @@ class PrefetchConsumer:
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    logger.exception("Consumer caught an error: %s", e)
+                    logger.exception("Consumer caught an error.")
                     self.orchestrator.set_error(e)
                     raise e
 
@@ -817,7 +782,7 @@ class BackgroundPrefetcher:
                 self._error = e
                 raise
             except Exception as e:
-                logger.exception("Exception raised during asynchronous fetch: %s", e)
+                logger.exception("Exception raised during asynchronous fetch.")
                 self._error = e
                 if self.producer and not self.producer.is_stopped:
                     await self.producer.stop()
