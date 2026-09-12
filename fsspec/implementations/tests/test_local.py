@@ -389,6 +389,33 @@ def test_open_auto_mkdir_create_modes(tmpdir, mode):
     assert fs.cat_file(fn) == b"data"
 
 
+@pytest.mark.parametrize(
+    "start,end",
+    [
+        (6, -5),  # crossed by one byte: end - tell() == -1, read()'s "to EOF"
+        (8, -5),
+        (6, 5),
+        (9, 1),
+        (None, -100),  # suffix longer than the file
+        (2, -2),
+        (-3, -1),
+        (2, 5),
+        (-4, None),
+        (None, None),
+    ],
+)
+def test_cat_file_offsets_match_slices(tmpdir, start, end):
+    # ``cat_file`` documents start/end as behaving "like usual python slices",
+    # so a crossed range must read nothing rather than falling through to a
+    # negative read length.
+    data = b"0123456789"
+    fn = str(tmpdir) + "/afile"
+    fs = fsspec.filesystem("file")
+    fs.pipe_file(fn, data)
+
+    assert fs.cat_file(fn, start=start, end=end) == data[start:end]
+
+
 def test_touch_truncate(tmpdir):
     fn = str(tmpdir + "/tfile")
     fs = fsspec.filesystem("file")

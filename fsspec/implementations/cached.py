@@ -748,9 +748,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # infer the compression from the original filename, like
             # the `TarFileSystem`, let's extend the `io.BufferedReader`
             # fileobject protocol by adding a dedicated attribute
-            # `original`.
+            # `original`. `size` is added for the same reason: callers such
+            # as `AbstractFileSystem.cat_file` need it to resolve negative
+            # offsets, and `LocalFileOpener` exposes it the same way.
             f = open(fn, mode)
             f.original = detail.get("original")
+            f.size = os.fstat(f.fileno()).st_size
             return f
 
         hash = self._mapper(path)
@@ -768,15 +771,31 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         path = self._strip_protocol(path)
         sha = self._mapper(path)
         fn = self._check_file(path)
+        if isinstance(fn, tuple):
+            # `WholeFileCacheFileSystem._check_file` returns `(detail, fn)`;
+            # the `SimpleCacheFileSystem` override returns just the path.
+            _, fn = fn
 
         if not fn:
             fn = os.path.join(self.storage[-1], sha)
             await self.fs._get_file(path, fn, **kwargs)
 
         with open(fn, "rb") as f:  # noqa ASYNC230
+            if (start is not None and start < 0) or (end is not None and end < 0):
+                # Negative offsets count backwards from the end of the file, as
+                # documented on ``AbstractFileSystem.cat_file``. They must be
+                # resolved against the file size first: seeking to a negative
+                # absolute position raises ``OSError(EINVAL)``.
+                file_size = os.fstat(f.fileno()).st_size
+                if start is not None and start < 0:
+                    start = max(0, file_size + start)
+                if end is not None and end < 0:
+                    end = max(0, file_size + end)
             if start:
                 f.seek(start)
-            size = -1 if end is None else end - f.tell()
+            # a crossed range reads nothing; clamp so that a range crossed by
+            # exactly one byte cannot produce ``-1``, the read-everything sentinel
+            size = -1 if end is None else max(0, end - f.tell())
             return f.read(size)
 
     async def _cat_ranges(
@@ -784,17 +803,28 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     ):
         logger.debug("async cat ranges %s", paths)
         lpaths = []
-        rset = set()
+        # local path per unique remote path: the same path may appear in
+        # ``paths`` more than once (readers of sharded formats ask for several
+        # ranges of one object), and every occurrence needs the local path,
+        # not just the one that scheduled the download
+        resolved = {}
         download = []
         rpaths = []
         for p in paths:
+            if p in resolved:
+                lpaths.append(resolved[p])
+                continue
             fn = self._check_file(p)
-            if fn is None and p not in rset:
+            if isinstance(fn, tuple):
+                # see `_cat_file`: the two subclasses differ in what
+                # `_check_file` returns for a cached path
+                _, fn = fn
+            if not fn:
                 sha = self._mapper(p)
                 fn = os.path.join(self.storage[-1], sha)
                 download.append(fn)
-                rset.add(p)
                 rpaths.append(p)
+            resolved[p] = fn
             lpaths.append(fn)
         if download:
             await self.fs._get(rpaths, download, on_error=on_error)
@@ -963,7 +993,11 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         fn = self._check_file(path)
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:
-            return open(fn, mode)
+            f = open(fn, mode)
+            # `AbstractFileSystem.cat_file` needs `size` to resolve negative
+            # offsets; `LocalFileOpener` exposes it on the raw file the same way.
+            f.size = os.fstat(f.fileno()).st_size
+            return f
 
         fn = os.path.join(self.storage[-1], sha)
         user_specified_kwargs = {
