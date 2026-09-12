@@ -227,6 +227,7 @@ class ArrowFSWrapper(AbstractFileSystem):
     "stream",
     [
         "read",
+        "readinto",
         "seek",
         "tell",
         "write",

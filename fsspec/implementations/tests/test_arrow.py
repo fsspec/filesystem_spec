@@ -1,3 +1,4 @@
+import io
 import secrets
 
 import pytest
@@ -269,6 +270,41 @@ def test_seekable(fs, remote_dir):
     with fs.open(remote_dir + "/a.txt", "rb", seekable=False) as file:
         with pytest.raises(OSError):
             file.seek(5)
+
+
+def test_readinto(fs, remote_dir):
+    data = b"dvc.org"
+
+    with fs.open(remote_dir + "/a.txt", "wb") as stream:
+        stream.write(data)
+
+    for seekable in [True, False]:
+        with fs.open(remote_dir + "/a.txt", "rb", seekable=seekable) as file:
+            buffer = bytearray(3)
+            assert file.readinto(buffer) == 3
+            assert bytes(buffer) == data[:3]
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda buffered: buffered.read(3),
+        lambda buffered: buffered.peek(3)[:3],
+        lambda buffered: buffered.read1(3),
+    ],
+    ids=["read", "peek", "read1"],
+)
+def test_readinto_supports_a_buffered_reader(fs, remote_dir, read):
+    # Each of these fills a buffer io.BufferedReader owns, so they go through
+    # readinto rather than read(); an unsized read() does not. A gzip reader takes
+    # the peek()/read1() path.
+    data = b"dvc.org"
+
+    with fs.open(remote_dir + "/a.txt", "wb") as stream:
+        stream.write(data)
+
+    with fs.open(remote_dir + "/a.txt", "rb") as file:
+        assert read(io.BufferedReader(file)) == data[:3]
 
 
 def test_get_kwargs_from_urls_hadoop_fs():
