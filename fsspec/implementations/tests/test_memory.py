@@ -1,10 +1,97 @@
 import os
+import pickle
 from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
 
+from fsspec import filesystem
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
+
+
+def test_independent_stores(m):
+    first = filesystem("memory", global_store=False)
+    second = filesystem("memory", global_store=False)
+    for fs, data in [(m, b"global"), (first, b"first"), (second, b"second")]:
+        fs.pipe("same/path", data)
+        fs.mkdir("empty")
+
+    assert m.cat("same/path") == b"global"
+    assert first.cat("same/path") == b"first"
+    assert second.cat("same/path") == b"second"
+
+    first.rm("same", recursive=True)
+    first.rmdir("empty")
+    assert first.ls("") == []
+    assert second.isdir("empty")
+    assert m.isdir("empty")
+    assert second.cat("same/path") == b"second"
+    assert m.cat("same/path") == b"global"
+
+
+def test_independent_store_identity():
+    first = filesystem("memory", global_store=False)
+    second = filesystem("memory", global_store=False)
+    assert first != second
+    assert len({first, second}) == 2
+    assert first.__dask_tokenize__() != second.__dask_tokenize__()
+    token = first.__dask_tokenize__()
+    first.pipe("file", b"data")
+    assert first.__dask_tokenize__() == token
+    assert not MemoryFileSystem._cache
+
+
+def test_default_store_is_shared(m):
+    other = filesystem("memory")
+    m.pipe("file", b"shared")
+    m.mkdir("empty")
+    assert other.cat("file") == b"shared"
+    assert other.isdir("empty")
+    assert other == m
+
+
+def test_independent_store_transaction(m):
+    fs = filesystem("memory", global_store=False)
+    with fs.transaction:
+        fs.pipe("committed", b"data")
+        assert not fs.exists("committed")
+    assert fs.cat("committed") == b"data"
+    assert not m.exists("committed")
+
+    with pytest.raises(RuntimeError), fs.transaction:
+        fs.pipe("discarded", b"data")
+        raise RuntimeError("discard transaction")
+    assert not fs.exists("discarded")
+    assert not m.exists("discarded")
+
+
+def test_independent_store_pickle(m):
+    fs = filesystem("memory", global_store=False)
+    fs.pipe("file", b"original")
+    fs.mkdir("empty")
+
+    restored = pickle.loads(pickle.dumps(fs))
+    assert restored != fs
+    assert restored.cat("file") == b"original"
+    assert restored.isdir("empty")
+    assert restored.store["/file"].fs is restored
+    assert restored.info("file") == fs.info("file")
+
+    with restored.open("file", "ab") as f:
+        f.write(b" appended")
+    restored.rmdir("empty")
+    assert restored.cat("file") == b"original appended"
+    assert fs.cat("file") == b"original"
+    assert fs.isdir("empty")
+    assert m.ls("") == []
+
+
+def test_default_store_pickle(m):
+    m.pipe("file", b"shared")
+    restored = pickle.loads(pickle.dumps(m))
+    assert restored == m
+    assert restored.store is m.store
+    assert restored.cat("file") == b"shared"
 
 
 def test_1(m):

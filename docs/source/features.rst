@@ -177,6 +177,24 @@ captured traceback might this be anticipated becoming a problem.
 To disable instance caching, i.e., get a fresh instance which is not in the cache
 even for a cachable class, pass ``skip_instance_cache=True``.
 
+Memory filesystems
+------------------
+
+Memory filesystem instances are not cached, but share their files and directories
+by default. To create independent stores, pass ``global_store=False`` and retain
+the filesystem instance for subsequent operations:
+
+.. code-block:: python
+
+    first = fsspec.filesystem("memory", global_store=False)
+    second = fsspec.filesystem("memory", global_store=False)
+    first.pipe("file", b"data")
+    assert not second.exists("file")
+
+Pickling an independent memory filesystem copies its files and directories.
+The default global filesystem continues to use the global store in the process
+where it is unpickled.
+
 Listings Caching
 ----------------
 

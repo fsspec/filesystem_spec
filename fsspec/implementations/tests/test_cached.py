@@ -1306,16 +1306,16 @@ def test_spurious_directory_issue1410(tmpdir):
 
 
 def test_write_transaction(tmpdir, m, monkeypatch):
+    tmpdir = str(tmpdir)
+    fs, _ = fsspec.core.url_to_fs("simplecache::memory://", cache_storage=tmpdir)
     called = [0]
-    orig = m.put
+    orig = fs.fs.put
 
     def patched_put(*args, **kwargs):
         called[0] += 1
         orig(*args, **kwargs)
 
-    monkeypatch.setattr(m, "put", patched_put)
-    tmpdir = str(tmpdir)
-    fs, _ = fsspec.core.url_to_fs("simplecache::memory://", cache_storage=tmpdir)
+    monkeypatch.setattr(fs.fs, "put", patched_put)
     with fs.transaction:
         fs.pipe("myfile", b"1")
         fs.pipe("otherfile", b"2")
@@ -1393,7 +1393,6 @@ def test_simplecache_instance_cache(instance_caches):
 
     assert instance_caches.gather_counts() == {
         "simplecache": 3,
-        "memory": 1,
         "file": 1,
         "http": 1,
     }

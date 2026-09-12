@@ -5,11 +5,11 @@ from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
-from typing import Any, ClassVar
+from typing import Any
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.utils import stringify_path
+from fsspec.utils import stringify_path, tokenize
 
 logger = logging.getLogger("fsspec.memoryfs")
 
@@ -17,14 +17,44 @@ logger = logging.getLogger("fsspec.memoryfs")
 class MemoryFileSystem(AbstractFileSystem):
     """A filesystem based on a dict of BytesIO objects
 
-    This is a global filesystem so instances of this class all point to the same
-    in memory filesystem.
+    By default, instances share a global in-memory filesystem. Pass
+    ``global_store=False`` to create an independent filesystem instead.
     """
 
-    store: ClassVar[dict[str, Any]] = {}  # global, do not overwrite!
-    pseudo_dirs = [""]  # global, do not overwrite!
+    store: dict[str, Any] = {}  # shared by default
+    pseudo_dirs = [""]  # shared by default
     protocol = "memory"
     root_marker = "/"
+    cachable = False
+
+    def __init__(self, *args, global_store=True, **kwargs):
+        """Create a memory filesystem.
+
+        Parameters
+        ----------
+        global_store: bool
+            Share files and directories with other default instances. If False,
+            each instance starts with an empty, independent store. Pickling an
+            independent filesystem copies its files and directories; pickling a
+            global filesystem retains the reference to the global store.
+        """
+        super().__init__(*args, **kwargs)
+        self.global_store = global_store
+        if not global_store:
+            self.store = {}
+            self.pseudo_dirs = [""]
+
+    @property
+    def _fs_token(self):
+        if self.global_store:
+            return super()._fs_token
+        return tokenize(super()._fs_token, id(self))
+
+    def __reduce__(self):
+        reduced = super().__reduce__()
+        if self.global_store:
+            return reduced
+        return (*reduced, {"store": self.store, "pseudo_dirs": self.pseudo_dirs})
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -42,7 +72,7 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
         # The base implementation calls ls() once per directory, and each ls()
-        # scans the whole (global) store, giving O(n_dirs * n_entries) behaviour
+        # scans the whole store, giving O(n_dirs * n_entries) behaviour
         # for a tree. Since the store is a flat mapping of every path, the same
         # result can be produced with a single pass over it.
         if maxdepth is not None and maxdepth < 1:
@@ -81,7 +111,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     dirs[parent] = {"name": parent, "size": 0, "type": "directory"}
                 idx = parent.rfind("/")
 
-        # `store` is shared by every MemoryFileSystem instance, so iterate a
+        # `store` may be shared by multiple MemoryFileSystem instances, so iterate a
         # snapshot: a concurrent create/delete would otherwise raise
         # "dictionary changed size during iteration". ls() does the same.
         for name, filelike in tuple(self.store.items()):
