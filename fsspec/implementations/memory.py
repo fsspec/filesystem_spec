@@ -8,13 +8,23 @@ from pathlib import PurePath, PureWindowsPath
 from typing import Any
 
 from fsspec import AbstractFileSystem
+from fsspec.config import apply_config
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.spec import _Cached
 from fsspec.utils import stringify_path, tokenize
 
 logger = logging.getLogger("fsspec.memoryfs")
 
 
-class MemoryFileSystem(AbstractFileSystem):
+class _MemoryFileSystemCache(_Cached):
+    def __call__(cls, *args, **kwargs):
+        kwargs = apply_config(cls, kwargs)
+        if not kwargs.get("global_store", True):
+            kwargs["skip_instance_cache"] = True
+        return super().__call__(*args, **kwargs)
+
+
+class MemoryFileSystem(AbstractFileSystem, metaclass=_MemoryFileSystemCache):
     """A filesystem based on a dict of BytesIO objects
 
     By default, instances share a global in-memory filesystem. Pass
@@ -25,7 +35,6 @@ class MemoryFileSystem(AbstractFileSystem):
     pseudo_dirs = [""]  # shared by default
     protocol = "memory"
     root_marker = "/"
-    cachable = False
 
     def __init__(self, *args, global_store=True, **kwargs):
         """Create a memory filesystem.

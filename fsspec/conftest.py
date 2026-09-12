@@ -85,7 +85,7 @@ def instance_caches() -> Generator[InstanceCacheInspector, None, None]:
             fsspec.open("memory://foo/bar")
 
             # Test assertion
-            assert instance_caches.gather_counts() == {"file": 1}
+            assert instance_caches.gather_counts() == {"file": 1, "memory": 1}
 
     Returns
     -------

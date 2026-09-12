@@ -4,7 +4,9 @@ from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
 
+import fsspec
 from fsspec import filesystem
+from fsspec.config import conf
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
 
@@ -48,6 +50,42 @@ def test_default_store_is_shared(m):
     assert other.cat("file") == b"shared"
     assert other.isdir("empty")
     assert other == m
+    assert other is m
+
+
+@pytest.mark.parametrize("use_mapper", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_default_store_transaction_helpers(m, use_mapper, rollback):
+    def write():
+        if use_mapper:
+            fsspec.get_mapper("memory://")["file"] = b"data"
+        else:
+            with fsspec.open("memory://file", "wb") as f:
+                f.write(b"data")
+        assert not m.exists("file")
+
+    if rollback:
+        with pytest.raises(RuntimeError), m.transaction:
+            write()
+            raise RuntimeError("discard transaction")
+        assert not m.exists("file")
+    else:
+        with m.transaction:
+            write()
+        assert m.cat("file") == b"data"
+
+
+def test_independent_store_from_config(m, monkeypatch):
+    monkeypatch.setitem(conf, "memory", {"global_store": False})
+    first = filesystem("memory")
+    second = filesystem("memory", skip_instance_cache=False)
+    first.pipe("file", b"private")
+    assert not second.exists("file")
+    assert not m.exists("file")
+
+    shared = filesystem("memory", global_store=True)
+    assert shared is filesystem("memory", global_store=True)
+    assert shared.store is m.store
 
 
 def test_independent_store_transaction(m):

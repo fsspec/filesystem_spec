@@ -180,9 +180,10 @@ even for a cachable class, pass ``skip_instance_cache=True``.
 Memory filesystems
 ------------------
 
-Memory filesystem instances are not cached, but share their files and directories
-by default. To create independent stores, pass ``global_store=False`` and retain
-the filesystem instance for subsequent operations:
+Memory filesystem instances share their files and directories by default and
+use the normal instance cache. To create independent stores, pass
+``global_store=False``. These instances bypass the cache, so retain the instance
+for subsequent operations:
 
 .. code-block:: python
 
