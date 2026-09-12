@@ -4,6 +4,11 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Allow independent memory filesystems with ``global_store=False`` while
+  preserving the default shared store and instance cache (#1904)
+
 Fixes
 
 - Allow filesystem implementations to assign ``protocol`` per instance
