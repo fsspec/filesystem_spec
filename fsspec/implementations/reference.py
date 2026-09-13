@@ -23,6 +23,7 @@ from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.core import filesystem, open, split_protocol
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.utils import (
+    check_contained,
     isfilelike,
     merge_offset_ranges,
     other_paths,
@@ -882,6 +883,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         rpath = self.expand_path(rpath, recursive=recursive)
         fs = fsspec.filesystem("file", auto_mkdir=True)
         targets = other_paths(rpath, lpath)
+        if isinstance(lpath, str):
+            # The names came from the source listing; ".." in one of them
+            # would otherwise place the copy above the destination. When
+            # lpath is a list the caller named every destination itself.
+            check_contained(lpath, targets)
         if recursive:
             data = self.cat([r for r in rpath if not self.isdir(r)])
         else:

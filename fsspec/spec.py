@@ -10,7 +10,7 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import Any, ClassVar
+from typing import Any
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -18,6 +18,7 @@ from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
+    check_contained,
     glob_translate,
     isfilelike,
     other_paths,
@@ -159,7 +160,9 @@ class AbstractFileSystem(metaclass=_Cached):
     _cached = False
     blocksize = 2**22
     sep = "/"
-    protocol: ClassVar[str | tuple[str, ...]] = "abstract"
+    # Implementations may select their protocol per instance (for example, a
+    # single adapter class backed by different storage implementations).
+    protocol: str | tuple[str, ...] = "abstract"
     _latest = None
     async_impl = False
     mirror_sync_methods = False
@@ -792,7 +795,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """Is this entry file-like?"""
         try:
             return self.info(path)["type"] == "file"
-        except:  # noqa: E722
+        except Exception:
             return False
 
     def read_text(self, path, encoding=None, errors=None, newline=None, **kwargs):
@@ -1061,6 +1064,11 @@ class AbstractFileSystem(metaclass=_Cached):
                 exists=exists,
                 flatten=not source_is_str,
             )
+            if isinstance(lpath, str):
+                # The names came from the source listing; ".." in one of them
+                # would otherwise place the copy above the destination. When
+                # lpath is a list the caller named every destination itself.
+                check_contained(lpath, lpaths)
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
@@ -1301,15 +1309,14 @@ class AbstractFileSystem(metaclass=_Cached):
         raise NotImplementedError
 
     def rm(self, path, recursive=False, maxdepth=None):
-        """Delete files.
+        """Delete files or directories.
 
         Parameters
         ----------
         path: str or list of str
-            File(s) to delete.
+            Files or directories to delete.
         recursive: bool
-            If file(s) are directories, recursively delete contents and then
-            also remove the directory
+            If True, recursively delete directories and their contents.
         maxdepth: int or None
             Depth to pass to walk for finding files to delete, if recursive.
             If None, there will be no limit and infinite recursion may be

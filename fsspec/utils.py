@@ -422,6 +422,36 @@ def other_paths(
     return path2
 
 
+def check_contained(root: str, paths: list[str]) -> None:
+    """Raise if any of ``paths`` lies outside the destination ``root``.
+
+    Bulk copies build their destination names by joining source names onto a
+    destination root. Those names come from the source listing, so a name
+    holding ".." segments resolves above the root and writes outside the
+    destination the caller asked for.
+
+    Parameters
+    ----------
+    root: str
+        The destination the caller passed.
+    paths: list of str
+        The destination names built for that root.
+    """
+    root_abs = os.path.abspath(root)
+    # normcase so that a case-insensitive platform does not report a false
+    # escape, while the message keeps the paths as the caller would see them.
+    root_key = os.path.normcase(root_abs)
+    prefix = root_key.rstrip(os.sep) + os.sep
+    for path in paths:
+        path_abs = os.path.abspath(path)
+        path_key = os.path.normcase(path_abs)
+        if path_key != root_key and not path_key.startswith(prefix):
+            raise ValueError(
+                f"path {path!r} would be copied to {path_abs!r}, which is "
+                f"outside the destination {root!r}"
+            )
+
+
 def is_exception(obj: Any) -> bool:
     return isinstance(obj, BaseException)
 

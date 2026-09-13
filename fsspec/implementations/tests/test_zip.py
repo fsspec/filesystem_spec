@@ -66,6 +66,18 @@ def test_write_seek(m):
         assert fs.cat("another") == b"hi"
 
 
+@pytest.mark.parametrize("prefix", ["", "/", "zip://", "zip:///"])
+def test_pipe_file_normalizes_path(m, prefix):
+    fs = fsspec.filesystem("zip", fo="memory://out.zip", mode="w")
+    fs.pipe_file(f"{prefix}reports/result.csv", b"total\n12\n")
+    fs.close()
+
+    fs = fsspec.filesystem("zip", fo="memory://out.zip")
+    assert fs.find("") == ["reports/result.csv"]
+    assert fs.cat("reports/result.csv") == b"total\n12\n"
+    fs.close()
+
+
 def test_rw(m):
     # extra arg to zip means "create archive"
     with fsspec.open(
@@ -457,13 +469,15 @@ def test_find_returns_expected_result_detail_false_include_dirs(zip_file):
     assert result == expected_result
 
 
-def test_find_returns_expected_result_path_set(zip_file):
+@pytest.mark.parametrize("prefix", ["/", "zip://", "zip:///"])
+@pytest.mark.parametrize("detail", [False, True])
+def test_find_returns_expected_result_path_set(zip_file, prefix, detail):
     zip_file_system = ZipFileSystem(zip_file)
 
-    result = zip_file_system.find("/dir2")
+    result = zip_file_system.find(f"{prefix}dir2", detail=detail)
     expected_result = ["dir2/file3.txt"]
 
-    assert result == expected_result
+    assert list(result) == expected_result
 
 
 def test_find_with_and_without_slash_should_return_same_result(zip_file):
@@ -472,10 +486,11 @@ def test_find_with_and_without_slash_should_return_same_result(zip_file):
     assert zip_file_system.find("/dir2/") == zip_file_system.find("/dir2")
 
 
-def test_find_should_return_file_if_exact_match(zip_file):
+@pytest.mark.parametrize("prefix", ["/", "zip://", "zip:///"])
+def test_find_should_return_file_if_exact_match(zip_file, prefix):
     zip_file_system = ZipFileSystem(zip_file)
 
-    result = zip_file_system.find("/dir2startwithsamename.txt", detail=False)
+    result = zip_file_system.find(f"{prefix}dir2startwithsamename.txt", detail=False)
     expected_result = ["dir2startwithsamename.txt"]
 
     assert result == expected_result
