@@ -4,6 +4,7 @@ import weakref
 from collections import deque
 
 from . import asyn as fsspec_asyn
+from .asyn import sync_teardown
 from .utils import HAS_CPYTHON_API, _fast_slice
 
 logger = logging.getLogger(__name__)
@@ -789,15 +790,16 @@ class BackgroundPrefetcher:
                 raise
 
     async def _async_close(self):
-        """Asynchronous teardown logic protected by the async lock."""
+        """Asynchronous teardown logic protected by the async lock.
+
+        Held for the duration of teardown so a concurrent in-flight
+        ``_async_fetch`` cannot observe a stopped producer/empty queue as
+        EOF and silently return a truncated read.
+        """
         async with self._async_lock:
-            if self.is_stopped:
-                return
+            logger.debug("Signaling prefetcher stop and tearing down producer.")
 
-            self.is_stopped = True
-            logger.debug("Acquired async lock. Tearing down producer and buffers.")
-
-            if self.producer:
+            if self.producer and not self.producer.is_stopped:
                 await self.producer.stop()
 
             self.consumer.clear_buffer()
@@ -836,8 +838,36 @@ class BackgroundPrefetcher:
 
     async def aclose(self):
         """Safely shuts down the prefetcher from an asynchronous context."""
+        self.is_stopped = True
         await self._async_close()
 
-    def close(self):
-        """Safely shuts down the prefetcher from a synchronous context."""
-        fsspec_asyn.sync(self.loop, self._async_close)
+    def close(self, timeout: float | None = 10.0):
+        """Safely shuts down the prefetcher from a synchronous context.
+
+        Schedules teardown on the IO loop. If the wait times out, teardown
+        continues in the background to let in-flight reads finish cleanly.
+
+        Args:
+            timeout: Maximum seconds to wait for teardown to finish. Defaults
+                to 10.0 seconds. If 0 or negative, teardown runs fire-and-forget.
+                If None, waits indefinitely.
+        """
+        self.is_stopped = True
+
+        try:
+            sync_teardown(
+                self.loop,
+                self._async_close,
+                timeout=timeout,
+                description="BackgroundPrefetcher teardown",
+            )
+        except fsspec_asyn.FSTimeoutError:
+            logger.warning(
+                "BackgroundPrefetcher teardown did not complete within %ss; "
+                "it will keep running in the background.",
+                timeout,
+            )
+        except Exception:
+            logger.warning(
+                "Exception while closing BackgroundPrefetcher", exc_info=True
+            )

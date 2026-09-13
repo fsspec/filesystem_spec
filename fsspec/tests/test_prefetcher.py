@@ -1,4 +1,7 @@
 import asyncio
+import logging
+import sys
+import threading
 from unittest import mock
 
 import pytest
@@ -431,6 +434,7 @@ def test_async_fetch_zero_copy_remainder(prefetcher_factory):
 
 def test_read_runtime_error_on_stopped_empty(prefetcher_factory):
     bp = prefetcher_factory(fetcher=MockFetcher(b"X"), size=100, concurrency=4)
+    fsspec.asyn.sync(bp.loop, bp.producer.stop)
     bp.is_stopped = True
     bp.producer.is_stopped = True
 
@@ -725,3 +729,293 @@ def test_fast_slice_pypy_fallback():
 
     # 3. Verify exact bounds
     assert _fast_slice(src, 0, len(src)) == src
+
+
+def test_close_when_interpreter_finalizing(prefetcher_factory):
+    """Verify close returns immediately without hanging during interpreter finalization."""
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X"), size=100, concurrency=1)
+
+    with mock.patch.object(sys, "is_finalizing", return_value=True):
+        bp.close()
+
+    assert bp.is_stopped is True
+
+
+def test_close_when_loop_not_running(prefetcher_factory):
+    """Verify close returns immediately without raising when loop is not running."""
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X"), size=100, concurrency=1)
+
+    with mock.patch.object(bp.loop, "is_running", return_value=False):
+        bp.close(timeout=1.0)
+
+    assert bp.is_stopped is True
+
+
+def test_close_on_loop_thread_schedules_task():
+    """Verify close called from within the IO loop thread completes without deadlocking."""
+    loop = fsspec.asyn.get_loop()
+
+    async def close_inside_loop():
+        bp = BackgroundPrefetcher(
+            fetcher=MockFetcher(b"X" * 100), size=100, concurrency=1, loop=loop
+        )
+        await bp.afetch(0, 10)
+        assert bp.producer is not None and not bp.producer.is_stopped
+
+        bp.close()
+
+        assert bp.is_stopped is True
+        # Allow scheduled task to complete
+        await asyncio.sleep(0.05)
+        assert bp.producer.is_stopped is True
+
+    fsspec.asyn.sync(loop, close_inside_loop)
+
+
+def test_reentrant_close_logs_exception(caplog):
+    """Verify that an exception in a reentrant teardown task is logged and handled cleanly."""
+    loop = fsspec.asyn.get_loop()
+
+    async def run_failing_reentrant():
+        bp = BackgroundPrefetcher(
+            fetcher=MockFetcher(b"X" * 10), size=10, concurrency=1, loop=loop
+        )
+        real_stop = bp.producer.stop
+
+        async def failing_close():
+            await real_stop()
+            raise RuntimeError("reentrant close failed")
+
+        bp._async_close = failing_close
+
+        with caplog.at_level(logging.ERROR, logger="fsspec.asyn"):
+            bp.close()
+            await asyncio.sleep(0.05)
+
+    fsspec.asyn.sync(loop, run_failing_reentrant)
+
+    assert any("reentrant close failed" in r.message for r in caplog.records)
+
+
+def test_close_when_loop_closed_emits_no_unawaited_warning(prefetcher_factory):
+    """Verify that if loop is closed, close() handles it cleanly without unawaited warnings."""
+    import warnings
+
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X"), size=100, concurrency=1)
+
+    with mock.patch.object(bp.loop, "is_closed", return_value=True):
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            bp.close(timeout=1.0)
+
+    assert bp.is_stopped is True
+    unawaited_warnings = [
+        w
+        for w in record
+        if issubclass(w.category, RuntimeWarning)
+        and "was never awaited" in str(w.message)
+    ]
+    assert not unawaited_warnings
+
+
+def test_close_is_bounded_when_loop_is_unserviced(prefetcher_factory):
+    """close() must return within `timeout` if teardown takes longer than timeout."""
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X"), size=100, concurrency=1)
+    teardown_done = threading.Event()
+    real_close = bp._async_close
+
+    async def slow_close():
+        await asyncio.sleep(0.1)
+        teardown_done.set()
+        await real_close()
+
+    bp._async_close = slow_close
+
+    bp.close(timeout=0.01)
+
+    assert bp.is_stopped is True
+    assert not teardown_done.is_set()
+    assert teardown_done.wait(timeout=2.0)
+
+
+def test_close_default_timeout_waits_for_teardown(prefetcher_factory):
+    """The default close() should still behave synchronously in the common
+    (non-degraded) case: callers and tests that assert on post-close state
+    rely on teardown having actually finished before close() returns.
+    """
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X" * 100), size=100, concurrency=4)
+    bp.fetch(0, 10)
+
+    bp.close()
+
+    assert bp.is_stopped is True
+    assert bp.producer.is_stopped is True
+
+
+def test_close_none_timeout_waits_for_teardown(prefetcher_factory):
+    """timeout=None adheres to standard Python library semantics, waiting
+    indefinitely until teardown finishes."""
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X" * 100), size=100, concurrency=4)
+    bp.fetch(0, 10)
+
+    bp.close(timeout=None)
+
+    assert bp.is_stopped is True
+    assert bp.producer.is_stopped is True
+
+
+@pytest.mark.parametrize("timeout", [0, -1])
+def test_close_zero_and_negative_timeout_is_fire_and_forget(
+    prefetcher_factory, timeout
+):
+    """timeout=0 or negative means fire-and-forget: teardown is scheduled
+    on the IO loop, but close() returns immediately without waiting.
+    """
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X"), size=100, concurrency=1)
+    teardown_done = threading.Event()
+    real_close = bp._async_close
+
+    async def slow_close():
+        await asyncio.sleep(0.1)
+        teardown_done.set()
+        await real_close()
+
+    bp._async_close = slow_close
+
+    bp.close(timeout=timeout)
+
+    assert bp.is_stopped is True
+    assert not teardown_done.is_set()
+    assert teardown_done.wait(timeout=2.0)
+
+
+def test_close_does_not_swallow_teardown_exceptions(prefetcher_factory, caplog):
+    """A real exception raised during teardown must be surfaced (logged),
+    not silently discarded -- silent failures here previously made it
+    impossible to notice a broken teardown.
+    """
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X"), size=100, concurrency=1)
+    bp.fetch(0, 1)
+
+    real_stop = bp.producer.stop
+
+    async def boom():
+        # Still cancel the real producer task so nothing is left pending
+        # for the interpreter to warn about after this test tears down.
+        await real_stop()
+        raise ValueError("teardown blew up")
+
+    bp.producer.stop = boom
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.prefetcher"):
+        bp.close()
+
+    assert bp.is_stopped is True
+    assert any("teardown blew up" in r.message for r in caplog.records) or any(
+        r.exc_info and "teardown blew up" in str(r.exc_info[1]) for r in caplog.records
+    )
+
+
+def test_close_does_not_cancel_inflight_network_task_on_timeout(prefetcher_factory):
+    """On a close() timeout, the in-flight teardown coroutine must keep
+    running rather than being cancelled -- PrefetchProducer.stop()
+    deliberately awaits (not cancels) in-flight network tasks to avoid
+    disrupting MRD streams, and fsspec.asyn.sync's timeout path used to
+    cancel the coroutine it was waiting on, undermining that.
+    """
+    fetcher = MockFetcher(b"X" * 1000)
+    bp = prefetcher_factory(fetcher=fetcher, size=1000, concurrency=4)
+    bp.fetch(0, 100)
+
+    stop_started = threading.Event()
+    stop_finished = threading.Event()
+    real_stop = bp.producer.stop
+
+    async def slow_stop():
+        stop_started.set()
+        await asyncio.sleep(0.3)
+        await real_stop()
+        stop_finished.set()
+
+    bp.producer.stop = slow_stop
+
+    bp.close(timeout=0.05)  # much shorter than slow_stop's delay
+
+    assert bp.is_stopped is True
+    assert stop_started.wait(timeout=1.0)
+    assert stop_finished.wait(timeout=2.0), (
+        "teardown should keep running to completion in the background "
+        "instead of being cancelled by the close() timeout"
+    )
+
+
+def test_close_concurrent_with_inflight_read_does_not_truncate(prefetcher_factory):
+    """Regression test: `_async_close` must hold `_async_lock` for the
+    duration of teardown. Without it, a `close()` running concurrently
+    with an in-flight `_async_fetch` can make the fetch observe a stopped
+    producer + empty queue as EOF and silently return a short read instead
+    of the requested byte range.
+    """
+    size = 2_000_000
+    data = bytes((i % 256) for i in range(size))
+
+    fetch_entered = threading.Event()
+
+    class SlowFetcher:
+        async def __call__(self, start, size, split_factor=1):
+            if start >= 1000:
+                fetch_entered.set()
+                await asyncio.sleep(0.05)
+            return data[start : start + size]
+
+    bp = prefetcher_factory(fetcher=SlowFetcher(), size=size, concurrency=4)
+    # Prime the pipeline so the producer has already started prefetching.
+    bp.fetch(0, 1000)
+
+    result = {}
+
+    def reader():
+        try:
+            result["data"] = bp.fetch(1000, 1000 + 1_000_000)
+        except BaseException as e:  # noqa: BLE001
+            result["exc"] = e
+
+    t = threading.Thread(target=reader)
+    t.start()
+    assert fetch_entered.wait(timeout=5.0), "fetch never got in-flight"
+    bp.close()
+    t.join(timeout=10)
+
+    assert "exc" not in result, f"reader raised unexpectedly: {result.get('exc')}"
+    assert len(result["data"]) == 1_000_000
+
+
+def test_close_and_aclose_idempotence(prefetcher_factory):
+    """Verify that close() and aclose() are idempotent and return early on subsequent calls."""
+    bp = prefetcher_factory(fetcher=MockFetcher(b"X" * 100), size=100, concurrency=1)
+    assert not bp.is_stopped
+
+    bp.close()
+
+    assert bp.is_stopped
+    # Second close() hits the early exit
+    bp.close()
+    assert bp.is_stopped
+
+    loop = fsspec.asyn.get_loop()
+
+    async def run_aclose_twice():
+        bp2 = BackgroundPrefetcher(
+            fetcher=MockFetcher(b"Y" * 100), size=100, concurrency=1, loop=loop
+        )
+        assert not bp2.is_stopped
+
+        await bp2.aclose()
+
+        assert bp2.is_stopped
+        # Second aclose() hits the early exit
+        await bp2.aclose()
+        assert bp2.is_stopped
+
+    fsspec.asyn.sync(loop, run_aclose_twice)
+
