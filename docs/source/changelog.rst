@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Create missing ZIP archives in append mode without truncating existing archives
+
 - Allow filesystem implementations to assign ``protocol`` per instance
 
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
