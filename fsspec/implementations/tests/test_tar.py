@@ -317,3 +317,12 @@ def test_reading_missing_member_raises_file_not_found(tar_with_one_member, read)
     assert fs.cat("present.txt") == b"data"
     with pytest.raises(FileNotFoundError):
         read(fs)
+
+
+@pytest.mark.parametrize(
+    "start, end, expected",
+    [(-2, None, b"ta"), (1, -1, b"at"), (None, -3, b"d")],
+)
+def test_cat_file_negative_offsets(tar_with_one_member, start, end, expected):
+    fs = TarFileSystem(str(tar_with_one_member))
+    assert fs.cat_file("present.txt", start=start, end=end) == expected

@@ -128,7 +128,10 @@ class TarFileSystem(AbstractArchiveFileSystem):
             raise FileNotFoundError(path) from exc
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
-        return self.tar.extractfile(orig_name)
+        out = self.tar.extractfile(orig_name)
+        # cat_file needs the size to resolve negative offsets, as zip provides.
+        out.size = details["size"]
+        return out
 
     def close(self):
         """Commits any write changes to the file. Done on ``del`` too."""
