@@ -281,6 +281,19 @@ class TestAnyArchive:
             assert fs.ls("deeply/nested", detail=False) == ["deeply/nested/path"]
             assert fs.ls("deeply/nested/") == fs.ls("deeply/nested")
 
+    def test_ls_file_or_missing(self, scenario: ArchiveTestScenario):
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+
+            assert fs.ls("b", detail=False) == ["b"]
+            assert fs.ls("deeply/nested/path", detail=False) == ["deeply/nested/path"]
+            assert fs.ls("b") == [fs.info("b")]
+
+            with pytest.raises(FileNotFoundError):
+                fs.ls("i-do-not-exist")
+            with pytest.raises(FileNotFoundError):
+                fs.ls("deeply/i-do-not-exist")
+
     def test_find(self, scenario: ArchiveTestScenario):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
