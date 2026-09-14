@@ -500,3 +500,30 @@ def test_find_does_not_scan_per_directory(m):
 
     assert len(out) == 100
     assert spy.call_count == 0
+
+
+def test_rm_missing_path_raises(m):
+    with pytest.raises(FileNotFoundError):
+        m.rm("/missing")
+
+
+def test_rm_list_with_missing_path_raises(m):
+    m.pipe("/present", b"data")
+    with pytest.raises(FileNotFoundError):
+        m.rm(["/present", "/missing"])
+
+
+def test_rm_recursive_still_removes_implicit_parents(m):
+    # Files written without their parent directories: the parents only exist
+    # while those files do, and vanish partway through a recursive delete.
+    m.pipe("/implicit/nested/file", b"data")
+    m.rm("/implicit", recursive=True)
+    assert not m.exists("/implicit")
+
+
+def test_mapper_delitem_missing_key_raises_keyerror(m):
+    mapper = m.get_mapper("/mapper")
+    mapper["present"] = b"data"
+    del mapper["present"]
+    with pytest.raises(KeyError):
+        del mapper["missing"]

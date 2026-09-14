@@ -359,6 +359,50 @@ def test_size(dirfs):
 
 
 @pytest.mark.asyncio
+async def test_async_sizes(adirfs):
+    assert await adirfs._sizes(["file1", "file2"]) == adirfs.fs._sizes.return_value
+    adirfs.fs._sizes.assert_called_once_with([f"{PATH}/file1", f"{PATH}/file2"])
+
+
+def test_sizes(dirfs):
+    assert dirfs.sizes(["file1", "file2"]) == dirfs.fs.sizes.return_value
+    dirfs.fs.sizes.assert_called_once_with([f"{PATH}/file1", f"{PATH}/file2"])
+
+
+@pytest.mark.asyncio
+async def test_async_cat_ranges(adirfs):
+    assert (
+        await adirfs._cat_ranges(["file"], [0], [2], *ARGS, **KWARGS)
+        == adirfs.fs._cat_ranges.return_value
+    )
+    adirfs.fs._cat_ranges.assert_called_once_with(
+        [f"{PATH}/file"], [0], [2], *ARGS, **KWARGS
+    )
+
+
+def test_cat_ranges(dirfs):
+    assert (
+        dirfs.cat_ranges(["file"], [0], [2], *ARGS, **KWARGS)
+        == dirfs.fs.cat_ranges.return_value
+    )
+    dirfs.fs.cat_ranges.assert_called_once_with(
+        [f"{PATH}/file"], [0], [2], *ARGS, **KWARGS
+    )
+
+
+def test_sizes_and_cat_ranges_over_sync_filesystem(tmp_path):
+    # A sync filesystem has no _size or _cat_file coroutines, so the inherited
+    # AsyncFileSystem versions of these methods broke: sizes raised
+    # AttributeError and cat_ranges returned the exceptions as results.
+    (tmp_path / "a.txt").write_bytes(b"hello")
+    (tmp_path / "b.txt").write_bytes(b"world!")
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+
+    assert dirfs.sizes(["a.txt", "b.txt"]) == [5, 6]
+    assert dirfs.cat_ranges(["a.txt", "b.txt"], [0, 1], [2, 3]) == [b"he", b"or"]
+
+
+@pytest.mark.asyncio
 async def test_async_exists(adirfs):
     assert await adirfs._exists("file") == adirfs.fs._exists.return_value
     adirfs.fs._exists.assert_called_once_with(f"{PATH}/file")

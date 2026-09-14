@@ -717,6 +717,16 @@ def test_make_path_posix_returns_absolute_paths(path):
     assert os.path.isabs(posix_pth)
 
 
+@pytest.mark.skipif(not WIN, reason="drive-letter paths are Windows-only")
+@pytest.mark.parametrize("path", ["c:x", "D:a", "e:."])
+def test_make_path_posix_short_drive_relative_path_is_not_the_root(path):
+    # "c:x" names "x" relative to drive c; collapsing it to "c:/" would silently
+    # point at a different, real location. It is handled like a longer
+    # drive-relative path such as "c:xy" instead.
+    assert make_path_posix(path) == path
+    assert make_path_posix(path) != path[0] + ":/"
+
+
 @pytest.mark.parametrize("container_cls", [list, set, tuple])
 def test_make_path_posix_set_list_tuple(container_cls):
     paths = container_cls(

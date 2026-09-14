@@ -566,3 +566,36 @@ def test_find_returns_expected_result_recursion_depth_set(zip_file):
 def test_find_generic(zip_file2, args, expected_result):
     zip_file_system = ZipFileSystem(zip_file2)
     assert zip_file_system.find(*args) == expected_result
+
+
+@pytest.fixture
+def zip_with_one_member(tmp_path):
+    path = tmp_path / "archive.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("present.txt", "data")
+    return path
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda fs: fs.open("missing.txt").read(),
+        lambda fs: fs.cat("missing.txt"),
+        lambda fs: fs.cat_file("missing.txt"),
+        lambda fs: fs.head("missing.txt", 1),
+    ],
+    ids=["open", "cat", "cat_file", "head"],
+)
+def test_reading_missing_member_raises_file_not_found(zip_with_one_member, read):
+    fs = ZipFileSystem(str(zip_with_one_member))
+    with pytest.raises(FileNotFoundError):
+        read(fs)
+
+
+def test_mapper_default_for_missing_member(zip_with_one_member):
+    # FSMap only substitutes the default for its missing_exceptions, which do
+    # not include KeyError, so a leaked KeyError ignored the default.
+    mapper = fsspec.get_mapper(f"zip://::file://{zip_with_one_member.as_posix()}")
+    assert mapper.__getitem__("missing.txt", default=b"fallback") == b"fallback"
+    with pytest.raises(KeyError):
+        mapper["missing.txt"]

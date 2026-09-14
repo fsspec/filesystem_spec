@@ -137,7 +137,12 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             raise FileNotFoundError(path)
         if "r" in self.mode and "w" in mode:
             raise OSError("ZipFS can only be open for reading or writing, not both")
-        out = self.zip.open(path, mode.strip("b"), force_zip64=self.force_zip_64)
+        try:
+            out = self.zip.open(path, mode.strip("b"), force_zip64=self.force_zip_64)
+        except KeyError as exc:
+            # zipfile reports a missing member as KeyError; fsspec callers,
+            # including FSMap's missing_exceptions, expect FileNotFoundError.
+            raise FileNotFoundError(path) from exc
         if "r" in mode:
             info = self.info(path)
             out.size = info["size"]

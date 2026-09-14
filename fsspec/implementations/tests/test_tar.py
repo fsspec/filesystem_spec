@@ -291,3 +291,29 @@ def test_ls_with_duplicate_slashes(compression: str, tmp_path: Path):
         # It can be opened both by its normalised name and its original name.
         assert fs.cat("path/with/extra/slash/test.txt") == b"Hello slash!"
         assert fs.cat("path/with/extra/slash//test.txt") == b"Hello slash!"
+
+
+@pytest.fixture
+def tar_with_one_member(tmp_path):
+    path = tmp_path / "archive.tar"
+    data = b"data"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("present.txt")
+        info.size = len(data)
+        tar.addfile(info, BytesIO(data))
+    return path
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda fs: fs.open("missing.txt").read(),
+        lambda fs: fs.cat("missing.txt"),
+    ],
+    ids=["open", "cat"],
+)
+def test_reading_missing_member_raises_file_not_found(tar_with_one_member, read):
+    fs = TarFileSystem(str(tar_with_one_member))
+    assert fs.cat("present.txt") == b"data"
+    with pytest.raises(FileNotFoundError):
+        read(fs)
