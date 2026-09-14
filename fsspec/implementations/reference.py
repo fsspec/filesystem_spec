@@ -813,18 +813,20 @@ class ReferenceFileSystem(AsyncFileSystem):
             logger.debug(f"Reference: {path} => {url}, offset {start0}, size {size}")
             end0 = start0 + size
 
+            # Resolve offsets like slicing the part, so they never reach target
+            # bytes outside the referenced range.
             if start is not None:
                 if start >= 0:
-                    start1 = start0 + start
+                    start1 = min(start0 + start, end0)
                 else:
-                    start1 = end0 + start
+                    start1 = max(end0 + start, start0)
             else:
                 start1 = start0
             if end is not None:
                 if end >= 0:
-                    end1 = start0 + end
+                    end1 = min(start0 + end, end0)
                 else:
-                    end1 = end0 + end
+                    end1 = max(end0 + end, start0)
             else:
                 end1 = end0
         if url is None:
