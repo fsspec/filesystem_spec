@@ -344,14 +344,19 @@ class MemoryFileSystem(AbstractFileSystem):
         else:
             path = [self._strip_protocol(p) for p in path]
         paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        # A non-recursive expand keeps a literal path whether or not it exists,
+        # so record what exists before anything is deleted.
+        existed = {p for p in paths if self.exists(p)}
         for p in reversed(paths):
             if self.isfile(p):
                 self.rm_file(p)
-            # If the expanded path doesn't exist, it is only because the expanded
-            # path was a directory that does not exist in self.pseudo_dirs. This
-            # is possible if you directly create files without making the
-            # directories first.
             elif not self.exists(p):
+                # A directory that is not in self.pseudo_dirs only exists while it
+                # has files under it, so deleting those files earlier in this loop
+                # makes it vanish. That is expected; a path that never existed is
+                # not, and raises like rm_file and the other filesystems do.
+                if p not in existed:
+                    raise FileNotFoundError(p)
                 continue
             else:
                 self.rmdir(p)
