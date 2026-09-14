@@ -6,6 +6,10 @@ Dev
 
 Fixes
 
+- Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
+  not exist, as ``rm_file`` and the other filesystems do, so deleting a missing
+  key from a memory-backed mapper raises ``KeyError``
+
 - Allow filesystem implementations to assign ``protocol`` per instance
 
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
