@@ -612,6 +612,12 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", start=-5) == other[4:10][-5:]
     assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
 
+    # Offsets beyond either end of the part stay inside it, as with slicing.
+    assert fs.cat_file("d", start=2, end=100) == other[4:10][2:100]
+    assert fs.cat_file("d", start=-100) == other[4:10][-100:]
+    assert fs.cat_file("d", start=100) == other[4:10][100:]
+    assert fs.cat_file("d", end=-100) == other[4:10][:-100]
+
 
 @pytest.mark.asyncio
 async def test_async_cat_file_ranges():
