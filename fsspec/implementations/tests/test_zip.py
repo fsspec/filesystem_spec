@@ -124,6 +124,25 @@ def test_zip_glob_star(m):
     assert len(outfiles) == 1
 
 
+@pytest.mark.parametrize("backend", ["memory", "local"])
+def test_append_creates_archive(m, tmp_path, backend):
+    path = "memory://new.zip" if backend == "memory" else tmp_path / "new.zip"
+    for name, content in [("first", b"original"), ("second", b"appended")]:
+        fs = ZipFileSystem(fo=path, mode="a")
+        try:
+            fs.pipe_file(name, content)
+        finally:
+            fs.close()
+
+    fs = ZipFileSystem(fo=path)
+    try:
+        assert fs.cat("first") == b"original"
+        assert fs.cat("second") == b"appended"
+        assert fs.find("") == ["first", "second"]
+    finally:
+        fs.close()
+
+
 def test_append(m, tmpdir):
     fs = fsspec.filesystem("zip", fo="memory://out.zip", mode="w")
     with fs.open("afile", "wb") as f:
