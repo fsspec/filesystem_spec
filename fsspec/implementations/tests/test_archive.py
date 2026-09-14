@@ -381,6 +381,17 @@ class TestAnyArchive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             assert fs.open("a").read() == b""
 
+    def test_leading_slash(self, scenario: ArchiveTestScenario):
+        # Paths are relative to the archive root, so a leading "/" is ignored.
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+
+            assert fs.cat("/b") == archive_data["b"]
+            with fs.open("/deeply/nested/path") as f:
+                assert f.read() == archive_data["deeply/nested/path"]
+            assert fs.info("/b")["name"] == "b"
+            assert fs.isfile("/b")
+
     def test_get_does_not_write_above_destination(
         self, scenario: ArchiveTestScenario, tmp_path
     ):

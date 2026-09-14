@@ -23,6 +23,11 @@ class TarFileSystem(AbstractArchiveFileSystem):
     protocol = "tar"
     cachable = False
 
+    @classmethod
+    def _strip_protocol(cls, path):
+        # file paths are always relative to the archive root
+        return super()._strip_protocol(path).lstrip("/")
+
     def __init__(
         self,
         fo="",
