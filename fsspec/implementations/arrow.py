@@ -230,6 +230,7 @@ class ArrowFSWrapper(AbstractFileSystem):
         "seek",
         "tell",
         "write",
+        "flush",
         "readable",
         "writable",
         "close",
@@ -249,6 +250,10 @@ class ArrowFile(io.IOBase):
 
     def __enter__(self):
         return self
+
+    @property
+    def closed(self):
+        return self.stream.closed
 
     @property
     def size(self):

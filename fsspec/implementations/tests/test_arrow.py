@@ -8,6 +8,41 @@ FileSystem = pyarrow_fs.FileSystem
 from fsspec.implementations.arrow import ArrowFSWrapper, HadoopFileSystem  # noqa: E402
 
 
+@pytest.mark.parametrize("mode", ["rb", "wb"])
+def test_arrow_file_closed_state_follows_stream(tmp_path, mode):
+    path = tmp_path / "data"
+    path.write_bytes(b"data")
+    fs = ArrowFSWrapper(pyarrow_fs.LocalFileSystem())
+    with fs.open(str(path), mode) as file:
+        assert not file.closed
+    assert file.stream.closed
+    assert file.closed
+
+
+def test_arrow_file_flushes_buffered_writes(tmp_path):
+    import pyarrow as pa
+
+    from fsspec.implementations.arrow import ArrowFile
+
+    path = tmp_path / "buffered"
+    fs = ArrowFSWrapper(pyarrow_fs.LocalFileSystem())
+    stream = pa.output_stream(str(path), buffer_size=1024)
+    with ArrowFile(fs, stream, str(path), "wb") as file:
+        file.write(b"checkpoint")
+        assert path.read_bytes() == b""
+        file.flush()
+        assert path.read_bytes() == b"checkpoint"
+
+
+def test_arrow_file_reports_external_stream_close(tmp_path):
+    path = tmp_path / "data"
+    path.write_bytes(b"data")
+    fs = ArrowFSWrapper(pyarrow_fs.LocalFileSystem())
+    with fs.open(str(path), "rb") as file:
+        file.stream.close()
+        assert file.closed
+
+
 @pytest.fixture(scope="function")
 def fs():
     fs, _ = FileSystem.from_uri("mock://")
