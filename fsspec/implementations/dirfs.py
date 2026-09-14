@@ -213,6 +213,14 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
         return ret
 
+    async def _cat_ranges(self, paths, starts, ends, *args, **kwargs):
+        return await self.fs._cat_ranges(
+            self._join(paths), starts, ends, *args, **kwargs
+        )
+
+    def cat_ranges(self, paths, starts, ends, *args, **kwargs):
+        return self.fs.cat_ranges(self._join(paths), starts, ends, *args, **kwargs)
+
     async def _put_file(self, lpath, rpath, **kwargs):
         return await self.fs._put_file(lpath, self._join(rpath), **kwargs)
 
@@ -270,6 +278,12 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
     def size(self, path):
         return self.fs.size(self._join(path))
+
+    async def _sizes(self, paths):
+        return await self.fs._sizes(self._join(paths))
+
+    def sizes(self, paths):
+        return self.fs.sizes(self._join(paths))
 
     async def _exists(self, path):
         return await self.fs._exists(self._join(path))
