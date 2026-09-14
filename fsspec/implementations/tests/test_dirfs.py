@@ -402,6 +402,32 @@ def test_sizes_and_cat_ranges_over_sync_filesystem(tmp_path):
     assert dirfs.cat_ranges(["a.txt", "b.txt"], [0, 1], [2, 3]) == [b"he", b"or"]
 
 
+def test_invalidate_cache(dirfs):
+    dirfs.invalidate_cache("file")
+    dirfs.fs.invalidate_cache.assert_called_once_with(f"{PATH}/file")
+
+
+def test_invalidate_cache_without_path(dirfs):
+    dirfs.invalidate_cache()
+    dirfs.fs.invalidate_cache.assert_called_once_with(PATH)
+
+
+def test_invalidate_cache_without_path_or_root(make_dirfs, fs):
+    dirfs = DirFileSystem("", fs)
+    dirfs.invalidate_cache()
+    fs.invalidate_cache.assert_called_once_with(None)
+
+
+def test_ukey(dirfs):
+    assert dirfs.ukey("file") == dirfs.fs.ukey.return_value
+    dirfs.fs.ukey.assert_called_once_with(f"{PATH}/file")
+
+
+def test_checksum(dirfs):
+    assert dirfs.checksum("file") == dirfs.fs.checksum.return_value
+    dirfs.fs.checksum.assert_called_once_with(f"{PATH}/file")
+
+
 @pytest.mark.asyncio
 async def test_async_exists(adirfs):
     assert await adirfs._exists("file") == adirfs.fs._exists.return_value
