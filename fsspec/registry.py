@@ -179,6 +179,7 @@ known_implementations = {
     },
     "local": {"class": "fsspec.implementations.local.LocalFileSystem"},
     "memory": {"class": "fsspec.implementations.memory.MemoryFileSystem"},
+    "mount": {"class": "fsspec.implementations.mount.MountFileSystem"},
     "oci": {
         "class": "ocifs.OCIFileSystem",
         "err": "Install ocifs to access OCI Object Storage",
