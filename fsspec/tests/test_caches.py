@@ -77,6 +77,35 @@ def test_block_cache_lru_no_redundant_reads():
     assert cache.cache_info().misses == 3
 
 
+def test_background_block_cache_no_redundant_reads():
+    block_size = 4
+    maxblocks = 2
+    cache = BackgroundBlockCache(
+        block_size, letters_fetcher, len(string.ascii_letters), maxblocks=maxblocks
+    )
+    try:
+        # More blocks than the LRU holds: each block is fetched once, not again
+        # after being evicted while the earlier ones were prefetched.
+        data = cache._fetch(0, block_size * (maxblocks + 1))
+        assert data == string.ascii_letters[: block_size * (maxblocks + 1)].encode()
+        assert cache.cache_info().misses == maxblocks + 1
+    finally:
+        cache.close()
+
+
+def test_background_block_cache_read_ending_on_block_boundary():
+    block_size = 4
+    cache = BackgroundBlockCache(block_size, letters_fetcher, len(string.ascii_letters))
+    try:
+        # Only block 0 is needed; block 1 is left to the background prefetch.
+        assert cache._fetch(0, block_size) == b"abcd"
+        assert cache.cache_info().misses == 1
+        assert cache._fetch(block_size, 2 * block_size) == b"efgh"
+        assert cache._fetch(2, 2 * block_size) == b"cdefgh"
+    finally:
+        cache.close()
+
+
 def test_first_cache():
     """
     FirstChunkCache is a cache that only caches the first chunk of data

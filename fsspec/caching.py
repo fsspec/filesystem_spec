@@ -857,9 +857,9 @@ class BackgroundBlockCache(BaseCache):
         if start >= self.size or start >= end:
             return b""
 
-        # byte position -> block numbers
+        # byte position -> block numbers; ``end`` is exclusive
         start_block_number = start // self.blocksize
-        end_block_number = end // self.blocksize
+        end_block_number = (end - 1) // self.blocksize
 
         fetch_future_block_number = None
         fetch_future = None
@@ -899,10 +899,6 @@ class BackgroundBlockCache(BaseCache):
             self._fetch_block_cached.add_key(
                 fetch_future.result(), fetch_future_block_number
             )
-
-        # these are cached, so safe to do multiple calls for the same start and end.
-        for block_number in range(start_block_number, end_block_number + 1):
-            self._fetch_block_cached(block_number)
 
         # fetch next block in the background if nothing is running in the background,
         # the block is within file and it is not already cached
@@ -958,6 +954,8 @@ class BackgroundBlockCache(BaseCache):
         """
         start_pos = start % self.blocksize
         end_pos = end % self.blocksize
+        if end_pos == 0:
+            end_pos = self.blocksize
 
         # kind of pointless to count this as a hit, but it is
         self.hit_count += 1
