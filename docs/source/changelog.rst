@@ -4,6 +4,11 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Add ``MountFileSystem`` (protocol ``mount``), which presents several
+  filesystems as a single tree, each mounted at its own directory (#1994)
+
 Fixes
 
 - Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
