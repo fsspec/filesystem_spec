@@ -1,4 +1,5 @@
 import io
+import os
 import random
 import sys
 import time
@@ -10,9 +11,11 @@ import pytest
 import fsspec.utils
 from fsspec.utils import (
     can_be_local,
+    check_contained,
     common_prefix,
     get_file_extension,
     get_protocol,
+    glob_translate,
     infer_storage_options,
     merge_offset_ranges,
     mirror_from,
@@ -664,3 +667,65 @@ def test_stringify_path(path, expected):
     path = fsspec.utils.stringify_path(path)
 
     assert path == expected
+
+
+@pytest.mark.parametrize(
+    "sep,altsep",
+    [
+        ("/", None),  # posix
+        ("\\", "/"),  # windows
+    ],
+)
+def test_glob_translate_does_not_depend_on_the_host_os(monkeypatch, sep, altsep):
+    # fsspec paths always use "/", so the pattern a given glob compiles to has to be
+    # the same everywhere. Deriving the separators from os.path made a backslash a
+    # separator on Windows only.
+    monkeypatch.setattr(os.path, "sep", sep)
+    monkeypatch.setattr(os.path, "altsep", altsep)
+
+    assert glob_translate("*") == r"(?s:[^/]+)\Z"
+    assert glob_translate("a/b*") == r"(?s:a/b[^/]*)\Z"
+    # a backslash is an ordinary character in a key, not a separator
+    assert glob_translate("we\\ird.txt") == r"(?s:we\\ird\.txt)\Z"
+
+
+def test_glob_matches_a_name_containing_a_backslash():
+    # A backslash is a legal character in an object store key. It must not be treated
+    # as a path separator, on any platform.
+    fs = fsspec.filesystem("memory")
+    for name in ["/data/plain.txt", "/data/we\\ird.txt"]:
+        with fs.open(name, "wb") as f:
+            f.write(b"x")
+
+    try:
+        assert sorted(fs.glob("/data/*")) == ["/data/plain.txt", "/data/we\\ird.txt"]
+        assert fs.glob("/data/we*") == ["/data/we\\ird.txt"]
+        assert sorted(fs.glob("/data/*.txt")) == [
+            "/data/plain.txt",
+            "/data/we\\ird.txt",
+        ]
+    finally:
+        fs.store.clear()
+
+
+@pytest.mark.parametrize(
+    "root, path, contained",
+    (
+        ("/dest", "/dest/inside.txt", True),
+        ("/dest", "/dest/a/b/inside.txt", True),
+        ("/dest", "/dest", True),
+        ("/dest", "/dest/a/../inside.txt", True),
+        ("/dest", "/escaped.txt", False),
+        ("/dest", "/dest/../escaped.txt", False),
+        # A sibling whose name starts with the root must not count as inside.
+        ("/dest", "/destination/escaped.txt", False),
+    ),
+)
+def test_check_contained(root, path, contained):
+    root = os.path.abspath(root)
+    path = os.path.abspath(path)
+    if contained:
+        check_contained(root, [path])
+    else:
+        with pytest.raises(ValueError, match="outside the destination"):
+            check_contained(root, [path])

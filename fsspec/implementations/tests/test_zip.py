@@ -66,6 +66,18 @@ def test_write_seek(m):
         assert fs.cat("another") == b"hi"
 
 
+@pytest.mark.parametrize("prefix", ["", "/", "zip://", "zip:///"])
+def test_pipe_file_normalizes_path(m, prefix):
+    fs = fsspec.filesystem("zip", fo="memory://out.zip", mode="w")
+    fs.pipe_file(f"{prefix}reports/result.csv", b"total\n12\n")
+    fs.close()
+
+    fs = fsspec.filesystem("zip", fo="memory://out.zip")
+    assert fs.find("") == ["reports/result.csv"]
+    assert fs.cat("reports/result.csv") == b"total\n12\n"
+    fs.close()
+
+
 def test_rw(m):
     # extra arg to zip means "create archive"
     with fsspec.open(
@@ -110,6 +122,25 @@ def test_zip_glob_star(m):
     fs = fsspec.filesystem("zip", fo=fn, mode="r")
     outfiles = fs.glob("*")
     assert len(outfiles) == 1
+
+
+@pytest.mark.parametrize("backend", ["memory", "local"])
+def test_append_creates_archive(m, tmp_path, backend):
+    path = "memory://new.zip" if backend == "memory" else tmp_path / "new.zip"
+    for name, content in [("first", b"original"), ("second", b"appended")]:
+        fs = ZipFileSystem(fo=path, mode="a")
+        try:
+            fs.pipe_file(name, content)
+        finally:
+            fs.close()
+
+    fs = ZipFileSystem(fo=path)
+    try:
+        assert fs.cat("first") == b"original"
+        assert fs.cat("second") == b"appended"
+        assert fs.find("") == ["first", "second"]
+    finally:
+        fs.close()
 
 
 def test_append(m, tmpdir):
@@ -457,13 +488,15 @@ def test_find_returns_expected_result_detail_false_include_dirs(zip_file):
     assert result == expected_result
 
 
-def test_find_returns_expected_result_path_set(zip_file):
+@pytest.mark.parametrize("prefix", ["/", "zip://", "zip:///"])
+@pytest.mark.parametrize("detail", [False, True])
+def test_find_returns_expected_result_path_set(zip_file, prefix, detail):
     zip_file_system = ZipFileSystem(zip_file)
 
-    result = zip_file_system.find("/dir2")
+    result = zip_file_system.find(f"{prefix}dir2", detail=detail)
     expected_result = ["dir2/file3.txt"]
 
-    assert result == expected_result
+    assert list(result) == expected_result
 
 
 def test_find_with_and_without_slash_should_return_same_result(zip_file):
@@ -472,10 +505,11 @@ def test_find_with_and_without_slash_should_return_same_result(zip_file):
     assert zip_file_system.find("/dir2/") == zip_file_system.find("/dir2")
 
 
-def test_find_should_return_file_if_exact_match(zip_file):
+@pytest.mark.parametrize("prefix", ["/", "zip://", "zip:///"])
+def test_find_should_return_file_if_exact_match(zip_file, prefix):
     zip_file_system = ZipFileSystem(zip_file)
 
-    result = zip_file_system.find("/dir2startwithsamename.txt", detail=False)
+    result = zip_file_system.find(f"{prefix}dir2startwithsamename.txt", detail=False)
     expected_result = ["dir2startwithsamename.txt"]
 
     assert result == expected_result
@@ -532,3 +566,36 @@ def test_find_returns_expected_result_recursion_depth_set(zip_file):
 def test_find_generic(zip_file2, args, expected_result):
     zip_file_system = ZipFileSystem(zip_file2)
     assert zip_file_system.find(*args) == expected_result
+
+
+@pytest.fixture
+def zip_with_one_member(tmp_path):
+    path = tmp_path / "archive.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("present.txt", "data")
+    return path
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda fs: fs.open("missing.txt").read(),
+        lambda fs: fs.cat("missing.txt"),
+        lambda fs: fs.cat_file("missing.txt"),
+        lambda fs: fs.head("missing.txt", 1),
+    ],
+    ids=["open", "cat", "cat_file", "head"],
+)
+def test_reading_missing_member_raises_file_not_found(zip_with_one_member, read):
+    fs = ZipFileSystem(str(zip_with_one_member))
+    with pytest.raises(FileNotFoundError):
+        read(fs)
+
+
+def test_mapper_default_for_missing_member(zip_with_one_member):
+    # FSMap only substitutes the default for its missing_exceptions, which do
+    # not include KeyError, so a leaked KeyError ignored the default.
+    mapper = fsspec.get_mapper(f"zip://::file://{zip_with_one_member.as_posix()}")
+    assert mapper.__getitem__("missing.txt", default=b"fallback") == b"fallback"
+    with pytest.raises(KeyError):
+        mapper["missing.txt"]

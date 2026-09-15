@@ -9,8 +9,18 @@ Enhancements
 - ``ia://`` filesystem for files in Internet Archive items: an
   ``HTTPFileSystem`` reading from ``archive.org/download`` with credentials from
   ``ia configure``'s ``ia.ini``
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#1904)
 
 Fixes
+
+- Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
+  not exist, as ``rm_file`` and the other filesystems do, so deleting a missing
+  key from a memory-backed mapper raises ``KeyError``
+
+- Create missing ZIP archives in append mode without truncating existing archives
+
+- Allow filesystem implementations to assign ``protocol`` per instance
 
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
   when pickling (#2102)
