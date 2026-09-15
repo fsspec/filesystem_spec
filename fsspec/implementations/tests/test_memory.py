@@ -527,3 +527,15 @@ def test_mapper_delitem_missing_key_raises_keyerror(m):
     del mapper["present"]
     with pytest.raises(KeyError):
         del mapper["missing"]
+
+
+def test_cat_recursive_skips_directories(m):
+    m.pipe({"/tree/a": b"a", "/tree/sub/b": b"b"})
+    assert m.cat("/tree", recursive=True) == {"/tree/a": b"a", "/tree/sub/b": b"b"}
+    assert m.cat(["/tree/sub"], recursive=True) == {"/tree/sub/b": b"b"}
+    assert m.cat("/tree/a", recursive=True) == b"a"
+
+
+def test_cat_recursive_empty_directory(m):
+    m.mkdir("/empty")
+    assert m.cat("/empty", recursive=True) == {}
