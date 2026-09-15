@@ -115,7 +115,7 @@ by ``pyarrow`` functions.
 Transactions
 ------------
 
-``fsspec`` supports *transactions*, during which writing to files on a remote store are deferred
+``fsspec`` supports *transactions*, during which writing to files on a remote store is deferred
 (typically put into a temporary location) until the transaction is over, whereupon the whole
 transaction is finalised in a semi-atomic way, and all the files are moved/committed to their
 final destination. The implementation of the details is file-system specific (and not all
@@ -220,7 +220,7 @@ are keyed by the protocol names included in the URL. Here is the equivalent to t
 
    of = fsspec.open('dask::s3://bucket/key', s3={'anon': True})
 
-A couple of more complicates cases:
+A couple of more complicated cases:
 
 .. code-block:: python
 
