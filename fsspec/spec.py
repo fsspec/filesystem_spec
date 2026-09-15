@@ -954,6 +954,13 @@ class AbstractFileSystem(metaclass=_Cached):
         or the path has been otherwise expanded
         """
         paths = self.expand_path(path, recursive=recursive, **kwargs)
+        if recursive:
+            from .implementations.local import trailing_sep
+
+            # expand_path lists the directories too, which have no contents
+            paths = [p for p in paths if not (trailing_sep(p) or self.isdir(p))]
+            if not paths:
+                return {}
         if (
             len(paths) > 1
             or isinstance(path, list)
