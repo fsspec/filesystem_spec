@@ -1,4 +1,4 @@
-"""Files in Internet Archive items, ``ia://<identifier>/<filename>``."""
+"""Files in Internet Archive items, ``ia://<item>/<filename>``."""
 
 import configparser
 import os
@@ -116,9 +116,9 @@ def authorized_request_class(authorization, domain, base=aiohttp.ClientRequest):
 
 
 class InternetArchiveFileSystem(HTTPFileSystem):
-    """Files in Internet Archive items, addressed as ``ia://<identifier>/<filename>``.
+    """Files in Internet Archive items, addressed as ``ia://<item>/<filename>``.
 
-    Every path is read from ``https://archive.org/download/<identifier>/<filename>``,
+    Every path is read from ``https://archive.org/download/<item>/<filename>``,
     which redirects to a data node that honours HTTP Range requests, so this is
     ``HTTPFileSystem`` with a path mapping and archive.org credentials. (IA's
     S3-like API at ``s3.us.archive.org`` is not used: it ignores Range headers and
