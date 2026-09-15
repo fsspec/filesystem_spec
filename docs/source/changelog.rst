@@ -4,6 +4,11 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#1904)
+
 Fixes
 
 - Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
