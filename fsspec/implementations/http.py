@@ -1,6 +1,7 @@
 import asyncio
 import io
 import logging
+import os
 import re
 import weakref
 from copy import copy
@@ -251,26 +252,55 @@ class HTTPFileSystem(AsyncFileSystem):
         return out
 
     async def _get_file(
-        self, rpath, lpath, chunk_size=5 * 2**20, callback=DEFAULT_CALLBACK, **kwargs
+        self,
+        rpath,
+        lpath,
+        chunk_size=5 * 2**20,
+        callback=DEFAULT_CALLBACK,
+        resume=False,
+        **kwargs,
     ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        offset = 0
+        if resume:
+            # continue an interrupted download by appending to the local file
+            if isfilelike(lpath):
+                raise ValueError("resume requires a local path, not a file-like")
+            try:
+                offset = os.stat(lpath).st_size
+            except FileNotFoundError:
+                pass
+            if offset:
+                kw["headers"] = {**kw.get("headers", {}), "Range": f"bytes={offset}-"}
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(self.encode_url(rpath), **kw) as r:
+            if offset and r.status == 416:
+                # the local file already covers the remote one, but only accept
+                # it when the remote size ("bytes */<size>") matches exactly
+                m = re.match(r"bytes \*/(\d+)", r.headers.get("Content-Range", ""))
+                if m is None or int(m[1]) != offset:
+                    raise ValueError(f"Local file {lpath} is larger than {rpath}")
+                return
+            self._raise_not_found_for_status(r, rpath)
+            if r.status != 206:
+                # server ignored the Range header; start over
+                offset = 0
             try:
-                size = int(r.headers["content-length"])
+                size = int(r.headers["content-length"]) + offset
             except (ValueError, KeyError):
                 size = None
 
             callback.set_size(size)
-            self._raise_not_found_for_status(r, rpath)
             if isfilelike(lpath):
                 outfile = lpath
             else:
-                outfile = open(lpath, "wb")  # noqa: ASYNC230
+                outfile = open(lpath, "ab" if offset else "wb")  # noqa: ASYNC230
 
             try:
+                if offset:
+                    callback.absolute_update(offset)
                 chunk = True
                 while chunk:
                     chunk = await r.content.read(chunk_size)
