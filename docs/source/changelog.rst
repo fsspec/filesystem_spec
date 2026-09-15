@@ -6,8 +6,8 @@ Dev
 
 Enhancements
 
-- Allow independent memory filesystems with ``global_store=False`` while
-  preserving the default shared store and instance cache (#1904)
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#1904)
 
 Fixes
 

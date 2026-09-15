@@ -8,27 +8,18 @@ from pathlib import PurePath, PureWindowsPath
 from typing import Any
 
 from fsspec import AbstractFileSystem
-from fsspec.config import apply_config
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.spec import _Cached
 from fsspec.utils import stringify_path, tokenize
 
 logger = logging.getLogger("fsspec.memoryfs")
 
 
-class _MemoryFileSystemCache(_Cached):
-    def __call__(cls, *args, **kwargs):
-        kwargs = apply_config(cls, kwargs)
-        if not kwargs.get("global_store", True):
-            kwargs["skip_instance_cache"] = True
-        return super().__call__(*args, **kwargs)
-
-
-class MemoryFileSystem(AbstractFileSystem, metaclass=_MemoryFileSystemCache):
+class MemoryFileSystem(AbstractFileSystem):
     """A filesystem based on a dict of BytesIO objects
 
     By default, instances share a global in-memory filesystem. Pass
-    ``global_store=False`` to create an independent filesystem instead.
+    ``global_store=False, skip_instance_cache=True`` to create a new instance
+    with an independent store instead.
     """
 
     store: dict[str, Any] = {}  # shared by default
@@ -43,7 +34,9 @@ class MemoryFileSystem(AbstractFileSystem, metaclass=_MemoryFileSystemCache):
         ----------
         global_store: bool
             Share files and directories with other default instances. If False,
-            each instance starts with an empty, independent store. Pickling an
+            each instance starts with an empty, independent store. The normal
+            instance cache still applies; pass ``skip_instance_cache=True``
+            to create a new instance on every call. Pickling an
             independent filesystem copies its files and directories; pickling a
             global filesystem retains the reference to the global store.
         """
@@ -63,7 +56,15 @@ class MemoryFileSystem(AbstractFileSystem, metaclass=_MemoryFileSystemCache):
         reduced = super().__reduce__()
         if self.global_store:
             return reduced
-        return (*reduced, {"store": self.store, "pseudo_dirs": self.pseudo_dirs})
+        factory, (cls, args, kwargs) = reduced
+        # Restore into a new instance even when the source is cached.
+        kwargs = {**kwargs, "skip_instance_cache": True}
+        # Pickle's memo preserves the cycle through each MemoryFile.fs.
+        return (
+            factory,
+            (cls, args, kwargs),
+            {"store": self.store, "pseudo_dirs": self.pseudo_dirs},
+        )
 
     @classmethod
     def _strip_protocol(cls, path):

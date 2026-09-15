@@ -182,13 +182,15 @@ Memory filesystems
 
 Memory filesystem instances share their files and directories by default and
 use the normal instance cache. To create independent stores, pass
-``global_store=False``. These instances bypass the cache, so retain the instance
-for subsequent operations:
+``global_store=False, skip_instance_cache=True`` and retain the instance for
+subsequent operations. Without ``skip_instance_cache=True``, the normal instance
+cache applies: repeated calls with the same arguments reuse the same instance
+and its store:
 
 .. code-block:: python
 
-    first = fsspec.filesystem("memory", global_store=False)
-    second = fsspec.filesystem("memory", global_store=False)
+    first = fsspec.filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = fsspec.filesystem("memory", global_store=False, skip_instance_cache=True)
     first.pipe("file", b"data")
     assert not second.exists("file")
 

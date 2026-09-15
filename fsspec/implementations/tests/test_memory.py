@@ -12,8 +12,8 @@ from fsspec.implementations.memory import MemoryFileSystem
 
 
 def test_independent_stores(m):
-    first = filesystem("memory", global_store=False)
-    second = filesystem("memory", global_store=False)
+    first = filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = filesystem("memory", global_store=False, skip_instance_cache=True)
     for fs, data in [(m, b"global"), (first, b"first"), (second, b"second")]:
         fs.pipe("same/path", data)
         fs.mkdir("empty")
@@ -32,8 +32,8 @@ def test_independent_stores(m):
 
 
 def test_independent_store_identity():
-    first = filesystem("memory", global_store=False)
-    second = filesystem("memory", global_store=False)
+    first = filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = filesystem("memory", global_store=False, skip_instance_cache=True)
     assert first != second
     assert len({first, second}) == 2
     assert first.__dask_tokenize__() != second.__dask_tokenize__()
@@ -41,6 +41,20 @@ def test_independent_store_identity():
     first.pipe("file", b"data")
     assert first.__dask_tokenize__() == token
     assert not MemoryFileSystem._cache
+
+
+def test_independent_store_uses_instance_cache(m):
+    fs = filesystem("memory", global_store=False)
+    assert fs is filesystem("memory", global_store=False)
+    fs.pipe("file", b"private")
+    snapshot = pickle.dumps(fs)
+    fs.pipe("file", b"changed after snapshot")
+    restored = pickle.loads(snapshot)
+    assert restored is not fs
+    assert restored.cat("file") == b"private"
+    assert fs.cat("file") == b"changed after snapshot"
+    assert fs is filesystem("memory", global_store=False)
+    assert not m.exists("file")
 
 
 def test_default_store_is_shared(m):
@@ -76,20 +90,23 @@ def test_default_store_transaction_helpers(m, use_mapper, rollback):
 
 
 def test_independent_store_from_config(m, monkeypatch):
-    monkeypatch.setitem(conf, "memory", {"global_store": False})
+    monkeypatch.setitem(
+        conf, "memory", {"global_store": False, "skip_instance_cache": True}
+    )
     first = filesystem("memory")
     second = filesystem("memory", skip_instance_cache=False)
     first.pipe("file", b"private")
     assert not second.exists("file")
+    assert second is filesystem("memory", skip_instance_cache=False)
     assert not m.exists("file")
 
-    shared = filesystem("memory", global_store=True)
-    assert shared is filesystem("memory", global_store=True)
+    shared = filesystem("memory", global_store=True, skip_instance_cache=False)
+    assert shared is filesystem("memory", global_store=True, skip_instance_cache=False)
     assert shared.store is m.store
 
 
 def test_independent_store_transaction(m):
-    fs = filesystem("memory", global_store=False)
+    fs = filesystem("memory", global_store=False, skip_instance_cache=True)
     with fs.transaction:
         fs.pipe("committed", b"data")
         assert not fs.exists("committed")
@@ -103,13 +120,16 @@ def test_independent_store_transaction(m):
     assert not m.exists("discarded")
 
 
-def test_independent_store_pickle(m):
-    fs = filesystem("memory", global_store=False)
+@pytest.mark.parametrize(
+    "cache_options", [{}, {"skip_instance_cache": False}, {"skip_instance_cache": True}]
+)
+def test_independent_store_pickle(m, cache_options):
+    fs = filesystem("memory", global_store=False, **cache_options)
     fs.pipe("file", b"original")
     fs.mkdir("empty")
 
     restored = pickle.loads(pickle.dumps(fs))
-    assert restored != fs
+    assert restored is not fs
     assert restored.cat("file") == b"original"
     assert restored.isdir("empty")
     assert restored.store["/file"].fs is restored
@@ -127,7 +147,7 @@ def test_independent_store_pickle(m):
 def test_default_store_pickle(m):
     m.pipe("file", b"shared")
     restored = pickle.loads(pickle.dumps(m))
-    assert restored == m
+    assert restored is m
     assert restored.store is m.store
     assert restored.cat("file") == b"shared"
 
