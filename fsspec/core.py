@@ -699,7 +699,10 @@ def get_fs_token_paths(
     else:
         if ("w" in mode or "x" in mode) and expand:
             paths = _expand_paths(paths, name_function, num)
-        elif "*" in paths:
+        elif "*" in paths or "[" in paths:
+            # Not has_magic(): "?" is also the URL query delimiter, so
+            # treating it as a glob wildcard breaks paths like
+            # "https://host/f?x=1" (HTTPFileSystem excludes it too).
             paths = [f for f in sorted(fs.glob(paths)) if not fs.isdir(f)]
         else:
             paths = [paths]
