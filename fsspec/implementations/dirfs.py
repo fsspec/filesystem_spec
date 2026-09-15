@@ -286,7 +286,6 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         return self.fs.sizes(self._join(paths))
 
     def invalidate_cache(self, path=None):
-        super().invalidate_cache(path)
         # With no path, clear only what is cached under this directory. An
         # unrooted dirfs joins to "", which means everything on the wrapped fs.
         self.fs.invalidate_cache(self._join(path or "") or None)
