@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import collections
 import functools
 import logging
@@ -280,6 +281,121 @@ class ReadAheadCache(BaseCache):
         self.start = start
         self.end = self.start + len(self.cache)
         return part + self.cache[:l]
+
+
+class AdaptiveReadaheadCache(BaseCache):
+    """Cache with adaptive asynchronous prefetching.
+
+    Optimized for sequential and near-sequential reads by dynamically
+    adjusting the amount of data prefetched in the background. The cache
+    uses the generic prefetch engine when async loop support is available,
+    and falls back to ``ReadAheadCache`` when it is not.
+
+    Parameters
+    ----------
+    blocksize: int
+        Nominal read size used by callers.
+    fetcher: Fetcher
+        Function of the form ``f(start, end)`` that returns bytes.
+    size: int
+        Total size of the file.
+    concurrency: int
+        Maximum number of concurrent background fetch tasks.
+    max_prefetch_size: int | None
+        Optional upper bound for adaptive prefetch size in bytes.
+    """
+
+    name = "adaptive"
+
+    def __init__(
+        self,
+        blocksize: int,
+        fetcher: Fetcher,
+        size: int,
+        concurrency: int = 4,
+        max_prefetch_size: int | None = None,
+    ) -> None:
+        super().__init__(blocksize, fetcher, size)
+        self._fallback = ReadAheadCache(blocksize, fetcher, size)
+        self._prefetcher = None
+
+        async def _default_fetcher_async(
+            start_offset: int,
+            total_size: int,
+            split_factor: int = 1,
+        ) -> bytes:
+            del split_factor
+            return await asyncio.to_thread(
+                self.fetcher, start_offset, start_offset + total_size
+            )
+
+        try:
+            from . import asyn as fsspec_asyn
+        except ImportError as e:
+            raise ImportError(
+                "AdaptiveReadaheadCache requires fsspec.asyn to be available"
+            ) from e
+
+        try:
+            from .prefetcher import BackgroundPrefetcher
+
+            self._prefetcher = BackgroundPrefetcher(
+                fetcher=_default_fetcher_async,
+                size=size,
+                concurrency=concurrency,
+                max_prefetch_size=max_prefetch_size,
+                loop=fsspec_asyn.get_loop(),
+            )
+            logger.info(
+                "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",
+                blocksize,
+                size,
+                concurrency,
+                max_prefetch_size,
+            )
+        except Exception as e:
+            logger.info(
+                "AdaptiveReadaheadCache fallback to ReadAheadCache: %s",
+                e,
+                exc_info=True,
+            )
+            self._prefetcher = None
+
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
+        if self._prefetcher is None:
+            out = self._fallback._fetch(start, end)
+            self.hit_count = self._fallback.hit_count
+            self.miss_count = self._fallback.miss_count
+            self.total_requested_bytes = self._fallback.total_requested_bytes
+            return out
+
+        out = self._prefetcher.fetch(start, end)
+        self.miss_count += 1
+        self.total_requested_bytes += len(out)
+        return out
+
+    def close(self) -> None:
+        if self._prefetcher is not None:
+            self._prefetcher.close()
+            self._prefetcher = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        # The prefetcher owns asyncio primitives that are not picklable.
+        self.close()
+        state = self.__dict__.copy()
+        state["_prefetcher"] = None
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._prefetcher = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            # Best-effort cleanup during GC.
+            pass
 
 
 class FirstChunkCache(BaseCache):
@@ -1016,6 +1132,7 @@ for c in (
     MMapCache,
     BytesCache,
     ReadAheadCache,
+    AdaptiveReadaheadCache,
     BlockCache,
     FirstChunkCache,
     AllBytes,

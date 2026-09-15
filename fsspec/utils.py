@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import logging
 import math
 import os
@@ -818,3 +819,39 @@ def glob_translate(pat):
             results.append(any_sep)
     res = "".join(results)
     return rf"(?s:{res})\Z"
+
+
+try:
+    PyBytes_FromStringAndSize = ctypes.pythonapi.PyBytes_FromStringAndSize
+    PyBytes_FromStringAndSize.argtypes = (ctypes.c_void_p, ctypes.c_ssize_t)
+    PyBytes_FromStringAndSize.restype = ctypes.py_object
+
+    PyBytes_AsString = ctypes.pythonapi.PyBytes_AsString
+    PyBytes_AsString.argtypes = (ctypes.py_object,)
+    PyBytes_AsString.restype = ctypes.c_void_p
+    HAS_CPYTHON_API = True
+except Exception:
+    PyBytes_FromStringAndSize = None
+    PyBytes_AsString = None
+    HAS_CPYTHON_API = False
+
+
+# Please refer to following discussion to understand why this is required at this point
+# Discussion = https://github.com/fsspec/gcsfs/pull/795#discussion_r3032749881
+def _fast_slice(src_bytes: bytes, offset: int, read_size: int) -> bytes:
+    if read_size == 0:
+        return b""
+    if offset < 0 or offset + read_size > len(src_bytes):
+        raise ValueError("Slice indices out of bounds")
+
+    if HAS_CPYTHON_API:
+        dest_bytes = PyBytes_FromStringAndSize(None, read_size)
+        src_ptr = PyBytes_AsString(src_bytes)
+        dest_ptr = PyBytes_AsString(dest_bytes)
+        # Releases the GIL
+        ctypes.memmove(dest_ptr, src_ptr + offset, read_size)
+        return dest_bytes
+    else:
+        # Standard fallback for PyPy/non-CPython
+        return src_bytes[offset : offset + read_size]
+
