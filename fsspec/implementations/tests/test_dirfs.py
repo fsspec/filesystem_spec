@@ -762,9 +762,14 @@ def test_find_detail_single_tar_file():
         try:
             dirfs = DirFileSystem("root", fs)
             details = dirfs.find("report.txt", detail=True)
-            assert details == {"report.txt": {"name": "report.txt"}}
+            assert list(details) == ["report.txt"]
+            assert details["report.txt"]["name"] == "report.txt"
+            assert details["report.txt"]["type"] == "file"
+            assert details["report.txt"]["size"] == 5
             assert dirfs.cat_file(details["report.txt"]["name"]) == b"hello"
-            assert fs.find("root/report.txt", detail=True) == {"root/report.txt": {}}
+            assert fs.find("root/report.txt", detail=True) == {
+                "root/report.txt": fs.info("root/report.txt")
+            }
         finally:
             fs.close()
 
