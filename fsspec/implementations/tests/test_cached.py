@@ -1443,3 +1443,15 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     for attr in ("_cat_file", "_cat_ranges"):
         assert hasattr(fs, attr), f"instance missing {attr}"
         assert hasattr(type(fs), attr), f"class missing {attr}"
+
+
+def test_simplecache_cat_ranges_downloads_uncached(tmp_path):
+    m = fsspec.filesystem("memory")
+    m.pipe({"/cat_ranges/one": b"0123456789", "/cat_ranges/two": b"abcdef"})
+    fs = fsspec.filesystem(
+        "simplecache", target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    paths = ["/cat_ranges/one", "/cat_ranges/one", "/cat_ranges/two"]
+    out = fs.cat_ranges(paths, [0, 5, 1], [2, 8, 3], on_error="raise")
+    assert out == [b"01", b"567", b"bc"]
+    assert len(os.listdir(tmp_path)) == 2
