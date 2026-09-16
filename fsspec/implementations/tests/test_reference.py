@@ -160,6 +160,16 @@ def test_info(server):
     assert fs.info("e")["size"] == len(data)
 
 
+def test_size_of_whole_file_reference(m):
+    m.pipe("/data/0", data)
+    refs = {"a": ["memory://data/0"], "b": ("memory://data/0",), "c": b"data"}
+    fs = fsspec.filesystem("reference", fo=refs, fs=m)
+    assert fs.size("a") == len(data)
+    assert fs.size("b") == len(data)
+    assert fs.sizes(["a", "c"]) == [len(data), 4]
+    assert fs.du("") == 2 * len(data) + 4
+
+
 def test_mutable(server, m):
     refs = {
         "a": b"data",
