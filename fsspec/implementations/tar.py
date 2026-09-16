@@ -99,10 +99,26 @@ class TarFileSystem(AbstractArchiveFileSystem):
             # Collapse duplicate slashes in the filesystem-facing name.
             name = re.sub("/+", "/", orig_name)
             info["name"] = name
+            if ti.islnk() or ti.issym():
+                # extractfile follows links, so report the size of the target
+                info["size"] = self._link_target_size(ti)
             out[name] = (info, ti.offset_data, orig_name)
 
         self.index = out
         # TODO: save index to self.index_store here, if set
+
+    def _link_target_size(self, ti):
+        seen = set()
+        while ti.islnk() or ti.issym():
+            if ti.name in seen:
+                return 0
+            seen.add(ti.name)
+            try:
+                ti = self.tar._find_link_target(ti)
+            except KeyError:
+                # dangling link; opening it fails as well
+                return 0
+        return ti.size
 
     def _get_dirs(self):
         if self.dir_cache is not None:
