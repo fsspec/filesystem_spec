@@ -1445,6 +1445,20 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
         assert hasattr(type(fs), attr), f"class missing {attr}"
 
 
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_whole_file_cache_tail(tmp_path, protocol):
+    fsspec.filesystem("memory").pipe("/tail/file", b"0123456789")
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    assert fs.tail("/tail/file", 3) == b"789"
+    # a size at or beyond the file length returns the whole file rather than
+    # seeking before the start, which plain local files reject
+    assert fs.tail("/tail/file", 10) == b"0123456789"
+    assert fs.tail("/tail/file", 20) == b"0123456789"
+    assert fs.tail("/tail/file", 0) == b""
+
+
 def test_simplecache_cat_ranges_downloads_uncached(tmp_path):
     m = fsspec.filesystem("memory")
     m.pipe({"/cat_ranges/one": b"0123456789", "/cat_ranges/two": b"abcdef"})
