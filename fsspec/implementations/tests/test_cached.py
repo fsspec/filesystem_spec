@@ -1452,4 +1452,8 @@ def test_whole_file_cache_tail(tmp_path, protocol):
         protocol, target_protocol="memory", cache_storage=str(tmp_path)
     )
     assert fs.tail("/tail/file", 3) == b"789"
+    # a size at or beyond the file length returns the whole file rather than
+    # seeking before the start, which plain local files reject
+    assert fs.tail("/tail/file", 10) == b"0123456789"
     assert fs.tail("/tail/file", 20) == b"0123456789"
+    assert fs.tail("/tail/file", 0) == b""
