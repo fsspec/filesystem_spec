@@ -1457,3 +1457,15 @@ def test_whole_file_cache_tail(tmp_path, protocol):
     assert fs.tail("/tail/file", 10) == b"0123456789"
     assert fs.tail("/tail/file", 20) == b"0123456789"
     assert fs.tail("/tail/file", 0) == b""
+
+
+def test_simplecache_cat_ranges_downloads_uncached(tmp_path):
+    m = fsspec.filesystem("memory")
+    m.pipe({"/cat_ranges/one": b"0123456789", "/cat_ranges/two": b"abcdef"})
+    fs = fsspec.filesystem(
+        "simplecache", target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    paths = ["/cat_ranges/one", "/cat_ranges/one", "/cat_ranges/two"]
+    out = fs.cat_ranges(paths, [0, 5, 1], [2, 8, 3], on_error="raise")
+    assert out == [b"01", b"567", b"bc"]
+    assert len(os.listdir(tmp_path)) == 2
