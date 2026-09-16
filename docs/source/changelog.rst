@@ -8,6 +8,7 @@ Enhancements
 
 - Allow instance-local memory stores with ``global_store=False`` while
   preserving normal instance caching and the default shared store (#1904)
+- Add ``resume=True`` to ``get_file``/``get`` to continue interrupted downloads (#1617)
 
 Fixes
 

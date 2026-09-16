@@ -973,9 +973,24 @@ class AbstractFileSystem(metaclass=_Cached):
             return self.cat_file(paths[0], **kwargs)
 
     def get_file(
-        self, rpath, lpath=None, callback=DEFAULT_CALLBACK, outfile=None, **kwargs
+        self,
+        rpath,
+        lpath=None,
+        callback=DEFAULT_CALLBACK,
+        outfile=None,
+        resume=False,
+        **kwargs,
     ):
-        """Copy single remote file to local"""
+        """Copy single remote file to local
+
+        Parameters
+        ----------
+        resume: bool
+            If True and ``lpath`` already exists, append only the remaining bytes
+            to it, continuing an interrupted download; the remote file is assumed
+            not to have changed since the earlier attempt. Requires a local path,
+            not a file-like object.
+        """
         from .implementations.local import LocalFileSystem
 
         if outfile is None and isfilelike(lpath):
@@ -984,17 +999,31 @@ class AbstractFileSystem(metaclass=_Cached):
             os.makedirs(lpath, exist_ok=True)
             return None
 
+        offset = 0
+        if resume:
+            if outfile is not None:
+                raise ValueError("resume requires a local path, not a file-like")
+            if os.path.isfile(lpath):
+                offset = os.path.getsize(lpath)
+
         if outfile is None:
             fs = LocalFileSystem(auto_mkdir=True)
             fs.makedirs(fs._parent(lpath), exist_ok=True)
 
         with self.open(rpath, "rb", **kwargs) as f1:
+            size = getattr(f1, "size", None)
+            if offset:
+                if size is not None and offset > size:
+                    raise ValueError(f"Local file {lpath} is larger than {rpath}")
+                f1.seek(offset)
             close_outfile = outfile is None
             if close_outfile:
-                outfile = open(lpath, "wb")
+                outfile = open(lpath, "ab" if resume else "wb")
 
             try:
-                callback.set_size(getattr(f1, "size", None))
+                callback.set_size(size)
+                if offset:
+                    callback.absolute_update(offset)
                 data = True
                 while data:
                     data = f1.read(self.blocksize)

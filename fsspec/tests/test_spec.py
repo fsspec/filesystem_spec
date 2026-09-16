@@ -1394,6 +1394,47 @@ def test_get_file_explicit_outfile_takes_precedence(tmpdir):
     assert outfile.getvalue() == b"data"
 
 
+def test_get_file_resume(m, tmp_path):
+    m.pipe_file("/source", data)
+    target = tmp_path / "target"
+
+    # no local file yet: a normal download
+    m.get_file("/source", target, resume=True)
+    assert target.read_bytes() == data
+
+    # partial local file: only the remainder is fetched and appended
+    target.write_bytes(data[:100])
+    callback = fsspec.Callback()
+    m.get_file("/source", target, resume=True, callback=callback)
+    assert target.read_bytes() == data
+    assert callback.size == callback.value == len(data)
+
+    # complete local file: left as is
+    m.get_file("/source", target, resume=True)
+    assert target.read_bytes() == data
+
+    # local file larger than the remote one: refuse rather than corrupt
+    target.write_bytes(data + b"x")
+    with pytest.raises(ValueError, match="larger"):
+        m.get_file("/source", target, resume=True)
+    assert target.read_bytes() == data + b"x"
+
+    # file-like destinations cannot be resumed
+    with pytest.raises(ValueError, match="file-like"):
+        m.get_file("/source", io.BytesIO(), resume=True)
+
+
+def test_get_resume_recursive(m, tmp_path):
+    m.pipe_file("/dir/a", data)
+    m.pipe_file("/dir/b", data)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "a").write_bytes(data[:10])
+    m.get("/dir/", str(out), recursive=True, resume=True)
+    assert (out / "a").read_bytes() == data
+    assert (out / "b").read_bytes() == data
+
+
 def test_dummy_callbacks_files(tmpdir):
     fs = DummyOpenFS()
     callback = BasicCallback()
