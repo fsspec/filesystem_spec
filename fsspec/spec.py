@@ -1175,7 +1175,8 @@ class AbstractFileSystem(metaclass=_Cached):
     def tail(self, path, size=1024):
         """Get the last ``size`` bytes from file"""
         with self.open(path, "rb") as f:
-            f.seek(max(-size, -f.size), 2)
+            f.seek(0, 2)
+            f.seek(max(f.tell() - size, 0))
             return f.read()
 
     def cp_file(self, path1, path2, **kwargs):

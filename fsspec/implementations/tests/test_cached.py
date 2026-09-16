@@ -1443,3 +1443,13 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     for attr in ("_cat_file", "_cat_ranges"):
         assert hasattr(fs, attr), f"instance missing {attr}"
         assert hasattr(type(fs), attr), f"class missing {attr}"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_whole_file_cache_tail(tmp_path, protocol):
+    fsspec.filesystem("memory").pipe("/tail/file", b"0123456789")
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    assert fs.tail("/tail/file", 3) == b"789"
+    assert fs.tail("/tail/file", 20) == b"0123456789"
