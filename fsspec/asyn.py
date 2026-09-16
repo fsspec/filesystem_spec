@@ -489,6 +489,11 @@ class AsyncFileSystem(AbstractFileSystem):
         self, path, recursive=False, on_error="raise", batch_size=None, **kwargs
     ):
         paths = await self._expand_path(path, recursive=recursive)
+        if recursive:
+            # _expand_path lists the directories too, which have no contents
+            paths = [p for p in paths if not (trailing_sep(p) or await self._isdir(p))]
+            if not paths:
+                return {}
         coros = [self._cat_file(path, **kwargs) for path in paths]
         batch_size = batch_size or self.batch_size
         out = await _run_coros_in_chunks(

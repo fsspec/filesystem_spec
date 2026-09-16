@@ -245,3 +245,19 @@ def test_get_does_not_write_above_destination(tmp_path):
         pass
 
     assert not outside.exists(), f"async copy wrote {outside}, above {dest}"
+
+
+@pytest.mark.asyncio
+async def test_cat_recursive_skips_directories(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "a").write_bytes(b"a")
+    (tmp_path / "sub" / "b").write_bytes(b"b")
+    (tmp_path / "empty").mkdir()
+    root = tmp_path.as_posix()
+    async_fs = AsyncFileSystemWrapper(LocalFileSystem())
+
+    assert await async_fs._cat(root, recursive=True) == {
+        f"{root}/a": b"a",
+        f"{root}/sub/b": b"b",
+    }
+    assert await async_fs._cat(f"{root}/empty", recursive=True) == {}
