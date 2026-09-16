@@ -327,8 +327,10 @@ def make_path_posix(path):
             path = path[1:]
         if path[1:2] == ":":
             # windows full path like "C:\\local\\path"
-            if len(path) <= 3:
-                # nt root (something like c:/)
+            if len(path) == 2 or (len(path) == 3 and path[2] in "/\\"):
+                # nt root (something like c:/). A three-character "c:x" is not a
+                # root: it names "x" relative to that drive, so it falls through
+                # instead of being collapsed to the drive root.
                 return path[0] + ":/"
             path = path.replace("\\", "/")
             return path

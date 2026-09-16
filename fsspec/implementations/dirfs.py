@@ -98,6 +98,15 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
             return path[len(prefix) :]
         return [self._relpath(_path) for _path in path]
 
+    def _relpath_detail(self, paths):
+        out = {}
+        for path, info in paths.items():
+            path = self._relpath(path)
+            info = info.copy()
+            info["name"] = path
+            out[path] = info
+        return out
+
     # Wrappers below
 
     @property
@@ -204,6 +213,14 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
         return ret
 
+    async def _cat_ranges(self, paths, starts, ends, *args, **kwargs):
+        return await self.fs._cat_ranges(
+            self._join(paths), starts, ends, *args, **kwargs
+        )
+
+    def cat_ranges(self, paths, starts, ends, *args, **kwargs):
+        return self.fs.cat_ranges(self._join(paths), starts, ends, *args, **kwargs)
+
     async def _put_file(self, lpath, rpath, **kwargs):
         return await self.fs._put_file(lpath, self._join(rpath), **kwargs)
 
@@ -262,6 +279,23 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     def size(self, path):
         return self.fs.size(self._join(path))
 
+    async def _sizes(self, paths):
+        return await self.fs._sizes(self._join(paths))
+
+    def sizes(self, paths):
+        return self.fs.sizes(self._join(paths))
+
+    def invalidate_cache(self, path=None):
+        # With no path, clear only what is cached under this directory. An
+        # unrooted dirfs joins to "", which means everything on the wrapped fs.
+        self.fs.invalidate_cache(self._join(path or "") or None)
+
+    def ukey(self, path):
+        return self.fs.ukey(self._join(path))
+
+    def checksum(self, path):
+        return self.fs.checksum(self._join(path))
+
     async def _exists(self, path):
         return await self.fs._exists(self._join(path))
 
@@ -316,14 +350,14 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         detail = kwargs.get("detail", False)
         ret = await self.fs._glob(self._join(path), **kwargs)
         if detail:
-            return {self._relpath(path): info for path, info in ret.items()}
+            return self._relpath_detail(ret)
         return self._relpath(ret)
 
     def glob(self, path, **kwargs):
         detail = kwargs.get("detail", False)
         ret = self.fs.glob(self._join(path), **kwargs)
         if detail:
-            return {self._relpath(path): info for path, info in ret.items()}
+            return self._relpath_detail(ret)
         return self._relpath(ret)
 
     async def _du(self, path, *args, **kwargs):
@@ -346,14 +380,14 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         detail = kwargs.get("detail", False)
         ret = await self.fs._find(self._join(path), *args, **kwargs)
         if detail:
-            return {self._relpath(path): info for path, info in ret.items()}
+            return self._relpath_detail(ret)
         return self._relpath(ret)
 
     def find(self, path, *args, **kwargs):
         detail = kwargs.get("detail", False)
         ret = self.fs.find(self._join(path), *args, **kwargs)
         if detail:
-            return {self._relpath(path): info for path, info in ret.items()}
+            return self._relpath_detail(ret)
         return self._relpath(ret)
 
     async def _expand_path(self, path, *args, **kwargs):

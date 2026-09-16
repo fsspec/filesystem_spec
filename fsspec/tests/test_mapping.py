@@ -239,3 +239,34 @@ def test_fsmap_dirfs():
     fs = m.dirfs
     assert isinstance(fs, fsspec.implementations.dirfs.DirFileSystem)
     assert fs.path == m.root
+
+
+@pytest.mark.parametrize("protocol", ["memory", "file"])
+@pytest.mark.parametrize("default", [None, False, 0, b"", []])
+def test_pop_missing_key_returns_explicit_default(tmp_path, protocol, default):
+    mapper = fsspec.get_mapper(
+        f"{protocol}://{tmp_path.as_posix()}/mapping", create=True
+    )
+
+    assert mapper.pop("missing", default) is default
+
+
+@pytest.mark.parametrize("protocol", ["memory", "file"])
+def test_pop_without_default_raises_for_missing_key(tmp_path, protocol):
+    mapper = fsspec.get_mapper(
+        f"{protocol}://{tmp_path.as_posix()}/mapping", create=True
+    )
+
+    with pytest.raises(KeyError, match="missing"):
+        mapper.pop("missing")
+
+
+@pytest.mark.parametrize("protocol", ["memory", "file"])
+def test_pop_existing_key_returns_and_removes_value(tmp_path, protocol):
+    mapper = fsspec.get_mapper(
+        f"{protocol}://{tmp_path.as_posix()}/mapping", create=True
+    )
+    mapper["key"] = b"value"
+
+    assert mapper.pop("key", None) == b"value"
+    assert "key" not in mapper

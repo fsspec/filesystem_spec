@@ -115,7 +115,7 @@ by ``pyarrow`` functions.
 Transactions
 ------------
 
-``fsspec`` supports *transactions*, during which writing to files on a remote store are deferred
+``fsspec`` supports *transactions*, during which writing to files on a remote store is deferred
 (typically put into a temporary location) until the transaction is over, whereupon the whole
 transaction is finalised in a semi-atomic way, and all the files are moved/committed to their
 final destination. The implementation of the details is file-system specific (and not all
@@ -177,6 +177,27 @@ captured traceback might this be anticipated becoming a problem.
 To disable instance caching, i.e., get a fresh instance which is not in the cache
 even for a cachable class, pass ``skip_instance_cache=True``.
 
+Memory filesystems
+------------------
+
+Memory filesystem instances share their files and directories by default and
+use the normal instance cache. To create independent stores, pass
+``global_store=False, skip_instance_cache=True`` and retain the instance for
+subsequent operations. Without ``skip_instance_cache=True``, the normal instance
+cache applies: repeated calls with the same arguments reuse the same instance
+and its store:
+
+.. code-block:: python
+
+    first = fsspec.filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = fsspec.filesystem("memory", global_store=False, skip_instance_cache=True)
+    first.pipe("file", b"data")
+    assert not second.exists("file")
+
+Pickling an independent memory filesystem copies its files and directories.
+The default global filesystem continues to use the global store in the process
+where it is unpickled.
+
 Listings Caching
 ----------------
 
@@ -220,7 +241,7 @@ are keyed by the protocol names included in the URL. Here is the equivalent to t
 
    of = fsspec.open('dask::s3://bucket/key', s3={'anon': True})
 
-A couple of more complicates cases:
+A couple of more complicated cases:
 
 .. code-block:: python
 

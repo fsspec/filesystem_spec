@@ -4,7 +4,18 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#1904)
+
 Fixes
+
+- Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
+  not exist, as ``rm_file`` and the other filesystems do, so deleting a missing
+  key from a memory-backed mapper raises ``KeyError``
+
+- Create missing ZIP archives in append mode without truncating existing archives
 
 - Close cached readers when exiting an ``open_files`` context
 
