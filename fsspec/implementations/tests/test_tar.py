@@ -326,3 +326,27 @@ def test_reading_missing_member_raises_file_not_found(tar_with_one_member, read)
 def test_cat_file_negative_offsets(tar_with_one_member, start, end, expected):
     fs = TarFileSystem(str(tar_with_one_member))
     assert fs.cat_file("present.txt", start=start, end=end) == expected
+
+
+def test_links_report_target_size(tmp_path: Path):
+    path = tmp_path / "links.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("d/f")
+        info.size = 5
+        tar.addfile(info, BytesIO(b"hello"))
+        for name, kind, target in [
+            ("d/sym", tarfile.SYMTYPE, "f"),
+            ("hard", tarfile.LNKTYPE, "d/f"),
+            ("dangling", tarfile.SYMTYPE, "missing"),
+        ]:
+            info = tarfile.TarInfo(name)
+            info.type = kind
+            info.linkname = target
+            tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    for name in ["d/sym", "hard"]:
+        assert fs.size(name) == 5
+        assert fs.cat_file(name, start=-2) == b"lo"
+        assert fs.read_block(name, 1, 3) == b"ell"
+    assert fs.size("dangling") == 0
