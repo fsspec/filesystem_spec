@@ -1253,8 +1253,19 @@ class ReferenceFileSystem(AsyncFileSystem):
             out0[0]["size"] = self.fss[prot].size(self.references[path][0])
         return out0[0]
 
-    async def _info(self, path, **kwargs):  # calls fast sync code
-        return self.info(path)
+    async def _info(self, path, **kwargs):
+        out = self.references.get(path)
+        if isinstance(out, (list, tuple)) and len(out) == 1:
+            # whole remote file: the size must come from the remote FS, which
+            # cannot be called synchronously from inside the event loop
+            prot, _ = split_protocol(out[0])
+            fs = self.fss[prot]
+            if fs.async_impl:
+                size = await fs._size(out[0])
+            else:
+                size = fs.size(out[0])
+            return {"name": path, "type": "file", "size": size}
+        return self.info(path)  # calls fast sync code
 
     async def _rm_file(self, path, **kwargs):
         self.references.pop(
