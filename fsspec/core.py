@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
-import os
+import posixpath
 import re
 from glob import has_magic
 from pathlib import Path
@@ -716,7 +716,8 @@ def _expand_paths(path, name_function, num):
         if path.count("*") > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
         elif "*" not in path:
-            path = os.path.join(path, "*.part")
+            # paths are "/"-separated on every filesystem, including local ones
+            path = posixpath.join(path, "*.part")
 
         if name_function is None:
             name_function = build_name_function(num - 1)
