@@ -5,11 +5,11 @@ from datetime import datetime, timezone
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
-from typing import Any, ClassVar
+from typing import Any
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.utils import stringify_path
+from fsspec.utils import stringify_path, tokenize
 
 logger = logging.getLogger("fsspec.memoryfs")
 
@@ -17,14 +17,54 @@ logger = logging.getLogger("fsspec.memoryfs")
 class MemoryFileSystem(AbstractFileSystem):
     """A filesystem based on a dict of BytesIO objects
 
-    This is a global filesystem so instances of this class all point to the same
-    in memory filesystem.
+    By default, instances share a global in-memory filesystem. Pass
+    ``global_store=False, skip_instance_cache=True`` to create a new instance
+    with an independent store instead.
     """
 
-    store: ClassVar[dict[str, Any]] = {}  # global, do not overwrite!
-    pseudo_dirs = [""]  # global, do not overwrite!
+    store: dict[str, Any] = {}  # shared by default
+    pseudo_dirs = [""]  # shared by default
     protocol = "memory"
     root_marker = "/"
+
+    def __init__(self, *args, global_store=True, **kwargs):
+        """Create a memory filesystem.
+
+        Parameters
+        ----------
+        global_store: bool
+            Share files and directories with other default instances. If False,
+            each instance starts with an empty, independent store. The normal
+            instance cache still applies; pass ``skip_instance_cache=True``
+            to create a new instance on every call. Pickling an
+            independent filesystem copies its files and directories; pickling a
+            global filesystem retains the reference to the global store.
+        """
+        super().__init__(*args, **kwargs)
+        self.global_store = global_store
+        if not global_store:
+            self.store = {}
+            self.pseudo_dirs = [""]
+
+    @property
+    def _fs_token(self):
+        if self.global_store:
+            return super()._fs_token
+        return tokenize(super()._fs_token, id(self))
+
+    def __reduce__(self):
+        reduced = super().__reduce__()
+        if self.global_store:
+            return reduced
+        factory, (cls, args, kwargs) = reduced
+        # Restore into a new instance even when the source is cached.
+        kwargs = {**kwargs, "skip_instance_cache": True}
+        # Pickle's memo preserves the cycle through each MemoryFile.fs.
+        return (
+            factory,
+            (cls, args, kwargs),
+            {"store": self.store, "pseudo_dirs": self.pseudo_dirs},
+        )
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -39,6 +79,79 @@ class MemoryFileSystem(AbstractFileSystem):
             return path.rstrip("/")
         path = path.lstrip("/").rstrip("/")
         return "/" + path if path else ""
+
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        # The base implementation calls ls() once per directory, and each ls()
+        # scans the whole store, giving O(n_dirs * n_entries) behaviour
+        # for a tree. Since the store is a flat mapping of every path, the same
+        # result can be produced with a single pass over it.
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
+        path = self._strip_protocol(path)
+        if path in self.store:
+            # path is itself a file
+            if not detail:
+                return [path]
+            filelike = self.store[path]
+            return {
+                path: {
+                    "name": path,
+                    "size": filelike.size,
+                    "type": "file",
+                    "created": filelike.created.timestamp(),
+                }
+            }
+
+        # Uniform prefix so that the search root "" (the filesystem root) and a
+        # nested path are handled the same way; rel depth is rel.count("/") + 1.
+        prefix = path + "/" if path else "/"
+        out = {}
+        dirs = {}
+
+        def add_ancestor_dirs(name):
+            # Register every directory implied between ``path`` and ``name`` that
+            # is within maxdepth, mirroring how walk() surfaces implied dirs.
+            idx = name.rfind("/")
+            while idx > len(path):
+                parent = name[:idx]
+                if parent in dirs:
+                    break
+                rel = parent[len(prefix) :]
+                if maxdepth is None or rel.count("/") + 1 <= maxdepth:
+                    dirs[parent] = {"name": parent, "size": 0, "type": "directory"}
+                idx = parent.rfind("/")
+
+        # `store` may be shared by multiple MemoryFileSystem instances, so iterate a
+        # snapshot: a concurrent create/delete would otherwise raise
+        # "dictionary changed size during iteration". ls() does the same.
+        for name, filelike in tuple(self.store.items()):
+            if not name.startswith(prefix):
+                continue
+            rel = name[len(prefix) :]
+            if withdirs:
+                add_ancestor_dirs(name)
+            if maxdepth is not None and rel.count("/") + 1 > maxdepth:
+                continue
+            out[name] = {
+                "name": name,
+                "size": filelike.size,
+                "type": "file",
+                "created": filelike.created.timestamp(),
+            }
+
+        if withdirs:
+            # Explicitly-created (possibly empty) directories live in pseudo_dirs.
+            for pdir in self.pseudo_dirs:
+                if pdir and pdir.startswith(prefix):
+                    add_ancestor_dirs(pdir + "/")
+            out.update(dirs)
+            # Mirror the base find(): include the search root itself when it is
+            # a directory (needed for posix glob compliance).
+            if path != "" and self.isdir(path):
+                out[path] = self.info(path)
+
+        names = sorted(out)
+        return {name: out[name] for name in names} if detail else names
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
@@ -271,14 +384,19 @@ class MemoryFileSystem(AbstractFileSystem):
         else:
             path = [self._strip_protocol(p) for p in path]
         paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
+        # A non-recursive expand keeps a literal path whether or not it exists,
+        # so record what exists before anything is deleted.
+        existed = {p for p in paths if self.exists(p)}
         for p in reversed(paths):
             if self.isfile(p):
                 self.rm_file(p)
-            # If the expanded path doesn't exist, it is only because the expanded
-            # path was a directory that does not exist in self.pseudo_dirs. This
-            # is possible if you directly create files without making the
-            # directories first.
             elif not self.exists(p):
+                # A directory that is not in self.pseudo_dirs only exists while it
+                # has files under it, so deleting those files earlier in this loop
+                # makes it vanish. That is expected; a path that never existed is
+                # not, and raises like rm_file and the other filesystems do.
+                if p not in existed:
+                    raise FileNotFoundError(p)
                 continue
             else:
                 self.rmdir(p)

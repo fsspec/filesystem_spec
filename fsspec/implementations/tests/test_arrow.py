@@ -8,6 +8,41 @@ FileSystem = pyarrow_fs.FileSystem
 from fsspec.implementations.arrow import ArrowFSWrapper, HadoopFileSystem  # noqa: E402
 
 
+@pytest.mark.parametrize("mode", ["rb", "wb"])
+def test_arrow_file_closed_state_follows_stream(tmp_path, mode):
+    path = tmp_path / "data"
+    path.write_bytes(b"data")
+    fs = ArrowFSWrapper(pyarrow_fs.LocalFileSystem())
+    with fs.open(str(path), mode) as file:
+        assert not file.closed
+    assert file.stream.closed
+    assert file.closed
+
+
+def test_arrow_file_flushes_buffered_writes(tmp_path):
+    import pyarrow as pa
+
+    from fsspec.implementations.arrow import ArrowFile
+
+    path = tmp_path / "buffered"
+    fs = ArrowFSWrapper(pyarrow_fs.LocalFileSystem())
+    stream = pa.output_stream(str(path), buffer_size=1024)
+    with ArrowFile(fs, stream, str(path), "wb") as file:
+        file.write(b"checkpoint")
+        assert path.read_bytes() == b""
+        file.flush()
+        assert path.read_bytes() == b"checkpoint"
+
+
+def test_arrow_file_reports_external_stream_close(tmp_path):
+    path = tmp_path / "data"
+    path.write_bytes(b"data")
+    fs = ArrowFSWrapper(pyarrow_fs.LocalFileSystem())
+    with fs.open(str(path), "rb") as file:
+        file.stream.close()
+        assert file.closed
+
+
 @pytest.fixture(scope="function")
 def fs():
     fs, _ = FileSystem.from_uri("mock://")
@@ -26,6 +61,23 @@ def test_protocol():
     fs, _ = FileSystem.from_uri("mock://")
     fss = ArrowFSWrapper(fs)
     assert fss.protocol == "mock"
+
+
+@pytest.mark.parametrize("type_name", ["gcs", "s3"])
+def test_object_store_parent_has_no_leading_slash(type_name):
+    class ObjectStoreFileSystem:
+        def __init__(self, type_name):
+            self.type_name = type_name
+
+        def create_dir(self, path, recursive):
+            self.created_path = path
+
+    backend = ObjectStoreFileSystem(type_name)
+    fs = ArrowFSWrapper(backend, skip_instance_cache=True)
+    fs.makedirs(fs._parent("bucket/path/file"))
+
+    assert backend.created_path == "bucket/path"
+    assert fs.root_marker == ""
 
 
 def strip_keys(original_entry):

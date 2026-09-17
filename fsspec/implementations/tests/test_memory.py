@@ -1,9 +1,155 @@
 import os
+import pickle
 from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
 
+import fsspec
+from fsspec import filesystem
+from fsspec.config import conf
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
+from fsspec.implementations.memory import MemoryFileSystem
+
+
+def test_independent_stores(m):
+    first = filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = filesystem("memory", global_store=False, skip_instance_cache=True)
+    for fs, data in [(m, b"global"), (first, b"first"), (second, b"second")]:
+        fs.pipe("same/path", data)
+        fs.mkdir("empty")
+
+    assert m.cat("same/path") == b"global"
+    assert first.cat("same/path") == b"first"
+    assert second.cat("same/path") == b"second"
+
+    first.rm("same", recursive=True)
+    first.rmdir("empty")
+    assert first.ls("") == []
+    assert second.isdir("empty")
+    assert m.isdir("empty")
+    assert second.cat("same/path") == b"second"
+    assert m.cat("same/path") == b"global"
+
+
+def test_independent_store_identity():
+    first = filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = filesystem("memory", global_store=False, skip_instance_cache=True)
+    assert first != second
+    assert len({first, second}) == 2
+    assert first.__dask_tokenize__() != second.__dask_tokenize__()
+    token = first.__dask_tokenize__()
+    first.pipe("file", b"data")
+    assert first.__dask_tokenize__() == token
+    assert not MemoryFileSystem._cache
+
+
+def test_independent_store_uses_instance_cache(m):
+    fs = filesystem("memory", global_store=False)
+    assert fs is filesystem("memory", global_store=False)
+    fs.pipe("file", b"private")
+    snapshot = pickle.dumps(fs)
+    fs.pipe("file", b"changed after snapshot")
+    restored = pickle.loads(snapshot)
+    assert restored is not fs
+    assert restored.cat("file") == b"private"
+    assert fs.cat("file") == b"changed after snapshot"
+    assert fs is filesystem("memory", global_store=False)
+    assert not m.exists("file")
+
+
+def test_default_store_is_shared(m):
+    other = filesystem("memory")
+    m.pipe("file", b"shared")
+    m.mkdir("empty")
+    assert other.cat("file") == b"shared"
+    assert other.isdir("empty")
+    assert other == m
+    assert other is m
+
+
+@pytest.mark.parametrize("use_mapper", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_default_store_transaction_helpers(m, use_mapper, rollback):
+    def write():
+        if use_mapper:
+            fsspec.get_mapper("memory://")["file"] = b"data"
+        else:
+            with fsspec.open("memory://file", "wb") as f:
+                f.write(b"data")
+        assert not m.exists("file")
+
+    if rollback:
+        with pytest.raises(RuntimeError), m.transaction:
+            write()
+            raise RuntimeError("discard transaction")
+        assert not m.exists("file")
+    else:
+        with m.transaction:
+            write()
+        assert m.cat("file") == b"data"
+
+
+def test_independent_store_from_config(m, monkeypatch):
+    monkeypatch.setitem(
+        conf, "memory", {"global_store": False, "skip_instance_cache": True}
+    )
+    first = filesystem("memory")
+    second = filesystem("memory", skip_instance_cache=False)
+    first.pipe("file", b"private")
+    assert not second.exists("file")
+    assert second is filesystem("memory", skip_instance_cache=False)
+    assert not m.exists("file")
+
+    shared = filesystem("memory", global_store=True, skip_instance_cache=False)
+    assert shared is filesystem("memory", global_store=True, skip_instance_cache=False)
+    assert shared.store is m.store
+
+
+def test_independent_store_transaction(m):
+    fs = filesystem("memory", global_store=False, skip_instance_cache=True)
+    with fs.transaction:
+        fs.pipe("committed", b"data")
+        assert not fs.exists("committed")
+    assert fs.cat("committed") == b"data"
+    assert not m.exists("committed")
+
+    with pytest.raises(RuntimeError), fs.transaction:
+        fs.pipe("discarded", b"data")
+        raise RuntimeError("discard transaction")
+    assert not fs.exists("discarded")
+    assert not m.exists("discarded")
+
+
+@pytest.mark.parametrize(
+    "cache_options", [{}, {"skip_instance_cache": False}, {"skip_instance_cache": True}]
+)
+def test_independent_store_pickle(m, cache_options):
+    fs = filesystem("memory", global_store=False, **cache_options)
+    fs.pipe("file", b"original")
+    fs.mkdir("empty")
+
+    restored = pickle.loads(pickle.dumps(fs))
+    assert restored is not fs
+    assert restored.cat("file") == b"original"
+    assert restored.isdir("empty")
+    assert restored.store["/file"].fs is restored
+    assert restored.info("file") == fs.info("file")
+
+    with restored.open("file", "ab") as f:
+        f.write(b" appended")
+    restored.rmdir("empty")
+    assert restored.cat("file") == b"original appended"
+    assert fs.cat("file") == b"original"
+    assert fs.isdir("empty")
+    assert m.ls("") == []
+
+
+def test_default_store_pickle(m):
+    m.pipe("file", b"shared")
+    restored = pickle.loads(pickle.dumps(m))
+    assert restored is m
+    assert restored.store is m.store
+    assert restored.cat("file") == b"shared"
 
 
 def test_1(m):
@@ -407,3 +553,122 @@ def test_open_path_windows(m):
         f.write(b"some\nlines\nof\ntext")
 
     assert m.read_text(path) == "some\nlines\nof\ntext"
+
+
+def test_find_matches_generic(m):
+    # MemoryFileSystem overrides find() with a single-pass implementation; make
+    # sure it agrees with the generic ls()-based AbstractFileSystem.find() across
+    # roots, maxdepth, withdirs and detail.
+    from fsspec.spec import AbstractFileSystem
+
+    for path in [
+        "/data/a/f1.txt",
+        "/data/a/f2.txt",
+        "/data/a/b/deep.txt",
+        "/data/a/b/c/deepest.txt",
+        "/data/x.txt",
+        "/data/y/z.txt",
+        "/other/o.txt",
+    ]:
+        m.pipe_file(path, b"hello")
+    m.mkdir("/data/emptydir")  # empty (pseudo) directory
+    m.mkdir("/data/a/b/emptysub")
+
+    for root in ["", "/data", "/data/a", "/data/a/b", "/data/x.txt", "/nope"]:
+        for maxdepth in [None, 1, 2, 3]:
+            for withdirs in [False, True]:
+                for detail in [False, True]:
+                    got = m.find(
+                        root, maxdepth=maxdepth, withdirs=withdirs, detail=detail
+                    )
+                    expected = AbstractFileSystem.find(
+                        m, root, maxdepth=maxdepth, withdirs=withdirs, detail=detail
+                    )
+                    assert got == expected, (root, maxdepth, withdirs, detail)
+
+
+def test_find_snapshots_store_before_iterating(m):
+    # `store` is a class attribute shared by every MemoryFileSystem instance, so
+    # another instance can add or remove a path while find() is walking it.
+    # ls() iterates over a snapshot for this reason; find() must too, or it dies
+    # with "dictionary changed size during iteration".
+    for f in range(5):
+        m.pipe_file(f"/data/file{f}.txt", b"x")
+
+    class MutatesStoreOnRead:
+        """Stands in for a real entry, but writes to the store when read.
+
+        Reading ``size`` happens inside find()'s loop, so this reproduces a
+        concurrent write landing mid-iteration without needing a second thread.
+        """
+
+        def __init__(self, real, store):
+            self._real = real
+            self._store = store
+            self._fired = False
+
+        @property
+        def created(self):
+            return self._real.created
+
+        @property
+        def size(self):
+            if not self._fired:
+                self._fired = True
+                self._store["/data/concurrent.txt"] = self._real
+            return self._real.size
+
+    real = m.store["/data/file0.txt"]
+    m.store["/data/file0.txt"] = MutatesStoreOnRead(real, m.store)
+
+    out = m.find("/data")
+
+    # The snapshot is taken before the concurrent write, so the new path is not
+    # part of this result; the point is that find() completes instead of raising.
+    assert "/data/file4.txt" in out
+    assert len(out) == 5
+
+
+def test_find_does_not_scan_per_directory(m):
+    # Regression guard: the old find() called ls() once per directory and each
+    # ls() re-scanned the whole (global) store, giving O(n_dirs * n_files) work.
+    # The single-pass implementation must not call ls() at all, so total work
+    # stays O(n_files) regardless of how many directories there are.
+    from unittest import mock
+
+    for d in range(20):
+        for f in range(5):
+            m.pipe_file(f"/data/dir{d}/file{f}.txt", b"x")
+
+    with mock.patch.object(MemoryFileSystem, "ls", wraps=m.ls) as spy:
+        out = m.find("/data")
+
+    assert len(out) == 100
+    assert spy.call_count == 0
+
+
+def test_rm_missing_path_raises(m):
+    with pytest.raises(FileNotFoundError):
+        m.rm("/missing")
+
+
+def test_rm_list_with_missing_path_raises(m):
+    m.pipe("/present", b"data")
+    with pytest.raises(FileNotFoundError):
+        m.rm(["/present", "/missing"])
+
+
+def test_rm_recursive_still_removes_implicit_parents(m):
+    # Files written without their parent directories: the parents only exist
+    # while those files do, and vanish partway through a recursive delete.
+    m.pipe("/implicit/nested/file", b"data")
+    m.rm("/implicit", recursive=True)
+    assert not m.exists("/implicit")
+
+
+def test_mapper_delitem_missing_key_raises_keyerror(m):
+    mapper = m.get_mapper("/mapper")
+    mapper["present"] = b"data"
+    del mapper["present"]
+    with pytest.raises(KeyError):
+        del mapper["missing"]

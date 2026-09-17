@@ -35,6 +35,7 @@ def wrap_exceptions(func):
 
 
 PYARROW_VERSION = None
+_EMPTY_ROOT_MARKER_FILESYSTEMS = {"gcs", "s3"}
 
 
 class ArrowFSWrapper(AbstractFileSystem):
@@ -52,6 +53,8 @@ class ArrowFSWrapper(AbstractFileSystem):
         global PYARROW_VERSION
         PYARROW_VERSION = get_package_version_without_import("pyarrow")
         self.fs = fs
+        if fs.type_name in _EMPTY_ROOT_MARKER_FILESYSTEMS:
+            self.root_marker = ""
         super().__init__(**kwargs)
 
     @property
@@ -61,6 +64,13 @@ class ArrowFSWrapper(AbstractFileSystem):
     @cached_property
     def fsid(self):
         return "hdfs_" + tokenize(self.fs.host, self.fs.port)
+
+    def _parent(self, path):
+        if self.root_marker:
+            return super()._parent(path)
+
+        path = self._strip_protocol(path).lstrip("/")
+        return path.rsplit("/", 1)[0] if "/" in path else ""
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -206,7 +216,7 @@ class ArrowFSWrapper(AbstractFileSystem):
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         kwargs.setdefault("seekable", start not in [None, 0])
-        return super().cat_file(path, start=None, end=None, **kwargs)
+        return super().cat_file(path, start, end, **kwargs)
 
     def get_file(self, rpath, lpath, **kwargs):
         kwargs.setdefault("seekable", False)
@@ -220,6 +230,7 @@ class ArrowFSWrapper(AbstractFileSystem):
         "seek",
         "tell",
         "write",
+        "flush",
         "readable",
         "writable",
         "close",
@@ -239,6 +250,10 @@ class ArrowFile(io.IOBase):
 
     def __enter__(self):
         return self
+
+    @property
+    def closed(self):
+        return self.stream.closed
 
     @property
     def size(self):

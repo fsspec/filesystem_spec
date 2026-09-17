@@ -1,4 +1,7 @@
+import logging
 from collections import deque
+
+logger = logging.getLogger("fsspec")
 
 
 class Transaction:
@@ -38,15 +41,32 @@ class Transaction:
 
     def complete(self, commit=True):
         """Finish transaction: commit or discard all deferred files"""
-        while self.files:
-            f = self.files.popleft()
-            if commit:
-                f.commit()
-            else:
-                f.discard()
-        self.fs._intrans = False
-        self.fs._transaction = None
-        self.fs = None
+        f = None
+        try:
+            while self.files:
+                f = self.files.popleft()
+                if commit:
+                    f.commit()
+                else:
+                    f.discard()
+                f = None
+        finally:
+            # the file being processed when the error was raised is already
+            # off the queue; put it back so its temporary file is cleaned up
+            if f is not None:
+                self.files.appendleft(f)
+            # A failed commit or discard must still end the transaction.
+            # Leaving _intrans set would defer every later write on this
+            # filesystem into a temporary file that nothing ever commits,
+            # and instances are cached, so that would persist process-wide.
+            while self.files:
+                try:
+                    self.files.popleft().discard()
+                except Exception:
+                    logger.debug("Discarding deferred file failed", exc_info=True)
+            self.fs._intrans = False
+            self.fs._transaction = None
+            self.fs = None
 
 
 class FileActor:
@@ -82,9 +102,12 @@ class DaskTransaction(Transaction):
 
     def complete(self, commit=True):
         """Finish transaction: commit or discard all deferred files"""
-        if commit:
-            self.files.commit().result()
-        else:
-            self.files.discard().result()
-        self.fs._intrans = False
-        self.fs = None
+        try:
+            if commit:
+                self.files.commit().result()
+            else:
+                self.files.discard().result()
+        finally:
+            self.fs._intrans = False
+            self.fs._transaction = None
+            self.fs = None

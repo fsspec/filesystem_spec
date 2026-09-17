@@ -208,7 +208,7 @@ class GenericFileSystem(AsyncFileSystem):
         return list(result)
 
     async def _info(self, url, **kwargs):
-        fs = _resolve_fs(url, self.method)
+        fs = _resolve_fs(url, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             out = await fs._info(url, **kwargs)
         else:
@@ -223,7 +223,7 @@ class GenericFileSystem(AsyncFileSystem):
         detail=True,
         **kwargs,
     ):
-        fs = _resolve_fs(url, self.method)
+        fs = _resolve_fs(url, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             out = await fs._ls(url, detail=True, **kwargs)
         else:
@@ -241,7 +241,7 @@ class GenericFileSystem(AsyncFileSystem):
         url,
         **kwargs,
     ):
-        fs = _resolve_fs(url, self.method)
+        fs = _resolve_fs(url, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             return await fs._cat_file(url, **kwargs)
         else:
@@ -263,7 +263,7 @@ class GenericFileSystem(AsyncFileSystem):
         urls = url
         if isinstance(urls, str):
             urls = [urls]
-        fs = _resolve_fs(urls[0], self.method)
+        fs = _resolve_fs(urls[0], self.method, storage_options=self.st_opts)
         if fs.async_impl:
             await fs._rm(urls, **kwargs)
         else:
@@ -293,8 +293,8 @@ class GenericFileSystem(AsyncFileSystem):
         tempdir: str | None = None,
         **kwargs,
     ):
-        fs = _resolve_fs(url, self.method)
-        fs2 = _resolve_fs(url2, self.method)
+        fs = _resolve_fs(url, self.method, storage_options=self.st_opts)
+        fs2 = _resolve_fs(url2, self.method, storage_options=self.st_opts)
         if fs is fs2:
             # pure remote
             if fs.async_impl:
@@ -304,7 +304,7 @@ class GenericFileSystem(AsyncFileSystem):
         await copy_file_op(fs, [url], fs2, [url2], tempdir, 1, on_error="raise")
 
     async def _make_many_dirs(self, urls, exist_ok=True):
-        fs = _resolve_fs(urls[0], self.method)
+        fs = _resolve_fs(urls[0], self.method, storage_options=self.st_opts)
         if fs.async_impl:
             coros = [fs._makedirs(u, exist_ok=exist_ok) for u in urls]
             await _run_coros_in_chunks(coros)
@@ -332,8 +332,8 @@ class GenericFileSystem(AsyncFileSystem):
         path1 = [path1] if isinstance(path1, str) else path1
         path2 = [path2] if isinstance(path2, str) else path2
 
-        fs = _resolve_fs(path1, self.method)
-        fs2 = _resolve_fs(path2, self.method)
+        fs = _resolve_fs(path1, self.method, storage_options=self.st_opts)
+        fs2 = _resolve_fs(path2, self.method, storage_options=self.st_opts)
 
         if fs is fs2:
             if fs.async_impl:

@@ -23,6 +23,7 @@ from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.core import filesystem, open, split_protocol
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.utils import (
+    check_contained,
     isfilelike,
     merge_offset_ranges,
     other_paths,
@@ -812,18 +813,20 @@ class ReferenceFileSystem(AsyncFileSystem):
             logger.debug(f"Reference: {path} => {url}, offset {start0}, size {size}")
             end0 = start0 + size
 
+            # Resolve offsets like slicing the part, so they never reach target
+            # bytes outside the referenced range.
             if start is not None:
                 if start >= 0:
-                    start1 = start0 + start
+                    start1 = min(start0 + start, end0)
                 else:
-                    start1 = end0 + start
+                    start1 = max(end0 + start, start0)
             else:
                 start1 = start0
             if end is not None:
                 if end >= 0:
-                    end1 = start0 + end
+                    end1 = min(start0 + end, end0)
                 else:
-                    end1 = end0 + end
+                    end1 = max(end0 + end, start0)
             else:
                 end1 = end0
         if url is None:
@@ -882,6 +885,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         rpath = self.expand_path(rpath, recursive=recursive)
         fs = fsspec.filesystem("file", auto_mkdir=True)
         targets = other_paths(rpath, lpath)
+        if isinstance(lpath, str):
+            # The names came from the source listing; ".." in one of them
+            # would otherwise place the copy above the destination. When
+            # lpath is a list the caller named every destination itself.
+            check_contained(lpath, targets)
         if recursive:
             data = self.cat([r for r in rpath if not self.isdir(r)])
         else:
@@ -1245,8 +1253,19 @@ class ReferenceFileSystem(AsyncFileSystem):
             out0[0]["size"] = self.fss[prot].size(self.references[path][0])
         return out0[0]
 
-    async def _info(self, path, **kwargs):  # calls fast sync code
-        return self.info(path)
+    async def _info(self, path, **kwargs):
+        out = self.references.get(path)
+        if isinstance(out, (list, tuple)) and len(out) == 1:
+            # whole remote file: the size must come from the remote FS, which
+            # cannot be called synchronously from inside the event loop
+            prot, _ = split_protocol(out[0])
+            fs = self.fss[prot]
+            if fs.async_impl:
+                size = await fs._size(out[0])
+            else:
+                size = fs.size(out[0])
+            return {"name": path, "type": "file", "size": size}
+        return self.info(path)  # calls fast sync code
 
     async def _rm_file(self, path, **kwargs):
         self.references.pop(

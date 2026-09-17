@@ -244,3 +244,109 @@ def test_ls_with_folders(compression: str, tmp_path: Path):
             "d/e/f.pdf",
             "d/g.pdf",
         ]
+
+
+@pytest.mark.parametrize(
+    "compression", ["", "gz", "bz2", "xz"], ids=["tar", "tar-gz", "tar-bz2", "tar-xz"]
+)
+def test_ls_with_duplicate_slashes(compression: str, tmp_path: Path):
+    """
+    Members whose names contain redundant duplicate slashes (e.g.
+    ``"a/b//c.txt"``) must still be reachable through the directory listing
+    and openable, rather than becoming silently invisible to
+    ``find``/``glob``/``ls``/``walk``. Regression test for
+    https://github.com/fsspec/filesystem_spec/issues/1947.
+    """
+    tar_data: dict[str, bytes] = {
+        "path/with/extra/slash//test.txt": b"Hello slash!",
+        "regular/file.txt": b"Hello regular!",
+    }
+    if compression:
+        temp_archive_file = tmp_path / f"test_tar_file.tar.{compression}"
+    else:
+        temp_archive_file = tmp_path / "test_tar_file.tar"
+    with open(temp_archive_file, "wb") as fd:
+        with tarfile.open(fileobj=fd, mode=f"w:{compression}") as tf:
+            for tar_file_path, data in tar_data.items():
+                info = tarfile.TarInfo(name=tar_file_path)
+                info.size = len(data)
+                tf.addfile(info, BytesIO(data))
+
+    with open(temp_archive_file, "rb") as fd:
+        fs = TarFileSystem(fd)
+
+        # The duplicate-slash member is discoverable with its slashes collapsed.
+        assert fs.find("/") == [
+            "path/with/extra/slash/test.txt",
+            "regular/file.txt",
+        ]
+        assert fs.glob("path/**/*.txt") == ["path/with/extra/slash/test.txt"]
+        assert fs.ls("path/with/extra/slash", detail=False) == [
+            "path/with/extra/slash/test.txt"
+        ]
+
+        # The intermediate directory is inferred without a trailing slash.
+        assert fs.isdir("path/with/extra/slash")
+
+        # It can be opened both by its normalised name and its original name.
+        assert fs.cat("path/with/extra/slash/test.txt") == b"Hello slash!"
+        assert fs.cat("path/with/extra/slash//test.txt") == b"Hello slash!"
+
+
+@pytest.fixture
+def tar_with_one_member(tmp_path):
+    path = tmp_path / "archive.tar"
+    data = b"data"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("present.txt")
+        info.size = len(data)
+        tar.addfile(info, BytesIO(data))
+    return path
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda fs: fs.open("missing.txt").read(),
+        lambda fs: fs.cat("missing.txt"),
+    ],
+    ids=["open", "cat"],
+)
+def test_reading_missing_member_raises_file_not_found(tar_with_one_member, read):
+    fs = TarFileSystem(str(tar_with_one_member))
+    assert fs.cat("present.txt") == b"data"
+    with pytest.raises(FileNotFoundError):
+        read(fs)
+
+
+@pytest.mark.parametrize(
+    "start, end, expected",
+    [(-2, None, b"ta"), (1, -1, b"at"), (None, -3, b"d")],
+)
+def test_cat_file_negative_offsets(tar_with_one_member, start, end, expected):
+    fs = TarFileSystem(str(tar_with_one_member))
+    assert fs.cat_file("present.txt", start=start, end=end) == expected
+
+
+def test_links_report_target_size(tmp_path: Path):
+    path = tmp_path / "links.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("d/f")
+        info.size = 5
+        tar.addfile(info, BytesIO(b"hello"))
+        for name, kind, target in [
+            ("d/sym", tarfile.SYMTYPE, "f"),
+            ("hard", tarfile.LNKTYPE, "d/f"),
+            ("dangling", tarfile.SYMTYPE, "missing"),
+        ]:
+            info = tarfile.TarInfo(name)
+            info.type = kind
+            info.linkname = target
+            tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    for name in ["d/sym", "hard"]:
+        assert fs.size(name) == 5
+        assert fs.cat_file(name, start=-2) == b"lo"
+        assert fs.read_block(name, 1, 3) == b"ell"
+    assert fs.size("dangling") == 0

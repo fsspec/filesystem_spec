@@ -72,6 +72,16 @@ def test_expand_paths_if_needed_in_read_mode(create_files, path, out):
     assert [os.path.basename(p) for p in res] == out
 
 
+@pytest.mark.parametrize("mode", ["w", "w+", "x", "x+"])
+def test_expand_paths_if_needed_in_write_mode(mode):
+    d = str(tempfile.mkdtemp())
+    path = os.path.join(d, "part*.csv")
+
+    fs = fsspec.filesystem("file")
+    res = expand_paths_if_needed([path], mode, 2, fs, None)
+    assert [os.path.basename(p) for p in res] == ["part0.csv", "part1.csv"]
+
+
 def test_expand_error():
     with pytest.raises(ValueError):
         _expand_paths("*.*", None, 1)

@@ -1,6 +1,68 @@
 Changelog
 =========
 
+Dev
+---
+
+Enhancements
+
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#1904)
+
+Fixes
+
+- Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
+  not exist, as ``rm_file`` and the other filesystems do, so deleting a missing
+  key from a memory-backed mapper raises ``KeyError``
+
+- Create missing ZIP archives in append mode without truncating existing archives
+
+- Close cached readers when exiting an ``open_files`` context
+
+- Allow filesystem implementations to assign ``protocol`` per instance
+
+- Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
+  when pickling (#2102)
+
+- End the transaction even when a commit or discard raises, so the filesystem
+  is not left in transaction mode and deferred temporary files are cleaned up
+
+2026.7.0
+--------
+
+Enhancements
+
+- Single-pass ``MemoryFileSystem.find()`` to avoid O(n_dirs * n_entries) listing (#2055)
+- Permit composite URL protocol schemes in infer_storage_options (#2085)
+- Implement topdown in async walk() (#2052)
+
+Fixes
+
+- Make ``merge_offset_ranges`` `O(n log n)` and keep merged blocks within ``max_block``, replacing the quadratic nested-range filter added in #1982 (#2091)
+- Fix incorrect glob docstring for '[!]' (#2084)
+- Propagate storage_options to all backends resolved by GenericFileSystem (#2083)
+- Handle end=None in FirstChunkCache._fetch like the other caches (#2082)
+- Clamp read end to file size in BlockCache and BackgroundBlockCache(#2081)
+- Create the parent dir for "x" and "a" modes under auto_mkdir (#2079)
+- Expand paths for mode="x" when urlpath is a list (#2078)
+- fix: correctly pass 'start' and 'end' parameters to super().cat_file() (#2077)
+- Fix LocalFileSystem directory symlink removal (#2074)
+- Fix ArrowFSWrapper parent paths for S3 (#2072)
+- Fix get_file_extension when a parent directory name contains a dot (#2071)
+- tar: make members with duplicate slashes reachable via ls/find/glob (#2063)
+- MemoryFileSystem: create the file when appending to a missing path (#2062)
+
+Other
+
+- fixes for pytest deprecation (#2076)
+- Shut down background cache workers on file close (#2069)
+- Forward ls kwargs from cached filesystems (#2068)
+- Fix bare except: use except Exception in upload cleanup handler (#2067)
+- fix: Make Cached metaclass instance instantiation thread-safe and fork-safe (#2064)
+- ci: fix test collection in fsspec_friends job (#2061)
+- ftp: Make deprecated TLS versions optional (#2056)
+- restrict cache storage directory permissions to owner (#2048)
+
 2026.6.0
 --------
 

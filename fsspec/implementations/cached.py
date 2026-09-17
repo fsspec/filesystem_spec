@@ -469,8 +469,8 @@ class CachingFileSystem(ChainedFileSystem):
         close()
         f.closed = True
 
-    def ls(self, path, detail=True):
-        return self.fs.ls(path, detail)
+    def ls(self, path, detail=True, **kwargs):
+        return self.fs.ls(path, detail, **kwargs)
 
     def __getattribute__(self, item):
         if item in {
@@ -492,6 +492,7 @@ class CachingFileSystem(ChainedFileSystem):
             "_cat_file",
             "cat_ranges",
             "_cat_ranges",
+            "_local_paths_for_ranges",
             "get",
             "read_block",
             "tail",
@@ -853,6 +854,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
         logger.debug("async cat ranges %s", paths)
+        # _local_paths_for_ranges, but the validity check is a coroutine here
         paths = [self._strip_protocol(p) for p in paths]
         lpaths = []
         need = {}
@@ -998,14 +1000,34 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
         logger.debug("cat ranges %s", paths)
-        rpaths = [p for p in dict.fromkeys(paths) if not self._check_file(p)]
-        if rpaths:
-            lpaths = [os.path.join(self.storage[-1], self._mapper(p)) for p in rpaths]
-            _atomic_get(self.fs, rpaths, lpaths)
-        paths = [self._check_file(p) for p in paths]
+        lpaths, rpaths, download = self._local_paths_for_ranges(paths)
+        if download:
+            # not on_error=on_error, which get() forwards into get_file()
+            _atomic_get(self.fs, rpaths, download)
         return LocalFileSystem().cat_ranges(
-            paths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
+            lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
+
+    def _local_paths_for_ranges(self, paths):
+        """Cache file for each of paths, and which remote files to download
+
+        A path given more than once is downloaded once, and every occurrence
+        reads from the same cache file.
+        """
+        lpaths = []
+        local = {}
+        download = []
+        rpaths = []
+        for p in paths:
+            if p not in local:
+                fn = self._check_file(p)
+                if fn is None:
+                    fn = os.path.join(self.storage[-1], self._mapper(p))
+                    download.append(fn)
+                    rpaths.append(p)
+                local[p] = fn
+            lpaths.append(local[p])
+        return lpaths, rpaths, download
 
     def _get_cached_file_before_open(self, path, **kwargs):
         sha = self._mapper(path)

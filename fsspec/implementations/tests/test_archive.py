@@ -281,6 +281,19 @@ class TestAnyArchive:
             assert fs.ls("deeply/nested", detail=False) == ["deeply/nested/path"]
             assert fs.ls("deeply/nested/") == fs.ls("deeply/nested")
 
+    def test_ls_file_or_missing(self, scenario: ArchiveTestScenario):
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+
+            assert fs.ls("b", detail=False) == ["b"]
+            assert fs.ls("deeply/nested/path", detail=False) == ["deeply/nested/path"]
+            assert fs.ls("b") == [fs.info("b")]
+
+            with pytest.raises(FileNotFoundError):
+                fs.ls("i-do-not-exist")
+            with pytest.raises(FileNotFoundError):
+                fs.ls("deeply/i-do-not-exist")
+
     def test_find(self, scenario: ArchiveTestScenario):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
@@ -380,3 +393,35 @@ class TestAnyArchive:
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             assert fs.open("a").read() == b""
+
+    def test_get_does_not_write_above_destination(
+        self, scenario: ArchiveTestScenario, tmp_path
+    ):
+        # Member names come from the archive, so a name holding ".." must not
+        # place the copy above the destination the caller asked for.
+        data = {"readme.txt": b"ok", "../escaped.txt": b"escaped"}
+        dest = tmp_path / "dest"
+        dest.mkdir()
+        outside = tmp_path / "escaped.txt"
+
+        with scenario.provider(data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            with pytest.raises(ValueError, match="outside the destination"):
+                fs.get("*", str(dest), recursive=True)
+
+        assert not outside.exists(), f"copy wrote {outside}, above {dest}"
+
+    def test_get_keeps_dotdot_inside_destination(
+        self, scenario: ArchiveTestScenario, tmp_path
+    ):
+        # ".." that resolves within the destination stays a legitimate name.
+        data = {"plain.txt": b"ok", "a/b/../inner.txt": b"inner"}
+        dest = tmp_path / "dest"
+        dest.mkdir()
+
+        with scenario.provider(data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            fs.get("*", str(dest), recursive=True)
+
+        assert (dest / "plain.txt").read_bytes() == b"ok"
+        assert (dest / "a" / "inner.txt").read_bytes() == b"inner"

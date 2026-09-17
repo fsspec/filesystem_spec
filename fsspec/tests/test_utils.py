@@ -1,5 +1,8 @@
 import io
+import os
+import random
 import sys
+import time
 from pathlib import Path, PurePath
 from unittest.mock import Mock
 
@@ -8,9 +11,11 @@ import pytest
 import fsspec.utils
 from fsspec.utils import (
     can_be_local,
+    check_contained,
     common_prefix,
     get_file_extension,
     get_protocol,
+    glob_translate,
     infer_storage_options,
     merge_offset_ranges,
     mirror_from,
@@ -221,6 +226,13 @@ def test_infer_simple():
     assert out["protocol"] == "file"
     assert out["path"] == "//mnt/datasets/test.csv"
     assert out.get("host", None) is None
+
+
+def test_infer_composite_protocol():
+    out = infer_storage_options("foo+bar-baz://db.example.org")
+    assert out["protocol"] == "foo+bar-baz"
+    assert out["host"] == "db.example.org"
+    assert out["path"] == ""
 
 
 @pytest.mark.parametrize(
@@ -443,6 +455,178 @@ def test_merge_offset_ranges(max_gap, max_block):
     assert expect_ends == result_ends
 
 
+def test_merge_offset_ranges_drops_nested():
+    paths = ["f", "f", "f", "f", "g"]
+    starts = [0, 10, 0, 100, 0]
+    ends = [50, 20, 80, 150, 10]
+
+    result_paths, result_starts, result_ends = merge_offset_ranges(
+        paths, starts, ends, max_gap=0, max_block=None
+    )
+
+    assert result_paths == ["f", "f", "g"]
+    assert result_starts == [0, 100, 0]
+    assert result_ends == [80, 150, 10]
+
+
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize(
+    "starts,ends,expected",
+    [
+        # Exact duplicates: keep one
+        ([0, 0], [50, 50], [(0, 50)]),
+        # Nested range
+        ([0, 10], [80, 20], [(0, 80)]),
+        # None end covers to EOF
+        ([0, 0], [None, 50], [(0, None)]),
+        ([0, 0], [50, None], [(0, None)]),
+        # None end past max_block: keep separate
+        ([0, 50], [10, None], [(0, 10), (50, None)]),
+    ],
+)
+def test_merge_offset_ranges_edges(starts, ends, expected, sort):
+    result = merge_offset_ranges(
+        ["f"] * len(starts),
+        list(starts),
+        list(ends),
+        max_gap=100,
+        max_block=1000,
+        sort=sort,
+    )
+
+    assert list(zip(*result)) == [("f", *rng) for rng in expected]
+
+
+def test_merge_offset_ranges_sorts_unsorted_nested_ranges():
+    result = merge_offset_ranges(
+        ["f", "f"],
+        [10, 0],
+        [20, 80],
+        max_gap=100,
+        max_block=1000,
+        sort=True,
+    )
+
+    assert list(zip(*result)) == [("f", 0, 80)]
+
+
+@pytest.mark.parametrize(
+    "starts,ends",
+    [
+        # Range starting behind an already emitted block
+        ([0, 100, 5], [10, 110, 7]),
+        # Range nested inside an earlier block, not the current one
+        ([102, 267, 108], [174, 286, 152]),
+        # Fully reversed
+        ([200, 100, 0], [210, 110, 10]),
+    ],
+)
+def test_merge_offset_ranges_unsorted_keeps_coverage(starts, ends):
+    # `sort=False` with out-of-order input must still cover every range
+    result = merge_offset_ranges(
+        ["f"] * len(starts), list(starts), list(ends), max_gap=0, sort=False
+    )
+
+    blocks = list(zip(*result))
+    for start, end in zip(starts, ends):
+        assert any(
+            block_start <= start and end <= block_end
+            for _, block_start, block_end in blocks
+        )
+        assert all(block_end >= block_start for _, block_start, block_end in blocks)
+
+
+@pytest.mark.parametrize(
+    "max_block,expected",
+    [
+        # Overlaps merge when the block stays within `max_block`
+        (None, [(0, 40)]),
+        (128, [(0, 40)]),
+        # Merging (8, 40) would exceed `max_block`, so it becomes its own
+        # block, overlapping the first. (12, 20) is already covered by it
+        (4, [(0, 10), (8, 40)]),
+    ],
+)
+def test_merge_offset_ranges_overlap_respects_max_block(max_block, expected):
+    result = merge_offset_ranges(
+        ["f"] * 3, [0, 8, 12], [10, 40, 20], max_gap=0, max_block=max_block
+    )
+
+    assert list(zip(*result)) == [("f", *rng) for rng in expected]
+
+
+def test_merge_offset_ranges_covers_every_input_range():
+    # Every input must be covered, and no block may exceed max_block
+    # when every input range is itself smaller than max_block
+    rand = random.Random(42)
+    paths, starts, ends = [], [], []
+    for _ in range(200):
+        path = f"f{rand.randint(0, 2)}"
+        start = rand.randrange(0, 4000)
+        paths.append(path)
+        starts.append(start)
+        ends.append(start + rand.randrange(1, 500))
+
+    result = merge_offset_ranges(paths, starts, ends, max_gap=8, max_block=512)
+
+    blocks = sorted(zip(*result))
+    for _, block_start, block_end in blocks:
+        assert block_end - block_start <= 512
+
+    for path, start, end in zip(paths, starts, ends):
+        assert any(
+            path == block_path and block_start <= start and end <= block_end
+            for block_path, block_start, block_end in blocks
+        )
+
+
+def test_merge_offset_ranges_overlap_chain_is_bounded():
+    # Regression: chained overlaps each extended the open block, so the
+    # merged block grew past max_block without bound
+    n = 20_000
+    max_block = 8_192
+    starts = list(range(0, n * 100, 100))
+    ends = [s + 150 for s in starts]
+
+    result = merge_offset_ranges(
+        ["f"] * n, starts, ends, max_gap=0, max_block=max_block
+    )
+
+    blocks = list(zip(*result))
+    assert len(blocks) > 1
+    for _, block_start, block_end in blocks:
+        assert block_end - block_start <= max_block
+
+    for start, end in zip(starts, ends):
+        assert any(
+            block_start <= start and end <= block_end
+            for _, block_start, block_end in blocks
+        )
+
+
+def test_merge_offset_ranges_many_sequential_is_fast():
+    # Regression: O(n²) nested-range filter added in #1982
+    def run(n):
+        paths = ["file"] * n
+        starts = list(range(0, n * 240, 240))
+        ends = [s + 240 for s in starts]
+        t0 = time.perf_counter()
+        result = merge_offset_ranges(
+            paths, starts, ends, max_block=8_388_608, sort=True
+        )
+        return time.perf_counter() - t0, result, ends[-1]
+
+    large_elapsed, result, expected_end = run(20_000)
+    result_paths, result_starts, result_ends = result
+
+    # Generous ceiling: the linear implementation needs ~10ms here, while the
+    # quadratic one needs tens of seconds.
+    assert large_elapsed < 1.0
+    assert result_paths == ["file"]
+    assert result_starts == [0]
+    assert result_ends == [expected_end]
+
+
 def test_size():
     f = io.BytesIO(b"hello")
     assert fsspec.utils.file_size(f) == 5
@@ -483,3 +667,65 @@ def test_stringify_path(path, expected):
     path = fsspec.utils.stringify_path(path)
 
     assert path == expected
+
+
+@pytest.mark.parametrize(
+    "sep,altsep",
+    [
+        ("/", None),  # posix
+        ("\\", "/"),  # windows
+    ],
+)
+def test_glob_translate_does_not_depend_on_the_host_os(monkeypatch, sep, altsep):
+    # fsspec paths always use "/", so the pattern a given glob compiles to has to be
+    # the same everywhere. Deriving the separators from os.path made a backslash a
+    # separator on Windows only.
+    monkeypatch.setattr(os.path, "sep", sep)
+    monkeypatch.setattr(os.path, "altsep", altsep)
+
+    assert glob_translate("*") == r"(?s:[^/]+)\Z"
+    assert glob_translate("a/b*") == r"(?s:a/b[^/]*)\Z"
+    # a backslash is an ordinary character in a key, not a separator
+    assert glob_translate("we\\ird.txt") == r"(?s:we\\ird\.txt)\Z"
+
+
+def test_glob_matches_a_name_containing_a_backslash():
+    # A backslash is a legal character in an object store key. It must not be treated
+    # as a path separator, on any platform.
+    fs = fsspec.filesystem("memory")
+    for name in ["/data/plain.txt", "/data/we\\ird.txt"]:
+        with fs.open(name, "wb") as f:
+            f.write(b"x")
+
+    try:
+        assert sorted(fs.glob("/data/*")) == ["/data/plain.txt", "/data/we\\ird.txt"]
+        assert fs.glob("/data/we*") == ["/data/we\\ird.txt"]
+        assert sorted(fs.glob("/data/*.txt")) == [
+            "/data/plain.txt",
+            "/data/we\\ird.txt",
+        ]
+    finally:
+        fs.store.clear()
+
+
+@pytest.mark.parametrize(
+    "root, path, contained",
+    (
+        ("/dest", "/dest/inside.txt", True),
+        ("/dest", "/dest/a/b/inside.txt", True),
+        ("/dest", "/dest", True),
+        ("/dest", "/dest/a/../inside.txt", True),
+        ("/dest", "/escaped.txt", False),
+        ("/dest", "/dest/../escaped.txt", False),
+        # A sibling whose name starts with the root must not count as inside.
+        ("/dest", "/destination/escaped.txt", False),
+    ),
+)
+def test_check_contained(root, path, contained):
+    root = os.path.abspath(root)
+    path = os.path.abspath(path)
+    if contained:
+        check_contained(root, [path])
+    else:
+        with pytest.raises(ValueError, match="outside the destination"):
+            check_contained(root, [path])

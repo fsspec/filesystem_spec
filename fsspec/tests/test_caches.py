@@ -4,6 +4,7 @@ import string
 import pytest
 
 from fsspec.caching import (
+    BackgroundBlockCache,
     BlockCache,
     FirstChunkCache,
     MMapCache,
@@ -19,6 +20,7 @@ def test_cache_getitem(Cache_imp):
     assert cacher._fetch(0, 4) == b"abcd"
     assert cacher._fetch(None, 4) == b"abcd"
     assert cacher._fetch(2, 4) == b"cd"
+    assert cacher._fetch(0, None) == string.ascii_letters.encode()
 
 
 def test_block_cache_lru():
@@ -177,12 +179,24 @@ def test_cache_empty_file(Cache_imp):
     assert cache._fetch(0, 0) == b""
 
 
+def test_cache_fetch_past_end_of_file(Cache_imp):
+    # Reading past the end of the file returns the available bytes rather than
+    # raising: `read(n)` yields at most n bytes. BlockCache/BackgroundBlockCache
+    # used to overflow their block count and raise ValueError here.
+    blocksize = 5
+    size = len(string.ascii_letters)
+    cache = Cache_imp(blocksize, letters_fetcher, size)
+    assert cache._fetch(0, size + 3 * blocksize) == string.ascii_letters.encode()
+
+
 def test_cache_pickleable(Cache_imp):
     blocksize = 5
     size = 100
     cache = Cache_imp(blocksize, _fetcher, size)
     cache._fetch(0, 5)  # fill in cache
-    unpickled = pickle.loads(pickle.dumps(cache))
+    payload = pickle.dumps(cache)
+    assert cache._fetch(0, 10) == b"0" * 10
+    unpickled = pickle.loads(payload)
     assert isinstance(unpickled, Cache_imp)
     assert unpickled.blocksize == blocksize
     assert unpickled.size == size
@@ -290,6 +304,40 @@ def test_background(server, monkeypatch):
     f.read(1)
     time.sleep(0.1)  # second block is loading
     assert len(thread_ids) == 2
+
+
+def test_background_shutdown_on_close():
+    import weakref
+
+    from fsspec.spec import AbstractBufferedFile
+
+    data = b"abcdefgh"
+
+    class TestFile(AbstractBufferedFile):
+        DEFAULT_BLOCK_SIZE = 4
+
+        def _fetch_range(self, start, end):
+            return data[start:end]
+
+    f = TestFile(
+        None,
+        "test",
+        mode="rb",
+        cache_type="background",
+        size=len(data),
+    )
+    f.read(1)
+    cache = f.cache
+    assert isinstance(cache, BackgroundBlockCache)
+    cache_ref = weakref.ref(cache)
+    executor = cache._thread_executor
+    del cache
+
+    f.close()
+
+    with pytest.raises(RuntimeError, match="cannot schedule new futures"):
+        executor.submit(lambda: None)
+    assert cache_ref() is None
 
 
 def test_register_cache():
