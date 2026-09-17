@@ -1460,8 +1460,11 @@ class _AsyncMemoryFileSystem(AsyncFileSystemWrapper):
 
 
 class _AsyncUkeyFileSystem(_AsyncMemoryFileSystem):
-    def ukey(self, path):  # a sync override, like http's
-        return self.sync_fs.info(path)["size"]
+    def __init__(self, **kwargs):  # sync mode on the cache's loop, like s3fs
+        super().__init__(asynchronous=False, loop=asyncio.get_running_loop(), **kwargs)
+
+    def ukey(self, path):  # a sync override that re-enters the loop, like s3fs's
+        return self.info(path)["size"]
 
 
 def _async_caching_fs(protocol, cache_dir, cls=_AsyncMemoryFileSystem, **kwargs):
@@ -1529,7 +1532,7 @@ def test_partial_download_invisible_async(tmp_path, protocol):
         fs = _async_caching_fs(protocol, str(tmp_path))
         fs.fs._get_file = slow_get_file
         first = asyncio.create_task(fs._cat_file("memory://afile"))
-        await inflight.wait()
+        await asyncio.wait_for(inflight.wait(), 5)
         assert await fs._cat_file("memory://afile") == b"0123456789"
         assert await first == b"0123456789"
 
@@ -1644,7 +1647,7 @@ def test_filecache_async_cat_ranges_on_error(tmp_path):
         assert returned[0] == b"0123"
         assert isinstance(returned[1], FileNotFoundError)
         assert "missing" in str(returned[1])  # the remote error, not the local copy's
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(FileNotFoundError, match="/missing"):
             await fs._cat_ranges(
                 ["memory://missing", "memory://exists"],
                 [0, 0],

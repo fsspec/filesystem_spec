@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import os
@@ -691,10 +692,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         return fn
 
     async def _ukey_async(self, path):
-        # the default ukey calls sync info(), which fails in a running loop
+        # the default ukey calls sync info(), which fails in a running loop;
+        # an override may too (s3fs's does), so run it off the loop
         if type(self.fs).ukey is AbstractFileSystem.ukey:
             return sha256(str(await self.fs._info(path)).encode()).hexdigest()
-        return self.fs.ukey(path)
+        return await asyncio.to_thread(self.fs.ukey, path)
 
     async def _check_file_async(self, path):
         # _check_file, with the async-safe ukey for check_files
