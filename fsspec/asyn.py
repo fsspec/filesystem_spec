@@ -408,6 +408,7 @@ class AsyncFileSystem(AbstractFileSystem):
             paths1 = await self._expand_path(
                 path1, maxdepth=maxdepth, recursive=recursive
             )
+            all_paths1 = paths1
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
                 paths1 = [
@@ -425,12 +426,25 @@ class AsyncFileSystem(AbstractFileSystem):
                 (has_magic(path1) and source_is_file)
                 or (not has_magic(path1) and dest_is_dir and not trailing_sep(path1))
             )
-            paths2 = other_paths(
-                paths1,
-                path2,
-                exists=exists,
-                flatten=not source_is_str,
-            )
+            if source_is_str and recursive and not has_magic(path1):
+                # destinations are relative to the whole recursive expansion, which
+                # starts at the source itself: after the directories were dropped the
+                # remaining files may share a deeper prefix, or be a single file
+                selected = set(paths1)
+                paths2 = [
+                    p2
+                    for p, p2 in zip(
+                        all_paths1, other_paths(all_paths1, path2, exists=exists)
+                    )
+                    if p in selected
+                ]
+            else:
+                paths2 = other_paths(
+                    paths1,
+                    path2,
+                    exists=exists,
+                    flatten=not source_is_str,
+                )
 
         batch_size = batch_size or self.batch_size
         coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths1, paths2)]
@@ -597,6 +611,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 lpath = make_path_posix(lpath)
             fs = LocalFileSystem()
             lpaths = fs.expand_path(lpath, recursive=recursive, maxdepth=maxdepth)
+            all_lpaths = lpaths
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
                 lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
@@ -613,12 +628,25 @@ class AsyncFileSystem(AbstractFileSystem):
                 (has_magic(lpath) and source_is_file)
                 or (not has_magic(lpath) and dest_is_dir and not trailing_sep(lpath))
             )
-            rpaths = other_paths(
-                lpaths,
-                rpath,
-                exists=exists,
-                flatten=not source_is_str,
-            )
+            if source_is_str and recursive and not has_magic(lpath):
+                # destinations are relative to the whole recursive expansion, which
+                # starts at the source itself: after the directories were dropped the
+                # remaining files may share a deeper prefix, or be a single file
+                selected = set(lpaths)
+                rpaths = [
+                    p2
+                    for p, p2 in zip(
+                        all_lpaths, other_paths(all_lpaths, rpath, exists=exists)
+                    )
+                    if p in selected
+                ]
+            else:
+                rpaths = other_paths(
+                    lpaths,
+                    rpath,
+                    exists=exists,
+                    flatten=not source_is_str,
+                )
 
         is_dir = {l: os.path.isdir(l) for l in lpaths}
         rdirs = [r for l, r in zip(lpaths, rpaths) if is_dir[l]]
@@ -676,6 +704,7 @@ class AsyncFileSystem(AbstractFileSystem):
             rpaths = await self._expand_path(
                 rpath, recursive=recursive, maxdepth=maxdepth
             )
+            all_rpaths = rpaths
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
                 rpaths = [
@@ -694,12 +723,25 @@ class AsyncFileSystem(AbstractFileSystem):
                 (has_magic(rpath) and source_is_file)
                 or (not has_magic(rpath) and dest_is_dir and source_not_trailing_sep)
             )
-            lpaths = other_paths(
-                rpaths,
-                lpath,
-                exists=exists,
-                flatten=not source_is_str,
-            )
+            if source_is_str and recursive and not has_magic(rpath):
+                # destinations are relative to the whole recursive expansion, which
+                # starts at the source itself: after the directories were dropped the
+                # remaining files may share a deeper prefix, or be a single file
+                selected = set(rpaths)
+                lpaths = [
+                    p2
+                    for p, p2 in zip(
+                        all_rpaths, other_paths(all_rpaths, lpath, exists=exists)
+                    )
+                    if p in selected
+                ]
+            else:
+                lpaths = other_paths(
+                    rpaths,
+                    lpath,
+                    exists=exists,
+                    flatten=not source_is_str,
+                )
             if isinstance(lpath, str):
                 # The names came from the source listing; ".." in one of them
                 # would otherwise place the copy above the destination. When
