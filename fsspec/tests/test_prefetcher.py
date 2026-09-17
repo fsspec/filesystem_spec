@@ -713,7 +713,7 @@ def test_local_seek_optimization(prefetcher_factory):
     assert fetcher.call_count > calls_after_next
 
 
-@mock.patch("fsspec.prefetcher.HAS_CPYTHON_API", False)
+@mock.patch("fsspec.utils.HAS_CPYTHON_API", False)
 def test_fast_slice_pypy_fallback():
     """
     Tests that when HAS_CPYTHON_API is False (e.g., on PyPy), _fast_slice
