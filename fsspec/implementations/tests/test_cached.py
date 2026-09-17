@@ -1469,3 +1469,43 @@ def test_simplecache_cat_ranges_downloads_uncached(tmp_path):
     out = fs.cat_ranges(paths, [0, 5, 1], [2, 8, 3], on_error="raise")
     assert out == [b"01", b"567", b"bc"]
     assert len(os.listdir(tmp_path)) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+async def test_async_cat_ranges_downloads_uncached(tmp_path, protocol):
+    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+
+    m = fsspec.filesystem("memory")
+    m.pipe({"/cat_ranges/one": b"0123456789", "/cat_ranges/two": b"abcdef"})
+    target = AsyncFileSystemWrapper(m, asynchronous=True)
+    fs = fsspec.filesystem(
+        protocol,
+        fs=target,
+        cache_storage=str(tmp_path),
+        asynchronous=True,
+        skip_instance_cache=True,
+    )
+    paths = ["/cat_ranges/one", "/cat_ranges/one", "/cat_ranges/two"]
+    out = await fs._cat_ranges(paths, [0, 5, 1], [2, 8, 3], on_error="raise")
+    assert out == [b"01", b"567", b"bc"]
+    # a second call reads the files downloaded by the first one
+    assert await fs._cat_ranges(paths[:1], [8], [10]) == [b"89"]
+
+
+def test_simplecache_cat_ranges_target_get_file_without_on_error(tmp_path):
+    class StrictGetFile(fsspec.implementations.memory.MemoryFileSystem):
+        # like HTTPFileSystem in http_sync: no **kwargs on get_file
+        def get_file(self, rpath, lpath, callback=None, outfile=None):
+            with open(lpath, "wb") as f:
+                f.write(self.cat_file(rpath))
+
+    target = StrictGetFile(skip_instance_cache=True)
+    target.pipe("/cat_ranges/one", b"0123456789")
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=target,
+        cache_storage=str(tmp_path),
+        skip_instance_cache=True,
+    )
+    assert fs.cat_ranges(["/cat_ranges/one"], [0], [3]) == [b"012"]
