@@ -100,6 +100,23 @@ class SFTPFileSystem(AbstractFileSystem):
         stat["name"] = path
         return stat
 
+    def created(self, path):
+        """Return the created timestamp of a file as a datetime.datetime"""
+        # The API does not provide creation time, so we use modification time
+        info = self.info(path)
+        mtime = info.get("mtime", None)
+        if mtime is not None:
+            return mtime
+        raise RuntimeError("Could not retrieve creation time (modification time).")
+
+    def modified(self, path):
+        """Return the modified timestamp of a file as a datetime.datetime"""
+        info = self.info(path)
+        mtime = info.get("mtime", None)
+        if mtime is not None:
+            return mtime
+        raise RuntimeError("Could not retrieve modification time.")
+
     @staticmethod
     def _decode_stat(stat, parent_path=None):
         if S_ISDIR(stat.st_mode):

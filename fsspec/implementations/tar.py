@@ -23,6 +23,11 @@ class TarFileSystem(AbstractArchiveFileSystem):
     protocol = "tar"
     cachable = False
 
+    @classmethod
+    def _strip_protocol(cls, path):
+        # file paths are always relative to the archive root
+        return super()._strip_protocol(path).lstrip("/")
+
     def __init__(
         self,
         fo="",
@@ -99,10 +104,26 @@ class TarFileSystem(AbstractArchiveFileSystem):
             # Collapse duplicate slashes in the filesystem-facing name.
             name = re.sub("/+", "/", orig_name)
             info["name"] = name
+            if ti.islnk() or ti.issym():
+                # extractfile follows links, so report the size of the target
+                info["size"] = self._link_target_size(ti)
             out[name] = (info, ti.offset_data, orig_name)
 
         self.index = out
         # TODO: save index to self.index_store here, if set
+
+    def _link_target_size(self, ti):
+        seen = set()
+        while ti.islnk() or ti.issym():
+            if ti.name in seen:
+                return 0
+            seen.add(ti.name)
+            try:
+                ti = self.tar._find_link_target(ti)
+            except KeyError:
+                # dangling link; opening it fails as well
+                return 0
+        return ti.size
 
     def _get_dirs(self):
         if self.dir_cache is not None:
@@ -122,10 +143,16 @@ class TarFileSystem(AbstractArchiveFileSystem):
             raise ValueError("Read-only filesystem implementation")
         # Accept paths containing the archive's duplicate slashes too.
         path = re.sub("/+", "/", path)
-        details, _, orig_name = self.index[path]
+        try:
+            details, _, orig_name = self.index[path]
+        except KeyError as exc:
+            raise FileNotFoundError(path) from exc
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
-        return self.tar.extractfile(orig_name)
+        out = self.tar.extractfile(orig_name)
+        # cat_file needs the size to resolve negative offsets, as zip provides.
+        out.size = details["size"]
+        return out
 
     def close(self):
         """Commits any write changes to the file. Done on ``del`` too."""

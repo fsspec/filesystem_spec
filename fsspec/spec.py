@@ -10,7 +10,7 @@ import weakref
 from errno import ESPIPE
 from glob import has_magic
 from hashlib import sha256
-from typing import Any, ClassVar
+from typing import Any
 
 from .callbacks import DEFAULT_CALLBACK
 from .config import apply_config, conf
@@ -18,6 +18,7 @@ from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
     _unstrip_protocol,
+    check_contained,
     glob_translate,
     isfilelike,
     other_paths,
@@ -159,7 +160,9 @@ class AbstractFileSystem(metaclass=_Cached):
     _cached = False
     blocksize = 2**22
     sep = "/"
-    protocol: ClassVar[str | tuple[str, ...]] = "abstract"
+    # Implementations may select their protocol per instance (for example, a
+    # single adapter class backed by different storage implementations).
+    protocol: str | tuple[str, ...] = "abstract"
     _latest = None
     async_impl = False
     mirror_sync_methods = False
@@ -792,7 +795,7 @@ class AbstractFileSystem(metaclass=_Cached):
         """Is this entry file-like?"""
         try:
             return self.info(path)["type"] == "file"
-        except:  # noqa: E722
+        except Exception:
             return False
 
     def read_text(self, path, encoding=None, errors=None, newline=None, **kwargs):
@@ -969,21 +972,25 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             return self.cat_file(paths[0], **kwargs)
 
-    def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, outfile=None, **kwargs):
+    def get_file(
+        self, rpath, lpath=None, callback=DEFAULT_CALLBACK, outfile=None, **kwargs
+    ):
         """Copy single remote file to local"""
         from .implementations.local import LocalFileSystem
 
-        if isfilelike(lpath):
+        if outfile is None and isfilelike(lpath):
             outfile = lpath
-        elif self.isdir(rpath):
+        elif outfile is None and self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
             return None
 
-        fs = LocalFileSystem(auto_mkdir=True)
-        fs.makedirs(fs._parent(lpath), exist_ok=True)
+        if outfile is None:
+            fs = LocalFileSystem(auto_mkdir=True)
+            fs.makedirs(fs._parent(lpath), exist_ok=True)
 
         with self.open(rpath, "rb", **kwargs) as f1:
-            if outfile is None:
+            close_outfile = outfile is None
+            if close_outfile:
                 outfile = open(lpath, "wb")
 
             try:
@@ -996,7 +1003,7 @@ class AbstractFileSystem(metaclass=_Cached):
                         segment_len = len(data)
                     callback.relative_update(segment_len)
             finally:
-                if not isfilelike(lpath):
+                if close_outfile:
                     outfile.close()
 
     def get(
@@ -1057,6 +1064,11 @@ class AbstractFileSystem(metaclass=_Cached):
                 exists=exists,
                 flatten=not source_is_str,
             )
+            if isinstance(lpath, str):
+                # The names came from the source listing; ".." in one of them
+                # would otherwise place the copy above the destination. When
+                # lpath is a list the caller named every destination itself.
+                check_contained(lpath, lpaths)
 
         callback.set_size(len(lpaths))
         for lpath, rpath in callback.wrap(zip(lpaths, rpaths)):
@@ -1163,7 +1175,8 @@ class AbstractFileSystem(metaclass=_Cached):
     def tail(self, path, size=1024):
         """Get the last ``size`` bytes from file"""
         with self.open(path, "rb") as f:
-            f.seek(max(-size, -f.size), 2)
+            f.seek(0, 2)
+            f.seek(max(f.tell() - size, 0))
             return f.read()
 
     def cp_file(self, path1, path2, **kwargs):
@@ -1297,15 +1310,14 @@ class AbstractFileSystem(metaclass=_Cached):
         raise NotImplementedError
 
     def rm(self, path, recursive=False, maxdepth=None):
-        """Delete files.
+        """Delete files or directories.
 
         Parameters
         ----------
         path: str or list of str
-            File(s) to delete.
+            Files or directories to delete.
         recursive: bool
-            If file(s) are directories, recursively delete contents and then
-            also remove the directory
+            If True, recursively delete directories and their contents.
         maxdepth: int or None
             Depth to pass to walk for finding files to delete, if recursive.
             If None, there will be no limit and infinite recursion may be
@@ -1410,6 +1422,8 @@ class AbstractFileSystem(metaclass=_Cached):
                 cache_options=cache_options,
                 **kwargs,
             )
+            if not ac and "r" not in mode:
+                self.transaction.files.append(f)
             if compression is not None:
                 from fsspec.compression import compr
                 from fsspec.core import get_compression
@@ -1417,9 +1431,6 @@ class AbstractFileSystem(metaclass=_Cached):
                 compression = get_compression(path, compression)
                 compress = compr[compression]
                 f = compress(f, mode=mode[0])
-
-            if not ac and "r" not in mode:
-                self.transaction.files.append(f)
             return f
 
     def touch(self, path, truncate=True, **kwargs):

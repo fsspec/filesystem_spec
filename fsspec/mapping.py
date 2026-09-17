@@ -1,6 +1,7 @@
 import array
 import logging
 import posixpath
+import uuid
 import warnings
 from collections.abc import MutableMapping
 from functools import cached_property
@@ -8,6 +9,7 @@ from functools import cached_property
 from fsspec.core import url_to_fs
 
 logger = logging.getLogger("fsspec.mapping")
+_MISSING = object()
 
 
 class FSMap(MutableMapping):
@@ -60,8 +62,9 @@ class FSMap(MutableMapping):
                     f"Path {root} does not exist. Create "
                     f" with the ``create=True`` keyword"
                 )
-            self.fs.touch(root + "/a")
-            self.fs.rm(root + "/a")
+            check_path = f"{root}/{uuid.uuid4().hex}"
+            self.fs.touch(check_path)
+            self.fs.rm(check_path)
 
     @cached_property
     def dirfs(self):
@@ -159,9 +162,14 @@ class FSMap(MutableMapping):
             raise KeyError(key) from exc
         return result
 
-    def pop(self, key, default=None):
+    def pop(self, key, default=_MISSING):
         """Pop data"""
-        result = self.__getitem__(key, default)
+        try:
+            result = self[key]
+        except KeyError:
+            if default is _MISSING:
+                raise
+            return default
         try:
             del self[key]
         except KeyError:

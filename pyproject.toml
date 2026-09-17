@@ -116,6 +116,7 @@ test_downstream = [
     "moto[server]>4,<5",
     "pytest-timeout",
     "xarray",
+    "zarr",
     "aiobotocore>=2.5.4,<3.0.0",
 ]
 

@@ -291,3 +291,62 @@ def test_ls_with_duplicate_slashes(compression: str, tmp_path: Path):
         # It can be opened both by its normalised name and its original name.
         assert fs.cat("path/with/extra/slash/test.txt") == b"Hello slash!"
         assert fs.cat("path/with/extra/slash//test.txt") == b"Hello slash!"
+
+
+@pytest.fixture
+def tar_with_one_member(tmp_path):
+    path = tmp_path / "archive.tar"
+    data = b"data"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("present.txt")
+        info.size = len(data)
+        tar.addfile(info, BytesIO(data))
+    return path
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda fs: fs.open("missing.txt").read(),
+        lambda fs: fs.cat("missing.txt"),
+    ],
+    ids=["open", "cat"],
+)
+def test_reading_missing_member_raises_file_not_found(tar_with_one_member, read):
+    fs = TarFileSystem(str(tar_with_one_member))
+    assert fs.cat("present.txt") == b"data"
+    with pytest.raises(FileNotFoundError):
+        read(fs)
+
+
+@pytest.mark.parametrize(
+    "start, end, expected",
+    [(-2, None, b"ta"), (1, -1, b"at"), (None, -3, b"d")],
+)
+def test_cat_file_negative_offsets(tar_with_one_member, start, end, expected):
+    fs = TarFileSystem(str(tar_with_one_member))
+    assert fs.cat_file("present.txt", start=start, end=end) == expected
+
+
+def test_links_report_target_size(tmp_path: Path):
+    path = tmp_path / "links.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("d/f")
+        info.size = 5
+        tar.addfile(info, BytesIO(b"hello"))
+        for name, kind, target in [
+            ("d/sym", tarfile.SYMTYPE, "f"),
+            ("hard", tarfile.LNKTYPE, "d/f"),
+            ("dangling", tarfile.SYMTYPE, "missing"),
+        ]:
+            info = tarfile.TarInfo(name)
+            info.type = kind
+            info.linkname = target
+            tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    for name in ["d/sym", "hard"]:
+        assert fs.size(name) == 5
+        assert fs.cat_file(name, start=-2) == b"lo"
+        assert fs.read_block(name, 1, 3) == b"ell"
+    assert fs.size("dangling") == 0

@@ -955,6 +955,36 @@ def test_again(protocol):
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("raise_in_context", [False, True])
+def test_multi_cache_closes_readers(tmp_path, m, protocol, raise_in_context):
+    m.pipe({"/first": b"first", "/second": b"second"})
+    open_files = fsspec.open_files(
+        [f"{protocol}::memory:///{name}" for name in ["first", "second"]],
+        cache_storage=str(tmp_path),
+    )
+
+    # Re-entering the context should close both cold- and warm-cache readers.
+    for _ in range(2):
+        try:
+            with open_files as files:
+                assert [f.read() for f in files] == [b"first", b"second"]
+                assert all(not f.closed for f in files)
+                if raise_in_context:
+                    raise RuntimeError("consumer failed")
+        except RuntimeError as exc:
+            assert raise_in_context
+            assert str(exc) == "consumer failed"
+        else:
+            assert not raise_in_context
+        try:
+            assert all(f.closed for f in files)
+        finally:
+            # Also release the descriptors when this regression fails.
+            for f in files:
+                f.close()
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_multi_cache(protocol):
     with fsspec.open_files("memory://file*", "wb", num=2) as files:
         for f in files:
@@ -1413,3 +1443,29 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     for attr in ("_cat_file", "_cat_ranges"):
         assert hasattr(fs, attr), f"instance missing {attr}"
         assert hasattr(type(fs), attr), f"class missing {attr}"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_whole_file_cache_tail(tmp_path, protocol):
+    fsspec.filesystem("memory").pipe("/tail/file", b"0123456789")
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    assert fs.tail("/tail/file", 3) == b"789"
+    # a size at or beyond the file length returns the whole file rather than
+    # seeking before the start, which plain local files reject
+    assert fs.tail("/tail/file", 10) == b"0123456789"
+    assert fs.tail("/tail/file", 20) == b"0123456789"
+    assert fs.tail("/tail/file", 0) == b""
+
+
+def test_simplecache_cat_ranges_downloads_uncached(tmp_path):
+    m = fsspec.filesystem("memory")
+    m.pipe({"/cat_ranges/one": b"0123456789", "/cat_ranges/two": b"abcdef"})
+    fs = fsspec.filesystem(
+        "simplecache", target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    paths = ["/cat_ranges/one", "/cat_ranges/one", "/cat_ranges/two"]
+    out = fs.cat_ranges(paths, [0, 5, 1], [2, 8, 3], on_error="raise")
+    assert out == [b"01", b"567", b"bc"]
+    assert len(os.listdir(tmp_path)) == 2

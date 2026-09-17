@@ -12,7 +12,9 @@ try:
 except ImportError:
     pq = None
 
+from fsspec.core import url_to_fs
 from fsspec.parquet import (
+    _get_parquet_byte_ranges,
     open_parquet_file,
     open_parquet_files,
 )
@@ -146,6 +148,36 @@ def test_with_filter(tmpdir):
 
     result = pd.read_parquet(f, engine="fastparquet", filters=[["b", "==", "b"]])
     pd.testing.assert_frame_equal(expect, result)
+
+
+@pytest.mark.filterwarnings("ignore:.*Not enough data.*")
+@FASTPARQUET_MARK
+def test_metadata_row_group_order(tmpdir):
+    # A list of row-group metadata objects is iterated in the caller's
+    # order, so the collected byte ranges can descend. Every range must
+    # still be fetched, whatever the order
+    df = pd.DataFrame({"a": range(20), "b": ["x"] * 20})
+    fn = os.path.join(str(tmpdir), "test.parquet")
+    df.to_parquet(fn, engine="fastparquet", row_group_offsets=[0, 10])
+
+    pf = fastparquet.ParquetFile(fn)
+    fs, path = url_to_fs(fn)
+    row_groups = list(pf.row_groups)[::-1]
+
+    ranges = _get_parquet_byte_ranges(
+        [path], fs, metadata=pf, row_groups=row_groups, engine="fastparquet"
+    )
+
+    covered = set()
+    for blocks in ranges.values():
+        for start, end in blocks:
+            covered.update(range(start, end))
+
+    for row_group in row_groups:
+        for column in row_group.columns:
+            meta = column.meta_data
+            start = meta.dictionary_page_offset or meta.data_page_offset
+            assert set(range(start, start + meta.total_compressed_size)) <= covered
 
 
 @pytest.mark.filterwarnings("ignore:.*Not enough data.*")

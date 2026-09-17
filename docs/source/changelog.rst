@@ -1,6 +1,32 @@
 Changelog
 =========
 
+Dev
+---
+
+Enhancements
+
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#1904)
+
+Fixes
+
+- Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
+  not exist, as ``rm_file`` and the other filesystems do, so deleting a missing
+  key from a memory-backed mapper raises ``KeyError``
+
+- Create missing ZIP archives in append mode without truncating existing archives
+
+- Close cached readers when exiting an ``open_files`` context
+
+- Allow filesystem implementations to assign ``protocol`` per instance
+
+- Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
+  when pickling (#2102)
+
+- End the transaction even when a commit or discard raises, so the filesystem
+  is not left in transaction mode and deferred temporary files are cleaned up
+
 2026.7.0
 --------
 
@@ -12,6 +38,7 @@ Enhancements
 
 Fixes
 
+- Make ``merge_offset_ranges`` `O(n log n)` and keep merged blocks within ``max_block``, replacing the quadratic nested-range filter added in #1982 (#2091)
 - Fix incorrect glob docstring for '[!]' (#2084)
 - Propagate storage_options to all backends resolved by GenericFileSystem (#2083)
 - Handle end=None in FirstChunkCache._fetch like the other caches (#2082)
