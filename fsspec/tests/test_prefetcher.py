@@ -1018,4 +1018,3 @@ def test_close_and_aclose_idempotence(prefetcher_factory):
         assert bp2.is_stopped
 
     fsspec.asyn.sync(loop, run_aclose_twice)
-

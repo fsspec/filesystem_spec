@@ -191,7 +191,7 @@ def sync_teardown(
         future = asyncio.run_coroutine_threadsafe(coro, loop)
     except RuntimeError:
         coro.close()
-        raise RuntimeError(f"Skipping {description}: event loop is closed.")
+        raise RuntimeError(f"Skipping {description}: event loop is closed.") from None
 
     if timeout is not None and timeout <= 0:
         return
@@ -199,7 +199,9 @@ def sync_teardown(
     try:
         return future.result(timeout)
     except concurrent.futures.TimeoutError:
-        raise FSTimeoutError(f"{description} did not complete within {timeout}s.")
+        raise FSTimeoutError(
+            f"{description} did not complete within {timeout}s."
+        ) from None
 
 
 def sync_wrapper(func, obj=None):

@@ -854,4 +854,3 @@ def _fast_slice(src_bytes: bytes, offset: int, read_size: int) -> bytes:
     else:
         # Standard fallback for PyPy/non-CPython
         return src_bytes[offset : offset + read_size]
-

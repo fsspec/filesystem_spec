@@ -5,7 +5,7 @@ from collections import deque
 
 from . import asyn as fsspec_asyn
 from .asyn import sync_teardown
-from .utils import HAS_CPYTHON_API, _fast_slice
+from .utils import _fast_slice
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +204,9 @@ class PrefetchProducer:
             self._producer_task.cancel()
             tasks_to_wait.append(self._producer_task)
 
-        tasks_to_wait.extend(task for task in list(self._active_tasks) if not task.done())
+        tasks_to_wait.extend(
+            task for task in list(self._active_tasks) if not task.done()
+        )
 
         # We do not cancel the network task, instead we wait on them.
         # This is intentionally done to avoid MRD stream disruption.
@@ -266,9 +268,7 @@ class PrefetchProducer:
         except asyncio.CancelledError:
             logger.debug("PrefetchProducer loop was cancelled.")
         except Exception as e:
-            logger.exception(
-                "PrefetchProducer loop encountered an unexpected error."
-            )
+            logger.exception("PrefetchProducer loop encountered an unexpected error.")
             self.is_stopped = True
             self.orchestrator.set_error(e)
             await self.queue.put(e)
