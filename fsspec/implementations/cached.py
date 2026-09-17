@@ -780,13 +780,37 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             size = -1 if end is None else end - f.tell()
             return f.read(size)
 
+    def _local_paths_for_ranges(self, paths):
+        """Cache file for each of paths, and which remote files to download
+
+        A path given more than once is downloaded once, and every occurrence
+        reads from the same cache file.
+        """
+        lpaths = []
+        local = {}
+        download = []
+        rpaths = []
+        for p in paths:
+            if p not in local:
+                detail = self._check_file(p)
+                if not detail:
+                    fn = os.path.join(self.storage[-1], self._mapper(p))
+                    download.append(fn)
+                    rpaths.append(p)
+                else:
+                    # filecache returns (detail, fn), simplecache just fn
+                    fn = detail[1] if isinstance(detail, tuple) else detail
+                local[p] = fn
+            lpaths.append(local[p])
+        return lpaths, rpaths, download
+
     async def _cat_ranges(
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
         logger.debug("async cat ranges %s", paths)
         lpaths, rpaths, download = self._local_paths_for_ranges(paths)
         if download:
-            await self.fs._get(rpaths, download, on_error=on_error)
+            await self.fs._get(rpaths, download)
 
         return LocalFileSystem().cat_ranges(
             lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
@@ -902,31 +926,10 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         logger.debug("cat ranges %s", paths)
         lpaths, rpaths, download = self._local_paths_for_ranges(paths)
         if download:
-            self.fs.get(rpaths, download, on_error=on_error)
+            self.fs.get(rpaths, download)
         return LocalFileSystem().cat_ranges(
             lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
-
-    def _local_paths_for_ranges(self, paths):
-        """Cache file for each of paths, and which remote files to download
-
-        A path given more than once is downloaded once, and every occurrence
-        reads from the same cache file.
-        """
-        lpaths = []
-        local = {}
-        download = []
-        rpaths = []
-        for p in paths:
-            if p not in local:
-                fn = self._check_file(p)
-                if fn is None:
-                    fn = os.path.join(self.storage[-1], self._mapper(p))
-                    download.append(fn)
-                    rpaths.append(p)
-                local[p] = fn
-            lpaths.append(local[p])
-        return lpaths, rpaths, download
 
     def _get_cached_file_before_open(self, path, **kwargs):
         sha = self._mapper(path)

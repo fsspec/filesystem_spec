@@ -507,6 +507,48 @@ def test_walk(dirfs):
     dirfs.fs.walk.assert_called_once_with(f"{PATH}/root", *ARGS, **KWARGS)
 
 
+def test_walk_detail(dirfs):
+    dirfs.fs.walk.return_value = iter(
+        [
+            (
+                f"{PATH}/root",
+                {"foo": {"name": f"{PATH}/root/foo", "type": "directory"}},
+                {"baz": {"name": f"{PATH}/root/baz", "type": "file"}},
+            )
+        ]
+    )
+
+    assert list(dirfs.walk("root", detail=True)) == [
+        (
+            "root",
+            {"foo": {"name": "root/foo", "type": "directory"}},
+            {"baz": {"name": "root/baz", "type": "file"}},
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_async_walk_detail(adirfs, mocker):
+    async def _walk(path, *args, **kwargs):
+        yield (
+            f"{PATH}/root",
+            {"foo": {"name": f"{PATH}/root/foo", "type": "directory"}},
+            {"baz": {"name": f"{PATH}/root/baz", "type": "file"}},
+        )
+
+    adirfs.fs._walk = mocker.MagicMock()
+    adirfs.fs._walk.side_effect = _walk
+
+    actual = [entry async for entry in adirfs._walk("root", detail=True)]
+    assert actual == [
+        (
+            "root",
+            {"foo": {"name": "root/foo", "type": "directory"}},
+            {"baz": {"name": "root/baz", "type": "file"}},
+        )
+    ]
+
+
 @pytest.mark.asyncio
 async def test_async_glob(adirfs):
     adirfs.fs._glob.return_value = [f"{PATH}/one", f"{PATH}/two"]
