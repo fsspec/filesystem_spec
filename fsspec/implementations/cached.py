@@ -883,12 +883,14 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         # _local_paths_for_ranges, but the validity check is a coroutine here
         paths = [self._strip_protocol(p) for p in paths]
         lpaths = []
+        local = {}
         need = {}
         for p in paths:
-            fn = await self._check_file_async(p)
-            if not fn:
-                fn = need.setdefault(p, os.path.join(self.storage[-1], self._mapper(p)))
-            lpaths.append(fn)
+            if p not in local:
+                local[p] = await self._check_file_async(p) or need.setdefault(
+                    p, os.path.join(self.storage[-1], self._mapper(p))
+                )
+            lpaths.append(local[p])
         errors = {}
         if need:
             # not self.fs._get: each download needs its own temp file
@@ -898,9 +900,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 return_exceptions=True,
             )
             errors = {p: e for p, e in zip(need, results) if isinstance(e, Exception)}
+            self.save_cache()
             if errors and on_error == "raise":
                 raise next(iter(errors.values()))
-            self.save_cache()
 
         out = LocalFileSystem().cat_ranges(
             lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
