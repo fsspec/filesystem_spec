@@ -493,3 +493,64 @@ async def test_isfile_does_not_swallow_cancellation():
         await fs._isdir("path")
     with pytest.raises(asyncio.CancelledError):
         await fs._isfile("path")
+
+
+class _MemoryBackedAsyncFS(fsspec.asyn.AsyncFileSystem):
+    # the async implementations of copy/get/put, on top of a memory store
+    cachable = False
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.m = fsspec.filesystem("memory", skip_instance_cache=True)
+        self.m.store = {}
+        self.m.pseudo_dirs = [""]
+
+    async def _ls(self, path, detail=True, **kwargs):
+        return self.m.ls(path, detail=detail)
+
+    async def _info(self, path, **kwargs):
+        return self.m.info(path)
+
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        return self.m.cat_file(path, start=start, end=end)
+
+    async def _pipe_file(self, path, data, **kwargs):
+        self.m.pipe_file(path, data)
+
+    async def _cp_file(self, path1, path2, **kwargs):
+        self.m.cp_file(path1, path2)
+
+    async def _put_file(self, lpath, rpath, **kwargs):
+        self.m.put_file(lpath, rpath)
+
+    async def _get_file(self, rpath, lpath, **kwargs):
+        self.m.get_file(rpath, lpath)
+
+
+@pytest.mark.parametrize(
+    "files, maxdepth, expected",
+    [
+        (["one", "sub/deep"], 1, ["one"]),
+        (["sub/a", "sub/b", "sub/nested/c"], 2, ["sub/a", "sub/b"]),
+    ],
+)
+def test_recursive_maxdepth_keeps_tree(tmp_path, files, maxdepth, expected):
+    from fsspec.implementations.local import LocalFileSystem, make_path_posix
+
+    fs = _MemoryBackedAsyncFS()
+    fs.m.pipe({f"/source/{f}": b"data" for f in files})
+    for f in files:
+        (tmp_path / "source" / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "source" / f).write_bytes(b"data")
+
+    fs.copy("/source", "/copied", recursive=True, maxdepth=maxdepth)
+    assert fs.m.find("/copied") == [f"/copied/{f}" for f in expected]
+
+    fs.put(str(tmp_path / "source"), "/put", recursive=True, maxdepth=maxdepth)
+    assert fs.m.find("/put") == [f"/put/{f}" for f in expected]
+
+    target = tmp_path / "got"
+    fs.get("/source", str(target), recursive=True, maxdepth=maxdepth)
+    assert LocalFileSystem().find(str(target)) == [
+        make_path_posix(str(target / f)) for f in expected
+    ]

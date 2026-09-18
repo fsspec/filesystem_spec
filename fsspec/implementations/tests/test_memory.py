@@ -672,3 +672,32 @@ def test_mapper_delitem_missing_key_raises_keyerror(m):
     del mapper["present"]
     with pytest.raises(KeyError):
         del mapper["missing"]
+
+
+@pytest.mark.parametrize(
+    "files, maxdepth, expected",
+    [
+        # a single file within maxdepth
+        (["one", "sub/deep"], 1, ["one"]),
+        # all files within maxdepth are in one subdirectory
+        (["sub/a", "sub/b", "sub/nested/c"], 2, ["sub/a", "sub/b"]),
+    ],
+)
+def test_recursive_maxdepth_keeps_tree(m, tmp_path, files, maxdepth, expected):
+    m.pipe({f"/source/{f}": b"data" for f in files})
+    for f in files:
+        (tmp_path / "source" / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "source" / f).write_bytes(b"data")
+
+    m.copy("/source", "/copied", recursive=True, maxdepth=maxdepth)
+    assert m.find("/copied") == [f"/copied/{f}" for f in expected]
+
+    m.put(str(tmp_path / "source"), "/put", recursive=True, maxdepth=maxdepth)
+    assert m.find("/put") == [f"/put/{f}" for f in expected]
+
+    target = tmp_path / "got"
+    m.get("/source", str(target), recursive=True, maxdepth=maxdepth)
+    local = LocalFileSystem()
+    assert local.find(str(target)) == [
+        make_path_posix(str(target / f)) for f in expected
+    ]
