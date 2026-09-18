@@ -338,13 +338,31 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
         return self._relpath(ret)
 
+    def _relpath_walk_entries(self, entries):
+        # with detail=True, walk gives dicts keyed by basename whose infos
+        # still carry the full name in the wrapped filesystem
+        if not isinstance(entries, dict):
+            return entries
+        return {
+            name: {**info, "name": self._relpath(info["name"])}
+            for name, info in entries.items()
+        }
+
     async def _walk(self, path, *args, **kwargs):
         async for root, dirs, files in self.fs._walk(self._join(path), *args, **kwargs):
-            yield self._relpath(root), dirs, files
+            yield (
+                self._relpath(root),
+                self._relpath_walk_entries(dirs),
+                self._relpath_walk_entries(files),
+            )
 
     def walk(self, path, *args, **kwargs):
         for root, dirs, files in self.fs.walk(self._join(path), *args, **kwargs):
-            yield self._relpath(root), dirs, files
+            yield (
+                self._relpath(root),
+                self._relpath_walk_entries(dirs),
+                self._relpath_walk_entries(files),
+            )
 
     async def _glob(self, path, **kwargs):
         detail = kwargs.get("detail", False)

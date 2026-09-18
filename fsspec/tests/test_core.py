@@ -43,6 +43,8 @@ def tempzip(data=None):
         ["apath.*.csv", None, 1, ["apath.0.csv"]],
         ["apath.*.csv", None, 2, ["apath.0.csv", "apath.1.csv"]],
         ["a*", lambda x: "abc"[x], 2, ["aa", "ab"]],
+        ["out", None, 2, ["out/0.part", "out/1.part"]],
+        ["/out/", None, 1, ["/out/0.part"]],
     ],
 )
 def test_expand_paths(path, name_function, num, out):
