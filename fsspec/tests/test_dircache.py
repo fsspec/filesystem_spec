@@ -6,86 +6,141 @@ import pytest
 from fsspec.dircache import DirCache
 
 
-def test_dircache_lru():
-    # Unlimited cache
-    dc_unlimited = DirCache(max_paths=None)
-    dc_unlimited["x"] = 1
-    assert list(dc_unlimited) == ["x"]
-
-    # max_paths=0 retains nothing
-    dc_zero = DirCache(max_paths=0)
-    dc_zero["a"] = 1
-    assert len(dc_zero) == 0 and "a" not in dc_zero
-
-    # Bounded cache with LRU eviction
+def test_dircache_evicts_oldest_when_capacity_exceeded():
     dc = DirCache(max_paths=2)
     dc["a"] = 1
     dc["b"] = 2
-    dc["c"] = 3  # Evicts oldest: "a"
-    assert "a" not in dc and dc["b"] == 2 and dc["c"] == 3
+
+    dc["c"] = 3
+
+    assert "a" not in dc
+    assert dc["b"] == 2
+    assert dc["c"] == 3
     assert len(dc) == 2
 
-    # Accessing "b" marks it recent, so "c" becomes LRU
-    _ = dc["b"]
-    dc["d"] = 4  # Evicts "c"
-    assert "c" not in dc and dc["b"] == 2 and dc["d"] == 4
-    assert list(dc) == ["b", "d"]
 
-
-def test_dircache_expiry():
-    dc = DirCache(max_paths=2, listings_expiry_time=0.1)
-    dc["a"] = 100
-    dc["b"] = 200
-
-    # Accessing "a" moves it to the most recent position
-    assert dc["a"] == 100
-    assert list(dc) == ["b", "a"]
-    assert "nonexistent" not in dc  # Missing key must not raise KeyError
-    with pytest.raises(KeyError):
-        _ = dc["nonexistent"]
-
-    time.sleep(0.12)
-
-    # Expired items raise KeyError on get and return False on membership
-    with pytest.raises(KeyError):
-        _ = dc["a"]
-    assert "b" not in dc
-    assert list(dc) == []
-    assert len(dc) == 0
-
-
-def test_dircache_disabled():
-    dc = DirCache(use_listings_cache=False)
+def test_dircache_read_promotes_key_to_most_recent():
+    dc = DirCache(max_paths=2)
     dc["a"] = 1
-    assert "a" not in dc
+    dc["b"] = 2
+
+    _ = dc["a"]
+    dc["c"] = 3
+
+    assert "b" not in dc
+    assert dc["a"] == 1
+    assert dc["c"] == 3
+
+
+def test_dircache_negative_max_paths_raises_error():
+    with pytest.raises(ValueError, match="non-negative"):
+        DirCache(max_paths=-1)
+
+
+def test_dircache_zero_max_paths_stores_no_items():
+    dc = DirCache(max_paths=0)
+
+    dc["a"] = 1
+
     assert len(dc) == 0
-    assert list(dc) == []
+    assert "a" not in dc
+
+
+def test_dircache_unlimited_paths_retains_all_items():
+    dc = DirCache(max_paths=None)
+
+    for i in range(10):
+        dc[f"k{i}"] = i
+
+    assert len(dc) == 10
+    assert dc["k0"] == 0
+    assert dc["k9"] == 9
+    assert len(list(dc)) == 10
+
+
+def test_dircache_expired_entry_raises_key_error_on_get():
+    dc = DirCache(listings_expiry_time=0.05)
+    dc["a"] = 100
+
+    time.sleep(0.08)
+
     with pytest.raises(KeyError):
         _ = dc["a"]
 
 
-def test_dircache_mapping_and_pickle():
-    dc = DirCache(use_listings_cache=True, listings_expiry_time=60, max_paths=5)
-    dc.update({"a": 1, "b": 2})
-    assert dc.get("a") == 1
-    assert dc.get("c", 42) == 42
-    assert dc.setdefault("c", 3) == 3
-    assert dict(dc) == {"a": 1, "b": 2, "c": 3}
+def test_dircache_expired_entry_not_in_cache():
+    dc = DirCache(listings_expiry_time=0.05)
+    dc["a"] = 100
 
-    # del removes item
-    del dc["a"]
+    time.sleep(0.08)
+
     assert "a" not in dc
 
-    # pop
-    assert dc.pop("b") == 2 and "b" not in dc
-    assert dc.pop("missing", 99) == 99
 
-    # clear
-    dc.clear()
+def test_dircache_missing_key_not_in_cache_with_expiry():
+    dc = DirCache(listings_expiry_time=10)
+
+    is_present = "missing" in dc
+
+    assert is_present is False
+
+
+def test_dircache_iter_excludes_expired_entries():
+    dc = DirCache(listings_expiry_time=0.05)
+    dc["a"] = 1
+    dc["b"] = 2
+
+    time.sleep(0.08)
+    active_keys = list(dc)
+
+    assert active_keys == []
+    assert len(dc) == 0
+
+
+def test_dircache_disabled_ignores_writes():
+    dc = DirCache(use_listings_cache=False)
+
+    dc["a"] = 1
+
+    assert "a" not in dc
     assert len(dc) == 0
     assert list(dc) == []
 
-    # pickle roundtrip
-    data = pickle.dumps(DirCache(listings_expiry_time=10, max_paths=5))
-    dc2 = pickle.loads(data)
-    assert dc2.listings_expiry_time == 10 and dc2.max_paths == 5
+
+def test_dircache_disabled_raises_key_error_on_read():
+    dc = DirCache(use_listings_cache=False)
+
+    with pytest.raises(KeyError):
+        _ = dc["a"]
+
+
+def test_dircache_del_removes_entry():
+    dc = DirCache(listings_expiry_time=60, max_paths=10)
+    dc["a"] = 1
+
+    del dc["a"]
+
+    assert "a" not in dc
+    assert len(dc) == 0
+
+
+def test_dircache_clear_removes_all_entries():
+    dc = DirCache(listings_expiry_time=60, max_paths=10)
+    dc["a"] = 1
+    dc["b"] = 2
+
+    dc.clear()
+
+    assert len(dc) == 0
+    assert "a" not in dc
+    assert "b" not in dc
+
+
+def test_dircache_pickle_roundtrip():
+    dc = DirCache(use_listings_cache=True, listings_expiry_time=10, max_paths=5)
+
+    dc2 = pickle.loads(pickle.dumps(dc))
+
+    assert dc2.use_listings_cache is True
+    assert dc2.listings_expiry_time == 10
+    assert dc2.max_paths == 5

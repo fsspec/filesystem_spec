@@ -44,6 +44,9 @@ class DirCache(MutableMapping):
             The number of most recent listings that are considered valid; 'recent'
             refers to when the entry was set or accessed.
         """
+        if max_paths is not None and max_paths < 0:
+            raise ValueError(f"max_paths must be non-negative, got {max_paths}")
+
         self._cache = OrderedDict() if max_paths is not None else {}
         self._times = {}
         self.use_listings_cache = use_listings_cache
