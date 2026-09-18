@@ -129,6 +129,13 @@ Other
 
 - Patch ``HAS_CPYTHON_API`` where ``_fast_slice`` reads it in tests (#2164)
 
+- Percent-decode the username and password parsed from URLs in
+  ``infer_storage_options`` so that backends (ftp, sftp, smb, ...) receive
+  the real credentials rather than their URL-encoded form; a password whose
+  bare ``%`` produces bytes that are not valid UTF-8 (for example
+  ``pass%ab``) is left untouched so that pre-existing URLs with unescaped
+  ``%`` continue to work (#1871)
+
 2026.7.0
 --------
 
