@@ -1,6 +1,6 @@
 import time
+from collections import OrderedDict
 from collections.abc import MutableMapping
-from functools import lru_cache
 
 
 class DirCache(MutableMapping):
@@ -48,7 +48,7 @@ class DirCache(MutableMapping):
         self._cache = {}
         self._times = {}
         if max_paths:
-            self._q = lru_cache(max_paths + 1)(lambda key: self._cache.pop(key, None))
+            self._q = OrderedDict()
         self.use_listings_cache = use_listings_cache
         self.listings_expiry_time = listings_expiry_time
         self.max_paths = max_paths
@@ -58,11 +58,15 @@ class DirCache(MutableMapping):
             if self._times.get(item, 0) - time.time() < -self.listings_expiry_time:
                 del self._cache[item]
         if self.max_paths:
-            self._q(item)
+            # Refresh the recency order; the item may already be evicted.
+            self._q.pop(item, None)
+            self._q[item] = None
         return self._cache[item]  # maybe raises KeyError
 
     def clear(self):
         self._cache.clear()
+        if self.max_paths:
+            self._q.clear()
 
     def __len__(self):
         return len(self._cache)
@@ -78,13 +82,20 @@ class DirCache(MutableMapping):
         if not self.use_listings_cache:
             return
         if self.max_paths:
-            self._q(key)
+            self._q.pop(key, None)
+            self._q[key] = None
+            while len(self._q) > self.max_paths:
+                oldest, _ = self._q.popitem(last=False)
+                self._cache.pop(oldest, None)
+                self._times.pop(oldest, None)
         self._cache[key] = value
         if self.listings_expiry_time is not None:
             self._times[key] = time.time()
 
     def __delitem__(self, key):
         del self._cache[key]
+        if self.max_paths:
+            self._q.pop(key, None)
 
     def __iter__(self):
         entries = list(self._cache)
