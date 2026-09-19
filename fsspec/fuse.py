@@ -76,8 +76,7 @@ class FUSEr(Operations):
 
         f = self.cache[fh]
         f.seek(offset)
-        out = f.read(size)
-        return out
+        return f.read(size)
 
     def write(self, path, data, offset, fh):
         logger.debug("write %s", (path, offset))
@@ -119,7 +118,7 @@ class FUSEr(Operations):
         fn = "".join([self.root, path.lstrip("/")])
         try:
             self.fs.rm(fn, False)
-        except (OSError, FileNotFoundError) as exc:
+        except OSError as exc:
             raise FuseOSError(EIO) from exc
 
     def release(self, path, fh):

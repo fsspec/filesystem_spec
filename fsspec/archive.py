@@ -75,7 +75,6 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
             if info["type"] != "directory":
                 paths[info["name"]] = info
         if detail:
-            out = sorted(paths.values(), key=operator.itemgetter("name"))
-            return out
+            return sorted(paths.values(), key=operator.itemgetter("name"))
         else:
             return sorted(paths)
