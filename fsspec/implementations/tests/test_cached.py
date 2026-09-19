@@ -1,13 +1,19 @@
+import asyncio
 import json
 import os
+import pathlib
 import shutil
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 import fsspec
 from fsspec.compression import compr
 from fsspec.exceptions import BlocksizeMismatchError
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.cache_mapper import (
     BasenameCacheMapper,
     HashCacheMapper,
@@ -17,8 +23,10 @@ from fsspec.implementations.cached import (
     CachingFileSystem,
     LocalTempFile,
     WholeFileCacheFileSystem,
+    _tempfile,
 )
 from fsspec.implementations.local import make_path_posix
+from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.zip import ZipFileSystem
 from fsspec.tests.conftest import win
 
@@ -1488,6 +1496,210 @@ def test_class_has_cat_file_and_cat_ranges(tmp_path, protocol):
     for attr in ("_cat_file", "_cat_ranges"):
         assert hasattr(fs, attr), f"instance missing {attr}"
         assert hasattr(type(fs), attr), f"class missing {attr}"
+
+
+class _AsyncMemoryFileSystem(AsyncFileSystemWrapper):
+    # unlike http: _strip_protocol is not the identity, and ukey is the default
+    protocol = "memory"
+    _strip_protocol = MemoryFileSystem._strip_protocol
+
+
+class _AsyncUkeyFileSystem(_AsyncMemoryFileSystem):
+    def __init__(self, **kwargs):  # sync mode on the cache's loop, like s3fs
+        super().__init__(asynchronous=False, loop=asyncio.get_running_loop(), **kwargs)
+
+    def ukey(self, path):  # a sync override that re-enters the loop, like s3fs's
+        return self.info(path)["size"]
+
+
+def _async_caching_fs(protocol, cache_dir, cls=_AsyncMemoryFileSystem, **kwargs):
+    return fsspec.filesystem(
+        protocol,
+        fs=cls(fs=fsspec.filesystem("memory")),
+        cache_storage=cache_dir,
+        skip_instance_cache=True,
+        **kwargs,
+    )
+
+
+def _count_downloads(fs):
+    downloads = []
+    inner_get_file = fs.fs._get_file
+
+    async def counting_get_file(rpath, lpath, **kwargs):
+        downloads.append(rpath)
+        return await inner_get_file(rpath, lpath, **kwargs)
+
+    fs.fs._get_file = counting_get_file
+    return downloads
+
+
+def test_partial_download_invisible(tmp_path, monkeypatch):
+    # #639: a reader must never see a download that is still in flight
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/afile", b"0123456789")
+    fs = fsspec.filesystem(
+        "simplecache", fs=mem, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    inflight = threading.Event()
+
+    def slow_get_file(rpath, lpath, **kwargs):
+        with open(lpath, "wb") as f:
+            f.write(b"01234")
+            f.flush()
+            inflight.set()
+            time.sleep(0.2)
+            f.write(b"56789")
+
+    monkeypatch.setattr(mem, "get_file", slow_get_file)
+    with ThreadPoolExecutor(1) as pool:
+        first = pool.submit(fs.cat_file, "/afile")
+        assert inflight.wait(5)
+        assert fs.cat_file("/afile") == b"0123456789"
+        assert first.result() == b"0123456789"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_partial_download_invisible_async(tmp_path, protocol):
+    fsspec.filesystem("memory").pipe("/afile", b"0123456789")
+
+    async def run():
+        inflight = asyncio.Event()
+
+        async def slow_get_file(rpath, lpath, **kwargs):
+            with open(lpath, "wb") as f:  # noqa ASYNC230
+                f.write(b"01234")
+                f.flush()
+                inflight.set()
+                await asyncio.sleep(0.05)
+                f.write(b"56789")
+
+        fs = _async_caching_fs(protocol, str(tmp_path))
+        fs.fs._get_file = slow_get_file
+        first = asyncio.create_task(fs._cat_file("memory://afile"))
+        await asyncio.wait_for(inflight.wait(), 5)
+        assert await fs._cat_file("memory://afile") == b"0123456789"
+        assert await first == b"0123456789"
+
+    asyncio.run(run())
+    assert not [f for f in os.listdir(tmp_path) if f.endswith(".part")]
+
+
+def test_failed_download_cleans_up_tempfiles(tmp_path, monkeypatch):
+    # a failed download leaves neither a .part file nor the final cache name
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/afile", b"0123456789")
+    fs = fsspec.filesystem(
+        "simplecache", fs=mem, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+
+    def boom(rpath, lpath, **kwargs):
+        with open(lpath, "wb") as f:
+            f.write(b"0123")
+        raise OSError("simulated download failure")
+
+    with monkeypatch.context() as m:
+        m.setattr(mem, "get_file", boom)
+        with pytest.raises(OSError, match="simulated download failure"):
+            fs.cat_file("/afile")
+    assert os.listdir(tmp_path) == []
+    assert fs.cat_file("/afile") == b"0123456789"
+
+
+def test_tempfile_busy_destination(tmp_path, monkeypatch):
+    # windows: os.replace onto a busy destination raises; only a same-size file
+    # written since the download started is a redundant concurrent copy
+    def busy_replace(src, dst):
+        raise PermissionError("destination is open in another process")
+
+    monkeypatch.setattr(os, "replace", busy_replace)
+    dst = tmp_path / "x"
+
+    with _tempfile(str(dst)) as tmp:
+        dst.write_bytes(b"payload")
+        pathlib.Path(tmp).write_bytes(b"payload")
+    assert dst.read_bytes() == b"payload"
+
+    dst.write_bytes(b"stale")
+    os.utime(dst, (0, 0))
+    with pytest.raises(PermissionError), _tempfile(str(dst)) as tmp:
+        pathlib.Path(tmp).write_bytes(b"fresh")
+    assert dst.read_bytes() == b"stale"
+
+    with pytest.raises(PermissionError), _tempfile(str(dst)) as tmp:
+        dst.write_bytes(b"much longer content")
+        pathlib.Path(tmp).write_bytes(b"short")
+
+    with pytest.raises(PermissionError), _tempfile(str(tmp_path / "missing")) as tmp:
+        pathlib.Path(tmp).write_bytes(b"payload")
+
+    assert os.listdir(tmp_path) == ["x"]
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_async_cache_hits(tmp_path, protocol):
+    # filecache's async _cat_file/_cat_ranges recorded no metadata, so every
+    # call re-downloaded, within one instance and across instances
+    fsspec.filesystem("memory").pipe("/afile", b"0123456789")
+
+    async def run():
+        fs = _async_caching_fs(protocol, str(tmp_path))
+        downloads = _count_downloads(fs)
+        ranges = await fs._cat_ranges(["memory://afile"] * 2, [0, 4], [4, 8])
+        assert ranges == [b"0123", b"4567"]
+        assert await fs._cat_file("memory://afile") == b"0123456789"
+        assert len(downloads) == 1
+
+        # a fresh instance over the same cache_storage must not re-download
+        fs2 = _async_caching_fs(protocol, str(tmp_path))
+        downloads2 = _count_downloads(fs2)
+        assert await fs2._cat_file("memory://afile") == b"0123456789"
+        assert downloads2 == []
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("cls", [_AsyncMemoryFileSystem, _AsyncUkeyFileSystem])
+def test_filecache_async_check_files(tmp_path, cls):
+    # check_files=True on the async paths: the recorded uid round-trips
+    # through the async-safe ukey, and a remote change triggers a re-download
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/cfile", b"version one")
+
+    async def run():
+        fs = _async_caching_fs("filecache", str(tmp_path), cls, check_files=True)
+        downloads = _count_downloads(fs)
+        assert await fs._cat_file("memory://cfile") == b"version one"
+        assert await fs._cat_file("memory://cfile") == b"version one"
+        mem.pipe("/cfile", b"version two, longer")
+        assert await fs._cat_file("memory://cfile") == b"version two, longer"
+        assert len(downloads) == 2
+
+    asyncio.run(run())
+
+
+def test_filecache_async_cat_ranges_on_error(tmp_path):
+    # a missing remote path is reported per-range with on_error="return"
+    mem = fsspec.filesystem("memory")
+    mem.pipe("/exists", b"0123456789")
+
+    async def run():
+        fs = _async_caching_fs("filecache", str(tmp_path))
+        returned = await fs._cat_ranges(
+            ["memory://exists", "memory://missing"], [0, 0], [4, 4], on_error="return"
+        )
+        assert returned[0] == b"0123"
+        assert isinstance(returned[1], FileNotFoundError)
+        assert "missing" in str(returned[1])  # the remote error, not the local copy's
+        with pytest.raises(FileNotFoundError, match="/missing"):
+            await fs._cat_ranges(
+                ["memory://missing", "memory://exists"],
+                [0, 0],
+                [4, 4],
+                on_error="raise",
+            )
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])

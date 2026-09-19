@@ -314,6 +314,11 @@ Cached files can still be removed by age using their local modification times, f
 ``fs.clear_expired_cache(expiry_time=7 * 24 * 60 * 60)``. This only changes the writable cache
 location when multiple cache directories are configured.
 
+With "filecache" and "simplecache", each file is downloaded to a temporary ``*.part`` file in the
+cache directory and renamed into place once complete, so a partial download is never visible. The
+temporary file is removed if the download fails, but not if the process is killed mid-download;
+leftover ``*.part`` files are ignored by the cache and safe to delete.
+
 Remote Write Caching
 --------------------
 
