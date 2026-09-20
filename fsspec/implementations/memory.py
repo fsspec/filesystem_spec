@@ -293,7 +293,7 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         if "x" in mode and self.exists(path):
             raise FileExistsError
-        if path in self.pseudo_dirs:
+        if self.isdir(path):
             raise IsADirectoryError(path)
         parent = path
         while len(parent) > 1:

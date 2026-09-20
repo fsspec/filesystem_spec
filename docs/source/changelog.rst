@@ -31,6 +31,8 @@ Enhancements
 
 Fixes
 
+- Reject opening implied directories as files in ``MemoryFileSystem``.
+
 - Make ``merge_offset_ranges`` ``O(n log n)`` and keep merged blocks within
   ``max_block``, replacing the quadratic nested-range filter added in #1982
   (#2091)
