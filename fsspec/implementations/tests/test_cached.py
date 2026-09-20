@@ -1504,6 +1504,32 @@ def test_whole_file_cache_tail(tmp_path, protocol):
     assert fs.tail("/tail/file", 0) == b""
 
 
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_whole_file_cache_cat_file_negative(tmp_path, protocol):
+    # `cat_file` with a negative start/end needs the file length; the plain
+    # local file the cache returns has no `.size`, so it must be measured.
+    fsspec.filesystem("memory").pipe("/neg/file", b"0123456789")
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    assert fs.cat_file("/neg/file", start=-3) == b"789"
+    assert fs.cat_file("/neg/file", start=-4, end=-1) == b"678"
+    assert fs.cat_file("/neg/file", start=2, end=5) == b"234"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_whole_file_cache_read_block(tmp_path, protocol):
+    # `read_block` clamps against the file length, which likewise must not
+    # rely on a `.size` attribute the plain local file lacks.
+    fsspec.filesystem("memory").pipe("/rb/file", b"0123456789")
+    fs = fsspec.filesystem(
+        protocol, target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    assert fs.read_block("/rb/file", 2, 4) == b"2345"
+    assert fs.read_block("/rb/file", 0, None) == b"0123456789"
+    assert fs.read_block("/rb/file", 8, 100) == b"89"
+
+
 def test_simplecache_cat_ranges_downloads_uncached(tmp_path):
     m = fsspec.filesystem("memory")
     m.pipe({"/cat_ranges/one": b"0123456789", "/cat_ranges/two": b"abcdef"})
