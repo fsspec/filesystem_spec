@@ -45,7 +45,10 @@ PUBLIC_ITEM = (
 def isolated_credentials(tmp_path, monkeypatch):
     """Never read the developer's real ia.ini; never reuse a cached instance, which
     would carry the previous test's credentials."""
+    # os.path.expanduser("~") reads HOME on POSIX and USERPROFILE on Windows, which
+    # never consults HOME; both have to move for the lookup to leave the real one alone.
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     for name in (
         "IA_CONFIG_FILE",
         "XDG_CONFIG_HOME",
