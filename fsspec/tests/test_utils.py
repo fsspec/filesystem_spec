@@ -364,6 +364,14 @@ def test_get_protocol(par):
         ("/path/to.dir/file", ""),
         ("s3://bucket.name/data/file", ""),
         ("/path/to.dir/file.parquet", "parquet"),
+        # A leading dot marks a hidden file, it does not introduce an extension
+        ("/path/to/.bashrc", ""),
+        (".gitignore", ""),
+        ("s3://bucket/.env", ""),
+        # ... but a hidden file can still carry one
+        ("/path/to/.hidden.txt", "txt"),
+        # A trailing dot leaves an empty extension
+        ("/path/to/file.", ""),
     ),
 )
 def test_get_file_extension(url, expected):

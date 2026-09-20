@@ -473,9 +473,12 @@ def get_file_extension(url: str) -> str:
     url = stringify_path(url)
     # Only consider the final path component: a "." in a parent directory name
     # (e.g. "/path/to.dir/file") is not the file's extension.
-    ext_parts = url.rsplit("/", 1)[-1].rsplit(".", 1)
-    if len(ext_parts) > 1:
-        return ext_parts[-1]
+    name = url.rsplit("/", 1)[-1]
+    # A leading dot marks a hidden file rather than an extension, so ".bashrc"
+    # has none, while ".hidden.txt" still has "txt".
+    stem, dot, extension = name.lstrip(".").rpartition(".")
+    if stem and dot:
+        return extension
     return ""
 
 
