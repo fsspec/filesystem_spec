@@ -862,11 +862,14 @@ class AbstractFileSystem(metaclass=_Cached):
             if (start is not None and start < 0) or (end is not None and end < 0):
                 f.seek(0, 2)
                 size = f.tell()
-            if start is not None:
-                if start >= 0:
-                    f.seek(start)
-                else:
-                    f.seek(max(0, size + start))
+            if start is None:
+                # measuring the size above may have moved the cursor to the
+                # end, so return to the start explicitly
+                f.seek(0)
+            elif start >= 0:
+                f.seek(start)
+            else:
+                f.seek(max(0, size + start))
             if end is not None:
                 if end < 0:
                     end = size + end

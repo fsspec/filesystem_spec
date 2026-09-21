@@ -1515,6 +1515,9 @@ def test_whole_file_cache_cat_file_negative(tmp_path, protocol):
     assert fs.cat_file("/neg/file", start=-3) == b"789"
     assert fs.cat_file("/neg/file", start=-4, end=-1) == b"678"
     assert fs.cat_file("/neg/file", start=2, end=5) == b"234"
+    # start=None with a negative end must still read from the beginning
+    assert fs.cat_file("/neg/file", start=None, end=-3) == b"0123456"
+    assert fs.cat_file("/neg/file", end=-1) == b"012345678"
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
