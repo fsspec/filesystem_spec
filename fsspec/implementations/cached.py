@@ -39,7 +39,11 @@ def _tempfile(lpath):
     # download to a temporary file, renamed into place once complete, so that
     # a partial download is never visible under its final cache name (#639)
     tmp = os.path.join(os.path.dirname(lpath), f"{secrets.token_hex(8)}.part")
-    start = time.time()
+    # stamp the start from the cache filesystem's own clock: on Windows a file
+    # written after time.time() can still report an earlier mtime
+    open(tmp, "wb").close()
+    start = os.path.getmtime(tmp)
+    os.remove(tmp)
     try:
         yield tmp
         try:
