@@ -859,17 +859,23 @@ class AbstractFileSystem(metaclass=_Cached):
             # A negative start or end counts back from the file length. Only
             # fsspec's own file classes expose `.size`; a plain file (e.g. from
             # the caching filesystems) does not, so measure with a seek instead.
-            if (start is not None and start < 0) or (end is not None and end < 0):
+            measured = (start is not None and start < 0) or (
+                end is not None and end < 0
+            )
+            if measured:
                 f.seek(0, 2)
                 size = f.tell()
-            if start is None:
-                # measuring the size above may have moved the cursor to the
-                # end, so return to the start explicitly
+            if start is not None:
+                if start >= 0:
+                    f.seek(start)
+                else:
+                    f.seek(max(0, size + start))
+            elif measured:
+                # measuring the size above moved the cursor to the end; with no
+                # start given, put it back so the read begins at the start. When
+                # nothing was measured the cursor is untouched, as before, so a
+                # plain full read still works on non-seekable files.
                 f.seek(0)
-            elif start >= 0:
-                f.seek(start)
-            else:
-                f.seek(max(0, size + start))
             if end is not None:
                 if end < 0:
                     end = size + end
