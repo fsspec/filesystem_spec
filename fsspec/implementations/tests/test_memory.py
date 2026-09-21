@@ -11,6 +11,24 @@ from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
 
 
+@pytest.mark.parametrize("mode", ["rb", "wb", "ab", "r+b", "w+b", "a+b"])
+@pytest.mark.parametrize("child_type", ["file", "directory"])
+def test_open_implied_directory(m, mode, child_type):
+    if child_type == "file":
+        m.pipe_file("parent/child", b"content")
+    else:
+        m.mkdir("parent/child", create_parents=False)
+
+    assert m.isdir("parent")
+    with pytest.raises(IsADirectoryError):
+        m.open("parent", mode)
+    assert not m.isfile("parent")
+    if child_type == "file":
+        assert m.cat_file("parent/child") == b"content"
+    else:
+        assert m.isdir("parent/child")
+
+
 def test_independent_stores(m):
     first = filesystem("memory", global_store=False, skip_instance_cache=True)
     second = filesystem("memory", global_store=False, skip_instance_cache=True)
