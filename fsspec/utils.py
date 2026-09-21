@@ -95,7 +95,13 @@ def infer_storage_options(
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
+        host = parsed_path.netloc.rsplit("@", 1)[-1]
+        if host.startswith("[") and "]" in host:
+            # An IPv6 literal carries colons of its own, so only a colon after
+            # the closing bracket separates the port.
+            options["host"] = host[: host.index("]") + 1]
+        else:
+            options["host"] = host.rsplit(":", 1)[0]
 
         if protocol in ("s3", "s3a", "gcs", "gs"):
             options["path"] = options["host"] + options["path"]

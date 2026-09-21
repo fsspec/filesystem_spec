@@ -235,6 +235,29 @@ def test_infer_composite_protocol():
     assert out["path"] == ""
 
 
+def test_infer_ipv6_host():
+    # The address itself contains colons, so only a colon after the closing
+    # bracket separates the port.
+    out = infer_storage_options("hdfs://[::1]/mnt/test.csv")
+    assert out["host"] == "[::1]"
+    assert out["path"] == "/mnt/test.csv"
+    assert "port" not in out
+
+    out = infer_storage_options("hdfs://[2001:db8::1]/mnt/test.csv")
+    assert out["host"] == "[2001:db8::1]"
+
+    # A port, a user and a password are still picked up alongside the address.
+    out = infer_storage_options("hdfs://[::1]:8020/mnt/test.csv")
+    assert out["host"] == "[::1]"
+    assert out["port"] == 8020
+
+    out = infer_storage_options("hdfs://user:pwd@[2001:db8::1]:8020/mnt/test.csv")
+    assert out["host"] == "[2001:db8::1]"
+    assert out["port"] == 8020
+    assert out["username"] == "user"
+    assert out["password"] == "pwd"
+
+
 @pytest.mark.parametrize(
     "urlpath, expected_path",
     (
