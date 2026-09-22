@@ -31,6 +31,9 @@ Enhancements
 
 Fixes
 
+- Compute ``HadoopFileSystem.fsid`` from its configured host and port instead of
+  accessing attributes no longer exposed by PyArrow (issue #1870)
+
 - Normalize dot path components in ``TarFileSystem`` listings and lookups,
   while preserving original archive names for reading (issue #1568)
 
