@@ -44,9 +44,10 @@ class DataFileSystem(AbstractFileSystem):
         return unquote(data).encode()[start:end]
 
     def info(self, path, **kwargs):
+        path = self._strip_protocol(path)
         pref, name = path.split(",", 1)
         data = self.cat_file(path)
-        mime = pref.split(":", 1)[1].split(";", 1)[0]
+        mime = pref.split(";", 1)[0]
         return {"name": name, "size": len(data), "type": "file", "mimetype": mime}
 
     def _open(
