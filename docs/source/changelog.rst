@@ -34,6 +34,9 @@ Fixes
 - Compute ``HadoopFileSystem.fsid`` from its configured host and port instead of
   accessing attributes no longer exposed by PyArrow (issue #1870)
 
+- Normalize dot path components in ``TarFileSystem`` listings and lookups,
+  while preserving original archive names for reading (issue #1568)
+
 - Make ``merge_offset_ranges`` ``O(n log n)`` and keep merged blocks within
   ``max_block``, replacing the quadratic nested-range filter added in #1982
   (#2091)

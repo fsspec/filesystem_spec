@@ -350,3 +350,112 @@ def test_links_report_target_size(tmp_path: Path):
         assert fs.cat_file(name, start=-2) == b"lo"
         assert fs.read_block(name, 1, 3) == b"ell"
     assert fs.size("dangling") == 0
+
+
+@pytest.mark.parametrize("prefix", ["./", "././"])
+@pytest.mark.parametrize("explicit_directories", [False, True])
+def test_dot_path_components(tmp_path, prefix, explicit_directories):
+    path = tmp_path / "dots.tar"
+    members = [
+        (prefix + "dir/./nested.txt", "dir/nested.txt", b"nested"),
+        (prefix + ".hidden", ".hidden", b"hidden"),
+        ("plain.txt", "plain.txt", b"plain"),
+    ]
+    with tarfile.open(path, "w") as tar:
+        if explicit_directories:
+            for name in [prefix, prefix + "dir/./"]:
+                info = tarfile.TarInfo(name)
+                info.type = tarfile.DIRTYPE
+                tar.addfile(info)
+        for name, _, data in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    assert fs.ls("", detail=False) == [".hidden", "dir", "plain.txt"]
+    assert fs.ls(prefix, detail=False) == fs.ls("", detail=False)
+    assert fs.find("") == [".hidden", "dir/nested.txt", "plain.txt"]
+    assert fs.glob("./dir/*.txt") == ["dir/nested.txt"]
+    for directory in ["dir", prefix + "dir/./", "tar://./dir"]:
+        assert fs.isdir(directory)
+        assert fs.info(directory)["name"] == "dir"
+        assert fs.ls(directory, detail=False) == ["dir/nested.txt"]
+        assert [entry["name"] for entry in fs.ls(directory)] == ["dir/nested.txt"]
+    for raw_name, name, data in members:
+        assert fs.info(name)["name"] == name
+        assert fs.info(raw_name)["name"] == name
+        assert fs.cat(name) == data
+        with fs.open(raw_name, "rb") as f:
+            assert f.read() == data
+
+
+def test_dot_root_directory(tmp_path):
+    path = tmp_path / "root.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("./")
+        info.type = tarfile.DIRTYPE
+        tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    assert fs.info(".")["type"] == "directory"
+    assert fs.info("")["type"] == "directory"
+    assert fs.ls(".") == []
+    assert fs.ls("", detail=False) == []
+    assert fs.find("") == []
+
+
+def test_dot_normalization_preserves_parent_components(tmp_path):
+    path = tmp_path / "parents.tar"
+    members = {"../file.txt": b"parent", "dir/../file.txt": b"literal"}
+    with tarfile.open(path, "w") as tar:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    for name, data in members.items():
+        assert fs.info(name)["name"] == name
+        assert fs.cat_file("./" + name) == data
+    assert not fs.exists("file.txt")
+
+
+@pytest.mark.parametrize(
+    "names", [["./file.txt", "file.txt"], ["file.txt", "./file.txt"]]
+)
+def test_dot_normalization_duplicate_members(tmp_path, names):
+    path = tmp_path / "duplicates.tar"
+    with tarfile.open(path, "w") as tar:
+        for name, data in zip(names, [b"first", b"last"]):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    assert fs.ls("", detail=False) == ["file.txt"]
+    assert fs.size("file.txt") == len(b"last")
+    assert fs.cat("file.txt") == b"last"
+    assert fs.cat("./file.txt") == b"last"
+
+
+def test_dot_normalization_preserves_links(tmp_path):
+    path = tmp_path / "dot-links.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("./dir/target")
+        info.size = 5
+        tar.addfile(info, BytesIO(b"hello"))
+        for name, kind, target in [
+            ("./dir/sym", tarfile.SYMTYPE, "target"),
+            ("./hard", tarfile.LNKTYPE, "./dir/target"),
+        ]:
+            info = tarfile.TarInfo(name)
+            info.type = kind
+            info.linkname = target
+            tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    for name in ["dir/target", "dir/sym", "hard"]:
+        assert fs.size(name) == 5
+        assert fs.cat(name) == b"hello"
+        assert fs.cat_file(name, start=-2) == b"lo"
