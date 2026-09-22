@@ -310,6 +310,11 @@ class HadoopFileSystem(ArrowFSWrapper):
             extra_conf=extra_conf,
         )
         super().__init__(fs=fs, **kwargs)
+        self._fsid = "hdfs_" + tokenize(host, port)
+
+    @property
+    def fsid(self):
+        return self._fsid
 
     @staticmethod
     def _get_kwargs_from_urls(path):

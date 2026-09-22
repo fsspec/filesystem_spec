@@ -58,6 +58,41 @@ def remote_dir(fs, request):
     fs.rm(directory, recursive=True)
 
 
+@pytest.mark.parametrize("host, port", [("default", 0), ("namenode", 8020)])
+def test_hadoop_fsid(monkeypatch, host, port):
+    monkeypatch.setattr(
+        pyarrow_fs, "HadoopFileSystem", lambda **kwargs: pyarrow_fs.LocalFileSystem()
+    )
+    first = HadoopFileSystem(
+        host=host, port=port, user="alice", skip_instance_cache=True
+    )
+    second = HadoopFileSystem(
+        host=host, port=port, user="bob", skip_instance_cache=True
+    )
+
+    assert first.fsid.startswith("hdfs_")
+    assert first.fsid == second.fsid
+    assert (
+        first.fsid
+        != HadoopFileSystem(host=host, port=port + 1, skip_instance_cache=True).fsid
+    )
+    assert (
+        first.fsid
+        != HadoopFileSystem(host="other", port=port, skip_instance_cache=True).fsid
+    )
+
+
+def test_hadoop_fsid_default_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        pyarrow_fs, "HadoopFileSystem", lambda **kwargs: pyarrow_fs.LocalFileSystem()
+    )
+
+    assert (
+        HadoopFileSystem(skip_instance_cache=True).fsid
+        == HadoopFileSystem(host="default", port=0, skip_instance_cache=True).fsid
+    )
+
+
 def test_protocol():
     fs, _ = FileSystem.from_uri("mock://")
     fss = ArrowFSWrapper(fs)

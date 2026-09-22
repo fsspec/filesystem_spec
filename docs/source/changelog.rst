@@ -31,6 +31,9 @@ Enhancements
 
 Fixes
 
+- Compute ``HadoopFileSystem.fsid`` from its configured host and port instead of
+  accessing attributes no longer exposed by PyArrow (issue #1870)
+
 - Make ``merge_offset_ranges`` ``O(n log n)`` and keep merged blocks within
   ``max_block``, replacing the quadratic nested-range filter added in #1982
   (#2091)
