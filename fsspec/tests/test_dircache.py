@@ -32,18 +32,28 @@ def test_dircache_read_promotes_key_to_most_recent():
     assert dc["c"] == 3
 
 
-def test_dircache_negative_max_paths_raises_error():
-    with pytest.raises(ValueError, match="non-negative"):
-        DirCache(max_paths=-1)
+def test_dircache_negative_max_paths_retains_all_items():
+    dc = DirCache(max_paths=-1)
+
+    for i in range(10):
+        dc[f"k{i}"] = i
+
+    assert len(dc) == 10
+    assert dc["k0"] == 0
+    assert dc["k9"] == 9
+    assert len(list(dc)) == 10
 
 
-def test_dircache_zero_max_paths_stores_no_items():
+def test_dircache_zero_max_paths_retains_all_items():
     dc = DirCache(max_paths=0)
 
-    dc["a"] = 1
+    for i in range(10):
+        dc[f"k{i}"] = i
 
-    assert len(dc) == 0
-    assert "a" not in dc
+    assert len(dc) == 10
+    assert dc["k0"] == 0
+    assert dc["k9"] == 9
+    assert len(list(dc)) == 10
 
 
 def test_dircache_unlimited_paths_retains_all_items():

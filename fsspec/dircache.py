@@ -39,19 +39,19 @@ class DirCache(MutableMapping):
             and setting items has no effect.
         listings_expiry_time: int or float (optional)
             Time in seconds that a listing is considered valid. If None,
-            listings do not expire.
+            listings do not expire. Time is measured from when the entry was set.
         max_paths: int (optional)
-            The number of most recent listings that are considered valid; 'recent'
-            refers to when the entry was set or accessed.
+            The maximum number of directory listings to retain in the cache.
+            When the cache exceeds this limit, the least recently used
+            (set or accessed) listings are evicted. If None, 0, or negative,
+            there is no limit.
         """
-        if max_paths is not None and max_paths < 0:
-            raise ValueError(f"max_paths must be non-negative, got {max_paths}")
-
-        self._cache = OrderedDict() if max_paths is not None else {}
+        # max_paths is normalized to be either positive or None.
+        self.max_paths = max_paths if max_paths and max_paths > 0 else None
+        self._cache = OrderedDict() if self.max_paths else {}
         self._times = {}
         self.use_listings_cache = use_listings_cache
         self.listings_expiry_time = listings_expiry_time
-        self.max_paths = max_paths
 
     def __getitem__(self, item):
         if not self.use_listings_cache:
@@ -63,7 +63,7 @@ class DirCache(MutableMapping):
                 raise KeyError(item)
 
         val = self._cache[item]
-        if self.max_paths is not None:
+        if self.max_paths:
             self._cache.move_to_end(item)
         return val
 
@@ -93,7 +93,7 @@ class DirCache(MutableMapping):
         if self.listings_expiry_time is not None:
             self._times[key] = time.time()
 
-        if self.max_paths is not None:
+        if self.max_paths:
             self._cache.move_to_end(key)
             if len(self._cache) > self.max_paths:
                 oldest, _ = self._cache.popitem(last=False)
