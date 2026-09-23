@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import logging
 import math
 import os
@@ -56,11 +57,18 @@ def infer_storage_options(
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
     """
-    # Handle Windows paths including disk name in this special case
-    if (
-        re.match(r"^[a-zA-Z]:[\\/]", urlpath)
-        or re.match(r"^[a-zA-Z0-9]+://", urlpath) is None
-    ):
+
+    # Discover Windows paths including disk name in this special case.
+    is_filesystem = re.match(r"^[a-zA-Z]:[\\/]", urlpath)
+
+    # Discover URI according to RFC 3986: Scheme names consist of a
+    # sequence of characters beginning with a letter and followed by
+    # any combination of letters, digits, plus ("+"), period ("."),
+    # or hyphen ("-").
+    # https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
+    is_uri = re.match(r"^[a-zA-Z0-9+.-]+://", urlpath)
+
+    if is_filesystem or is_uri is None:
         return {"protocol": "file", "path": urlpath}
 
     parsed_path = urlsplit(urlpath)
@@ -87,7 +95,13 @@ def infer_storage_options(
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
+        host = parsed_path.netloc.rsplit("@", 1)[-1]
+        if host.startswith("[") and "]" in host:
+            # An IPv6 literal carries colons of its own, so only a colon after
+            # the closing bracket separates the port.
+            options["host"] = host[: host.index("]") + 1]
+        else:
+            options["host"] = host.rsplit(":", 1)[0]
 
         if protocol in ("s3", "s3a", "gcs", "gs"):
             options["path"] = options["host"] + options["path"]
@@ -415,6 +429,36 @@ def other_paths(
     return path2
 
 
+def check_contained(root: str, paths: list[str]) -> None:
+    """Raise if any of ``paths`` lies outside the destination ``root``.
+
+    Bulk copies build their destination names by joining source names onto a
+    destination root. Those names come from the source listing, so a name
+    holding ".." segments resolves above the root and writes outside the
+    destination the caller asked for.
+
+    Parameters
+    ----------
+    root: str
+        The destination the caller passed.
+    paths: list of str
+        The destination names built for that root.
+    """
+    root_abs = os.path.abspath(root)
+    # normcase so that a case-insensitive platform does not report a false
+    # escape, while the message keeps the paths as the caller would see them.
+    root_key = os.path.normcase(root_abs)
+    prefix = root_key.rstrip(os.sep) + os.sep
+    for path in paths:
+        path_abs = os.path.abspath(path)
+        path_key = os.path.normcase(path_abs)
+        if path_key != root_key and not path_key.startswith(prefix):
+            raise ValueError(
+                f"path {path!r} would be copied to {path_abs!r}, which is "
+                f"outside the destination {root!r}"
+            )
+
+
 def is_exception(obj: Any) -> bool:
     return isinstance(obj, BaseException)
 
@@ -433,9 +477,14 @@ def get_protocol(url: str) -> str:
 
 def get_file_extension(url: str) -> str:
     url = stringify_path(url)
-    ext_parts = url.rsplit(".", 1)
-    if len(ext_parts) > 1:
-        return ext_parts[-1]
+    # Only consider the final path component: a "." in a parent directory name
+    # (e.g. "/path/to.dir/file") is not the file's extension.
+    name = url.rsplit("/", 1)[-1]
+    # A leading dot marks a hidden file rather than an extension, so ".bashrc"
+    # has none, while ".hidden.txt" still has "txt".
+    stem, dot, extension = name.lstrip(".").rpartition(".")
+    if stem and dot:
+        return extension
     return ""
 
 
@@ -528,18 +577,29 @@ def nullcontext(obj: T) -> Iterator[T]:
 
 def merge_offset_ranges(
     paths: list[str],
-    starts: list[int] | int,
-    ends: list[int] | int,
+    starts: list[int | None] | int | None,
+    ends: list[int | None] | int | None,
     max_gap: int = 0,
     max_block: int | None = None,
     sort: bool = True,
-) -> tuple[list[str], list[int], list[int]]:
+) -> tuple[list[str], list[int], list[int | None]]:
     """Merge adjacent byte-offset ranges when the inter-range
     gap is <= `max_gap`, and when the merged byte range does not
-    exceed `max_block` (if specified). By default, this function
-    will re-order the input paths and byte ranges to ensure sorted
-    order. If the user can guarantee that the inputs are already
-    sorted, passing `sort=False` will skip the re-ordering.
+    exceed `max_block` (if specified). Every input range is covered by
+    at least one returned range. Overlapping input ranges are merged
+    where `max_block` allows it, so returned ranges may overlap once a
+    chain of overlapping inputs reaches `max_block`; a single input
+    range larger than `max_block` is still returned whole.
+
+    An `end` of `None` means to the end of the file. By default, this
+    function will re-order the input paths and byte ranges to ensure
+    sorted order.
+
+    Passing `sort=False` skips the re-ordering, which is only worthwhile
+    when the inputs are already grouped by path and ascending by start
+    within each path. Ranges that break that order still appear in the
+    output, as their own range rather than merged, so coverage holds for
+    any input order.
     """
     # Check input
     if not isinstance(paths, list):
@@ -551,59 +611,79 @@ def merge_offset_ranges(
     if len(starts) != len(paths) or len(ends) != len(paths):
         raise ValueError
 
-    # Early Return
-    if len(starts) <= 1:
-        return paths, starts, ends
+    starts_i: list[int] = [s or 0 for s in starts]
+    ends_i: list[int | None] = ends
 
-    starts = [s or 0 for s in starts]
+    # Early Return
+    if len(starts_i) <= 1:
+        return paths, starts_i, ends_i
+
     # Sort by paths and then ranges if `sort=True`
     if sort:
-        paths, starts, ends = (
-            list(v)
-            for v in zip(
-                *sorted(
-                    zip(paths, starts, ends),
-                )
-            )
+        ranges = sorted(
+            zip(paths, starts_i, ends_i),
+            # None end sorts last (covers furthest into the file)
+            key=lambda pse: (pse[0], pse[1], math.inf if pse[2] is None else pse[2]),
         )
-    remove = []
-    for i, (path, start, end) in enumerate(zip(paths, starts, ends)):
-        if any(
-            e is not None and p == path and start >= s and end <= e and i != i2
-            for i2, (p, s, e) in enumerate(zip(paths, starts, ends))
-        ):
-            remove.append(i)
-    paths = [p for i, p in enumerate(paths) if i not in remove]
-    starts = [s for i, s in enumerate(starts) if i not in remove]
-    ends = [e for i, e in enumerate(ends) if i not in remove]
+        paths = [r[0] for r in ranges]
+        starts_i = [r[1] for r in ranges]
+        ends_i = [r[2] for r in ranges]
 
-    if paths:
-        # Loop through the coupled `paths`, `starts`, and
-        # `ends`, and merge adjacent blocks when appropriate
-        new_paths = paths[:1]
-        new_starts = starts[:1]
-        new_ends = ends[:1]
-        for i in range(1, len(paths)):
-            if paths[i] == paths[i - 1] and new_ends[-1] is None:
+    # Loop through the coupled `paths`, `starts`, and
+    # `ends`, and merge adjacent blocks when appropriate
+    new_paths = paths[:1]
+    new_starts = starts_i[:1]
+    new_ends = ends_i[:1]
+    for path, start, end in zip(paths[1:], starts_i[1:], ends_i[1:]):
+        prev_end = new_ends[-1]
+        if path != new_paths[-1]:
+            # Cannot merge with previous block
+            new_paths.append(path)
+            new_starts.append(start)
+            new_ends.append(end)
+        elif start < new_starts[-1]:
+            # Out of order (only possible when `sort=False`). Walking the
+            # current block start backwards would uncover bytes already
+            # attributed to it, so give this range its own block
+            new_paths.append(path)
+            new_starts.append(start)
+            new_ends.append(end)
+        elif prev_end is None:
+            # Previous block already covers the rest of the file
+            continue
+        elif start < prev_end:
+            # Overlap / nested
+            if end is not None and end <= prev_end:
+                # Already covered by the current block
                 continue
             elif (
-                paths[i] != paths[i - 1]
-                or ((starts[i] - new_ends[-1]) > max_gap)
-                or (max_block is not None and (ends[i] - new_starts[-1]) > max_block)
+                end is not None
+                and max_block is not None
+                and (end - new_starts[-1]) > max_block
             ):
-                # Cannot merge with previous block.
-                # Add new `paths`, `starts`, and `ends` elements
-                new_paths.append(paths[i])
-                new_starts.append(starts[i])
-                new_ends.append(ends[i])
+                # Extending would exceed `max_block`. Start a new block,
+                # which overlaps the previous one, rather than letting a
+                # chain of overlaps grow the block without bound
+                new_paths.append(path)
+                new_starts.append(start)
+                new_ends.append(end)
             else:
-                # Merge with the previous block by updating the
-                # last element of `ends`
-                new_ends[-1] = ends[i]
-        return new_paths, new_starts, new_ends
+                # An `end` of None extends the block to EOF; a separate
+                # block would subsume the current one anyway
+                new_ends[-1] = end
+        elif (start - prev_end) > max_gap or (
+            max_block is not None
+            and (end is None or (end - new_starts[-1]) > max_block)
+        ):
+            # Gap too large, or merging would exceed `max_block`
+            new_paths.append(path)
+            new_starts.append(start)
+            new_ends.append(end)
+        else:
+            # Merge with the previous block
+            new_ends[-1] = end
 
-    # `paths` is empty. Just return input lists
-    return paths, starts, ends
+    return new_paths, new_starts, new_ends
 
 
 def file_size(filelike: IO[bytes]) -> int:
@@ -713,12 +793,14 @@ def _translate(pat, STAR, QUESTION_MARK):
 def glob_translate(pat):
     # Copied from: https://github.com/python/cpython/pull/106703.
     # The keyword parameters' values are fixed to:
-    # recursive=True, include_hidden=True, seps=None
+    # recursive=True, include_hidden=True, seps="/"
     """Translate a pathname with shell wildcards to a regular expression."""
-    if os.path.altsep:
-        seps = os.path.sep + os.path.altsep
-    else:
-        seps = os.path.sep
+    # fsspec paths always use "/" as their separator (AbstractFileSystem.sep), on every
+    # platform, and glob() has already put the pattern through _strip_protocol by the
+    # time it reaches here. Taking the separators from os.path instead would make a
+    # backslash a separator on Windows only, so a key containing one, which is an
+    # ordinary character on an object store, would stop matching there.
+    seps = "/"
     escaped_seps = "".join(map(re.escape, seps))
     any_sep = f"[{escaped_seps}]" if len(seps) > 1 else escaped_seps
     not_sep = f"[^{escaped_seps}]"
@@ -746,3 +828,38 @@ def glob_translate(pat):
             results.append(any_sep)
     res = "".join(results)
     return rf"(?s:{res})\Z"
+
+
+try:
+    PyBytes_FromStringAndSize = ctypes.pythonapi.PyBytes_FromStringAndSize
+    PyBytes_FromStringAndSize.argtypes = (ctypes.c_void_p, ctypes.c_ssize_t)
+    PyBytes_FromStringAndSize.restype = ctypes.py_object
+
+    PyBytes_AsString = ctypes.pythonapi.PyBytes_AsString
+    PyBytes_AsString.argtypes = (ctypes.py_object,)
+    PyBytes_AsString.restype = ctypes.c_void_p
+    HAS_CPYTHON_API = True
+except Exception:
+    PyBytes_FromStringAndSize = None
+    PyBytes_AsString = None
+    HAS_CPYTHON_API = False
+
+
+# Please refer to following discussion to understand why this is required at this point
+# Discussion = https://github.com/fsspec/gcsfs/pull/795#discussion_r3032749881
+def _fast_slice(src_bytes: bytes, offset: int, read_size: int) -> bytes:
+    if read_size == 0:
+        return b""
+    if offset < 0 or offset + read_size > len(src_bytes):
+        raise ValueError("Slice indices out of bounds")
+
+    if HAS_CPYTHON_API:
+        dest_bytes = PyBytes_FromStringAndSize(None, read_size)
+        src_ptr = PyBytes_AsString(src_bytes)
+        dest_ptr = PyBytes_AsString(dest_bytes)
+        # Releases the GIL
+        ctypes.memmove(dest_ptr, src_ptr + offset, read_size)
+        return dest_bytes
+    else:
+        # Standard fallback for PyPy/non-CPython
+        return src_bytes[offset : offset + read_size]

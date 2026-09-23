@@ -1,8 +1,13 @@
+import tarfile
+from io import BytesIO
+
 import pytest
 
 from fsspec.asyn import AsyncFileSystem
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.tar import TarFileSystem
 from fsspec.spec import AbstractFileSystem
 
 PATH = "path/to/dir"
@@ -354,6 +359,76 @@ def test_size(dirfs):
 
 
 @pytest.mark.asyncio
+async def test_async_sizes(adirfs):
+    assert await adirfs._sizes(["file1", "file2"]) == adirfs.fs._sizes.return_value
+    adirfs.fs._sizes.assert_called_once_with([f"{PATH}/file1", f"{PATH}/file2"])
+
+
+def test_sizes(dirfs):
+    assert dirfs.sizes(["file1", "file2"]) == dirfs.fs.sizes.return_value
+    dirfs.fs.sizes.assert_called_once_with([f"{PATH}/file1", f"{PATH}/file2"])
+
+
+@pytest.mark.asyncio
+async def test_async_cat_ranges(adirfs):
+    assert (
+        await adirfs._cat_ranges(["file"], [0], [2], *ARGS, **KWARGS)
+        == adirfs.fs._cat_ranges.return_value
+    )
+    adirfs.fs._cat_ranges.assert_called_once_with(
+        [f"{PATH}/file"], [0], [2], *ARGS, **KWARGS
+    )
+
+
+def test_cat_ranges(dirfs):
+    assert (
+        dirfs.cat_ranges(["file"], [0], [2], *ARGS, **KWARGS)
+        == dirfs.fs.cat_ranges.return_value
+    )
+    dirfs.fs.cat_ranges.assert_called_once_with(
+        [f"{PATH}/file"], [0], [2], *ARGS, **KWARGS
+    )
+
+
+def test_sizes_and_cat_ranges_over_sync_filesystem(tmp_path):
+    # A sync filesystem has no _size or _cat_file coroutines, so the inherited
+    # AsyncFileSystem versions of these methods broke: sizes raised
+    # AttributeError and cat_ranges returned the exceptions as results.
+    (tmp_path / "a.txt").write_bytes(b"hello")
+    (tmp_path / "b.txt").write_bytes(b"world!")
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+
+    assert dirfs.sizes(["a.txt", "b.txt"]) == [5, 6]
+    assert dirfs.cat_ranges(["a.txt", "b.txt"], [0, 1], [2, 3]) == [b"he", b"or"]
+
+
+def test_invalidate_cache(dirfs):
+    dirfs.invalidate_cache("file")
+    dirfs.fs.invalidate_cache.assert_called_once_with(f"{PATH}/file")
+
+
+def test_invalidate_cache_without_path(dirfs):
+    dirfs.invalidate_cache()
+    dirfs.fs.invalidate_cache.assert_called_once_with(PATH)
+
+
+def test_invalidate_cache_without_path_or_root(make_dirfs, fs):
+    dirfs = DirFileSystem("", fs)
+    dirfs.invalidate_cache()
+    fs.invalidate_cache.assert_called_once_with(None)
+
+
+def test_ukey(dirfs):
+    assert dirfs.ukey("file") == dirfs.fs.ukey.return_value
+    dirfs.fs.ukey.assert_called_once_with(f"{PATH}/file")
+
+
+def test_checksum(dirfs):
+    assert dirfs.checksum("file") == dirfs.fs.checksum.return_value
+    dirfs.fs.checksum.assert_called_once_with(f"{PATH}/file")
+
+
+@pytest.mark.asyncio
 async def test_async_exists(adirfs):
     assert await adirfs._exists("file") == adirfs.fs._exists.return_value
     adirfs.fs._exists.assert_called_once_with(f"{PATH}/file")
@@ -432,6 +507,48 @@ def test_walk(dirfs):
     dirfs.fs.walk.assert_called_once_with(f"{PATH}/root", *ARGS, **KWARGS)
 
 
+def test_walk_detail(dirfs):
+    dirfs.fs.walk.return_value = iter(
+        [
+            (
+                f"{PATH}/root",
+                {"foo": {"name": f"{PATH}/root/foo", "type": "directory"}},
+                {"baz": {"name": f"{PATH}/root/baz", "type": "file"}},
+            )
+        ]
+    )
+
+    assert list(dirfs.walk("root", detail=True)) == [
+        (
+            "root",
+            {"foo": {"name": "root/foo", "type": "directory"}},
+            {"baz": {"name": "root/baz", "type": "file"}},
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_async_walk_detail(adirfs, mocker):
+    async def _walk(path, *args, **kwargs):
+        yield (
+            f"{PATH}/root",
+            {"foo": {"name": f"{PATH}/root/foo", "type": "directory"}},
+            {"baz": {"name": f"{PATH}/root/baz", "type": "file"}},
+        )
+
+    adirfs.fs._walk = mocker.MagicMock()
+    adirfs.fs._walk.side_effect = _walk
+
+    actual = [entry async for entry in adirfs._walk("root", detail=True)]
+    assert actual == [
+        (
+            "root",
+            {"foo": {"name": "root/foo", "type": "directory"}},
+            {"baz": {"name": "root/baz", "type": "file"}},
+        )
+    ]
+
+
 @pytest.mark.asyncio
 async def test_async_glob(adirfs):
     adirfs.fs._glob.return_value = [f"{PATH}/one", f"{PATH}/two"]
@@ -454,25 +571,29 @@ def test_glob_with_protocol(dirfs):
 @pytest.mark.asyncio
 async def test_async_glob_detail(adirfs):
     adirfs.fs._glob.return_value = {
-        f"{PATH}/one": {"foo": "bar"},
-        f"{PATH}/two": {"baz": "qux"},
+        f"{PATH}/one": {"name": f"{PATH}/one", "foo": "bar"},
+        f"{PATH}/two": {"name": f"{PATH}/two", "baz": "qux"},
     }
     assert await adirfs._glob("*", detail=True, **KWARGS) == {
-        "one": {"foo": "bar"},
-        "two": {"baz": "qux"},
+        "one": {"name": "one", "foo": "bar"},
+        "two": {"name": "two", "baz": "qux"},
     }
+    for name, info in adirfs.fs._glob.return_value.items():
+        assert info["name"] == name
     adirfs.fs._glob.assert_called_once_with(f"{PATH}/*", detail=True, **KWARGS)
 
 
 def test_glob_detail(dirfs):
     dirfs.fs.glob.return_value = {
-        f"{PATH}/one": {"foo": "bar"},
-        f"{PATH}/two": {"baz": "qux"},
+        f"{PATH}/one": {"name": f"{PATH}/one", "foo": "bar"},
+        f"{PATH}/two": {"name": f"{PATH}/two", "baz": "qux"},
     }
     assert dirfs.glob("*", detail=True, **KWARGS) == {
-        "one": {"foo": "bar"},
-        "two": {"baz": "qux"},
+        "one": {"name": "one", "foo": "bar"},
+        "two": {"name": "two", "baz": "qux"},
     }
+    for name, info in dirfs.fs.glob.return_value.items():
+        assert info["name"] == name
     dirfs.fs.glob.assert_called_once_with(f"{PATH}/*", detail=True, **KWARGS)
 
 
@@ -521,25 +642,29 @@ def test_find(dirfs):
 @pytest.mark.asyncio
 async def test_async_find_detail(adirfs):
     adirfs.fs._find.return_value = {
-        f"{PATH}/dir/one": {"foo": "bar"},
-        f"{PATH}/dir/two": {"baz": "qux"},
+        f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
+        f"{PATH}/dir/two": {"name": f"{PATH}/dir/two", "baz": "qux"},
     }
     assert await adirfs._find("dir", *ARGS, detail=True, **KWARGS) == {
-        "dir/one": {"foo": "bar"},
-        "dir/two": {"baz": "qux"},
+        "dir/one": {"name": "dir/one", "foo": "bar"},
+        "dir/two": {"name": "dir/two", "baz": "qux"},
     }
+    for name, info in adirfs.fs._find.return_value.items():
+        assert info["name"] == name
     adirfs.fs._find.assert_called_once_with(f"{PATH}/dir", *ARGS, detail=True, **KWARGS)
 
 
 def test_find_detail(dirfs):
     dirfs.fs.find.return_value = {
-        f"{PATH}/dir/one": {"foo": "bar"},
-        f"{PATH}/dir/two": {"baz": "qux"},
+        f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
+        f"{PATH}/dir/two": {"name": f"{PATH}/dir/two", "baz": "qux"},
     }
     assert dirfs.find("dir", *ARGS, detail=True, **KWARGS) == {
-        "dir/one": {"foo": "bar"},
-        "dir/two": {"baz": "qux"},
+        "dir/one": {"name": "dir/one", "foo": "bar"},
+        "dir/two": {"name": "dir/two", "baz": "qux"},
     }
+    for name, info in dirfs.fs.find.return_value.items():
+        assert info["name"] == name
     dirfs.fs.find.assert_called_once_with(f"{PATH}/dir", *ARGS, detail=True, **KWARGS)
 
 
@@ -650,6 +775,40 @@ def test_open(mocker, dirfs):
     dirfs.fs.open.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
 
 
+@pytest.mark.parametrize("method, pattern", [("glob", "**/*.txt"), ("find", "")])
+def test_detailed_listing_names_can_be_read(tmp_path, method, pattern):
+    (tmp_path / "nested").mkdir()
+    (tmp_path / "nested" / "report.txt").write_bytes(b"hello")
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+
+    listing = getattr(dirfs, method)
+    details = listing(pattern, detail=True)
+    assert list(details) == listing(pattern) == ["nested/report.txt"]
+    for name, info in details.items():
+        assert dirfs.cat_file(info["name"]) == b"hello"
+        assert info["name"] == dirfs.info(name)["name"] == name
+        assert info["size"] == 5
+        assert info["type"] == "file"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method, pattern", [("_glob", "**/*.txt"), ("_find", "")])
+async def test_async_detailed_listing_names_can_be_read(tmp_path, method, pattern):
+    (tmp_path / "nested").mkdir()
+    (tmp_path / "nested" / "report.txt").write_bytes(b"hello")
+    fs = AsyncFileSystemWrapper(LocalFileSystem(), asynchronous=True)
+    dirfs = DirFileSystem(tmp_path.as_posix(), fs, asynchronous=True)
+
+    listing = getattr(dirfs, method)
+    details = await listing(pattern, detail=True)
+    assert list(details) == await listing(pattern) == ["nested/report.txt"]
+    for name, info in details.items():
+        assert await dirfs._cat_file(info["name"]) == b"hello"
+        assert info["name"] == (await dirfs._info(name))["name"] == name
+        assert info["size"] == 5
+        assert info["type"] == "file"
+
+
 def test_from_url(m):
     from fsspec.core import url_to_fs
 
@@ -658,3 +817,45 @@ def test_from_url(m):
     assert fs.ls("", False) == ["file"]
     assert fs.ls("", True)[0]["name"] == "file"
     assert fs.cat("file") == b"data"
+
+
+def test_find_detail_single_tar_file():
+    with BytesIO() as data:
+        with tarfile.open(fileobj=data, mode="w") as archive:
+            entry = tarfile.TarInfo("root/report.txt")
+            entry.size = 5
+            archive.addfile(entry, BytesIO(b"hello"))
+        data.seek(0)
+        fs = TarFileSystem(fo=data)
+        try:
+            dirfs = DirFileSystem("root", fs)
+            details = dirfs.find("report.txt", detail=True)
+            assert list(details) == ["report.txt"]
+            assert details["report.txt"]["name"] == "report.txt"
+            assert details["report.txt"]["type"] == "file"
+            assert details["report.txt"]["size"] == 5
+            assert dirfs.cat_file(details["report.txt"]["name"]) == b"hello"
+            assert fs.find("root/report.txt", detail=True) == {
+                "root/report.txt": fs.info("root/report.txt")
+            }
+        finally:
+            fs.close()
+
+
+@pytest.mark.parametrize("method", ["glob", "find"])
+def test_detail_without_name(dirfs, method):
+    wrapped = getattr(dirfs.fs, method)
+    wrapped.return_value = {f"{PATH}/file": {}}
+    assert getattr(dirfs, method)("file", detail=True) == {"file": {"name": "file"}}
+    assert wrapped.return_value == {f"{PATH}/file": {}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["_glob", "_find"])
+async def test_async_detail_without_name(adirfs, method):
+    wrapped = getattr(adirfs.fs, method)
+    wrapped.return_value = {f"{PATH}/file": {}}
+    assert await getattr(adirfs, method)("file", detail=True) == {
+        "file": {"name": "file"}
+    }
+    assert wrapped.return_value == {f"{PATH}/file": {}}

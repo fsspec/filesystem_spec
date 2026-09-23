@@ -25,3 +25,16 @@ def test_info():
         "type": "file",
         "mimetype": "text/html",
     }
+
+
+def test_info_without_protocol():
+    # url_to_fs and fsspec.open hand the filesystem paths with "data:" removed
+    fs, path = fsspec.core.url_to_fs("data:text/plain;base64,SGk=")
+    assert path == "text/plain;base64,SGk="
+    assert fs.info(path)["mimetype"] == "text/plain"
+    assert fs.size(path) == 2
+    assert fs.exists(path)
+
+    fs, path = fsspec.core.url_to_fs("data:,Hello")
+    assert fs.info(path)["mimetype"] == ""
+    assert fs.size(path) == 5

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
-import os
+import posixpath
 import re
 from glob import has_magic
 from pathlib import Path
@@ -192,7 +192,11 @@ class OpenFiles(list):
     def __exit__(self, *args):
         fs = self.fs
         [s.__exit__(*args) for s in self]
-        if "r" not in self.mode:
+        if "r" in self.mode:
+            # open_many() returns files without populating the OpenFile objects.
+            for f in self.files:
+                f.close()
+        else:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
@@ -601,7 +605,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     expanded_paths = []
     paths = list(paths)
 
-    if "w" in mode:  # read mode
+    if "w" in mode or "x" in mode:  # write mode
         if sum(1 for p in paths if "*" in p) > 1:
             raise ValueError(
                 "When writing data, only one filename mask can be specified."
@@ -712,7 +716,8 @@ def _expand_paths(path, name_function, num):
         if path.count("*") > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
         elif "*" not in path:
-            path = os.path.join(path, "*.part")
+            # paths are "/"-separated on every filesystem, including local ones
+            path = posixpath.join(path, "*.part")
 
         if name_function is None:
             name_function = build_name_function(num - 1)

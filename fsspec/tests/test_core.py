@@ -43,6 +43,8 @@ def tempzip(data=None):
         ["apath.*.csv", None, 1, ["apath.0.csv"]],
         ["apath.*.csv", None, 2, ["apath.0.csv", "apath.1.csv"]],
         ["a*", lambda x: "abc"[x], 2, ["aa", "ab"]],
+        ["out", None, 2, ["out/0.part", "out/1.part"]],
+        ["/out/", None, 1, ["/out/0.part"]],
     ],
 )
 def test_expand_paths(path, name_function, num, out):
@@ -70,6 +72,16 @@ def test_expand_paths_if_needed_in_read_mode(create_files, path, out):
     fs = fsspec.filesystem("file")
     res = expand_paths_if_needed([path], "r", 0, fs, None)
     assert [os.path.basename(p) for p in res] == out
+
+
+@pytest.mark.parametrize("mode", ["w", "w+", "x", "x+"])
+def test_expand_paths_if_needed_in_write_mode(mode):
+    d = str(tempfile.mkdtemp())
+    path = os.path.join(d, "part*.csv")
+
+    fs = fsspec.filesystem("file")
+    res = expand_paths_if_needed([path], mode, 2, fs, None)
+    assert [os.path.basename(p) for p in res] == ["part0.csv", "part1.csv"]
 
 
 def test_expand_error():

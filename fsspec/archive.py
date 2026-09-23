@@ -68,6 +68,12 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                 if ppath not in paths:
                     out = {"name": ppath, "size": 0, "type": "directory"}
                     paths[ppath] = out
+        if not paths and path.strip("/"):
+            # Nothing is listed under ``path``, so it is a file, an empty
+            # directory or missing; ``info`` raises FileNotFoundError for the last.
+            info = self.info(path)
+            if info["type"] != "directory":
+                paths[info["name"]] = info
         if detail:
             out = sorted(paths.values(), key=operator.itemgetter("name"))
             return out

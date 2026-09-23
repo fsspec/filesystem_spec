@@ -22,6 +22,21 @@ class TarFileSystem(AbstractArchiveFileSystem):
     protocol = "tar"
     cachable = False
 
+    @classmethod
+    def _strip_protocol(cls, path):
+        # file paths are always relative to the archive root
+        return cls._normalize_path(super()._strip_protocol(path))
+
+    @staticmethod
+    def _normalize_path(path):
+        # Do not resolve '..': it can be part of a literal archive member name.
+        return "/".join(part for part in path.split("/") if part not in ("", "."))
+
+    def ls(self, path, detail=True, **kwargs):
+        entries = super().ls(self._strip_protocol(path), detail=detail, **kwargs)
+        # An explicit './' member represents the root, not one of its children.
+        return [entry for entry in entries if (entry["name"] if detail else entry)]
+
     def __init__(
         self,
         fo="",
@@ -94,11 +109,30 @@ class TarFileSystem(AbstractArchiveFileSystem):
         for ti in self.tar:
             info = ti.get_info()
             info["type"] = typemap.get(info["type"], "file")
-            name = ti.get_info()["name"].rstrip("/")
-            out[name] = (info, ti.offset_data)
+            orig_name = info["name"].rstrip("/")
+            # Keep the original name for tarfile lookups and link resolution.
+            name = self._normalize_path(orig_name)
+            info["name"] = name
+            if ti.islnk() or ti.issym():
+                # extractfile follows links, so report the size of the target
+                info["size"] = self._link_target_size(ti)
+            out[name] = (info, ti.offset_data, orig_name)
 
         self.index = out
         # TODO: save index to self.index_store here, if set
+
+    def _link_target_size(self, ti):
+        seen = set()
+        while ti.islnk() or ti.issym():
+            if ti.name in seen:
+                return 0
+            seen.add(ti.name)
+            try:
+                ti = self.tar._find_link_target(ti)
+            except KeyError:
+                # dangling link; opening it fails as well
+                return 0
+        return ti.size
 
     def _get_dirs(self):
         if self.dir_cache is not None:
@@ -107,21 +141,26 @@ class TarFileSystem(AbstractArchiveFileSystem):
         # This enables ls to get directories as children as well as files
         self.dir_cache = {
             dirname: {"name": dirname, "size": 0, "type": "directory"}
-            for dirname in self._all_dirnames(self.tar.getnames())
+            for dirname in self._all_dirnames(self.index)
         }
-        for member in self.tar.getmembers():
-            info = member.get_info()
-            info["name"] = info["name"].rstrip("/")
-            info["type"] = typemap.get(info["type"], "file")
-            self.dir_cache[info["name"]] = info
+        self.dir_cache.update(
+            {info["name"]: info for info, _, _ in self.index.values()}
+        )
 
     def _open(self, path, mode="rb", **kwargs):
         if mode != "rb":
             raise ValueError("Read-only filesystem implementation")
-        details, offset = self.index[path]
+        path = self._normalize_path(path)
+        try:
+            details, _, orig_name = self.index[path]
+        except KeyError as exc:
+            raise FileNotFoundError(path) from exc
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
-        return self.tar.extractfile(path)
+        out = self.tar.extractfile(orig_name)
+        # cat_file needs the size to resolve negative offsets, as zip provides.
+        out.size = details["size"]
+        return out
 
     def close(self):
         """Commits any write changes to the file. Done on ``del`` too."""

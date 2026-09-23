@@ -32,7 +32,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         Parameters
         ----------
         fo: str or file-like
-            Contains ZIP, and must exist. If a str, will fetch file using
+            Contains ZIP. In append mode, a missing archive is created.
+            If a str, will fetch file using
             :meth:`~fsspec.open_files`, which must return one file exactly.
         mode: str
             Accept: "r", "w", "a"
@@ -59,7 +60,13 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             )
         self.force_zip_64 = allowZip64
         self.of = fo
-        self.fo = fo.__enter__()  # the whole instance is a context
+        try:
+            self.fo = fo.__enter__()  # the whole instance is a context
+        except FileNotFoundError:
+            if mode != "a" or not isinstance(fo, fsspec.core.OpenFile):
+                raise
+            fo.mode = "w+b"
+            self.fo = fo.__enter__()
         self.zip = zipfile.ZipFile(
             self.fo,
             mode=mode,
@@ -111,6 +118,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
 
     def pipe_file(self, path, value, **kwargs):
         # override upstream, because we know the exact file size in this case
+        path = self._strip_protocol(path)
         self.zip.writestr(path, value, **kwargs)
 
     def _open(
@@ -129,7 +137,12 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             raise FileNotFoundError(path)
         if "r" in self.mode and "w" in mode:
             raise OSError("ZipFS can only be open for reading or writing, not both")
-        out = self.zip.open(path, mode.strip("b"), force_zip64=self.force_zip_64)
+        try:
+            out = self.zip.open(path, mode.strip("b"), force_zip64=self.force_zip_64)
+        except KeyError as exc:
+            # zipfile reports a missing member as KeyError; fsspec callers,
+            # including FSMap's missing_exceptions, expect FileNotFoundError.
+            raise FileNotFoundError(path) from exc
         if "r" in mode:
             info = self.info(path)
             out.size = info["size"]
@@ -146,9 +159,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if not isinstance(path, str):
             path = str(path)
 
-        # Remove the leading slash, as the zip file paths are always
-        # given without a leading slash
-        path = path.lstrip("/")
+        path = self._strip_protocol(path)
         path_parts = to_parts(path)
         path_depth = len(path_parts)
 

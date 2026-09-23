@@ -4,6 +4,7 @@ import string
 import pytest
 
 from fsspec.caching import (
+    BackgroundBlockCache,
     BlockCache,
     FirstChunkCache,
     MMapCache,
@@ -19,6 +20,7 @@ def test_cache_getitem(Cache_imp):
     assert cacher._fetch(0, 4) == b"abcd"
     assert cacher._fetch(None, 4) == b"abcd"
     assert cacher._fetch(2, 4) == b"cd"
+    assert cacher._fetch(0, None) == string.ascii_letters.encode()
 
 
 def test_block_cache_lru():
@@ -73,6 +75,35 @@ def test_block_cache_lru_no_redundant_reads():
     )
     cache._fetch(0, block_size * (maxblocks + 1))
     assert cache.cache_info().misses == 3
+
+
+def test_background_block_cache_no_redundant_reads():
+    block_size = 4
+    maxblocks = 2
+    cache = BackgroundBlockCache(
+        block_size, letters_fetcher, len(string.ascii_letters), maxblocks=maxblocks
+    )
+    try:
+        # More blocks than the LRU holds: each block is fetched once, not again
+        # after being evicted while the earlier ones were prefetched.
+        data = cache._fetch(0, block_size * (maxblocks + 1))
+        assert data == string.ascii_letters[: block_size * (maxblocks + 1)].encode()
+        assert cache.cache_info().misses == maxblocks + 1
+    finally:
+        cache.close()
+
+
+def test_background_block_cache_read_ending_on_block_boundary():
+    block_size = 4
+    cache = BackgroundBlockCache(block_size, letters_fetcher, len(string.ascii_letters))
+    try:
+        # Only block 0 is needed; block 1 is left to the background prefetch.
+        assert cache._fetch(0, block_size) == b"abcd"
+        assert cache.cache_info().misses == 1
+        assert cache._fetch(block_size, 2 * block_size) == b"efgh"
+        assert cache._fetch(2, 2 * block_size) == b"cdefgh"
+    finally:
+        cache.close()
 
 
 def test_first_cache():
@@ -177,12 +208,24 @@ def test_cache_empty_file(Cache_imp):
     assert cache._fetch(0, 0) == b""
 
 
+def test_cache_fetch_past_end_of_file(Cache_imp):
+    # Reading past the end of the file returns the available bytes rather than
+    # raising: `read(n)` yields at most n bytes. BlockCache/BackgroundBlockCache
+    # used to overflow their block count and raise ValueError here.
+    blocksize = 5
+    size = len(string.ascii_letters)
+    cache = Cache_imp(blocksize, letters_fetcher, size)
+    assert cache._fetch(0, size + 3 * blocksize) == string.ascii_letters.encode()
+
+
 def test_cache_pickleable(Cache_imp):
     blocksize = 5
     size = 100
     cache = Cache_imp(blocksize, _fetcher, size)
     cache._fetch(0, 5)  # fill in cache
-    unpickled = pickle.loads(pickle.dumps(cache))
+    payload = pickle.dumps(cache)
+    assert cache._fetch(0, 10) == b"0" * 10
+    unpickled = pickle.loads(payload)
     assert isinstance(unpickled, Cache_imp)
     assert unpickled.blocksize == blocksize
     assert unpickled.size == size
@@ -292,6 +335,40 @@ def test_background(server, monkeypatch):
     assert len(thread_ids) == 2
 
 
+def test_background_shutdown_on_close():
+    import weakref
+
+    from fsspec.spec import AbstractBufferedFile
+
+    data = b"abcdefgh"
+
+    class TestFile(AbstractBufferedFile):
+        DEFAULT_BLOCK_SIZE = 4
+
+        def _fetch_range(self, start, end):
+            return data[start:end]
+
+    f = TestFile(
+        None,
+        "test",
+        mode="rb",
+        cache_type="background",
+        size=len(data),
+    )
+    f.read(1)
+    cache = f.cache
+    assert isinstance(cache, BackgroundBlockCache)
+    cache_ref = weakref.ref(cache)
+    executor = cache._thread_executor
+    del cache
+
+    f.close()
+
+    with pytest.raises(RuntimeError, match="cannot schedule new futures"):
+        executor.submit(lambda: None)
+    assert cache_ref() is None
+
+
 def test_register_cache():
     # just test that we have them populated and fail to re-add again unless overload
     with pytest.raises(ValueError):
@@ -313,3 +390,70 @@ def test_cache_kwargs(mocker):
     # It is a random location that cannot be predicted.
     # The important thing is the 'overwrite' kwarg
     fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], ["/test"], overwrite=True)
+
+
+def test_adaptive_cache_with_async_fetcher():
+    data = string.ascii_letters.encode()
+
+    cache = caches["adaptive"](
+        8,
+        letters_fetcher,
+        len(data),
+        # Keep this below the default prefetch minimum so behavior is deterministic
+        # and bounded for unit testing.
+        concurrency=2,
+        max_prefetch_size=64,
+    )
+    try:
+        assert cache._fetch(0, 0) == b""
+        assert cache._fetch(0, 5) == data[0:5]
+        assert cache._fetch(5, 12) == data[5:12]
+        assert cache._fetch(12, 20) == data[12:20]
+    finally:
+        cache.close()
+
+
+def test_adaptive_cache_registered():
+    assert "adaptive" in caches
+
+
+def test_adaptive_cache_fallback_when_prefetcher_init_fails(monkeypatch):
+    import fsspec.prefetcher as prefetcher_mod
+
+    class FailingPrefetcher:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("prefetch init failed")
+
+    monkeypatch.setattr(prefetcher_mod, "BackgroundPrefetcher", FailingPrefetcher)
+
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
+
+    # On prefetch setup failure, adaptive must still serve reads through readahead.
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]
+    assert cache._prefetcher is None
+
+
+def test_adaptive_cache_selected_in_open_flow():
+    from fsspec.spec import AbstractBufferedFile
+
+    data = string.ascii_letters.encode()
+
+    class TestFile(AbstractBufferedFile):
+        DEFAULT_BLOCK_SIZE = 8
+
+        def _fetch_range(self, start, end):
+            return data[start:end]
+
+    with TestFile(None, "afile", mode="rb", cache_type="adaptive", size=len(data)) as f:
+        assert f.cache.name == "adaptive"
+        assert f.read(12) == data[:12]
+
+
+def test_adaptive_cache_fallback_without_loop():
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
+
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]

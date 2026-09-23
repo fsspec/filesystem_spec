@@ -1,6 +1,9 @@
 import pytest
 
 import fsspec
+from fsspec.generic import rsync
+from fsspec.implementations.memory import MemoryFileSystem
+from fsspec.registry import _registry, register_implementation
 from fsspec.tests.conftest import data, server  # noqa: F401
 
 
@@ -116,3 +119,57 @@ def test_rsync(tmpdir, m):
         allfiles[f"file://{pos_tmpdir}/deep/path/afile"]
         == allfiles2[f"file://{pos_tmpdir}/deep/path/afile"]
     )
+
+
+class _OptionsRequiredFS(MemoryFileSystem):
+    """Backend that raises unless its storage_options reached the constructor."""
+
+    protocol = "optsrequired"
+
+    def __init__(self, *args, token=None, **kwargs):
+        if token is None:
+            raise ValueError("storage_options were not propagated")
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def _strip_protocol(cls, path):
+        if isinstance(path, str):
+            path = path.removeprefix(f"{cls.protocol}://")
+        return MemoryFileSystem._strip_protocol(path)
+
+
+@pytest.fixture()
+def opts_fs(m):
+    register_implementation(
+        _OptionsRequiredFS.protocol, _OptionsRequiredFS, clobber=True
+    )
+    m.pipe_file("/afile", b"hello")
+    m.makedirs("/adir", exist_ok=True)
+    m.pipe_file("/adir/nested", b"world")
+    yield fsspec.filesystem(
+        "generic",
+        default_method="options",
+        storage_options={_OptionsRequiredFS.protocol: {"token": "set"}},
+    )
+    _registry.pop(_OptionsRequiredFS.protocol, None)
+    _OptionsRequiredFS.clear_instance_cache()
+
+
+def test_storage_options_propagated_to_backend(opts_fs):
+    opts_fs.info("optsrequired:///afile")
+    opts_fs.ls("optsrequired:///adir")
+    opts_fs.cat_file("optsrequired:///afile")
+    opts_fs.isdir("optsrequired:///adir")
+    opts_fs.find("optsrequired:///adir")
+
+
+def test_storage_options_propagated_cross_protocol(opts_fs, tmpdir):
+    rsync(
+        "optsrequired:///adir",
+        f"file://{tmpdir}",
+        inst_kwargs={
+            "default_method": "options",
+            "storage_options": {_OptionsRequiredFS.protocol: {"token": "set"}},
+        },
+    )
+    assert (tmpdir / "nested").read_binary() == b"world"

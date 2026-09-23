@@ -1,12 +1,191 @@
 Changelog
 =========
 
+Dev
+---
+
+Fixes
+
+- Make async loop lock initialization thread-safe (#1783)
+
+
+2026.9.0
+--------
+
+Enhancements
+
+- ``ia://`` filesystem for files in Internet Archive items: an
+  ``HTTPFileSystem`` reading from ``archive.org/download`` with credentials from
+  ``ia configure``'s ``ia.ini``
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#2137;
+  issue #1904)
+
+- Add an adaptive readahead cache (#2093)
+
+- Implement ``created`` and ``modified`` for ``SFTPFileSystem`` (#2104)
+
+- Allow filesystem implementations to assign ``protocol`` per instance (#2117)
+
+- Delegate ``sizes`` and ``cat_ranges`` from ``DirFileSystem`` to the wrapped
+  filesystem (#2142)
+
+- Delegate ``invalidate_cache``, ``ukey`` and ``checksum`` from
+  ``DirFileSystem`` to the wrapped filesystem (#2144)
+
+- Support negative offsets in ``TarFileSystem.cat_file`` (#2146)
+
+- Mirror ``readinto`` from the PyArrow stream onto ``ArrowFile`` (#2111)
+
+- Allow ``simplecache`` files to be removed by age using their modification
+  times (#2118)
+
+Fixes
+
+- Compute ``HadoopFileSystem.fsid`` from its configured host and port instead of
+  accessing attributes no longer exposed by PyArrow (issue #1870)
+
+- Normalize dot path components in ``TarFileSystem`` listings and lookups,
+  while preserving original archive names for reading (issue #1568)
+
+- Make ``merge_offset_ranges`` ``O(n log n)`` and keep merged blocks within
+  ``max_block``, replacing the quadratic nested-range filter added in #1982
+  (#2091)
+
+- Fix transactions with compressed files (#2070)
+
+- Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
+  not exist, as ``rm_file`` and the other filesystems do, so deleting a missing
+  key from a memory-backed mapper raises ``KeyError`` (#2140)
+
+- Create missing ZIP archives in append mode without truncating existing
+  archives (#2139)
+
+- Close cached readers when exiting an ``open_files`` context (#2131)
+
+- Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
+  when pickling (#2102)
+
+- End the transaction even when a commit or discard raises, so the filesystem
+  is not left in transaction mode and deferred temporary files are cleaned up
+  (#2108)
+
+- Honor a caller-owned output file in ``get_file`` (#2066)
+
+- Preserve existing files when checking ``FSMap`` write access (#2122)
+
+- Normalize ZIP paths in ``pipe_file`` and ``find`` (#2123)
+
+- Reject ``get`` destinations that resolve above the target (#2103)
+
+- Pass ``maxdepth`` through in ``AsyncFileSystem._rm`` (#2106)
+
+- Do not let ``isfile`` swallow ``BaseException`` (#2125)
+
+- Keep reference filesystem ``get`` destinations inside the target (#2129)
+
+- Return relative names from ``DirFileSystem.glob`` and ``find`` (#2127)
+
+- Raise ``FileNotFoundError`` for missing ZIP and TAR members (#2141)
+
+- Stop collapsing three-character drive-relative paths to the drive root
+  (#2143)
+
+- Use ``/`` as the only glob separator on every platform (#2112)
+
+- Distinguish omitted and ``None`` defaults in ``FSMap.pop`` (#2136)
+
+- Forward an Arrow file's ``flush`` and ``closed`` state to its stream (#2134)
+
+- Keep reference filesystem ``cat_file`` offsets inside the referenced part
+  (#2147)
+
+- Raise ``FileNotFoundError`` from archive ``ls`` for a missing path (#2145)
+
+- Download uncached files in ``simplecache.cat_ranges`` (#2154)
+
+- Fix ``tail`` on ``simplecache`` and ``filecache`` (#2155)
+
+- Get whole-file reference sizes asynchronously in
+  ``ReferenceFileSystem._info`` (#2156)
+
+- Report the target size for links in ``TarFileSystem`` (#2157)
+
+- Keep the async generator returned by ``AsyncFileSystemWrapper._walk``
+  (#2158)
+
+- Join the default output filename with ``/`` in ``_expand_paths`` (#2162)
+
+- Make names relative in ``DirFileSystem.walk(detail=True)`` (#2160)
+
+- Ignore a leading slash in ``TarFileSystem`` paths (#2148)
+
+- Fix ``cat_ranges`` on whole-file caches (#2163)
+
+- Normalize paths in ``AsyncFileSystemWrapper`` like the wrapped filesystem
+  (#2159)
+
+- The SFTP host key policy is configurable with the new ``host_key_policy``
+  argument of ``SFTPFileSystem``, which accepts ``"auto_add"`` (default,
+  unchanged behaviour), ``"warning"`` or ``"reject"``, or any
+  ``paramiko.MissingHostKeyPolicy`` (#2126; issue #2119)
+
+Other
+
+- Use trusted publishing for releases and trigger the release workflow on tags
+  (#2060)
+
+- Remove the stale async wrapper documentation warning (#2098)
+
+- Add Zarr to the ``test_downstream`` extra so the Xarray/Zarr test runs again
+  (#2109)
+
+- Clarify that ``rm`` handles directories (#2096)
+
+- Fix grammar in ``features.rst`` (#2153)
+
+- Patch ``HAS_CPYTHON_API`` where ``_fast_slice`` reads it in tests (#2164)
+
+2026.7.0
+--------
+
+Enhancements
+
+- Single-pass ``MemoryFileSystem.find()`` to avoid O(n_dirs * n_entries) listing (#2055)
+- Permit composite URL protocol schemes in infer_storage_options (#2085)
+- Implement topdown in async walk() (#2052)
+
+Fixes
+
+- Fix incorrect glob docstring for '[!]' (#2084)
+- Propagate storage_options to all backends resolved by GenericFileSystem (#2083)
+- Handle end=None in FirstChunkCache._fetch like the other caches (#2082)
+- Clamp read end to file size in BlockCache and BackgroundBlockCache(#2081)
+- Create the parent dir for "x" and "a" modes under auto_mkdir (#2079)
+- Expand paths for mode="x" when urlpath is a list (#2078)
+- fix: correctly pass 'start' and 'end' parameters to super().cat_file() (#2077)
+- Fix LocalFileSystem directory symlink removal (#2074)
+- Fix ArrowFSWrapper parent paths for S3 (#2072)
+- Fix get_file_extension when a parent directory name contains a dot (#2071)
+- tar: make members with duplicate slashes reachable via ls/find/glob (#2063)
+- MemoryFileSystem: create the file when appending to a missing path (#2062)
+
+Other
+
+- fixes for pytest deprecation (#2076)
+- Shut down background cache workers on file close (#2069)
+- Forward ls kwargs from cached filesystems (#2068)
+- Fix bare except: use except Exception in upload cleanup handler (#2067)
+- fix: Make Cached metaclass instance instantiation thread-safe and fork-safe (#2064)
+- ci: fix test collection in fsspec_friends job (#2061)
+- ftp: Make deprecated TLS versions optional (#2056)
+- restrict cache storage directory permissions to owner (#2048)
+
 2026.6.0
 --------
 
 Fixes
 
-- Make async loop lock initialization thread-safe (#1783)
 - FTP: preserve filenames containing whitespace in _mlsd2 (#2043)
 - Prevent attribute error for 'forced' before flushing cache (#2042)
 - Reflect async _walk correctly (#2040)

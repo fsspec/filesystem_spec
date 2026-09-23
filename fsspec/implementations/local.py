@@ -8,10 +8,11 @@ import stat
 import tempfile
 from functools import lru_cache
 
-from fsspec import AbstractFileSystem
 from fsspec.compression import compr
 from fsspec.core import get_compression
 from fsspec.utils import isfilelike, stringify_path
+
+from ..spec import AbstractFileSystem
 
 logger = logging.getLogger("fsspec.local")
 
@@ -194,7 +195,7 @@ class LocalFileSystem(AbstractFileSystem):
 
         for p in path:
             p = self._strip_protocol(p)
-            if self.isdir(p):
+            if self.isdir(p) and not self.islink(p):
                 if not recursive:
                     raise ValueError("Cannot delete directory, set recursive=True")
                 if osp.abspath(p) == os.getcwd():
@@ -210,7 +211,7 @@ class LocalFileSystem(AbstractFileSystem):
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         path = self._strip_protocol(path)
-        if self.auto_mkdir and "w" in mode:
+        if self.auto_mkdir and ("w" in mode or "x" in mode or "a" in mode):
             self.makedirs(self._parent(path), exist_ok=True)
         return LocalFileOpener(path, mode, fs=self, **kwargs)
 
@@ -327,8 +328,10 @@ def make_path_posix(path):
             path = path[1:]
         if path[1:2] == ":":
             # windows full path like "C:\\local\\path"
-            if len(path) <= 3:
-                # nt root (something like c:/)
+            if len(path) == 2 or (len(path) == 3 and path[2] in "/\\"):
+                # nt root (something like c:/). A three-character "c:x" is not a
+                # root: it names "x" relative to that drive, so it falls through
+                # instead of being collapsed to the drive root.
                 return path[0] + ":/"
             path = path.replace("\\", "/")
             return path
@@ -437,6 +440,11 @@ class LocalFileOpener(io.IOBase):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
+        if not self.f.closed:
+            # a compression wrapper (e.g., GzipFile) does not close the file
+            # object it was given, so buffered bytes and any trailer may still
+            # be pending here. Windows also refuses to rename an open file.
+            self.f.close()
         try:
             shutil.move(self.temp, self.path)
         except PermissionError as e:

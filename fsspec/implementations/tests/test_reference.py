@@ -160,6 +160,16 @@ def test_info(server):
     assert fs.info("e")["size"] == len(data)
 
 
+def test_size_of_whole_file_reference(m):
+    m.pipe("/data/0", data)
+    refs = {"a": ["memory://data/0"], "b": ("memory://data/0",), "c": b"data"}
+    fs = fsspec.filesystem("reference", fo=refs, fs=m)
+    assert fs.size("a") == len(data)
+    assert fs.size("b") == len(data)
+    assert fs.sizes(["a", "c"]) == [len(data), 4]
+    assert fs.du("") == 2 * len(data) + 4
+
+
 def test_mutable(server, m):
     refs = {
         "a": b"data",
@@ -442,6 +452,44 @@ def test_get_sync(tmpdir):
     assert (tmpdir / "c" / "d").read_binary() == b"123456"
 
 
+def test_get_does_not_write_above_destination(tmp_path):
+    # Reference keys come from the spec, so a key holding ".." must not
+    # place the copy above the destination the caller asked for.
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    outside = tmp_path / "escaped.txt"
+    outside.write_bytes(b"ORIGINAL")
+
+    refs = {
+        "version": 1,
+        "refs": {
+            "dataset/../escaped.txt": b"ATTACKER",
+            "dataset/normal.txt": b"ok",
+        },
+    }
+    fs = fsspec.filesystem("reference", fo=refs, skip_instance_cache=True)
+    with pytest.raises(ValueError, match="outside the destination"):
+        fs.get("dataset", str(dest) + "/", recursive=True)
+
+    assert outside.read_bytes() == b"ORIGINAL"
+    assert not (dest / "normal.txt").exists()
+
+
+def test_get_keeps_dotdot_inside_destination(tmp_path):
+    # ".." that resolves within the destination stays a legitimate name.
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    refs = {
+        "plain.txt": b"ok",
+        "a/b/../inner.txt": b"inner",
+    }
+    fs = fsspec.filesystem("reference", fo=refs, skip_instance_cache=True)
+    fs.get("", str(dest) + "/", recursive=True)
+
+    assert (dest / "plain.txt").read_bytes() == b"ok"
+    assert (dest / "a" / "inner.txt").read_bytes() == b"inner"
+
+
 def test_multi_fs_provided(m, tmpdir):
     localfs = LocalFileSystem()
 
@@ -573,6 +621,12 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", start=1) == other[4:10][1:]
     assert fs.cat_file("d", start=-5) == other[4:10][-5:]
     assert fs.cat_file("d", 1, -3) == other[4:10][1:-3]
+
+    # Offsets beyond either end of the part stay inside it, as with slicing.
+    assert fs.cat_file("d", start=2, end=100) == other[4:10][2:100]
+    assert fs.cat_file("d", start=-100) == other[4:10][-100:]
+    assert fs.cat_file("d", start=100) == other[4:10][100:]
+    assert fs.cat_file("d", end=-100) == other[4:10][:-100]
 
 
 @pytest.mark.asyncio
