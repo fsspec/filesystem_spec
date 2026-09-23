@@ -172,11 +172,13 @@ def test_rename_from_upath(smb_params):
     fsmb.mv("/home/a/b/c", "/home/a/b/d", recursive=False, maxdepth=None)
 
 
-def test_strip_protocol_pathlike():
+def test_parent_pathlike():
     from pathlib import PurePosixPath
 
-    fsmb = fsspec.get_filesystem_class("smb")
-    assert (
-        fsmb._strip_protocol(PurePosixPath("/share/dir/file.txt"))
-        == "/share/dir/file.txt"
+    fsmb = fsspec.get_filesystem_class("smb")(
+        host="example",
+        username="user",
+        password="pass",
+        register_session_retries=-1,
     )
+    assert fsmb._parent(PurePosixPath("/share/dir/file.txt")) == "/share/dir"
