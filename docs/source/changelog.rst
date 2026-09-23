@@ -4,6 +4,14 @@ Changelog
 Dev
 ---
 
+Fixes
+
+- Make async loop lock initialization thread-safe (#1783)
+
+
+2026.9.0
+--------
+
 Enhancements
 
 - ``ia://`` filesystem for files in Internet Archive items: an
@@ -178,7 +186,6 @@ Other
 
 Fixes
 
-- LocalFS: remove directory symlinks without requiring recursive mode (#1299)
 - FTP: preserve filenames containing whitespace in _mlsd2 (#2043)
 - Prevent attribute error for 'forced' before flushing cache (#2042)
 - Reflect async _walk correctly (#2040)

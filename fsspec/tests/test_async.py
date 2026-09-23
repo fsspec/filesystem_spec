@@ -1,13 +1,37 @@
 import asyncio
 import inspect
 import io
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
 import fsspec
 import fsspec.asyn
 from fsspec.asyn import _run_coros_in_chunks
+
+
+def test_get_lock_is_thread_safe(monkeypatch):
+    barrier = threading.Barrier(2)
+    real_threading = fsspec.asyn.threading
+
+    def make_lock():
+        candidate = threading.Lock()
+        barrier.wait()
+        return candidate
+
+    fsspec.asyn.reset_lock()
+    try:
+        monkeypatch.setattr(fsspec.asyn, "threading", SimpleNamespace(Lock=make_lock))
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            locks = list(executor.map(lambda _: fsspec.asyn.get_lock(), range(2)))
+    finally:
+        monkeypatch.setattr(fsspec.asyn, "threading", real_threading)
+        fsspec.asyn.reset_lock()
+
+    assert locks[0] is locks[1]
 
 
 def test_sync_methods():
