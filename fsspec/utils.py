@@ -29,10 +29,11 @@ T = TypeVar("T")
 
 def _unquote_userinfo(value: str) -> str:
     # Percent-decode a URL userinfo component (username or password).
-    # Falls back to the raw input when the decoded bytes do not form valid
-    # UTF-8, so that a literal ``%`` followed by two hex digits that happens
-    # to produce a non-UTF-8 byte (e.g. a password containing ``%ab``) is
-    # preserved instead of being replaced by U+FFFD or raising downstream.
+    # The fallback is deliberately all-or-nothing: the value is either decoded
+    # in full or kept exactly as it arrived, so a literal ``%`` followed by two
+    # hex digits that happens to produce a non-UTF-8 byte (e.g. a password
+    # containing ``%ab``) is preserved intact instead of being replaced by
+    # U+FFFD, and no caller ever sees a partially-decoded string.
     try:
         return unquote(value, errors="strict")
     except UnicodeDecodeError:
