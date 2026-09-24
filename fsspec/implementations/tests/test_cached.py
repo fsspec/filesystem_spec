@@ -855,8 +855,6 @@ def test_filecache_multicache_with_same_file_different_data_reads_from_first(imp
 
 
 def test_filecache_with_checks():
-    import time
-
     origin = tempfile.mkdtemp()
     cache1 = tempfile.mkdtemp()
     data = b"test data"
@@ -865,8 +863,12 @@ def test_filecache_with_checks():
         f.write(data)
 
     # populate first cache
+    expiry_time = 100
     fs = fsspec.filesystem(
-        "filecache", target_protocol="file", cache_storage=cache1, expiry_time=0.1
+        "filecache",
+        target_protocol="file",
+        cache_storage=cache1,
+        expiry_time=expiry_time,
     )
     fs2 = fsspec.filesystem(
         "filecache", target_protocol="file", cache_storage=cache1, check_files=True
@@ -881,7 +883,10 @@ def test_filecache_with_checks():
     assert fs2.cat(f1) == data * 2  # changed, since origin changed
     with fs2.open(f1) as f:
         assert f.read() == data * 2  # read also sees new data
-    time.sleep(0.11)  # allow cache details to expire
+
+    # age the cache details past the expiry, rather than waiting out a short one
+    for detail in fs._metadata.cached_files[-1].values():
+        detail["time"] -= expiry_time + 1
     assert fs.cat(f1) == data * 2  # changed, since origin changed
 
 
