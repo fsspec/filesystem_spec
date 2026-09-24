@@ -1,5 +1,6 @@
 import os
 import pickle
+from contextlib import nullcontext
 from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
@@ -334,6 +335,26 @@ def test_append_creates_missing_file(m, mode):
         assert f.tell() == f.seek(0, 2)
         f.write(b"data" if "b" in mode else "data")
     assert m.cat(filename) == b"data"
+
+
+@pytest.mark.parametrize("global_store", [False, True])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_transaction_append_existing_file(m, global_store, mode, rollback):
+    fs = filesystem("memory", global_store=global_store, skip_instance_cache=True)
+    fs.pipe_file("file", b"original")
+
+    with pytest.raises(RuntimeError) if rollback else nullcontext():
+        with fs.transaction:
+            for data in [b"-first", b"-second"]:
+                with fs.open("file", mode) as f:
+                    f.write(data)
+            assert fs.cat_file("file") == b"original"
+            if rollback:
+                raise RuntimeError("discard transaction")
+
+    expected = b"original" if rollback else b"original-first-second"
+    assert fs.cat_file("file") == expected
 
 
 def test_moves(m):
