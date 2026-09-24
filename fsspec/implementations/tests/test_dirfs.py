@@ -889,9 +889,7 @@ async def test_async_detail_without_name(adirfs, method):
 def _memory_dirfs():
     import fsspec
 
-    mem = fsspec.filesystem(
-        "memory", global_store=False, skip_instance_cache=True
-    )
+    mem = fsspec.filesystem("memory", global_store=False, skip_instance_cache=True)
     mem.pipe_file("/root/a.txt", b"hello")
     mem.pipe_file("/root/sub/b.txt", b"worldworld")
     return DirFileSystem(path="/root", fs=mem)
