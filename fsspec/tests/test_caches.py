@@ -6,6 +6,7 @@ import pytest
 from fsspec.caching import (
     BackgroundBlockCache,
     BlockCache,
+    BytesCache,
     FirstChunkCache,
     MMapCache,
     ReadAheadCache,
@@ -179,6 +180,33 @@ def test_readahead_cache():
     assert len(cache.cache) == 9
     total_requested_bytes += (4 - 0) + block_size
     assert cache.total_requested_bytes == total_requested_bytes
+
+
+def test_bytes_cache_range_ending_at_cache_end():
+    """
+    A range that stops exactly where the cached data stops is already held in
+    full, so it must be served without going back to the fetcher.
+    """
+    block_size = 5
+    calls = []
+
+    def counting_fetcher(start, end):
+        calls.append((start, end))
+        return letters_fetcher(start, end)
+
+    cache = BytesCache(block_size, counting_fetcher, len(string.ascii_letters))
+
+    assert cache._fetch(0, 5) == letters_fetcher(0, 5)
+    assert cache.miss_count == 1
+    assert cache.hit_count == 0
+    # the read ahead leaves the cache holding [0, 10)
+    assert calls == [(0, 10)]
+
+    # ends exactly at the end of the cached range: every byte is already here
+    assert cache._fetch(5, 10) == letters_fetcher(5, 10)
+    assert cache.hit_count == 1
+    assert cache.miss_count == 1
+    assert calls == [(0, 10)]
 
 
 def _fetcher(start, end):
