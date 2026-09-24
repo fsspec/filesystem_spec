@@ -81,6 +81,11 @@ run and corresponding environment file run a set of tests from the dask
 test suite, and very minimal tests against pandas and zarr from the
 test_downstream.py module in this repo.
 
+### Type Hints
+
+fsspec uses type stub files for type hints instead of inline hints. Use ``stubtest <module>``
+to verify if type stubs are in sync with implementation.
+
 ### Code Formatting
 
 fsspec uses [Black](https://black.readthedocs.io/en/stable) to ensure
