@@ -4,19 +4,6 @@ from .chained import ChainedFileSystem
 from .local import LocalFileSystem
 
 
-def _bind(kwargs, name, args, index, default):
-    """Read an argument the wrapper must inspect, given either way.
-
-    These wrappers forward ``*args`` untouched, so a parameter the base
-    signature accepts positionally never reaches ``kwargs``.
-    """
-    if name in kwargs:
-        return kwargs[name]
-    if len(args) > index:
-        return args[index]
-    return default
-
-
 def _escapes_root(path):
     """Whether a relative path would resolve above its root via ".." segments."""
     depth = 0
@@ -398,32 +385,45 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
             return self._relpath_detail(ret)
         return self._relpath(ret)
 
-    async def _du(self, path, *args, **kwargs):
-        total = _bind(kwargs, "total", args, 0, True)
-        ret = await self.fs._du(self._join(path), *args, **kwargs)
+    async def _du(self, path, total=True, maxdepth=None, **kwargs):
+        ret = await self.fs._du(
+            self._join(path), total=total, maxdepth=maxdepth, **kwargs
+        )
         if total:
             return ret
 
         return {self._relpath(path): size for path, size in ret.items()}
 
-    def du(self, path, *args, **kwargs):
-        total = _bind(kwargs, "total", args, 0, True)
-        ret = self.fs.du(self._join(path), *args, **kwargs)
+    def du(self, path, total=True, maxdepth=None, withdirs=False, **kwargs):
+        ret = self.fs.du(
+            self._join(path),
+            total=total,
+            maxdepth=maxdepth,
+            withdirs=withdirs,
+            **kwargs,
+        )
         if total:
             return ret
 
         return {self._relpath(path): size for path, size in ret.items()}
 
-    async def _find(self, path, *args, **kwargs):
+    async def _find(self, path, maxdepth=None, withdirs=False, **kwargs):
         detail = kwargs.get("detail", False)
-        ret = await self.fs._find(self._join(path), *args, **kwargs)
+        ret = await self.fs._find(
+            self._join(path), maxdepth=maxdepth, withdirs=withdirs, **kwargs
+        )
         if detail:
             return self._relpath_detail(ret)
         return self._relpath(ret)
 
-    def find(self, path, *args, **kwargs):
-        detail = _bind(kwargs, "detail", args, 2, False)
-        ret = self.fs.find(self._join(path), *args, **kwargs)
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        ret = self.fs.find(
+            self._join(path),
+            maxdepth=maxdepth,
+            withdirs=withdirs,
+            detail=detail,
+            **kwargs,
+        )
         if detail:
             return self._relpath_detail(ret)
         return self._relpath(ret)

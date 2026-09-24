@@ -625,43 +625,55 @@ def test_glob_detail(dirfs):
 @pytest.mark.asyncio
 async def test_async_du(adirfs):
     adirfs.fs._du.return_value = 1234
-    assert await adirfs._du("file", *ARGS, **KWARGS) == 1234
-    adirfs.fs._du.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+    assert await adirfs._du("file", **KWARGS) == 1234
+    adirfs.fs._du.assert_called_once_with(
+        f"{PATH}/file", total=True, maxdepth=None, **KWARGS
+    )
 
 
 def test_du(dirfs):
     dirfs.fs.du.return_value = 1234
-    assert dirfs.du("file", *ARGS, **KWARGS) == 1234
-    dirfs.fs.du.assert_called_once_with(f"{PATH}/file", *ARGS, **KWARGS)
+    assert dirfs.du("file", **KWARGS) == 1234
+    dirfs.fs.du.assert_called_once_with(
+        f"{PATH}/file", total=True, maxdepth=None, withdirs=False, **KWARGS
+    )
 
 
 @pytest.mark.asyncio
 async def test_async_du_granular(adirfs):
     adirfs.fs._du.return_value = {f"{PATH}/dir/one": 1, f"{PATH}/dir/two": 2}
-    assert await adirfs._du("dir", *ARGS, total=False, **KWARGS) == {
+    assert await adirfs._du("dir", total=False, **KWARGS) == {
         "dir/one": 1,
         "dir/two": 2,
     }
-    adirfs.fs._du.assert_called_once_with(f"{PATH}/dir", *ARGS, total=False, **KWARGS)
+    adirfs.fs._du.assert_called_once_with(
+        f"{PATH}/dir", total=False, maxdepth=None, **KWARGS
+    )
 
 
 def test_du_granular(dirfs):
     dirfs.fs.du.return_value = {f"{PATH}/dir/one": 1, f"{PATH}/dir/two": 2}
-    assert dirfs.du("dir", *ARGS, total=False, **KWARGS) == {"dir/one": 1, "dir/two": 2}
-    dirfs.fs.du.assert_called_once_with(f"{PATH}/dir", *ARGS, total=False, **KWARGS)
+    assert dirfs.du("dir", total=False, **KWARGS) == {"dir/one": 1, "dir/two": 2}
+    dirfs.fs.du.assert_called_once_with(
+        f"{PATH}/dir", total=False, maxdepth=None, withdirs=False, **KWARGS
+    )
 
 
 @pytest.mark.asyncio
 async def test_async_find(adirfs):
     adirfs.fs._find.return_value = [f"{PATH}/dir/one", f"{PATH}/dir/two"]
-    assert await adirfs._find("dir", *ARGS, **KWARGS) == ["dir/one", "dir/two"]
-    adirfs.fs._find.assert_called_once_with(f"{PATH}/dir", *ARGS, **KWARGS)
+    assert await adirfs._find("dir", **KWARGS) == ["dir/one", "dir/two"]
+    adirfs.fs._find.assert_called_once_with(
+        f"{PATH}/dir", maxdepth=None, withdirs=False, **KWARGS
+    )
 
 
 def test_find(dirfs):
     dirfs.fs.find.return_value = [f"{PATH}/dir/one", f"{PATH}/dir/two"]
-    assert dirfs.find("dir", *ARGS, **KWARGS) == ["dir/one", "dir/two"]
-    dirfs.fs.find.assert_called_once_with(f"{PATH}/dir", *ARGS, **KWARGS)
+    assert dirfs.find("dir", **KWARGS) == ["dir/one", "dir/two"]
+    dirfs.fs.find.assert_called_once_with(
+        f"{PATH}/dir", maxdepth=None, withdirs=False, detail=False, **KWARGS
+    )
 
 
 @pytest.mark.asyncio
@@ -670,13 +682,15 @@ async def test_async_find_detail(adirfs):
         f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
         f"{PATH}/dir/two": {"name": f"{PATH}/dir/two", "baz": "qux"},
     }
-    assert await adirfs._find("dir", *ARGS, detail=True, **KWARGS) == {
+    assert await adirfs._find("dir", detail=True, **KWARGS) == {
         "dir/one": {"name": "dir/one", "foo": "bar"},
         "dir/two": {"name": "dir/two", "baz": "qux"},
     }
     for name, info in adirfs.fs._find.return_value.items():
         assert info["name"] == name
-    adirfs.fs._find.assert_called_once_with(f"{PATH}/dir", *ARGS, detail=True, **KWARGS)
+    adirfs.fs._find.assert_called_once_with(
+        f"{PATH}/dir", maxdepth=None, withdirs=False, detail=True, **KWARGS
+    )
 
 
 def test_find_detail(dirfs):
@@ -684,13 +698,15 @@ def test_find_detail(dirfs):
         f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
         f"{PATH}/dir/two": {"name": f"{PATH}/dir/two", "baz": "qux"},
     }
-    assert dirfs.find("dir", *ARGS, detail=True, **KWARGS) == {
+    assert dirfs.find("dir", detail=True, **KWARGS) == {
         "dir/one": {"name": "dir/one", "foo": "bar"},
         "dir/two": {"name": "dir/two", "baz": "qux"},
     }
     for name, info in dirfs.fs.find.return_value.items():
         assert info["name"] == name
-    dirfs.fs.find.assert_called_once_with(f"{PATH}/dir", *ARGS, detail=True, **KWARGS)
+    dirfs.fs.find.assert_called_once_with(
+        f"{PATH}/dir", maxdepth=None, withdirs=False, detail=True, **KWARGS
+    )
 
 
 @pytest.mark.asyncio
