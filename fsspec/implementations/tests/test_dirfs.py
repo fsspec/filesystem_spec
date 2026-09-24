@@ -884,3 +884,31 @@ async def test_async_detail_without_name(adirfs, method):
         "file": {"name": "file"}
     }
     assert wrapped.return_value == {f"{PATH}/file": {}}
+
+
+def _memory_dirfs():
+    import fsspec
+
+    mem = fsspec.filesystem(
+        "memory", global_store=False, skip_instance_cache=True
+    )
+    mem.pipe_file("/root/a.txt", b"hello")
+    mem.pipe_file("/root/sub/b.txt", b"worldworld")
+    return DirFileSystem(path="/root", fs=mem)
+
+
+def test_du_total_given_positionally():
+    # AbstractFileSystem.du(path, total=True, ...): total is the first
+    # positional parameter after path.
+    dirfs = _memory_dirfs()
+    assert dirfs.du("", False) == dirfs.du("", total=False)
+    assert dirfs.du("", False) == {"a.txt": 5, "sub/b.txt": 10}
+
+
+def test_find_detail_given_positionally():
+    # AbstractFileSystem.find(path, maxdepth=None, withdirs=False, detail=False)
+    dirfs = _memory_dirfs()
+    out = dirfs.find("", None, False, True)
+    assert out == dirfs.find("", detail=True)
+    assert sorted(out) == ["a.txt", "sub/b.txt"]
+    assert out["a.txt"]["name"] == "a.txt"
