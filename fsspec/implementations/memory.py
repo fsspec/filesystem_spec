@@ -293,7 +293,9 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         if "x" in mode and self.exists(path):
             raise FileExistsError
-        if self.isdir(path):
+        # Existing files cannot also be directories. Check the store first so
+        # opening one does not scan all keys via isdir().
+        if path not in self.store and self.isdir(path):
             raise IsADirectoryError(path)
         parent = path
         while len(parent) > 1:
@@ -436,3 +438,4 @@ class MemoryFile(BytesIO):
     def commit(self):
         self.fs.store[self.path] = self
         self.modified = datetime.now(tz=timezone.utc)
+
