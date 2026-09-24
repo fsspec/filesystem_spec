@@ -1795,3 +1795,40 @@ def test_simplecache_cat_ranges_target_get_file_without_on_error(tmp_path):
         skip_instance_cache=True,
     )
     assert fs.cat_ranges(["/cat_ranges/one"], [0], [3]) == [b"012"]
+
+
+def _filecache_with_one_entry(tmp_path, **kwargs):
+    source = tmp_path / "source"
+    source.mkdir()
+    f = source / "data"
+    f.write_bytes(b"data")
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=str(tmp_path / "cache"),
+        skip_instance_cache=True,
+        **kwargs,
+    )
+    assert fs.cat(str(f)) == b"data"
+    path = fs._strip_protocol(str(f))
+    assert fs._check_file(path)
+    return fs, path
+
+
+def test_clear_expired_cache_accepts_zero(tmp_path):
+    # expiry_time=0 means "older than zero seconds", i.e. drop everything, the
+    # same value SimpleCacheFileSystem.clear_expired_cache accepts.
+    fs, path = _filecache_with_one_entry(tmp_path)
+
+    fs.clear_expired_cache(0)
+
+    assert not fs._check_file(path)
+
+
+def test_clear_expired_cache_honours_disabled_expiry(tmp_path):
+    # __init__: "expiry_time ... Set to falsy to prevent expiry."
+    fs, path = _filecache_with_one_entry(tmp_path, expiry_time=0)
+
+    fs.clear_expired_cache()
+
+    assert fs._check_file(path)
