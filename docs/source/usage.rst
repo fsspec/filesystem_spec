@@ -118,6 +118,54 @@ or write mode (create names). Critically, the file on the backend system is not 
             if "KENYA" in line:
                 break
 
+Compressed files
+----------------
+
+Use the ``compression`` argument to :func:`fsspec.open` to read or write an
+individual compressed file. This wraps the file object; it does not compress the
+whole file-system. For example, write a gzip-compressed text file and read it back:
+
+.. code-block:: python
+
+    import fsspec
+
+    with fsspec.open("example.txt.gz", "wt", compression="gzip", encoding="utf-8") as f:
+        f.write("Hello from fsspec!\n")
+
+    with fsspec.open("example.txt.gz", "rt", compression="infer", encoding="utf-8") as f:
+        assert f.read() == "Hello from fsspec!\n"
+
+``compression="infer"`` selects a registered codec from the filename suffix,
+such as ``.gz`` for gzip. Compression is not inferred by default:
+``compression=None`` leaves the bytes unchanged, even if the filename ends in
+``.gz``. The same ``compression`` argument is available on :func:`fsspec.open_files`.
+
+Available codecs depend on your Python installation and optional packages.
+Call :func:`fsspec.available_compressions` to see the codecs registered in the
+current process. For example, ``"gzip"`` is a codec name, while ``None`` means no
+compression.
+
+For Zstandard (``compression="zstd"``, or ``compression="infer"`` with a ``.zst``
+filename), fsspec first tries the standard-library ``compression.zstd`` module
+on Python 3.14 and later. On older Python versions, install ``backports.zstd``:
+
+.. code-block:: console
+
+    python -m pip install backports.zstd
+
+If that backend is unavailable, fsspec also supports the ``zstandard`` package
+as a fallback. Other optional codecs include ``lz4`` (install ``lz4``) and
+``snappy`` (install ``python-snappy``). Install optional packages before importing
+fsspec, or restart your Python process after installation so the codecs can be
+registered.
+
+Explicitly requesting an unavailable codec raises ``ValueError`` with a message
+such as ``Compression type zstd not supported``. Inference only recognizes
+suffixes registered by available codecs: if a suffix is not recognized,
+``compression="infer"`` passes through the stored bytes without compression or
+decompression. Use an explicit codec name
+when you want a missing dependency to produce an error.
+
 .. raw:: html
 
     <script data-goatcounter="https://fsspec.goatcounter.com/count"
