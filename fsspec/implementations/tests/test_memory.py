@@ -29,6 +29,17 @@ def test_open_implied_directory(m, mode, child_type):
         assert m.isdir("parent/child")
 
 
+def test_open_existing_file_does_not_check_directories(m, monkeypatch):
+    m.pipe_file("existing", b"content")
+
+    def unexpected_isdir(path):
+        raise AssertionError("existing files should not require a directory scan")
+
+    monkeypatch.setattr(m, "isdir", unexpected_isdir)
+    with m.open("existing", "rb") as f:
+        assert f.read() == b"content"
+
+
 def test_independent_stores(m):
     first = filesystem("memory", global_store=False, skip_instance_cache=True)
     second = filesystem("memory", global_store=False, skip_instance_cache=True)
@@ -690,3 +701,4 @@ def test_mapper_delitem_missing_key_raises_keyerror(m):
     del mapper["present"]
     with pytest.raises(KeyError):
         del mapper["missing"]
+
