@@ -304,7 +304,11 @@ class CachingFileSystem(ChainedFileSystem):
             file caching instantiation.
         """
 
-        if not expiry_time:
+        if expiry_time is None:
+            if not self.expiry:
+                # "Set to falsy to prevent expiry" (see __init__): nothing
+                # ever goes stale, so there is nothing to clear.
+                return
             expiry_time = self.expiry
 
         self._check_cache()
