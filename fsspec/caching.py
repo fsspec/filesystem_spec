@@ -611,7 +611,7 @@ class BytesCache(BaseCache):
             self.start is not None
             and start >= self.start
             and self.end is not None
-            and end < self.end
+            and end <= self.end
         ):
             # cache hit: we have all the required data
             offset = start - self.start
