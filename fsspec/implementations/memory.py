@@ -303,6 +303,14 @@ class MemoryFileSystem(AbstractFileSystem):
         if mode in ["rb", "ab", "r+b", "a+b"]:
             if path in self.store:
                 f = self.store[path]
+                if self._intrans and "a" in mode:
+                    for pending in reversed(self.transaction.files):
+                        if pending.path == path:
+                            f = pending
+                            break
+                    else:
+                        f = MemoryFile(self, path, f.getvalue())
+                        f.created = self.store[path].created
                 if "a" in mode:
                     # position at the end of file
                     f.seek(0, 2)
