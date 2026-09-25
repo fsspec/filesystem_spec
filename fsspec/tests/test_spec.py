@@ -802,7 +802,8 @@ def test_instance_created_once_concurrently():
     assert not SleepyFS._token_locks
 
 
-def test_instance_creation_error_concurrently():
+@pytest.mark.parametrize("max_workers", [2, 10])
+def test_instance_creation_error_concurrently(max_workers):
     import concurrent.futures
     import time
 
@@ -820,17 +821,61 @@ def test_instance_creation_error_concurrently():
 
     FailingOnceFS.clear_instance_cache()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(FailingOnceFS) for _ in range(10)]
         concurrent.futures.wait(futures)
 
     errors = [f.exception() for f in futures if f.exception() is not None]
     results = [f.result() for f in futures if f.exception() is None]
     assert len(errors) == 1
+    # after the failure, a single thread retries while the others (including
+    # those arriving during the retry) wait for it
     assert len(inits) == 2
     assert len(results) == 9
     assert all(r is results[0] for r in results)
     assert not FailingOnceFS._token_locks
+
+
+def test_instance_created_reentrantly():
+    import threading
+
+    inits = []
+
+    class ReentrantFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            if len(inits) == 1:
+                # same token, same thread, while its instance is being created
+                ReentrantFS()
+            super().__init__(*args, **kwargs)
+
+    ReentrantFS.clear_instance_cache()
+
+    results = []
+    # run in a thread so that a deadlock fails the test instead of hanging it
+    t = threading.Thread(target=lambda: results.append(ReentrantFS()), daemon=True)
+    t.start()
+    t.join(timeout=5)
+
+    assert not t.is_alive(), "deadlock when creating the instance reentrantly"
+    assert len(inits) == 2
+    assert results[0] is ReentrantFS()
+    assert not ReentrantFS._token_locks
+
+
+def test_token_locks_cleared_on_pid_change():
+    class PidFS(DummyTestFS):
+        pass
+
+    PidFS._token_locks["stale"] = object()
+    PidFS._pid = -1  # pretend the process has changed, e.g. forked
+
+    PidFS()
+
+    assert PidFS._pid == os.getpid()
+    assert not PidFS._token_locks
 
 
 def test_uncached_instantiation_concurrency():
