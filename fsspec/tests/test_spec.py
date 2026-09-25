@@ -776,6 +776,63 @@ def test_instance_cache_concurrency():
     assert all(r is results[0] for r in results)
 
 
+def test_instance_created_once_concurrently():
+    import concurrent.futures
+    import time
+
+    inits = []
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(SleepyFS) for _ in range(10)]
+        results = [f.result() for f in futures]
+
+    # the threads wait for the instance instead of creating their own
+    assert len(inits) == 1
+    assert all(r is results[0] for r in results)
+    assert not SleepyFS._token_locks
+
+
+def test_instance_creation_error_concurrently():
+    import concurrent.futures
+    import time
+
+    inits = []
+
+    class FailingOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.1)
+            if len(inits) == 1:
+                raise RuntimeError("failed to create the instance")
+            super().__init__(*args, **kwargs)
+
+    FailingOnceFS.clear_instance_cache()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(FailingOnceFS) for _ in range(10)]
+        concurrent.futures.wait(futures)
+
+    errors = [f.exception() for f in futures if f.exception() is not None]
+    results = [f.result() for f in futures if f.exception() is None]
+    assert len(errors) == 1
+    assert len(inits) == 2
+    assert len(results) == 9
+    assert all(r is results[0] for r in results)
+    assert not FailingOnceFS._token_locks
+
+
 def test_uncached_instantiation_concurrency():
     import concurrent.futures
     import time

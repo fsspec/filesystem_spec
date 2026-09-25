@@ -43,6 +43,7 @@ if FORK_AVAILABLE:
     def _reset_instances_lock():
         for cls in _registered_classes:
             cls._instantiation_lock = threading.RLock()
+            cls._token_locks = {}
             cls._cache.clear()
             cls._pid = os.getpid()
 
@@ -79,6 +80,8 @@ class _Cached(type):
             cls._cache = {}
         cls._pid = os.getpid()
         cls._instantiation_lock = threading.RLock()
+        # locks of the tokens whose instance is being created, see __call__
+        cls._token_locks = {}
 
         if FORK_AVAILABLE:
             _registered_classes.add(cls)
@@ -124,7 +127,30 @@ class _Cached(type):
                 inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
+                # Only one thread creates the instance for a given token, the others
+                # wait for it instead of creating (and discarding) their own, since
+                # creating an instance can be expensive (e.g. looking up credentials).
+                # Instances for different tokens are still created concurrently.
+                token_lock = cls._token_locks.setdefault(token, threading.RLock())
 
+            with token_lock:
+                try:
+                    inst = cls._check_instance_cache(token)
+                    if inst is not None:
+                        return inst
+                    return cls.__create_instance(
+                        token, args, kwargs, strip_tokenize_options, cache=True
+                    )
+                finally:
+                    with cls._instantiation_lock:
+                        if cls._token_locks.get(token) is token_lock:
+                            del cls._token_locks[token]
+
+        return cls.__create_instance(
+            token, args, kwargs, strip_tokenize_options, cache=False
+        )
+
+    def __create_instance(cls, token, args, kwargs, strip_tokenize_options, cache):
         obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
         # Setting _fs_token here causes some static linters to complain.
         obj._fs_token_ = token
@@ -135,7 +161,7 @@ class _Cached(type):
 
             mirror_sync_methods(obj)
 
-        if cls.cachable and not skip:
+        if cache:
             with cls._instantiation_lock:
                 # another thread may have created the instance while we were calling
                 # super().__call__(), so we check again.
