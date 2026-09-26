@@ -307,6 +307,21 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
 
 
 @pytest.mark.parametrize("strict", [True, False])
+def test_known_read_starting_outside_a_part(strict):
+    parts = {(0, 10): b"0" * 10, (40, 50): b"3" * 10}
+    c = caches["parts"](None, None, 100, parts, strict=strict)
+
+    # a read that starts in the gap has no first byte to return, in either mode
+    with pytest.raises(ValueError):
+        c._fetch(20, 30)
+    with pytest.raises(ValueError):
+        c._fetch(35, 45)
+
+    # a read that starts inside a part is unaffected
+    assert c._fetch(5, 10) == b"0" * 5
+
+
+@pytest.mark.parametrize("strict", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 def test_known(strict, sort):
     parts = {
