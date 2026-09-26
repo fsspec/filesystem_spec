@@ -539,3 +539,39 @@ def test_cat_recursive_skips_directories(m):
 def test_cat_recursive_empty_directory(m):
     m.mkdir("/empty")
     assert m.cat("/empty", recursive=True) == {}
+
+
+def test_expand_path_files_only(m):
+    m.pipe({"/tree/a": b"a", "/tree/sub/b": b"b"})
+    m.mkdir("/tree/empty")
+
+    assert m.expand_path("/tree", recursive=True, files_only=True) == [
+        "/tree/a",
+        "/tree/sub/b",
+    ]
+    # without it, the directories are part of the expansion
+    assert "/tree/sub" in m.expand_path("/tree", recursive=True)
+    # globs drop directories too
+    assert m.expand_path("/tree/*", recursive=True, files_only=True) == [
+        "/tree/a",
+        "/tree/sub/b",
+    ]
+    # a literal file is still returned, a directory holding no files is not
+    assert m.expand_path("/tree/a", recursive=True, files_only=True) == ["/tree/a"]
+    with pytest.raises(FileNotFoundError):
+        m.expand_path("/tree/empty", recursive=True, files_only=True)
+
+
+def test_cat_recursive_does_not_stat_every_path(m):
+    m.pipe({f"/many/f{i}": b"x" for i in range(20)})
+    calls = []
+    isdir = MemoryFileSystem.isdir
+    try:
+        MemoryFileSystem.isdir = lambda self, path: (
+            calls.append(path),
+            isdir(self, path),
+        )[1]
+        assert len(m.cat("/many", recursive=True)) == 20
+    finally:
+        MemoryFileSystem.isdir = isdir
+    assert calls == []

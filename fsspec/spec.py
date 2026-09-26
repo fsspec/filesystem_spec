@@ -953,14 +953,18 @@ class AbstractFileSystem(metaclass=_Cached):
         dict of {path: contents} if there are multiple paths
         or the path has been otherwise expanded
         """
-        paths = self.expand_path(path, recursive=recursive, **kwargs)
-        if recursive:
-            from .implementations.local import trailing_sep
-
-            # expand_path lists the directories too, which have no contents
-            paths = [p for p in paths if not (trailing_sep(p) or self.isdir(p))]
-            if not paths:
-                return {}
+        # a recursive expansion lists the directories too, which have no contents
+        try:
+            paths = self.expand_path(
+                path, recursive=recursive, files_only=recursive, **kwargs
+            )
+        except FileNotFoundError:
+            if not recursive:
+                raise
+            # nothing was found: either the path holds no files, or it is not
+            # there at all, and only the second is an error
+            self.expand_path(path, recursive=True, **kwargs)
+            return {}
         if (
             len(paths) > 1
             or isinstance(path, list)
@@ -1245,10 +1249,20 @@ class AbstractFileSystem(metaclass=_Cached):
                     raise
 
     def expand_path(
-        self, path, recursive=False, maxdepth=None, assume_literal=False, **kwargs
+        self,
+        path,
+        recursive=False,
+        maxdepth=None,
+        assume_literal=False,
+        files_only=False,
+        **kwargs,
     ):
         """Turn one or more globs or directories into a list of all matching paths
         to files or directories.
+
+        With ``files_only``, directories are left out of the result. The listings
+        that do the expansion already know which entries are directories, so this
+        costs nothing beyond what the expansion does anyway.
 
         kwargs are passed to ``glob`` or ``find``, which may in turn call ``ls``
         """
@@ -1257,14 +1271,25 @@ class AbstractFileSystem(metaclass=_Cached):
             raise ValueError("maxdepth must be at least 1")
 
         if isinstance(path, (str, os.PathLike)):
-            out = self.expand_path([path], recursive, maxdepth, **kwargs)
+            out = self.expand_path(
+                [path], recursive, maxdepth, files_only=files_only, **kwargs
+            )
         else:
             out = set()
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if not assume_literal and has_magic(p):
-                    bit = set(self.glob(p, maxdepth=maxdepth, **kwargs))
-                    out |= bit
+                    if files_only:
+                        matches = self.glob(p, maxdepth=maxdepth, detail=True, **kwargs)
+                        bit = set(matches)
+                        out |= {
+                            m
+                            for m, info in matches.items()
+                            if info["type"] != "directory"
+                        }
+                    else:
+                        bit = set(self.glob(p, maxdepth=maxdepth, **kwargs))
+                        out |= bit
                     if recursive:
                         # glob call above expanded one depth so if maxdepth is defined
                         # then decrement it in expand_path call below. If it is zero
@@ -1277,6 +1302,7 @@ class AbstractFileSystem(metaclass=_Cached):
                                 recursive=recursive,
                                 maxdepth=maxdepth - 1 if maxdepth is not None else None,
                                 assume_literal=True,
+                                files_only=files_only,
                                 **kwargs,
                             )
                         )
@@ -1284,11 +1310,18 @@ class AbstractFileSystem(metaclass=_Cached):
                 elif recursive:
                     rec = set(
                         self.find(
-                            p, maxdepth=maxdepth, withdirs=True, detail=False, **kwargs
+                            p,
+                            maxdepth=maxdepth,
+                            withdirs=not files_only,
+                            detail=False,
+                            **kwargs,
                         )
                     )
                     out |= rec
-                if p not in out and (recursive is False or self.exists(p)):
+                if p not in out and (
+                    recursive is False
+                    or (self.isfile(p) if files_only else self.exists(p))
+                ):
                     # should only check once, for the root
                     out.add(p)
         if not out:
