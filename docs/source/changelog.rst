@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Preserve binary bytes in percent-encoded data URLs without base64 encoding.
+
 - Make async loop lock initialization thread-safe (#1783)
 
 
