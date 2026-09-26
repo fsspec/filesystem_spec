@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Keep failed memory-mapped cache reads retriable without discarding completed ranges.
+
 - Make async loop lock initialization thread-safe (#1783)
 
 
