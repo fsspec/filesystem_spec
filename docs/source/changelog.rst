@@ -4,6 +4,12 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- ``BlockCache`` fetches a run of blocks it does not hold in one request
+  instead of one request per block, so a read spanning many blocks no longer
+  costs that many serialized round trips (#1960)
+
 Fixes
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
