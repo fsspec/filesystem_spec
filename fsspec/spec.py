@@ -50,17 +50,6 @@ if FORK_AVAILABLE:
     os.register_at_fork(after_in_child=_reset_instances_lock)
 
 
-class _TokenLock:
-    """Lock for creating the instance of a token, see ``_Cached.__call__``"""
-
-    __slots__ = ("lock", "users")
-
-    def __init__(self):
-        self.lock = threading.RLock()
-        # number of threads holding or waiting for the lock
-        self.users = 0
-
-
 class _Cached(type):
     """
     Metaclass for caching file system instances.
@@ -143,30 +132,21 @@ class _Cached(type):
                 # wait for it instead of creating (and discarding) their own, since
                 # creating an instance can be expensive (e.g. looking up credentials).
                 # Instances for different tokens are still created concurrently.
-                token_lock = cls._token_locks.get(token)
-                if token_lock is None:
-                    token_lock = cls._token_locks[token] = _TokenLock()
-                token_lock.users += 1
+                # This is under _instantiation_lock, so all threads get the same lock.
+                token_lock = cls._token_locks.setdefault(token, threading.RLock())
 
-            try:
-                with token_lock.lock:
-                    inst = cls._check_instance_cache(token)
-                    if inst is not None:
-                        return inst
-                    return cls.__create_instance(
-                        token, args, kwargs, strip_tokenize_options, cache=True
-                    )
-            finally:
-                # Remove the lock only once no thread uses it anymore: if creating
-                # the instance failed, a waiting thread retries it, and threads
-                # arriving in the meantime must wait for that thread too.
+            with token_lock:
+                inst = cls._check_instance_cache(token)
+                if inst is not None:
+                    return inst
+                inst = cls.__create_instance(
+                    token, args, kwargs, strip_tokenize_options, cache=True
+                )
+                # Only removed on success: if creating the instance failed, the lock
+                # is kept so that the retries also happen one at a time.
                 with cls._instantiation_lock:
-                    token_lock.users -= 1
-                    if (
-                        not token_lock.users
-                        and cls._token_locks.get(token) is token_lock
-                    ):
-                        del cls._token_locks[token]
+                    cls._token_locks.pop(token, None)
+                return inst
 
         return cls.__create_instance(
             token, args, kwargs, strip_tokenize_options, cache=False
