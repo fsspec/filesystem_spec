@@ -457,3 +457,62 @@ def test_adaptive_cache_fallback_without_loop():
 
     assert cache._fetch(0, 10) == data[0:10]
     assert cache._fetch(10, 17) == data[10:17]
+
+
+def _counting_fetcher(calls):
+    def fetcher(start, end):
+        calls.append((start, end))
+        return string.ascii_letters.encode()[start:end]
+
+    return fetcher
+
+
+def test_block_cache_coalesces_contiguous_misses():
+    calls = []
+    cache = BlockCache(
+        4, _counting_fetcher(calls), len(string.ascii_letters), maxblocks=32
+    )
+
+    # 8 blocks, none of them cached: one request, not eight
+    assert cache._fetch(0, 32) == string.ascii_letters[:32].encode()
+    assert calls == [(0, 32)]
+    assert cache.cache_info().misses == 8
+    assert cache.miss_count == 8
+    assert cache.total_requested_bytes == 32
+
+
+def test_block_cache_only_fetches_the_blocks_it_is_missing():
+    calls = []
+    cache = BlockCache(
+        4, _counting_fetcher(calls), len(string.ascii_letters), maxblocks=32
+    )
+    cache._fetch(8, 12)  # block 2
+    cache._fetch(20, 24)  # block 5
+    calls.clear()
+
+    # blocks 0-6, with 2 and 5 already held: the gaps are fetched, they are not
+    assert cache._fetch(0, 28) == string.ascii_letters[:28].encode()
+    assert calls == [(0, 8), (12, 20), (24, 28)]
+
+
+def test_block_cache_run_is_capped_at_maxblocks():
+    calls = []
+    maxblocks = 2
+    cache = BlockCache(
+        4, _counting_fetcher(calls), len(string.ascii_letters), maxblocks=maxblocks
+    )
+
+    # a run longer than the cache holds is split, so a block cannot be evicted
+    # before it is read
+    assert cache._fetch(0, 24) == string.ascii_letters[:24].encode()
+    assert calls == [(0, 8), (8, 16), (16, 24)]
+    assert cache.cache_info().misses == 6
+
+
+def test_block_cache_run_stops_at_the_end_of_the_file():
+    calls = []
+    size = len(string.ascii_letters)
+    cache = BlockCache(4, _counting_fetcher(calls), size, maxblocks=32)
+
+    assert cache._fetch(0, size + 100) == string.ascii_letters.encode()
+    assert calls == [(0, size)]
