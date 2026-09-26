@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Update memory file modification times after writes and truncation.
+
 - Make async loop lock initialization thread-safe (#1783)
 
 

@@ -1,5 +1,6 @@
 import os
 import pickle
+from datetime import datetime, timezone
 from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
@@ -9,6 +10,65 @@ from fsspec import filesystem
 from fsspec.config import conf
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
+
+
+@pytest.mark.parametrize(
+    "mode, method, args, expected",
+    [
+        ("ab", "write", (b"def",), b"abcdef"),
+        ("r+b", "write", (b"XY",), b"XYc"),
+        ("ab", "writelines", ([b"d", b"ef"],), b"abcdef"),
+        ("r+b", "truncate", (2,), b"ab"),
+    ],
+)
+def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
+    m.pipe_file("file", b"abc")
+    created = m.created("file")
+    modified = datetime(2100, 1, 1, tzinfo=timezone.utc)
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            assert tz is timezone.utc
+            return modified
+
+    with m.open("file", mode) as f:
+        monkeypatch.setattr("fsspec.implementations.memory.datetime", Clock)
+        getattr(f, method)(*args)
+
+    assert m.cat_file("file") == expected
+    assert m.modified("file") == modified
+    assert m.created("file") == created
+
+
+def test_modified_after_partial_writelines(m):
+    m.pipe_file("file", b"abc")
+    original = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+    with m.open("file", "ab") as f:
+        f.modified = original
+        with pytest.raises(TypeError):
+            f.writelines([b"d", None])
+
+    assert m.cat_file("file") == b"abcd"
+    assert m.modified("file") > original
+
+
+def test_modified_unchanged_without_write(m):
+    m.pipe_file("file", b"abc")
+    original = m.modified("file")
+
+    with m.open("file", "r+b") as f:
+        assert f.read() == b"abc"
+        f.seek(0)
+        assert f.write(b"") == 0
+        assert f.writelines([]) is None
+        with pytest.raises(TypeError):
+            f.write(None)
+        with pytest.raises(ValueError):
+            f.truncate(-1)
+
+    assert m.modified("file") == original
 
 
 def test_independent_stores(m):
