@@ -260,7 +260,7 @@ def test_cache_pickleable(Cache_imp):
     assert unpickled._fetch(0, 10) == b"0" * 10
 
 
-def test_first_cache():
+def test_first_cache_without_fetcher():
     c = FirstChunkCache(5, letters_fetcher, 52)
     assert c.cache is None
     assert c._fetch(12, 15) == letters_fetcher(12, 15)
