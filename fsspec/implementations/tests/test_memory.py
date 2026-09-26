@@ -672,3 +672,13 @@ def test_mapper_delitem_missing_key_raises_keyerror(m):
     del mapper["present"]
     with pytest.raises(KeyError):
         del mapper["missing"]
+
+
+@pytest.mark.parametrize("mode", ["rb", "wb", "ab"])
+def test_open_implicit_directory_raises(m, mode):
+    # "/dir" exists only because a file lives under it
+    m.pipe("/dir/file", b"data")
+    with pytest.raises(IsADirectoryError):
+        m.open("/dir", mode)
+    assert m.isdir("/dir")
+    assert m.cat("/dir/file") == b"data"
