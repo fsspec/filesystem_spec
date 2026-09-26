@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import collections
-import functools
 import logging
 import math
 import os
@@ -477,7 +476,7 @@ class BlockCache(BaseCache):
         super().__init__(blocksize, fetcher, size)
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
-        self._fetch_block_cached = functools.lru_cache(maxblocks)(self._fetch_block)
+        self._fetch_block_cached = UpdatableLRU(self._fetch_block, maxblocks)
 
     def cache_info(self):
         """
@@ -497,9 +496,7 @@ class BlockCache(BaseCache):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
-        self._fetch_block_cached = functools.lru_cache(state["maxblocks"])(
-            self._fetch_block
-        )
+        self._fetch_block_cached = UpdatableLRU(self._fetch_block, state["maxblocks"])
 
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
@@ -555,23 +552,66 @@ class BlockCache(BaseCache):
             return block[start_pos:end_pos]
 
         else:
-            # read from the initial
-            out = [self._fetch_block_cached(start_block_number)[start_pos:]]
+            blocks = self._fetch_blocks(start_block_number, end_block_number)
+            blocks[0] = blocks[0][start_pos:]
+            blocks[-1] = blocks[-1][:end_pos]
+            return b"".join(blocks)
 
-            # intermediate blocks
-            # Note: it'd be nice to combine these into one big request. However
-            # that doesn't play nicely with our LRU cache.
-            out.extend(
-                map(
-                    self._fetch_block_cached,
-                    range(start_block_number + 1, end_block_number),
-                )
+    def _fetch_blocks(self, first: int, last: int) -> list[bytes]:
+        """The contents of blocks ``first`` to ``last``, inclusive.
+
+        Blocks already held are taken from the cache. A run of blocks that are
+        not held is fetched in a single request rather than one per block: the
+        old one-at-a-time loop turned a large read into as many serialized
+        round trips as it spanned blocks.
+
+        A run is capped at ``maxblocks``, the cache's own capacity, so one read
+        cannot ask a backend for an unbounded range.
+        """
+        out: list[bytes] = []
+        block_number = first
+        while block_number <= last:
+            if self._fetch_block_cached.is_key_cached(block_number):
+                out.append(self._fetch_block_cached(block_number))
+                block_number += 1
+                continue
+
+            run_end = block_number
+            while (
+                run_end < last
+                and run_end - block_number + 1 < self.maxblocks
+                and not self._fetch_block_cached.is_key_cached(run_end + 1)
+            ):
+                run_end += 1
+
+            if run_end == block_number:
+                # one block: the ordinary path, which logs and counts the miss
+                out.append(self._fetch_block_cached(block_number))
+            else:
+                out.extend(self._fetch_block_run(block_number, run_end))
+            block_number = run_end + 1
+        return out
+
+    def _fetch_block_run(self, first: int, last: int) -> list[bytes]:
+        """Fetch blocks ``first`` to ``last`` in one request and cache them."""
+        if last > self.nblocks:
+            raise ValueError(
+                f"'block_number={last}' is greater than "
+                f"the number of blocks ({self.nblocks})"
             )
+        start = first * self.blocksize
+        end = min((last + 1) * self.blocksize, self.size)
+        logger.info("BlockCache fetching blocks %d-%d", first, last)
+        self.total_requested_bytes += end - start
+        self.miss_count += last - first + 1
+        data = super()._fetch(start, end)
 
-            # final block
-            out.append(self._fetch_block_cached(end_block_number)[:end_pos])
-
-            return b"".join(out)
+        blocks = []
+        for offset, block_number in enumerate(range(first, last + 1)):
+            block = data[offset * self.blocksize : (offset + 1) * self.blocksize]
+            self._fetch_block_cached.add_key(block, block_number, count_miss=True)
+            blocks.append(block)
+        return blocks
 
 
 class BytesCache(BaseCache):
@@ -861,9 +901,16 @@ class UpdatableLRU(Generic[P, T]):
         with self._lock:
             return args in self._cache
 
-    def add_key(self, result: T, *args: Any) -> None:
+    def add_key(self, result: T, *args: Any, count_miss: bool = False) -> None:
+        """Store a value fetched elsewhere.
+
+        ``count_miss`` counts it as a miss, for callers that fetched the value
+        themselves rather than letting this cache call the function.
+        """
         with self._lock:
             self._cache[args] = result
+            if count_miss:
+                self._misses += 1
             if len(self._cache) > self._max_size:
                 self._cache.popitem(last=False)
 
