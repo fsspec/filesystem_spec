@@ -901,6 +901,39 @@ def test_fork_deadlock():
     assert result is True
 
 
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"",
+        b"hello",
+        b"hello\n",
+        b"\n\n",
+        b"hello\nworld",
+        b"hello\r\nworld\r\n",
+        b"a\rb",
+    ],
+)
+def test_buffered_readlines(m, cache_type, content):
+    m.pipe_file("lines", content)
+    with (
+        AbstractBufferedFile(m, "lines", cache_type=cache_type, block_size=2) as stream,
+        io.BytesIO(content) as expected,
+    ):
+        assert stream.readlines() == expected.readlines()
+        assert stream.readlines() == []
+
+        stream.seek(0)
+        expected.seek(0)
+        stream.read(2)
+        expected.read(2)
+        assert stream.readlines() == expected.readlines()
+        assert stream.readlines() == []
+
+    with pytest.raises(ValueError, match="closed file"):
+        stream.readlines()
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",

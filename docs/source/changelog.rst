@@ -6,6 +6,7 @@ Dev
 
 Fixes
 
+- Return an empty list from buffered-file ``readlines()`` at end of file
 - Make async loop lock initialization thread-safe (#1783)
 
 

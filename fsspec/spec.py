@@ -2281,6 +2281,8 @@ class AbstractBufferedFile(io.IOBase):
     def readlines(self):
         """Return all data, split by the newline character, including the newline character"""
         data = self.read()
+        if not data:
+            return []
         lines = data.split(b"\n")
         out = [l + b"\n" for l in lines[:-1]]
         if data.endswith(b"\n"):
