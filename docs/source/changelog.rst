@@ -6,6 +6,10 @@ Dev
 
 Fixes
 
+- Reject writes through read-only memory file handles, including text wrappers,
+  truncation and writable buffer views. Read-only opens now use independent
+  content snapshots so another open cannot change their mode (issue #2193).
+
 - Make async loop lock initialization thread-safe (#1783)
 
 

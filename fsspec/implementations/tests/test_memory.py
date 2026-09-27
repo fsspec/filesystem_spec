@@ -1,5 +1,6 @@
 import os
 import pickle
+from io import UnsupportedOperation
 from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
@@ -372,6 +373,97 @@ def test_open_mode(m, mode):
     m.touch(filename)
     with m.open(filename, mode=mode) as _:
         pass
+
+
+@pytest.mark.parametrize("mode", ["rb", "r", "rt"])
+def test_read_only_handle(m, mode):
+    m.pipe("file", b"first\nsecond\n")
+    with m.open("file", mode) as f:
+        assert f.readable()
+        assert f.seekable()
+        assert not f.writable()
+        assert f.readline() == (b"first\n" if "b" in mode else "first\n")
+        f.seek(0)
+        assert f.read() == (b"first\nsecond\n" if "b" in mode else "first\nsecond\n")
+
+
+@pytest.mark.parametrize("mode", ["rb", "r", "rt"])
+@pytest.mark.parametrize("operation", ["write", "writelines", "truncate"])
+def test_read_only_mutations_rejected(m, mode, operation):
+    data = b"original contents"
+    m.pipe("file", data)
+    with m.open("file", mode) as f:
+        value = b"changed" if "b" in mode else "changed"
+        argument = [value] if operation == "writelines" else value
+        if operation == "truncate":
+            argument = 0
+        with pytest.raises(UnsupportedOperation):
+            getattr(f, operation)(argument)
+    assert m.cat("file") == data
+
+
+def test_read_only_buffer(m):
+    m.pipe("file", b"original")
+    with m.open("file", "rb") as f, f.getbuffer() as view:
+        assert view.readonly
+        with pytest.raises(TypeError):
+            view[0] = ord("X")
+    assert m.cat("file") == b"original"
+
+
+def test_read_only_handle_stays_read_only(m):
+    m.pipe("file", b"original")
+    reader = m.open("file", "rb")
+    with m.open("file", "r+b") as writer:
+        assert writer.writable()
+        assert not reader.writable()
+        with pytest.raises(UnsupportedOperation):
+            reader.write(b"X")
+        writer.write(b"O")
+    assert reader.read() == b"original"
+    assert m.cat("file") == b"Original"
+
+
+def test_read_only_snapshot_and_metadata(m):
+    m.pipe("file", b"original")
+    stored = m.store["/file"]
+    with m.open("file", "rb") as reader:
+        assert reader.mode == "rb"
+        assert reader.fs is m
+        assert reader.path == stored.path
+        assert reader.created == stored.created
+        assert reader.modified == stored.modified
+        assert reader.size == stored.size
+        assert reader.read(2) == b"or"
+        with m.open("file", "rb") as second:
+            assert second.read(2) == b"or"
+        assert reader.read() == b"iginal"
+        m.pipe("file", b"replacement")
+        with pytest.raises(UnsupportedOperation):
+            reader.commit()
+    assert m.cat("file") == b"replacement"
+
+
+@pytest.mark.parametrize("data", [b"", b"contents"])
+def test_read_only_pickle(m, data):
+    m.pipe("file", data)
+    with m.open("file", "rb") as reader:
+        restored = pickle.loads(pickle.dumps(reader))
+    assert not restored.writable()
+    assert restored.read() == data
+    with pytest.raises(UnsupportedOperation):
+        restored.write(b"X")
+
+
+@pytest.mark.parametrize("mode", ["wb", "w+b", "ab", "a+b", "r+b", "xb", "x+b"])
+def test_write_modes_remain_writable(m, mode):
+    if mode.startswith(("a", "r")):
+        m.pipe("file", b"old")
+    with m.open("file", mode) as f:
+        assert f.writable()
+        assert f.write(b"new") == 3
+        f.writelines([b"!"])
+    assert m.cat("file") == (b"oldnew!" if mode.startswith("a") else b"new!")
 
 
 def test_remove_all(m):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from errno import ENOTEMPTY
-from io import BytesIO
+from io import BytesIO, UnsupportedOperation
 from pathlib import PurePath, PureWindowsPath
 from typing import Any
 
@@ -20,6 +20,9 @@ class MemoryFileSystem(AbstractFileSystem):
     By default, instances share a global in-memory filesystem. Pass
     ``global_store=False, skip_instance_cache=True`` to create a new instance
     with an independent store instead.
+
+    Read-only opens return a snapshot with an independent cursor. Writable
+    handles continue to modify the stored file directly.
     """
 
     store: dict[str, Any] = {}  # shared by default
@@ -303,6 +306,14 @@ class MemoryFileSystem(AbstractFileSystem):
         if mode in ["rb", "ab", "r+b", "a+b"]:
             if path in self.store:
                 f = self.store[path]
+                if mode == "rb":
+                    # Do not change the mode of the shared, writable store entry.
+                    # BytesIO can share the immutable bytes until a writer changes them.
+                    reader = MemoryFile(self, path, f.getvalue(), mode=mode)
+                    reader.created = f.created
+                    reader.modified = f.modified
+                    return reader
+                f.mode = mode
                 if "a" in mode:
                     # position at the end of file
                     f.seek(0, 2)
@@ -313,7 +324,7 @@ class MemoryFileSystem(AbstractFileSystem):
             elif "a" in mode:
                 # append modes create the file if it does not exist, matching
                 # builtin open() and LocalFileSystem
-                m = MemoryFile(self, path, kwargs.get("data"))
+                m = MemoryFile(self, path, kwargs.get("data"), mode=mode)
                 if not self._intrans:
                     m.commit()
                 # position at the end of file, like the existing-file path above
@@ -324,7 +335,7 @@ class MemoryFileSystem(AbstractFileSystem):
         elif mode in {"wb", "w+b", "xb", "x+b"}:
             if "x" in mode and self.exists(path):
                 raise FileExistsError
-            m = MemoryFile(self, path, kwargs.get("data"))
+            m = MemoryFile(self, path, kwargs.get("data"), mode=mode)
             if not self._intrans:
                 m.commit()
             return m
@@ -410,10 +421,11 @@ class MemoryFile(BytesIO):
     No need to provide fs, path if auto-committing (default)
     """
 
-    def __init__(self, fs=None, path=None, data=None):
+    def __init__(self, fs=None, path=None, data=None, mode="r+b"):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
+        self.mode = mode
         self.created = datetime.now(tz=timezone.utc)
         self.modified = datetime.now(tz=timezone.utc)
         if data:
@@ -423,6 +435,29 @@ class MemoryFile(BytesIO):
     @property
     def size(self):
         return self.getbuffer().nbytes
+
+    def writable(self):
+        return self.mode != "rb"
+
+    def write(self, data):
+        if not self.writable():
+            raise UnsupportedOperation("not writable")
+        return super().write(data)
+
+    def writelines(self, lines):
+        if not self.writable():
+            raise UnsupportedOperation("not writable")
+        return super().writelines(lines)
+
+    def truncate(self, size=None):
+        if not self.writable():
+            raise UnsupportedOperation("not writable")
+        return super().truncate(size)
+
+    def getbuffer(self):
+        if not self.writable():
+            return memoryview(self.getvalue())
+        return super().getbuffer()
 
     def __enter__(self):
         return self
@@ -434,5 +469,7 @@ class MemoryFile(BytesIO):
         pass
 
     def commit(self):
+        if not self.writable():
+            raise UnsupportedOperation("not writable")
         self.fs.store[self.path] = self
         self.modified = datetime.now(tz=timezone.utc)
