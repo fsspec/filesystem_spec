@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Normalize protocol prefixes and leading slashes before listing archive paths.
+
 - Make async loop lock initialization thread-safe (#1783)
 
 

@@ -49,6 +49,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path)
         self._get_dirs()
         paths = {}
         for p, f in self.dir_cache.items():
