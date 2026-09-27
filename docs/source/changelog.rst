@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Resolve negative FTP read offsets relative to the end of the file.
+
 - Make async loop lock initialization thread-safe (#1783)
 
 

@@ -216,7 +216,7 @@ class FTPFileSystem(AbstractFileSystem):
             outfile.close()
 
     def cat_file(self, path, start=None, end=None, **kwargs):
-        if end is not None:
+        if end is not None or (start is not None and start < 0):
             return super().cat_file(path, start, end, **kwargs)
         out = []
 

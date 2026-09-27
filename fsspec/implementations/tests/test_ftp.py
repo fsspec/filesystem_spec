@@ -216,6 +216,25 @@ def test_cat_get(ftp_writable, tmpdir):
     assert open(fn, "rb").read() == data
 
 
+@pytest.mark.parametrize("start", [-3, -10, -100, 0, 3, None])
+def test_cat_file_start(ftp_writable, start):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    data = b"0123456789"
+    fs.pipe("/slice", data)
+    assert fs.cat_file("/slice", start=start) == data[start:]
+    assert fs.cat_file("/slice", start=start, end=8) == data[start:8]
+
+
+def test_cat_file_negative_start_empty_or_missing(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    fs.pipe("/empty", b"")
+    assert fs.cat_file("/empty", start=-3) == b""
+    with pytest.raises(FileNotFoundError):
+        fs.cat_file("/missing", start=-3)
+
+
 def test_mkdir(ftp_writable):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)
