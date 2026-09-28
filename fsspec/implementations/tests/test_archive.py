@@ -294,6 +294,17 @@ class TestAnyArchive:
             with pytest.raises(FileNotFoundError):
                 fs.ls("deeply/i-do-not-exist")
 
+    @pytest.mark.parametrize("detail", [False, True])
+    @pytest.mark.parametrize("prefix", ["/", "protocol://", "protocol:///"])
+    def test_ls_normalizes_path(self, scenario, detail, prefix):
+        prefix = prefix.replace("protocol", scenario.protocol)
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            for path in ("", "deeply", "deeply/nested", "deeply/nested/path"):
+                assert fs.ls(prefix + path, detail=detail) == fs.ls(path, detail=detail)
+            with pytest.raises(FileNotFoundError):
+                fs.ls(prefix + "missing", detail=detail)
+
     def test_find(self, scenario: ArchiveTestScenario):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
