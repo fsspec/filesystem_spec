@@ -301,14 +301,6 @@ class MemoryFileSystem(AbstractFileSystem):
             if self.isfile(parent):
                 raise FileExistsError(parent)
         if mode in ["rb", "ab", "r+b", "a+b"]:
-            if self._intrans and "a" in mode:
-                # the last pending file for a path is what gets committed, so a
-                # repeated append in one transaction must continue it rather
-                # than start over from the store and drop the earlier writes
-                for pending in reversed(self.transaction.files):
-                    if pending.path == path:
-                        pending.seek(0, 2)
-                        return pending
             if path in self.store:
                 f = self.store[path]
                 if self._intrans and "a" in mode:

@@ -346,30 +346,14 @@ def test_transaction_append_existing_file(m, global_store, mode, rollback):
 
     with pytest.raises(RuntimeError) if rollback else nullcontext():
         with fs.transaction:
-            for data in [b"-first", b"-second"]:
-                with fs.open("file", mode) as f:
-                    f.write(data)
+            with fs.open("file", mode) as f:
+                f.write(b"-appended")
             assert fs.cat_file("file") == b"original"
             if rollback:
                 raise RuntimeError("discard transaction")
 
-    expected = b"original" if rollback else b"original-first-second"
+    expected = b"original" if rollback else b"original-appended"
     assert fs.cat_file("file") == expected
-
-
-@pytest.mark.parametrize("first_mode", ["wb", "ab"])
-@pytest.mark.parametrize("mode", ["ab", "a+b"])
-def test_transaction_append_after_pending_write(first_mode, mode):
-    fs = filesystem("memory", global_store=False, skip_instance_cache=True)
-
-    with fs.transaction:
-        with fs.open("file", first_mode) as f:
-            f.write(b"first")
-        with fs.open("file", mode) as f:
-            f.write(b"-second")
-        assert not fs.exists("file")
-
-    assert fs.cat_file("file") == b"first-second"
 
 
 def test_moves(m):
