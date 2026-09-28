@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Preserve binary bytes in percent-encoded data URLs without base64 encoding.
+
 - Keep failed memory-mapped cache reads retriable without discarding completed ranges.
 
 - Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
