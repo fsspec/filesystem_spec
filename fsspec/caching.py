@@ -805,7 +805,7 @@ class KnownPartsOfAFile(BaseCache):
                 # the whole block
                 self.hit_count += 1
                 out += self.data[(loc0, loc1)]
-            elif loc0 <= stop <= loc1:
+            elif started and loc0 <= stop <= loc1:
                 # end block
                 self.hit_count += 1
                 out = out + self.data[(loc0, loc1)][: stop - loc0]
