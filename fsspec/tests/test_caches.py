@@ -339,6 +339,37 @@ def test_known(strict, sort):
     assert c.miss_count
 
 
+@pytest.mark.parametrize("strict", [True, False])
+def test_known_parts_read_beginning_outside_a_part(strict):
+    """
+    A read that begins outside every known byte range cannot be served: there
+    are no bytes to return and, per the ``strict`` docstring, such a read is
+    not zero padded either, so it must raise instead of quietly handing back
+    bytes from the wrong offsets.
+    """
+    parts = {
+        (10, 20): b"1" * 10,
+        (20, 30): b"2" * 10,
+    }
+    c = caches["parts"](None, None, 100, parts, strict=strict)
+    assert c.data == {(10, 30): b"1" * 10 + b"2" * 10}  # got consolidated
+
+    # these used to be answered with bytes taken from the wrong offsets
+    for start, stop in [(5, 15), (5, 25), (9, 11)]:
+        hits = c.hit_count
+        with pytest.raises(ValueError):
+            c._fetch(start, stop)
+        assert c.hit_count == hits, "a read that cannot be served is not a hit"
+
+    # a read reaching past the end of the known data still fails
+    with pytest.raises(ValueError):
+        c._fetch(5, 100)
+
+    # reads that do begin inside a part are unaffected
+    assert c._fetch(12, 18) == b"1" * 6
+    assert c._fetch(25, 30) == b"2" * 5
+
+
 def test_background(server, monkeypatch):
     import threading
     import time

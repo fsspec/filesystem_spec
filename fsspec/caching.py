@@ -804,8 +804,9 @@ class KnownPartsOfAFile(BaseCache):
                 # the whole block
                 self.hit_count += 1
                 out += self.data[(loc0, loc1)]
-            elif loc0 <= stop <= loc1:
-                # end block
+            elif started and loc0 <= stop <= loc1:
+                # end block. The start of the request must have been found in
+                # an earlier part, else these bytes come from the wrong offsets
                 self.hit_count += 1
                 out = out + self.data[(loc0, loc1)][: stop - loc0]
                 return out
