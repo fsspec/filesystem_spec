@@ -21,8 +21,10 @@ class MemoryFileSystem(AbstractFileSystem):
     ``global_store=False, skip_instance_cache=True`` to create a new instance
     with an independent store instead.
 
-    Read-only opens return a snapshot with an independent cursor. Writable
-    handles continue to modify the stored file directly.
+    Read-only opens return a snapshot with an independent cursor. They do not
+    observe writes made after the snapshot was opened. Writable opens continue
+    to return the stored file directly: multiple writable handles share that
+    object's cursor and mode, rather than providing independent open state.
     """
 
     store: dict[str, Any] = {}  # shared by default

@@ -8,7 +8,10 @@ Fixes
 
 - Reject writes through read-only memory file handles, including text wrappers,
   truncation and writable buffer views. Read-only opens now use independent
-  content snapshots so another open cannot change their mode (issue #2193).
+  content snapshots so another open cannot change their mode; existing readers
+  do not observe later writes. Multiple writable opens still share the stored
+  object's cursor and mode; independent writable handles are not implemented
+  by this change (issue #2193).
 
 - Make async loop lock initialization thread-safe (#1783)
 
