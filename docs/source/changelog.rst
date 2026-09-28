@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+
+- Update memory file modification times after writes and truncation.
+
 - Preserve binary bytes in percent-encoded data URLs without base64 encoding.
 
 - Keep failed memory-mapped cache reads retriable without discarding completed ranges.
