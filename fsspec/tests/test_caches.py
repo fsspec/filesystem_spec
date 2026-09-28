@@ -292,6 +292,53 @@ def test_mmap_cache(mocker):
     assert fetcher.call_count == 5
 
 
+@pytest.mark.parametrize("use_multi_fetcher", [False, True])
+@pytest.mark.parametrize("failed_start", [0, 8])
+@pytest.mark.parametrize("short_read", [False, True])
+def test_mmap_cache_retries_failed_ranges(use_multi_fetcher, failed_start, short_read):
+    data = b"abcdefghijkl"
+    calls = []
+    failed = False
+
+    def fetcher(start, end):
+        nonlocal failed
+        calls.append((start, end))
+        if start == failed_start and not failed:
+            failed = True
+            if short_read:
+                return b""
+            raise OSError("temporary read failure")
+        return data[start:end]
+
+    def multi_fetcher(ranges):
+        for start, end in ranges:
+            yield fetcher(start, end)
+
+    cache = MMapCache(
+        4,
+        fetcher,
+        len(data),
+        multi_fetcher=multi_fetcher if use_multi_fetcher else None,
+    )
+    try:
+        # A cached middle block splits the next read into two missing ranges.
+        assert cache._fetch(4, 7) == data[4:7]
+        with pytest.raises(IndexError if short_read else OSError):
+            cache._fetch(0, 11)
+
+        assert cache.blocks == ({1} if failed_start == 0 else {0, 1})
+        calls.clear()
+        assert cache._fetch(0, 11) == data[:11]
+        assert calls == ([(0, 4), (8, 12)] if failed_start == 0 else [(8, 12)])
+        assert cache.blocks == {0, 1, 2}
+
+        calls.clear()
+        assert cache._fetch(0, 11) == data[:11]
+        assert calls == []
+    finally:
+        cache.cache.close()
+
+
 @pytest.mark.parametrize(
     "size_requests",
     [[(0, 30), (0, 35), (51, 52)], [(0, 1), (1, 11), (1, 52)], [(0, 52), (11, 15)]],
