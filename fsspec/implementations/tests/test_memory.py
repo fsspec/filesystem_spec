@@ -357,6 +357,21 @@ def test_transaction_append_existing_file(m, global_store, mode, rollback):
     assert fs.cat_file("file") == expected
 
 
+@pytest.mark.parametrize("first_mode", ["wb", "ab"])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_transaction_append_after_pending_write(first_mode, mode):
+    fs = filesystem("memory", global_store=False, skip_instance_cache=True)
+
+    with fs.transaction:
+        with fs.open("file", first_mode) as f:
+            f.write(b"first")
+        with fs.open("file", mode) as f:
+            f.write(b"-second")
+        assert not fs.exists("file")
+
+    assert fs.cat_file("file") == b"first-second"
+
+
 def test_moves(m):
     m.touch("source.txt")
     m.mv("source.txt", "target.txt")
