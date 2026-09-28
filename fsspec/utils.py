@@ -103,7 +103,13 @@ def infer_storage_options(
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
+        host = parsed_path.netloc.rsplit("@", 1)[-1]
+        if host.startswith("[") and "]" in host:
+            # An IPv6 literal carries colons of its own, so only a colon after
+            # the closing bracket separates the port.
+            options["host"] = host[: host.index("]") + 1]
+        else:
+            options["host"] = host.rsplit(":", 1)[0]
 
         if protocol in ("s3", "s3a", "gcs", "gs"):
             options["path"] = options["host"] + options["path"]
@@ -481,9 +487,12 @@ def get_file_extension(url: str) -> str:
     url = stringify_path(url)
     # Only consider the final path component: a "." in a parent directory name
     # (e.g. "/path/to.dir/file") is not the file's extension.
-    ext_parts = url.rsplit("/", 1)[-1].rsplit(".", 1)
-    if len(ext_parts) > 1:
-        return ext_parts[-1]
+    name = url.rsplit("/", 1)[-1]
+    # A leading dot marks a hidden file rather than an extension, so ".bashrc"
+    # has none, while ".hidden.txt" still has "txt".
+    stem, dot, extension = name.lstrip(".").rpartition(".")
+    if stem and dot:
+        return extension
     return ""
 
 

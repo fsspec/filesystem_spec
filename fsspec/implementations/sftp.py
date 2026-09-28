@@ -12,6 +12,37 @@ from ..utils import infer_storage_options
 
 logger = logging.getLogger("fsspec.sftp")
 
+#: Short names for the missing host key policies built into paramiko, accepted
+#: as the ``host_key_policy`` argument of ``SFTPFileSystem``.
+HOST_KEY_POLICIES = {
+    "auto_add": paramiko.AutoAddPolicy,
+    "reject": paramiko.RejectPolicy,
+    "warning": paramiko.WarningPolicy,
+}
+
+
+def _resolve_host_key_policy(policy):
+    """Turn a ``host_key_policy`` argument into a paramiko policy instance."""
+    if policy is None:
+        return paramiko.AutoAddPolicy()
+    if isinstance(policy, str):
+        try:
+            return HOST_KEY_POLICIES[policy]()
+        except KeyError:
+            raise ValueError(
+                f"Unknown host_key_policy {policy!r}; expected one of "
+                f"{sorted(HOST_KEY_POLICIES)} or a paramiko.MissingHostKeyPolicy"
+            ) from None
+    if isinstance(policy, type) and issubclass(policy, paramiko.MissingHostKeyPolicy):
+        return policy()
+    if isinstance(policy, paramiko.MissingHostKeyPolicy):
+        return policy
+    raise TypeError(
+        "host_key_policy must be one of "
+        f"{sorted(HOST_KEY_POLICIES)}, a paramiko.MissingHostKeyPolicy subclass "
+        f"or instance, not {type(policy).__name__}"
+    )
+
 
 class SFTPFileSystem(AbstractFileSystem):
     """Files over SFTP/SSH
@@ -34,6 +65,20 @@ class SFTPFileSystem(AbstractFileSystem):
             Hostname or IP as a string
         temppath: str
             Location on the server to put files, when within a transaction
+        host_key_policy: str or paramiko.MissingHostKeyPolicy, optional
+            Policy applied when the server presents a host key that is not
+            known yet, passed to
+            ``paramiko.SSHClient.set_missing_host_key_policy``. Either one of
+            the strings ``"auto_add"`` (default, ``paramiko.AutoAddPolicy``:
+            accept and remember any unknown key), ``"warning"``
+            (``paramiko.WarningPolicy``: log a warning and accept) or
+            ``"reject"`` (``paramiko.RejectPolicy``: refuse to connect), or a
+            ``paramiko.MissingHostKeyPolicy`` subclass or instance.
+
+            The default, ``"auto_add"``, trusts any host key presented on the
+            first connection to a host, so a man-in-the-middle attacker can
+            impersonate the server. Pass ``"reject"`` to only connect to hosts
+            whose keys are already in the known hosts of the process.
         ssh_kwargs: dict
             Parameters passed on to connection. See details in
             https://docs.paramiko.org/en/3.3/api/client.html#paramiko.client.SSHClient.connect
@@ -43,6 +88,9 @@ class SFTPFileSystem(AbstractFileSystem):
             return
         super().__init__(**ssh_kwargs)
         self.temppath = ssh_kwargs.pop("temppath", "/tmp")  # remote temp directory
+        self.host_key_policy = _resolve_host_key_policy(
+            ssh_kwargs.pop("host_key_policy", None)
+        )
         self.host = host
         self.ssh_kwargs = ssh_kwargs
         self._connect()
@@ -50,7 +98,7 @@ class SFTPFileSystem(AbstractFileSystem):
     def _connect(self):
         logger.debug("Connecting to SFTP server %s", self.host)
         self.client = paramiko.SSHClient()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.client.set_missing_host_key_policy(self.host_key_policy)
         self.client.connect(self.host, **self.ssh_kwargs)
         self.ftp = self.client.open_sftp()
 

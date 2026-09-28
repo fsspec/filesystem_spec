@@ -856,15 +856,39 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         # explicitly set buffering off?
         with self.open(path, "rb", **kwargs) as f:
+            # A negative start or end counts back from the file length. Only
+            # fsspec's own file classes expose `.size`; a plain file (e.g. from
+            # the caching filesystems) does not, so measure with a seek instead.
+            needs_size = (start is not None and start < 0) or (
+                end is not None and end < 0
+            )
+            size = None
+            seeked_for_size = False
+            if needs_size:
+                size = getattr(f, "size", None)
+                if size is None:
+                    size = f.seek(0, 2)
+                    seeked_for_size = True
             if start is not None:
                 if start >= 0:
                     f.seek(start)
                 else:
-                    f.seek(max(0, f.size + start))
+                    f.seek(max(0, size + start))
+            elif seeked_for_size:
+                # measuring the size above moved the cursor to the end; with no
+                # start given, put it back so the read begins at the start. When
+                # .size was used instead, or nothing was measured, the cursor
+                # is untouched, as before, so a plain full read still works
+                # on non-seekable files.
+                f.seek(0)
             if end is not None:
                 if end < 0:
-                    end = f.size + end
-                return f.read(end - f.tell())
+                    # a negative end counts back from the end, as the start
+                    # does, and clamps at the start of the file
+                    end = max(0, size + end)
+                # a range that ends at or before where it starts is empty; a
+                # negative length would instead mean "read to the end"
+                return f.read(max(0, end - f.tell()))
             return f.read()
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
@@ -1492,7 +1516,12 @@ class AbstractFileSystem(metaclass=_Cached):
         :func:`fsspec.utils.read_block`
         """
         with self.open(fn, "rb") as f:
-            size = f.size
+            # Only fsspec's own file classes expose `.size`; a plain file (e.g.
+            # from the caching filesystems) does not, so fall back to a seek.
+            size = getattr(f, "size", None)
+            if size is None:
+                size = f.seek(0, 2)
+                f.seek(0)
             if length is None:
                 length = size
             if size is not None and offset + length > size:
@@ -2256,6 +2285,8 @@ class AbstractBufferedFile(io.IOBase):
     def readlines(self):
         """Return all data, split by the newline character, including the newline character"""
         data = self.read()
+        if not data:
+            return []
         lines = data.split(b"\n")
         out = [l + b"\n" for l in lines[:-1]]
         if data.endswith(b"\n"):

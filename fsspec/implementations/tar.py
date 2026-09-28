@@ -1,5 +1,4 @@
 import logging
-import re
 import tarfile
 
 import fsspec
@@ -26,7 +25,17 @@ class TarFileSystem(AbstractArchiveFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         # file paths are always relative to the archive root
-        return super()._strip_protocol(path).lstrip("/")
+        return cls._normalize_path(super()._strip_protocol(path))
+
+    @staticmethod
+    def _normalize_path(path):
+        # Do not resolve '..': it can be part of a literal archive member name.
+        return "/".join(part for part in path.split("/") if part not in ("", "."))
+
+    def ls(self, path, detail=True, **kwargs):
+        entries = super().ls(self._strip_protocol(path), detail=detail, **kwargs)
+        # An explicit './' member represents the root, not one of its children.
+        return [entry for entry in entries if (entry["name"] if detail else entry)]
 
     def __init__(
         self,
@@ -101,8 +110,8 @@ class TarFileSystem(AbstractArchiveFileSystem):
             info = ti.get_info()
             info["type"] = typemap.get(info["type"], "file")
             orig_name = info["name"].rstrip("/")
-            # Collapse duplicate slashes in the filesystem-facing name.
-            name = re.sub("/+", "/", orig_name)
+            # Keep the original name for tarfile lookups and link resolution.
+            name = self._normalize_path(orig_name)
             info["name"] = name
             if ti.islnk() or ti.issym():
                 # extractfile follows links, so report the size of the target
@@ -141,8 +150,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
     def _open(self, path, mode="rb", **kwargs):
         if mode != "rb":
             raise ValueError("Read-only filesystem implementation")
-        # Accept paths containing the archive's duplicate slashes too.
-        path = re.sub("/+", "/", path)
+        path = self._normalize_path(path)
         try:
             details, _, orig_name = self.index[path]
         except KeyError as exc:

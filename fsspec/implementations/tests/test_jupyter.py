@@ -64,3 +64,21 @@ def test_simple(jupyter):
     fs.mv("bfile", "cfile")
     assert "cfile" in os.listdir(d)
     assert "bfile" not in os.listdir(d)
+
+
+def test_notebook_contents(jupyter):
+    # The contents API returns notebooks as parsed JSON (format "json") and
+    # files it cannot decode as UTF-8 as base64; cat must give the bytes on disk.
+    url, d = jupyter
+    fs = fsspec.filesystem("jupyter", url=url)
+
+    nb = (
+        b'{\n "cells": [],\n "metadata": {},\n'
+        b' "nbformat": 4,\n "nbformat_minor": 5\n}\n'
+    )
+    with open(os.path.join(d, "nb.ipynb"), "wb") as f:
+        f.write(nb)
+    assert fs.cat("nb.ipynb") == nb
+    with fs.open("nb.ipynb", "rb") as f:
+        assert f.read() == nb
+    assert fs.info("nb.ipynb")["type"] == "file"

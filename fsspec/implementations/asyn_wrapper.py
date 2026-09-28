@@ -71,6 +71,10 @@ class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
         else:
             self.sync_fs = fsspec.filesystem(target_protocol, **target_options)
         self.protocol = self.sync_fs.protocol
+        # paths must be normalized the way the wrapped filesystem does it
+        self.root_marker = self.sync_fs.root_marker
+        self._strip_protocol = self.sync_fs._strip_protocol
+        self._parent = self.sync_fs._parent
         self.semaphore = semaphore
         self._wrap_all_sync_methods()
 

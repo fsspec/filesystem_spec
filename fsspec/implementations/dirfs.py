@@ -68,6 +68,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 return path
             if not path:
                 return self.path
+            # a trailing slash requests "copy the contents" in bulk
+            # operations (docs/source/copying.rst), so preserve it across the
+            # join even though _strip_protocol removes it
+            suffix = "/" if path.endswith("/") else ""
             path = self._strip_protocol(path)
             # ".." only navigates above the root on filesystems that resolve it
             # against a real directory tree; on object stores it is a literal
@@ -76,7 +80,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )
-            return self.fs.sep.join((self.path, path))
+            joined = self.fs.sep.join((self.path, path))
+            if suffix and not joined.endswith("/"):
+                joined += "/"
+            return joined
         if isinstance(path, dict):
             return {self._join(_path): value for _path, value in path.items()}
         return [self._join(_path) for _path in path]

@@ -901,6 +901,39 @@ def test_fork_deadlock():
     assert result is True
 
 
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"",
+        b"hello",
+        b"hello\n",
+        b"\n\n",
+        b"hello\nworld",
+        b"hello\r\nworld\r\n",
+        b"a\rb",
+    ],
+)
+def test_buffered_readlines(m, cache_type, content):
+    m.pipe_file("lines", content)
+    with (
+        AbstractBufferedFile(m, "lines", cache_type=cache_type, block_size=2) as stream,
+        io.BytesIO(content) as expected,
+    ):
+        assert stream.readlines() == expected.readlines()
+        assert stream.readlines() == []
+
+        stream.seek(0)
+        expected.seek(0)
+        stream.read(2)
+        expected.read(2)
+        assert stream.readlines() == expected.readlines()
+        assert stream.readlines() == []
+
+    with pytest.raises(ValueError, match="closed file"):
+        stream.readlines()
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",
@@ -1239,6 +1272,37 @@ def test_ls_from_cache():
         fs.ls("top_level/second_level/", refresh=False, strip_proto=False)
         == uncached_results
     )
+
+
+def test_cat_file_empty_range(tmpdir):
+    """
+    A range that ends at or before its start is empty, exactly like a python
+    slice, so ``cat_file`` must return b"" rather than the rest of the file.
+    """
+    import zipfile
+
+    archive = os.path.join(str(tmpdir), "ar.zip")
+    with zipfile.ZipFile(archive, mode="w") as z:
+        z.writestr("member.txt", b"0123456789")
+
+    fs = fsspec.filesystem("zip", fo=archive)
+    data = b"0123456789"
+
+    # end at or before start
+    assert fs.cat_file("member.txt", 3, 0) == b""
+    assert fs.cat_file("member.txt", 8, 3) == b""
+    # a negative end that reaches back past the start of the file
+    assert fs.cat_file("member.txt", 0, -20) == b""
+    assert fs.cat_file("member.txt", 3, -20) == b""
+
+    # the documented slice semantics still apply
+    assert fs.cat_file("member.txt", 3, -2) == data[3:-2]
+    assert fs.cat_file("member.txt", -3, -1) == data[-3:-1]
+    assert fs.cat_file("member.txt", 3, 20) == data[3:20]
+
+    # the same holds for the public aliases of cat_file
+    assert fs.read_bytes("member.txt", 3, 0) == b""
+    assert fs.cat_ranges(["member.txt"], [3], [0]) == [b""]
 
 
 @pytest.mark.parametrize(

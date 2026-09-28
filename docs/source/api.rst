@@ -121,6 +121,7 @@ Built-in Implementations
    implementations.git.GitFileSystem
    implementations.github.GithubFileSystem
    implementations.http.HTTPFileSystem
+   implementations.ia.InternetArchiveFileSystem
    implementations.jupyter.JupyterFileSystem
    implementations.libarchive.LibArchiveFileSystem
    implementations.local.LocalFileSystem
@@ -173,6 +174,9 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.http.HTTPFileSystem
+   :members: __init__
+
+.. autoclass:: fsspec.implementations.ia.InternetArchiveFileSystem
    :members: __init__
 
 .. autoclass:: fsspec.implementations.jupyter.JupyterFileSystem

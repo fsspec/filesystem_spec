@@ -1,3 +1,4 @@
+import io
 import secrets
 
 import pytest
@@ -55,6 +56,41 @@ def remote_dir(fs, request):
     fs.makedirs(directory)
     yield ("hdfs://" if request.param else "/") + directory
     fs.rm(directory, recursive=True)
+
+
+@pytest.mark.parametrize("host, port", [("default", 0), ("namenode", 8020)])
+def test_hadoop_fsid(monkeypatch, host, port):
+    monkeypatch.setattr(
+        pyarrow_fs, "HadoopFileSystem", lambda **kwargs: pyarrow_fs.LocalFileSystem()
+    )
+    first = HadoopFileSystem(
+        host=host, port=port, user="alice", skip_instance_cache=True
+    )
+    second = HadoopFileSystem(
+        host=host, port=port, user="bob", skip_instance_cache=True
+    )
+
+    assert first.fsid.startswith("hdfs_")
+    assert first.fsid == second.fsid
+    assert (
+        first.fsid
+        != HadoopFileSystem(host=host, port=port + 1, skip_instance_cache=True).fsid
+    )
+    assert (
+        first.fsid
+        != HadoopFileSystem(host="other", port=port, skip_instance_cache=True).fsid
+    )
+
+
+def test_hadoop_fsid_default_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        pyarrow_fs, "HadoopFileSystem", lambda **kwargs: pyarrow_fs.LocalFileSystem()
+    )
+
+    assert (
+        HadoopFileSystem(skip_instance_cache=True).fsid
+        == HadoopFileSystem(host="default", port=0, skip_instance_cache=True).fsid
+    )
 
 
 def test_protocol():
@@ -304,6 +340,41 @@ def test_seekable(fs, remote_dir):
     with fs.open(remote_dir + "/a.txt", "rb", seekable=False) as file:
         with pytest.raises(OSError):
             file.seek(5)
+
+
+def test_readinto(fs, remote_dir):
+    data = b"dvc.org"
+
+    with fs.open(remote_dir + "/a.txt", "wb") as stream:
+        stream.write(data)
+
+    for seekable in [True, False]:
+        with fs.open(remote_dir + "/a.txt", "rb", seekable=seekable) as file:
+            buffer = bytearray(3)
+            assert file.readinto(buffer) == 3
+            assert bytes(buffer) == data[:3]
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda buffered: buffered.read(3),
+        lambda buffered: buffered.peek(3)[:3],
+        lambda buffered: buffered.read1(3),
+    ],
+    ids=["read", "peek", "read1"],
+)
+def test_readinto_supports_a_buffered_reader(fs, remote_dir, read):
+    # Each of these fills a buffer io.BufferedReader owns, so they go through
+    # readinto rather than read(); an unsized read() does not. A gzip reader takes
+    # the peek()/read1() path.
+    data = b"dvc.org"
+
+    with fs.open(remote_dir + "/a.txt", "wb") as stream:
+        stream.write(data)
+
+    with fs.open(remote_dir + "/a.txt", "rb") as file:
+        assert read(io.BufferedReader(file)) == data[:3]
 
 
 def test_get_kwargs_from_urls_hadoop_fs():

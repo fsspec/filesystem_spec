@@ -61,7 +61,10 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         path = self._strip_protocol(path)
-        r = self.session.get(f"{self.url}/{path}")
+        # Ask for the raw file; by default notebooks come back as parsed JSON
+        r = self.session.get(
+            f"{self.url}/{path}", params={"type": "file", "format": "base64"}
+        )
         if r.status_code == 404:
             raise FileNotFoundError(path)
         r.raise_for_status()
