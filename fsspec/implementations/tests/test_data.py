@@ -1,3 +1,7 @@
+from urllib.parse import quote_from_bytes
+
+import pytest
+
 import fsspec
 
 
@@ -38,3 +42,31 @@ def test_info_without_protocol():
     fs, path = fsspec.core.url_to_fs("data:,Hello")
     assert fs.info(path)["mimetype"] == ""
     assert fs.size(path) == 5
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("data:application/octet-stream,%FF%00%80", b"\xff\x00\x80"),
+        ("data:text/plain;charset=iso-8859-1,%E9", b"\xe9"),
+        ("data:text/plain;charset=utf-8,%C3%A9", b"\xc3\xa9"),
+        ("data:,Hello%2C%20World%21", b"Hello, World!"),
+        ("data:,%25+%2f", b"%+/"),
+        ("data:,", b""),
+    ],
+)
+def test_percent_encoded_bytes(uri, expected):
+    with fsspec.open(uri, "rb") as f:
+        assert f.read() == expected
+
+    fs, path = fsspec.core.url_to_fs(uri)
+    assert fs.info(path)["size"] == len(expected)
+    assert fs.cat_file(path, start=1, end=3) == expected[1:3]
+    assert fs.cat_file(path, start=-2) == expected[-2:]
+
+
+def test_percent_encoded_all_byte_values():
+    data = bytes(range(256))
+    uri = "data:application/octet-stream," + quote_from_bytes(data)
+    with fsspec.open(uri, "rb") as f:
+        assert f.read() == data

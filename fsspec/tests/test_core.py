@@ -330,7 +330,7 @@ def test_open_file_write_with_special_characters(tmp_path, char, monkeypatch):
 
 
 @pytest.mark.parametrize("char", glob_magic_characters)
-def test_open_files_read_with_special_characters(tmp_path, char):
+def test_open_files_read_with_special_characters_unexpanded(tmp_path, char):
     # Create a filename incorporating the special character
     file_name = f"test{char}.txt"
     file_path = tmp_path / file_name

@@ -1274,6 +1274,37 @@ def test_ls_from_cache():
     )
 
 
+def test_cat_file_empty_range(tmpdir):
+    """
+    A range that ends at or before its start is empty, exactly like a python
+    slice, so ``cat_file`` must return b"" rather than the rest of the file.
+    """
+    import zipfile
+
+    archive = os.path.join(str(tmpdir), "ar.zip")
+    with zipfile.ZipFile(archive, mode="w") as z:
+        z.writestr("member.txt", b"0123456789")
+
+    fs = fsspec.filesystem("zip", fo=archive)
+    data = b"0123456789"
+
+    # end at or before start
+    assert fs.cat_file("member.txt", 3, 0) == b""
+    assert fs.cat_file("member.txt", 8, 3) == b""
+    # a negative end that reaches back past the start of the file
+    assert fs.cat_file("member.txt", 0, -20) == b""
+    assert fs.cat_file("member.txt", 3, -20) == b""
+
+    # the documented slice semantics still apply
+    assert fs.cat_file("member.txt", 3, -2) == data[3:-2]
+    assert fs.cat_file("member.txt", -3, -1) == data[-3:-1]
+    assert fs.cat_file("member.txt", 3, 20) == data[3:20]
+
+    # the same holds for the public aliases of cat_file
+    assert fs.read_bytes("member.txt", 3, 0) == b""
+    assert fs.cat_ranges(["member.txt"], [3], [0]) == [b""]
+
+
 @pytest.mark.parametrize(
     "dt",
     [

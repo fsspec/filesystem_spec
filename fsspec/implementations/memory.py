@@ -424,6 +424,21 @@ class MemoryFile(BytesIO):
     def size(self):
         return self.getbuffer().nbytes
 
+    def write(self, data):
+        written = super().write(data)
+        if written:
+            self.modified = datetime.now(tz=timezone.utc)
+        return written
+
+    def writelines(self, lines):
+        for line in lines:
+            self.write(line)
+
+    def truncate(self, size=None):
+        size = super().truncate(size)
+        self.modified = datetime.now(tz=timezone.utc)
+        return size
+
     def __enter__(self):
         return self
 
