@@ -6,6 +6,7 @@ import pytest
 from fsspec.caching import (
     BackgroundBlockCache,
     BlockCache,
+    BytesCache,
     FirstChunkCache,
     MMapCache,
     ReadAheadCache,
@@ -181,6 +182,33 @@ def test_readahead_cache():
     assert cache.total_requested_bytes == total_requested_bytes
 
 
+def test_bytes_cache_range_ending_at_cache_end():
+    """
+    A range that stops exactly where the cached data stops is already held in
+    full, so it must be served without going back to the fetcher.
+    """
+    block_size = 5
+    calls = []
+
+    def counting_fetcher(start, end):
+        calls.append((start, end))
+        return letters_fetcher(start, end)
+
+    cache = BytesCache(block_size, counting_fetcher, len(string.ascii_letters))
+
+    assert cache._fetch(0, 5) == letters_fetcher(0, 5)
+    assert cache.miss_count == 1
+    assert cache.hit_count == 0
+    # the read ahead leaves the cache holding [0, 10)
+    assert calls == [(0, 10)]
+
+    # ends exactly at the end of the cached range: every byte is already here
+    assert cache._fetch(5, 10) == letters_fetcher(5, 10)
+    assert cache.hit_count == 1
+    assert cache.miss_count == 1
+    assert calls == [(0, 10)]
+
+
 def _fetcher(start, end):
     return b"0" * (end - start)
 
@@ -232,7 +260,7 @@ def test_cache_pickleable(Cache_imp):
     assert unpickled._fetch(0, 10) == b"0" * 10
 
 
-def test_first_cache():
+def test_first_cache_without_fetcher():
     c = FirstChunkCache(5, letters_fetcher, 52)
     assert c.cache is None
     assert c._fetch(12, 15) == letters_fetcher(12, 15)
@@ -264,6 +292,53 @@ def test_mmap_cache(mocker):
     assert fetcher.call_count == 5
 
 
+@pytest.mark.parametrize("use_multi_fetcher", [False, True])
+@pytest.mark.parametrize("failed_start", [0, 8])
+@pytest.mark.parametrize("short_read", [False, True])
+def test_mmap_cache_retries_failed_ranges(use_multi_fetcher, failed_start, short_read):
+    data = b"abcdefghijkl"
+    calls = []
+    failed = False
+
+    def fetcher(start, end):
+        nonlocal failed
+        calls.append((start, end))
+        if start == failed_start and not failed:
+            failed = True
+            if short_read:
+                return b""
+            raise OSError("temporary read failure")
+        return data[start:end]
+
+    def multi_fetcher(ranges):
+        for start, end in ranges:
+            yield fetcher(start, end)
+
+    cache = MMapCache(
+        4,
+        fetcher,
+        len(data),
+        multi_fetcher=multi_fetcher if use_multi_fetcher else None,
+    )
+    try:
+        # A cached middle block splits the next read into two missing ranges.
+        assert cache._fetch(4, 7) == data[4:7]
+        with pytest.raises(IndexError if short_read else OSError):
+            cache._fetch(0, 11)
+
+        assert cache.blocks == ({1} if failed_start == 0 else {0, 1})
+        calls.clear()
+        assert cache._fetch(0, 11) == data[:11]
+        assert calls == ([(0, 4), (8, 12)] if failed_start == 0 else [(8, 12)])
+        assert cache.blocks == {0, 1, 2}
+
+        calls.clear()
+        assert cache._fetch(0, 11) == data[:11]
+        assert calls == []
+    finally:
+        cache.cache.close()
+
+
 @pytest.mark.parametrize(
     "size_requests",
     [[(0, 30), (0, 35), (51, 52)], [(0, 1), (1, 11), (1, 52)], [(0, 52), (11, 15)]],
@@ -276,6 +351,21 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
         result = cache._fetch(start, end)
         expected = string.ascii_letters[start:end].encode()
         assert result == expected
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_known_read_starting_outside_a_part(strict):
+    parts = {(0, 10): b"0" * 10, (40, 50): b"3" * 10}
+    c = caches["parts"](None, None, 100, parts, strict=strict)
+
+    # a read that starts in the gap has no first byte to return, in either mode
+    with pytest.raises(ValueError):
+        c._fetch(20, 30)
+    with pytest.raises(ValueError):
+        c._fetch(35, 45)
+
+    # a read that starts inside a part is unaffected
+    assert c._fetch(5, 10) == b"0" * 5
 
 
 @pytest.mark.parametrize("strict", [True, False])
@@ -309,6 +399,37 @@ def test_known(strict, sort):
         assert c._fetch(25, 35) == b"2" * 5 + b"\x00" * 5
         assert c._fetch(25, 45) == b"2" * 5 + b"\x00" * 10 + b"3" * 5
     assert c.miss_count
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_known_parts_read_beginning_outside_a_part(strict):
+    """
+    A read that begins outside every known byte range cannot be served: there
+    are no bytes to return and, per the ``strict`` docstring, such a read is
+    not zero padded either, so it must raise instead of quietly handing back
+    bytes from the wrong offsets.
+    """
+    parts = {
+        (10, 20): b"1" * 10,
+        (20, 30): b"2" * 10,
+    }
+    c = caches["parts"](None, None, 100, parts, strict=strict)
+    assert c.data == {(10, 30): b"1" * 10 + b"2" * 10}  # got consolidated
+
+    # these used to be answered with bytes taken from the wrong offsets
+    for start, stop in [(5, 15), (5, 25), (9, 11)]:
+        hits = c.hit_count
+        with pytest.raises(ValueError):
+            c._fetch(start, stop)
+        assert c.hit_count == hits, "a read that cannot be served is not a hit"
+
+    # a read reaching past the end of the known data still fails
+    with pytest.raises(ValueError):
+        c._fetch(5, 100)
+
+    # reads that do begin inside a part are unaffected
+    assert c._fetch(12, 18) == b"1" * 6
+    assert c._fetch(25, 30) == b"2" * 5
 
 
 def test_background(server, monkeypatch):

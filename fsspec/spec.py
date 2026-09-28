@@ -883,8 +883,12 @@ class AbstractFileSystem(metaclass=_Cached):
                 f.seek(0)
             if end is not None:
                 if end < 0:
-                    end = size + end
-                return f.read(end - f.tell())
+                    # a negative end counts back from the end, as the start
+                    # does, and clamps at the start of the file
+                    end = max(0, size + end)
+                # a range that ends at or before where it starts is empty; a
+                # negative length would instead mean "read to the end"
+                return f.read(max(0, end - f.tell()))
             return f.read()
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
@@ -2281,6 +2285,8 @@ class AbstractBufferedFile(io.IOBase):
     def readlines(self):
         """Return all data, split by the newline character, including the newline character"""
         data = self.read()
+        if not data:
+            return []
         lines = data.split(b"\n")
         out = [l + b"\n" for l in lines[:-1]]
         if data.endswith(b"\n"):

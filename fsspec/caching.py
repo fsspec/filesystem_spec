@@ -180,6 +180,7 @@ class MMapCache(BaseCache):
         self.hit_count += sum(1 for i in block_range if i in self.blocks)
 
         ranges = []
+        block_groups = []
 
         # Consolidate needed blocks.
         # Algorithm adapted from Python 2.x itertools documentation.
@@ -203,9 +204,7 @@ class MMapCache(BaseCache):
                 f"MMap get blocks {_blocks[0]}-{_blocks[-1]} ({sstart}-{send})"
             )
             ranges.append((sstart, send))
-
-            # Update set of cached blocks
-            self.blocks.update(_blocks)
+            block_groups.append(_blocks)
             # Update cache statistics with number of blocks we had to cache
             self.miss_count += len(_blocks)
 
@@ -218,10 +217,12 @@ class MMapCache(BaseCache):
                 sstart, send = ranges[idx]
                 logger.debug(f"MMap copy block ({sstart}-{send}")
                 self.cache[sstart:send] = r
+                self.blocks.update(block_groups[idx])
         else:
-            for sstart, send in ranges:
+            for idx, (sstart, send) in enumerate(ranges):
                 logger.debug(f"MMap get block ({sstart}-{send}")
                 self.cache[sstart:send] = self.fetcher(sstart, send)
+                self.blocks.update(block_groups[idx])
 
         return self.cache[start:end]
 
@@ -611,7 +612,7 @@ class BytesCache(BaseCache):
             self.start is not None
             and start >= self.start
             and self.end is not None
-            and end < self.end
+            and end <= self.end
         ):
             # cache hit: we have all the required data
             offset = start - self.start
@@ -804,8 +805,9 @@ class KnownPartsOfAFile(BaseCache):
                 # the whole block
                 self.hit_count += 1
                 out += self.data[(loc0, loc1)]
-            elif loc0 <= stop <= loc1:
-                # end block
+            elif started and loc0 <= stop <= loc1:
+                # end block. The start of the request must have been found in
+                # an earlier part, else these bytes come from the wrong offsets
                 self.hit_count += 1
                 out = out + self.data[(loc0, loc1)][: stop - loc0]
                 return out

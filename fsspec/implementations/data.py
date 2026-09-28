@@ -1,6 +1,6 @@
 import base64
 import io
-from urllib.parse import unquote
+from urllib.parse import unquote_to_bytes
 
 from fsspec import AbstractFileSystem
 from fsspec.utils import stringify_path
@@ -41,7 +41,7 @@ class DataFileSystem(AbstractFileSystem):
         pref, data = path.split(",", 1)
         if pref.endswith("base64"):
             return base64.b64decode(data)[start:end]
-        return unquote(data).encode()[start:end]
+        return unquote_to_bytes(data)[start:end]
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)

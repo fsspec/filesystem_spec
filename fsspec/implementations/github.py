@@ -1,5 +1,6 @@
 import base64
 import re
+from urllib.parse import quote
 
 import requests
 
@@ -228,7 +229,7 @@ class GithubFileSystem(AbstractFileSystem):
 
         # construct a url to hit the GitHub API's repo contents API
         url = self.content_url.format(
-            org=self.org, repo=self.repo, path=path, sha=sha or self.root
+            org=self.org, repo=self.repo, path=quote(path), sha=sha or self.root
         )
 
         # make a request to this API, and parse the response as JSON
@@ -296,7 +297,10 @@ class GithubFileSystem(AbstractFileSystem):
         sha = self._get_sha_from_cache(path)
         if not sha:
             url = self.content_url.format(
-                org=self.org, repo=self.repo, path=path.lstrip("/"), sha=self.root
+                org=self.org,
+                repo=self.repo,
+                path=quote(path.lstrip("/")),
+                sha=self.root,
             )
             r = requests.get(url, timeout=self.timeout, **self.kw)
             if r.status_code == 404:
@@ -306,7 +310,7 @@ class GithubFileSystem(AbstractFileSystem):
 
         # Delete the file
         delete_url = self.content_url.format(
-            org=self.org, repo=self.repo, path=path, sha=self.root
+            org=self.org, repo=self.repo, path=quote(path), sha=self.root
         )
         branch = self.root
         data = {
