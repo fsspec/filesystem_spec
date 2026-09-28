@@ -6,6 +6,7 @@ Dev
 
 Fixes
 
+- Normalize protocol prefixes and leading slashes before listing archive paths.
 
 - Update memory file modification times after writes and truncation.
 
