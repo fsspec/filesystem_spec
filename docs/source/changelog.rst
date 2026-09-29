@@ -7,6 +7,9 @@ Dev
 Fixes
 
 - Resolve negative FTP read offsets relative to the end of the file.
+
+- Return an empty list from buffered-file ``readlines()`` at end of file
+
 - Normalize protocol prefixes and leading slashes before listing archive paths.
 
 - Update memory file modification times after writes and truncation.
@@ -156,6 +159,13 @@ Other
 - Fix grammar in ``features.rst`` (#2153)
 
 - Patch ``HAS_CPYTHON_API`` where ``_fast_slice`` reads it in tests (#2164)
+
+- Percent-decode the username and password parsed from URLs in
+  ``infer_storage_options`` so that backends (ftp, sftp, smb, ...) receive
+  the real credentials rather than their URL-encoded form; a password whose
+  bare ``%`` produces bytes that are not valid UTF-8 (for example
+  ``pass%ab``) is left untouched so that pre-existing URLs with unescaped
+  ``%`` continue to work (#1871)
 
 2026.7.0
 --------

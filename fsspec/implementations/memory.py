@@ -303,6 +303,10 @@ class MemoryFileSystem(AbstractFileSystem):
         if mode in ["rb", "ab", "r+b", "a+b"]:
             if path in self.store:
                 f = self.store[path]
+                if self._intrans and "a" in mode:
+                    # append to a copy so the store is unchanged until commit
+                    f = MemoryFile(self, path, f.getvalue())
+                    f.created = self.store[path].created
                 if "a" in mode:
                     # position at the end of file
                     f.seek(0, 2)
