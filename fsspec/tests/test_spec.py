@@ -1719,3 +1719,19 @@ def test_cat_ranges_forwards_kwargs():
     fs.cat_ranges(["a", "b"], [0, 0], [1, 1], block_size=42)
 
     assert received == [{"block_size": 42}, {"block_size": 42}]
+
+
+def test_mv_same_path_spelled_differently_keeps_the_file(m):
+    m.pipe("/mvsame/f", b"data")
+    m.mv("/mvsame/f", "memory:///mvsame/f")
+    assert m.cat("/mvsame/f") == b"data"
+
+
+def test_mv_into_own_subdirectory_is_refused(m):
+    m.pipe({"/mvnest/f": b"f", "/mvnest/g": b"g"})
+    with pytest.raises(ValueError, match="into itself"):
+        m.mv("/mvnest", "/mvnest/sub", recursive=True)
+    assert sorted(m.find("/mvnest")) == ["/mvnest/f", "/mvnest/g"]
+
+    m.mv("/mvnest", "/mvnest2", recursive=True)  # a shared prefix is not nesting
+    assert sorted(m.find("/mvnest2")) == ["/mvnest2/f", "/mvnest2/g"]
