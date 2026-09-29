@@ -2017,6 +2017,14 @@ class AbstractBufferedFile(io.IOBase):
                 self.size = size
             else:
                 self.size = self.details["size"]
+            if (
+                cache_type == "blockcache"
+                and getattr(self.fs, "async_impl", False)
+                and "multi_fetcher" not in cache_options
+            ):
+                # lets the cache request several runs of missing blocks
+                # concurrently instead of one after another
+                cache_options = {**cache_options, "multi_fetcher": self._fetch_ranges}
             self.cache = caches[cache_type](
                 self.blocksize, self._fetch_range, self.size, **cache_options
             )
@@ -2195,6 +2203,15 @@ class AbstractBufferedFile(io.IOBase):
     def _fetch_range(self, start, end):
         """Get the specified set of bytes from remote"""
         return self.fs.cat_file(self.path, start=start, end=end)
+
+    def _fetch_ranges(self, ranges):
+        """Get several ``(start, end)`` byte ranges from remote in one call"""
+        return self.fs.cat_ranges(
+            [self.path] * len(ranges),
+            [start for start, _ in ranges],
+            [end for _, end in ranges],
+            on_error="raise",
+        )
 
     def read(self, length=-1):
         """

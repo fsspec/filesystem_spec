@@ -623,8 +623,7 @@ def test_block_cache_run_is_capped_at_maxblocks():
         4, _counting_fetcher(calls), len(string.ascii_letters), maxblocks=maxblocks
     )
 
-    # a run longer than the cache holds is split, so a block cannot be evicted
-    # before it is read
+    # a run longer than the cache holds is split, so one range stays bounded
     assert cache._fetch(0, 24) == string.ascii_letters[:24].encode()
     assert calls == [(0, 8), (8, 16), (16, 24)]
     assert cache.cache_info().misses == 6
@@ -637,3 +636,44 @@ def test_block_cache_run_stops_at_the_end_of_the_file():
 
     assert cache._fetch(0, size + 100) == string.ascii_letters.encode()
     assert calls == [(0, size)]
+
+
+def test_block_cache_sends_every_run_in_one_multi_fetch():
+    calls, multi_calls = [], []
+    data = string.ascii_letters.encode()
+
+    def multi_fetcher(ranges):
+        multi_calls.append(list(ranges))
+        return [data[start:end] for start, end in ranges]
+
+    cache = BlockCache(
+        4, _counting_fetcher(calls), len(data), multi_fetcher=multi_fetcher
+    )
+    cache._fetch(8, 12)  # block 2, read on its own
+    cache._fetch(20, 24)  # block 5
+    multi_calls.clear()
+
+    assert cache._fetch(0, 28) == data[:28]
+    assert multi_calls == [[(0, 8), (12, 20), (24, 28)]]
+    assert calls == [(8, 12), (20, 24)]  # only the single-block reads above
+    assert cache.miss_count == 7
+
+
+def test_buffered_file_uses_cat_ranges_for_blockcache_on_async_fs():
+    from fsspec.spec import AbstractBufferedFile
+
+    data = string.ascii_letters.encode()
+    cat_ranges_calls = []
+
+    class FakeAsyncFS:
+        async_impl = True
+
+        def cat_ranges(self, paths, starts, ends, on_error="return"):
+            cat_ranges_calls.append(list(zip(starts, ends)))
+            return [data[s:e] for s, e in zip(starts, ends)]
+
+    f = AbstractBufferedFile(
+        FakeAsyncFS(), "path", cache_type="blockcache", block_size=4, size=len(data)
+    )
+    assert f.read(16) == data[:16]
+    assert cat_ranges_calls == [[(0, 16)]]
