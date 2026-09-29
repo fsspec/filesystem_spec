@@ -617,12 +617,12 @@ class BlockCache(BaseCache):
             self.total_requested_bytes += end - start
             self.miss_count += b - a + 1
         if self.multi_fetcher is not None:
-            datas = self.multi_fetcher(ranges)
+            payloads = self.multi_fetcher(ranges)
         else:
-            datas = [self.fetcher(start, end) for start, end in ranges]
+            payloads = [self.fetcher(start, end) for start, end in ranges]
 
         fetched = {}
-        for (a, b), data in zip(runs, datas):
+        for (a, b), data in zip(runs, payloads):
             if isinstance(data, Exception):
                 raise data
             for offset, number in enumerate(range(a, b + 1)):
