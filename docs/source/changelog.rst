@@ -6,7 +6,10 @@ Dev
 
 Fixes
 
+- Resolve negative FTP read offsets relative to the end of the file.
+
 - Return an empty list from buffered-file ``readlines()`` at end of file
+
 - Normalize protocol prefixes and leading slashes before listing archive paths.
 
 - Update memory file modification times after writes and truncation.
