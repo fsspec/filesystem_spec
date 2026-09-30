@@ -527,6 +527,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 maxdepth=maxdepth,
                 detail=detail,
                 topdown=topdown,
+                on_error=on_error,
                 **kwargs,
             )
 
