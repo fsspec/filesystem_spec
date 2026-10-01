@@ -427,7 +427,7 @@ def other_paths(
         else:
             cp = common_prefix(paths)
             if exists:
-                cp = cp.rsplit("/", 1)[0]
+                cp = cp.rpartition("/")[0]
             if not cp and all(not s.startswith("/") for s in paths):
                 path2 = ["/".join([path2, p]) for p in paths]
             else:

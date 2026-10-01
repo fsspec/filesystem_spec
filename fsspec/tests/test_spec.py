@@ -1371,6 +1371,35 @@ class DummyOpenFS(DummyTestFS):
         return stream
 
 
+@pytest.mark.parametrize("target_exists", [False, True])
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+def test_get_top_level_directory(tmp_path, monkeypatch, target_exists, trailing_slash):
+    monkeypatch.chdir(tmp_path)
+    source = Path("src")
+    (source / "nested").mkdir(parents=True)
+    files = {"file": b"top-level", "nested/other": b"nested"}
+    contents = [
+        {"name": "src", "type": "directory", "size": 0},
+        {"name": "src/nested", "type": "directory", "size": 0},
+    ]
+    for name, payload in files.items():
+        (source / name).write_bytes(payload)
+        contents.append({"name": "src/" + name, "type": "file", "size": len(payload)})
+    fs = DummyOpenFS(fs_content=contents)
+    target = tmp_path / "target"
+    if target_exists:
+        target.mkdir()
+
+    fs.get("src" + trailing_slash, str(target), recursive=True)
+
+    prefix = "src/" if target_exists and not trailing_slash else ""
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == {prefix + name: payload for name, payload in files.items()}
+
+
 class BasicCallback(fsspec.Callback):
     def __init__(self, **kwargs):
         self.events = []
