@@ -61,6 +61,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
         self.path = fs._strip_protocol(path)
         self.fs = fs
+        self.async_impl = fs.async_impl
 
     def _join(self, path):
         if isinstance(path, str):
