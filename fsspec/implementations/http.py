@@ -164,8 +164,7 @@ class HTTPFileSystem(AsyncFileSystem):
             an aiohttp.ClientSession. Its state will be managed by
             the HTTPFileSystem class.
         retries: int
-            How many times a transient failure of a read (HTTP 408/425/429/5xx,
-            a dropped or reset connection, a timeout, a truncated range body)
+            How many times a transient failure of a read (see below)
             is retried in ``cat_file`` and ``HTTPFile`` block reads; 0 disables
             retries.
         retry_wait: float
