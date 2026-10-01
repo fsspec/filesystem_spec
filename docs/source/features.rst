@@ -319,6 +319,43 @@ cache directory and renamed into place once complete, so a partial download is n
 temporary file is removed if the download fails, but not if the process is killed mid-download;
 leftover ``*.part`` files are ignored by the cache and safe to delete.
 
+Versioned whole-file reads
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For backends supporting a ``version_id`` argument, such as a
+version-aware S3 filesystem, pass the version to the cache filesystem's
+``open`` method:
+
+.. code-block:: python
+
+    fs = fsspec.filesystem(
+        "filecache", target_protocol="s3",
+        target_options={"version_aware": True}, cache_storage="/tmp/files/",
+    )
+    with fs.open("bucket/key", "rb", version_id="object-version-id") as f:
+        data = f.read()
+
+``filecache`` and ``simplecache`` download the requested revision and keep it
+separate from other revisions and from an unversioned read. Explicit versions
+use hashed local filenames, including when ``same_names=True`` or a custom
+``cache_mapper`` is configured. The mapper still receives the original path.
+Omitting ``version_id`` or passing ``None`` retains the existing cache names.
+Use backend-supported scalar identifiers, such as strings or integers, with a
+stable representation across calls and processes. Custom object identifiers
+are not supported.
+
+``filecache`` expiry still applies to explicit versions. With
+``check_files=True``, cached metadata is compared with the requested revision's
+``info(path, version_id=...)``. This also detects changes to mutable identifiers,
+such as S3's ``"null"`` version. The latest revision is not checked; it may have
+changed or been deleted independently. The backend must support version-aware
+``info`` for ``filecache``. ``simplecache`` retains its usual existence-only local
+cache checks.
+
+This support applies to read-only ``open`` calls. Mutating modes with an explicit
+version raise ``ValueError``. Other version selectors, block caching, and
+version arguments to bulk or async cache methods are not covered by this support.
+
 Remote Write Caching
 --------------------
 

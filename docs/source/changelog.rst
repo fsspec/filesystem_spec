@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Keep explicit ``version_id`` reads in ``filecache`` and ``simplecache`` separate
+  from other revisions and the latest version (issue #633).
+
 - Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
 
 - Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.

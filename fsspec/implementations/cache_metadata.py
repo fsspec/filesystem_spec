@@ -83,13 +83,14 @@ class CacheMetadata:
             yield os.path.join(storage, "cache"), storage, writable
 
     def check_file(
-        self, path: str, cfs: CachingFileSystem | None
+        self, path: str, cfs: CachingFileSystem | None, uid: str | None = None
     ) -> Literal[False] | tuple[Detail, str]:
         """If path is in cache return its details, otherwise return ``False``.
 
         If the optional CachingFileSystem is specified then it is used to
         perform extra checks to reject possible matches, such as if they are
-        too old.
+        too old. An explicit ``uid`` avoids looking up the remote path when
+        the metadata key includes a version identifier.
         """
         for (fn, base, _), cache in zip(self._scan_locations(), self.cached_files):
             if path not in cache:
@@ -97,7 +98,9 @@ class CacheMetadata:
             detail = cache[path].copy()
 
             if cfs is not None:
-                if cfs.check_files and detail["uid"] != cfs.fs.ukey(path):
+                if cfs.check_files and detail["uid"] != (
+                    cfs.fs.ukey(path) if uid is None else uid
+                ):
                     # Wrong file as determined by hash of file properties
                     continue
                 if cfs.expiry and time.time() - detail["time"] > cfs.expiry:
