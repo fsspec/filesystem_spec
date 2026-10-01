@@ -120,6 +120,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     def sep(self):
         return self.fs.sep
 
+    @property
+    def local_file(self):
+        return getattr(self.fs, "local_file", False)
+
     async def set_session(self, *args, **kwargs):
         return await self.fs.set_session(*args, **kwargs)
 

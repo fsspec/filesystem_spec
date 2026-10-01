@@ -1,12 +1,16 @@
+import os
 import tarfile
 from io import BytesIO
 
 import pytest
 
+import fsspec
 from fsspec.asyn import AsyncFileSystem
+from fsspec.core import OpenFile, OpenFiles
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.tar import TarFileSystem
 from fsspec.spec import AbstractFileSystem
 
@@ -884,3 +888,43 @@ async def test_async_detail_without_name(adirfs, method):
         "file": {"name": "file"}
     }
     assert wrapped.return_value == {f"{PATH}/file": {}}
+
+
+@pytest.mark.parametrize("depth", [1, 2])
+def test_local_file_passthrough(tmp_path, depth, monkeypatch):
+    path = tmp_path / "data"
+    path.write_bytes(b"data")
+    fs = LocalFileSystem()
+    for _ in range(depth):
+        fs = DirFileSystem(str(tmp_path) if _ == 0 else ".", fs=fs)
+    assert fs.local_file is True
+    monkeypatch.setattr(
+        fsspec.core,
+        "open_files",
+        lambda *a, **kw: OpenFiles([OpenFile(fs, "data")], fs=fs),
+    )
+    assert os.path.normpath(fsspec.open_local("data")) == str(path)
+    assert path.read_bytes() == b"data"
+
+
+@pytest.mark.parametrize("depth", [1, 2])
+def test_local_file_missing_flag(depth, monkeypatch):
+    fs = MemoryFileSystem()
+    for _ in range(depth):
+        fs = DirFileSystem("/root" if _ == 0 else ".", fs=fs)
+    assert fs.local_file is False
+    monkeypatch.setattr(
+        fsspec.core,
+        "open_files",
+        lambda *a, **kw: OpenFiles([OpenFile(fs, "data")], fs=fs),
+    )
+    with pytest.raises(ValueError, match="attribute local_file=True"):
+        fsspec.open_local("data")
+
+
+def test_local_file_explicit_false():
+    class NonLocalFileSystem(LocalFileSystem):
+        local_file = False
+
+    fs = DirFileSystem("/root", fs=NonLocalFileSystem())
+    assert fs.local_file is False
