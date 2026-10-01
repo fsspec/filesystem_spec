@@ -106,11 +106,11 @@ class OpenFile:
         except FileNotFoundError as e:
             if has_magic(self.path):
                 raise FileNotFoundError(
-                    "%s not found. The URL contains glob characters: you maybe needed\n"
+                    f"{self.path} not found. "
+                    "The URL contains glob characters: you maybe needed\n"
                     "to pass expand=True in fsspec.open() or the storage_options of \n"
                     "your library. You can also set the config value 'open_expand'\n"
-                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
-                    self.path,
+                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True."
                 ) from e
             raise
 
@@ -691,7 +691,7 @@ def get_fs_token_paths(
             _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
         ]
         if len({pc[1] for pc in pchains}) > 1:
-            raise ValueError("Protocol mismatch getting fs from %s", urlpath)
+            raise ValueError(f"Protocol mismatch getting fs from {urlpath}")
         paths = [pc[0] for pc in pchains]
     else:
         paths = fs._strip_protocol(paths)
