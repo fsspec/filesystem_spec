@@ -70,6 +70,41 @@ def adirfs(make_dirfs, asyncfs):
     return make_dirfs(asyncfs, asynchronous=True)
 
 
+@pytest.mark.parametrize("backend", ["memory", "local", "dir", "async_wrapper"])
+def test_async_impl_matches_backend(backend, tmp_path):
+    from fsspec.implementations.memory import MemoryFileSystem
+
+    fs = MemoryFileSystem(skip_instance_cache=True)
+    if backend == "local":
+        fs = LocalFileSystem()
+        root = str(tmp_path)
+    else:
+        root = "/async_impl_test"
+        if backend == "dir":
+            fs = DirFileSystem("/", fs, skip_instance_cache=True)
+        elif backend == "async_wrapper":
+            fs = AsyncFileSystemWrapper(fs=fs, asynchronous=False)
+
+    dirfs = DirFileSystem(root, fs, skip_instance_cache=True)
+    assert dirfs.async_impl is (backend == "async_wrapper")
+    assert dirfs.async_impl == fs.async_impl
+    dirfs.pipe_file("file", b"data")
+    assert dirfs.cat_file("file") == b"data"
+
+
+@pytest.mark.asyncio
+async def test_async_impl_matches_async_backend():
+    from fsspec.implementations.memory import MemoryFileSystem
+
+    fs = AsyncFileSystemWrapper(
+        fs=MemoryFileSystem(skip_instance_cache=True), asynchronous=True
+    )
+    dirfs = DirFileSystem("/async_impl_test", fs, asynchronous=True)
+    assert dirfs.async_impl is True
+    await dirfs._pipe_file("async_file", b"data")
+    assert await dirfs._cat_file("async_file") == b"data"
+
+
 def test_dirfs(fs, asyncfs):
     DirFileSystem("path", fs)
     DirFileSystem("path", asyncfs, asynchronous=True)
