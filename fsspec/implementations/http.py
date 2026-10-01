@@ -693,6 +693,11 @@ class HTTPFile(AbstractBufferedFile):
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = f"bytes={start}-{end - 1}"
+        if not any(k.lower() == "accept-encoding" for k in headers) and not any(
+            k.lower() == "accept-encoding" for k in self.session.headers
+        ):
+            # Match the unencoded size from _file_info unless explicitly overridden.
+            headers["Accept-Encoding"] = "identity"
         logger.debug(f"{self.url} : {headers['Range']}")
         r = await self.session.get(
             self.fs.encode_url(self.url), headers=headers, **kwargs
