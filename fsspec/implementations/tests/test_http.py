@@ -650,3 +650,40 @@ def test_protocol_independent_of_first_used_protocol(protocol):
     fs1 = filesystem("https")
     p1 = fs1.protocol[0] if isinstance(fs1.protocol, tuple) else fs1.protocol
     assert p0 == p1 == "http"
+
+
+@pytest.mark.asyncio
+async def test_async_stream_not_seekable(server):
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+    stream = await fs.open_async(server.realfile)
+    try:
+        assert stream.tell() == 0
+        stream.seek(0)
+        stream.seek(0, 1)
+        with pytest.raises(ValueError, match="Cannot seek streaming HTTP file"):
+            stream.seek(5)
+        assert stream.tell() == 0
+        assert await stream.read(5) == data[:5]
+        assert stream.tell() == 5
+        stream.seek(5)
+        stream.seek(0, 1)
+        for offset, whence in [(0, 0), (1, 1), (0, 2)]:
+            with pytest.raises(ValueError, match="Cannot seek streaming HTTP file"):
+                stream.seek(offset, whence)
+            assert stream.tell() == 5
+        assert await stream.read(5) == data[5:10]
+        assert stream.tell() == 10
+    finally:
+        await stream.close()
+        await fs._session.close()
+
+
+@pytest.mark.asyncio
+async def test_async_stream_seekable(server):
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+    stream = await fs.open_async(server.realfile)
+    try:
+        assert stream.seekable() is False
+    finally:
+        await stream.close()
+        await fs._session.close()

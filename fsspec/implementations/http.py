@@ -806,6 +806,16 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none")
         self.size = size
 
+    def seek(self, loc, whence=0):
+        if loc == 0 and whence == 1:
+            return
+        if loc == self.loc and whence == 0:
+            return
+        raise ValueError("Cannot seek streaming HTTP file")
+
+    def seekable(self):
+        return False
+
     async def read(self, num=-1):
         if self.r is None:
             r = await self.session.get(
