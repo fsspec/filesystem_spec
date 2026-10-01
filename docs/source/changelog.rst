@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Reject seeks that change position on async streaming HTTP files.
+
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
