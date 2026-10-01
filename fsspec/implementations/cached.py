@@ -517,7 +517,6 @@ class CachingFileSystem(ChainedFileSystem):
             "clear_cache",
             "clear_expired_cache",
             "pop_from_cache",
-            "local_file",
             "_paths_from_path",
             "get_mapper",
             "open_many",
@@ -546,6 +545,8 @@ class CachingFileSystem(ChainedFileSystem):
         if item in ["transaction"]:
             # property
             return type(self).transaction.__get__(self)
+        if item == "local_file" and hasattr(type(self), item):
+            return getattr(type(self), item)
         if item in {"_cache", "transaction_type", "protocol"}:
             # class attributes
             return getattr(type(self), item)

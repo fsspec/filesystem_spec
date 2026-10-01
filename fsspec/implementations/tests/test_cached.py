@@ -22,6 +22,7 @@ from fsspec.implementations.cache_mapper import (
 from fsspec.implementations.cached import (
     CachingFileSystem,
     LocalTempFile,
+    SimpleCacheFileSystem,
     WholeFileCacheFileSystem,
     _tempfile,
 )
@@ -50,6 +51,47 @@ def local_filecache():
     )
 
     return data, original_file, cache_location, fs
+
+
+@pytest.mark.parametrize(
+    "cache_class,expected",
+    [
+        (WholeFileCacheFileSystem, True),
+        (SimpleCacheFileSystem, True),
+    ],
+)
+@pytest.mark.parametrize("target_protocol", ["memory", "file"])
+def test_local_file_attribute(cache_class, expected, target_protocol, tmp_path):
+    fs = cache_class(
+        target_protocol=target_protocol,
+        cache_storage=str(tmp_path / "cache"),
+        skip_instance_cache=True,
+    )
+    assert fs.local_file is expected
+    assert fs.local_file is cache_class.local_file
+    # Method dispatch and delegation must still work after reading the flag.
+    assert callable(fs.open)
+    assert callable(fs.cat_file)
+
+
+@pytest.mark.parametrize("target_protocol", ["memory", "file"])
+def test_blockcache_local_file_delegation(target_protocol, tmp_path):
+    fs = CachingFileSystem(
+        target_protocol=target_protocol,
+        cache_storage=str(tmp_path),
+        skip_instance_cache=True,
+    )
+    assert getattr(fs, "local_file", False) is getattr(fs.fs, "local_file", False)
+
+
+def test_local_file_attribute_subclass(tmp_path):
+    class CustomCache(SimpleCacheFileSystem):
+        local_file = False
+
+    fs = CustomCache(
+        target_protocol="memory", cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    assert fs.local_file is False
 
 
 def test_mapper():
