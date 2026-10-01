@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
+
 - Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
 
 - Resolve negative FTP read offsets relative to the end of the file.
