@@ -1,4 +1,6 @@
 import asyncio
+import gzip
+import io
 import json
 import os
 import pathlib
@@ -1837,3 +1839,281 @@ def test_clear_expired_cache_honours_disabled_expiry(tmp_path):
     fs.clear_expired_cache()
 
     assert fs._check_file(path)
+
+
+class VersionedFileSystem(fsspec.AbstractFileSystem):
+    """Small version-aware backend, without a server or cloud credentials."""
+
+    protocol = "versioned"
+    cachable = False
+
+    def __init__(self, compressed=False):
+        super().__init__()
+        self.compressed = compressed
+        self.calls = []
+        self.latest = "B"
+        self.versions = {"A": b"first revision", "B": b"second revision"}
+
+    def _data(self, path, version_id):
+        version = self.latest if version_id is None else version_id
+        if version not in self.versions:
+            raise FileNotFoundError(f"{path}, version={version!r}")
+        data = path.encode() + b": " + self.versions[version]
+        return gzip.compress(data, mtime=0) if self.compressed else data
+
+    def info(self, path, version_id=None, **kwargs):
+        self.calls.append(("info", path, version_id))
+        data = self._data(path, version_id)
+        return {"name": path, "type": "file", "size": len(data), "etag": data.hex()}
+
+    def _open(self, path, mode="rb", version_id=None, **kwargs):
+        self.calls.append(("open", path, version_id))
+        return io.BytesIO(self._data(path, version_id))
+
+    def get_file(self, rpath, lpath, version_id=None):
+        # Intentionally reject unrelated open options such as block_size.
+        self.calls.append(("get_file", rpath, version_id))
+        with open(lpath, "wb") as f:
+            f.write(self._data(rpath, version_id))
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_versioned_open_forwards_version(tmp_path, protocol):
+    target = VersionedFileSystem()
+    fs = fsspec.filesystem(protocol, fs=target, cache_storage=str(tmp_path))
+    with fs.open("bucket/key", version_id="A") as f:
+        assert f.read() == b"bucket/key: first revision"
+    assert ("get_file", "bucket/key", "A") in target.calls
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+@pytest.mark.parametrize("compression", [None, "gzip", "infer"])
+@pytest.mark.parametrize("same_names", [False, True])
+def test_versioned_open_cache_identity(tmp_path, protocol, compression, same_names):
+    target = VersionedFileSystem(compressed=compression is not None)
+    options = {
+        "fs": target,
+        "cache_storage": str(tmp_path),
+        "compression": compression,
+        "same_names": same_names,
+        "skip_instance_cache": True,
+    }
+    fs = fsspec.filesystem(protocol, **options)
+    path = "bucket/key.gz"
+    for version, expected in [
+        ("A", b"first revision"),
+        ("B", b"second revision"),
+        ("A", b"first revision"),
+        (None, b"second revision"),
+    ]:
+        with fs.open(path, version_id=version) as f:
+            assert f.read() == path.encode() + b": " + expected
+            if protocol == "filecache":
+                assert f.original == path
+
+    method = "open" if compression else "get_file"
+    assert [v for m, p, v in target.calls if m == method] == ["A", "B", None]
+    # Reloading from disk must preserve all three identities without downloads.
+    fs = fsspec.filesystem(protocol, **options)
+    target.calls.clear()
+    for version, expected in [
+        ("A", b"first revision"),
+        ("B", b"second revision"),
+        (None, b"second revision"),
+    ]:
+        with fs.open(path, version_id=version) as f:
+            assert f.read() == path.encode() + b": " + expected
+    assert not any(m in {"get_file", "open"} for m, p, v in target.calls)
+    # None and absence retain the old mapper output, including same_names.
+    with fs.open(path) as f:
+        assert f.name == str(tmp_path / fs._mapper(path))
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_versioned_open_mapper_and_opaque_ids(tmp_path, protocol):
+    paths_seen = []
+
+    def mapper(path):
+        paths_seen.append(path)
+        return path.rsplit("/", 1)[-1]
+
+    target = VersionedFileSystem()
+    target.versions.update(
+        {"../a?b+#/": b"opaque", 1: b"integer", "1": b"string", "": b"empty"}
+    )
+    fs = fsspec.filesystem(
+        protocol, fs=target, cache_storage=str(tmp_path), cache_mapper=mapper
+    )
+    filenames = set()
+    for path in ["bucket/key", "other/key"]:
+        for version in ["../a?b+#/", 1, "1", ""]:
+            with fs.open(path, version_id=version) as f:
+                assert f.read() == path.encode() + b": " + target.versions[version]
+                filenames.add(f.name)
+    assert len(filenames) == 8
+    assert set(paths_seen) == {"bucket/key", "other/key"}
+    assert all(pathlib.Path(fn).parent == tmp_path for fn in filenames)
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_versioned_open_without_latest(tmp_path, protocol):
+    target = VersionedFileSystem()
+    target.latest = None
+    fs = fsspec.filesystem(
+        protocol, fs=target, cache_storage=str(tmp_path), check_files=True
+    )
+    for _ in range(2):
+        with fs.open("bucket/key", version_id="A") as f:
+            assert f.read() == b"bucket/key: first revision"
+    assert all(version == "A" for method, path, version in target.calls)
+    with pytest.raises(FileNotFoundError):
+        fs.open("bucket/key", version_id="missing")
+    with pytest.raises(FileNotFoundError):
+        fs.open("bucket/key")
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+@pytest.mark.parametrize("mode", ["wb", "ab", "rb+", "xb"])
+def test_versioned_open_rejects_writing(tmp_path, protocol, mode):
+    target = VersionedFileSystem()
+    fs = fsspec.filesystem(protocol, fs=target, cache_storage=str(tmp_path))
+    with pytest.raises(ValueError, match="version_id.*read"):
+        fs.open("bucket/key", mode, version_id="A")
+    assert not target.calls
+    assert not list(tmp_path.iterdir())
+
+
+def test_versioned_open_check_files(tmp_path):
+    target = VersionedFileSystem()
+    fs = fsspec.filesystem(
+        "filecache", fs=target, cache_storage=str(tmp_path), check_files=True
+    )
+    with fs.open("bucket/key", version_id="A") as f:
+        assert f.read() == b"bucket/key: first revision"
+    target.calls.clear()
+    target.latest = None
+    with fs.open("bucket/key", version_id="A") as f:
+        assert f.read() == b"bucket/key: first revision"
+    assert target.calls and all(
+        call == ("info", "bucket/key", "A") for call in target.calls
+    )
+    del target.versions["A"]
+    with pytest.raises(FileNotFoundError):
+        fs.open("bucket/key", version_id="A")
+
+
+def test_versioned_open_expiry_and_multiple_caches(tmp_path):
+    target = VersionedFileSystem()
+    caches = [str(tmp_path / "readonly"), str(tmp_path / "writable")]
+    for cache in caches:
+        fs = fsspec.filesystem("filecache", fs=target, cache_storage=cache)
+        with fs.open("bucket/key", version_id="A") as f:
+            assert f.read() == b"bucket/key: first revision"
+    # Expire the first location while keeping the second valid.
+    metadata_file = tmp_path / "readonly" / "cache"
+    metadata = json.loads(metadata_file.read_text())
+    next(iter(metadata.values()))["time"] = 0
+    metadata_file.write_text(json.dumps(metadata))
+    fs = fsspec.filesystem(
+        "filecache", fs=target, cache_storage=caches, check_files=True
+    )
+    target.calls.clear()
+    with fs.open("bucket/key", version_id="A") as f:
+        assert pathlib.Path(f.name).parent == tmp_path / "writable"
+        assert f.read() == b"bucket/key: first revision"
+    assert not any(m == "get_file" for m, p, v in target.calls)
+    # Once both entries expire, refresh only the writable location.
+    for cache in fs._metadata.cached_files:
+        next(iter(cache.values()))["time"] = 0
+    with fs.open("bucket/key", version_id="A") as f:
+        assert pathlib.Path(f.name).parent == tmp_path / "writable"
+        assert f.read() == b"bucket/key: first revision"
+    assert ("get_file", "bucket/key", "A") in target.calls
+    assert next(iter(json.loads(metadata_file.read_text()).values()))["time"] == 0
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_versioned_open_failed_download_is_not_cached(tmp_path, protocol):
+    class FailingVersionFileSystem(VersionedFileSystem):
+        def get_file(self, rpath, lpath, version_id=None):
+            if version_id == "A":
+                self.calls.append(("get_file", rpath, version_id))
+                pathlib.Path(lpath).write_bytes(b"partial")
+                raise OSError("download failed")
+            return super().get_file(rpath, lpath, version_id=version_id)
+
+    target = FailingVersionFileSystem()
+    fs = fsspec.filesystem(protocol, fs=target, cache_storage=str(tmp_path))
+    with fs.open("bucket/key") as f:
+        assert f.read() == b"bucket/key: second revision"
+    for _ in range(2):
+        with pytest.raises(OSError, match="download failed"):
+            fs.open("bucket/key", version_id="A")
+    assert [
+        call for call in target.calls if call == ("get_file", "bucket/key", "A")
+    ] == [
+        ("get_file", "bucket/key", "A"),
+        ("get_file", "bucket/key", "A"),
+    ]
+    assert not list(tmp_path.glob("*.part"))
+    with fs.open("bucket/key") as f:
+        assert f.read() == b"bucket/key: second revision"
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_versioned_open_does_not_share_unversioned_hash(tmp_path, protocol):
+    target = VersionedFileSystem()
+    path = "bucket/key"
+    # A real remote path can itself look like the input to a versioned hash.
+    other_path = repr((HashCacheMapper()(path), path, "A"))
+    fs = fsspec.filesystem(protocol, fs=target, cache_storage=str(tmp_path))
+    with fs.open(path, version_id="A") as f:
+        assert f.read() == b"bucket/key: first revision"
+        versioned_filename = f.name
+    with fs.open(other_path) as f:
+        assert f.read() == other_path.encode() + b": second revision"
+        assert f.name != versioned_filename
+    with fs.open(path, version_id="A") as f:
+        assert f.read() == b"bucket/key: first revision"
+
+
+def test_versioned_open_check_files_detects_changed_version(tmp_path):
+    # S3's special "null" version can be replaced in a suspended bucket.
+    target = VersionedFileSystem()
+    target.versions["null"] = b"old"
+    fs = fsspec.filesystem(
+        "filecache", fs=target, cache_storage=str(tmp_path), check_files=True
+    )
+    with fs.open("bucket/key", version_id="null") as f:
+        assert f.read() == b"bucket/key: old"
+    target.versions["null"] = b"new"  # Same size, different content identity.
+    with fs.open("bucket/key", version_id="null") as f:
+        assert f.read() == b"bucket/key: new"
+
+
+def test_versioned_open_failed_refresh_preserves_metadata(tmp_path):
+    class InterruptedVersionFileSystem(VersionedFileSystem):
+        fail = False
+
+        def get_file(self, rpath, lpath, version_id=None):
+            if self.fail:
+                pathlib.Path(lpath).write_bytes(b"partial")
+                raise OSError("download failed")
+            return super().get_file(rpath, lpath, version_id=version_id)
+
+    target = InterruptedVersionFileSystem()
+    target.versions["null"] = b"old"
+    fs = fsspec.filesystem(
+        "filecache", fs=target, cache_storage=str(tmp_path), check_files=True
+    )
+    with fs.open("bucket/key", version_id="null") as f:
+        assert f.read() == b"bucket/key: old"
+    original_metadata = (tmp_path / "cache").read_bytes()
+    target.versions["null"] = b"new"
+    target.fail = True
+    with pytest.raises(OSError, match="download failed"):
+        fs.open("bucket/key", version_id="null")
+    assert (tmp_path / "cache").read_bytes() == original_metadata
+    target.fail = False
+    with fs.open("bucket/key", version_id="null") as f:
+        assert f.read() == b"bucket/key: new"

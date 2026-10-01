@@ -491,6 +491,9 @@ class CachingFileSystem(ChainedFileSystem):
             "__getattribute__",
             "__reduce__",
             "_make_local_details",
+            "_cache_key",
+            "_cache_name",
+            "_versioned_ukey",
             "_ukey_async",
             "_check_file_async",
             "_download_async",
@@ -620,6 +623,37 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     protocol = "filecache"
     local_file = True
 
+    def _cache_key(self, path, version_id=None):
+        if version_id is None:
+            return path
+        # A NUL separates this metadata key from any ordinary file path.
+        return path + "\0" + sha256(repr(version_id).encode()).hexdigest()
+
+    def _cache_name(self, path, version_id=None):
+        name = self._mapper(path)
+        if version_id is None:
+            return name
+        # Keep mapper input unchanged, but include the full remote path to avoid
+        # collisions even when the mapper only retains its basename. Hashing
+        # also keeps opaque version IDs and long basenames safe for local files.
+        return "version-" + sha256(repr((name, path, version_id)).encode()).hexdigest()
+
+    def _versioned_ukey(self, path, version_id):
+        # Like AbstractFileSystem.ukey, but query the requested revision. Some
+        # version identifiers (for example S3's "null") can be overwritten.
+        return sha256(
+            str(self.fs.info(path, version_id=version_id)).encode()
+        ).hexdigest()
+
+    def _check_file(self, path, version_id=None):
+        if version_id is None:
+            return super()._check_file(path)
+        path = self._strip_protocol(path)
+        self._check_cache()
+        uid = self._versioned_ukey(path, version_id) if self.check_files else None
+        key = self._cache_key(path, version_id)
+        return self._metadata.check_file(key, self, uid=uid)
+
     def open_many(self, open_files, **kwargs):
         paths = [of.path for of in open_files]
         if "r" in open_files.mode:
@@ -684,8 +718,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 pass
         self._cache_size = None
 
-    def _make_local_details(self, path, uid=None):
-        hash = self._mapper(path)
+    def _make_local_details(self, path, uid=None, version_id=None):
+        hash = self._cache_name(path, version_id)
+        key = self._cache_key(path, version_id)
+        if version_id is not None and uid is None:
+            uid = self._versioned_ukey(path, version_id)
         fn = os.path.join(self.storage[-1], hash)
         detail = {
             "original": path,
@@ -694,7 +731,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             "time": time.time(),
             "uid": self.fs.ukey(path) if uid is None else uid,
         }
-        self._metadata.update_file(path, detail)
+        self._metadata.update_file(key, detail)
         logger.debug("Copying %s to local cache", path)
         return fn
 
@@ -773,7 +810,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         return out
 
     def _get_cached_file_before_open(self, path, **kwargs):
-        fn = self._make_local_details(path)
+        version_id = kwargs.get("version_id")
+        fn = os.path.join(self.storage[-1], self._cache_name(path, version_id))
+        uid = (
+            self.fs.ukey(path)
+            if version_id is None
+            else self._versioned_ukey(path, version_id)
+        )
         # call target filesystems open
         self._mkcache()
         if self.compression:
@@ -798,20 +841,30 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     f2.write(data)
         else:
             with _tempfile(fn) as tmp:
-                self.fs.get_file(path, tmp)
+                download_options = (
+                    {"version_id": kwargs["version_id"]}
+                    if kwargs.get("version_id") is not None
+                    else {}
+                )
+                self.fs.get_file(path, tmp, **download_options)
+        # A failed refresh must not associate the old local bytes with a new UID.
+        self._make_local_details(path, uid=uid, version_id=version_id)
         self.save_cache()
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
+        version_id = kwargs.get("version_id")
+        if version_id is not None and ("r" not in mode or "+" in mode):
+            raise ValueError("version_id is only supported for read-only opens")
         # For read (or append), (try) download from remote
         if "r" in mode or "a" in mode:
-            if not self._check_file(path):
-                if self.fs.exists(path):
+            if not self._check_file(path, version_id):
+                if version_id is not None or self.fs.exists(path):
                     self._get_cached_file_before_open(path, **kwargs)
                 elif "r" in mode:
                     raise FileNotFoundError(path)
 
-            detail, fn = self._check_file(path)
+            detail, fn = self._check_file(path, version_id)
             _, blocks = detail["fn"], detail["blocks"]
             if blocks is True:
                 logger.debug("Opening local copy of %s", path)
@@ -949,9 +1002,9 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             if not os.path.exists(storage):
                 self._makedirs(storage)
 
-    def _check_file(self, path):
+    def _check_file(self, path, version_id=None):
         self._check_cache()
-        sha = self._mapper(path)
+        sha = self._cache_name(path, version_id)
         for storage in self.storage:
             fn = os.path.join(storage, sha)
             if os.path.exists(fn):
@@ -1075,7 +1128,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         )
 
     def _get_cached_file_before_open(self, path, **kwargs):
-        sha = self._mapper(path)
+        sha = self._cache_name(path, kwargs.get("version_id"))
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache", path)
 
@@ -1104,22 +1157,30 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                     f2.write(data)
         else:
             with _tempfile(fn) as tmp:
-                self.fs.get_file(path, tmp)
+                download_options = (
+                    {"version_id": kwargs["version_id"]}
+                    if kwargs.get("version_id") is not None
+                    else {}
+                )
+                self.fs.get_file(path, tmp, **download_options)
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
-        sha = self._mapper(path)
+        version_id = kwargs.get("version_id")
+        if version_id is not None and ("r" not in mode or "+" in mode):
+            raise ValueError("version_id is only supported for read-only opens")
+        sha = self._cache_name(path, version_id)
 
         # For read (or append), (try) download from remote
         if "r" in mode or "a" in mode:
-            if not self._check_file(path):
+            if not self._check_file(path, version_id):
                 # append does not require an existing file but read does
-                if self.fs.exists(path):
+                if version_id is not None or self.fs.exists(path):
                     self._get_cached_file_before_open(path, **kwargs)
                 elif "r" in mode:
                     raise FileNotFoundError(path)
 
-        fn = self._check_file(path)
+        fn = self._check_file(path, version_id)
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:
             return open(fn, mode)

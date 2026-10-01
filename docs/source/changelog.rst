@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Keep explicit ``version_id`` reads in ``filecache`` and ``simplecache`` separate
+  from other revisions and the latest version (issue #633).
+
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
