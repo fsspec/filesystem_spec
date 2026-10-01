@@ -296,7 +296,7 @@ class LocalFileSystem(AbstractFileSystem):
         return True
 
     def chmod(self, path, mode):
-        path = stringify_path(path)
+        path = self._strip_protocol(path)
         return os.chmod(path, mode)
 
 

@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Strip the protocol from the path in ``LocalFileSystem.chmod``.
+
 - Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
 
 - Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
