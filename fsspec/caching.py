@@ -167,12 +167,12 @@ class MMapCache(BaseCache):
         logger.debug(f"MMap cache fetching {start}-{end}")
         if start is None:
             start = 0
-        if end is None:
+        if end is None or end > self.size:
             end = self.size
         if start >= self.size or start >= end:
             return b""
         start_block = start // self.blocksize
-        end_block = end // self.blocksize
+        end_block = (end - 1) // self.blocksize
         block_range = range(start_block, end_block + 1)
         # Determine which blocks need to be fetched. This sequence is sorted by construction.
         need = (i for i in block_range if i not in self.blocks)

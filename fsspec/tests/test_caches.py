@@ -293,6 +293,108 @@ def test_mmap_cache(mocker):
 
 
 @pytest.mark.parametrize("use_multi_fetcher", [False, True])
+@pytest.mark.parametrize(
+    "size, start, end, cached_byte, expected_ranges",
+    [
+        (12, None, 4, None, [(0, 4)]),
+        (12, 4, 8, None, [(4, 8)]),
+        (8, 0, None, None, [(0, 8)]),
+        (8, 0, 8, None, [(0, 8)]),
+        (8, 0, 100, None, [(0, 8)]),
+        (8, 0, None, 6, [(0, 4)]),
+        (8, 0, 8, 6, [(0, 4)]),
+        (8, 0, 100, 6, [(0, 4)]),
+        (10, 0, None, None, [(0, 10)]),
+        (10, 0, 10, None, [(0, 10)]),
+        (10, 0, 100, None, [(0, 10)]),
+        (10, 0, None, 8, [(0, 8)]),
+        (10, 0, 10, 8, [(0, 8)]),
+        (10, 0, 100, 8, [(0, 8)]),
+        (12, 0, 100, 4, [(0, 4), (8, 12)]),
+        (0, None, None, None, []),
+        (10, 10, 100, None, []),
+        (10, 11, 12, None, []),
+        (10, 4, 4, None, []),
+    ],
+)
+def test_mmap_cache_read_bounds(
+    use_multi_fetcher, size, start, end, cached_byte, expected_ranges
+):
+    data = bytes(range(size))
+    calls = []
+
+    def fetcher(start, end):
+        # Backends must not receive empty or inverted byte ranges at EOF.
+        assert 0 <= start < end <= size
+        calls.append((start, end))
+        return data[start:end]
+
+    def multi_fetcher(ranges):
+        return [fetcher(start, end) for start, end in ranges]
+
+    cache = MMapCache(
+        4, fetcher, size, multi_fetcher=multi_fetcher if use_multi_fetcher else None
+    )
+    try:
+        expected_blocks = set()
+        if cached_byte is not None:
+            assert (
+                cache._fetch(cached_byte, cached_byte + 1)
+                == data[cached_byte : cached_byte + 1]
+            )
+            expected_blocks.add(cached_byte // 4)
+            calls.clear()
+        cache._reset_stats()
+
+        assert cache._fetch(start, end) == data[start:end]
+        assert calls == expected_ranges
+        for range_start, range_end in expected_ranges:
+            expected_blocks.update(range(range_start // 4, (range_end - 1) // 4 + 1))
+        assert cache.blocks == expected_blocks
+        expected_misses = len(expected_blocks) - (cached_byte is not None)
+        assert cache.miss_count == expected_misses
+        expected_bytes = sum(stop - begin for begin, stop in expected_ranges)
+        assert cache.total_requested_bytes == expected_bytes
+
+        # A repeated request must be served entirely from the same cached blocks.
+        calls.clear()
+        assert cache._fetch(start, end) == data[start:end]
+        assert calls == []
+        assert cache.miss_count == expected_misses
+        assert cache.total_requested_bytes == expected_bytes
+    finally:
+        if size:
+            cache.cache.close()
+
+
+@pytest.mark.parametrize("size", [8, 10])
+@pytest.mark.parametrize("length", [-1, 100])
+def test_mmap_cache_buffered_read_to_eof(size, length):
+    from fsspec.spec import AbstractBufferedFile
+
+    data = bytes(range(size))
+
+    class TestFile(AbstractBufferedFile):
+        def _fetch_range(self, start, end):
+            assert 0 <= start < end <= size
+            return data[start:end]
+
+    with TestFile(
+        None, "test", mode="rb", cache_type="mmap", block_size=4, size=size
+    ) as f:
+        cache = f.cache
+        try:
+            f.seek(size - 2)
+            assert f.read(1) == data[-2:-1]
+            f.seek(0)
+            assert f.read(length) == data
+            assert f.tell() == size
+            assert f.read(1) == b""
+        finally:
+            cache.cache.close()
+
+
+@pytest.mark.parametrize("use_multi_fetcher", [False, True])
 @pytest.mark.parametrize("failed_start", [0, 8])
 @pytest.mark.parametrize("short_read", [False, True])
 def test_mmap_cache_retries_failed_ranges(use_multi_fetcher, failed_start, short_read):
