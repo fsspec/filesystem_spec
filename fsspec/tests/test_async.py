@@ -47,11 +47,8 @@ def test_sync_stopped_io_thread(monkeypatch, finalizing):
         def must_not_create_coroutine():
             pytest.fail("sync attempted to schedule work on a stopped IO thread")
 
-        if finalizing:
-            assert fsspec.asyn.sync(stopped_loop, must_not_create_coroutine) is None
-        else:
-            with pytest.raises(RuntimeError, match="IO thread has already stopped"):
-                fsspec.asyn.sync(stopped_loop, must_not_create_coroutine)
+        with pytest.raises(RuntimeError, match="IO thread has already stopped"):
+            fsspec.asyn.sync(stopped_loop, must_not_create_coroutine)
     finally:
         stopped_loop.close()
 
