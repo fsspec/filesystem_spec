@@ -1,5 +1,7 @@
 import os
 import pickle
+from contextlib import nullcontext
+from datetime import datetime, timezone
 from io import UnsupportedOperation
 from pathlib import PurePosixPath, PureWindowsPath
 
@@ -10,6 +12,65 @@ from fsspec import filesystem
 from fsspec.config import conf
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
+
+
+@pytest.mark.parametrize(
+    "mode, method, args, expected",
+    [
+        ("ab", "write", (b"def",), b"abcdef"),
+        ("r+b", "write", (b"XY",), b"XYc"),
+        ("ab", "writelines", ([b"d", b"ef"],), b"abcdef"),
+        ("r+b", "truncate", (2,), b"ab"),
+    ],
+)
+def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
+    m.pipe_file("file", b"abc")
+    created = m.created("file")
+    modified = datetime(2100, 1, 1, tzinfo=timezone.utc)
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            assert tz is timezone.utc
+            return modified
+
+    with m.open("file", mode) as f:
+        monkeypatch.setattr("fsspec.implementations.memory.datetime", Clock)
+        getattr(f, method)(*args)
+
+    assert m.cat_file("file") == expected
+    assert m.modified("file") == modified
+    assert m.created("file") == created
+
+
+def test_modified_after_partial_writelines(m):
+    m.pipe_file("file", b"abc")
+    original = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+    with m.open("file", "ab") as f:
+        f.modified = original
+        with pytest.raises(TypeError):
+            f.writelines([b"d", None])
+
+    assert m.cat_file("file") == b"abcd"
+    assert m.modified("file") > original
+
+
+def test_modified_unchanged_without_write(m):
+    m.pipe_file("file", b"abc")
+    original = m.modified("file")
+
+    with m.open("file", "r+b") as f:
+        assert f.read() == b"abc"
+        f.seek(0)
+        assert f.write(b"") == 0
+        assert f.writelines([]) is None
+        with pytest.raises(TypeError):
+            f.write(None)
+        with pytest.raises(ValueError):
+            f.truncate(-1)
+
+    assert m.modified("file") == original
 
 
 def test_independent_stores(m):
@@ -337,6 +398,25 @@ def test_append_creates_missing_file(m, mode):
     assert m.cat(filename) == b"data"
 
 
+@pytest.mark.parametrize("global_store", [False, True])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_transaction_append_existing_file(m, global_store, mode, rollback):
+    fs = filesystem("memory", global_store=global_store, skip_instance_cache=True)
+    fs.pipe_file("file", b"original")
+
+    with pytest.raises(RuntimeError) if rollback else nullcontext():
+        with fs.transaction:
+            with fs.open("file", mode) as f:
+                f.write(b"-appended")
+            assert fs.cat_file("file") == b"original"
+            if rollback:
+                raise RuntimeError("discard transaction")
+
+    expected = b"original" if rollback else b"original-appended"
+    assert fs.cat_file("file") == expected
+
+
 def test_moves(m):
     m.touch("source.txt")
     m.mv("source.txt", "target.txt")
@@ -420,11 +500,11 @@ def test_read_only_handle_stays_read_only(m):
         with pytest.raises(UnsupportedOperation):
             reader.write(b"X")
         writer.write(b"O")
-    assert reader.read() == b"original"
+    assert reader.read() == b"Original"
     assert m.cat("file") == b"Original"
 
 
-def test_read_only_snapshot_and_metadata(m):
+def test_read_only_cursor_and_metadata(m):
     m.pipe("file", b"original")
     stored = m.store["/file"]
     with m.open("file", "rb") as reader:
@@ -464,6 +544,194 @@ def test_write_modes_remain_writable(m, mode):
         assert f.write(b"new") == 3
         f.writelines([b"!"])
     assert m.cat("file") == (b"oldnew!" if mode.startswith("a") else b"new!")
+
+
+@pytest.mark.parametrize("mode", ["rb", "r+b", "wb", "w+b", "ab", "a+b"])
+def test_open_handles_share_content_not_position_or_mode(m, mode):
+    m.pipe("file", b"abcdef")
+    reader = m.open("file", "rb")
+    reader.seek(2)
+    other = m.open("file", mode)
+    assert reader is not other
+    assert reader.tell() == 2
+    assert reader.mode == "rb"
+    assert other.mode == mode
+    assert other.tell() == (6 if "a" in mode else 0)
+    if mode == "rb":
+        assert other.read(1) == b"a"
+    else:
+        other.write(b"XY")
+    assert reader.tell() == 2
+    assert reader.getvalue() == m.cat("file")
+    assert reader.size == other.size
+    assert reader.modified == other.modified
+    reader.seek(0)
+    expected = b"XY" if "w" in mode else b"abcdefXY" if "a" in mode else b"XYcdef"
+    assert reader.read() == (b"abcdef" if mode == "rb" else expected)
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["read", "read1", "readline", "readlines", "readinto", "readinto1", "iter"],
+)
+def test_live_read_methods_have_independent_cursors(m, method):
+    m.pipe("file", b"old\nend\n")
+    first = m.open("file", "rb")
+    second = m.open("file", "rb")
+    second.seek(4)
+    with m.open("file", "r+b") as writer:
+        writer.write(b"new")
+    if method in {"readinto", "readinto1"}:
+        data = bytearray(4)
+        assert getattr(first, method)(data) == 4
+        result = bytes(data)
+    elif method == "iter":
+        result = next(iter(first))
+    elif method == "readlines":
+        result = b"".join(first.readlines(1))
+    else:
+        result = getattr(first, method)(4)
+    assert result == b"new\n"
+    assert first.tell() == 4
+    assert second.tell() == 4
+    assert second.read() == b"end\n"
+    assert first.tell() == 4
+
+
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_append_handles_write_at_current_end(m, mode):
+    m.pipe("file", b"old")
+    first = m.open("file", mode)
+    second = m.open("file", mode)
+    first.seek(0)
+    first.write(b"1")
+    assert second.tell() == 3
+    second.writelines([b"2", b"3"])
+    assert first.tell() == 4
+    assert second.tell() == 6
+    assert m.cat("file") == b"old123"
+
+
+def test_handles_observe_truncation_and_zero_fill(m):
+    m.pipe("file", b"abcdef")
+    reader = m.open("file", "rb")
+    reader.seek(4)
+    writer = m.open("file", "r+b")
+    assert writer.truncate(2) == 2
+    assert reader.tell() == 4
+    assert reader.read() == b""
+    writer.seek(5)
+    writer.write(b"X")
+    assert reader.read() == b"\x00X"
+    assert m.cat("file") == b"ab\x00\x00\x00X"
+
+
+def test_handle_buffers_share_storage(m):
+    m.pipe("file", b"abc")
+    reader = m.open("file", "rb")
+    writer = m.open("file", "r+b")
+    with reader.getbuffer() as readonly, writer.getbuffer() as writable:
+        assert readonly.readonly
+        assert not writable.readonly
+        writable[1] = ord("X")
+        assert readonly.tobytes() == b"aXc"
+        assert reader.read() == b"aXc"
+    writer.seek(0, 2)
+    writer.write(b"d")
+    assert reader.read() == b"d"
+
+
+def test_handle_pickle_preserves_shared_content_and_separate_positions(m):
+    m.pipe("file", b"abc")
+    reader = m.open("file", "rb")
+    writer = m.open("file", "r+b")
+    reader.seek(1)
+    restored_reader, restored_writer = pickle.loads(pickle.dumps((reader, writer)))
+    restored_writer.seek(1)
+    restored_writer.write(b"X")
+    assert restored_reader.tell() == 1
+    assert restored_reader.read() == b"Xc"
+    assert not restored_reader.writable()
+    assert reader.read() == b"bc"
+    assert m.cat("file") == b"abc"
+
+
+@pytest.mark.parametrize("mode", ["wb", "w+b"])
+def test_truncating_open_updates_existing_readers(m, mode):
+    m.pipe("file", b"old contents")
+    reader = m.open("file", "rb")
+    writer = m.open("file", mode)
+    assert reader.read() == b""
+    writer.write(b"new")
+    assert reader.read() == b"new"
+
+
+def test_pipe_updates_existing_reader(m):
+    m.pipe("file", b"old")
+    reader = m.open("file", "rb")
+    m.pipe("file", b"replacement")
+    assert reader.read() == b"replacement"
+
+
+def test_shared_handles_with_text_wrappers(m):
+    m.pipe("file", b"old\n")
+    with m.open("file", "rt") as reader, m.open("file", "r+t") as writer:
+        assert reader.read(1) == "o"
+        writer.write("new")
+        writer.flush()
+        # TextIOWrapper may buffer reads; seeking discards that read-ahead.
+        reader.seek(0)
+        assert reader.read() == "new\n"
+        assert writer.tell() == 3
+
+
+@pytest.mark.parametrize("mode", ["ab", "wb"])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_transaction_does_not_publish_to_open_reader(m, mode, rollback):
+    m.pipe("file", b"old")
+    reader = m.open("file", "rb")
+    with pytest.raises(RuntimeError) if rollback else nullcontext():
+        with m.transaction:
+            with m.open("file", mode) as writer:
+                writer.write(b"new")
+            assert reader.getvalue() == b"old"
+            assert m.cat("file") == b"old"
+            if rollback:
+                raise RuntimeError("discard transaction")
+    assert m.cat("file") == (
+        b"old" if rollback else b"oldnew" if "a" in mode else b"new"
+    )
+    # Commit publishes a replacement, as before; existing handles retain their buffer.
+    assert reader.read() == b"old"
+
+
+def test_unlinked_reader_retains_its_buffer(m):
+    m.pipe("file", b"original")
+    reader = m.open("file", "rb")
+    m.rm("file")
+    m.pipe("file", b"replacement")
+    assert reader.read() == b"original"
+    with pytest.raises(UnsupportedOperation):
+        reader.commit()
+    assert m.cat("file") == b"replacement"
+
+
+def test_concurrent_handles_keep_independent_positions(m):
+    from concurrent.futures import ThreadPoolExecutor
+
+    data = bytes(range(256)) * 20
+    m.pipe("file", data)
+
+    def read_all(chunk_size):
+        with m.open("file", "rb") as reader:
+            chunks = []
+            while chunk := reader.read(chunk_size):
+                chunks.append(chunk)
+            return b"".join(chunks), reader.tell()
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(read_all, range(1, 17)))
+    assert results == [(data, len(data))] * 16
 
 
 def test_remove_all(m):

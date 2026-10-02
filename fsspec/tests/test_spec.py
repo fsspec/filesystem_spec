@@ -776,6 +776,160 @@ def test_instance_cache_concurrency():
     assert all(r is results[0] for r in results)
 
 
+def test_instance_created_once_concurrently():
+    import concurrent.futures
+    import time
+
+    inits = []
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(SleepyFS) for _ in range(10)]
+        results = [f.result() for f in futures]
+
+    # the threads wait for the instance instead of creating their own
+    assert len(inits) == 1
+    assert all(r is results[0] for r in results)
+    assert not SleepyFS._token_locks
+
+
+def test_instance_creation_error_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class FailingOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise RuntimeError("failed to create the instance")
+            super().__init__(*args, **kwargs)
+
+    FailingOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return FailingOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # the threads waiting for the instance fail like the one creating it, instead
+    # of retrying one after another (the last one failing after n attempts)
+    assert len(inits) == 1
+    assert all(isinstance(f.exception(), RuntimeError) for f in futures)
+    assert not FailingOnceFS._token_locks
+
+    # the error is not cached, a later call tries again
+    fs = FailingOnceFS()
+    assert len(inits) == 2
+    assert fs is FailingOnceFS()
+    assert not FailingOnceFS._token_locks
+
+
+def test_instance_creation_interrupted_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class Interrupted(BaseException):
+        pass
+
+    class InterruptedOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise Interrupted
+            super().__init__(*args, **kwargs)
+
+    InterruptedOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return InterruptedOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # an interruption (e.g. KeyboardInterrupt) only concerns the interrupted
+    # thread, one of the waiting threads creates the instance instead
+    errors = [f.exception() for f in futures if f.exception() is not None]
+    results = [f.result() for f in futures if f.exception() is None]
+    assert len(errors) == 1
+    assert isinstance(errors[0], Interrupted)
+    assert len(inits) == 2
+    assert len(results) == n - 1
+    assert all(r is results[0] for r in results)
+    assert not InterruptedOnceFS._token_locks
+
+
+def test_instance_created_reentrantly():
+    import threading
+
+    inits = []
+
+    class ReentrantFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            if len(inits) == 1:
+                # same token, same thread, while its instance is being created
+                ReentrantFS()
+            super().__init__(*args, **kwargs)
+
+    ReentrantFS.clear_instance_cache()
+
+    results = []
+    # run in a thread so that a deadlock fails the test instead of hanging it
+    t = threading.Thread(target=lambda: results.append(ReentrantFS()), daemon=True)
+    t.start()
+    t.join(timeout=5)
+
+    assert not t.is_alive(), "deadlock when creating the instance reentrantly"
+    assert len(inits) == 2
+    assert results[0] is ReentrantFS()
+    assert not ReentrantFS._token_locks
+
+
+def test_token_locks_cleared_on_pid_change():
+    class PidFS(DummyTestFS):
+        pass
+
+    PidFS._token_locks["stale"] = object()
+    PidFS._pid = -1  # pretend the process has changed, e.g. forked
+
+    PidFS()
+
+    assert PidFS._pid == os.getpid()
+    assert not PidFS._token_locks
+
+
 def test_uncached_instantiation_concurrency():
     import concurrent.futures
     import time
@@ -899,6 +1053,39 @@ def test_fork_deadlock():
     except queue.Empty:
         pytest.fail("Child process crashed before writing to queue")
     assert result is True
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"",
+        b"hello",
+        b"hello\n",
+        b"\n\n",
+        b"hello\nworld",
+        b"hello\r\nworld\r\n",
+        b"a\rb",
+    ],
+)
+def test_buffered_readlines(m, cache_type, content):
+    m.pipe_file("lines", content)
+    with (
+        AbstractBufferedFile(m, "lines", cache_type=cache_type, block_size=2) as stream,
+        io.BytesIO(content) as expected,
+    ):
+        assert stream.readlines() == expected.readlines()
+        assert stream.readlines() == []
+
+        stream.seek(0)
+        expected.seek(0)
+        stream.read(2)
+        expected.read(2)
+        assert stream.readlines() == expected.readlines()
+        assert stream.readlines() == []
+
+    with pytest.raises(ValueError, match="closed file"):
+        stream.readlines()
 
 
 def test_cache_not_pickled(server):
@@ -1241,6 +1428,37 @@ def test_ls_from_cache():
     )
 
 
+def test_cat_file_empty_range(tmpdir):
+    """
+    A range that ends at or before its start is empty, exactly like a python
+    slice, so ``cat_file`` must return b"" rather than the rest of the file.
+    """
+    import zipfile
+
+    archive = os.path.join(str(tmpdir), "ar.zip")
+    with zipfile.ZipFile(archive, mode="w") as z:
+        z.writestr("member.txt", b"0123456789")
+
+    fs = fsspec.filesystem("zip", fo=archive)
+    data = b"0123456789"
+
+    # end at or before start
+    assert fs.cat_file("member.txt", 3, 0) == b""
+    assert fs.cat_file("member.txt", 8, 3) == b""
+    # a negative end that reaches back past the start of the file
+    assert fs.cat_file("member.txt", 0, -20) == b""
+    assert fs.cat_file("member.txt", 3, -20) == b""
+
+    # the documented slice semantics still apply
+    assert fs.cat_file("member.txt", 3, -2) == data[3:-2]
+    assert fs.cat_file("member.txt", -3, -1) == data[-3:-1]
+    assert fs.cat_file("member.txt", 3, 20) == data[3:20]
+
+    # the same holds for the public aliases of cat_file
+    assert fs.read_bytes("member.txt", 3, 0) == b""
+    assert fs.cat_ranges(["member.txt"], [3], [0]) == [b""]
+
+
 @pytest.mark.parametrize(
     "dt",
     [
@@ -1305,6 +1523,35 @@ class DummyOpenFS(DummyTestFS):
         stream = open(path, mode)
         stream.size = os.stat(path).st_size
         return stream
+
+
+@pytest.mark.parametrize("target_exists", [False, True])
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+def test_get_top_level_directory(tmp_path, monkeypatch, target_exists, trailing_slash):
+    monkeypatch.chdir(tmp_path)
+    source = Path("src")
+    (source / "nested").mkdir(parents=True)
+    files = {"file": b"top-level", "nested/other": b"nested"}
+    contents = [
+        {"name": "src", "type": "directory", "size": 0},
+        {"name": "src/nested", "type": "directory", "size": 0},
+    ]
+    for name, payload in files.items():
+        (source / name).write_bytes(payload)
+        contents.append({"name": "src/" + name, "type": "file", "size": len(payload)})
+    fs = DummyOpenFS(fs_content=contents)
+    target = tmp_path / "target"
+    if target_exists:
+        target.mkdir()
+
+    fs.get("src" + trailing_slash, str(target), recursive=True)
+
+    prefix = "src/" if target_exists and not trailing_slash else ""
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == {prefix + name: payload for name, payload in files.items()}
 
 
 class BasicCallback(fsspec.Callback):

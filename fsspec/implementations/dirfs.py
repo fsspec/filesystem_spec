@@ -61,6 +61,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
         self.path = fs._strip_protocol(path)
         self.fs = fs
+        self.async_impl = fs.async_impl
 
     def _join(self, path):
         if isinstance(path, str):
@@ -119,6 +120,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     @property
     def sep(self):
         return self.fs.sep
+
+    @property
+    def local_file(self):
+        return getattr(self.fs, "local_file", False)
 
     async def set_session(self, *args, **kwargs):
         return await self.fs.set_session(*args, **kwargs)

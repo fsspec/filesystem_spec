@@ -94,6 +94,11 @@ def test_expand_fs_token_paths(mode):
     assert len(get_fs_token_paths("path", mode, num=2, expand=True)[-1]) == 2
 
 
+def test_get_fs_token_paths_protocol_mismatch():
+    with pytest.raises(ValueError, match=r"from \['memory://a', 'file:///b'\]$"):
+        get_fs_token_paths(["memory://a", "file:///b"])
+
+
 def test_openfile_api(m):
     m.open("somepath", "wb").write(b"data")
     of = OpenFile(m, "somepath")
@@ -183,7 +188,7 @@ def test_list():
 
 def test_open_expand(m, monkeypatch):
     m.pipe("/myfile", b"hello")
-    with pytest.raises(FileNotFoundError, match="expand=True"):
+    with pytest.raises(FileNotFoundError, match=r"(?s)^/my\* not found.*expand=True"):
         with fsspec.open("memory://my*", expand=False):
             pass
     with fsspec.open("memory://my*", expand=True) as f:
@@ -330,7 +335,7 @@ def test_open_file_write_with_special_characters(tmp_path, char, monkeypatch):
 
 
 @pytest.mark.parametrize("char", glob_magic_characters)
-def test_open_files_read_with_special_characters(tmp_path, char):
+def test_open_files_read_with_special_characters_unexpanded(tmp_path, char):
     # Create a filename incorporating the special character
     file_name = f"test{char}.txt"
     file_path = tmp_path / file_name

@@ -913,6 +913,17 @@ def test_linked_directories(tmpdir):
     assert fs.isdir(subdir0)
 
 
+@pytest.mark.skipif(WIN, reason="Windows only toggles the read-only flag")
+def test_chmod_strips_protocol(tmpdir):
+    fs = LocalFileSystem()
+    path = make_path_posix(os.path.join(str(tmpdir), "afile"))
+    fs.touch(path)
+
+    fs.chmod(f"file://{path}", 0o600)
+
+    assert os.stat(path).st_mode & 0o777 == 0o600
+
+
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
     assert fs._isfilestore()

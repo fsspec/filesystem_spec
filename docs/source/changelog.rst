@@ -7,11 +7,30 @@ Dev
 Fixes
 
 - Reject writes through read-only memory file handles, including text wrappers,
-  truncation and writable buffer views. Read-only opens now use independent
-  content snapshots so another open cannot change their mode; existing readers
-  do not observe later writes. Multiple writable opens still share the stored
-  object's cursor and mode; independent writable handles are not implemented
-  by this change (issue #2193).
+  truncation and writable buffer views. Opens now have independent cursors and
+  modes over a shared buffer; existing readers observe subsequent writes and
+  truncation. Append handles write at the current end of the shared buffer
+  (issue #2193).
+
+- Strip the protocol from the path in ``LocalFileSystem.chmod``.
+
+- Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
+
+- Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
+
+- Resolve negative FTP read offsets relative to the end of the file.
+
+- Return an empty list from buffered-file ``readlines()`` at end of file
+
+- Normalize protocol prefixes and leading slashes before listing archive paths.
+
+- Update memory file modification times after writes and truncation.
+
+- Preserve binary bytes in percent-encoded data URLs without base64 encoding.
+
+- Keep failed memory-mapped cache reads retriable without discarding completed ranges.
+
+- Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
 
 - Make async loop lock initialization thread-safe (#1783)
 
@@ -152,6 +171,13 @@ Other
 - Fix grammar in ``features.rst`` (#2153)
 
 - Patch ``HAS_CPYTHON_API`` where ``_fast_slice`` reads it in tests (#2164)
+
+- Percent-decode the username and password parsed from URLs in
+  ``infer_storage_options`` so that backends (ftp, sftp, smb, ...) receive
+  the real credentials rather than their URL-encoded form; a password whose
+  bare ``%`` produces bytes that are not valid UTF-8 (for example
+  ``pass%ab``) is left untouched so that pre-existing URLs with unescaped
+  ``%`` continue to work (#1871)
 
 2026.7.0
 --------
