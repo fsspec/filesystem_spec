@@ -120,7 +120,7 @@ class SigSlot:
         widget components.
         """
         if not self._ignoring_events:
-            wn = "-".join([event.obj.name, event.name])
+            wn = f"{event.obj.name}-{event.name}"
             if wn in self._map and self._map[wn] in self._sigs:
                 self._emit(self._map[wn], event.new)
 
