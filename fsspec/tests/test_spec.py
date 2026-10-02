@@ -776,6 +776,160 @@ def test_instance_cache_concurrency():
     assert all(r is results[0] for r in results)
 
 
+def test_instance_created_once_concurrently():
+    import concurrent.futures
+    import time
+
+    inits = []
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(SleepyFS) for _ in range(10)]
+        results = [f.result() for f in futures]
+
+    # the threads wait for the instance instead of creating their own
+    assert len(inits) == 1
+    assert all(r is results[0] for r in results)
+    assert not SleepyFS._token_locks
+
+
+def test_instance_creation_error_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class FailingOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise RuntimeError("failed to create the instance")
+            super().__init__(*args, **kwargs)
+
+    FailingOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return FailingOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # the threads waiting for the instance fail like the one creating it, instead
+    # of retrying one after another (the last one failing after n attempts)
+    assert len(inits) == 1
+    assert all(isinstance(f.exception(), RuntimeError) for f in futures)
+    assert not FailingOnceFS._token_locks
+
+    # the error is not cached, a later call tries again
+    fs = FailingOnceFS()
+    assert len(inits) == 2
+    assert fs is FailingOnceFS()
+    assert not FailingOnceFS._token_locks
+
+
+def test_instance_creation_interrupted_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class Interrupted(BaseException):
+        pass
+
+    class InterruptedOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise Interrupted
+            super().__init__(*args, **kwargs)
+
+    InterruptedOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return InterruptedOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # an interruption (e.g. KeyboardInterrupt) only concerns the interrupted
+    # thread, one of the waiting threads creates the instance instead
+    errors = [f.exception() for f in futures if f.exception() is not None]
+    results = [f.result() for f in futures if f.exception() is None]
+    assert len(errors) == 1
+    assert isinstance(errors[0], Interrupted)
+    assert len(inits) == 2
+    assert len(results) == n - 1
+    assert all(r is results[0] for r in results)
+    assert not InterruptedOnceFS._token_locks
+
+
+def test_instance_created_reentrantly():
+    import threading
+
+    inits = []
+
+    class ReentrantFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            if len(inits) == 1:
+                # same token, same thread, while its instance is being created
+                ReentrantFS()
+            super().__init__(*args, **kwargs)
+
+    ReentrantFS.clear_instance_cache()
+
+    results = []
+    # run in a thread so that a deadlock fails the test instead of hanging it
+    t = threading.Thread(target=lambda: results.append(ReentrantFS()), daemon=True)
+    t.start()
+    t.join(timeout=5)
+
+    assert not t.is_alive(), "deadlock when creating the instance reentrantly"
+    assert len(inits) == 2
+    assert results[0] is ReentrantFS()
+    assert not ReentrantFS._token_locks
+
+
+def test_token_locks_cleared_on_pid_change():
+    class PidFS(DummyTestFS):
+        pass
+
+    PidFS._token_locks["stale"] = object()
+    PidFS._pid = -1  # pretend the process has changed, e.g. forked
+
+    PidFS()
+
+    assert PidFS._pid == os.getpid()
+    assert not PidFS._token_locks
+
+
 def test_uncached_instantiation_concurrency():
     import concurrent.futures
     import time

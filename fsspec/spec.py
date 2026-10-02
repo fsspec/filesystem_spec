@@ -43,10 +43,17 @@ if FORK_AVAILABLE:
     def _reset_instances_lock():
         for cls in _registered_classes:
             cls._instantiation_lock = threading.RLock()
+            cls._token_locks = {}
             cls._cache.clear()
             cls._pid = os.getpid()
 
     os.register_at_fork(after_in_child=_reset_instances_lock)
+
+
+class _TokenLock:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.error = None  # set if creating the instance failed
 
 
 class _Cached(type):
@@ -79,6 +86,8 @@ class _Cached(type):
             cls._cache = {}
         cls._pid = os.getpid()
         cls._instantiation_lock = threading.RLock()
+        # locks of the tokens whose instance is being created, see __call__
+        cls._token_locks = {}
 
         if FORK_AVAILABLE:
             _registered_classes.add(cls)
@@ -111,6 +120,7 @@ class _Cached(type):
             with cls._instantiation_lock:
                 if pid != cls._pid:
                     cls._cache.clear()
+                    cls._token_locks.clear()
                     cls._pid = pid
 
         if not skip and cls.cachable:
@@ -124,7 +134,39 @@ class _Cached(type):
                 inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
+                # Only one thread creates the instance for a given token, the others
+                # wait for it instead of creating (and discarding) their own, since
+                # creating an instance can be expensive (e.g. looking up credentials).
+                # Instances for different tokens are still created concurrently.
+                # This is under _instantiation_lock, so all threads get the same lock.
+                token_lock = cls._token_locks.setdefault(token, _TokenLock())
 
+            with token_lock.lock:
+                if token_lock.error is not None:
+                    # Fail like the thread we waited for instead of retrying: with
+                    # the same arguments it most likely fails the same way, and the
+                    # last waiter would fail only after all the others retried.
+                    raise token_lock.error
+                inst = cls._check_instance_cache(token)
+                if inst is not None:
+                    return inst
+                try:
+                    return cls.__create_instance(
+                        token, args, kwargs, strip_tokenize_options, cache=True
+                    )
+                except Exception as e:
+                    token_lock.error = e
+                    raise
+                finally:
+                    # removed even on failure, so that later calls try again
+                    with cls._instantiation_lock:
+                        cls._token_locks.pop(token, None)
+
+        return cls.__create_instance(
+            token, args, kwargs, strip_tokenize_options, cache=False
+        )
+
+    def __create_instance(cls, token, args, kwargs, strip_tokenize_options, cache):
         obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
         # Setting _fs_token here causes some static linters to complain.
         obj._fs_token_ = token
@@ -135,7 +177,7 @@ class _Cached(type):
 
             mirror_sync_methods(obj)
 
-        if cls.cachable and not skip:
+        if cache:
             with cls._instantiation_lock:
                 # another thread may have created the instance while we were calling
                 # super().__call__(), so we check again.
