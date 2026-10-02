@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
+
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
 
 - Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
