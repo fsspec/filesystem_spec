@@ -50,6 +50,12 @@ if FORK_AVAILABLE:
     os.register_at_fork(after_in_child=_reset_instances_lock)
 
 
+class _TokenLock:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.error = None  # set if creating the instance failed
+
+
 class _Cached(type):
     """
     Metaclass for caching file system instances.
@@ -133,20 +139,28 @@ class _Cached(type):
                 # creating an instance can be expensive (e.g. looking up credentials).
                 # Instances for different tokens are still created concurrently.
                 # This is under _instantiation_lock, so all threads get the same lock.
-                token_lock = cls._token_locks.setdefault(token, threading.RLock())
+                token_lock = cls._token_locks.setdefault(token, _TokenLock())
 
-            with token_lock:
+            with token_lock.lock:
+                if token_lock.error is not None:
+                    # Fail like the thread we waited for instead of retrying: with
+                    # the same arguments it most likely fails the same way, and the
+                    # last waiter would fail only after all the others retried.
+                    raise token_lock.error
                 inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
-                inst = cls.__create_instance(
-                    token, args, kwargs, strip_tokenize_options, cache=True
-                )
-                # Only removed on success: if creating the instance failed, the lock
-                # is kept so that the retries also happen one at a time.
-                with cls._instantiation_lock:
-                    cls._token_locks.pop(token, None)
-                return inst
+                try:
+                    return cls.__create_instance(
+                        token, args, kwargs, strip_tokenize_options, cache=True
+                    )
+                except Exception as e:
+                    token_lock.error = e
+                    raise
+                finally:
+                    # removed even on failure, so that later calls try again
+                    with cls._instantiation_lock:
+                        cls._token_locks.pop(token, None)
 
         return cls.__create_instance(
             token, args, kwargs, strip_tokenize_options, cache=False

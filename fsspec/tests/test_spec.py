@@ -802,11 +802,12 @@ def test_instance_created_once_concurrently():
     assert not SleepyFS._token_locks
 
 
-@pytest.mark.parametrize("max_workers", [2, 10])
-def test_instance_creation_error_concurrently(max_workers):
+def test_instance_creation_error_concurrently():
     import concurrent.futures
+    import threading
     import time
 
+    n = 10
     inits = []
 
     class FailingOnceFS(DummyTestFS):
@@ -814,26 +815,77 @@ def test_instance_creation_error_concurrently(max_workers):
 
         def __init__(self, *args, **kwargs):
             inits.append(None)
-            time.sleep(0.1)
+            time.sleep(0.3)
             if len(inits) == 1:
                 raise RuntimeError("failed to create the instance")
             super().__init__(*args, **kwargs)
 
     FailingOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(FailingOnceFS) for _ in range(10)]
+    def create():
+        barrier.wait()
+        return FailingOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
         concurrent.futures.wait(futures)
 
+    # the threads waiting for the instance fail like the one creating it, instead
+    # of retrying one after another (the last one failing after n attempts)
+    assert len(inits) == 1
+    assert all(isinstance(f.exception(), RuntimeError) for f in futures)
+    assert not FailingOnceFS._token_locks
+
+    # the error is not cached, a later call tries again
+    fs = FailingOnceFS()
+    assert len(inits) == 2
+    assert fs is FailingOnceFS()
+    assert not FailingOnceFS._token_locks
+
+
+def test_instance_creation_interrupted_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class Interrupted(BaseException):
+        pass
+
+    class InterruptedOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise Interrupted
+            super().__init__(*args, **kwargs)
+
+    InterruptedOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return InterruptedOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # an interruption (e.g. KeyboardInterrupt) only concerns the interrupted
+    # thread, one of the waiting threads creates the instance instead
     errors = [f.exception() for f in futures if f.exception() is not None]
     results = [f.result() for f in futures if f.exception() is None]
     assert len(errors) == 1
-    # after the failure, a single thread retries while the others (including
-    # those arriving during the retry) wait for it
+    assert isinstance(errors[0], Interrupted)
     assert len(inits) == 2
-    assert len(results) == 9
+    assert len(results) == n - 1
     assert all(r is results[0] for r in results)
-    assert not FailingOnceFS._token_locks
+    assert not InterruptedOnceFS._token_locks
 
 
 def test_instance_created_reentrantly():
