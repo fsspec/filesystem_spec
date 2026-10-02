@@ -39,9 +39,10 @@ class DataFileSystem(AbstractFileSystem):
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         pref, data = path.split(",", 1)
+        data = unquote_to_bytes(data)
         if pref.endswith("base64"):
-            return base64.b64decode(data)[start:end]
-        return unquote_to_bytes(data)[start:end]
+            data = base64.b64decode(data)
+        return data[start:end]
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
