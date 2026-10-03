@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Return a list of paths when listing a single file with ``GithubFileSystem``.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
