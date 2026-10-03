@@ -5,6 +5,7 @@ import uuid
 import warnings
 from collections.abc import MutableMapping
 from functools import cached_property
+from glob import has_magic
 
 from fsspec.core import url_to_fs
 
@@ -17,6 +18,7 @@ class FSMap(MutableMapping):
 
     The keys of the mapping become files under the given root, and the
     values (which must be bytes) the contents of those files.
+    Keys are literal filenames, rather than glob patterns.
 
     Parameters
     ----------
@@ -77,7 +79,10 @@ class FSMap(MutableMapping):
         """Remove all keys below root - empties out mapping"""
         logger.info("Clear mapping at %s", self.root)
         try:
-            self.fs.rm(self.root, True)
+            if has_magic(self.root):
+                self.delitems(list(self))
+            else:
+                self.fs.rm(self.root, True)
             self.fs.mkdir(self.root)
         except:  # noqa: E722
             pass
@@ -105,9 +110,19 @@ class FSMap(MutableMapping):
         keys2 = [self._key_to_str(k) for k in keys]
         oe = on_error if on_error == "raise" else "return"
         try:
-            out = self.fs.cat(keys2, on_error=oe)
-            if isinstance(out, bytes):
-                out = {keys2[0]: out}
+            if any(has_magic(k) for k in keys2):
+                out = {}
+                for k in dict.fromkeys(keys2):
+                    try:
+                        out[k] = self.fs.cat_file(k)
+                    except Exception as e:
+                        if oe == "raise":
+                            raise
+                        out[k] = e
+            else:
+                out = self.fs.cat(keys2, on_error=oe)
+                if isinstance(out, bytes):
+                    out = {keys2[0]: out}
         except self.missing_exceptions as e:
             raise KeyError from e
         out = {
@@ -132,7 +147,12 @@ class FSMap(MutableMapping):
 
     def delitems(self, keys):
         """Remove multiple keys from the store"""
-        self.fs.rm([self._key_to_str(k) for k in keys])
+        paths = [self._key_to_str(k) for k in keys]
+        if any(has_magic(path) for path in paths):
+            for path in dict.fromkeys(paths):
+                self.fs.rm_file(path)
+        else:
+            self.fs.rm(paths)
 
     def _key_to_str(self, key):
         """Generate full path for the key"""
@@ -155,7 +175,7 @@ class FSMap(MutableMapping):
         """Retrieve data"""
         k = self._key_to_str(key)
         try:
-            result = self.fs.cat(k)
+            result = self.fs.cat_file(k)
         except self.missing_exceptions as exc:
             if default is not None:
                 return default
@@ -191,7 +211,11 @@ class FSMap(MutableMapping):
     def __delitem__(self, key):
         """Remove key"""
         try:
-            self.fs.rm(self._key_to_str(key))
+            path = self._key_to_str(key)
+            if has_magic(path):
+                self.fs.rm_file(path)
+            else:
+                self.fs.rm(path)
         except Exception as exc:
             raise KeyError from exc
 
