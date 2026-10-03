@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from errno import ENOTEMPTY
-from io import BytesIO
+from io import BufferedIOBase, BytesIO, UnsupportedOperation
 from pathlib import PurePath, PureWindowsPath
+from threading import RLock
 from typing import Any
 
 from fsspec import AbstractFileSystem
@@ -20,6 +21,12 @@ class MemoryFileSystem(AbstractFileSystem):
     By default, instances share a global in-memory filesystem. Pass
     ``global_store=False, skip_instance_cache=True`` to create a new instance
     with an independent store instead.
+
+    Opens have independent cursors and modes but share the stored buffer, so
+    reads observe subsequent writes and truncation. Transactional append and
+    overwrite operations retain their private buffer until commit, which
+    publishes a replacement without changing already-open handles. As before,
+    closing a memory handle does not invalidate it or the stored data.
     """
 
     store: dict[str, Any] = {}  # shared by default
@@ -307,31 +314,32 @@ class MemoryFileSystem(AbstractFileSystem):
                     # append to a copy so the store is unchanged until commit
                     f = MemoryFile(self, path, f.getvalue())
                     f.created = self.store[path].created
-                if "a" in mode:
-                    # position at the end of file
-                    f.seek(0, 2)
-                else:
-                    # position at the beginning of file
-                    f.seek(0)
-                return f
+                return _MemoryFileHandle(f, mode)
             elif "a" in mode:
                 # append modes create the file if it does not exist, matching
                 # builtin open() and LocalFileSystem
                 m = MemoryFile(self, path, kwargs.get("data"))
                 if not self._intrans:
                     m.commit()
-                # position at the end of file, like the existing-file path above
-                m.seek(0, 2)
-                return m
+                return _MemoryFileHandle(m, mode)
             else:
                 raise FileNotFoundError(path)
         elif mode in {"wb", "w+b", "xb", "x+b"}:
             if "x" in mode and self.exists(path):
                 raise FileExistsError
+            if "w" in mode and path in self.store and not self._intrans:
+                # Truncate the same buffer so already-open handles see the change.
+                m = self.store[path]
+                with m._lock:
+                    m.truncate(0)
+                    if kwargs.get("data"):
+                        m.seek(0)
+                        m.write(kwargs["data"])
+                return _MemoryFileHandle(m, mode)
             m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
                 m.commit()
-            return m
+            return _MemoryFileHandle(m, mode)
         else:
             name = self.__class__.__name__
             raise ValueError(f"unsupported file mode for {name}: {mode!r}")
@@ -418,6 +426,7 @@ class MemoryFile(BytesIO):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
+        self._lock = RLock()
         self.created = datetime.now(tz=timezone.utc)
         self.modified = datetime.now(tz=timezone.utc)
         if data:
@@ -443,6 +452,16 @@ class MemoryFile(BytesIO):
         self.modified = datetime.now(tz=timezone.utc)
         return size
 
+    def __getstate__(self):
+        data, position, attributes = super().__getstate__()
+        attributes = attributes.copy()
+        attributes.pop("_lock")
+        return data, position, attributes
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        self._lock = RLock()
+
     def __enter__(self):
         return self
 
@@ -455,3 +474,111 @@ class MemoryFile(BytesIO):
     def commit(self):
         self.fs.store[self.path] = self
         self.modified = datetime.now(tz=timezone.utc)
+
+
+class _MemoryFileHandle(BufferedIOBase):
+    """Per-open state over a shared MemoryFile, without copying its contents."""
+
+    def __init__(self, file, mode):
+        self._file = file
+        self.mode = mode
+        self._position = file.size if "a" in mode else 0
+
+    @property
+    def fs(self):
+        return self._file.fs
+
+    @property
+    def path(self):
+        return self._file.path
+
+    @property
+    def created(self):
+        return self._file.created
+
+    @property
+    def modified(self):
+        return self._file.modified
+
+    @modified.setter
+    def modified(self, value):
+        self._file.modified = value
+
+    @property
+    def size(self):
+        return self._file.size
+
+    def readable(self):
+        # Preserve MemoryFile's existing readable behavior for writable modes.
+        return True
+
+    def writable(self):
+        return self.mode != "rb"
+
+    def seekable(self):
+        return True
+
+    def tell(self):
+        return self._position
+
+    def _call(self, method, *args):
+        # Keep positioning and the operation together across concurrent handles.
+        with self._file._lock:
+            self._file.seek(self._position)
+            try:
+                return getattr(self._file, method)(*args)
+            finally:
+                self._position = self._file.tell()
+
+    def seek(self, offset, whence=0):
+        return self._call("seek", offset, whence)
+
+    def read(self, size=-1):
+        return self._call("read", size)
+
+    read1 = read
+
+    def readinto(self, buffer):
+        return self._call("readinto", buffer)
+
+    readinto1 = readinto
+
+    def readline(self, size=-1):
+        return self._call("readline", size)
+
+    def _check_writable(self):
+        if not self.writable():
+            raise UnsupportedOperation("not writable")
+
+    def write(self, data):
+        self._check_writable()
+        with self._file._lock:
+            if "a" in self.mode:
+                self._position = self._file.size
+            return self._call("write", data)
+
+    def writelines(self, lines):
+        self._check_writable()
+        for line in lines:
+            self.write(line)
+
+    def truncate(self, size=None):
+        self._check_writable()
+        return self._call("truncate", size)
+
+    def getvalue(self):
+        return self._file.getvalue()
+
+    def getbuffer(self):
+        view = self._file.getbuffer()
+        return view if self.writable() else view.toreadonly()
+
+    def close(self):
+        pass
+
+    def commit(self):
+        self._check_writable()
+        self._file.commit()
+
+    def discard(self):
+        pass

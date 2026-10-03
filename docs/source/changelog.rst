@@ -6,6 +6,12 @@ Dev
 
 Fixes
 
+- Reject writes through read-only memory file handles, including text wrappers,
+  truncation and writable buffer views. Opens now have independent cursors and
+  modes over a shared buffer; existing readers observe subsequent writes and
+  truncation. Append handles write at the current end of the shared buffer
+  (issue #2193).
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
