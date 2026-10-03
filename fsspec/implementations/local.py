@@ -468,10 +468,10 @@ class LocalFileOpener(io.IOBase):
         os.remove(self.temp)
 
     def readable(self) -> bool:
-        return True
+        return self.f.readable()
 
     def writable(self) -> bool:
-        return "r" not in self.mode
+        return self.f.writable()
 
     def read(self, *args, **kwargs):
         return self.f.read(*args, **kwargs)
