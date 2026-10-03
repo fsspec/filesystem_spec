@@ -163,7 +163,7 @@ class GithubFileSystem(AbstractFileSystem):
                     if detail:
                         return [out]
                     else:
-                        return path
+                        return [out["name"]]
                 _sha = out["sha"]
         if path not in self.dircache or sha not in [self.root, None]:
             r = requests.get(
