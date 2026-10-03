@@ -7,8 +7,147 @@ import uuid
 import pytest
 
 import fsspec
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
+
+
+@pytest.fixture(params=["memory", "file", "async", "simplecache"])
+def literal_mapper(request, tmp_path):
+    if request.param == "file":
+        fs = LocalFileSystem()
+    else:
+        fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
+        if request.param == "async":
+            fs = AsyncFileSystemWrapper(fs=fs, asynchronous=False)
+        elif request.param == "simplecache":
+            fs = fsspec.filesystem(
+                "simplecache", fs=fs, cache_storage=str(tmp_path / "cache")
+            )
+    return fs.get_mapper(tmp_path.as_posix() + "/mapping", create=True)
+
+
+def test_literal_mapping_key_reads(literal_mapper):
+    mapper = literal_mapper
+    values = {"chunk[0]": b"literal", "chunk0": b"other"}
+    mapper.setitems(values)
+
+    assert mapper["chunk[0]"] == b"literal"
+    assert mapper.getitems(list(values)) == values
+    assert mapper.getitems(["chunk[0]", "chunk[0]", "chunk0"]) == values
+
+
+def test_literal_mapping_key_delete(literal_mapper):
+    mapper = literal_mapper
+    mapper.setitems({"chunk[0]": b"literal", "chunk0": b"other"})
+
+    del mapper["chunk[0]"]
+
+    assert "chunk[0]" not in mapper
+    assert mapper["chunk0"] == b"other"
+
+
+def test_literal_mapping_key_bulk_delete(literal_mapper):
+    mapper = literal_mapper
+    mapper.setitems({"chunk[0]": b"literal", "chunk0": b"other", "plain": b"data"})
+
+    mapper.delitems(iter(["chunk[0]", "plain", "chunk[0]"]))
+
+    assert "chunk[0]" not in mapper
+    assert "plain" not in mapper
+    assert mapper["chunk0"] == b"other"
+
+
+def test_missing_literal_mapping_key(literal_mapper):
+    mapper = literal_mapper
+    mapper["chunk0"] = b"other"
+
+    with pytest.raises(KeyError):
+        mapper["chunk[0]"]
+    with pytest.raises(KeyError):
+        mapper.getitems(["chunk[0]"])
+    assert mapper.getitems(["chunk[0]"], on_error="omit") == {}
+    assert isinstance(
+        mapper.getitems(["chunk[0]"], on_error="return")["chunk[0]"], KeyError
+    )
+    with pytest.raises(KeyError):
+        del mapper["chunk[0]"]
+    assert mapper["chunk0"] == b"other"
+
+
+def test_literal_mapping_root(literal_mapper):
+    fs = literal_mapper.fs
+    root = literal_mapper.root + "[0]"
+    mapper = fs.get_mapper(root, create=True)
+    mapper["plain"] = b"literal root"
+    fs.makedirs(literal_mapper.root + "0", exist_ok=True)
+    fs.pipe_file(literal_mapper.root + "0/plain", b"other root")
+
+    assert mapper["plain"] == b"literal root"
+    assert mapper.getitems(["plain"]) == {"plain": b"literal root"}
+    del mapper["plain"]
+    assert fs.cat_file(literal_mapper.root + "0/plain") == b"other root"
+
+
+def test_literal_mapping_root_clear(literal_mapper):
+    fs = literal_mapper.fs
+    mapper = fs.get_mapper(literal_mapper.root + "[0]", create=True)
+    mapper.update({"plain": b"data", "nested/key": b"more data"})
+    fs.makedirs(literal_mapper.root + "0", exist_ok=True)
+    fs.pipe_file(literal_mapper.root + "0/plain", b"other root")
+
+    mapper.clear()
+
+    assert list(mapper) == []
+    assert fs.cat_file(literal_mapper.root + "0/plain") == b"other root"
+
+
+def test_missing_literal_mapping_bulk_delete(literal_mapper):
+    mapper = literal_mapper
+    mapper["chunk0"] = b"other"
+
+    with pytest.raises(FileNotFoundError):
+        mapper.delitems(["chunk[0]"])
+
+    assert mapper["chunk0"] == b"other"
+
+
+@pytest.mark.parametrize("on_error", ["raise", "omit", "return"])
+def test_literal_mapping_mixed_getitems_errors(literal_mapper, on_error):
+    mapper = literal_mapper
+    mapper["present[0]"] = b"data"
+    keys = ["present[0]", "missing[0]"]
+
+    if on_error == "raise":
+        with pytest.raises(KeyError):
+            mapper.getitems(keys, on_error=on_error)
+    else:
+        out = mapper.getitems(keys, on_error=on_error)
+        assert out["present[0]"] == b"data"
+        if on_error == "omit":
+            assert "missing[0]" not in out
+        else:
+            assert isinstance(out["missing[0]"], KeyError)
+
+
+@pytest.mark.parametrize("operation", ["delete", "pop"])
+def test_mapping_delete_with_rm_only_filesystem(operation):
+    class RmOnlyFileSystem(MemoryFileSystem):
+        def _rm(self, path):
+            raise NotImplementedError
+
+        def rm(self, path, recursive=False):
+            MemoryFileSystem._rm(self, path)
+
+    fs = RmOnlyFileSystem(global_store=False, skip_instance_cache=True)
+    mapper = fs.get_mapper("/mapping", create=True)
+    mapper["plain"] = b"data"
+
+    if operation == "delete":
+        del mapper["plain"]
+    else:
+        assert mapper.pop("plain") == b"data"
+    assert "plain" not in mapper
 
 
 def test_mapping_prefix(tmpdir):

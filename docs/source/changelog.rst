@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Treat mapping keys and roots literally when reading and deleting files, including names containing glob characters.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
