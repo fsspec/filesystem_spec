@@ -1532,3 +1532,72 @@ def test_a_native_windows_pattern_is_normalised_before_the_translator_sees_it(tm
 
     # the mechanism itself, so it cannot rot silently
     assert "\\" not in make_path_posix(native)
+
+
+@pytest.mark.parametrize("mode", ["rb", "wb", "ab", "xb", "r+b", "w+b", "a+b", "x+b"])
+def test_local_file_capabilities(tmp_path, mode):
+    path = tmp_path / "capabilities"
+    reference = tmp_path / "reference"
+    if "x" not in mode:
+        path.write_bytes(b"original")
+        reference.write_bytes(b"original")
+    with open(reference, mode) as expected:
+        with fsspec.open(path, mode) as actual:
+            assert actual.readable() == expected.readable()
+            assert actual.writable() == expected.writable()
+
+
+@pytest.mark.parametrize("use_filesystem", [False, True])
+@pytest.mark.parametrize("mode", ["r+", "r+t"])
+def test_local_text_update(tmp_path, use_filesystem, mode):
+    path = tmp_path / "update.txt"
+    path.write_text("old value", encoding="utf-8")
+    opener = fsspec.filesystem("file").open if use_filesystem else fsspec.open
+    with opener(path, mode, encoding="utf-8") as stream:
+        assert stream.read(3) == "old"
+        stream.seek(0)
+        assert stream.write("new") == 3
+        stream.seek(0)
+        assert stream.read() == "new value"
+    assert path.read_text(encoding="utf-8") == "new value"
+
+
+@pytest.mark.parametrize("mode", ["rb", "wb", "r+b"])
+@pytest.mark.parametrize("method", ["readable", "writable"])
+def test_local_closed_file_capabilities(tmp_path, mode, method):
+    path = tmp_path / "closed"
+    path.write_bytes(b"original")
+    with open(path, mode) as expected:
+        pass
+    with fsspec.open(path, mode) as stream:
+        pass
+    try:
+        result = getattr(expected, method)()
+    except ValueError:
+        with pytest.raises(ValueError):
+            getattr(stream, method)()
+    else:
+        assert getattr(stream, method)() == result
+
+
+def test_local_pickled_file_capabilities(tmp_path):
+    path = tmp_path / "pickled"
+    path.write_bytes(b"original")
+    with fsspec.open(path, "rb") as stream:
+        assert stream.read(3) == b"ori"
+        with pickle.loads(pickle.dumps(stream)) as restored:
+            assert restored.readable()
+            assert not restored.writable()
+            assert restored.read() == b"ginal"
+
+
+def test_local_compressed_file_capabilities(tmp_path):
+    path = tmp_path / "compressed.gz"
+    with fsspec.open(path, "wt", compression="gzip", encoding="utf-8") as stream:
+        assert not stream.readable()
+        assert stream.writable()
+        assert stream.write("original") == 8
+    with fsspec.open(path, "rt", compression="gzip", encoding="utf-8") as stream:
+        assert stream.readable()
+        assert not stream.writable()
+        assert stream.read() == "original"

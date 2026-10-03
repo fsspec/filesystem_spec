@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Report local file read and write capabilities from the underlying file, allowing text update mode writes.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
