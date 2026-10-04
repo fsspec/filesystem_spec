@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Read ini and json config files as UTF-8 instead of the locale encoding.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
