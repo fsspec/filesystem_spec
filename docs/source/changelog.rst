@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Follow GitHub API pagination when listing tags, branches and repositories.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
