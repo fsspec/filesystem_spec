@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
