@@ -215,12 +215,20 @@ class HTTPFileSystem(AsyncFileSystem):
             return sorted(out)
 
     async def _ls(self, url, detail=True, **kwargs):
+        # The cached shape is always the detailed one, and a detail=False request is
+        # answered by projecting the cached entries down to their names. Caching whatever
+        # shape the first caller happened to ask for meant the first caller's `detail`
+        # decided the type for every later caller: one ls(url, detail=False) left a list
+        # of strings in the cache, and the info/find/walk/cat paths that all go through
+        # ls(detail=True) then got strings where dicts are expected.
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
-            out = await self._ls_real(url, detail=detail, **kwargs)
+            out = await self._ls_real(url, detail=True, **kwargs)
             self.dircache[url] = out
-        return out
+        if detail:
+            return out
+        return sorted(entry["name"] for entry in out)
 
     ls = sync_wrapper(_ls)
 

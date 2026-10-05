@@ -36,6 +36,45 @@ def test_list_cache(server, sync):
     assert out == [server.address + "/index/realfile"]
 
 
+@pytest.mark.parametrize("first_detail", [True, False])
+def test_list_cache_detail_shape_is_independent_of_the_first_caller(
+    server, sync, first_detail
+):
+    """The cached listing must not depend on which shape the first caller asked for.
+
+    Same contract as the async implementation in http.py: ``info``/``find``/``glob`` all
+    go through ``ls(detail=True)``, so a cached list of strings breaks them.
+    """
+    h = fsspec.filesystem("http", use_listings_cache=True)
+    url = server.address + "/index/"
+
+    first = h.ls(url, detail=first_detail)
+    second = h.ls(url, detail=not first_detail)
+    third = h.ls(url, detail=first_detail)
+
+    # Whichever order the two shapes arrive in, each call gets what it asked for.
+    shape = {True: dict, False: str}
+    assert all(type(x) is shape[first_detail] for x in first)
+    assert all(type(x) is shape[not first_detail] for x in second)
+    assert all(type(x) is shape[first_detail] for x in third)
+
+    # The projected names must be the ones the detailed listing carries.
+    detailed = h.ls(url, detail=True)
+    assert h.ls(url, detail=False) == sorted(d["name"] for d in detailed)
+
+
+def test_list_cache_detail_false_does_not_poison_the_detailed_consumers(server, sync):
+    """info/find/glob read the cached entry as dicts and must keep working."""
+    h = fsspec.filesystem("http", use_listings_cache=True)
+    url = server.address + "/index/"
+
+    h.ls(url, detail=False)
+
+    assert h.ls(url) == h.ls(url, detail=True)
+    assert h.glob(url + "*") == [server.realfile]
+    assert h.info(server.realfile)["type"] == "file"
+
+
 def test_list_cache_with_expiry_time_cached(server, sync):
     h = fsspec.filesystem("http", use_listings_cache=True, listings_expiry_time=30)
 

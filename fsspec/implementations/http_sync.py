@@ -338,12 +338,17 @@ class HTTPFileSystem(AbstractFileSystem):
             return sorted(out)
 
     def ls(self, url, detail=True, **kwargs):
+        # Keep the detailed shape in the cache and project down for a detail=False caller.
+        # Caching whatever shape the first caller asked for made that caller's `detail`
+        # decide the type for every later caller. See the async twin in http.py.
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
-            out = self._ls_real(url, detail=detail, **kwargs)
+            out = self._ls_real(url, detail=True, **kwargs)
             self.dircache[url] = out
-        return out
+        if detail:
+            return out
+        return sorted(entry["name"] for entry in out)
 
     def _raise_not_found_for_status(self, response, url):
         """
