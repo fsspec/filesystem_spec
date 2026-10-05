@@ -9,6 +9,7 @@ import posixpath
 import sys
 import tempfile
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -249,6 +250,30 @@ def test_not_found():
     with pytest.raises((FileNotFoundError, OSError)):
         with OpenFile(fs, fn, mode="rb"):
             pass
+
+
+@pytest.mark.parametrize("source_kind", ["str", "path", "file", "local"])
+@pytest.mark.parametrize("file_like", [False, True])
+@pytest.mark.parametrize("data", [b"", b"\x00binary\xff\n"])
+def test_get_file_source_paths(tmp_path, source_kind, file_like, data):
+    fs = LocalFileSystem()
+    source = tmp_path / "source data %20.bin"
+    source.write_bytes(data)
+    if source_kind == "str":
+        source = str(source)
+    elif source_kind != "path":
+        source = f"{source_kind}://{source.as_posix()}"
+
+    target = BytesIO(b"prefix") if file_like else tmp_path / "copy.bin"
+    if file_like:
+        target.seek(0, 2)
+    fs.get_file(source, target)
+
+    if file_like:
+        assert not target.closed
+        assert target.getvalue() == b"prefix" + data
+    else:
+        assert target.read_bytes() == data
 
 
 def test_isfile():

@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Accept local filesystem URLs in ``get_file`` when copying to a file-like object.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.

@@ -152,7 +152,7 @@ class LocalFileSystem(AbstractFileSystem):
 
     def get_file(self, path1, path2, callback=None, **kwargs):
         if isfilelike(path2):
-            with open(path1, "rb") as f:
+            with open(self._strip_protocol(path1), "rb") as f:
                 shutil.copyfileobj(f, path2)
         else:
             return self.cp_file(path1, path2, **kwargs)
