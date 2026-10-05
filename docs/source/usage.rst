@@ -74,7 +74,7 @@ Functionality is generally chosen to be as close to the builtin ``os`` module's 
     assert fs.isfile("/remote/output/success")
     assert fs.cat("/remote/output/success") == b""  # get content as bytestring
     fs.copy("/remote/output/success", "/remote/output/copy")
-    assert fs.ls("/remote/output", detail=False) == ["/remote/output/success", "/remote/output/copy")
+    assert sorted(fs.ls("/remote/output", detail=False)) == ["/remote/output/copy", "/remote/output/success"]
     fs.rm("/remote/output", recursive=True)
 
 The ``open()`` method will return a file-like object which can be passed to any other library that expects
