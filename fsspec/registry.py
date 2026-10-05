@@ -235,7 +235,7 @@ known_implementations = {
     "wandb": {"class": "wandbfs.WandbFS", "err": "Install wandbfs to access wandb"},
     "webdav": {
         "class": "webdav4.fsspec.WebdavFileSystem",
-        "err": "Install webdav4 to access WebDAV",
+        "err": "Install webdav-rfc4918 (recommended) or webdav4 to access WebDAV",
     },
     "webhdfs": {
         "class": "fsspec.implementations.webhdfs.WebHDFS",

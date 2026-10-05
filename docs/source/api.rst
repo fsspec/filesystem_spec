@@ -257,6 +257,7 @@ documentation carefully before using any particular package.
 - `fsspec-union`_: A chained filesystem that unions multiple fsspec backends as a read-through cache
 - `wandbfs`_ to access Wandb run data (experimental)
 - `wandbfsspec`_ to access Weights & Biases (experimental)
+- `webdav-rfc4918`_ for WebDAV (RFC 4918), with protocol "webdav://" or "dav://"
 - `webdav4`_ for WebDAV, with protocol "webdav://" or "dav://"
 - `xrootd`_ for xrootd, with protocol "root://"
 
@@ -297,6 +298,7 @@ documentation carefully before using any particular package.
 .. _fsspec-union: https://github.com/1kbgz/fsspec-union
 .. _wandbfs: https://github.com/jkulhanek/wandbfs
 .. _wandbfsspec: https://github.com/alvarobartt/wandbfsspec
+.. _webdav-rfc4918: https://github.com/manfred-kaiser/webdav-rfc4918
 .. _webdav4: https://github.com/skshetry/webdav4
 .. _xrootd: https://github.com/CoffeaTeam/fsspec-xrootd
 
