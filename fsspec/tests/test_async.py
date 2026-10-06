@@ -517,3 +517,51 @@ async def test_isfile_does_not_swallow_cancellation():
         await fs._isdir("path")
     with pytest.raises(asyncio.CancelledError):
         await fs._isfile("path")
+
+
+class UnreadableAsyncSubdirFS(fsspec.asyn.AsyncFileSystem):
+    """The async counterpart of the unreadable-subdirectory tree."""
+
+    protocol = "unreadableasyncsub"
+    cachable = False
+    mirror_sync_methods = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    async def _ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+@pytest.mark.asyncio
+async def test_async_walk_on_error_reaches_subdirectories():
+    # _walk documents the same on_error contract as walk(), and had the same
+    # omission in the recursive call.
+    fs = UnreadableAsyncSubdirFS()
+    # _walk yields the path it could not list, where walk() omits it. That
+    # difference predates this and is left alone here; what matters is that the
+    # last entry only appears at all when on_error is left at the default.
+    omitted = [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    yielded = omitted + [("top/locked", [], [])]
+
+    assert [entry async for entry in fs._walk("")] == yielded
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        [entry async for entry in fs._walk("", on_error="raise")]
+
+    handled = []
+    assert [entry async for entry in fs._walk("", on_error=handled.append)] == yielded
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]
