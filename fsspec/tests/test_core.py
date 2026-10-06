@@ -119,6 +119,14 @@ def test_openfile_open(m):
     assert m.size("somepath") == 5
 
 
+def test_open_return_annotation(m):
+    import typing
+
+    assert typing.get_type_hints(fsspec.open)["return"] is OpenFile
+    m.pipe("somepath", b"data")
+    assert isinstance(fsspec.open("memory://somepath"), OpenFile)
+
+
 def test_open_local_w_cache():
     d1 = str(tempfile.mkdtemp())
     f1 = os.path.join(d1, "f1")
