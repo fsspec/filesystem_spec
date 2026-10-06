@@ -30,6 +30,10 @@ Fixes
 
 - Make async loop lock initialization thread-safe (#1783)
 
+Other
+
+- Fix the file-system example in the usage docs, which had a SyntaxError and assumed a fixed ``ls`` order.
+
 
 2026.9.0
 --------
