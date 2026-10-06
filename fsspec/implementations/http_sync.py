@@ -338,9 +338,6 @@ class HTTPFileSystem(AbstractFileSystem):
             return sorted(out)
 
     def ls(self, url, detail=True, **kwargs):
-        # Keep the detailed shape in the cache and project down for a detail=False caller.
-        # Caching whatever shape the first caller asked for made that caller's `detail`
-        # decide the type for every later caller. See the async twin in http.py.
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
