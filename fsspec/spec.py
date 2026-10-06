@@ -763,8 +763,11 @@ class AbstractFileSystem(metaclass=_Cached):
         try:
             self.info(path, **kwargs)
             return True
+        except FileNotFoundError:
+            return False
         except:  # noqa: E722
-            # any exception allowed bar FileNotFoundError?
+            # any other failure also means we cannot reach the path, but say why
+            logger.debug("exists(%s) failed", path, exc_info=True)
             return False
 
     def lexists(self, path, **kwargs):

@@ -1948,3 +1948,21 @@ def test_walk_on_error_reaches_subdirectories():
         ("top/readable", [], []),
     ]
     assert [str(exc) for exc in handled] == ["no access to top/locked"]
+
+
+def test_exists_logs_unexpected_errors(caplog):
+    class BrokenInfoFS(AbstractFileSystem):
+        def info(self, path, **kwargs):
+            if path == "missing":
+                raise FileNotFoundError(path)
+            raise PermissionError("no access to locked")
+
+    fs = BrokenInfoFS(skip_instance_cache=True)
+    with caplog.at_level("DEBUG", logger="fsspec"):
+        assert not fs.exists("missing")
+        assert not caplog.records
+
+        assert not fs.exists("locked")
+    [record] = caplog.records
+    assert "locked" in record.getMessage()
+    assert isinstance(record.exc_info[1], PermissionError)
