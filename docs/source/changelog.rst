@@ -8,6 +8,8 @@ Fixes
 
 - Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
 
+- Keep files deeper than ``maxdepth`` in the source of a recursive ``mv`` instead of deleting them uncopied.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
