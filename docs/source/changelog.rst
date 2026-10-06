@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Read empty GitHub files without requiring the HTTP extra or a second download.
+
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
 - Strip the protocol from the path in ``LocalFileSystem.chmod``.
