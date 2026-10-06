@@ -1361,11 +1361,24 @@ class AbstractFileSystem(metaclass=_Cached):
         if path1 == path2:
             logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
+            if recursive and maxdepth is not None:
+                # copy only reaches maxdepth, so only remove what it copied
+                paths = self.expand_path(path1, recursive=True, maxdepth=maxdepth)
+                dirs = [p for p in paths if self.isdir(p)]
+                files = [p for p in paths if p not in dirs]
             # explicitly raise exception to prevent data corruption
             self.copy(
                 path1, path2, recursive=recursive, maxdepth=maxdepth, on_error="raise"
             )
-            self.rm(path1, recursive=recursive)
+            if recursive and maxdepth is not None:
+                if files:
+                    self.rm(files)
+                # a directory still holding files deeper than maxdepth is kept
+                for p in reversed(dirs):
+                    if self.exists(p) and not self.ls(p, detail=False):
+                        self.rmdir(p)
+            else:
+                self.rm(path1, recursive=recursive)
 
     def rm_file(self, path):
         """Delete a file"""
