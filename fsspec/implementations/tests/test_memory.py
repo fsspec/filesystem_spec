@@ -312,6 +312,23 @@ def test_mv_recursive(m):
     assert not m.exists("src")
 
 
+def test_mv_recursive_maxdepth_keeps_deeper_files(m):
+    m.pipe(
+        {
+            "/src/top.txt": b"top",
+            "/src/sub/mid.txt": b"mid",
+            "/src/sub/deeper/low.txt": b"low",
+        }
+    )
+    m.mv("/src", "/dst", recursive=True, maxdepth=2)
+    assert m.cat("/dst/top.txt") == b"top"
+    assert m.cat("/dst/sub/mid.txt") == b"mid"
+    assert not m.exists("/src/top.txt")
+    assert not m.exists("/src/sub/mid.txt")
+    # beyond maxdepth: not copied, so it must not be deleted either
+    assert m.cat("/src/sub/deeper/low.txt") == b"low"
+
+
 def test_mv_same_paths(m):
     m.mkdir("src")
     m.touch("src/file.txt")
