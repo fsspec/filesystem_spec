@@ -94,8 +94,7 @@ class CachingFileSystem(ChainedFileSystem):
     - the block-size must be the same for each access of a given file, unless
       all blocks of the file have already been read
     - caching can only be applied to file-systems which produce files
-      derived from fsspec.spec.AbstractBufferedFile ; LocalFileSystem is also
-      allowed, for testing
+      derived from fsspec.spec.AbstractBufferedFile.
     """
 
     protocol: ClassVar[str | tuple[str, ...]] = ("blockcache", "cached")
