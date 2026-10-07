@@ -402,6 +402,9 @@ class MemoryFileSystem(AbstractFileSystem):
                 if p not in existed:
                     raise FileNotFoundError(p)
                 continue
+            elif maxdepth is not None and self.ls(p, detail=False):
+                # a directory still holding files deeper than maxdepth is kept
+                continue
             else:
                 self.rmdir(p)
 
