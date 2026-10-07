@@ -194,6 +194,8 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
         path = self._strip_protocol(path)
         if mode != "rb":
             raise NotImplementedError
+        if not self.isfile(path):
+            raise self._not_a_file(path)
 
         data = b""
         with self._open_archive() as arc:

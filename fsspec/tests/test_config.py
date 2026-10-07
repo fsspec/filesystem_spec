@@ -119,6 +119,16 @@ def test_from_file_json(clean_conf, tmpdir):
     }
 
 
+def test_from_file_non_ascii(clean_conf, tmpdir):
+    with open(os.path.join(tmpdir, "1.ini"), "w", encoding="utf-8") as f:
+        f.write("[proto]\nkey=Müller\n")
+    with open(os.path.join(tmpdir, "2.json"), "w", encoding="utf-8") as f:
+        f.write('{"other": {"key": "Rızgar"}}')
+    cd = {}
+    set_conf_files(tmpdir, cd)
+    assert cd == {"proto": {"key": "Müller"}, "other": {"key": "Rızgar"}}
+
+
 def test_apply(clean_conf):
     conf["file"] = {"auto_mkdir": "test"}
     fs = fsspec.filesystem("file")

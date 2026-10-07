@@ -1902,3 +1902,49 @@ def test_cat_ranges_forwards_kwargs():
     fs.cat_ranges(["a", "b"], [0, 0], [1, 1], block_size=42)
 
     assert received == [{"block_size": 42}, {"block_size": 42}]
+
+
+class UnreadableSubdirFS(AbstractFileSystem):
+    """A tree in which the ``locked`` subdirectory cannot be listed."""
+
+    protocol = "unreadablesub"
+    cachable = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+def test_walk_on_error_reaches_subdirectories():
+    # on_error is documented to apply to any path whose listing fails, not only
+    # to the one handed to walk(), so the recursive call has to forward it.
+    fs = UnreadableSubdirFS()
+
+    # the default, "omit", keeps skipping the unreadable directory
+    assert list(fs.walk("")) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        list(fs.walk("", on_error="raise"))
+
+    handled = []
+    assert list(fs.walk("", on_error=handled.append)) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]
