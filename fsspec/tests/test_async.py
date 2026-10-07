@@ -142,6 +142,41 @@ def test_io_loop_stopped_before_interpreter_shutdown():
     assert out.strip() == "alive False"
 
 
+def test_io_loop_blocked_at_exit_warns_and_waits():
+    script = """
+        import atexit
+        import sys
+        import threading
+        import time
+
+        # Registered before fsspec is imported, so it runs after fsspec's hook.
+        def report():
+            print("alive", sys.modules["fsspec.asyn"].iothread[0].is_alive())
+
+        atexit.register(report)
+
+        import fsspec.asyn
+
+        fsspec.asyn._STOP_IO_LOOP_WARN_SECONDS = 0.2
+        loop = fsspec.asyn.get_loop()
+        blocking = threading.Event()
+
+        def block():
+            blocking.set()
+            time.sleep(1)
+
+        loop.call_soon_threadsafe(block)
+        blocking.wait(10)
+    """
+    proc = _run_python(
+        script, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    out, err = proc.communicate(timeout=60)
+    assert proc.returncode == 0
+    assert "fsspec IO loop is still running" in err
+    assert out.strip() == "alive False"
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="uses __cxa_atexit")
 def test_late_uvloop_timer_does_not_crash_at_exit():
     pytest.importorskip("uvloop")
