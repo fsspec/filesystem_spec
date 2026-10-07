@@ -53,6 +53,28 @@ def test_sync_stopped_io_thread(monkeypatch, finalizing):
         stopped_loop.close()
 
 
+def test_sync_supplied_loop_on_stopped_io_thread(monkeypatch):
+    supplied_loop = asyncio.new_event_loop()
+    try:
+        monkeypatch.setattr(fsspec.asyn, "loop", [object()])
+        monkeypatch.setattr(
+            fsspec.asyn,
+            "iothread",
+            [SimpleNamespace(is_alive=lambda: False, ident=424242)],
+        )
+        # the supplied loop was being run by the fsspec IO thread
+        supplied_loop._thread_id = 424242
+
+        def must_not_create_coroutine():
+            pytest.fail("sync attempted to schedule work on a stopped IO thread")
+
+        with pytest.raises(RuntimeError, match="IO thread has already stopped"):
+            fsspec.asyn.sync(supplied_loop, must_not_create_coroutine)
+    finally:
+        supplied_loop._thread_id = None
+        supplied_loop.close()
+
+
 @pytest.mark.parametrize("finalizing", [False, True])
 def test_sync_custom_loop_ignores_stopped_io_thread(monkeypatch, finalizing):
     custom_loop = asyncio.new_event_loop()
@@ -61,7 +83,9 @@ def test_sync_custom_loop_ignores_stopped_io_thread(monkeypatch, finalizing):
     try:
         monkeypatch.setattr(fsspec.asyn, "loop", [object()])
         monkeypatch.setattr(
-            fsspec.asyn, "iothread", [SimpleNamespace(is_alive=lambda: False)]
+            fsspec.asyn,
+            "iothread",
+            [SimpleNamespace(is_alive=lambda: False, ident=12345)],
         )
         monkeypatch.setattr(fsspec.asyn.sys, "is_finalizing", lambda: finalizing)
 
