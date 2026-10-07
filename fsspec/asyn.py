@@ -1,5 +1,6 @@
 import asyncio
 import asyncio.events
+import atexit
 import concurrent.futures
 import functools
 import inspect
@@ -247,6 +248,30 @@ def get_loop():
                 th.start()
                 iothread[0] = th
     return loop[0]
+
+
+def _stop_io_loop():
+    """Stop the fsspec IO loop, if one was started, and wait for its thread.
+
+    The IO thread is a daemon, so nothing else stops it before interpreter
+    shutdown. It must not outlive ``Py_Finalize``: a callback firing on it
+    afterwards (for example a uvloop timer) re-enters the finalized interpreter
+    and crashes the process (#2241). atexit hooks run before finalization,
+    while the thread can still take the GIL to process the stop.
+    """
+    if loop[0] is None or iothread[0] is None or not iothread[0].is_alive():
+        return
+    try:
+        loop[0].call_soon_threadsafe(loop[0].stop)
+    except RuntimeError:
+        # the loop was closed by its user
+        return
+    iothread[0].join(timeout=5)
+
+
+# Registered at import, so it runs after any atexit hook registered later
+# that may still use the loop.
+atexit.register(_stop_io_loop)
 
 
 def reset_after_fork():
