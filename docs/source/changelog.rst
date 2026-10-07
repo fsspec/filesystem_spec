@@ -8,6 +8,9 @@ Fixes
 
 - Return a list of paths when listing a single file with ``GithubFileSystem``.
 
+- Stop the fsspec IO loop and join its thread at interpreter exit, so a callback firing on it after ``Py_Finalize`` (e.g. a uvloop timer)
+  cannot crash the process (#2241).
+
 - Avoid deadlocks in ``sync()`` when the default IO thread has stopped (#1723).
 
 - Percent-encode GitHub branch and tag names in API URLs so refs containing ``#``, ``&`` or ``%`` select the intended revision.
