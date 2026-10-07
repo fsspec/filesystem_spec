@@ -1,6 +1,10 @@
 import asyncio
 import inspect
 import io
+import os
+import subprocess
+import sys
+import textwrap
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -108,6 +112,109 @@ def test_sync_live_io_thread(monkeypatch, finalizing):
         return 42
 
     assert fsspec.asyn.sync(live_loop, work, timeout=1) == 42
+
+
+def _run_python(script, **kwargs):
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    return subprocess.Popen(
+        [sys.executable, "-c", textwrap.dedent(script)], env=env, **kwargs
+    )
+
+
+def test_io_loop_stopped_before_interpreter_shutdown():
+    script = """
+        import atexit
+        import sys
+
+        # Registered before fsspec is imported, so it runs after fsspec's hook.
+        def report():
+            print("alive", sys.modules["fsspec.asyn"].iothread[0].is_alive())
+
+        atexit.register(report)
+
+        import fsspec.asyn
+
+        fsspec.asyn.get_loop()
+    """
+    proc = _run_python(script, stdout=subprocess.PIPE, text=True)
+    out, _ = proc.communicate(timeout=60)
+    assert proc.returncode == 0
+    assert out.strip() == "alive False"
+
+
+def test_io_loop_blocked_at_exit_warns_and_waits():
+    script = """
+        import atexit
+        import sys
+        import threading
+        import time
+
+        # Registered before fsspec is imported, so it runs after fsspec's hook.
+        def report():
+            print("alive", sys.modules["fsspec.asyn"].iothread[0].is_alive())
+
+        atexit.register(report)
+
+        import fsspec.asyn
+
+        fsspec.asyn._STOP_IO_LOOP_WARN_SECONDS = 0.2
+        loop = fsspec.asyn.get_loop()
+        blocking = threading.Event()
+
+        def block():
+            blocking.set()
+            time.sleep(1)
+
+        loop.call_soon_threadsafe(block)
+        blocking.wait(10)
+    """
+    proc = _run_python(
+        script, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    out, err = proc.communicate(timeout=60)
+    assert proc.returncode == 0
+    assert "fsspec IO loop is still running" in err
+    assert out.strip() == "alive False"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="uses __cxa_atexit")
+def test_late_uvloop_timer_does_not_crash_at_exit():
+    pytest.importorskip("uvloop")
+    # A C exit handler blocked in getchar() holds the process after
+    # Py_Finalize; a timer on a still-running uvloop IO loop firing there
+    # re-enters the finalized interpreter and segfaults (#2241).
+    script = """
+        import asyncio
+        import ctypes
+        import threading
+
+        import uvloop
+
+        import fsspec.asyn
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        loop = fsspec.asyn.get_loop()
+        process = ctypes.CDLL(None)
+        process.__cxa_atexit(process.getchar, None, None)
+        armed = threading.Event()
+
+        def arm():
+            loop.call_later(0.3, lambda: None)
+            armed.set()
+
+        loop.call_soon_threadsafe(arm)
+        armed.wait(10)
+        print("exiting", flush=True)
+    """
+    proc = _run_python(script, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    assert proc.stdout.readline() == b"exiting\n"
+    time.sleep(1.5)  # well past the timer
+    try:
+        proc.stdin.write(b"\n")
+        proc.stdin.close()
+    except BrokenPipeError:
+        pass  # the child already crashed
+    assert proc.wait(timeout=60) == 0
 
 
 def test_sync_methods():
