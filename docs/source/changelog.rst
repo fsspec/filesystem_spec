@@ -6,6 +6,12 @@ Dev
 
 Fixes
 
+- Read ini and json config files as UTF-8 instead of the locale encoding.
+
+- Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
+
+- Keep files deeper than ``maxdepth`` in the source of a recursive ``mv`` instead of deleting them uncopied.
+
 - Accept local filesystem URLs in ``get_file`` when copying to a file-like object.
 
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
