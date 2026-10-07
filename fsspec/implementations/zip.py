@@ -142,7 +142,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         except KeyError as exc:
             # zipfile reports a missing member as KeyError; fsspec callers,
             # including FSMap's missing_exceptions, expect FileNotFoundError.
-            raise FileNotFoundError(path) from exc
+            raise self._not_a_file(path) from exc
         if "r" in mode:
             info = self.info(path)
             out.size = info["size"]

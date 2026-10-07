@@ -341,9 +341,11 @@ class HTTPFileSystem(AbstractFileSystem):
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
-            out = self._ls_real(url, detail=detail, **kwargs)
+            out = self._ls_real(url, detail=True, **kwargs)
             self.dircache[url] = out
-        return out
+        if detail:
+            return out
+        return sorted(entry["name"] for entry in out)
 
     def _raise_not_found_for_status(self, response, url):
         """

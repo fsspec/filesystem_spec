@@ -1230,6 +1230,27 @@ def test_delete_non_recursive_dir_fails(tmpdir):
     fs.rm(subdir, recursive=True)
 
 
+def test_rm_recursive_maxdepth_keeps_deeper_files(tmpdir):
+    fs = LocalFileSystem()
+    src = make_path_posix(str(tmpdir / "src"))
+    fs.mkdir(src + "/sub/deeper")
+    fs.pipe(
+        {
+            src + "/top.txt": b"top",
+            src + "/sub/mid.txt": b"mid",
+            src + "/sub/deeper/low.txt": b"low",
+        }
+    )
+    fs.rm(src, recursive=True, maxdepth=2)
+    assert not fs.exists(src + "/top.txt")
+    assert not fs.exists(src + "/sub/mid.txt")
+    # beyond maxdepth, so it is kept along with its parent directories
+    assert fs.cat(src + "/sub/deeper/low.txt") == b"low"
+
+    fs.rm(src, recursive=True, maxdepth=3)
+    assert not fs.exists(src)
+
+
 @pytest.mark.parametrize(
     "opener, ext", [(bz2.open, ".bz2"), (gzip.open, ".gz"), (open, "")]
 )
