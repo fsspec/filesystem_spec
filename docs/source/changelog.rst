@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Avoid deadlocks in ``sync()`` when the default IO thread has stopped (#1723).
+
 - Percent-encode GitHub branch and tag names in API URLs so refs containing ``#``, ``&`` or ``%`` select the intended revision.
 
 - Keep files deeper than ``maxdepth`` in a recursive ``LocalFileSystem.rm`` instead of deleting the whole tree.

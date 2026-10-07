@@ -67,6 +67,12 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     # and we will wait for it
     if loop is None or loop.is_closed():
         raise RuntimeError("Loop is not running")
+    if iothread[0] is not None and (
+        loop is globals()["loop"][0]
+        or (getattr(loop, "_thread_id", 0) or 0) == iothread[0].ident
+    ):
+        if not iothread[0].is_alive():
+            raise RuntimeError("fsspec IO thread has already stopped.")
     try:
         loop0 = asyncio.events.get_running_loop()
         if loop0 is loop:
