@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
+
 - Keep files deeper than ``maxdepth`` in a recursive ``LocalFileSystem.rm`` instead of deleting the whole tree.
 
 - Read ini and json config files as UTF-8 instead of the locale encoding.
