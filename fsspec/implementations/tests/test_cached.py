@@ -19,6 +19,7 @@ from fsspec.implementations.cache_mapper import (
     HashCacheMapper,
     create_cache_mapper,
 )
+from fsspec.implementations.cache_metadata import CacheMetadata
 from fsspec.implementations.cached import (
     CachingFileSystem,
     LocalTempFile,
@@ -28,6 +29,7 @@ from fsspec.implementations.cached import (
 from fsspec.implementations.local import make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.zip import ZipFileSystem
+from fsspec.spec import AbstractBufferedFile
 from fsspec.tests.conftest import win
 
 from .test_ftp import FTPFileSystem
@@ -540,6 +542,48 @@ def test_pop():
     assert len(os.listdir(cache2)) == 1
     assert not fs._check_file(f2)
     assert fs._check_file(f1)
+
+
+def test_pop_metadata_persists_without_losing_other_entries(tmp_path):
+    metadata = CacheMetadata([str(tmp_path)])
+    (tmp_path / "one").write_bytes(b"cached data")
+    metadata.update_file("one", {"fn": "one", "blocks": {0}, "time": 1, "uid": "one"})
+    metadata.save()
+
+    # Another instance adds a file after this instance last loaded the metadata.
+    other = CacheMetadata([str(tmp_path)])
+    other.load()
+    other.update_file("two", {"fn": "two", "blocks": {0}, "time": 1, "uid": "two"})
+    other.save()
+
+    assert metadata.pop_file("one") == str(tmp_path / "one")
+    assert metadata.pop_file("missing") is None
+    assert set(metadata.cached_files[-1]) == {"two"}
+    metadata.load()
+    assert set(metadata.cached_files[-1]) == {"two"}
+
+
+def test_pop_blockcache_then_partial_refill(tmp_path, m):
+    class BufferedMemoryFile(AbstractBufferedFile):
+        def _fetch_range(self, start, end):
+            return self.fs.cat_file(self.path, start=start, end=end)
+
+    class BufferedMemoryFileSystem(MemoryFileSystem):
+        def _open(self, path, mode="rb", block_size=None, **kwargs):
+            return BufferedMemoryFile(
+                self, path, mode=mode, block_size=block_size, **kwargs
+            )
+
+    data = b"abcdefgh"
+    m.pipe_file("/data", data)
+    fs = CachingFileSystem(fs=BufferedMemoryFileSystem(), cache_storage=str(tmp_path))
+    with fs.open("/data", block_size=2) as f:
+        assert f.read() == data
+    fs.pop_from_cache("/data")
+    with fs.open("/data", block_size=2) as f:
+        assert f.read(1) == data[:1]
+    with fs.open("/data", block_size=2) as f:
+        assert f.read() == data
 
 
 def test_blocksize(ftp_writable):
