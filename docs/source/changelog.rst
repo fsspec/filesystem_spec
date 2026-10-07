@@ -8,6 +8,24 @@ Fixes
 
 - Avoid deadlocks in ``sync()`` when the default IO thread has stopped (#1723).
 
+- Percent-encode GitHub branch and tag names in API URLs so refs containing ``#``, ``&`` or ``%`` select the intended revision.
+
+- Keep files deeper than ``maxdepth`` in a recursive ``LocalFileSystem.rm`` instead of deleting the whole tree.
+
+- Read ini and json config files as UTF-8 instead of the locale encoding.
+
+- Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
+
+- Keep files deeper than ``maxdepth`` in the source of a recursive ``mv`` instead of deleting them uncopied.
+
+- Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
+
+- Strip the protocol from the path in ``LocalFileSystem.chmod``.
+
+- Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
+
+- Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
+
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file

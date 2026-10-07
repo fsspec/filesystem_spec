@@ -776,6 +776,160 @@ def test_instance_cache_concurrency():
     assert all(r is results[0] for r in results)
 
 
+def test_instance_created_once_concurrently():
+    import concurrent.futures
+    import time
+
+    inits = []
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(SleepyFS) for _ in range(10)]
+        results = [f.result() for f in futures]
+
+    # the threads wait for the instance instead of creating their own
+    assert len(inits) == 1
+    assert all(r is results[0] for r in results)
+    assert not SleepyFS._token_locks
+
+
+def test_instance_creation_error_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class FailingOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise RuntimeError("failed to create the instance")
+            super().__init__(*args, **kwargs)
+
+    FailingOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return FailingOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # the threads waiting for the instance fail like the one creating it, instead
+    # of retrying one after another (the last one failing after n attempts)
+    assert len(inits) == 1
+    assert all(isinstance(f.exception(), RuntimeError) for f in futures)
+    assert not FailingOnceFS._token_locks
+
+    # the error is not cached, a later call tries again
+    fs = FailingOnceFS()
+    assert len(inits) == 2
+    assert fs is FailingOnceFS()
+    assert not FailingOnceFS._token_locks
+
+
+def test_instance_creation_interrupted_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class Interrupted(BaseException):
+        pass
+
+    class InterruptedOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise Interrupted
+            super().__init__(*args, **kwargs)
+
+    InterruptedOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return InterruptedOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # an interruption (e.g. KeyboardInterrupt) only concerns the interrupted
+    # thread, one of the waiting threads creates the instance instead
+    errors = [f.exception() for f in futures if f.exception() is not None]
+    results = [f.result() for f in futures if f.exception() is None]
+    assert len(errors) == 1
+    assert isinstance(errors[0], Interrupted)
+    assert len(inits) == 2
+    assert len(results) == n - 1
+    assert all(r is results[0] for r in results)
+    assert not InterruptedOnceFS._token_locks
+
+
+def test_instance_created_reentrantly():
+    import threading
+
+    inits = []
+
+    class ReentrantFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            if len(inits) == 1:
+                # same token, same thread, while its instance is being created
+                ReentrantFS()
+            super().__init__(*args, **kwargs)
+
+    ReentrantFS.clear_instance_cache()
+
+    results = []
+    # run in a thread so that a deadlock fails the test instead of hanging it
+    t = threading.Thread(target=lambda: results.append(ReentrantFS()), daemon=True)
+    t.start()
+    t.join(timeout=5)
+
+    assert not t.is_alive(), "deadlock when creating the instance reentrantly"
+    assert len(inits) == 2
+    assert results[0] is ReentrantFS()
+    assert not ReentrantFS._token_locks
+
+
+def test_token_locks_cleared_on_pid_change():
+    class PidFS(DummyTestFS):
+        pass
+
+    PidFS._token_locks["stale"] = object()
+    PidFS._pid = -1  # pretend the process has changed, e.g. forked
+
+    PidFS()
+
+    assert PidFS._pid == os.getpid()
+    assert not PidFS._token_locks
+
+
 def test_uncached_instantiation_concurrency():
     import concurrent.futures
     import time
@@ -1371,6 +1525,35 @@ class DummyOpenFS(DummyTestFS):
         return stream
 
 
+@pytest.mark.parametrize("target_exists", [False, True])
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+def test_get_top_level_directory(tmp_path, monkeypatch, target_exists, trailing_slash):
+    monkeypatch.chdir(tmp_path)
+    source = Path("src")
+    (source / "nested").mkdir(parents=True)
+    files = {"file": b"top-level", "nested/other": b"nested"}
+    contents = [
+        {"name": "src", "type": "directory", "size": 0},
+        {"name": "src/nested", "type": "directory", "size": 0},
+    ]
+    for name, payload in files.items():
+        (source / name).write_bytes(payload)
+        contents.append({"name": "src/" + name, "type": "file", "size": len(payload)})
+    fs = DummyOpenFS(fs_content=contents)
+    target = tmp_path / "target"
+    if target_exists:
+        target.mkdir()
+
+    fs.get("src" + trailing_slash, str(target), recursive=True)
+
+    prefix = "src/" if target_exists and not trailing_slash else ""
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == {prefix + name: payload for name, payload in files.items()}
+
+
 class BasicCallback(fsspec.Callback):
     def __init__(self, **kwargs):
         self.events = []
@@ -1719,3 +1902,49 @@ def test_cat_ranges_forwards_kwargs():
     fs.cat_ranges(["a", "b"], [0, 0], [1, 1], block_size=42)
 
     assert received == [{"block_size": 42}, {"block_size": 42}]
+
+
+class UnreadableSubdirFS(AbstractFileSystem):
+    """A tree in which the ``locked`` subdirectory cannot be listed."""
+
+    protocol = "unreadablesub"
+    cachable = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+def test_walk_on_error_reaches_subdirectories():
+    # on_error is documented to apply to any path whose listing fails, not only
+    # to the one handed to walk(), so the recursive call has to forward it.
+    fs = UnreadableSubdirFS()
+
+    # the default, "omit", keeps skipping the unreadable directory
+    assert list(fs.walk("")) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        list(fs.walk("", on_error="raise"))
+
+    handled = []
+    assert list(fs.walk("", on_error=handled.append)) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]

@@ -903,6 +903,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 maxdepth=maxdepth,
                 detail=detail,
                 topdown=topdown,
+                on_error=on_error,
                 **kwargs,
             ):
                 yield _

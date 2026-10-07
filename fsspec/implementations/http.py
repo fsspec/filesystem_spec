@@ -218,9 +218,11 @@ class HTTPFileSystem(AsyncFileSystem):
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
-            out = await self._ls_real(url, detail=detail, **kwargs)
+            out = await self._ls_real(url, detail=True, **kwargs)
             self.dircache[url] = out
-        return out
+        if detail:
+            return out
+        return sorted(entry["name"] for entry in out)
 
     ls = sync_wrapper(_ls)
 

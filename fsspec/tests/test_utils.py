@@ -324,6 +324,8 @@ def test_common_prefix(paths, out):
     "paths, other, exists, expected",
     (
         (["/path1"], "/path2", False, ["/path2"]),
+        (["path1"], "/path2", False, ["/path2"]),
+        (["path1"], "/path2", True, ["/path2/path1"]),
         (["/path1"], "/path2", True, ["/path2/path1"]),
         (["/path1"], "/path2/", True, ["/path2/path1"]),
         (["/path1"], ["/path2"], False, ["/path2"]),
@@ -377,6 +379,18 @@ def test_common_prefix(paths, out):
 )
 def test_other_paths(paths, other, exists, expected):
     assert other_paths(paths, other, exists) == expected
+
+
+@pytest.mark.parametrize("prefix", ["", "/", "parent/", "/parent/"])
+@pytest.mark.parametrize("exists", [False, True])
+@pytest.mark.parametrize("target", ["target", "target/"])
+def test_other_paths_directory_nesting(prefix, exists, target):
+    source = prefix + "src"
+    paths = [source, source + "/file", source + "/nested/other"]
+    root = "target/src" if exists else "target"
+    expected = [root, root + "/file", root + "/nested/other"]
+
+    assert other_paths(paths, target, exists=exists) == expected
 
 
 def test_log():

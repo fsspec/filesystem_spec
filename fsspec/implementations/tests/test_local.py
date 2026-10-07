@@ -913,6 +913,17 @@ def test_linked_directories(tmpdir):
     assert fs.isdir(subdir0)
 
 
+@pytest.mark.skipif(WIN, reason="Windows only toggles the read-only flag")
+def test_chmod_strips_protocol(tmpdir):
+    fs = LocalFileSystem()
+    path = make_path_posix(os.path.join(str(tmpdir), "afile"))
+    fs.touch(path)
+
+    fs.chmod(f"file://{path}", 0o600)
+
+    assert os.stat(path).st_mode & 0o777 == 0o600
+
+
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
     assert fs._isfilestore()
@@ -1217,6 +1228,27 @@ def test_delete_non_recursive_dir_fails(tmpdir):
     with pytest.raises(ValueError):
         fs.rm(subdir)
     fs.rm(subdir, recursive=True)
+
+
+def test_rm_recursive_maxdepth_keeps_deeper_files(tmpdir):
+    fs = LocalFileSystem()
+    src = make_path_posix(str(tmpdir / "src"))
+    fs.mkdir(src + "/sub/deeper")
+    fs.pipe(
+        {
+            src + "/top.txt": b"top",
+            src + "/sub/mid.txt": b"mid",
+            src + "/sub/deeper/low.txt": b"low",
+        }
+    )
+    fs.rm(src, recursive=True, maxdepth=2)
+    assert not fs.exists(src + "/top.txt")
+    assert not fs.exists(src + "/sub/mid.txt")
+    # beyond maxdepth, so it is kept along with its parent directories
+    assert fs.cat(src + "/sub/deeper/low.txt") == b"low"
+
+    fs.rm(src, recursive=True, maxdepth=3)
+    assert not fs.exists(src)
 
 
 @pytest.mark.parametrize(

@@ -200,7 +200,17 @@ class LocalFileSystem(AbstractFileSystem):
                     raise ValueError("Cannot delete directory, set recursive=True")
                 if osp.abspath(p) == os.getcwd():
                     raise ValueError("Cannot delete current working directory")
-                shutil.rmtree(p)
+                if maxdepth is None:
+                    shutil.rmtree(p)
+                else:
+                    # only delete down to maxdepth; a directory still holding
+                    # deeper files is kept
+                    paths = self.expand_path(p, recursive=True, maxdepth=maxdepth)
+                    for sub in reversed(paths):
+                        if not self.isdir(sub) or self.islink(sub):
+                            os.remove(sub)
+                        elif not os.listdir(sub):
+                            os.rmdir(sub)
             else:
                 os.remove(p)
 
@@ -296,7 +306,7 @@ class LocalFileSystem(AbstractFileSystem):
         return True
 
     def chmod(self, path, mode):
-        path = stringify_path(path)
+        path = self._strip_protocol(path)
         return os.chmod(path, mode)
 
 
