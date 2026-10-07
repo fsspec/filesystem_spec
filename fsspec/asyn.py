@@ -251,7 +251,7 @@ def get_loop():
 
 
 # How long to wait for the IO thread at exit before warning that it is stuck
-_STOP_IO_LOOP_WARN_SECONDS = 5
+_STOP_IO_LOOP_WARN_SECONDS = 1
 
 
 def _stop_io_loop():
