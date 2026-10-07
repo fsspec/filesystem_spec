@@ -205,6 +205,32 @@ def test_exists(server):
         h.cat(server.address + "/notafile")
 
 
+def test_exists_requests_one_byte(server, monkeypatch):
+    headers = {"use_206": "1", "give_length": "1"}
+    h = fsspec.filesystem("http", headers=headers, skip_instance_cache=True)
+    session = fsspec.asyn.sync(h.loop, h.set_session)
+    get = session.get
+    ranges = []
+
+    def recording_get(url, **kwargs):
+        ranges.append(kwargs.get("headers", {}).get("Range"))
+        return get(url, **kwargs)
+
+    monkeypatch.setattr(session, "get", recording_get)
+    assert h.exists(server.realfile)
+    assert ranges == ["bytes=0-0"]
+    assert "Range" not in headers
+
+
+def test_exists_empty_file(server):
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+    url = server.address + "/empty_file"
+    h.pipe(url, b"")
+    assert h.cat(url) == b""
+    assert h.exists(url)
+    assert h.exists(url, strict=True)
+
+
 def test_exists_strict(server):
     h = fsspec.filesystem("http")
     assert not h.exists(server.address + "/notafile", strict=True)

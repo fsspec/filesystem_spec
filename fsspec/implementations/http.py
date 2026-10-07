@@ -335,13 +335,25 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _exists(self, path, strict=False, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        # Ask for a single byte, so that a server supporting ranges does not start
+        # sending the whole file just to show that it exists. A GET is kept rather
+        # than a HEAD, since signed URLs are often only valid for GET
+        headers = kw.pop("headers", {}).copy()
+        headers["Range"] = "bytes=0-0"
+        kw["headers"] = headers
         try:
             logger.debug(path)
             session = await self.set_session()
             r = await session.get(self.encode_url(path), **kw)
             async with r:
+                if r.status == 416:
+                    # nothing to satisfy the range with, so the file exists but is empty
+                    return True
                 if strict:
                     self._raise_not_found_for_status(r, path)
+                if r.status == 206:
+                    # read the one byte, so the connection can go back to the pool
+                    await r.read()
                 return r.status < 400
         except FileNotFoundError:
             return False
