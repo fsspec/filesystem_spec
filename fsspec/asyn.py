@@ -285,7 +285,9 @@ def _stop_io_loop():
 
 
 # Registered at import, so it runs after any atexit hook registered later
-# that may still use the loop.
+# that may still use the loop. A forked child inherits this registration;
+# the fork guard below clears ``loop``/``iothread`` there, so in the child it
+# only stops a loop the child started itself, never the parent's thread.
 atexit.register(_stop_io_loop)
 
 
