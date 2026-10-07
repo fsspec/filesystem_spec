@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- ``HTTPFileSystem.exists`` asks for a single byte instead of the whole file, so it no longer starts a full download and the connection can be reused.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
