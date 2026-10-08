@@ -53,10 +53,24 @@ def _inline_data(part):
     as UTF-8. ``info`` and ``ls`` measure the result of this rather than the
     stored form, so that a size always matches what ``cat`` returns.
     """
-    if isinstance(part, str):
-        part = part.encode()
+    if isinstance(part, (str, bytes)):
+        return _decode_inline(part)
     if hasattr(part, "to_bytes"):
         part = part.to_bytes()
+    return _decode_inline(part)
+
+
+@lru_cache(maxsize=1024)
+def _decode_inline(part):
+    """Decode a stored inline part once and stash the result.
+
+    The same inline value is decoded for ``cat`` and again for the length
+    check in ``info``/``ls``; caching avoids repeating the work for every
+    listing. Inline references are small and few, so a bounded cache is
+    enough.
+    """
+    if isinstance(part, str):
+        part = part.encode()
     if part.startswith(b"base64:"):
         return base64.b64decode(part[7:])
     return part
