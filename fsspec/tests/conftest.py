@@ -76,6 +76,16 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         baseurl = f"http://127.0.0.1:{self.server.server_port}"
         file_path = self.path
+        if file_path == "/redirect-cross-origin":
+            return self._respond(
+                302,
+                {
+                    "Location": f"http://localhost:{self.server.server_port}/cross-origin-target"
+                },
+            )
+        if file_path == "/cross-origin-target":
+            headers = {k.lower(): v for k, v in self.headers.items()}
+            return self._respond(200, data=json.dumps(headers).encode())
         if file_path.endswith("/") and file_path.rstrip("/") in self.files:
             file_path = file_path.rstrip("/")
         file_data = self.files.get(file_path)
