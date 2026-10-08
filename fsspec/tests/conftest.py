@@ -94,6 +94,9 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         status = 200
         content_range = f"bytes 0-{len(file_data) - 1}/{len(file_data)}"
         if ("Range" in self.headers) and ("ignore_range" not in self.headers):
+            if not file_data:
+                # no byte of an empty file can satisfy a range
+                return self._respond(416)
             ran = self.headers["Range"]
             b, ran = ran.split("=")
             start, end = ran.split("-")

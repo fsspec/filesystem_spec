@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- ``HTTPFileSystem.exists`` asks for a single byte instead of the whole file, so it no longer starts a full download and the connection can be reused.
+
 - Return a list of paths when listing a single file with ``GithubFileSystem``.
 
 - Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.
