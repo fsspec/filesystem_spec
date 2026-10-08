@@ -1183,6 +1183,47 @@ def tests_file_open_error(monkeypatch):
             stream.write(b"hello" * stream.blocksize * 2)
 
 
+def test_write_discarded_when_block_raises(monkeypatch):
+    uploads, discards = [], []
+
+    class RecordingFile(AbstractBufferedFile):
+        def _initiate_upload(self):
+            pass
+
+        def _upload_chunk(self, final=False):
+            uploads.append((self.buffer.getvalue(), final))
+            return True
+
+        def discard(self):
+            discards.append(self.path)
+
+    monkeypatch.setattr(DummyTestFS, "_file_class", RecordingFile)
+    fs = DummyTestFS()
+
+    with pytest.raises(RuntimeError):
+        with fs.open("misc/foo.txt", "wb") as f:
+            f.write(b"half of it")
+            raise RuntimeError
+    assert uploads == []  # the truncated data never reaches the target
+    assert discards == ["misc/foo.txt"]
+    assert f.closed
+    f.close()  # a later close must not commit it either
+    assert uploads == []
+
+    with fs.open("misc/foo.txt", "wb") as f:
+        f.write(b"all of it")
+    assert uploads == [(b"all of it", True)]
+
+    uploads.clear()
+    with pytest.raises(ValueError):
+        with fs.open("misc/empty.txt", "wb") as f:
+            f.read()
+    # An exception before any data is written still closes an empty file, which
+    # preserves the behavior expected by existing filesystem implementations.
+    assert uploads == [(b"", True)]
+    assert discards == ["misc/foo.txt"]
+
+
 def test_eq():
     fs = DummyTestFS()
     result = fs == 1

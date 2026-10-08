@@ -2421,7 +2421,16 @@ class AbstractBufferedFile(io.IOBase):
     def __enter__(self):
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None and self.writable() and self.loc:
+            # The block failed after writing data. Committing now would replace
+            # the target (on an object store, the whole existing object) with
+            # incomplete data, so throw the write away instead.
+            try:
+                self.discard()
+            finally:
+                self.closed = True
+            return
         self.close()
 
 
