@@ -8,6 +8,10 @@ Fixes
 
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
+- Return a list of paths when listing a single file with ``GithubFileSystem``.
+
+- Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.
+
 - Stop the fsspec IO loop and join its thread at interpreter exit, so a callback firing on it after ``Py_Finalize`` (e.g. a uvloop timer)
   cannot crash the process (#2241).
 
@@ -17,11 +21,15 @@ Fixes
 
 - Keep files deeper than ``maxdepth`` in a recursive ``LocalFileSystem.rm`` instead of deleting the whole tree.
 
+- Keep directories that still hold files deeper than ``maxdepth`` in a recursive ``MemoryFileSystem.rm`` instead of raising ``OSError``.
+
 - Read ini and json config files as UTF-8 instead of the locale encoding.
 
 - Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
 
 - Keep files deeper than ``maxdepth`` in the source of a recursive ``mv`` instead of deleting them uncopied.
+
+- Accept local filesystem URLs in ``get_file`` when copying to a file-like object.
 
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 
