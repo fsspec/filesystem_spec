@@ -15,6 +15,8 @@ Fixes
 
 - Keep files deeper than ``maxdepth`` in a recursive ``LocalFileSystem.rm`` instead of deleting the whole tree.
 
+- Keep directories that still hold files deeper than ``maxdepth`` in a recursive ``MemoryFileSystem.rm`` instead of raising ``OSError``.
+
 - Read ini and json config files as UTF-8 instead of the locale encoding.
 
 - Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
