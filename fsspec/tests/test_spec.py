@@ -1060,6 +1060,15 @@ def test_write_discarded_when_block_raises(monkeypatch):
         f.write(b"all of it")
     assert uploads == [(b"all of it", True)]
 
+    uploads.clear()
+    with pytest.raises(ValueError):
+        with fs.open("misc/empty.txt", "wb") as f:
+            f.read()
+    # An exception before any data is written still closes an empty file, which
+    # preserves the behavior expected by existing filesystem implementations.
+    assert uploads == [(b"", True)]
+    assert discards == ["misc/foo.txt"]
+
 
 def test_eq():
     fs = DummyTestFS()
