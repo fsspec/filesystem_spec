@@ -4,6 +4,13 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- ``BlockCache`` fetches a run of blocks it does not hold in one request
+  instead of one request per block, so a read spanning many blocks no longer
+  costs that many serialized round trips; on async filesystems the runs are
+  requested together through ``cat_ranges`` (#1960)
+
 Fixes
 
 - Stop the fsspec IO loop and join its thread at interpreter exit, so a callback firing on it after ``Py_Finalize`` (e.g. a uvloop timer)
