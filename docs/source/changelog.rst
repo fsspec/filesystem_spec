@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.
+
 - Stop the fsspec IO loop and join its thread at interpreter exit, so a callback firing on it after ``Py_Finalize`` (e.g. a uvloop timer)
   cannot crash the process (#2241).
 
