@@ -8,7 +8,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import partial
 from hashlib import md5
 from importlib.metadata import version
@@ -581,6 +581,111 @@ def mirror_from(
 @contextlib.contextmanager
 def nullcontext(obj: T) -> Iterator[T]:
     yield obj
+
+
+def parse_content_range_header(
+    headers: Mapping[str, str],
+) -> tuple[int | None, int | None, int | None]:
+    """Parse the ``Content-Range`` header of an HTTP response.
+
+    :param headers: the response headers
+    :return: ``(start, end, total)``, each ``None`` when the header is missing,
+        malformed, or the value is ``*``
+    """
+    s = headers.get("Content-Range", "")
+    m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", s)
+    if not m:
+        return None, None, None
+
+    if m[1] == "*":
+        start = end = None
+    else:
+        start, end = [int(x) for x in m[1].split("-")]
+    total = None if m[2] == "*" else int(m[2])
+    return start, end, total
+
+
+def response_is_requested_range(
+    status: int, headers: Mapping[str, str], start: int | None, end: int | None
+) -> bool:
+    """Whether an HTTP response carries the requested range, not the whole file.
+
+    A server that ignores a ``Range`` header replies with the whole
+    representation instead, and that body is not the window a caller asked for.
+
+    :param status: the response status code
+    :param headers: the response headers
+    :param start: the requested start, ``None`` for the beginning of the file
+    :param end: the requested end, ``None`` for the end of the file
+    """
+    if status == 206:
+        return True
+    if start is not None and parse_content_range_header(headers)[0] == start:
+        return True
+    if start is None or start < 0 or end is None:
+        return False
+    length = headers.get("Content-Length", headers.get("content-length", end + 1))
+    return int(length) <= end - start
+
+
+def range_response_window(
+    out: bytes,
+    status: int,
+    headers: Mapping[str, str],
+    start: int | None,
+    end: int | None,
+) -> bytes:
+    """The requested window of the body of a response to a ``Range`` request.
+
+    A server that ignores the ``Range`` header replies with the whole
+    representation instead of the window, and handing that back as if it were
+    the window misaligns the caller's data. A 206 response is a window by
+    definition, and so is a body no longer than the window; anything longer is
+    the whole file, which starts at its beginning, so the window is read out of
+    it. A suffix range asks for the tail, which is the tail of either response.
+
+    A window that starts inside the file cannot be told apart from a response
+    that served more of a range than was asked for, so instead of guessing it
+    raises, as the streaming file interface does for the same situation.
+
+    :param out: the body of the response
+    :param status: the response status code
+    :param headers: the response headers
+    :param start: the requested start, ``None`` for the beginning of the file
+    :param end: the requested end, ``None`` for the end of the file
+    """
+    lo = 0 if start is None else start
+    if lo < 0 and (end is None or end >= len(out)):
+        # the window is the tail of the file, and the response is either that
+        # tail or the whole file: the tail of both is the bytes asked for
+        return out[lo:]
+    if status != 206:
+        # the length of the window, where it can be told without knowing the
+        # file size: a negative bound counts back from the end of the file, so
+        # two bounds of the same sign still give the length between them
+        window = end - lo if end is not None and (lo >= 0) == (end >= 0) else None
+        content_range_start = parse_content_range_header(headers)[0]
+        if lo >= 0 and content_range_start is not None and content_range_start != lo:
+            window = 0  # the body starts somewhere the request did not ask for
+        if window is not None and len(out) > window:
+            return _whole_file_window(out, lo, end)
+    return out
+
+
+def _whole_file_window(out: bytes, start: int, end: int | None) -> bytes:
+    """Read the requested window out of the body of a whole-file response."""
+    if start > 0:
+        raise ValueError(
+            "The HTTP server doesn't appear to support range requests. "
+            "Only reading this file from the beginning is supported. "
+            "Open with block_size=0 for a streaming file interface."
+        )
+    if end is None:
+        return out
+    if start >= 0:
+        return out[:end]
+    # a negative start counts back from the end of the file
+    return out[len(out) + start : end]
 
 
 def merge_offset_ranges(
