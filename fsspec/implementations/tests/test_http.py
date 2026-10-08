@@ -446,6 +446,21 @@ def test_info(server):
     assert info["url"] == server.realfile
 
 
+def test_custom_headers_not_forwarded_across_origins(server):
+    fs = fsspec.filesystem("http", headers={"X-Api-Key": "secret"})
+
+    same_origin_headers = json.loads(
+        fs.cat_file(server.address + "/cross-origin-target")
+    )
+    assert same_origin_headers["x-api-key"] == "secret"
+
+    redirected_headers = json.loads(
+        fs.cat_file(server.address + "/redirect-cross-origin", start=0, end=1)
+    )
+    assert "x-api-key" not in redirected_headers
+    assert redirected_headers["range"] == "bytes=0-0"
+
+
 @pytest.mark.parametrize("method", ["POST", "PUT"])
 def test_put_file(server, tmp_path, method, reset_files):
     src_file = tmp_path / "file_1"

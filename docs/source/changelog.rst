@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
+
 - Stop the fsspec IO loop and join its thread at interpreter exit, so a callback firing on it after ``Py_Finalize`` (e.g. a uvloop timer)
   cannot crash the process (#2241).
 

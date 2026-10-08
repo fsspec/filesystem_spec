@@ -27,6 +27,39 @@ from ..caching import AllBytes
 ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
+_REDIRECT_SAFE_HEADERS = {
+    "accept",
+    "accept-encoding",
+    "accept-language",
+    "cache-control",
+    "content-encoding",
+    "content-language",
+    "content-type",
+    "if-match",
+    "if-modified-since",
+    "if-none-match",
+    "if-range",
+    "if-unmodified-since",
+    "range",
+    "user-agent",
+}
+
+
+async def _strip_headers_on_cross_origin_redirect(session, context, params):
+    """Do not forward custom request headers to a different origin."""
+    location = params.response.headers.get("Location") or params.response.headers.get(
+        "URI"
+    )
+    if not location:
+        return
+
+    redirect_url = params.url.join(yarl.URL(location))
+    if params.url.origin() == redirect_url.origin():
+        return
+
+    for header in tuple(params.headers):
+        if header.lower() not in _REDIRECT_SAFE_HEADERS:
+            params.headers.popall(header, None)
 
 
 async def get_client(**kwargs):
@@ -44,6 +77,9 @@ class HTTPFileSystem(AsyncFileSystem):
 
     URLs are passed unfiltered to aiohttp, so all addresses are accessible. Where URLs are
     supplied by a user, the calling application may wish to filter to prevent scanning.
+
+    On cross-origin redirects, custom request headers are removed to avoid
+    forwarding credentials such as API keys to another host.
     """
 
     protocol = ("http", "https")
@@ -136,7 +172,15 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def set_session(self):
         if self._session is None:
-            self._session = await self.get_client(loop=self.loop, **self.client_kwargs)
+            client_kwargs = self.client_kwargs.copy()
+            trace_config = aiohttp.TraceConfig()
+            trace_config.on_request_redirect.append(
+                _strip_headers_on_cross_origin_redirect
+            )
+            trace_configs = list(client_kwargs.get("trace_configs") or ())
+            trace_configs.append(trace_config)
+            client_kwargs["trace_configs"] = trace_configs
+            self._session = await self.get_client(loop=self.loop, **client_kwargs)
             if not self.asynchronous:
                 weakref.finalize(self, self.close_session, self.loop, self._session)
         return self._session
