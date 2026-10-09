@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Document that overlapping transactions in different threads must use separate
+  filesystem instances (#180).
+
 - Return a list of paths when listing a single file with ``GithubFileSystem``.
 
 - Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.
