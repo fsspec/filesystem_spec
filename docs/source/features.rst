@@ -139,6 +139,13 @@ file target locations untouched.
 The class :func:`fsspec.spec.Transaction` allows for fine-tuning of the operation, and every
 ``fsspec`` instance has an instance of this as an attribute ``.transaction`` to give access.
 
+Transaction state is stored on the filesystem instance, not per thread.
+Do not share an instance between overlapping transactions in different threads:
+one transaction can interfere with another's pending writes. Use a separate
+filesystem instance for each thread's transactions, passing
+``skip_instance_cache=True`` when constructing the instances to avoid reusing
+a cached instance (see `Instance Caching`_).
+
 Note that synchronising transactions across multiple instances, perhaps across a cluster,
 is a harder problem to solve, and the implementation described here is only part of the solution.
 
