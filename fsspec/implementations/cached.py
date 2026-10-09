@@ -810,15 +810,18 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 elif "r" in mode:
                     raise FileNotFoundError(path)
 
-            detail, fn = self._check_file(path)
-            _, blocks = detail["fn"], detail["blocks"]
-            if blocks is True:
-                logger.debug("Opening local copy of %s", path)
-            else:
-                raise ValueError(
-                    f"Attempt to open partially cached file {path}"
-                    f" as a wholly cached file"
-                )
+            # 2026-10-09: New append targets do not have cached metadata yet.
+            cached = self._check_file(path)
+            if cached:
+                detail, fn = cached
+                _, blocks = detail["fn"], detail["blocks"]
+                if blocks is True:
+                    logger.debug("Opening local copy of %s", path)
+                else:
+                    raise ValueError(
+                        f"Attempt to open partially cached file {path}"
+                        f" as a wholly cached file"
+                    )
 
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:
