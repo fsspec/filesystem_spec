@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Keep the leading delimiter in ``read_block(..., split_before=True)`` when reading to the end of the file with ``length=None``.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).

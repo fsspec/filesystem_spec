@@ -139,6 +139,17 @@ def test_read_block_split_before():
     )
 
 
+@pytest.mark.parametrize("split_before", [False, True])
+def test_read_block_split_before_to_end(split_before):
+    data = b"123\n456\n789"
+    f = io.BytesIO(data)
+
+    expected = b"\n456\n789" if split_before else b"456\n789"
+    assert read_block(f, 1, None, b"\n", split_before) == expected
+    assert read_block(f, 1, len(data), b"\n", split_before) == expected
+    assert read_block(f, 0, None, b"\n", split_before) == data
+
+
 def test_seek_delimiter_endline():
     f = io.BytesIO(b"123\n456\n789")
 
