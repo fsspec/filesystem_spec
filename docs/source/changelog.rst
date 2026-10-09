@@ -8,6 +8,8 @@ Fixes
 
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
+- Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
+
 - Return a list of paths when listing a single file with ``GithubFileSystem``.
 
 - Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.
