@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Preserve per-call request options in synchronous HTTP directory listings,
+  including the retry without a trailing slash.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
