@@ -45,8 +45,16 @@ _REDIRECT_SAFE_HEADERS = {
 }
 
 
-async def _strip_headers_on_cross_origin_redirect(session, context, params):
-    """Do not forward custom request headers to a different origin."""
+async def _strip_headers_on_cross_origin_redirect(
+    session: aiohttp.ClientSession,
+    context: object,
+    params: aiohttp.TraceRequestRedirectParams,
+) -> None:
+    """Do not forward custom request headers to a different origin.
+
+    This callback follows the ``TraceConfig.on_request_redirect`` signature
+    documented at https://docs.aiohttp.org/en/stable/tracing_reference.html.
+    """
     location = params.response.headers.get("Location") or params.response.headers.get(
         "URI"
     )
