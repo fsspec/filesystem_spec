@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Refetch memory-mapped cache blocks when a missing backing file is recreated,
+  including when restoring a pickled cache.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).

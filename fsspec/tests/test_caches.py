@@ -292,6 +292,69 @@ def test_mmap_cache(mocker):
     assert fetcher.call_count == 5
 
 
+@pytest.mark.parametrize("remove_location", [False, True])
+def test_mmap_cache_pickle_named_location(tmp_path, remove_location):
+    location = tmp_path / "cached"
+    cache = MMapCache(5, letters_fetcher, 52, location=str(location))
+    assert cache._fetch(6, 8) == letters_fetcher(6, 8)
+    payload = pickle.dumps(cache)
+    requested = cache.total_requested_bytes
+    cache.cache.close()
+    if remove_location:
+        location.unlink()
+
+    restored = pickle.loads(payload)
+    try:
+        assert restored._fetch(6, 8) == letters_fetcher(6, 8)
+        assert restored.total_requested_bytes == requested + (
+            5 if remove_location else 0
+        )
+    finally:
+        restored.cache.close()
+
+
+def test_mmap_cache_new_named_location_clears_shared_blocks(tmp_path):
+    blocks = {1}
+    cache = MMapCache(5, letters_fetcher, 52, str(tmp_path / "cached"), blocks)
+    try:
+        assert cache.blocks is blocks
+        assert blocks == set()
+        assert cache._fetch(6, 8) == letters_fetcher(6, 8)
+        assert blocks == {1}
+    finally:
+        cache.cache.close()
+
+
+def test_mmap_cache_http_reader_recreates_location(server, tmp_path):
+    import fsspec
+
+    location = tmp_path / "cached"
+    fs = fsspec.filesystem(
+        "http", headers={"head_ok": "true", "head_give_length": "true"}
+    )
+    with fs.open(
+        server.realfile,
+        block_size=5,
+        cache_type="mmap",
+        cache_options={"location": str(location)},
+    ) as reader:
+        expected = reader.read(2)
+        blocks = reader.cache.blocks
+        reader.cache.cache.close()
+    location.unlink()
+
+    with fs.open(
+        server.realfile,
+        block_size=5,
+        cache_type="mmap",
+        cache_options={"location": str(location), "blocks": blocks},
+    ) as reader:
+        try:
+            assert reader.read(2) == expected
+        finally:
+            reader.cache.cache.close()
+
+
 @pytest.mark.parametrize("use_multi_fetcher", [False, True])
 @pytest.mark.parametrize("failed_start", [0, 8])
 @pytest.mark.parametrize("short_read", [False, True])
