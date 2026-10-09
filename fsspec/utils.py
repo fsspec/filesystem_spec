@@ -291,6 +291,8 @@ def read_block(
         f.seek(offset)
         found_start_delim = seek_delimiter(f, delimiter, 2**16)
         if length is None:
+            if found_start_delim and split_before:
+                f.seek(f.tell() - len(delimiter))
             return f.read()
         start = f.tell()
         length -= start - offset
