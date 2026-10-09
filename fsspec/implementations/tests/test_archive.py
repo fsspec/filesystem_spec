@@ -3,6 +3,7 @@ import gzip
 import lzma
 import os
 import pickle
+import sys
 import tarfile
 import tempfile
 import zipfile
@@ -267,6 +268,17 @@ class TestAnyArchive:
             assert fs._all_dirnames(["f1", "d1/f1", "d1/f2"]) == {"d1"}
             assert fs._all_dirnames(["f1", "d1/f1", "d2/f1"]) == {"d1", "d2"}
             assert fs._all_dirnames(["d1/d1/d1/f1"]) == {"d1", "d1/d1", "d1/d1/d1"}
+
+    def test_deep_directory_listing(self, scenario: ArchiveTestScenario):
+        depth = sys.getrecursionlimit() + 10
+        directory = "/".join(["d"] * depth)
+        path = directory + "/data.txt"
+        with scenario.provider({path: b"archive data"}) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            assert fs.ls("", detail=False) == ["d"]
+            assert fs.ls(directory, detail=False) == [path]
+            assert fs.info(path)["size"] == len(b"archive data")
+            assert fs.cat_file(path) == b"archive data"
 
     def test_ls(self, scenario: ArchiveTestScenario):
         with scenario.provider(archive_data) as archive:

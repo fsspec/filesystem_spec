@@ -34,11 +34,13 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
         ----------
         paths: Iterable of path strings
         """
-        if len(paths) == 0:
-            return set()
-
-        dirnames = {self._parent(path) for path in paths} - {self.root_marker}
-        return dirnames | self._all_dirnames(dirnames)
+        dirnames = set()
+        for path in paths:
+            parent = self._parent(path)
+            while parent != self.root_marker and parent not in dirnames:
+                dirnames.add(parent)
+                parent = self._parent(parent)
+        return dirnames
 
     def info(self, path, **kwargs):
         self._get_dirs()
