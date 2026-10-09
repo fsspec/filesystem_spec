@@ -128,7 +128,7 @@ class LocalFileSystem(AbstractFileSystem):
         return result
 
     def lexists(self, path, **kwargs):
-        return osp.lexists(path)
+        return osp.lexists(self._strip_protocol(path))
 
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
