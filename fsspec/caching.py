@@ -150,9 +150,9 @@ class MMapCache(BaseCache):
 
         # posix version
         if self.location is None or not os.path.exists(self.location):
+            self.blocks.clear()
             if self.location is None:
                 fd = tempfile.TemporaryFile()
-                self.blocks = set()
             else:
                 fd = open(self.location, "wb+")
             fd.seek(self.size - 1)
