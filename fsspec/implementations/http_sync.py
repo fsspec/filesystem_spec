@@ -388,11 +388,11 @@ class HTTPFileSystem(AbstractFileSystem):
 
         callback.set_size(size)
         self._raise_not_found_for_status(r, rpath)
-        if not isfilelike(lpath):
-            lpath = open(lpath, "wb")
-        for chunk in r.iter_content(chunk_size, decode_unicode=False):
-            lpath.write(chunk)
-            callback.relative_update(len(chunk))
+        context = nullcontext(lpath) if isfilelike(lpath) else open(lpath, "wb")
+        with context as outfile:
+            for chunk in r.iter_content(chunk_size, decode_unicode=False):
+                outfile.write(chunk)
+                callback.relative_update(len(chunk))
 
     def put_file(
         self,
