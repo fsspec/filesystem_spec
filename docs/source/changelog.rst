@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Strip the protocol from the path in ``LocalFileSystem.lexists``.
+
 - Return a list of paths when listing a single file with ``GithubFileSystem``.
 
 - Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.

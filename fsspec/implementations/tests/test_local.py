@@ -949,6 +949,16 @@ def test_chmod_strips_protocol(tmpdir):
     assert os.stat(path).st_mode & 0o777 == 0o600
 
 
+def test_lexists_strips_protocol(tmpdir):
+    fs = LocalFileSystem()
+    path = make_path_posix(os.path.join(str(tmpdir), "afile"))
+
+    assert not fs.lexists(f"file://{path}")
+    fs.touch(path)
+    assert fs.lexists(f"file://{path}")
+    assert fs.lexists(f"local://{path}")
+
+
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
     assert fs._isfilestore()
