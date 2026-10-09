@@ -1,7 +1,5 @@
 import os
-import shutil
 import subprocess
-import tempfile
 
 import pytest
 
@@ -12,9 +10,9 @@ pygit2 = pytest.importorskip("pygit2")
 
 
 @pytest.fixture()
-def repo():
+def repo(tmp_path):
     orig_dir = os.getcwd()
-    d = tempfile.mkdtemp()
+    d = str(tmp_path.resolve())
     try:
         os.chdir(d)
         subprocess.call("git init -b master", shell=True, cwd=d)
@@ -40,7 +38,23 @@ def repo():
         yield d, sha
     finally:
         os.chdir(orig_dir)
-        shutil.rmtree(d)
+
+
+@pytest.mark.parametrize("prefix", ["", "git://"])
+@pytest.mark.parametrize("ref", [None, "master"])
+@pytest.mark.parametrize(
+    "path",
+    ["/repo", "relative/repo", "C:/repo", r"D:\repo", "//server/share/repo"],
+)
+def test_url_components(prefix, ref, path):
+    cls = fsspec.get_filesystem_class("git")
+    url = f"{prefix}{path}:{ref + '@' if ref else ''}inner/file1"
+    expected = {"path": path}
+    if ref:
+        expected["ref"] = ref
+
+    assert cls._get_kwargs_from_urls(url) == expected
+    assert cls._strip_protocol(url) == "inner/file1"
 
 
 def test_refs(repo):
@@ -106,4 +120,7 @@ def test_url(repo):
     assert make_path_posix(d) in make_path_posix(fs.repo.path)
     assert paths == ["file1"]
     with fsspec.open(f"git://{d}:master@file1") as f:
+        assert f.read() == b"data00"
+
+    with fsspec.open(f"git://{d}:file1") as f:
         assert f.read() == b"data00"
