@@ -49,6 +49,22 @@ def test_read_block():
         assert b"".join(filter(None, out)) == data
 
 
+@pytest.mark.parametrize("offset", [0, 1, 11, 12])
+@pytest.mark.parametrize("length", [None, 0, 100])
+@pytest.mark.parametrize("on_disk", [False, True])
+def test_read_block_without_delimiter_to_end(tmp_path, offset, length, on_disk):
+    data = b"123\n456\n789"
+    if on_disk:
+        path = tmp_path / "data"
+        path.write_bytes(data)
+        stream = path.open("rb")
+    else:
+        stream = io.BytesIO(data)
+    with stream:
+        expected = data[offset:] if length is None else data[offset : offset + length]
+        assert read_block(stream, offset, length) == expected
+
+
 def test_read_block_split_before():
     """Test start/middle/end cases of split_before."""
     d = ("#header" + "".join(f">foo{i}\nFOOBAR{i}\n" for i in range(100000))).encode()
