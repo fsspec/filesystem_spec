@@ -1,9 +1,13 @@
 import asyncio
+import gzip
 import io
 import json
 import os
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from types import SimpleNamespace
 
 import aiohttp
 import pytest
@@ -12,6 +16,154 @@ import fsspec.asyn
 import fsspec.utils
 from fsspec.implementations.http import HTTPStreamFile
 from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
+
+
+@pytest.fixture
+def encoded_range_server(request):
+    content = getattr(request, "param", bytes(range(256)) * 32)
+    encoded = gzip.compress(content, mtime=0)
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def respond(self, head=False):
+            encoding = self.headers.get("Accept-Encoding", "")
+            compress = "gzip" in encoding or not encoding
+            representation = encoded if compress else content
+            total = len(representation)
+            headers = {"Accept-Ranges": "bytes", "Vary": "Accept-Encoding"}
+            if compress:
+                headers["Content-Encoding"] = "gzip"
+            requests.append((self.command, dict(self.headers)))
+            status = 200
+            if not head and "Range" in self.headers:
+                start, end = self.headers["Range"].removeprefix("bytes=").split("-")
+                start = int(start)
+                end = min(int(end), total - 1)
+                if start >= total:
+                    status = 416
+                    headers["Content-Range"] = f"bytes */{total}"
+                    representation = b""
+                else:
+                    status = 206
+                    headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+                    representation = representation[start : end + 1]
+            headers["Content-Length"] = str(len(representation))
+            self.send_response(status)
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.end_headers()
+            if not head:
+                self.wfile.write(representation)
+
+        def do_HEAD(self):
+            if "head_unavailable" in self.headers:
+                requests.append((self.command, dict(self.headers)))
+                self.send_response(405)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.respond(head=True)
+
+        def do_GET(self):
+            self.respond()
+
+        def log_message(self, *args):
+            pass
+
+    with HTTPServer(("127.0.0.1", 0), Handler) as httpd:
+        thread = threading.Thread(target=httpd.serve_forever)
+        thread.start()
+        try:
+            yield SimpleNamespace(
+                url=f"http://127.0.0.1:{httpd.server_port}/data",
+                content=content,
+                encoded=encoded,
+                requests=requests,
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+            assert not thread.is_alive()
+
+
+@pytest.mark.parametrize("start", [0, 4096])
+@pytest.mark.parametrize("metadata_method", ["HEAD", "GET"])
+def test_range_uses_identity_representation(
+    encoded_range_server, start, metadata_method
+):
+    server = encoded_range_server
+    headers = {"X-Test": "preserved"}
+    if metadata_method == "GET":
+        headers["head_unavailable"] = "true"
+    original = headers.copy()
+    fs = fsspec.filesystem("http", headers=headers)
+    with fs.open(server.url, block_size=16, cache_type="none") as f:
+        assert f.size == len(server.content)
+        f.seek(start)
+        assert f.read(5) == server.content[start : start + 5]
+    assert headers == original
+    assert all(h["X-Test"] == "preserved" for _, h in server.requests)
+    metadata = [(m, h) for m, h in server.requests if "Range" not in h]
+    assert [m for m, _ in metadata] == (
+        ["HEAD"] if metadata_method == "HEAD" else ["HEAD", "GET"]
+    )
+    assert all(h["Accept-Encoding"] == "identity" for _, h in metadata)
+
+
+@pytest.mark.parametrize(
+    "encoded_range_server",
+    [
+        b'def main():\n    print("Hallo, R\xc3\xa4uber Hotzenplotz.")  # noqa: T201\n'
+        b"    return 42\n"
+    ],
+    indirect=True,
+)
+def test_small_file_read_all_with_encoding(encoded_range_server):
+    server = encoded_range_server
+    assert len(server.encoded) > len(server.content)
+    fs = fsspec.filesystem("http")
+    with fs.open(server.url) as f:
+        assert f.size == len(server.content)
+        assert f.size < f.blocksize
+        assert f.read() == server.content
+    assert server.requests[-1][1]["Range"] == f"bytes=0-{len(server.content) - 1}"
+
+
+@pytest.mark.parametrize(
+    "header_name", ["Accept-Encoding", "accept-encoding", "aCcEpT-EnCoDiNg"]
+)
+@pytest.mark.parametrize("location", ["request", "session", "request_over_session"])
+def test_range_preserves_explicit_encoding(encoded_range_server, header_name, location):
+    server = encoded_range_server
+    headers = {header_name: "gzip", "X-Test": "preserved"}
+    original = headers.copy()
+    options = {"client_kwargs": {"auto_decompress": False}}
+    if location != "session":
+        options["headers"] = headers
+        if location == "request_over_session":
+            options["client_kwargs"]["headers"] = {"Accept-Encoding": "identity"}
+    else:
+        options["client_kwargs"]["headers"] = headers
+    fs = fsspec.filesystem("http", **options)
+    with fs.open(
+        server.url, size=len(server.encoded), block_size=16, cache_type="none"
+    ) as f:
+        assert f.read(5) == server.encoded[:5]
+        f.seek(100)
+        assert f.read(5) == server.encoded[100:105]
+    assert headers == original
+    assert all(h["X-Test"] == "preserved" for _, h in server.requests)
+
+
+@pytest.mark.parametrize("block_size", [0, 16])
+def test_full_read_preserves_compression(encoded_range_server, block_size):
+    server = encoded_range_server
+    fs = fsspec.filesystem("http")
+    with fs.open(server.url, block_size=block_size) as f:
+        assert f.read() == server.content
+    get_headers = [h for method, h in server.requests if method == "GET"]
+    assert len(get_headers) == 1
+    assert "gzip" in get_headers[0]["Accept-Encoding"]
 
 
 def test_list(server):
