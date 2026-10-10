@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Correct file name padding for large integer maxima so lexical order matches numeric order.
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
