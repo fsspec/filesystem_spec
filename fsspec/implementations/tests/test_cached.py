@@ -1161,6 +1161,32 @@ def test_cached_append_binary(protocol):
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("target_protocol", ["memory", "file"])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_cached_append_missing(tmp_path, protocol, target_protocol, mode):
+    # 2026-10-09: Append must create a target even before it has a cache entry.
+    target = fsspec.filesystem(target_protocol, skip_instance_cache=True)
+    path = str(tmp_path / "new_file")
+    fs = fsspec.filesystem(protocol, fs=target, cache_storage=str(tmp_path / "cache"))
+    assert not target.exists(path)
+
+    with fs.open(path, mode) as f:
+        assert f.tell() == 0
+        f.write(b"hello")
+        if "+" in mode:
+            f.seek(0)
+            assert f.read() == b"hello"
+    assert target.cat_file(path) == b"hello"
+
+    with fs.open(path, "rb") as f:
+        assert f.read() == b"hello"
+    with fs.open(path, mode) as f:
+        assert f.tell() == 5
+        f.write(b"world")
+    assert target.cat_file(path) == b"helloworld"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_cached_update_text(protocol):
     fn = "memory://afile"
     with fsspec.open(fn, "w") as f:
