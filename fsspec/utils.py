@@ -74,7 +74,7 @@ def infer_storage_options(
     # any combination of letters, digits, plus ("+"), period ("."),
     # or hyphen ("-").
     # https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
-    is_uri = re.match(r"^[a-zA-Z0-9+.-]+://", urlpath)
+    is_uri = re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", urlpath)
 
     if is_filesystem or is_uri is None:
         return {"protocol": "file", "path": urlpath}

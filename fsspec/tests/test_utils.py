@@ -235,6 +235,12 @@ def test_infer_composite_protocol():
     assert out["path"] == ""
 
 
+@pytest.mark.parametrize("prefix", ["1bucket", "+local", "-local", ".local"])
+def test_infer_non_uri_prefix_preserves_literal_path(prefix):
+    path = f"{prefix}://host/file?name=1#part"
+    assert infer_storage_options(path) == {"protocol": "file", "path": path}
+
+
 def test_infer_options_percent_encoded_userinfo():
     # Percent-encoded characters in the userinfo component must be decoded
     # so that backends (ftp, sftp, smb, ...) receive the real credentials
