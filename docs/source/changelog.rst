@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Preserve ``None`` values when serializing filesystem arguments and options to dictionaries or JSON.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
