@@ -10,6 +10,7 @@ import pytest
 
 import fsspec.utils
 from fsspec.utils import (
+    build_name_function,
     can_be_local,
     check_contained,
     common_prefix,
@@ -26,6 +27,25 @@ from fsspec.utils import (
 )
 
 WIN = sys.platform.startswith("win")
+
+
+@pytest.mark.parametrize(
+    "maximum", [0, 1, 9, 10, 1000, 10**7, 10**8, 10**16, 10**20, 1e8, 999.5]
+)
+def test_build_name_function_preserves_numeric_order(maximum):
+    name = build_name_function(maximum)
+    largest = int(maximum)
+    indices = sorted({0, largest // 2, largest})
+    names = [name(i) for i in indices]
+
+    assert names == sorted(names)
+    assert len({len(value) for value in names}) == 1
+
+
+@pytest.mark.parametrize("maximum", [-1, -100])
+def test_build_name_function_rejects_negative_maximum(maximum):
+    with pytest.raises(ValueError):
+        build_name_function(maximum)
 
 
 def test_read_block():
