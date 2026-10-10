@@ -49,6 +49,25 @@ def test_read_block():
         assert b"".join(filter(None, out)) == data
 
 
+@pytest.mark.parametrize("protocol", ["file", "memory"])
+@pytest.mark.parametrize("offset", [1, 3, 4, 5])
+@pytest.mark.parametrize("length", [None, 1])
+@pytest.mark.parametrize("delimiter", [None, b"\n"])
+def test_filesystem_read_block_at_or_past_eof(
+    tmp_path, protocol, offset, length, delimiter
+):
+    fs = fsspec.filesystem(protocol)
+    path = str(tmp_path / "data")
+    fs.pipe_file(path, b"abc")
+    try:
+        expected = (
+            b"" if offset >= 3 or delimiter else b"bc" if length is None else b"b"
+        )
+        assert fs.read_block(path, offset, length, delimiter) == expected
+    finally:
+        fs.rm(path)
+
+
 def test_read_block_split_before():
     """Test start/middle/end cases of split_before."""
     d = ("#header" + "".join(f">foo{i}\nFOOBAR{i}\n" for i in range(100000))).encode()
