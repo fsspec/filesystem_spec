@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Correct file name padding for large integer maxima so lexical order matches numeric order.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
