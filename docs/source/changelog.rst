@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Preserve literal local paths whose apparent URI scheme does not start with a letter.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
