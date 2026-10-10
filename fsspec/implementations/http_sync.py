@@ -17,7 +17,15 @@ except (ImportError, ModuleNotFoundError, OSError):
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.registry import register_implementation
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
-from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
+from fsspec.utils import (
+    DEFAULT_BLOCK_SIZE,
+    isfilelike,
+    nullcontext,
+    parse_content_range_header,
+    range_response_window,
+    response_is_requested_range,
+    tokenize,
+)
 
 from ..caching import AllBytes
 
@@ -360,7 +368,8 @@ class HTTPFileSystem(AbstractFileSystem):
         kw.update(kwargs)
         logger.debug(url)
 
-        if start is not None or end is not None:
+        ranged = start is not None or end is not None
+        if ranged:
             if start == end:
                 return b""
             headers = kw.pop("headers", {}).copy()
@@ -369,7 +378,11 @@ class HTTPFileSystem(AbstractFileSystem):
             kw["headers"] = headers
         r = self.session.get(self.encode_url(url), **kw)
         self._raise_not_found_for_status(r, url)
-        return r.content
+        if not ranged:
+            return r.content
+        # a server that ignores the Range header replies with the whole file,
+        # which is not the window the caller asked for
+        return range_response_window(r.content, r.status_code, r.headers, start, end)
 
     def get_file(
         self, rpath, lpath, chunk_size=5 * 2**20, callback=_DEFAULT_CALLBACK, **kwargs
@@ -751,17 +764,7 @@ class HTTPFile(AbstractBufferedFile):
 
     def _parse_content_range(self, headers):
         """Parse the Content-Range header"""
-        s = headers.get("Content-Range", "")
-        m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", s)
-        if not m:
-            return None, None, None
-
-        if m[1] == "*":
-            start = end = None
-        else:
-            start, end = [int(x) for x in m[1].split("-")]
-        total = None if m[2] == "*" else int(m[2])
-        return start, end, total
+        return parse_content_range_header(headers)
 
     def _fetch_range(self, start, end):
         """Download a block of data
@@ -786,14 +789,7 @@ class HTTPFile(AbstractBufferedFile):
         # with status 206 (partial content). But we'll guess that a suitable
         # Content-Range header or a Content-Length no more than the
         # requested range also mean we have got the desired range.
-        cl = r.headers.get("Content-Length", r.headers.get("content-length", end + 1))
-        response_is_range = (
-            r.status_code == 206
-            or self._parse_content_range(r.headers)[0] == start
-            or int(cl) <= end - start
-        )
-
-        if response_is_range:
+        if response_is_requested_range(r.status_code, r.headers, start, end):
             # partial content, as expected
             out = r.content
         elif start > 0:
