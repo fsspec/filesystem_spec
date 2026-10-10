@@ -1024,7 +1024,10 @@ class BackgroundBlockCache(BaseCache):
         with self._fetch_future_lock:
             if (
                 self._fetch_future is None
-                and end_block_plus_1 <= self.nblocks
+                # blocks are numbered 0..nblocks-1, so block nblocks is not part
+                # of this file: prefetching it stores an empty entry that both
+                # occupies an LRU slot and counts as a miss
+                and end_block_plus_1 < self.nblocks
                 and not self._fetch_block_cached.is_key_cached(end_block_plus_1)
             ):
                 self._fetch_future_block_number = end_block_plus_1

@@ -1,5 +1,6 @@
 import pickle
 import string
+import time
 
 import pytest
 
@@ -103,6 +104,36 @@ def test_background_block_cache_read_ending_on_block_boundary():
         assert cache.cache_info().misses == 1
         assert cache._fetch(block_size, 2 * block_size) == b"efgh"
         assert cache._fetch(2, 2 * block_size) == b"cdefgh"
+    finally:
+        cache.close()
+
+
+def test_background_block_cache_no_prefetch_past_the_last_block():
+    block_size = 4
+    letters = string.ascii_letters.encode()
+    cache = BackgroundBlockCache(block_size, letters_fetcher, len(letters), maxblocks=4)
+    try:
+        # reading the last block must not prefetch the block after it: blocks are
+        # numbered 0..nblocks-1, so there is no such block to fetch
+        assert (
+            cache._fetch(len(letters) - block_size, len(letters))
+            == letters[-block_size:]
+        )
+        time.sleep(0.1)
+
+        # a later read joins the prefetch, which is where an entry for a block
+        # that does not exist would otherwise land in the LRU
+        cache._fetch(0, block_size)
+        time.sleep(0.1)
+
+        # the LRU keys are the lru_cache argument tuples; the block number is
+        # the first element, the content the value
+        cached = {
+            key[0]: value for key, value in cache._fetch_block_cached._cache.items()
+        }
+        assert cached, "no blocks were cached"
+        assert all(block < cache.nblocks for block in cached), sorted(cached)
+        assert b"" not in cached.values(), sorted(cached)
     finally:
         cache.close()
 
