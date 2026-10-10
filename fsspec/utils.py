@@ -259,7 +259,7 @@ def read_block(
         Open file
     offset: int
         Byte offset to start read
-    length: int
+    length: int or None
         Number of bytes to read, read through end of file if None
     delimiter: bytes (optional)
         Ensure reading starts and stops at delimiter bytestring
@@ -312,10 +312,7 @@ def read_block(
 
     f.seek(offset)
 
-    # TODO: allow length to be None and read to the end of the file?
-    assert length is not None
-    b = f.read(length)
-    return b
+    return f.read() if length is None else f.read(length)
 
 
 def tokenize(*args: Any, **kwargs: Any) -> str:
