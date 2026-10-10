@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Return an empty block instead of passing a negative read length when
+  ``AbstractFileSystem.read_block`` starts past the end of a file.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
