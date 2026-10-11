@@ -2308,17 +2308,22 @@ class AbstractBufferedFile(io.IOBase):
             mean a new read on every call.
         """
         out = []
+        tail = b""
+        overlap = max(len(char) - 1, 0)
         while True:
             start = self.tell()
             part = self.read(blocks or self.blocksize)
             if len(part) == 0:
                 break
-            found = part.find(char)
+            data = tail + part
+            found = data.find(char)
             if found > -1:
-                out.append(part[: found + len(char)])
-                self.seek(start + found + len(char))
+                consumed = found + len(char) - len(tail)
+                out.append(part[:consumed])
+                self.seek(start + consumed)
                 break
             out.append(part)
+            tail = data[-overlap:] if overlap else b""
         return b"".join(out)
 
     def readline(self):

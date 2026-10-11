@@ -563,6 +563,21 @@ def test_pop_metadata_persists_without_losing_other_entries(tmp_path):
     assert set(metadata.cached_files[-1]) == {"two"}
 
 
+def test_pop_metadata_without_existing_metadata_file(tmp_path):
+    metadata = CacheMetadata([str(tmp_path)])
+    cached_file = tmp_path / "one"
+    cached_file.write_bytes(b"cached data")
+    metadata.update_file("one", {"fn": "one", "blocks": {0}, "time": 1, "uid": "one"})
+    cache_path = tmp_path / "cache"
+    assert not cache_path.exists()
+
+    assert metadata.pop_file("one") == str(cached_file)
+
+    assert cached_file.exists()
+    assert metadata.cached_files[-1] == {}
+    assert metadata._load(str(cache_path)) == {}
+
+
 def test_pop_blockcache_then_partial_refill(tmp_path, m):
     class BufferedMemoryFile(AbstractBufferedFile):
         def _fetch_range(self, start, end):

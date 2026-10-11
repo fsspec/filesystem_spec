@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 
@@ -168,6 +169,30 @@ def test_size_of_whole_file_reference(m):
     assert fs.size("b") == len(data)
     assert fs.sizes(["a", "c"]) == [len(data), 4]
     assert fs.du("") == 2 * len(data) + 4
+
+
+def test_size_of_inline_data_is_the_decoded_length():
+    # an inline reference is stored in an encoded form ("base64:" or text),
+    # so its size is the length cat() returns, not the length of the encoding
+    binary = b"\x00\xff not utf-8 decodable"
+    refs = {
+        "a": "base64:" + base64.b64encode(binary).decode(),
+        "b": b"base64:" + base64.b64encode(binary),
+        "c": binary,
+        "d": "héllo",
+    }
+    fs = fsspec.filesystem("reference", fo=refs)
+    assert fs.cat("a") == binary
+    assert fs.size("a") == len(binary)
+    assert fs.sizes(["a", "b", "c"]) == 3 * [len(binary)]
+    assert fs.size("d") == len("héllo".encode())
+    assert {e["name"]: e["size"] for e in fs.ls("", detail=True)} == {
+        "a": len(binary),
+        "b": len(binary),
+        "c": len(binary),
+        "d": len("héllo".encode()),
+    }
+    assert fs.du("") == 3 * len(binary) + len("héllo".encode())
 
 
 def test_mutable(server, m):
