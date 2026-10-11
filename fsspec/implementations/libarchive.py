@@ -162,25 +162,19 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
                 if not entry.isdir and not entry.isfile:
                     # Skip symbolic links, fifo entries, etc.
                     continue
-                self.dir_cache.update(
-                    {
-                        dirname: {"name": dirname, "size": 0, "type": "directory"}
-                        for dirname in self._all_dirnames(set(entry.name))
-                    }
-                )
                 f = {key: getattr(entry, fields[key]) for key in fields}
                 f["type"] = "directory" if entry.isdir else "file"
+                if entry.isdir:
+                    f["name"] = f["name"].rstrip("/")
                 list_names.append(entry.name)
 
                 self.dir_cache[f["name"]] = f
         # libarchive does not seem to return an entry for the directories (at least
         # not in all formats), so get the directories names from the files names
-        self.dir_cache.update(
-            {
-                dirname: {"name": dirname, "size": 0, "type": "directory"}
-                for dirname in self._all_dirnames(list_names)
-            }
-        )
+        for dirname in self._all_dirnames(list_names):
+            self.dir_cache.setdefault(
+                dirname, {"name": dirname, "size": 0, "type": "directory"}
+            )
 
     def _open(
         self,
