@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Reject memory filesystem copies whose destination conflicts with an existing
+  file or directory, without changing the source or destination.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).

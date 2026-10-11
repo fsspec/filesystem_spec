@@ -339,15 +339,25 @@ class MemoryFileSystem(AbstractFileSystem):
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
-        if self.isfile(path1):
+        source_is_file = self.isfile(path1)
+        if not source_is_file and not self.isdir(path1):
+            raise FileNotFoundError(path1)
+        parent = path2
+        while len(parent) > 1:
+            parent = self._parent(parent)
+            if self.isfile(parent):
+                raise FileExistsError(parent)
+        if source_is_file:
+            if self.isdir(path2):
+                raise IsADirectoryError(path2)
             self.store[path2] = MemoryFile(
                 self, path2, self.store[path1].getvalue()
             )  # implicit copy
-        elif self.isdir(path1):
+        else:
+            if self.isfile(path2):
+                raise FileExistsError(path2)
             if path2 not in self.pseudo_dirs:
                 self.pseudo_dirs.append(path2)
-        else:
-            raise FileNotFoundError(path1)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         logger.debug("cat: %s", path)
