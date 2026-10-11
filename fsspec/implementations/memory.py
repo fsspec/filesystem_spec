@@ -276,7 +276,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "name": path,
                 "size": filelike.size,
                 "type": "file",
-                "created": getattr(filelike, "created", None),
+                "created": filelike.created.timestamp(),
             }
         else:
             raise FileNotFoundError(path)
