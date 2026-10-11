@@ -30,30 +30,31 @@ ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
 
 _RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
+# dropped or reset connections, truncated bodies, timeouts
+_RETRYABLE_EXCEPTIONS = (
+    aiohttp.ClientConnectionError,
+    aiohttp.ClientPayloadError,
+    asyncio.TimeoutError,
+)
 _RETRY_MAX_WAIT = 60.0
-_retry_sleep = asyncio.sleep  # module attribute so tests can substitute a fake
 
 
-def _is_retryable(exc, statuses=_RETRYABLE_STATUSES):
+def _is_retryable(exc, statuses=_RETRYABLE_STATUSES, exceptions=None):
     """Whether a failed HTTP read is worth repeating.
 
-    A response error is retried when its status is in ``statuses``; dropped
-    or reset connections, timeouts and truncated bodies are always transient;
-    anything else (including the ``FileNotFoundError``/``PermissionError`` a
-    subclass may map 4xx codes to) is deterministic and propagates at once.
+    A response error is retried when its status is in ``statuses``; any
+    other error is retried when it is an instance of ``exceptions``. The
+    default (None) is ``_RETRYABLE_EXCEPTIONS`` minus SSL failures, which
+    are deterministic. Anything else (including the ``FileNotFoundError``/
+    ``PermissionError`` a subclass may map 4xx codes to) propagates at once.
     """
     if isinstance(exc, aiohttp.ClientResponseError):
         return exc.status in statuses
-    if isinstance(exc, aiohttp.ClientSSLError):
-        return False
-    return isinstance(
-        exc,
-        (
-            aiohttp.ClientConnectionError,
-            aiohttp.ClientPayloadError,
-            asyncio.TimeoutError,
-        ),
-    )
+    if exceptions is None:
+        return isinstance(exc, _RETRYABLE_EXCEPTIONS) and not isinstance(
+            exc, aiohttp.ClientSSLError
+        )
+    return isinstance(exc, exceptions)
 
 
 def _retry_after(exc):
@@ -99,7 +100,7 @@ async def _with_retries(
                 exc,
                 delay,
             )
-            await _retry_sleep(delay)
+            await asyncio.sleep(delay)
 
 
 async def get_client(**kwargs):
@@ -138,6 +139,7 @@ class HTTPFileSystem(AsyncFileSystem):
         retries=3,
         retry_wait=1.0,
         retry_statuses=None,
+        retry_exceptions=None,
         **storage_options,
     ):
         """
@@ -171,11 +173,14 @@ class HTTPFileSystem(AsyncFileSystem):
             Seconds to wait before the first retry; doubled on each further
             retry (capped at 60 s, with jitter). A ``Retry-After`` header sent
             by the server takes precedence.
-        retry_statuses: iterable of int or None
+        retry_statuses: container of int or None
             HTTP status codes of a failed read that are retried; default
-            (None) is 408, 425, 429, 500, 502, 503 and 504. Dropped
-            connections, timeouts and truncated bodies are retried regardless.
-            Override ``_is_retryable`` in a subclass for finer control.
+            (None) is 408, 425, 429, 500, 502, 503 and 504.
+        retry_exceptions: exception class, tuple of classes or None
+            Errors other than a response status that are retried; default
+            (None) is dropped or reset connections (except SSL failures),
+            truncated bodies and timeouts. Override ``_is_retryable`` in a
+            subclass for finer control.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open()
@@ -195,20 +200,10 @@ class HTTPFileSystem(AsyncFileSystem):
             raise ValueError(f"retry_wait must be >= 0, got {retry_wait!r}")
         self.retries = retries
         self.retry_wait = retry_wait
-        if retry_statuses is None:
-            self.retry_statuses = _RETRYABLE_STATUSES
-        else:
-            if isinstance(retry_statuses, str):
-                # "503" would otherwise iterate to {5, 0, 3}
-                raise ValueError(
-                    f"retry_statuses must be an iterable of ints, got {retry_statuses!r}"
-                )
-            try:
-                self.retry_statuses = frozenset(int(s) for s in retry_statuses)
-            except (TypeError, ValueError):
-                raise ValueError(
-                    f"retry_statuses must be an iterable of ints, got {retry_statuses!r}"
-                ) from None
+        self.retry_statuses = (
+            retry_statuses if retry_statuses is not None else _RETRYABLE_STATUSES
+        )
+        self.retry_exceptions = retry_exceptions
         self.kwargs = storage_options
         self._session = None
 
@@ -348,10 +343,11 @@ class HTTPFileSystem(AsyncFileSystem):
 
         Consulted by ``cat_file`` and ``HTTPFile`` block reads after each
         failure. Response errors are retried when their status is in
-        ``retry_statuses``; connection errors, timeouts and truncated bodies
-        always are. Override to change the decision for a particular server.
+        ``retry_statuses``, other errors when they are instances of
+        ``retry_exceptions``. Override to change the decision for a
+        particular server.
         """
-        return _is_retryable(exc, self.retry_statuses)
+        return _is_retryable(exc, self.retry_statuses, self.retry_exceptions)
 
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()

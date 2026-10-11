@@ -836,7 +836,7 @@ def test_retry_honours_retry_after(server, reset_faults, monkeypatch):
     async def fake_sleep(delay):
         sleeps.append(delay)
 
-    monkeypatch.setattr(fsspec.implementations.http, "_retry_sleep", fake_sleep)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
     fs = _retry_fs({"fail_status": "429", "retry_after": "7"}, retry_wait=1)
     assert fs.cat_file(server.realfile) == data
     assert sleeps == [7.0]
@@ -848,7 +848,7 @@ def test_retry_backoff_sequence(server, reset_faults, monkeypatch):
     async def fake_sleep(delay):
         sleeps.append(delay)
 
-    monkeypatch.setattr(fsspec.implementations.http, "_retry_sleep", fake_sleep)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
     monkeypatch.setattr(fsspec.implementations.http.random, "random", lambda: 0.5)
     fs = _retry_fs({"fail_status": "503", "fail_times": "3"}, retry_wait=1)
     assert fs.cat_file(server.realfile) == data
@@ -895,19 +895,34 @@ def test_retry_custom_statuses(server, reset_faults):
     assert _gets() == 1
 
 
-def test_retry_statuses_validation():
+def test_retry_defaults():
     fs = fsspec.filesystem("http", skip_instance_cache=True)
     assert fs.retry_statuses == _RETRYABLE_STATUSES
-    fs = fsspec.filesystem(
-        "http", retry_statuses=(500, "503"), skip_instance_cache=True
-    )
-    assert fs.retry_statuses == frozenset({500, 503})
-    with pytest.raises(ValueError):
-        fsspec.filesystem("http", retry_statuses=["abc"], skip_instance_cache=True)
-    with pytest.raises(ValueError):
-        fsspec.filesystem("http", retry_statuses=503, skip_instance_cache=True)
-    with pytest.raises(ValueError):
-        fsspec.filesystem("http", retry_statuses="503", skip_instance_cache=True)
+    assert fs.retry_exceptions is None
+
+
+def test_retry_custom_exceptions(server, reset_faults):
+    # a truncated body is retried by default ...
+    fs = _retry_fs({"truncate_body": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _gets() == 2
+
+    # ... but not when the retried exceptions are restricted
+    _rearm()
+    fs = _retry_fs({"truncate_body": "true"}, retry_exceptions=(TimeoutError,))
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError):
+            f.read(len(data))
+    assert _gets() == 1
+
+    # ... and can be opted back in, as a tuple or a single class
+    for exceptions in ((aiohttp.ClientPayloadError,), aiohttp.ClientPayloadError):
+        _rearm()
+        fs = _retry_fs({"truncate_body": "true"}, retry_exceptions=exceptions)
+        with fs.open(server.realfile) as f:
+            assert f.read(len(data)) == data
+        assert _gets() == 2
 
 
 def test_retry_is_retryable_override(server, reset_faults):
