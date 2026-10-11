@@ -906,11 +906,11 @@ class ReferenceFileSystem(AsyncFileSystem):
                 f.write(data)
         callback.absolute_update(len(data))
 
-    def get(self, rpath, lpath, recursive=False, **kwargs):
+    def get(self, rpath, lpath, recursive=False, maxdepth=None, **kwargs):
         if recursive:
             # trigger directory build
             self.ls("")
-        rpath = self.expand_path(rpath, recursive=recursive)
+        rpath = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
         fs = fsspec.filesystem("file", auto_mkdir=True)
         targets = other_paths(rpath, lpath)
         if isinstance(lpath, str):
