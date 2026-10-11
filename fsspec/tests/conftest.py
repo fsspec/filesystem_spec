@@ -50,9 +50,11 @@ def reset_faults():
     # (fail_status / truncate_body / short_body, see HTTPTestHandler._serve_fault)
     HTTPTestHandler.fault_counts.clear()
     HTTPTestHandler.get_counts.clear()
+    HTTPTestHandler.head_counts.clear()
     yield
     HTTPTestHandler.fault_counts.clear()
     HTTPTestHandler.get_counts.clear()
+    HTTPTestHandler.head_counts.clear()
 
 
 class HTTPTestHandler(BaseHTTPRequestHandler):
@@ -71,6 +73,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
     # fault injection, keyed by request path; cleared by the reset_faults fixture
     fault_counts = {}
     get_counts = {}
+    head_counts = {}
 
     files = ChainMap(dynamic_files, static_files)
 
@@ -95,8 +98,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         announces the full Content-Length but sends only half the body before
         the connection closes; ``short_body: true`` sends half the body with a
         matching (short) Content-Length. ``fail_times: <n>`` (default 1) is
-        how many GETs of this path fault before it is served normally.
-        Returns True when a fault was served.
+        how many requests for this path fault before it is served normally.
+        Faults apply to GET; ``fail_head: true`` makes ``fail_status`` apply
+        to HEAD as well, from the same budget. Returns True when a fault was
+        served.
         """
         modes = [
             k
@@ -217,6 +222,10 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         file_data = self.files.get(file_path)
         if file_data is None:
             return self._respond(404)
+        self.head_counts[self.path] = self.head_counts.get(self.path, 0) + 1
+        if "fail_head" in self.headers and "fail_status" in self.headers:
+            if self._serve_fault(200, None, file_data):
+                return
 
         if ("give_length" in self.headers) or ("head_give_length" in self.headers):
             if "zero_length" in self.headers:

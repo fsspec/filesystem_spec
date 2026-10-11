@@ -76,9 +76,9 @@ async def _with_retries(attempt, fs, label):
     failure too. The policy comes from the ``retries``, ``retry_wait``,
     ``retry_statuses`` and ``retry_exceptions`` attributes of ``fs``. A
     ``Retry-After`` header is honoured when present; otherwise the wait
-    doubles from ``retry_wait`` on each retry, capped at ``_RETRY_MAX_WAIT``
-    seconds and jittered. Non-retryable errors and the final failure
-    propagate unchanged.
+    doubles from ``retry_wait`` on each retry, jittered. Either way the wait
+    is capped at ``_RETRY_MAX_WAIT`` seconds. Non-retryable errors and the
+    final failure propagate unchanged.
     """
     retries = fs.retries
     for n in range(retries + 1):
@@ -91,9 +91,8 @@ async def _with_retries(attempt, fs, label):
                 raise
             delay = _retry_after(exc)
             if delay is None:
-                delay = min(_RETRY_MAX_WAIT, fs.retry_wait * 2**n) * (
-                    0.5 + random.random()
-                )
+                delay = fs.retry_wait * 2**n * (0.5 + random.random())
+            delay = min(_RETRY_MAX_WAIT, delay)
             logger.warning(
                 "%s: attempt %d/%d failed (%r); retrying in %.1fs",
                 label,
@@ -169,12 +168,12 @@ class HTTPFileSystem(AsyncFileSystem):
             the HTTPFileSystem class.
         retries: int
             How many times a transient failure of a read (see below)
-            is retried in ``cat_file`` and ``HTTPFile`` block reads; 0 disables
-            retries.
+            is retried in ``cat_file``, ``HTTPFile`` block reads and the
+            ``info`` lookup behind ``open``; 0 disables retries.
         retry_wait: float
             Seconds to wait before the first retry; doubled on each further
-            retry (capped at 60 s, with jitter). A ``Retry-After`` header sent
-            by the server takes precedence.
+            retry, with jitter. A ``Retry-After`` header sent by the server
+            takes precedence. Either wait is capped at 60 s.
         retry_statuses: container of int or None
             HTTP status codes of a failed read that are retried; default
             (None) is 408, 425, 429, 500, 502, 503 and 504.
@@ -552,24 +551,33 @@ class HTTPFileSystem(AsyncFileSystem):
         info = {}
         session = await self.set_session()
 
-        for policy in ["head", "get"]:
-            try:
-                info.update(
-                    await _file_info(
-                        self.encode_url(url),
-                        size_policy=policy,
-                        session=session,
-                        **self.kwargs,
-                        **kwargs,
+        async def _once():
+            # HEAD, then GET if that gave no size or failed for any reason
+            # (many servers mishandle HEAD); only a GET failure counts as a
+            # failed attempt.
+            for policy in ["head", "get"]:
+                try:
+                    info.update(
+                        await _file_info(
+                            self.encode_url(url),
+                            size_policy=policy,
+                            session=session,
+                            **self.kwargs,
+                            **kwargs,
+                        )
                     )
-                )
-                if info.get("size") is not None:
-                    break
-            except Exception as exc:
-                if policy == "get":
-                    # If get failed, then raise a FileNotFoundError
-                    raise FileNotFoundError(url) from exc
-                logger.debug("", exc_info=exc)
+                    if info.get("size") is not None:
+                        break
+                except Exception as exc:
+                    if policy == "get":
+                        raise
+                    logger.debug("", exc_info=exc)
+
+        try:
+            await _with_retries(_once, self, url)
+        except Exception as exc:
+            # If get failed, then raise a FileNotFoundError
+            raise FileNotFoundError(url) from exc
 
         return {"name": url, "size": None, **info, "type": "file"}
 

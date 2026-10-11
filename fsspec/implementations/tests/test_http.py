@@ -723,14 +723,19 @@ def _gets(path=_REALFILE_PATH):
     return HTTPTestHandler.get_counts.get(path, 0)
 
 
+def _heads(path=_REALFILE_PATH):
+    return HTTPTestHandler.head_counts.get(path, 0)
+
+
 def _faults(path=_REALFILE_PATH):
     return HTTPTestHandler.fault_counts.get(path, 0)
 
 
 def _rearm():
-    """Restore the fault budget and GET counter for a second read in a test."""
+    """Restore the fault budget and request counters for a second read in a test."""
     HTTPTestHandler.fault_counts.clear()
     HTTPTestHandler.get_counts.clear()
+    HTTPTestHandler.head_counts.clear()
 
 
 def test_retry_503_then_succeeds(server, reset_faults):
@@ -840,6 +845,33 @@ def test_retry_honours_retry_after(server, reset_faults, monkeypatch):
     fs = _retry_fs({"fail_status": "429", "retry_after": "7"}, retry_wait=1)
     assert fs.cat_file(server.realfile) == data
     assert sleeps == [7.0]
+
+    # ... but a server asking for an hour is capped
+    _rearm()
+    fs = _retry_fs({"fail_status": "429", "retry_after": "3600"}, retry_wait=1)
+    assert fs.cat_file(server.realfile) == data
+    assert sleeps == [7.0, 60.0]
+
+
+def test_retry_info_head(server, reset_faults):
+    # open() needs the size from a HEAD request; a failed HEAD falls back to
+    # GET at once, and the HEAD+GET sequence is what gets retried
+    fs = _retry_fs({"fail_status": "503", "fail_times": "2", "fail_head": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _heads() == 2  # 503, then 200 on the retry
+    assert _gets() == 2  # the 503 fallback, then the block read
+
+    # without retries the HEAD fails, the GET fallback fails too, and _info
+    # reports that as "not found" (pre-existing behaviour)
+    _rearm()
+    fs = _retry_fs(
+        {"fail_status": "503", "fail_times": "5", "fail_head": "true"}, retries=0
+    )
+    with pytest.raises(FileNotFoundError):
+        fs.open(server.realfile)
+    assert _heads() == 1
+    assert _gets() == 1
 
 
 def test_retry_backoff_sequence(server, reset_faults, monkeypatch):
