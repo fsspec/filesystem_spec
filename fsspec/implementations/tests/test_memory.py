@@ -2,7 +2,7 @@ import os
 import pickle
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -511,7 +511,46 @@ def test_cp_directory_recursive(m):
         assert m.find(target) == correct
 
 
-def test_get_directory_recursive(m, tmpdir):
+class _LocalPathLike:
+    def __init__(self, path):
+        self.path = path
+
+    def __fspath__(self):
+        return str(self.path)
+
+
+@pytest.mark.parametrize("path_type", [str, Path, _LocalPathLike])
+@pytest.mark.parametrize("source_kind", ["file", "directory", "glob", "list", "pairs"])
+def test_get_local_pathlike(m, tmp_path, path_type, source_kind):
+    m.pipe({"/src/a": b"a", "/src/b": b"b"})
+    target = tmp_path / "target"
+    if source_kind == "file":
+        source = "/src/a"
+        destination = path_type(target / "renamed")
+        expected = {"renamed": b"a"}
+    else:
+        target.mkdir()
+        source = "/src/a" if source_kind == "directory" else "/src/*"
+        destination = path_type(target)
+        expected = {"a": b"a"}
+        if source_kind in ("glob", "list", "pairs"):
+            expected["b"] = b"b"
+        if source_kind in ("list", "pairs"):
+            source = ["/src/a", "/src/b"]
+        if source_kind == "pairs":
+            destination = [path_type(target / "a"), path_type(target / "b")]
+
+    m.get(source, destination)
+
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == expected
+
+
+@pytest.mark.parametrize("path_type", [str, Path, _LocalPathLike])
+def test_get_directory_recursive(m, tmpdir, path_type):
     # https://github.com/fsspec/filesystem_spec/issues/1062
     # Recursive cp/get/put of source directory into non-existent target directory.
     src = "/src"
@@ -519,7 +558,7 @@ def test_get_directory_recursive(m, tmpdir):
     m.mkdir(src)
     m.touch(src_file)
 
-    target = os.path.join(tmpdir, "target")
+    target = path_type(os.path.join(tmpdir, "target"))
     target_fs = LocalFileSystem()
 
     # get without slash
