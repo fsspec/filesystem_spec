@@ -393,6 +393,19 @@ def test_dir_errors(m):
         m.mkdir("/afile/nodir")
 
 
+@pytest.mark.parametrize("path", ["afile", "/afile", "memory://afile"])
+@pytest.mark.parametrize("exist_ok", [False, True])
+@pytest.mark.parametrize("method", ["makedirs", "mkdirs"])
+def test_makedirs_existing_file(m, path, exist_ok, method):
+    m.pipe_file("/afile", b"payload")
+
+    with pytest.raises(FileExistsError):
+        getattr(m, method)(path, exist_ok=exist_ok)
+
+    assert m.cat_file(path) == b"payload"
+    assert not m.isdir(path)
+
+
 def test_no_rewind_append_mode(m):
     # https://github.com/fsspec/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:
