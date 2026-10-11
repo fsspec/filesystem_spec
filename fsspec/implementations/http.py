@@ -68,28 +68,30 @@ def _retry_after(exc):
         return None
 
 
-async def _with_retries(
-    attempt, retries, retry_wait, label, is_retryable=_is_retryable
-):
+async def _with_retries(attempt, fs, label):
     """Await ``attempt()``, repeating it on transient failures.
 
     ``attempt`` is a zero-argument coroutine function covering the whole
     request *and* body read, so a connection dropped mid-body counts as a
-    failure too. ``is_retryable(exc)`` decides whether a failure is worth
-    repeating. A ``Retry-After`` header is honoured when present; otherwise
-    the wait doubles from ``retry_wait`` on each retry, capped at
-    ``_RETRY_MAX_WAIT`` seconds and jittered. Non-retryable errors and the
-    final failure propagate unchanged.
+    failure too. The policy comes from the ``retries``, ``retry_wait``,
+    ``retry_statuses`` and ``retry_exceptions`` attributes of ``fs``. A
+    ``Retry-After`` header is honoured when present; otherwise the wait
+    doubles from ``retry_wait`` on each retry, capped at ``_RETRY_MAX_WAIT``
+    seconds and jittered. Non-retryable errors and the final failure
+    propagate unchanged.
     """
+    retries = fs.retries
     for n in range(retries + 1):
         try:
             return await attempt()
         except Exception as exc:
-            if n >= retries or not is_retryable(exc):
+            if n >= retries or not _is_retryable(
+                exc, fs.retry_statuses, fs.retry_exceptions
+            ):
                 raise
             delay = _retry_after(exc)
             if delay is None:
-                delay = min(_RETRY_MAX_WAIT, retry_wait * 2**n) * (
+                delay = min(_RETRY_MAX_WAIT, fs.retry_wait * 2**n) * (
                     0.5 + random.random()
                 )
             logger.warning(
@@ -179,8 +181,7 @@ class HTTPFileSystem(AsyncFileSystem):
         retry_exceptions: exception class, tuple of classes or None
             Errors other than a response status that are retried; default
             (None) is dropped or reset connections (except SSL failures),
-            truncated bodies and timeouts. Override ``_is_retryable`` in a
-            subclass for finer control.
+            truncated bodies and timeouts.
         storage_options: key-value
             Any other parameters passed on to requests
         cache_type, cache_options: defaults used in open()
@@ -338,17 +339,6 @@ class HTTPFileSystem(AsyncFileSystem):
             raise FileNotFoundError(url)
         response.raise_for_status()
 
-    def _is_retryable(self, exc):
-        """Whether a failed read should be tried again.
-
-        Consulted by ``cat_file`` and ``HTTPFile`` block reads after each
-        failure. Response errors are retried when their status is in
-        ``retry_statuses``, other errors when they are instances of
-        ``retry_exceptions``. Override to change the decision for a
-        particular server.
-        """
-        return _is_retryable(exc, self.retry_statuses, self.retry_exceptions)
-
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -369,9 +359,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 self._raise_not_found_for_status(r, url)
             return out
 
-        return await _with_retries(
-            _once, self.retries, self.retry_wait, url, self._is_retryable
-        )
+        return await _with_retries(_once, self, url)
 
     async def _get_file(
         self, rpath, lpath, chunk_size=5 * 2**20, callback=DEFAULT_CALLBACK, **kwargs
@@ -502,8 +490,6 @@ class HTTPFileSystem(AsyncFileSystem):
         if mode != "rb":
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
-        # per-open retry overrides are for HTTPFile only, never request options
-        retry_kw = {k: kwargs.pop(k) for k in ("retries", "retry_wait") if k in kwargs}
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
@@ -521,7 +507,6 @@ class HTTPFileSystem(AsyncFileSystem):
                 cache_type=cache_type or self.cache_type,
                 cache_options=cache_options or self.cache_options,
                 loop=self.loop,
-                **retry_kw,
                 **kw,
             )
         else:
@@ -717,12 +702,6 @@ class HTTPFile(AbstractBufferedFile):
     size: None or int
         If given, this is the size of the file in bytes, and we don't attempt
         to call the server to find the value.
-    retries: int or None
-        Retries for a transient failure of a block read; None (default) uses
-        the value configured on the filesystem.
-    retry_wait: float or None
-        Wait before the first retry, doubled on each further retry; None
-        (default) uses the value configured on the filesystem.
     kwargs: all other key-values are passed to requests calls.
     """
 
@@ -738,8 +717,6 @@ class HTTPFile(AbstractBufferedFile):
         size=None,
         loop=None,
         asynchronous=False,
-        retries=None,
-        retry_wait=None,
         **kwargs,
     ):
         if mode != "rb":
@@ -748,11 +725,6 @@ class HTTPFile(AbstractBufferedFile):
         self.loop = loop
         self.url = url
         self.session = session
-        self.retries = getattr(fs, "retries", 0) if retries is None else retries
-        self.retry_wait = (
-            getattr(fs, "retry_wait", 1.0) if retry_wait is None else retry_wait
-        )
-        self._is_retryable = getattr(fs, "_is_retryable", _is_retryable)
         self.details = {"name": url, "size": size, "type": "file"}
         super().__init__(
             fs=fs,
@@ -900,13 +872,7 @@ class HTTPFile(AbstractBufferedFile):
                     out = b"".join(out)[: end - start]
                 return out
 
-        return await _with_retries(
-            _once,
-            self.retries,
-            self.retry_wait,
-            f"{self.url} ({headers['Range']})",
-            self._is_retryable,
-        )
+        return await _with_retries(_once, self.fs, f"{self.url} ({headers['Range']})")
 
     _fetch_range = sync_wrapper(async_fetch_range)
 

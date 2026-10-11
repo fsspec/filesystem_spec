@@ -12,7 +12,6 @@ import fsspec.asyn
 import fsspec.utils
 from fsspec.implementations.http import (
     _RETRYABLE_STATUSES,
-    HTTPFileSystem,
     HTTPStreamFile,
 )
 from fsspec.tests.conftest import (  # noqa: F401
@@ -863,20 +862,6 @@ def test_retry_option_validation():
         fsspec.filesystem("http", retry_wait=-1, skip_instance_cache=True)
 
 
-def test_retry_per_open_override(server, reset_faults):
-    fs = _retry_fs({"fail_status": "503"}, retries=3)
-    with fs.open(server.realfile, retries=0) as f:
-        assert f.retries == 0
-        with pytest.raises(aiohttp.ClientResponseError):
-            f.read(len(data))
-    assert _gets() == 1
-
-    # the override must not leak into request kwargs on the streaming branch
-    with fs.open(server.realfile, block_size=0, retries=1) as f:
-        assert isinstance(f, HTTPStreamFile)
-        assert f.read() == data
-
-
 def test_retry_custom_statuses(server, reset_faults):
     # 403 is not retried by default, but can be opted in
     fs = _retry_fs({"fail_status": "403"}, retry_statuses=[403])
@@ -923,24 +908,3 @@ def test_retry_custom_exceptions(server, reset_faults):
         with fs.open(server.realfile) as f:
             assert f.read(len(data)) == data
         assert _gets() == 2
-
-
-def test_retry_is_retryable_override(server, reset_faults):
-    class BusyCDNFileSystem(HTTPFileSystem):
-        def _is_retryable(self, exc):
-            # a CDN that answers 403 under load
-            if isinstance(exc, aiohttp.ClientResponseError) and exc.status == 403:
-                return True
-            return super()._is_retryable(exc)
-
-    fs = BusyCDNFileSystem(
-        headers=dict(_RETRY_HEADERS, fail_status="403"),
-        retry_wait=0,
-        skip_instance_cache=True,
-    )
-    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
-    assert _gets() == 2
-    _rearm()
-    with fs.open(server.realfile) as f:
-        assert f.read(len(data)) == data
-    assert _gets() == 2
