@@ -160,7 +160,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(url)
         session = await self.set_session()
-        async with session.get(self.encode_url(url), **self.kwargs) as r:
+        async with session.get(self.encode_url(url), **kw) as r:
             self._raise_not_found_for_status(r, url)
 
             if "Content-Type" in r.headers:
@@ -201,7 +201,7 @@ class HTTPFileSystem(AsyncFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            out = await self._ls_real(url.rstrip("/"), detail=False)
+            out = await self._ls_real(url.rstrip("/"), detail=False, **kwargs)
         if detail:
             return [
                 {

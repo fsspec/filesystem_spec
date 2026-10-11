@@ -26,6 +26,54 @@ def test_list_invalid_args(server):
         h.glob(server.address + "/index/*")
 
 
+@pytest.mark.parametrize("retry_without_slash", [False, True])
+def test_list_request_options(server, monkeypatch, retry_without_slash):
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    received = []
+    original_handler = HTTPTestHandler.do_GET
+
+    def respond(handler):
+        if handler.path not in ("/options", "/options/"):
+            return original_handler(handler)
+        received.append((handler.path, handler.headers.get("X-Listing")))
+        body = (
+            b"" if handler.path.endswith("/") else b'<a href="/options/file">file</a>'
+        )
+        handler._respond(data=body)
+
+    monkeypatch.setattr(HTTPTestHandler, "do_GET", respond)
+    h = fsspec.filesystem(
+        "http", headers={"X-Listing": "default"}, timeout=3, skip_instance_cache=True
+    )
+    session = fsspec.asyn.sync(h.loop, h.set_session)
+    timeouts = []
+    original_get = session.get
+
+    def get(*args, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        return original_get(*args, **kwargs)
+
+    monkeypatch.setattr(session, "get", get)
+    suffix = "/" if retry_without_slash else ""
+    url = server.address + "/options" + suffix
+    paths = ["/options/", "/options"] if retry_without_slash else ["/options"]
+    try:
+        assert h.ls(url, detail=False, headers={"X-Listing": "call"}, timeout=1) == [
+            server.address + "/options/file"
+        ]
+        assert received == [(path, "call") for path in paths]
+        assert timeouts == [1] * len(paths)
+        received.clear()
+        timeouts.clear()
+        assert h.ls(url, detail=False) == [server.address + "/options/file"]
+        assert received == [(path, "default") for path in paths]
+        assert timeouts == [3] * len(paths)
+        assert h.kwargs == {"headers": {"X-Listing": "default"}, "timeout": 3}
+    finally:
+        h.close_session(h.loop, session)
+
+
 def test_list_cache(server):
     h = fsspec.filesystem("http", use_listings_cache=True)
     out = h.glob(server.address + "/index/*")

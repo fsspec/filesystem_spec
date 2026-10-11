@@ -6,7 +6,7 @@ Dev
 
 Fixes
 
-- Preserve per-call request options in synchronous HTTP directory listings,
+- Preserve per-call request options in asynchronous and synchronous HTTP directory listings,
   including the retry without a trailing slash.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
