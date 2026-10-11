@@ -716,12 +716,11 @@ def atomic_write(path: str, mode: str = "wb"):
     try:
         with open(fd, mode) as fp:
             yield fp
+        os.replace(fn, path)
     except BaseException:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(fn)
         raise
-    else:
-        os.replace(fn, path)
 
 
 def _translate(pat, STAR, QUESTION_MARK):

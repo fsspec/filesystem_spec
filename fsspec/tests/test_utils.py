@@ -708,6 +708,42 @@ def test_size():
     assert f.tell() == 0
 
 
+def test_atomic_write_replaces_file(tmp_path):
+    target = tmp_path / "target"
+    target.write_bytes(b"old data")
+
+    with fsspec.utils.atomic_write(str(target)) as file:
+        file.write(b"new data")
+
+    assert target.read_bytes() == b"new data"
+    assert list(tmp_path.glob("target-*")) == []
+
+
+def test_atomic_write_body_failure_keeps_file(tmp_path):
+    target = tmp_path / "target"
+    target.write_bytes(b"old data")
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        with fsspec.utils.atomic_write(str(target)) as file:
+            file.write(b"new data")
+            raise RuntimeError("cancelled")
+
+    assert target.read_bytes() == b"old data"
+    assert list(tmp_path.glob("target-*")) == []
+
+
+def test_atomic_write_replace_failure_removes_temporary_file(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+
+    with pytest.raises(OSError):
+        with fsspec.utils.atomic_write(str(target)) as file:
+            file.write(b"new data")
+
+    assert target.is_dir()
+    assert list(tmp_path.glob("target-*")) == []
+
+
 class _HasFspath:
     def __fspath__(self):
         return "foo"
