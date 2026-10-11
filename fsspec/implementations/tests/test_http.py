@@ -44,14 +44,17 @@ def test_list_request_options(server, monkeypatch, retry_without_slash):
 
     monkeypatch.setattr(HTTPTestHandler, "do_GET", respond)
     h = fsspec.filesystem(
-        "http", headers={"X-Listing": "default"}, timeout=3, skip_instance_cache=True
+        "http",
+        headers={"X-Listing": "default"},
+        allow_redirects=True,
+        skip_instance_cache=True,
     )
     session = fsspec.asyn.sync(h.loop, h.set_session)
-    timeouts = []
+    redirects = []
     original_get = session.get
 
     def get(*args, **kwargs):
-        timeouts.append(kwargs.get("timeout"))
+        redirects.append(kwargs.get("allow_redirects"))
         return original_get(*args, **kwargs)
 
     monkeypatch.setattr(session, "get", get)
@@ -59,17 +62,20 @@ def test_list_request_options(server, monkeypatch, retry_without_slash):
     url = server.address + "/options" + suffix
     paths = ["/options/", "/options"] if retry_without_slash else ["/options"]
     try:
-        assert h.ls(url, detail=False, headers={"X-Listing": "call"}, timeout=1) == [
-            server.address + "/options/file"
-        ]
+        assert h.ls(
+            url, detail=False, headers={"X-Listing": "call"}, allow_redirects=False
+        ) == [server.address + "/options/file"]
         assert received == [(path, "call") for path in paths]
-        assert timeouts == [1] * len(paths)
+        assert redirects == [False] * len(paths)
         received.clear()
-        timeouts.clear()
+        redirects.clear()
         assert h.ls(url, detail=False) == [server.address + "/options/file"]
         assert received == [(path, "default") for path in paths]
-        assert timeouts == [3] * len(paths)
-        assert h.kwargs == {"headers": {"X-Listing": "default"}, "timeout": 3}
+        assert redirects == [True] * len(paths)
+        assert h.kwargs == {
+            "headers": {"X-Listing": "default"},
+            "allow_redirects": True,
+        }
     finally:
         h.close_session(h.loop, session)
 
