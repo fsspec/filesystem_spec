@@ -813,9 +813,12 @@ class HTTPFile(AbstractBufferedFile):
             async with r:
                 if r.status == 416:
                     if self.size is not None and start < self.size:
-                        # Some servers (CloudFront under load, see #1895)
-                        # answer 416 to a range that lies inside the file;
-                        # treating it as EOF would silently truncate the read.
+                        # CloudFront answers 416 (with an HTML error page as
+                        # body) to a range inside the file when range requests
+                        # follow each other too quickly; treating it as EOF
+                        # would silently truncate the read, retrying with
+                        # backoff gets the data. See
+                        # https://github.com/fsspec/filesystem_spec/issues/1895
                         raise aiohttp.ClientPayloadError(
                             f"{headers['Range']} of {self.url} reported "
                             f"unsatisfiable, but the file has {self.size} bytes"

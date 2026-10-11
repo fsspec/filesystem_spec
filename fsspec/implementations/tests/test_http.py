@@ -815,7 +815,8 @@ def test_retry_short_206_body(server, reset_faults):
 
 
 def test_retry_416_inside_file(server, reset_faults):
-    # gh-1895: a 416 for a range that lies inside the file is not EOF
+    # a 416 for a range that lies inside the file is not EOF, see
+    # https://github.com/fsspec/filesystem_spec/issues/1895
     fs = _retry_fs({"fail_status": "416"})
     with fs.open(server.realfile) as f:
         assert f.read(len(data)) == data
