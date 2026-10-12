@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Honor a single SMB session registration retry without dividing by zero.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
