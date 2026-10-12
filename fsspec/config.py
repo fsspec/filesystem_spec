@@ -84,13 +84,13 @@ def set_conf_files(cdir, conf_dict):
     for fn in allfiles:
         if fn.endswith(".ini"):
             ini = configparser.ConfigParser()
-            ini.read(os.path.join(cdir, fn))
+            ini.read(os.path.join(cdir, fn), encoding="utf-8")
             for key in ini:
                 if key == "DEFAULT":
                     continue
                 conf_dict.setdefault(key, {}).update(dict(ini[key]))
         if fn.endswith(".json"):
-            with open(os.path.join(cdir, fn)) as f:
+            with open(os.path.join(cdir, fn), encoding="utf-8") as f:
                 js = json.load(f)
             for key in js:
                 conf_dict.setdefault(key, {}).update(dict(js[key]))

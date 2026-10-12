@@ -1088,6 +1088,36 @@ def test_buffered_readlines(m, cache_type, content):
         stream.readlines()
 
 
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("blocks", [None, 1, 2, 3, 8])
+@pytest.mark.parametrize(
+    "content, delimiter, expected",
+    [
+        (b"a\r\nb\r\ntail", b"\r\n", [b"a\r\n", b"b\r\n", b"tail"]),
+        (b"a||||b||||tail", b"||||", [b"a||||", b"b||||", b"tail"]),
+        (b"xxababaYYababaZ", b"ababa", [b"xxababa", b"YYababa", b"Z"]),
+        (b"\r\n\r\n", b"\r\n", [b"\r\n", b"\r\n"]),
+        (b"abc\r", b"\r\n", [b"abc\r"]),
+        (b"", b"\r\n", []),
+        (b"a\nb\ntail", b"\n", [b"a\n", b"b\n", b"tail"]),
+    ],
+)
+def test_buffered_readuntil_delimiters(
+    m, cache_type, blocks, content, delimiter, expected
+):
+    m.pipe_file("delimiters", b"skip" + content)
+    with AbstractBufferedFile(
+        m, "delimiters", cache_type=cache_type, block_size=2
+    ) as stream:
+        position = stream.seek(4)
+        for part in expected:
+            assert stream.readuntil(delimiter, blocks=blocks) == part
+            position += len(part)
+            assert stream.tell() == position
+        assert stream.readuntil(delimiter, blocks=blocks) == b""
+        assert stream.tell() == position
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",
@@ -1902,3 +1932,49 @@ def test_cat_ranges_forwards_kwargs():
     fs.cat_ranges(["a", "b"], [0, 0], [1, 1], block_size=42)
 
     assert received == [{"block_size": 42}, {"block_size": 42}]
+
+
+class UnreadableSubdirFS(AbstractFileSystem):
+    """A tree in which the ``locked`` subdirectory cannot be listed."""
+
+    protocol = "unreadablesub"
+    cachable = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+def test_walk_on_error_reaches_subdirectories():
+    # on_error is documented to apply to any path whose listing fails, not only
+    # to the one handed to walk(), so the recursive call has to forward it.
+    fs = UnreadableSubdirFS()
+
+    # the default, "omit", keeps skipping the unreadable directory
+    assert list(fs.walk("")) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        list(fs.walk("", on_error="raise"))
+
+    handled = []
+    assert list(fs.walk("", on_error=handled.append)) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]
