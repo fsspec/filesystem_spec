@@ -433,6 +433,57 @@ def test_transaction_append_existing_file(m, global_store, mode, rollback):
     assert fs.cat_file("file") == expected
 
 
+@pytest.mark.parametrize("mode", ["wb", "w+b", "xb", "x+b", "ab", "a+b"])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_explicit_autocommit_false_new_file(m, mode, rollback):
+    with m.open("file", mode, autocommit=False) as f:
+        f.write(b"pending")
+
+    assert not m.exists("file")
+    m.transaction.complete(commit=not rollback)
+    if rollback:
+        assert not m.exists("file")
+    else:
+        assert m.cat_file("file") == b"pending"
+
+
+@pytest.mark.parametrize("mode", ["wb", "w+b", "ab", "a+b"])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_explicit_autocommit_false_existing_file(m, mode, rollback):
+    m.pipe_file("file", b"original")
+    with m.open("file", mode, autocommit=False) as f:
+        f.write(b"pending")
+
+    assert m.cat_file("file") == b"original"
+    m.transaction.complete(commit=not rollback)
+    expected = b"originalpending" if "a" in mode else b"pending"
+    assert m.cat_file("file") == (b"original" if rollback else expected)
+
+
+@pytest.mark.parametrize("mode", ["wb", "w+b", "xb", "x+b", "ab", "a+b"])
+def test_explicit_autocommit_true_in_transaction(m, mode):
+    with pytest.raises(RuntimeError), m.transaction:
+        with m.open("file", mode, autocommit=True) as f:
+            f.write(b"immediate")
+        assert m.cat_file("file") == b"immediate"
+        raise RuntimeError("discard transaction")
+
+    assert m.cat_file("file") == b"immediate"
+
+
+@pytest.mark.parametrize("mode", ["wb", "w+b", "ab", "a+b"])
+def test_explicit_autocommit_true_existing_file(m, mode):
+    m.pipe_file("file", b"original")
+    expected = b"originalimmediate" if "a" in mode else b"immediate"
+    with pytest.raises(RuntimeError), m.transaction:
+        with m.open("file", mode, autocommit=True) as f:
+            f.write(b"immediate")
+        assert m.cat_file("file") == expected
+        raise RuntimeError("discard transaction")
+
+    assert m.cat_file("file") == expected
+
+
 def test_moves(m):
     m.touch("source.txt")
     m.mv("source.txt", "target.txt")

@@ -303,7 +303,7 @@ class MemoryFileSystem(AbstractFileSystem):
         if mode in ["rb", "ab", "r+b", "a+b"]:
             if path in self.store:
                 f = self.store[path]
-                if self._intrans and "a" in mode:
+                if not autocommit and "a" in mode:
                     # append to a copy so the store is unchanged until commit
                     f = MemoryFile(self, path, f.getvalue())
                     f.created = self.store[path].created
@@ -318,7 +318,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 # append modes create the file if it does not exist, matching
                 # builtin open() and LocalFileSystem
                 m = MemoryFile(self, path, kwargs.get("data"))
-                if not self._intrans:
+                if autocommit:
                     m.commit()
                 # position at the end of file, like the existing-file path above
                 m.seek(0, 2)
@@ -329,7 +329,7 @@ class MemoryFileSystem(AbstractFileSystem):
             if "x" in mode and self.exists(path):
                 raise FileExistsError
             m = MemoryFile(self, path, kwargs.get("data"))
-            if not self._intrans:
+            if autocommit:
                 m.commit()
             return m
         else:
