@@ -8,6 +8,8 @@ Fixes
 
 - Use the correct POST method in the Pyodide HTTP session shim.
 
+- Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
+
 - Read empty GitHub files without requiring the HTTP extra or a second download.
 
 - Accept PathLike local destinations in synchronous ``get`` (#896).
