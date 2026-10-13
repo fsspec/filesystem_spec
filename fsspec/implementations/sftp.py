@@ -125,6 +125,7 @@ class SFTPFileSystem(AbstractFileSystem):
             self.ftp.mkdir(path, mode)
 
     def makedirs(self, path, exist_ok=False, mode=511):
+        path = self._strip_protocol(path)
         if self.exists(path) and not exist_ok:
             raise FileExistsError(f"File exists: {path}")
 

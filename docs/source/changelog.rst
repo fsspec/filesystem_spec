@@ -8,9 +8,19 @@ Fixes
 
 - Preserve ``None`` values when serializing filesystem arguments and options to dictionaries or JSON.
 
+- Use the correct POST method in the Pyodide HTTP session shim.
+
+- Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
+
+- Read empty GitHub files without requiring the HTTP extra or a second download.
+
+- Accept PathLike local destinations in synchronous ``get`` (#896).
+
 - Reject seeks that change position on async streaming HTTP files.
 
 - Follow GitHub API pagination when listing tags, branches and repositories.
+
+- Strip SFTP and SSH URL prefixes before recursively creating directories.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
@@ -46,6 +56,9 @@ Fixes
 - Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
 
 - Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
+
+- Request identity encoding for buffered HTTP range reads by default, while
+  preserving explicitly configured request and session encodings (#1748).
 
 - Resolve negative FTP read offsets relative to the end of the file.
 
