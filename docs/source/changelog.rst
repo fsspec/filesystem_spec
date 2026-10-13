@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Follow GitHub API pagination when listing tags, branches and repositories.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
