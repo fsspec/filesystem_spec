@@ -195,6 +195,7 @@ class FTPFileSystem(AbstractFileSystem):
         return out
 
     def get_file(self, rpath, lpath, **kwargs):
+        rpath = self._strip_protocol(rpath)
         if self.isdir(rpath):
             if not os.path.exists(lpath):
                 os.mkdir(lpath)
@@ -216,6 +217,7 @@ class FTPFileSystem(AbstractFileSystem):
             outfile.close()
 
     def cat_file(self, path, start=None, end=None, **kwargs):
+        path = self._strip_protocol(path)
         if end is not None or (start is not None and start < 0):
             return super().cat_file(path, start, end, **kwargs)
         out = []

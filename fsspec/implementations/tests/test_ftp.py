@@ -217,6 +217,27 @@ def test_cat_get(ftp_writable, tmpdir):
     assert open(fn, "rb").read() == data
 
 
+@pytest.mark.parametrize("start,end", [(None, None), (3, None), (-3, None), (2, 8)])
+def test_cat_file_with_protocol(ftp_writable, start, end):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    data = b"0123456789"
+    fs.pipe("/url-file", data)
+    url = f"ftp://{host}:{port}/url-file"
+    assert fs.cat_file(url, start=start, end=end) == data[start:end]
+
+
+@pytest.mark.parametrize("file_like", [False, True])
+def test_get_file_with_protocol(ftp_writable, tmp_path, file_like):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    data = b"download through an FTP URL"
+    fs.pipe("/url-file", data)
+    target = io.BytesIO() if file_like else tmp_path / "download"
+    fs.get_file(f"ftp://{host}:{port}/url-file", target)
+    assert (target.getvalue() if file_like else target.read_bytes()) == data
+
+
 @pytest.mark.parametrize("start", [-3, -10, -100, 0, 3, None])
 def test_cat_file_start(ftp_writable, start):
     host, port, user, pw = ftp_writable

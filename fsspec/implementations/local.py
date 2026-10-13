@@ -128,7 +128,7 @@ class LocalFileSystem(AbstractFileSystem):
         return result
 
     def lexists(self, path, **kwargs):
-        return osp.lexists(path)
+        return osp.lexists(self._strip_protocol(path))
 
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
@@ -152,7 +152,7 @@ class LocalFileSystem(AbstractFileSystem):
 
     def get_file(self, path1, path2, callback=None, **kwargs):
         if isfilelike(path2):
-            with open(path1, "rb") as f:
+            with open(self._strip_protocol(path1), "rb") as f:
                 shutil.copyfileobj(f, path2)
         else:
             return self.cp_file(path1, path2, **kwargs)
@@ -200,7 +200,17 @@ class LocalFileSystem(AbstractFileSystem):
                     raise ValueError("Cannot delete directory, set recursive=True")
                 if osp.abspath(p) == os.getcwd():
                     raise ValueError("Cannot delete current working directory")
-                shutil.rmtree(p)
+                if maxdepth is None:
+                    shutil.rmtree(p)
+                else:
+                    # only delete down to maxdepth; a directory still holding
+                    # deeper files is kept
+                    paths = self.expand_path(p, recursive=True, maxdepth=maxdepth)
+                    for sub in reversed(paths):
+                        if not self.isdir(sub) or self.islink(sub):
+                            os.remove(sub)
+                        elif not os.listdir(sub):
+                            os.rmdir(sub)
             else:
                 os.remove(p)
 
@@ -296,7 +306,7 @@ class LocalFileSystem(AbstractFileSystem):
         return True
 
     def chmod(self, path, mode):
-        path = stringify_path(path)
+        path = self._strip_protocol(path)
         return os.chmod(path, mode)
 
 
