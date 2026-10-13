@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Reject seeks that change position on async streaming HTTP files.
+
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
