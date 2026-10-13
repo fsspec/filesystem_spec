@@ -235,7 +235,7 @@ class MemoryFileSystem(AbstractFileSystem):
         try:
             self.mkdir(path, create_parents=True)
         except FileExistsError:
-            if not exist_ok or self._strip_protocol(path) in self.store:
+            if not exist_ok or self.isfile(path):
                 raise
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
