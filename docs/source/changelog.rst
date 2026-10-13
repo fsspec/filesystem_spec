@@ -9,6 +9,8 @@ Fixes
 - Honor explicit ``autocommit`` options when opening memory files for writing
   or appending.
 
+- Accept PathLike local destinations in synchronous ``get`` (#896).
+
 - Reject seeks that change position on async streaming HTTP files.
 
 - Follow GitHub API pagination when listing tags, branches and repositories.
