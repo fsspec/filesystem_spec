@@ -8,11 +8,15 @@ Fixes
 
 - Preserve caller-provided temporary directories during cross-filesystem copies.
 
+- Read empty GitHub files without requiring the HTTP extra or a second download.
+
 - Accept PathLike local destinations in synchronous ``get`` (#896).
 
 - Reject seeks that change position on async streaming HTTP files.
 
 - Follow GitHub API pagination when listing tags, branches and repositories.
+
+- Strip SFTP and SSH URL prefixes before recursively creating directories.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
