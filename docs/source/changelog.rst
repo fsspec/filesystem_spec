@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Reject writes through read-only memory file handles (#2193).
+
 - Reject seeks that change position on async streaming HTTP files.
 
 - Follow GitHub API pagination when listing tags, branches and repositories.
