@@ -1,3 +1,4 @@
+import base64
 from urllib.parse import quote_from_bytes
 
 import pytest
@@ -70,3 +71,41 @@ def test_percent_encoded_all_byte_values():
     uri = "data:application/octet-stream," + quote_from_bytes(data)
     with fsspec.open(uri, "rb") as f:
         assert f.read() == data
+
+
+@pytest.mark.parametrize(
+    "payload, expected",
+    [
+        ("SGVsbG8%3D", b"Hello"),
+        ("%2Bw%3D%3D", b"\xfb"),
+        ("%2fw%3d%3d", b"\xff"),
+        ("%5A%6D%39%76", b"foo"),
+        ("+w%3D%3D", b"\xfb"),
+    ],
+)
+def test_percent_encoded_base64(payload, expected):
+    uri = "data:application/octet-stream;base64," + payload
+    with fsspec.open(uri, "rb") as f:
+        assert f.read() == expected
+
+    fs, path = fsspec.core.url_to_fs(uri)
+    assert fs.info(path)["size"] == len(expected)
+    assert fs.cat_file(path, start=1, end=3) == expected[1:3]
+    assert fs.cat_file(path, start=-2) == expected[-2:]
+
+
+def test_percent_encoded_base64_all_byte_values():
+    data = bytes(range(256))
+    payload = quote_from_bytes(base64.b64encode(data), safe="")
+    uri = "data:application/octet-stream;base64," + payload
+    with fsspec.open(uri, "rb") as f:
+        assert f.read() == data
+
+
+@pytest.mark.parametrize(
+    "payload, expected",
+    [("+w==", b"\xfb"), ("/w==", b"\xff"), ("JTQx", b"%41"), ("", b"")],
+)
+def test_base64_decoding_preserves_bytes(payload, expected):
+    with fsspec.open("data:;base64," + payload, "rb") as f:
+        assert f.read() == expected
