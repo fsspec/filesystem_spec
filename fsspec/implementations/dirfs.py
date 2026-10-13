@@ -61,6 +61,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
         self.path = fs._strip_protocol(path)
         self.fs = fs
+        self.async_impl = fs.async_impl
 
     def _join(self, path):
         if isinstance(path, str):
@@ -68,6 +69,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 return path
             if not path:
                 return self.path
+            # a trailing slash requests "copy the contents" in bulk
+            # operations (docs/source/copying.rst), so preserve it across the
+            # join even though _strip_protocol removes it
+            suffix = "/" if path.endswith("/") else ""
             path = self._strip_protocol(path)
             # ".." only navigates above the root on filesystems that resolve it
             # against a real directory tree; on object stores it is a literal
@@ -76,7 +81,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )
-            return self.fs.sep.join((self.path, path))
+            joined = self.fs.sep.join((self.path, path))
+            if suffix and not joined.endswith("/"):
+                joined += "/"
+            return joined
         if isinstance(path, dict):
             return {self._join(_path): value for _path, value in path.items()}
         return [self._join(_path) for _path in path]
@@ -112,6 +120,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     @property
     def sep(self):
         return self.fs.sep
+
+    @property
+    def local_file(self):
+        return getattr(self.fs, "local_file", False)
 
     async def set_session(self, *args, **kwargs):
         return await self.fs.set_session(*args, **kwargs)
@@ -285,6 +297,17 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
     def sizes(self, paths):
         return self.fs.sizes(self._join(paths))
 
+    def invalidate_cache(self, path=None):
+        # With no path, clear only what is cached under this directory. An
+        # unrooted dirfs joins to "", which means everything on the wrapped fs.
+        self.fs.invalidate_cache(self._join(path or "") or None)
+
+    def ukey(self, path):
+        return self.fs.ukey(self._join(path))
+
+    def checksum(self, path):
+        return self.fs.checksum(self._join(path))
+
     async def _exists(self, path):
         return await self.fs._exists(self._join(path))
 
@@ -327,13 +350,31 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
 
         return self._relpath(ret)
 
+    def _relpath_walk_entries(self, entries):
+        # with detail=True, walk gives dicts keyed by basename whose infos
+        # still carry the full name in the wrapped filesystem
+        if not isinstance(entries, dict):
+            return entries
+        return {
+            name: {**info, "name": self._relpath(info["name"])}
+            for name, info in entries.items()
+        }
+
     async def _walk(self, path, *args, **kwargs):
         async for root, dirs, files in self.fs._walk(self._join(path), *args, **kwargs):
-            yield self._relpath(root), dirs, files
+            yield (
+                self._relpath(root),
+                self._relpath_walk_entries(dirs),
+                self._relpath_walk_entries(files),
+            )
 
     def walk(self, path, *args, **kwargs):
         for root, dirs, files in self.fs.walk(self._join(path), *args, **kwargs):
-            yield self._relpath(root), dirs, files
+            yield (
+                self._relpath(root),
+                self._relpath_walk_entries(dirs),
+                self._relpath_walk_entries(files),
+            )
 
     async def _glob(self, path, **kwargs):
         detail = kwargs.get("detail", False)

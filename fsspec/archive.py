@@ -22,6 +22,10 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
     def ukey(self, path):
         return tokenize(path, self.fo, self.protocol)
 
+    def _not_a_file(self, path):
+        """The error for opening ``path``, which is not a file member."""
+        return IsADirectoryError(path) if self.isdir(path) else FileNotFoundError(path)
+
     def _all_dirnames(self, paths):
         """Returns *all* directory names for each path in paths, including intermediate
         ones.
@@ -49,6 +53,7 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
 
     def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path)
         self._get_dirs()
         paths = {}
         for p, f in self.dir_cache.items():
@@ -68,6 +73,12 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                 if ppath not in paths:
                     out = {"name": ppath, "size": 0, "type": "directory"}
                     paths[ppath] = out
+        if not paths and path.strip("/"):
+            # Nothing is listed under ``path``, so it is a file, an empty
+            # directory or missing; ``info`` raises FileNotFoundError for the last.
+            info = self.info(path)
+            if info["type"] != "directory":
+                paths[info["name"]] = info
         if detail:
             out = sorted(paths.values(), key=operator.itemgetter("name"))
             return out

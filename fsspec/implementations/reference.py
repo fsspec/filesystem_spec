@@ -46,6 +46,36 @@ def _first(d):
     return next(iter(d.values()))
 
 
+def _inline_data(part):
+    """The bytes an inline (in-memory) reference delivers to a reader.
+
+    A ``base64:`` prefix marks base64-encoded content; other text is encoded
+    as UTF-8. ``info`` and ``ls`` measure the result of this rather than the
+    stored form, so that a size always matches what ``cat`` returns.
+    """
+    if isinstance(part, (str, bytes)):
+        return _decode_inline(part)
+    if hasattr(part, "to_bytes"):
+        part = part.to_bytes()
+    return _decode_inline(part)
+
+
+@lru_cache(maxsize=1024)
+def _decode_inline(part):
+    """Decode a stored inline part once and stash the result.
+
+    The same inline value is decoded for ``cat`` and again for the length
+    check in ``info``/``ls``; caching avoids repeating the work for every
+    listing. Inline references are small and few, so a bounded cache is
+    enough.
+    """
+    if isinstance(part, str):
+        part = part.encode()
+    if part.startswith(b"base64:"):
+        return base64.b64decode(part[7:])
+    return part
+
+
 def _prot_in_references(path, references):
     ref = references.get(path)
     if isinstance(ref, (list, tuple)) and isinstance(ref[0], str):
@@ -800,9 +830,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             part = part.to_bytes()
         if isinstance(part, bytes):
             logger.debug(f"Reference: {path}, type bytes")
-            if part.startswith(b"base64:"):
-                part = base64.b64decode(part[7:])
-            return part, None, None
+            return _inline_data(part), None, None
 
         if len(part) == 1:
             logger.debug(f"Reference: {path}, whole file => {part}")
@@ -1127,7 +1155,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         it = self.references.items()
         for path, part in it:
             if isinstance(part, (bytes, str)) or hasattr(part, "to_bytes"):
-                size = len(part)
+                size = len(_inline_data(part))
             elif len(part) == 1:
                 size = None
             else:
@@ -1236,8 +1264,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         out = self.references.get(path)
         if out is not None:
             if isinstance(out, (str, bytes)):
-                # decode base64 here
-                return {"name": path, "type": "file", "size": len(out)}
+                return {"name": path, "type": "file", "size": len(_inline_data(out))}
             elif len(out) > 1:
                 return {"name": path, "type": "file", "size": out[2]}
             else:
@@ -1253,8 +1280,19 @@ class ReferenceFileSystem(AsyncFileSystem):
             out0[0]["size"] = self.fss[prot].size(self.references[path][0])
         return out0[0]
 
-    async def _info(self, path, **kwargs):  # calls fast sync code
-        return self.info(path)
+    async def _info(self, path, **kwargs):
+        out = self.references.get(path)
+        if isinstance(out, (list, tuple)) and len(out) == 1:
+            # whole remote file: the size must come from the remote FS, which
+            # cannot be called synchronously from inside the event loop
+            prot, _ = split_protocol(out[0])
+            fs = self.fss[prot]
+            if fs.async_impl:
+                size = await fs._size(out[0])
+            else:
+                size = fs.size(out[0])
+            return {"name": path, "type": "file", "size": size}
+        return self.info(path)  # calls fast sync code
 
     async def _rm_file(self, path, **kwargs):
         self.references.pop(

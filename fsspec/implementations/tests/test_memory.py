@@ -1,10 +1,216 @@
 import os
+import pickle
+from contextlib import nullcontext
+from datetime import datetime, timezone
 from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
 
+import fsspec
+from fsspec import filesystem
+from fsspec.config import conf
 from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
+
+
+@pytest.mark.parametrize(
+    "mode, method, args, expected",
+    [
+        ("ab", "write", (b"def",), b"abcdef"),
+        ("r+b", "write", (b"XY",), b"XYc"),
+        ("ab", "writelines", ([b"d", b"ef"],), b"abcdef"),
+        ("r+b", "truncate", (2,), b"ab"),
+    ],
+)
+def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
+    m.pipe_file("file", b"abc")
+    created = m.created("file")
+    modified = datetime(2100, 1, 1, tzinfo=timezone.utc)
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            assert tz is timezone.utc
+            return modified
+
+    with m.open("file", mode) as f:
+        monkeypatch.setattr("fsspec.implementations.memory.datetime", Clock)
+        getattr(f, method)(*args)
+
+    assert m.cat_file("file") == expected
+    assert m.modified("file") == modified
+    assert m.created("file") == created
+
+
+def test_modified_after_partial_writelines(m):
+    m.pipe_file("file", b"abc")
+    original = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+    with m.open("file", "ab") as f:
+        f.modified = original
+        with pytest.raises(TypeError):
+            f.writelines([b"d", None])
+
+    assert m.cat_file("file") == b"abcd"
+    assert m.modified("file") > original
+
+
+def test_modified_unchanged_without_write(m):
+    m.pipe_file("file", b"abc")
+    original = m.modified("file")
+
+    with m.open("file", "r+b") as f:
+        assert f.read() == b"abc"
+        f.seek(0)
+        assert f.write(b"") == 0
+        assert f.writelines([]) is None
+        with pytest.raises(TypeError):
+            f.write(None)
+        with pytest.raises(ValueError):
+            f.truncate(-1)
+
+    assert m.modified("file") == original
+
+
+def test_independent_stores(m):
+    first = filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = filesystem("memory", global_store=False, skip_instance_cache=True)
+    for fs, data in [(m, b"global"), (first, b"first"), (second, b"second")]:
+        fs.pipe("same/path", data)
+        fs.mkdir("empty")
+
+    assert m.cat("same/path") == b"global"
+    assert first.cat("same/path") == b"first"
+    assert second.cat("same/path") == b"second"
+
+    first.rm("same", recursive=True)
+    first.rmdir("empty")
+    assert first.ls("") == []
+    assert second.isdir("empty")
+    assert m.isdir("empty")
+    assert second.cat("same/path") == b"second"
+    assert m.cat("same/path") == b"global"
+
+
+def test_independent_store_identity():
+    first = filesystem("memory", global_store=False, skip_instance_cache=True)
+    second = filesystem("memory", global_store=False, skip_instance_cache=True)
+    assert first != second
+    assert len({first, second}) == 2
+    assert first.__dask_tokenize__() != second.__dask_tokenize__()
+    token = first.__dask_tokenize__()
+    first.pipe("file", b"data")
+    assert first.__dask_tokenize__() == token
+    assert not MemoryFileSystem._cache
+
+
+def test_independent_store_uses_instance_cache(m):
+    fs = filesystem("memory", global_store=False)
+    assert fs is filesystem("memory", global_store=False)
+    fs.pipe("file", b"private")
+    snapshot = pickle.dumps(fs)
+    fs.pipe("file", b"changed after snapshot")
+    restored = pickle.loads(snapshot)
+    assert restored is not fs
+    assert restored.cat("file") == b"private"
+    assert fs.cat("file") == b"changed after snapshot"
+    assert fs is filesystem("memory", global_store=False)
+    assert not m.exists("file")
+
+
+def test_default_store_is_shared(m):
+    other = filesystem("memory")
+    m.pipe("file", b"shared")
+    m.mkdir("empty")
+    assert other.cat("file") == b"shared"
+    assert other.isdir("empty")
+    assert other == m
+    assert other is m
+
+
+@pytest.mark.parametrize("use_mapper", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_default_store_transaction_helpers(m, use_mapper, rollback):
+    def write():
+        if use_mapper:
+            fsspec.get_mapper("memory://")["file"] = b"data"
+        else:
+            with fsspec.open("memory://file", "wb") as f:
+                f.write(b"data")
+        assert not m.exists("file")
+
+    if rollback:
+        with pytest.raises(RuntimeError), m.transaction:
+            write()
+            raise RuntimeError("discard transaction")
+        assert not m.exists("file")
+    else:
+        with m.transaction:
+            write()
+        assert m.cat("file") == b"data"
+
+
+def test_independent_store_from_config(m, monkeypatch):
+    monkeypatch.setitem(
+        conf, "memory", {"global_store": False, "skip_instance_cache": True}
+    )
+    first = filesystem("memory")
+    second = filesystem("memory", skip_instance_cache=False)
+    first.pipe("file", b"private")
+    assert not second.exists("file")
+    assert second is filesystem("memory", skip_instance_cache=False)
+    assert not m.exists("file")
+
+    shared = filesystem("memory", global_store=True, skip_instance_cache=False)
+    assert shared is filesystem("memory", global_store=True, skip_instance_cache=False)
+    assert shared.store is m.store
+
+
+def test_independent_store_transaction(m):
+    fs = filesystem("memory", global_store=False, skip_instance_cache=True)
+    with fs.transaction:
+        fs.pipe("committed", b"data")
+        assert not fs.exists("committed")
+    assert fs.cat("committed") == b"data"
+    assert not m.exists("committed")
+
+    with pytest.raises(RuntimeError), fs.transaction:
+        fs.pipe("discarded", b"data")
+        raise RuntimeError("discard transaction")
+    assert not fs.exists("discarded")
+    assert not m.exists("discarded")
+
+
+@pytest.mark.parametrize(
+    "cache_options", [{}, {"skip_instance_cache": False}, {"skip_instance_cache": True}]
+)
+def test_independent_store_pickle(m, cache_options):
+    fs = filesystem("memory", global_store=False, **cache_options)
+    fs.pipe("file", b"original")
+    fs.mkdir("empty")
+
+    restored = pickle.loads(pickle.dumps(fs))
+    assert restored is not fs
+    assert restored.cat("file") == b"original"
+    assert restored.isdir("empty")
+    assert restored.store["/file"].fs is restored
+    assert restored.info("file") == fs.info("file")
+
+    with restored.open("file", "ab") as f:
+        f.write(b" appended")
+    restored.rmdir("empty")
+    assert restored.cat("file") == b"original appended"
+    assert fs.cat("file") == b"original"
+    assert fs.isdir("empty")
+    assert m.ls("") == []
+
+
+def test_default_store_pickle(m):
+    m.pipe("file", b"shared")
+    restored = pickle.loads(pickle.dumps(m))
+    assert restored is m
+    assert restored.store is m.store
+    assert restored.cat("file") == b"shared"
 
 
 def test_1(m):
@@ -106,6 +312,23 @@ def test_mv_recursive(m):
     assert not m.exists("src")
 
 
+def test_mv_recursive_maxdepth_keeps_deeper_files(m):
+    m.pipe(
+        {
+            "/src/top.txt": b"top",
+            "/src/sub/mid.txt": b"mid",
+            "/src/sub/deeper/low.txt": b"low",
+        }
+    )
+    m.mv("/src", "/dst", recursive=True, maxdepth=2)
+    assert m.cat("/dst/top.txt") == b"top"
+    assert m.cat("/dst/sub/mid.txt") == b"mid"
+    assert not m.exists("/src/top.txt")
+    assert not m.exists("/src/sub/mid.txt")
+    # beyond maxdepth: not copied, so it must not be deleted either
+    assert m.cat("/src/sub/deeper/low.txt") == b"low"
+
+
 def test_mv_same_paths(m):
     m.mkdir("src")
     m.touch("src/file.txt")
@@ -189,6 +412,25 @@ def test_append_creates_missing_file(m, mode):
         assert f.tell() == f.seek(0, 2)
         f.write(b"data" if "b" in mode else "data")
     assert m.cat(filename) == b"data"
+
+
+@pytest.mark.parametrize("global_store", [False, True])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_transaction_append_existing_file(m, global_store, mode, rollback):
+    fs = filesystem("memory", global_store=global_store, skip_instance_cache=True)
+    fs.pipe_file("file", b"original")
+
+    with pytest.raises(RuntimeError) if rollback else nullcontext():
+        with fs.transaction:
+            with fs.open("file", mode) as f:
+                f.write(b"-appended")
+            assert fs.cat_file("file") == b"original"
+            if rollback:
+                raise RuntimeError("discard transaction")
+
+    expected = b"original" if rollback else b"original-appended"
+    assert fs.cat_file("file") == expected
 
 
 def test_moves(m):
@@ -521,6 +763,27 @@ def test_rm_recursive_still_removes_implicit_parents(m):
     assert not m.exists("/implicit")
 
 
+@pytest.mark.parametrize("explicit_dirs", [False, True])
+def test_rm_recursive_maxdepth_keeps_deeper_files(m, explicit_dirs):
+    if explicit_dirs:
+        m.mkdir("/src/sub/deeper")
+    m.pipe(
+        {
+            "/src/top.txt": b"top",
+            "/src/sub/mid.txt": b"mid",
+            "/src/sub/deeper/low.txt": b"low",
+        }
+    )
+    m.rm("/src", recursive=True, maxdepth=2)
+    assert not m.exists("/src/top.txt")
+    assert not m.exists("/src/sub/mid.txt")
+    # beyond maxdepth, so it is kept along with its parent directories
+    assert m.cat("/src/sub/deeper/low.txt") == b"low"
+
+    m.rm("/src", recursive=True, maxdepth=3)
+    assert not m.exists("/src")
+
+
 def test_mapper_delitem_missing_key_raises_keyerror(m):
     mapper = m.get_mapper("/mapper")
     mapper["present"] = b"data"
@@ -575,3 +838,13 @@ def test_cat_recursive_does_not_stat_every_path(m):
     finally:
         MemoryFileSystem.isdir = isdir
     assert calls == []
+
+    
+@pytest.mark.parametrize("mode", ["rb", "wb", "ab"])
+def test_open_implicit_directory_raises(m, mode):
+    # "/dir" exists only because a file lives under it
+    m.pipe("/dir/file", b"data")
+    with pytest.raises(IsADirectoryError):
+        m.open("/dir", mode)
+    assert m.isdir("/dir")
+    assert m.cat("/dir/file") == b"data"

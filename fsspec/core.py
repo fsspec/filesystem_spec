@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
-import os
+import posixpath
 import re
 from glob import has_magic
 from pathlib import Path
@@ -106,11 +106,11 @@ class OpenFile:
         except FileNotFoundError as e:
             if has_magic(self.path):
                 raise FileNotFoundError(
-                    "%s not found. The URL contains glob characters: you maybe needed\n"
+                    f"{self.path} not found. "
+                    "The URL contains glob characters: you maybe needed\n"
                     "to pass expand=True in fsspec.open() or the storage_options of \n"
                     "your library. You can also set the config value 'open_expand'\n"
-                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
-                    self.path,
+                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True."
                 ) from e
             raise
 
@@ -192,7 +192,11 @@ class OpenFiles(list):
     def __exit__(self, *args):
         fs = self.fs
         [s.__exit__(*args) for s in self]
-        if "r" not in self.mode:
+        if "r" in self.mode:
+            # open_many() returns files without populating the OpenFile objects.
+            for f in self.files:
+                f.close()
+        else:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
@@ -446,7 +450,7 @@ def open(
     newline=None,
     expand=None,
     **kwargs,
-):
+) -> OpenFile:
     """Given a path or paths, return one ``OpenFile`` object.
 
     Parameters
@@ -687,7 +691,7 @@ def get_fs_token_paths(
             _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
         ]
         if len({pc[1] for pc in pchains}) > 1:
-            raise ValueError("Protocol mismatch getting fs from %s", urlpath)
+            raise ValueError(f"Protocol mismatch getting fs from {urlpath}")
         paths = [pc[0] for pc in pchains]
     else:
         paths = fs._strip_protocol(paths)
@@ -712,7 +716,8 @@ def _expand_paths(path, name_function, num):
         if path.count("*") > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
         elif "*" not in path:
-            path = os.path.join(path, "*.part")
+            # paths are "/"-separated on every filesystem, including local ones
+            path = posixpath.join(path, "*.part")
 
         if name_function is None:
             name_function = build_name_function(num - 1)

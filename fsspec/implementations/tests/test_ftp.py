@@ -1,3 +1,4 @@
+import io
 import os
 import subprocess
 import sys
@@ -214,6 +215,61 @@ def test_cat_get(ftp_writable, tmpdir):
     fn = os.path.join(tmpdir, "lfile")
     fs.get_file("/tmp/myfile", fn)
     assert open(fn, "rb").read() == data
+
+
+@pytest.mark.parametrize("start,end", [(None, None), (3, None), (-3, None), (2, 8)])
+def test_cat_file_with_protocol(ftp_writable, start, end):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    data = b"0123456789"
+    fs.pipe("/url-file", data)
+    url = f"ftp://{host}:{port}/url-file"
+    assert fs.cat_file(url, start=start, end=end) == data[start:end]
+
+
+@pytest.mark.parametrize("file_like", [False, True])
+def test_get_file_with_protocol(ftp_writable, tmp_path, file_like):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    data = b"download through an FTP URL"
+    fs.pipe("/url-file", data)
+    target = io.BytesIO() if file_like else tmp_path / "download"
+    fs.get_file(f"ftp://{host}:{port}/url-file", target)
+    assert (target.getvalue() if file_like else target.read_bytes()) == data
+
+
+@pytest.mark.parametrize("start", [-3, -10, -100, 0, 3, None])
+def test_cat_file_start(ftp_writable, start):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    data = b"0123456789"
+    fs.pipe("/slice", data)
+    assert fs.cat_file("/slice", start=start) == data[start:]
+    assert fs.cat_file("/slice", start=start, end=8) == data[start:8]
+
+
+def test_cat_file_negative_start_empty_or_missing(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    fs.pipe("/empty", b"")
+    assert fs.cat_file("/empty", start=-3) == b""
+    with pytest.raises(FileNotFoundError):
+        fs.cat_file("/missing", start=-3)
+
+
+@pytest.mark.parametrize("start", [None, 3])
+def test_cat_file_reads_past_cached_size(ftp_writable, start):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    fs.pipe("/growing", b"short")
+    assert fs.info("/growing")["size"] == 5
+    data = b"short and longer"
+    # An external write does not invalidate this filesystem's directory cache.
+    with FTP() as writer:
+        writer.connect(host, port)
+        writer.login(user, pw)
+        writer.storbinary("STOR /growing", io.BytesIO(data))
+    assert fs.cat_file("/growing", start=start) == data[start:]
 
 
 def test_mkdir(ftp_writable):

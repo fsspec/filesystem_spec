@@ -12,7 +12,7 @@ import smbclient
 import smbprotocol.exceptions
 
 from .. import AbstractFileSystem
-from ..utils import infer_storage_options
+from ..utils import infer_storage_options, stringify_path
 
 # ! pylint: disable=bad-continuation
 
@@ -217,7 +217,7 @@ class SMBFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path):
-        return infer_storage_options(path)["path"]
+        return infer_storage_options(stringify_path(path))["path"]
 
     @staticmethod
     def _get_kwargs_from_urls(path):

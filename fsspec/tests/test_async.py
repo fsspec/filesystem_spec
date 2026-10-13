@@ -1,13 +1,220 @@
 import asyncio
 import inspect
 import io
+import os
+import subprocess
+import sys
+import textwrap
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
 import fsspec
 import fsspec.asyn
 from fsspec.asyn import _run_coros_in_chunks
+
+
+def test_get_lock_is_thread_safe(monkeypatch):
+    barrier = threading.Barrier(2)
+    real_threading = fsspec.asyn.threading
+
+    def make_lock():
+        candidate = threading.Lock()
+        barrier.wait()
+        return candidate
+
+    fsspec.asyn.reset_lock()
+    try:
+        monkeypatch.setattr(fsspec.asyn, "threading", SimpleNamespace(Lock=make_lock))
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            locks = list(executor.map(lambda _: fsspec.asyn.get_lock(), range(2)))
+    finally:
+        monkeypatch.setattr(fsspec.asyn, "threading", real_threading)
+        fsspec.asyn.reset_lock()
+
+    assert locks[0] is locks[1]
+
+
+@pytest.mark.parametrize("finalizing", [False, True])
+def test_sync_stopped_io_thread(monkeypatch, finalizing):
+    stopped_loop = asyncio.new_event_loop()
+    try:
+        monkeypatch.setattr(fsspec.asyn, "loop", [stopped_loop])
+        monkeypatch.setattr(
+            fsspec.asyn, "iothread", [SimpleNamespace(is_alive=lambda: False)]
+        )
+        monkeypatch.setattr(fsspec.asyn.sys, "is_finalizing", lambda: finalizing)
+
+        def must_not_create_coroutine():
+            pytest.fail("sync attempted to schedule work on a stopped IO thread")
+
+        with pytest.raises(RuntimeError, match="IO thread has already stopped"):
+            fsspec.asyn.sync(stopped_loop, must_not_create_coroutine)
+    finally:
+        stopped_loop.close()
+
+
+def test_sync_supplied_loop_on_stopped_io_thread(monkeypatch):
+    supplied_loop = asyncio.new_event_loop()
+    try:
+        monkeypatch.setattr(fsspec.asyn, "loop", [object()])
+        monkeypatch.setattr(
+            fsspec.asyn,
+            "iothread",
+            [SimpleNamespace(is_alive=lambda: False, ident=424242)],
+        )
+        # the supplied loop was being run by the fsspec IO thread
+        supplied_loop._thread_id = 424242
+
+        def must_not_create_coroutine():
+            pytest.fail("sync attempted to schedule work on a stopped IO thread")
+
+        with pytest.raises(RuntimeError, match="IO thread has already stopped"):
+            fsspec.asyn.sync(supplied_loop, must_not_create_coroutine)
+    finally:
+        supplied_loop._thread_id = None
+        supplied_loop.close()
+
+
+@pytest.mark.parametrize("finalizing", [False, True])
+def test_sync_custom_loop_ignores_stopped_io_thread(monkeypatch, finalizing):
+    custom_loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=custom_loop.run_forever)
+    thread.start()
+    try:
+        monkeypatch.setattr(fsspec.asyn, "loop", [object()])
+        monkeypatch.setattr(
+            fsspec.asyn,
+            "iothread",
+            [SimpleNamespace(is_alive=lambda: False, ident=12345)],
+        )
+        monkeypatch.setattr(fsspec.asyn.sys, "is_finalizing", lambda: finalizing)
+
+        async def work():
+            return 42
+
+        assert fsspec.asyn.sync(custom_loop, work, timeout=1) == 42
+    finally:
+        custom_loop.call_soon_threadsafe(custom_loop.stop)
+        thread.join(timeout=5)
+        custom_loop.close()
+
+
+@pytest.mark.parametrize("finalizing", [False, True])
+def test_sync_live_io_thread(monkeypatch, finalizing):
+    live_loop = fsspec.asyn.get_loop()
+    monkeypatch.setattr(fsspec.asyn.sys, "is_finalizing", lambda: finalizing)
+
+    async def work():
+        return 42
+
+    assert fsspec.asyn.sync(live_loop, work, timeout=1) == 42
+
+
+def _run_python(script, **kwargs):
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    return subprocess.Popen(
+        [sys.executable, "-c", textwrap.dedent(script)], env=env, **kwargs
+    )
+
+
+def test_io_loop_stopped_before_interpreter_shutdown():
+    script = """
+        import atexit
+        import sys
+
+        # Registered before fsspec is imported, so it runs after fsspec's hook.
+        def report():
+            print("alive", sys.modules["fsspec.asyn"].iothread[0].is_alive())
+
+        atexit.register(report)
+
+        import fsspec.asyn
+
+        fsspec.asyn.get_loop()
+    """
+    proc = _run_python(script, stdout=subprocess.PIPE, text=True)
+    out, _ = proc.communicate(timeout=60)
+    assert proc.returncode == 0
+    assert out.strip() == "alive False"
+
+
+def test_io_loop_blocked_at_exit_warns_and_waits():
+    script = """
+        import atexit
+        import sys
+        import threading
+        import time
+
+        # Registered before fsspec is imported, so it runs after fsspec's hook.
+        def report():
+            print("alive", sys.modules["fsspec.asyn"].iothread[0].is_alive())
+
+        atexit.register(report)
+
+        import fsspec.asyn
+
+        fsspec.asyn._STOP_IO_LOOP_WARN_SECONDS = 0.2
+        loop = fsspec.asyn.get_loop()
+        blocking = threading.Event()
+
+        def block():
+            blocking.set()
+            time.sleep(1)
+
+        loop.call_soon_threadsafe(block)
+        blocking.wait(10)
+    """
+    proc = _run_python(
+        script, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    out, err = proc.communicate(timeout=60)
+    assert proc.returncode == 0
+    assert "fsspec IO loop is still running" in err
+    assert out.strip() == "alive False"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="uses __cxa_atexit")
+def test_late_uvloop_timer_does_not_crash_at_exit():
+    pytest.importorskip("uvloop")
+    # A C exit handler blocked in getchar() holds the process after
+    # Py_Finalize; a timer on a still-running uvloop IO loop firing there
+    # re-enters the finalized interpreter and segfaults (#2241).
+    script = """
+        import asyncio
+        import ctypes
+        import threading
+
+        import uvloop
+
+        import fsspec.asyn
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        loop = fsspec.asyn.get_loop()
+        process = ctypes.CDLL(None)
+        process.__cxa_atexit(process.getchar, None, None)
+        armed = threading.Event()
+
+        def arm():
+            loop.call_later(0.3, lambda: None)
+            armed.set()
+
+        loop.call_soon_threadsafe(arm)
+        armed.wait(10)
+        print("exiting", flush=True)
+    """
+    proc = _run_python(script, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    assert proc.stdout.readline() == b"exiting\n"
+    time.sleep(1.5)  # well past the timer
+    try:
+        proc.stdin.write(b"\n")
+        proc.stdin.close()
+    except BrokenPipeError:
+        pass  # the child already crashed
+    assert proc.wait(timeout=60) == 0
 
 
 def test_sync_methods():
@@ -493,3 +700,51 @@ async def test_isfile_does_not_swallow_cancellation():
         await fs._isdir("path")
     with pytest.raises(asyncio.CancelledError):
         await fs._isfile("path")
+
+
+class UnreadableAsyncSubdirFS(fsspec.asyn.AsyncFileSystem):
+    """The async counterpart of the unreadable-subdirectory tree."""
+
+    protocol = "unreadableasyncsub"
+    cachable = False
+    mirror_sync_methods = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    async def _ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+@pytest.mark.asyncio
+async def test_async_walk_on_error_reaches_subdirectories():
+    # _walk documents the same on_error contract as walk(), and had the same
+    # omission in the recursive call.
+    fs = UnreadableAsyncSubdirFS()
+    # _walk yields the path it could not list, where walk() omits it. That
+    # difference predates this and is left alone here; what matters is that the
+    # last entry only appears at all when on_error is left at the default.
+    omitted = [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    yielded = omitted + [("top/locked", [], [])]
+
+    assert [entry async for entry in fs._walk("")] == yielded
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        [entry async for entry in fs._walk("", on_error="raise")]
+
+    handled = []
+    assert [entry async for entry in fs._walk("", on_error=handled.append)] == yielded
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]

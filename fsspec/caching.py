@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import collections
 import functools
 import logging
@@ -179,6 +180,7 @@ class MMapCache(BaseCache):
         self.hit_count += sum(1 for i in block_range if i in self.blocks)
 
         ranges = []
+        block_groups = []
 
         # Consolidate needed blocks.
         # Algorithm adapted from Python 2.x itertools documentation.
@@ -202,9 +204,7 @@ class MMapCache(BaseCache):
                 f"MMap get blocks {_blocks[0]}-{_blocks[-1]} ({sstart}-{send})"
             )
             ranges.append((sstart, send))
-
-            # Update set of cached blocks
-            self.blocks.update(_blocks)
+            block_groups.append(_blocks)
             # Update cache statistics with number of blocks we had to cache
             self.miss_count += len(_blocks)
 
@@ -217,10 +217,12 @@ class MMapCache(BaseCache):
                 sstart, send = ranges[idx]
                 logger.debug(f"MMap copy block ({sstart}-{send}")
                 self.cache[sstart:send] = r
+                self.blocks.update(block_groups[idx])
         else:
-            for sstart, send in ranges:
+            for idx, (sstart, send) in enumerate(ranges):
                 logger.debug(f"MMap get block ({sstart}-{send}")
                 self.cache[sstart:send] = self.fetcher(sstart, send)
+                self.blocks.update(block_groups[idx])
 
         return self.cache[start:end]
 
@@ -280,6 +282,121 @@ class ReadAheadCache(BaseCache):
         self.start = start
         self.end = self.start + len(self.cache)
         return part + self.cache[:l]
+
+
+class AdaptiveReadaheadCache(BaseCache):
+    """Cache with adaptive asynchronous prefetching.
+
+    Optimized for sequential and near-sequential reads by dynamically
+    adjusting the amount of data prefetched in the background. The cache
+    uses the generic prefetch engine when async loop support is available,
+    and falls back to ``ReadAheadCache`` when it is not.
+
+    Parameters
+    ----------
+    blocksize: int
+        Nominal read size used by callers.
+    fetcher: Fetcher
+        Function of the form ``f(start, end)`` that returns bytes.
+    size: int
+        Total size of the file.
+    concurrency: int
+        Maximum number of concurrent background fetch tasks.
+    max_prefetch_size: int | None
+        Optional upper bound for adaptive prefetch size in bytes.
+    """
+
+    name = "adaptive"
+
+    def __init__(
+        self,
+        blocksize: int,
+        fetcher: Fetcher,
+        size: int,
+        concurrency: int = 4,
+        max_prefetch_size: int | None = None,
+    ) -> None:
+        super().__init__(blocksize, fetcher, size)
+        self._fallback = ReadAheadCache(blocksize, fetcher, size)
+        self._prefetcher = None
+
+        async def _default_fetcher_async(
+            start_offset: int,
+            total_size: int,
+            split_factor: int = 1,
+        ) -> bytes:
+            del split_factor
+            return await asyncio.to_thread(
+                self.fetcher, start_offset, start_offset + total_size
+            )
+
+        try:
+            from . import asyn as fsspec_asyn
+        except ImportError as e:
+            raise ImportError(
+                "AdaptiveReadaheadCache requires fsspec.asyn to be available"
+            ) from e
+
+        try:
+            from .prefetcher import BackgroundPrefetcher
+
+            self._prefetcher = BackgroundPrefetcher(
+                fetcher=_default_fetcher_async,
+                size=size,
+                concurrency=concurrency,
+                max_prefetch_size=max_prefetch_size,
+                loop=fsspec_asyn.get_loop(),
+            )
+            logger.info(
+                "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",
+                blocksize,
+                size,
+                concurrency,
+                max_prefetch_size,
+            )
+        except Exception as e:
+            logger.info(
+                "AdaptiveReadaheadCache fallback to ReadAheadCache: %s",
+                e,
+                exc_info=True,
+            )
+            self._prefetcher = None
+
+    def _fetch(self, start: int | None, end: int | None) -> bytes:
+        if self._prefetcher is None:
+            out = self._fallback._fetch(start, end)
+            self.hit_count = self._fallback.hit_count
+            self.miss_count = self._fallback.miss_count
+            self.total_requested_bytes = self._fallback.total_requested_bytes
+            return out
+
+        out = self._prefetcher.fetch(start, end)
+        self.miss_count += 1
+        self.total_requested_bytes += len(out)
+        return out
+
+    def close(self) -> None:
+        if self._prefetcher is not None:
+            self._prefetcher.close()
+            self._prefetcher = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        # The prefetcher owns asyncio primitives that are not picklable.
+        self.close()
+        state = self.__dict__.copy()
+        state["_prefetcher"] = None
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._prefetcher = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            # Best-effort cleanup during GC.
+            pass
 
 
 class FirstChunkCache(BaseCache):
@@ -495,7 +612,7 @@ class BytesCache(BaseCache):
             self.start is not None
             and start >= self.start
             and self.end is not None
-            and end < self.end
+            and end <= self.end
         ):
             # cache hit: we have all the required data
             offset = start - self.start
@@ -688,8 +805,9 @@ class KnownPartsOfAFile(BaseCache):
                 # the whole block
                 self.hit_count += 1
                 out += self.data[(loc0, loc1)]
-            elif loc0 <= stop <= loc1:
-                # end block
+            elif started and loc0 <= stop <= loc1:
+                # end block. The start of the request must have been found in
+                # an earlier part, else these bytes come from the wrong offsets
                 self.hit_count += 1
                 out = out + self.data[(loc0, loc1)][: stop - loc0]
                 return out
@@ -857,9 +975,9 @@ class BackgroundBlockCache(BaseCache):
         if start >= self.size or start >= end:
             return b""
 
-        # byte position -> block numbers
+        # byte position -> block numbers; ``end`` is exclusive
         start_block_number = start // self.blocksize
-        end_block_number = end // self.blocksize
+        end_block_number = (end - 1) // self.blocksize
 
         fetch_future_block_number = None
         fetch_future = None
@@ -899,10 +1017,6 @@ class BackgroundBlockCache(BaseCache):
             self._fetch_block_cached.add_key(
                 fetch_future.result(), fetch_future_block_number
             )
-
-        # these are cached, so safe to do multiple calls for the same start and end.
-        for block_number in range(start_block_number, end_block_number + 1):
-            self._fetch_block_cached(block_number)
 
         # fetch next block in the background if nothing is running in the background,
         # the block is within file and it is not already cached
@@ -958,6 +1072,8 @@ class BackgroundBlockCache(BaseCache):
         """
         start_pos = start % self.blocksize
         end_pos = end % self.blocksize
+        if end_pos == 0:
+            end_pos = self.blocksize
 
         # kind of pointless to count this as a hit, but it is
         self.hit_count += 1
@@ -1016,6 +1132,7 @@ for c in (
     MMapCache,
     BytesCache,
     ReadAheadCache,
+    AdaptiveReadaheadCache,
     BlockCache,
     FirstChunkCache,
     AllBytes,

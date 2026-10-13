@@ -1,11 +1,22 @@
 import base64
 import re
+from urllib.parse import quote
 
 import requests
 
 from ..spec import AbstractFileSystem
 from ..utils import infer_storage_options
 from .memory import MemoryFile
+
+
+def _github_names(url, timeout, **kwargs):
+    names = []
+    while url:
+        response = requests.get(url, timeout=timeout, **kwargs)
+        response.raise_for_status()
+        names.extend(item["name"] for item in response.json())
+        url = response.links.get("next", {}).get("url")
+    return names
 
 
 class GithubFileSystem(AbstractFileSystem):
@@ -29,8 +40,8 @@ class GithubFileSystem(AbstractFileSystem):
     - 'github://org:repo@sha/precip/catalog.yml', where the sha is also included
 
     ``sha`` can be the full or abbreviated hex of the commit you want to fetch
-    from, or a branch or tag name (so long as it doesn't contain special characters
-    like "/", "?", which would have to be HTTP-encoded).
+    from, or a branch or tag name. Pass the unencoded name in the ``sha`` option;
+    it is percent-encoded when constructing GitHub API URLs.
 
     For authorised access, you must provide username and token, which can be made
     at https://github.com/settings/tokens
@@ -94,34 +105,28 @@ class GithubFileSystem(AbstractFileSystem):
         -------
         List of string
         """
-        r = requests.get(
+        return _github_names(
             f"https://api.github.com/{['users', 'orgs'][is_org]}/{org_or_user}/repos",
             timeout=cls.timeout,
         )
-        r.raise_for_status()
-        return [repo["name"] for repo in r.json()]
 
     @property
     def tags(self):
         """Names of tags in the repo"""
-        r = requests.get(
+        return _github_names(
             f"https://api.github.com/repos/{self.org}/{self.repo}/tags",
             timeout=self.timeout,
             **self.kw,
         )
-        r.raise_for_status()
-        return [t["name"] for t in r.json()]
 
     @property
     def branches(self):
         """Names of branches in the repo"""
-        r = requests.get(
+        return _github_names(
             f"https://api.github.com/repos/{self.org}/{self.repo}/branches",
             timeout=self.timeout,
             **self.kw,
         )
-        r.raise_for_status()
-        return [t["name"] for t in r.json()]
 
     @property
     def refs(self):
@@ -162,11 +167,11 @@ class GithubFileSystem(AbstractFileSystem):
                     if detail:
                         return [out]
                     else:
-                        return path
+                        return [out["name"]]
                 _sha = out["sha"]
         if path not in self.dircache or sha not in [self.root, None]:
             r = requests.get(
-                self.url.format(org=self.org, repo=self.repo, sha=_sha),
+                self.url.format(org=self.org, repo=self.repo, sha=quote(_sha, safe="")),
                 timeout=self.timeout,
                 **self.kw,
             )
@@ -228,7 +233,10 @@ class GithubFileSystem(AbstractFileSystem):
 
         # construct a url to hit the GitHub API's repo contents API
         url = self.content_url.format(
-            org=self.org, repo=self.repo, path=path, sha=sha or self.root
+            org=self.org,
+            repo=self.repo,
+            path=quote(path),
+            sha=quote(sha or self.root, safe=""),
         )
 
         # make a request to this API, and parse the response as JSON
@@ -296,7 +304,10 @@ class GithubFileSystem(AbstractFileSystem):
         sha = self._get_sha_from_cache(path)
         if not sha:
             url = self.content_url.format(
-                org=self.org, repo=self.repo, path=path.lstrip("/"), sha=self.root
+                org=self.org,
+                repo=self.repo,
+                path=quote(path.lstrip("/")),
+                sha=quote(self.root, safe=""),
             )
             r = requests.get(url, timeout=self.timeout, **self.kw)
             if r.status_code == 404:
@@ -306,7 +317,10 @@ class GithubFileSystem(AbstractFileSystem):
 
         # Delete the file
         delete_url = self.content_url.format(
-            org=self.org, repo=self.repo, path=path, sha=self.root
+            org=self.org,
+            repo=self.repo,
+            path=quote(path),
+            sha=quote(self.root, safe=""),
         )
         branch = self.root
         data = {

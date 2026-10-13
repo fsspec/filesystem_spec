@@ -1,11 +1,15 @@
 import asyncio
 import asyncio.events
+import atexit
+import concurrent.futures
 import functools
 import inspect
 import io
+import logging
 import numbers
 import os
 import re
+import sys
 import threading
 from collections.abc import Iterable
 from glob import has_magic
@@ -20,32 +24,22 @@ from .utils import check_contained, glob_translate, is_exception, other_paths
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
 loop = [None]  # global event loop for any non-async instance
-_lock = None  # global lock placeholder
+_lock = threading.Lock()
 get_running_loop = asyncio.get_running_loop
 
 
 def get_lock():
-    """Allocate or return a threading lock.
-
-    The lock is allocated on first use to allow setting one lock per forked process.
-    """
-    global _lock
-    if not _lock:
-        _lock = threading.Lock()
+    """Return the process-local threading lock."""
     return _lock
 
 
 def reset_lock():
-    """Reset the global lock.
-
-    This should be called only on the init of a forked process to reset the lock to
-    None, enabling the new forked process to get a new lock.
-    """
+    """Reset the global loop and lock after forking."""
     global _lock
 
     iothread[0] = None
     loop[0] = None
-    _lock = None
+    _lock = threading.Lock()
 
 
 async def _runner(event, coro, result, timeout=None):
@@ -74,6 +68,12 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     # and we will wait for it
     if loop is None or loop.is_closed():
         raise RuntimeError("Loop is not running")
+    if iothread[0] is not None and (
+        loop is globals()["loop"][0]
+        or (getattr(loop, "_thread_id", 0) or 0) == iothread[0].ident
+    ):
+        if not iothread[0].is_alive():
+            raise RuntimeError("fsspec IO thread has already stopped.")
     try:
         loop0 = asyncio.events.get_running_loop()
         if loop0 is loop:
@@ -103,6 +103,102 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         raise return_result
     else:
         return return_result
+
+
+_deferred_close_tasks = set()
+_deferred_close_lock = threading.Lock()
+
+
+def _on_loop_thread(loop):
+    """Returns True if the current thread is servicing the given event loop."""
+    if loop is None:
+        return False
+    try:
+        return asyncio.get_running_loop() is loop
+    except RuntimeError:
+        return False
+
+
+def _defer_task(
+    loop,
+    coro,
+    description="deferred task",
+    logger=None,
+    log_level=logging.WARNING,
+):
+    """Schedules a coroutine as a tracked background task on ``loop``.
+
+    Retains a strong reference in ``_deferred_close_tasks`` until completion to
+    prevent asyncio garbage collection from discarding pending tasks mid-flight,
+    and ensures unhandled task exceptions are retrieved and logged.
+    """
+    task = loop.create_task(coro)
+    with _deferred_close_lock:
+        _deferred_close_tasks.add(task)
+
+    def _on_done(t):
+        with _deferred_close_lock:
+            _deferred_close_tasks.discard(t)
+        if not t.cancelled():
+            exc = t.exception()
+            if exc:
+                log = logger or logging.getLogger("fsspec.asyn")
+                log.log(
+                    log_level,
+                    "%s failed during asynchronous execution: %s",
+                    description,
+                    exc,
+                    exc_info=exc,
+                )
+
+    task.add_done_callback(_on_done)
+    return task
+
+
+def sync_teardown(
+    loop,
+    func_or_coro,
+    *args,
+    timeout=None,
+    description="teardown",
+    **kwargs,
+):
+    """Safely runs an async teardown coroutine on ``loop`` from synchronous context.
+
+    Schedules via :func:`asyncio.run_coroutine_threadsafe` or defers on the loop
+    thread to prevent deadlocks.
+    """
+    coro = func_or_coro(*args, **kwargs) if callable(func_or_coro) else func_or_coro
+    if not asyncio.iscoroutine(coro):
+        return
+
+    if sys.is_finalizing():
+        coro.close()
+        return
+
+    if loop is None or not loop.is_running() or loop.is_closed():
+        coro.close()
+        raise RuntimeError(f"Skipping {description}: no usable IO loop available.")
+
+    if _on_loop_thread(loop):
+        _defer_task(loop, coro, description=description, log_level=logging.ERROR)
+        return
+
+    try:
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+    except RuntimeError:
+        coro.close()
+        raise RuntimeError(f"Skipping {description}: event loop is closed.") from None
+
+    if timeout is not None and timeout <= 0:
+        return
+
+    try:
+        return future.result(timeout)
+    except concurrent.futures.TimeoutError:
+        raise FSTimeoutError(
+            f"{description} did not complete within {timeout}s."
+        ) from None
 
 
 def sync_wrapper(func, obj=None):
@@ -154,11 +250,49 @@ def get_loop():
     return loop[0]
 
 
+# How long to wait for the IO thread at exit before warning that it is stuck
+_STOP_IO_LOOP_WARN_SECONDS = 1
+
+
+def _stop_io_loop():
+    """Stop the fsspec IO loop, if one was started, and wait for its thread.
+
+    The IO thread is a daemon, so nothing else stops it before interpreter
+    shutdown. It must not outlive ``Py_Finalize``: a callback firing on it
+    afterwards (for example a uvloop timer) re-enters the finalized interpreter
+    and crashes the process (#2241). atexit hooks run before finalization,
+    while the thread can still take the GIL to process the stop.
+
+    The stop takes effect once the running callback returns, so the wait only
+    lasts if a callback blocks the loop. That case is logged, then waited out:
+    letting the thread survive finalization would reintroduce the crash.
+    """
+    if loop[0] is None or iothread[0] is None or not iothread[0].is_alive():
+        return
+    try:
+        loop[0].call_soon_threadsafe(loop[0].stop)
+    except RuntimeError:
+        # the loop was closed by its user
+        return
+    iothread[0].join(timeout=_STOP_IO_LOOP_WARN_SECONDS)
+    if iothread[0].is_alive():
+        logging.getLogger("fsspec.asyn").warning(
+            "fsspec IO loop is still running %ss after interpreter exit began; "
+            "a callback is blocking it. Waiting for it to finish.",
+            _STOP_IO_LOOP_WARN_SECONDS,
+        )
+        iothread[0].join()
+
+
+# Registered at import, so it runs after any atexit hook registered later
+# that may still use the loop. A forked child inherits this registration;
+# the fork guard below clears ``loop``/``iothread`` there, so in the child it
+# only stops a loop the child started itself, never the parent's thread.
+atexit.register(_stop_io_loop)
+
+
 def reset_after_fork():
-    global lock
-    loop[0] = None
-    iothread[0] = None
-    lock = None
+    reset_lock()
 
 
 if hasattr(os, "register_at_fork"):
@@ -822,6 +956,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 maxdepth=maxdepth,
                 detail=detail,
                 topdown=topdown,
+                on_error=on_error,
                 **kwargs,
             ):
                 yield _

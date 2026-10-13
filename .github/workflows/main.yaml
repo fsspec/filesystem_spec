@@ -48,7 +48,10 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install -e .[test_full]
+          # Install test_full deps from PyPI first so s3fs's strict fsspec pin
+          # doesn't fail on new release tags, then overwrite with local fsspec.
+          pip install "fsspec[test_full]"
+          pip install --no-deps -e .
           pytest -v
 
   win:
