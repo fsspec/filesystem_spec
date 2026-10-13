@@ -300,7 +300,9 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         if "x" in mode and self.exists(path):
             raise FileExistsError
-        if path in self.pseudo_dirs:
+        if path in self.pseudo_dirs or (
+            path not in self.store and any(p.startswith(path + "/") for p in self.store)
+        ):
             raise IsADirectoryError(path)
         parent = path
         while len(parent) > 1:
@@ -409,6 +411,9 @@ class MemoryFileSystem(AbstractFileSystem):
                 # not, and raises like rm_file and the other filesystems do.
                 if p not in existed:
                     raise FileNotFoundError(p)
+                continue
+            elif maxdepth is not None and self.ls(p, detail=False):
+                # a directory still holding files deeper than maxdepth is kept
                 continue
             else:
                 self.rmdir(p)

@@ -6,11 +6,38 @@ Dev
 
 Fixes
 
-- Reject writes through read-only memory file handles, including text wrappers,
-  truncation and writable buffer views. Opens now have independent cursors and
-  modes over a shared buffer; existing readers observe subsequent writes and
-  truncation. Append handles write at the current end of the shared buffer
-  (issue #2193).
+- Reject writes through read-only memory file handles (#2193).
+
+- Reject seeks that change position on async streaming HTTP files.
+
+- Follow GitHub API pagination when listing tags, branches and repositories.
+
+- Strip the protocol from the path in ``LocalFileSystem.lexists``.
+
+- Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
+
+- Return a list of paths when listing a single file with ``GithubFileSystem``.
+
+- Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.
+
+- Stop the fsspec IO loop and join its thread at interpreter exit, so a callback firing on it after ``Py_Finalize`` (e.g. a uvloop timer)
+  cannot crash the process (#2241).
+
+- Avoid deadlocks in ``sync()`` when the default IO thread has stopped (#1723).
+
+- Percent-encode GitHub branch and tag names in API URLs so refs containing ``#``, ``&`` or ``%`` select the intended revision.
+
+- Keep files deeper than ``maxdepth`` in a recursive ``LocalFileSystem.rm`` instead of deleting the whole tree.
+
+- Keep directories that still hold files deeper than ``maxdepth`` in a recursive ``MemoryFileSystem.rm`` instead of raising ``OSError``.
+
+- Read ini and json config files as UTF-8 instead of the locale encoding.
+
+- Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
+
+- Keep files deeper than ``maxdepth`` in the source of a recursive ``mv`` instead of deleting them uncopied.
+
+- Accept local filesystem URLs in ``get_file`` when copying to a file-like object.
 
 - Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
 

@@ -450,7 +450,7 @@ def open(
     newline=None,
     expand=None,
     **kwargs,
-):
+) -> OpenFile:
     """Given a path or paths, return one ``OpenFile`` object.
 
     Parameters

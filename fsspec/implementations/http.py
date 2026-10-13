@@ -127,7 +127,7 @@ class HTTPFileSystem(AsyncFileSystem):
             try:
                 sync(loop, session.close, timeout=0.1)
                 return
-            except (TimeoutError, FSTimeoutError, NotImplementedError):
+            except (TimeoutError, FSTimeoutError, NotImplementedError, RuntimeError):
                 pass
         connector = getattr(session, "_connector", None)
         if connector is not None:
@@ -218,9 +218,11 @@ class HTTPFileSystem(AsyncFileSystem):
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
-            out = await self._ls_real(url, detail=detail, **kwargs)
+            out = await self._ls_real(url, detail=True, **kwargs)
             self.dircache[url] = out
-        return out
+        if detail:
+            return out
+        return sorted(entry["name"] for entry in out)
 
     ls = sync_wrapper(_ls)
 
@@ -805,6 +807,16 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         self.kwargs = kwargs
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none")
         self.size = size
+
+    def seek(self, loc, whence=0):
+        if loc == 0 and whence == 1:
+            return
+        if loc == self.loc and whence == 0:
+            return
+        raise ValueError("Cannot seek streaming HTTP file")
+
+    def seekable(self):
+        return False
 
     async def read(self, num=-1):
         if self.r is None:

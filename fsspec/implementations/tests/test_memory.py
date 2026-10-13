@@ -313,6 +313,23 @@ def test_mv_recursive(m):
     assert not m.exists("src")
 
 
+def test_mv_recursive_maxdepth_keeps_deeper_files(m):
+    m.pipe(
+        {
+            "/src/top.txt": b"top",
+            "/src/sub/mid.txt": b"mid",
+            "/src/sub/deeper/low.txt": b"low",
+        }
+    )
+    m.mv("/src", "/dst", recursive=True, maxdepth=2)
+    assert m.cat("/dst/top.txt") == b"top"
+    assert m.cat("/dst/sub/mid.txt") == b"mid"
+    assert not m.exists("/src/top.txt")
+    assert not m.exists("/src/sub/mid.txt")
+    # beyond maxdepth: not copied, so it must not be deleted either
+    assert m.cat("/src/sub/deeper/low.txt") == b"low"
+
+
 def test_mv_same_paths(m):
     m.mkdir("src")
     m.touch("src/file.txt")
@@ -1026,9 +1043,40 @@ def test_rm_recursive_still_removes_implicit_parents(m):
     assert not m.exists("/implicit")
 
 
+@pytest.mark.parametrize("explicit_dirs", [False, True])
+def test_rm_recursive_maxdepth_keeps_deeper_files(m, explicit_dirs):
+    if explicit_dirs:
+        m.mkdir("/src/sub/deeper")
+    m.pipe(
+        {
+            "/src/top.txt": b"top",
+            "/src/sub/mid.txt": b"mid",
+            "/src/sub/deeper/low.txt": b"low",
+        }
+    )
+    m.rm("/src", recursive=True, maxdepth=2)
+    assert not m.exists("/src/top.txt")
+    assert not m.exists("/src/sub/mid.txt")
+    # beyond maxdepth, so it is kept along with its parent directories
+    assert m.cat("/src/sub/deeper/low.txt") == b"low"
+
+    m.rm("/src", recursive=True, maxdepth=3)
+    assert not m.exists("/src")
+
+
 def test_mapper_delitem_missing_key_raises_keyerror(m):
     mapper = m.get_mapper("/mapper")
     mapper["present"] = b"data"
     del mapper["present"]
     with pytest.raises(KeyError):
         del mapper["missing"]
+
+
+@pytest.mark.parametrize("mode", ["rb", "wb", "ab"])
+def test_open_implicit_directory_raises(m, mode):
+    # "/dir" exists only because a file lives under it
+    m.pipe("/dir/file", b"data")
+    with pytest.raises(IsADirectoryError):
+        m.open("/dir", mode)
+    assert m.isdir("/dir")
+    assert m.cat("/dir/file") == b"data"

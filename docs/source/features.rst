@@ -371,7 +371,7 @@ the dictionary ``fsspec.config.conf``.
 
 Files are stored in the directory pointed to by ``FSSPEC_CONFIG_DIR``,
 ``"~/.config/fsspec/`` by default. All \*.ini and \*.json files will be
-loaded and parsed from their respective formats and fed into the config dict
+loaded as UTF-8, parsed from their respective formats and fed into the config dict
 at import time. For example, if there is a file "~/.config/fsspec/conf.json"
 containing
 
