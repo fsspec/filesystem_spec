@@ -8,6 +8,10 @@ Fixes
 
 - Preserve ``None`` values when serializing filesystem arguments and options to dictionaries or JSON.
 
+- Reject seeks that change position on async streaming HTTP files.
+
+- Follow GitHub API pagination when listing tags, branches and repositories.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
