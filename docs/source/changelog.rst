@@ -1,12 +1,15 @@
 Changelog
-=========
-
+==
 Dev
 ---
 
 Fixes
 
 - Preserve literal local paths whose apparent URI scheme does not start with a letter.
+
+- Reject seeks that change position on async streaming HTTP files.
+
+- Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
