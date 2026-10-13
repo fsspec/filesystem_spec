@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Read empty GitHub files without requiring the HTTP extra or a second download.
+
 - Accept PathLike local destinations in synchronous ``get`` (#896).
 
 - Reject seeks that change position on async streaming HTTP files.
