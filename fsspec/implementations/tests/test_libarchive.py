@@ -96,6 +96,34 @@ def test_literal_components(name, path):
     with pytest.raises(FileNotFoundError):
         fs.cat_file("file")
 
+        
+@pytest.mark.parametrize(
+    "payloads",
+    [
+        [b"", b"last"],
+        [b"first", b""],
+        [b"first", b"", b"last"],
+        [b"first", b"last"],
+        [b"", b""],
+    ],
+    ids=["empty_first", "empty_last", "empty_middle", "nonempty", "all_empty"],
+)
+def test_duplicate_members_with_empty_files(payloads):
+    pytest.importorskip("libarchive")
+    data = BytesIO()
+    with tarfile.open(fileobj=data, mode="w") as archive:
+        for payload in payloads:
+            member = tarfile.TarInfo("file")
+            member.size = len(payload)
+            archive.addfile(member, BytesIO(payload))
+    data.seek(0)
+    fs = fsspec.filesystem("libarchive", fo=data)
+    expected = payloads[-1]
+    assert fs.info("file")["size"] == len(expected)
+    assert fs.cat_file("file") == expected
+    with fs.open("file", "rb") as stream:
+        assert stream.read() == expected
+
 
 @pytest.mark.parametrize("directory_first", [True, False])
 def test_explicit_directory_metadata(directory_first):

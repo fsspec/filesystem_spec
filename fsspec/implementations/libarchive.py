@@ -208,7 +208,8 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
 
                 if entry.size == 0:
                     # empty file, so there are no blocks
-                    break
+                    data = b""
+                    continue
 
                 for block in entry.get_blocks(entry.size):
                     data = block
