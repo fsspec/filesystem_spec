@@ -5,6 +5,7 @@ import logging
 import re
 import urllib.error
 import urllib.parse
+from collections.abc import Iterator
 from copy import copy
 from json import dumps, loads
 from urllib.parse import urlparse
@@ -168,8 +169,9 @@ class RequestsSessionShim:
         elif data:
             if isinstance(data, io.IOBase):
                 data = data.read()
+            parts = list(data) if isinstance(data, Iterator) else [data]
             blob = Blob.new(
-                to_js([data]),
+                to_js(parts),
                 to_js(
                     {"type": "application/octet-stream"},
                     dict_converter=Object.fromEntries,

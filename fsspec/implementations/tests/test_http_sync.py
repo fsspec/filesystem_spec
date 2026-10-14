@@ -108,6 +108,23 @@ def test_session_shim_rejects_data_and_json(js_session_shim, value):
     to_js.assert_not_called()
 
 
+@pytest.mark.parametrize("chunks", [(), (b"he", b"llo")])
+def test_session_shim_iterator_body(js_session_shim, chunks):
+    from fsspec.implementations.http_sync import RequestsSessionShim
+
+    request, blob, object_type, to_js = js_session_shim
+    RequestsSessionShim().post("https://example.com/data", data=iter(chunks))
+
+    parts = list(chunks)
+    options = {"type": "application/octet-stream"}
+    assert to_js.call_args_list == [
+        call(parts),
+        call(options, dict_converter=object_type.fromEntries),
+    ]
+    blob.new.assert_called_once_with(parts, options)
+    request.send.assert_called_once_with(blob.new.return_value)
+
+
 def test_session_shim_without_body(js_session_shim):
     from fsspec.implementations.http_sync import RequestsSessionShim
 
