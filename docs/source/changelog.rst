@@ -6,8 +6,35 @@ Dev
 
 Fixes
 
-- Support ``length=None`` in ``utils.read_block`` without a delimiter, as
-  documented, to read through the end of the file.
+- Support ``length=None`` in ``utils.read_block`` without a delimiter (#2262)
+
+- Return an empty block instead of passing a negative read length in read_block (#2261)
+
+- Preserve per-call request options in HTTP directory listings (#2258)
+
+- Refetch memory-mapped cache blocks when a missing backing file is recreated (#2257)
+
+- Normalize single-dot and empty path components in libarchive member names and lookups.
+
+- Read the last libarchive member consistently when duplicate names include empty files.
+
+- Preserve caller-provided temporary directories during cross-filesystem copies.
+
+- Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
+
+- Use the correct POST method in the Pyodide HTTP session shim.
+
+- Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
+
+- Read empty GitHub files without requiring the HTTP extra or a second download.
+
+- Accept PathLike local destinations in synchronous ``get`` (#896).
+
+- Reject seeks that change position on async streaming HTTP files.
+
+- Follow GitHub API pagination when listing tags, branches and repositories.
+
+- Strip SFTP and SSH URL prefixes before recursively creating directories.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
@@ -43,6 +70,9 @@ Fixes
 - Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
 
 - Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
+
+- Request identity encoding for buffered HTTP range reads by default, while
+  preserving explicitly configured request and session encodings (#1748).
 
 - Resolve negative FTP read offsets relative to the end of the file.
 

@@ -177,7 +177,7 @@ class RequestsSessionShim:
         return self.request("HEAD", url, **kwargs)
 
     def post(self, url, **kwargs):
-        return self.request("POST}", url, **kwargs)
+        return self.request("POST", url, **kwargs)
 
     def put(self, url, **kwargs):
         return self.request("PUT", url, **kwargs)
@@ -296,7 +296,7 @@ class HTTPFileSystem(AbstractFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
-        r = self.session.get(self.encode_url(url), **self.kwargs)
+        r = self.session.get(self.encode_url(url), **kw)
         self._raise_not_found_for_status(r, url)
         text = r.text
         if self.simple_links:
@@ -324,7 +324,7 @@ class HTTPFileSystem(AbstractFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            out = self._ls_real(url.rstrip("/"), detail=False)
+            out = self._ls_real(url.rstrip("/"), detail=False, **kwargs)
         if detail:
             return [
                 {
