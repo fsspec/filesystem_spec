@@ -312,7 +312,7 @@ def read_block(
 
     f.seek(offset)
 
-    return f.read() if length is None else f.read(length)
+    return f.read(length)
 
 
 def tokenize(*args: Any, **kwargs: Any) -> str:
