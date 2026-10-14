@@ -1113,7 +1113,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 if not rpaths:
                     return
 
-            if isinstance(lpath, str):
+            if isinstance(lpath, (str, os.PathLike)):
                 lpath = make_path_posix(lpath)
 
             source_is_file = len(rpaths) == 1

@@ -345,6 +345,29 @@ def fake_client(monkeypatch):
     return _FakeSSHClient
 
 
+@pytest.mark.parametrize("protocol", ["sftp", "ssh"])
+def test_makedirs_with_url(fake_client, tmp_path, protocol):
+    class LocalSFTP:
+        def stat(self, path):
+            return (tmp_path / path.lstrip("/")).stat()
+
+        def mkdir(self, path, mode=0o777):
+            (tmp_path / path.lstrip("/")).mkdir(mode=mode)
+
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = LocalSFTP()
+    url = f"{protocol}://host/parent/child"
+    fs.makedirs(url)
+    assert (tmp_path / "parent/child").is_dir()
+    assert {path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")} == {
+        "parent",
+        "parent/child",
+    }
+    fs.makedirs(url, exist_ok=True)
+    with pytest.raises(FileExistsError):
+        fs.makedirs(url)
+
+
 def test_host_key_policy_default(fake_client):
     fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
 

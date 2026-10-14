@@ -246,8 +246,9 @@ class GithubFileSystem(AbstractFileSystem):
         r.raise_for_status()
         content_json = r.json()
 
-        # if the response's content key is not empty, try to parse it as base64
-        if content_json["content"]:
+        # Inline base64 content may be empty for a zero-byte file. Large files
+        # report encoding="none" and need the download fallback below.
+        if content_json.get("encoding") == "base64":
             content = base64.b64decode(content_json["content"])
 
             # as long as the content does not start with the string
