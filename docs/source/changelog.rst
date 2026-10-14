@@ -8,6 +8,8 @@ Fixes
 
 - Read the last libarchive member consistently when duplicate names include empty files.
 
+- Preserve caller-provided temporary directories during cross-filesystem copies.
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
