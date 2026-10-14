@@ -81,7 +81,9 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )
-            joined = self.fs.sep.join((self.path, path))
+            if self.path.endswith(self.fs.sep):
+                path = path.lstrip(self.fs.sep)
+            joined = self.fs.sep.join((self.path.rstrip(self.fs.sep), path))
             if suffix and not joined.endswith("/"):
                 joined += "/"
             return joined
@@ -99,7 +101,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
                 self.path.startswith(self.fs.sep) and path == self.path[1:]
             ):
                 return ""
-            prefix = self.path + self.fs.sep
+            prefix = self.path.rstrip(self.fs.sep) + self.fs.sep
             if self.path.startswith(self.fs.sep) and not path.startswith(self.fs.sep):
                 prefix = prefix[1:]
             assert path.startswith(prefix)

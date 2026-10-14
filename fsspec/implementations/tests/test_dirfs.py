@@ -129,6 +129,9 @@ def test_dirfs(fs, asyncfs):
         ("root", "foo", "root/foo"),
         ("/root", "", "/root"),
         ("/root", "foo", "/root/foo"),
+        ("/", "", "/"),
+        ("/", "foo", "/foo"),
+        ("C:/", "foo", "C:/foo"),
     ],
 )
 def test_path(fs, root, rel, full):
@@ -142,11 +145,31 @@ def test_path(fs, root, rel, full):
     [
         ("/root", "foo", "root/foo"),
         ("/root", "", "root"),
+        ("/", "foo", "foo"),
     ],
 )
 def test_path_no_leading_slash(fs, root, rel, full):
     dirfs = DirFileSystem(root, fs)
     assert dirfs._relpath(full) == rel
+
+
+@pytest.mark.parametrize("operation", ["ls", "info", "find", "glob"])
+@pytest.mark.parametrize("leading_slash", [False, True])
+def test_filesystem_root(operation, leading_slash, tmp_path):
+    (tmp_path / "file").write_bytes(b"payload")
+    local = LocalFileSystem()
+    root = local._strip_protocol(tmp_path.anchor)
+    directory = local._strip_protocol(str(tmp_path))[len(root) :]
+    dirfs = DirFileSystem(root, local)
+    request_path = local.sep + directory if leading_slash else directory
+    expected = directory + local.sep + "file"
+
+    if operation == "info":
+        assert dirfs.info(request_path + local.sep + "file")["name"] == expected
+    else:
+        if operation == "glob":
+            request_path += local.sep + "*"
+        assert getattr(dirfs, operation)(request_path, detail=False) == [expected]
 
 
 @pytest.mark.parametrize(
