@@ -2073,6 +2073,17 @@ class AbstractBufferedFile(io.IOBase):
                 self.size = size
             else:
                 self.size = self.details["size"]
+            if (
+                cache_type == "blockcache"
+                and getattr(self.fs, "async_impl", False)
+                and "cat_ranges" not in cache_options
+            ):
+                # Let BlockCache use the filesystem's batched range interface.
+                cache_options = {
+                    **cache_options,
+                    "_cat_ranges": self.fs.cat_ranges,
+                    "_path": self.path,
+                }
             self.cache = caches[cache_type](
                 self.blocksize, self._fetch_range, self.size, **cache_options
             )
