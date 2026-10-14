@@ -128,7 +128,14 @@ class FSMap(MutableMapping):
         values_dict: dict(str, bytes)
         """
         values = {self._key_to_str(k): maybe_convert(v) for k, v in values_dict.items()}
-        self.fs.pipe(values)
+        try:
+            self.fs.pipe(values)
+        except FileNotFoundError:
+            # Missing parent directories: create them, as __setitem__ does,
+            # then retry the bulk write once. Successful writes skip this.
+            for parent in dict.fromkeys(self.fs._parent(k) for k in values):
+                self.fs.mkdirs(parent, exist_ok=True)
+            self.fs.pipe(values)
 
     def delitems(self, keys):
         """Remove multiple keys from the store"""
