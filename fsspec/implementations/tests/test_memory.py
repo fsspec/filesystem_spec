@@ -804,25 +804,25 @@ def test_cat_recursive_empty_directory(m):
     assert m.cat("/empty", recursive=True) == {}
 
 
-def test_expand_path_files_only(m):
+def test_expand_path_withdirs(m):
     m.pipe({"/tree/a": b"a", "/tree/sub/b": b"b"})
     m.mkdir("/tree/empty")
 
-    assert m.expand_path("/tree", recursive=True, files_only=True) == [
+    assert m.expand_path("/tree", recursive=True, withdirs=False) == [
         "/tree/a",
         "/tree/sub/b",
     ]
     # without it, the directories are part of the expansion
     assert "/tree/sub" in m.expand_path("/tree", recursive=True)
     # globs drop directories too
-    assert m.expand_path("/tree/*", recursive=True, files_only=True) == [
+    assert m.expand_path("/tree/*", recursive=True, withdirs=False) == [
         "/tree/a",
         "/tree/sub/b",
     ]
     # a literal file is still returned, a directory holding no files is not
-    assert m.expand_path("/tree/a", recursive=True, files_only=True) == ["/tree/a"]
+    assert m.expand_path("/tree/a", recursive=True, withdirs=False) == ["/tree/a"]
     with pytest.raises(FileNotFoundError):
-        m.expand_path("/tree/empty", recursive=True, files_only=True)
+        m.expand_path("/tree/empty", recursive=True, withdirs=False)
 
 
 def test_cat_recursive_does_not_stat_every_path(m):

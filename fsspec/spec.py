@@ -1023,7 +1023,7 @@ class AbstractFileSystem(metaclass=_Cached):
         # a recursive expansion lists the directories too, which have no contents
         try:
             paths = self.expand_path(
-                path, recursive=recursive, files_only=recursive, **kwargs
+                path, recursive=recursive, withdirs=not recursive, **kwargs
             )
         except FileNotFoundError:
             if not recursive:
@@ -1322,15 +1322,15 @@ class AbstractFileSystem(metaclass=_Cached):
         recursive=False,
         maxdepth=None,
         assume_literal=False,
-        files_only=False,
+        withdirs=True,
         **kwargs,
     ):
         """Turn one or more globs or directories into a list of all matching paths
         to files or directories.
 
-        With ``files_only``, directories are left out of the result. The listings
-        that do the expansion already know which entries are directories, so this
-        costs nothing beyond what the expansion does anyway.
+        With ``withdirs=False``, directories are left out of the result. The
+        listings that do the expansion already know which entries are directories,
+        so this costs nothing beyond what the expansion does anyway.
 
         kwargs are passed to ``glob`` or ``find``, which may in turn call ``ls``
         """
@@ -1340,14 +1340,14 @@ class AbstractFileSystem(metaclass=_Cached):
 
         if isinstance(path, (str, os.PathLike)):
             out = self.expand_path(
-                [path], recursive, maxdepth, files_only=files_only, **kwargs
+                [path], recursive, maxdepth, withdirs=withdirs, **kwargs
             )
         else:
             out = set()
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if not assume_literal and has_magic(p):
-                    if files_only:
+                    if not withdirs:
                         matches = self.glob(p, maxdepth=maxdepth, detail=True, **kwargs)
                         bit = set(matches)
                         out |= {
@@ -1370,7 +1370,7 @@ class AbstractFileSystem(metaclass=_Cached):
                                 recursive=recursive,
                                 maxdepth=maxdepth - 1 if maxdepth is not None else None,
                                 assume_literal=True,
-                                files_only=files_only,
+                                withdirs=withdirs,
                                 **kwargs,
                             )
                         )
@@ -1380,7 +1380,7 @@ class AbstractFileSystem(metaclass=_Cached):
                         self.find(
                             p,
                             maxdepth=maxdepth,
-                            withdirs=not files_only,
+                            withdirs=withdirs,
                             detail=False,
                             **kwargs,
                         )
@@ -1388,7 +1388,7 @@ class AbstractFileSystem(metaclass=_Cached):
                     out |= rec
                 if p not in out and (
                     recursive is False
-                    or (self.isfile(p) if files_only else self.exists(p))
+                    or (self.exists(p) if withdirs else self.isfile(p))
                 ):
                     # should only check once, for the root
                     out.add(p)

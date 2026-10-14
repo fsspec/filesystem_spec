@@ -625,7 +625,7 @@ class AsyncFileSystem(AbstractFileSystem):
         # a recursive expansion lists the directories too, which have no contents
         try:
             paths = await self._expand_path(
-                path, recursive=recursive, files_only=recursive
+                path, recursive=recursive, withdirs=not recursive
             )
         except FileNotFoundError:
             if not recursive:
@@ -1088,21 +1088,21 @@ class AsyncFileSystem(AbstractFileSystem):
         recursive=False,
         maxdepth=None,
         assume_literal=False,
-        files_only=False,
+        withdirs=True,
     ):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
         if isinstance(path, str):
             out = await self._expand_path(
-                [path], recursive, maxdepth, files_only=files_only
+                [path], recursive, maxdepth, withdirs=withdirs
             )
         else:
             out = set()
             path = [self._strip_protocol(p) for p in path]
             for p in path:  # can gather here
                 if not assume_literal and has_magic(p):
-                    if files_only:
+                    if not withdirs:
                         matches = await self._glob(p, maxdepth=maxdepth, detail=True)
                         bit = set(matches)
                         out |= {
@@ -1125,18 +1125,18 @@ class AsyncFileSystem(AbstractFileSystem):
                                 recursive=recursive,
                                 maxdepth=maxdepth - 1 if maxdepth is not None else None,
                                 assume_literal=True,
-                                files_only=files_only,
+                                withdirs=withdirs,
                             )
                         )
                     continue
                 elif recursive:
                     rec = set(
-                        await self._find(p, maxdepth=maxdepth, withdirs=not files_only)
+                        await self._find(p, maxdepth=maxdepth, withdirs=withdirs)
                     )
                     out |= rec
                 if p not in out and (
                     recursive is False
-                    or (await (self._isfile(p) if files_only else self._exists(p)))
+                    or (await (self._exists(p) if withdirs else self._isfile(p)))
                 ):
                     # should only check once, for the root
                     out.add(p)
