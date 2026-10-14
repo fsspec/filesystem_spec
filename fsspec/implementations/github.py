@@ -9,6 +9,16 @@ from ..utils import infer_storage_options
 from .memory import MemoryFile
 
 
+def _github_names(url, timeout, **kwargs):
+    names = []
+    while url:
+        response = requests.get(url, timeout=timeout, **kwargs)
+        response.raise_for_status()
+        names.extend(item["name"] for item in response.json())
+        url = response.links.get("next", {}).get("url")
+    return names
+
+
 class GithubFileSystem(AbstractFileSystem):
     """Interface to files in github
 
@@ -95,34 +105,28 @@ class GithubFileSystem(AbstractFileSystem):
         -------
         List of string
         """
-        r = requests.get(
+        return _github_names(
             f"https://api.github.com/{['users', 'orgs'][is_org]}/{org_or_user}/repos",
             timeout=cls.timeout,
         )
-        r.raise_for_status()
-        return [repo["name"] for repo in r.json()]
 
     @property
     def tags(self):
         """Names of tags in the repo"""
-        r = requests.get(
+        return _github_names(
             f"https://api.github.com/repos/{self.org}/{self.repo}/tags",
             timeout=self.timeout,
             **self.kw,
         )
-        r.raise_for_status()
-        return [t["name"] for t in r.json()]
 
     @property
     def branches(self):
         """Names of branches in the repo"""
-        r = requests.get(
+        return _github_names(
             f"https://api.github.com/repos/{self.org}/{self.repo}/branches",
             timeout=self.timeout,
             **self.kw,
         )
-        r.raise_for_status()
-        return [t["name"] for t in r.json()]
 
     @property
     def refs(self):
@@ -242,8 +246,9 @@ class GithubFileSystem(AbstractFileSystem):
         r.raise_for_status()
         content_json = r.json()
 
-        # if the response's content key is not empty, try to parse it as base64
-        if content_json["content"]:
+        # Inline base64 content may be empty for a zero-byte file. Large files
+        # report encoding="none" and need the download fallback below.
+        if content_json.get("encoding") == "base64":
             content = base64.b64decode(content_json["content"])
 
             # as long as the content does not start with the string
