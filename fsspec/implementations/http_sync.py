@@ -137,13 +137,14 @@ class RequestsSessionShim:
         cert=None,
         json=None,
     ):
-        from js import Blob, XMLHttpRequest
+        from js import Blob, Object, XMLHttpRequest
+        from pyodide.ffi import to_js
 
         logger.debug("JS request: %s %s", method, url)
 
         if cert or verify or proxies or files or cookies or hooks:
             raise NotImplementedError
-        if data and json:
+        if data is not None and json is not None:
             raise ValueError("Use json= or data=, not both")
         req = XMLHttpRequest.new()
         extra = auth if auth else ()
@@ -158,13 +159,22 @@ class RequestsSessionShim:
 
         req.setRequestHeader("Accept", "application/octet-stream")
         req.responseType = "arraybuffer"
-        if json:
-            blob = Blob.new([dumps(data)], {type: "application/json"})
+        if json is not None:
+            blob = Blob.new(
+                to_js([dumps(json)]),
+                to_js({"type": "application/json"}, dict_converter=Object.fromEntries),
+            )
             req.send(blob)
         elif data:
             if isinstance(data, io.IOBase):
                 data = data.read()
-            blob = Blob.new([data], {type: "application/octet-stream"})
+            blob = Blob.new(
+                to_js([data]),
+                to_js(
+                    {"type": "application/octet-stream"},
+                    dict_converter=Object.fromEntries,
+                ),
+            )
             req.send(blob)
         else:
             req.send(None)
