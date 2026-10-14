@@ -262,7 +262,7 @@ async def test_cat_recursive_skips_directories(tmp_path):
     }
     assert await async_fs._cat(f"{root}/empty", recursive=True) == {}
 
-    
+
 def test_paths_normalized_like_wrapped_fs():
     fs = fsspec.filesystem("memory")
     fs.pipe({"/norm/a": b"a", "/norm/sub/b": b"b"})
