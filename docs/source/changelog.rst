@@ -4,6 +4,12 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
+  operations that fill the cache on a miss, so ``filecache``/``simplecache``
+  opens can report download progress (#1623)
+
 Fixes
 
 - Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
