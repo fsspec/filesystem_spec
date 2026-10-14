@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Preserve per-call request options in HTTP directory listings (#2258)
+
 - Refetch memory-mapped cache blocks when a missing backing file is recreated (#2257)
 
 - Normalize single-dot and empty path components in libarchive member names and lookups.
