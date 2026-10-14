@@ -133,6 +133,13 @@ Enhancements
 - Allow ``simplecache`` files to be removed by age using their modification
   times (#2118)
 
+- HTTP: retry transient failures (408/425/429/5xx, dropped connections,
+  timeouts, truncated range bodies, a 416 inside the file) of ``cat_file``,
+  ``HTTPFile`` block reads and the size lookup behind ``open``, controlled
+  by the new ``retries``,
+  ``retry_wait``, ``retry_statuses`` and ``retry_exceptions`` options
+  (#2124)
+
 Fixes
 
 - Compute ``HadoopFileSystem.fsid`` from its configured host and port instead of
