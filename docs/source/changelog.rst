@@ -12,6 +12,8 @@ Fixes
 
 - Preserve caller-provided temporary directories during cross-filesystem copies.
 
+- Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
