@@ -96,7 +96,7 @@ def test_literal_components(name, path):
     with pytest.raises(FileNotFoundError):
         fs.cat_file("file")
 
-        
+
 @pytest.mark.parametrize(
     "payloads",
     [
