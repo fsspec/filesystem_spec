@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
+
 - Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
 
 - Support ``length=None`` in ``utils.read_block`` without a delimiter (#2262)
