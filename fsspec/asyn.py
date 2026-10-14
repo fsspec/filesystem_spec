@@ -1130,9 +1130,7 @@ class AsyncFileSystem(AbstractFileSystem):
                         )
                     continue
                 elif recursive:
-                    rec = set(
-                        await self._find(p, maxdepth=maxdepth, withdirs=withdirs)
-                    )
+                    rec = set(await self._find(p, maxdepth=maxdepth, withdirs=withdirs))
                     out |= rec
                 if p not in out and (
                     recursive is False

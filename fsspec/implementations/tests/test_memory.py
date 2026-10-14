@@ -839,7 +839,7 @@ def test_cat_recursive_does_not_stat_every_path(m):
         MemoryFileSystem.isdir = isdir
     assert calls == []
 
-    
+
 @pytest.mark.parametrize("mode", ["rb", "wb", "ab"])
 def test_open_implicit_directory_raises(m, mode):
     # "/dir" exists only because a file lives under it
