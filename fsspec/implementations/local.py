@@ -415,7 +415,7 @@ class LocalFileOpener(io.IOBase):
                 os.close(i)  # we want normal open and normal buffered file
                 self.temp = name
                 self.f = open(name, mode=self.mode)
-            if "w" not in self.mode:
+            if "r" in self.mode:
                 self.size = self.f.seek(0, 2)
                 self.f.seek(0)
                 self.f.size = self.size
