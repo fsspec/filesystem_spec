@@ -69,6 +69,22 @@ def test_read_block():
         assert b"".join(filter(None, out)) == data
 
 
+@pytest.mark.parametrize("offset", [0, 1, 11, 12])
+@pytest.mark.parametrize("length", [None, 0, 100])
+@pytest.mark.parametrize("on_disk", [False, True])
+def test_read_block_without_delimiter_to_end(tmp_path, offset, length, on_disk):
+    data = b"123\n456\n789"
+    if on_disk:
+        path = tmp_path / "data"
+        path.write_bytes(data)
+        stream = path.open("rb")
+    else:
+        stream = io.BytesIO(data)
+    with stream:
+        expected = data[offset:] if length is None else data[offset : offset + length]
+        assert read_block(stream, offset, length) == expected
+
+
 @pytest.mark.parametrize("protocol", ["file", "memory"])
 @pytest.mark.parametrize("offset", [1, 3, 4, 5])
 @pytest.mark.parametrize("length", [None, 1])

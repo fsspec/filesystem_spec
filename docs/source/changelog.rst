@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Support ``length=None`` in ``utils.read_block`` without a delimiter (#2262)
+
 - Reject memory fs copies whose destination conflicts with an existing
   file or directory (#2268)
 
