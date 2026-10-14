@@ -1363,6 +1363,26 @@ def test_symlink(tmpdir):
 
 
 # https://github.com/fsspec/filesystem_spec/issues/967
+@pytest.mark.parametrize("as_uri", [False, True])
+@pytest.mark.parametrize("target_exists", [False, True])
+def test_put_file_create_mode(tmp_path, as_uri, target_exists):
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.write_bytes(b"new data")
+    if target_exists:
+        target.write_bytes(b"existing data")
+    destination = target.as_uri() if as_uri else str(target)
+    fs = LocalFileSystem()
+
+    if target_exists:
+        with pytest.raises(FileExistsError):
+            fs.put_file(str(source), destination, mode="create")
+        assert target.read_bytes() == b"existing data"
+    else:
+        fs.put_file(str(source), destination, mode="create")
+        assert target.read_bytes() == b"new data"
+
+
 def test_put_file_to_dir(tmpdir):
     src_file = os.path.join(str(tmpdir), "src")
     target_dir = os.path.join(str(tmpdir), "target")
@@ -1588,3 +1608,25 @@ def test_a_native_windows_pattern_is_normalised_before_the_translator_sees_it(tm
 
     # the mechanism itself, so it cannot rot silently
     assert "\\" not in make_path_posix(native)
+
+
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_append_opener_starts_at_end(tmp_path, mode):
+    path = tmp_path / "append.bin"
+    path.write_bytes(b"existing")
+    with LocalFileSystem().open(path, mode) as stream:
+        assert stream.tell() == len(b"existing")
+        if "+" in mode:
+            assert stream.read() == b""
+        stream.write(b" appended")
+    assert path.read_bytes() == b"existing appended"
+
+
+def test_compressed_local_opener_append(tmp_path):
+    path = str(tmp_path / "append.gz")
+    with gzip.open(path, "wb") as stream:
+        stream.write(b"existing")
+    with LocalFileOpener(path, "ab", compression="gzip") as stream:
+        stream.write(b" appended")
+    with gzip.open(path, "rb") as stream:
+        assert stream.read() == b"existing appended"

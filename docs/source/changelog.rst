@@ -4,9 +4,58 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
+  operations that fill the cache on a miss, so ``filecache``/``simplecache``
+  opens can report download progress (#1623)
+
 Fixes
 
 - Honor a single SMB session registration retry without dividing by zero.
+
+- Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
+
+- Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
+
+- Support ``length=None`` in ``utils.read_block`` without a delimiter (#2262)
+
+- Reject memory fs copies whose destination conflicts with an existing
+  file or directory (#2268)
+
+- Preserve ``None`` values when serializing filesystem arguments (#2264)
+
+- Correct file name padding for large integer maxima so lexical order matches numeric order (#2263)
+
+- Preserve caller-owned protocol options when merging per-call overrides (#2279)
+
+- Return an empty block instead of passing a negative read length in read_block (#2261)
+
+- Preserve per-call request options in HTTP directory listings (#2258)
+
+- Refetch memory-mapped cache blocks when a missing backing file is recreated (#2257)
+
+- Normalize single-dot and empty path components in libarchive member names and lookups.
+
+- Read the last libarchive member consistently when duplicate names include empty files.
+
+- Preserve caller-provided temporary directories during cross-filesystem copies.
+
+- Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
+
+- Use the correct POST method in the Pyodide HTTP session shim.
+
+- Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
+
+- Read empty GitHub files without requiring the HTTP extra or a second download.
+
+- Accept PathLike local destinations in synchronous ``get`` (#896).
+
+- Reject seeks that change position on async streaming HTTP files.
+
+- Follow GitHub API pagination when listing tags, branches and repositories.
+
+- Strip SFTP and SSH URL prefixes before recursively creating directories.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
@@ -42,6 +91,9 @@ Fixes
 - Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
 
 - Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
+
+- Request identity encoding for buffered HTTP range reads by default, while
+  preserving explicitly configured request and session encodings (#1748).
 
 - Resolve negative FTP read offsets relative to the end of the file.
 
@@ -90,6 +142,13 @@ Enhancements
 
 - Allow ``simplecache`` files to be removed by age using their modification
   times (#2118)
+
+- HTTP: retry transient failures (408/425/429/5xx, dropped connections,
+  timeouts, truncated range bodies, a 416 inside the file) of ``cat_file``,
+  ``HTTPFile`` block reads and the size lookup behind ``open``, controlled
+  by the new ``retries``,
+  ``retry_wait``, ``retry_statuses`` and ``retry_exceptions`` options
+  (#2124)
 
 Fixes
 

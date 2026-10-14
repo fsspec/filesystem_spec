@@ -1161,6 +1161,32 @@ def test_cached_append_binary(protocol):
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("target_protocol", ["memory", "file"])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_cached_append_missing(tmp_path, protocol, target_protocol, mode):
+    # 2026-10-09: Append must create a target even before it has a cache entry.
+    target = fsspec.filesystem(target_protocol, skip_instance_cache=True)
+    path = str(tmp_path / "new_file")
+    fs = fsspec.filesystem(protocol, fs=target, cache_storage=str(tmp_path / "cache"))
+    assert not target.exists(path)
+
+    with fs.open(path, mode) as f:
+        assert f.tell() == 0
+        f.write(b"hello")
+        if "+" in mode:
+            f.seek(0)
+            assert f.read() == b"hello"
+    assert target.cat_file(path) == b"hello"
+
+    with fs.open(path, "rb") as f:
+        assert f.read() == b"hello"
+    with fs.open(path, mode) as f:
+        assert f.tell() == 5
+        f.write(b"world")
+    assert target.cat_file(path) == b"helloworld"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_cached_update_text(protocol):
     fn = "memory://afile"
     with fsspec.open(fn, "w") as f:
@@ -1837,3 +1863,80 @@ def test_clear_expired_cache_honours_disabled_expiry(tmp_path):
     fs.clear_expired_cache()
 
     assert fs._check_file(path)
+
+
+class _CountingCallback(fsspec.callbacks.Callback):
+    # records the progress of the downloads that fill the cache (#1623)
+    def __init__(self):
+        super().__init__()
+        self.sizes = []
+        self.updates = []
+
+    def set_size(self, size):
+        self.sizes.append(size)
+        super().set_size(size)
+
+    def relative_update(self, inc=1):
+        self.updates.append(inc)
+        super().relative_update(inc)
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_callback_reports_download_on_open(tmp_path, m, protocol):
+    m.pipe("/afile", b"0123456789")
+    callback = _CountingCallback()
+    fs = fsspec.filesystem(
+        protocol, fs=m, cache_storage=str(tmp_path), callback=callback
+    )
+
+    # cache miss: open() downloads the file and the callback sees the bytes
+    with fs.open("/afile", "rb") as f:
+        assert f.read() == b"0123456789"
+    assert callback.sizes == [10]
+    assert sum(callback.updates) == 10
+
+    # cache hit: nothing is downloaded, so nothing is reported
+    callback.sizes.clear()
+    callback.updates.clear()
+    with fs.open("/afile", "rb") as f:
+        assert f.read() == b"0123456789"
+    assert callback.sizes == []
+    assert callback.updates == []
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_callback_reports_multi_file_get(tmp_path, m, protocol):
+    m.pipe({"/afile": b"aa", "/bfile": b"bbb"})
+    callback = _CountingCallback()
+    fs = fsspec.filesystem(
+        protocol, fs=m, cache_storage=str(tmp_path), callback=callback
+    )
+
+    # cat() fills the cache with one get() over both files
+    assert fs.cat(["/afile", "/bfile"]) == {"/afile": b"aa", "/bfile": b"bbb"}
+    assert callback.sizes == [2]
+    assert callback.updates == [1, 1]
+
+    callback.sizes.clear()
+    callback.updates.clear()
+    assert fs.cat(["/afile", "/bfile"]) == {"/afile": b"aa", "/bfile": b"bbb"}
+    assert callback.sizes == []
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_callback_reports_download_async(tmp_path, protocol):
+    fsspec.filesystem("memory").pipe("/afile", b"0123456789")
+    callback = _CountingCallback()
+
+    async def run():
+        fs = _async_caching_fs(protocol, str(tmp_path), callback=callback)
+        assert await fs._cat_file("memory://afile") == b"0123456789"
+        assert callback.sizes == [10]
+        assert sum(callback.updates) == 10
+
+        callback.sizes.clear()
+        callback.updates.clear()
+        assert await fs._cat_file("memory://afile") == b"0123456789"
+        assert callback.sizes == []
+
+    asyncio.run(run())
