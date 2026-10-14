@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Return an empty block instead of passing a negative read length in read_block (#2261)
+
 - Preserve per-call request options in HTTP directory listings (#2258)
 
 - Refetch memory-mapped cache blocks when a missing backing file is recreated (#2257)
