@@ -609,14 +609,14 @@ class BlockCache(BaseCache):
             for start_block, end_block in runs:
                 start = start_block * self.blocksize
                 end = min((end_block + 1) * self.blocksize, self.size)
-                logger.info(
-                    "BlockCache fetching blocks %d-%d", start_block, end_block
-                )
+                logger.info("BlockCache fetching blocks %d-%d", start_block, end_block)
                 self.total_requested_bytes += end - start
                 self.miss_count += end_block - start_block + 1
                 data = self.fetcher(start, end)
                 for offset, number in enumerate(range(start_block, end_block + 1)):
-                    block = data[offset * self.blocksize : (offset + 1) * self.blocksize]
+                    block = data[
+                        offset * self.blocksize : (offset + 1) * self.blocksize
+                    ]
                     self._fetch_block_cached.add_key(block, number)
                     fetched[number] = block
 
