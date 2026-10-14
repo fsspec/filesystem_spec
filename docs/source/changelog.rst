@@ -6,6 +6,10 @@ Dev
 
 Fixes
 
+- Read the last libarchive member consistently when duplicate names include empty files.
+
+- Preserve caller-provided temporary directories during cross-filesystem copies.
+
 - Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
 
 - Use the correct POST method in the Pyodide HTTP session shim.
