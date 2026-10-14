@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Normalize single-dot and empty path components in libarchive member names and lookups.
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
