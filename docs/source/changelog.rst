@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Preserve ``None`` values when serializing filesystem arguments (#2264)
+
 - Correct file name padding for large integer maxima so lexical order matches numeric order (#2263)
 
 - Preserve caller-owned protocol options when merging per-call overrides (#2279)
