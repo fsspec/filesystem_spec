@@ -304,6 +304,93 @@ def test_touch(m):
     assert not m.exists("/root/a/b/")
 
 
+@pytest.mark.parametrize("method", ["cp_file", "copy", "mv"])
+@pytest.mark.parametrize("destination", ["/parent/child", "memory://parent/sub/child"])
+def test_copy_rejects_file_parent(m, method, destination):
+    m.pipe("/src", b"source")
+    m.pipe("/parent", b"parent")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(FileExistsError):
+        getattr(m, method)("/src", destination)
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+    assert m.cat("/src") == b"source"
+    assert m.cat("/parent") == b"parent"
+    assert not m.exists(destination)
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_cp_file_rejects_directory_destination(m, explicit):
+    m.pipe("/src", b"source")
+    if explicit:
+        m.mkdir("/destination")
+    else:
+        m.pipe("/destination/child", b"child")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(IsADirectoryError):
+        m.cp_file("/src", "/destination")
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+    assert m.isdir("/destination")
+    assert not m.isfile("/destination")
+
+
+def test_cp_directory_rejects_file_parent(m):
+    m.mkdir("/src")
+    m.pipe("/parent", b"parent")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(FileExistsError):
+        m.cp_file("/src", "/parent/sub/destination")
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+
+
+def test_cp_directory_rejects_file_destination(m):
+    m.mkdir("/src")
+    m.pipe("/destination", b"destination")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(FileExistsError):
+        m.cp_file("/src", "/destination")
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+    assert m.cat("/destination") == b"destination"
+
+
+@pytest.mark.parametrize("method", ["cp_file", "copy"])
+def test_copy_creates_missing_parents_and_overwrites_file(m, method):
+    m.pipe("/src", b"source")
+    copy = getattr(m, method)
+    copy("/src", "/new/sub/destination")
+    assert m.cat("/new/sub/destination") == b"source"
+    m.pipe("/src", b"updated")
+    copy("/src", "/new/sub/destination")
+    assert m.cat("/new/sub/destination") == b"updated"
+    assert m.cat("/src") == b"updated"
+
+
+def test_copy_to_existing_directory(m):
+    m.pipe("/src", b"source")
+    m.mkdir("/destination")
+    m.copy("/src", "/destination")
+    assert m.cat("/destination/src") == b"source"
+    m.mkdir("/empty")
+    m.cp_file("/empty", "/new/empty")
+    m.cp_file("/empty", "/new/empty")
+    assert m.isdir("/new/empty")
+
+
 def test_mv_recursive(m):
     m.mkdir("src")
     m.touch("src/file.txt")
@@ -391,6 +478,19 @@ def test_dir_errors(m):
     m.touch("/afile")
     with pytest.raises(NotADirectoryError):
         m.mkdir("/afile/nodir")
+
+
+@pytest.mark.parametrize("path", ["afile", "/afile", "memory://afile"])
+@pytest.mark.parametrize("exist_ok", [False, True])
+@pytest.mark.parametrize("method", ["makedirs", "mkdirs"])
+def test_makedirs_existing_file(m, path, exist_ok, method):
+    m.pipe_file("/afile", b"payload")
+
+    with pytest.raises(FileExistsError):
+        getattr(m, method)(path, exist_ok=exist_ok)
+
+    assert m.cat_file(path) == b"payload"
+    assert not m.isdir(path)
 
 
 def test_no_rewind_append_mode(m):

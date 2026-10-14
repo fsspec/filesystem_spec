@@ -1018,3 +1018,17 @@ def test_close_and_aclose_idempotence(prefetcher_factory):
         assert bp2.is_stopped
 
     fsspec.asyn.sync(loop, run_aclose_twice)
+
+
+def test_adaptive_cache_binds_to_fs_loop(monkeypatch):
+    from fsspec.caching import AdaptiveReadaheadCache
+
+    loop1 = fsspec.asyn.get_loop()
+    monkeypatch.setattr(fsspec.asyn, "loop", [None])
+
+    fetcher = mock.Mock(
+        return_value=b"x" * 10, __self__=mock.Mock(fs=mock.Mock(loop=loop1))
+    )
+    cache = AdaptiveReadaheadCache(10, fetcher, 100)
+    assert cache._prefetcher.loop is loop1
+    cache.close()

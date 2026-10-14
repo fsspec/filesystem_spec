@@ -1581,7 +1581,7 @@ class AbstractFileSystem(metaclass=_Cached):
             if length is None:
                 length = size
             if size is not None and offset + length > size:
-                length = size - offset
+                length = max(0, size - offset)
             return read_block(f, offset, length, delimiter)
 
     def to_json(self, *, include_password: bool = True) -> str:
