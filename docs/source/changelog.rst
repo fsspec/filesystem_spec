@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Preserve caller-owned protocol options when merging per-call overrides (#2279)
+
 - Return an empty block instead of passing a negative read length in read_block (#2261)
 
 - Preserve per-call request options in HTTP directory listings (#2258)
