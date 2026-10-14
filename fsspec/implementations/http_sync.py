@@ -177,7 +177,7 @@ class RequestsSessionShim:
         return self.request("HEAD", url, **kwargs)
 
     def post(self, url, **kwargs):
-        return self.request("POST}", url, **kwargs)
+        return self.request("POST", url, **kwargs)
 
     def put(self, url, **kwargs):
         return self.request("PUT", url, **kwargs)
