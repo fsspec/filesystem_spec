@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Correct file name padding for large integer maxima so lexical order matches numeric order (#2263)
+
 - Preserve caller-owned protocol options when merging per-call overrides (#2279)
 
 - Return an empty block instead of passing a negative read length in read_block (#2261)
