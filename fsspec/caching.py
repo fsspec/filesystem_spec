@@ -342,13 +342,17 @@ class AdaptiveReadaheadCache(BaseCache):
             try:
                 fs_loop = fetcher.__self__.fs.loop
             except AttributeError:
-                fs_loop = fsspec_asyn.get_loop()
+                fs_loop = None
             self._prefetcher = BackgroundPrefetcher(
                 fetcher=_default_fetcher_async,
                 size=size,
                 concurrency=concurrency,
                 max_prefetch_size=max_prefetch_size,
-                loop=fs_loop,
+                loop=(
+                    fs_loop
+                    if isinstance(fs_loop, asyncio.AbstractEventLoop)
+                    else fsspec_asyn.get_loop()
+                ),
             )
             logger.info(
                 "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",
