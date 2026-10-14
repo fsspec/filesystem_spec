@@ -931,6 +931,54 @@ def test_mapper_delitem_missing_key_raises_keyerror(m):
         del mapper["missing"]
 
 
+def test_cat_recursive_skips_directories(m):
+    m.pipe({"/tree/a": b"a", "/tree/sub/b": b"b"})
+    assert m.cat("/tree", recursive=True) == {"/tree/a": b"a", "/tree/sub/b": b"b"}
+    assert m.cat(["/tree/sub"], recursive=True) == {"/tree/sub/b": b"b"}
+    assert m.cat("/tree/a", recursive=True) == b"a"
+
+
+def test_cat_recursive_empty_directory(m):
+    m.mkdir("/empty")
+    assert m.cat("/empty", recursive=True) == {}
+
+
+def test_expand_path_withdirs(m):
+    m.pipe({"/tree/a": b"a", "/tree/sub/b": b"b"})
+    m.mkdir("/tree/empty")
+
+    assert m.expand_path("/tree", recursive=True, withdirs=False) == [
+        "/tree/a",
+        "/tree/sub/b",
+    ]
+    # without it, the directories are part of the expansion
+    assert "/tree/sub" in m.expand_path("/tree", recursive=True)
+    # globs drop directories too
+    assert m.expand_path("/tree/*", recursive=True, withdirs=False) == [
+        "/tree/a",
+        "/tree/sub/b",
+    ]
+    # a literal file is still returned, a directory holding no files is not
+    assert m.expand_path("/tree/a", recursive=True, withdirs=False) == ["/tree/a"]
+    with pytest.raises(FileNotFoundError):
+        m.expand_path("/tree/empty", recursive=True, withdirs=False)
+
+
+def test_cat_recursive_does_not_stat_every_path(m):
+    m.pipe({f"/many/f{i}": b"x" for i in range(20)})
+    calls = []
+    isdir = MemoryFileSystem.isdir
+    try:
+        MemoryFileSystem.isdir = lambda self, path: (
+            calls.append(path),
+            isdir(self, path),
+        )[1]
+        assert len(m.cat("/many", recursive=True)) == 20
+    finally:
+        MemoryFileSystem.isdir = isdir
+    assert calls == []
+
+
 @pytest.mark.parametrize("mode", ["rb", "wb", "ab"])
 def test_open_implicit_directory_raises(m, mode):
     # "/dir" exists only because a file lives under it
