@@ -6,6 +6,9 @@ Dev
 
 Fixes
 
+- Reject memory fs copies whose destination conflicts with an existing
+  file or directory (#2268)
+
 - Preserve ``None`` values when serializing filesystem arguments (#2264)
 
 - Correct file name padding for large integer maxima so lexical order matches numeric order (#2263)
