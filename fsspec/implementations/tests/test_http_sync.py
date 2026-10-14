@@ -18,6 +18,25 @@ def sync():
     unregister()
 
 
+@pytest.mark.parametrize("method", ["get", "head", "post", "put", "patch", "delete"])
+def test_session_shim_request_method(monkeypatch, method):
+    from fsspec.implementations.http_sync import RequestsSessionShim
+
+    session = RequestsSessionShim()
+    response = object()
+    calls = []
+
+    def request(method, url, **kwargs):
+        calls.append((method, url, kwargs))
+        return response
+
+    monkeypatch.setattr(session, "request", request)
+    url = "https://example.com/data"
+    options = {"headers": {"X-Test": "value"}, "timeout": 10}
+    assert getattr(session, method)(url, **options) is response
+    assert calls == [(method.upper(), url, options)]
+
+
 def test_list(server, sync):
     h = fsspec.filesystem("http")
     out = h.glob(server.address + "/index/*")
