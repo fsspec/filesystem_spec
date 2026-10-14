@@ -139,7 +139,15 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         # file paths are always relative to the archive root
-        return super()._strip_protocol(path).lstrip("/")
+        return cls._normalize_path(super()._strip_protocol(path))
+
+    @staticmethod
+    def _normalize_path(path):
+        return "/".join(part for part in path.split("/") if part not in ("", "."))
+
+    def ls(self, path, detail=True, **kwargs):
+        entries = super().ls(path, detail=detail, **kwargs)
+        return [entry for entry in entries if (entry["name"] if detail else entry)]
 
     def _get_dirs(self):
         fields = {
@@ -156,6 +164,7 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
             return
 
         self.dir_cache = {}
+        self._member_names = {}
         list_names = []
         with self._open_archive() as arc:
             for entry in arc:
@@ -164,11 +173,11 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
                     continue
                 f = {key: getattr(entry, fields[key]) for key in fields}
                 f["type"] = "directory" if entry.isdir else "file"
-                if entry.isdir:
-                    f["name"] = f["name"].rstrip("/")
-                list_names.append(entry.name)
+                f["name"] = self._normalize_path(f["name"])
+                list_names.append(f["name"])
 
                 self.dir_cache[f["name"]] = f
+                self._member_names[f["name"]] = entry.pathname
         # libarchive does not seem to return an entry for the directories (at least
         # not in all formats), so get the directories names from the files names
         for dirname in self._all_dirnames(list_names):
@@ -194,12 +203,13 @@ class LibArchiveFileSystem(AbstractArchiveFileSystem):
         data = b""
         with self._open_archive() as arc:
             for entry in arc:
-                if entry.pathname != path:
+                if entry.pathname != self._member_names[path]:
                     continue
 
                 if entry.size == 0:
                     # empty file, so there are no blocks
-                    break
+                    data = b""
+                    continue
 
                 for block in entry.get_blocks(entry.size):
                     data = block

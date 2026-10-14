@@ -6,8 +6,28 @@ Dev
 
 Fixes
 
-- Reject memory filesystem copies whose destination conflicts with an existing
-  file or directory, without changing the source or destination.
+- Reject memory fs copies whose destination conflicts with an existing
+  file or directory (#2268)
+
+- Preserve ``None`` values when serializing filesystem arguments (#2264)
+
+- Correct file name padding for large integer maxima so lexical order matches numeric order (#2263)
+
+- Preserve caller-owned protocol options when merging per-call overrides (#2279)
+
+- Return an empty block instead of passing a negative read length in read_block (#2261)
+
+- Preserve per-call request options in HTTP directory listings (#2258)
+
+- Refetch memory-mapped cache blocks when a missing backing file is recreated (#2257)
+
+- Normalize single-dot and empty path components in libarchive member names and lookups.
+
+- Read the last libarchive member consistently when duplicate names include empty files.
+
+- Preserve caller-provided temporary directories during cross-filesystem copies.
+
+- Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
 
 - Use the correct POST method in the Pyodide HTTP session shim.
 
