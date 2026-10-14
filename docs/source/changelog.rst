@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Refetch memory-mapped cache blocks when a missing backing file is recreated (#2257)
+
 - Normalize single-dot and empty path components in libarchive member names and lookups.
 
 - Read the last libarchive member consistently when duplicate names include empty files.
