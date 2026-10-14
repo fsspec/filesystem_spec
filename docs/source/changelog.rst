@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Handle filesystem roots consistently when joining and returning relative paths in ``DirFileSystem``.
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
