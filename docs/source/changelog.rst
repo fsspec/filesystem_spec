@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Read the last libarchive member consistently when duplicate names include empty files.
+
 - Preserve caller-provided temporary directories during cross-filesystem copies.
 
 - Use the correct POST method in the Pyodide HTTP session shim.
