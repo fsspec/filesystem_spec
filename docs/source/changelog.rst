@@ -6,6 +6,8 @@ Dev
 
 Fixes
 
+- Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.

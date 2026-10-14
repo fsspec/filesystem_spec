@@ -168,16 +168,15 @@ class CacheMetadata:
             return None
         _, fn = details
         if fn.startswith(self._storage[-1]):
-            self.cached_files[-1].pop(path)
-            self.save()
+            self.save(removed=path)
         else:
             raise PermissionError(
                 "Can only delete cached file in last, writable cache location"
             )
         return fn
 
-    def save(self) -> None:
-        """Save metadata to disk"""
+    def save(self, *, removed: str | None = None) -> None:
+        """Save metadata to disk, excluding an explicitly removed path."""
         for (fn, _, writable), cache in zip(self._scan_locations(), self.cached_files):
             if not writable:
                 continue
@@ -205,6 +204,9 @@ class CacheMetadata:
                         cached_files[k] = c
             else:
                 cached_files = cache
+            # Remove the entry after merging, before writing the metadata.
+            if removed is not None:
+                cached_files.pop(removed, None)
             cache = {k: v.copy() for k, v in cached_files.items()}
             for c in cache.values():
                 if isinstance(c["blocks"], set):
