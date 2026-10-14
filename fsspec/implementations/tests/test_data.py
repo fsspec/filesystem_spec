@@ -70,3 +70,24 @@ def test_percent_encoded_all_byte_values():
     uri = "data:application/octet-stream," + quote_from_bytes(data)
     with fsspec.open(uri, "rb") as f:
         assert f.read() == data
+
+
+@pytest.mark.parametrize("metadata", ["text/plain;name=base64", "text/base64"])
+def test_base64_in_media_type_is_not_encoding(metadata):
+    uri = f"data:{metadata},SGVsbG8="
+    with fsspec.open(uri, "rb") as stream:
+        assert stream.read() == b"SGVsbG8="
+    fs, path = fsspec.core.url_to_fs(uri)
+    assert fs.info(path)["size"] == 8
+
+
+@pytest.mark.parametrize(
+    "data, expected", [("SGVsbG8%3D", b"Hello"), ("%2Fw%3D%3D", b"\xff")]
+)
+def test_percent_encoded_base64(data, expected):
+    uri = f"data:application/octet-stream;base64,{data}"
+    with fsspec.open(uri, "rb") as stream:
+        assert stream.read() == expected
+    fs, path = fsspec.core.url_to_fs(uri)
+    assert fs.info(path)["size"] == len(expected)
+    assert fs.cat_file(path, start=-1) == expected[-1:]

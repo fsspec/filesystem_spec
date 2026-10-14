@@ -184,10 +184,9 @@ def build_name_function(max_int: float) -> Callable[[int], str]:
     >>> build_name_function(0)(0)
     '0'
     """
-    # handle corner cases max_int is 0 or exact power of 10
-    max_int += 1e-8
-
-    pad_length = int(math.ceil(math.log10(max_int)))
+    if max_int < 0:
+        raise ValueError("max_int must be non-negative")
+    pad_length = len(str(int(max_int)))
 
     def name_function(i: int) -> str:
         return str(i).zfill(pad_length)
@@ -259,7 +258,7 @@ def read_block(
         Open file
     offset: int
         Byte offset to start read
-    length: int
+    length: int or None
         Number of bytes to read, read through end of file if None
     delimiter: bytes (optional)
         Ensure reading starts and stops at delimiter bytestring
@@ -312,10 +311,7 @@ def read_block(
 
     f.seek(offset)
 
-    # TODO: allow length to be None and read to the end of the file?
-    assert length is not None
-    b = f.read(length)
-    return b
+    return f.read(length)
 
 
 def tokenize(*args: Any, **kwargs: Any) -> str:
@@ -427,7 +423,7 @@ def other_paths(
         else:
             cp = common_prefix(paths)
             if exists:
-                cp = cp.rsplit("/", 1)[0]
+                cp = cp.rpartition("/")[0]
             if not cp and all(not s.startswith("/") for s in paths):
                 path2 = ["/".join([path2, p]) for p in paths]
             else:

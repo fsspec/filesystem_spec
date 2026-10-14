@@ -106,11 +106,11 @@ class OpenFile:
         except FileNotFoundError as e:
             if has_magic(self.path):
                 raise FileNotFoundError(
-                    "%s not found. The URL contains glob characters: you maybe needed\n"
+                    f"{self.path} not found. "
+                    "The URL contains glob characters: you maybe needed\n"
                     "to pass expand=True in fsspec.open() or the storage_options of \n"
                     "your library. You can also set the config value 'open_expand'\n"
-                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
-                    self.path,
+                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True."
                 ) from e
             raise
 
@@ -361,7 +361,7 @@ def _un_chain(path, kwargs):
         protocol = kwargs.pop("protocol", None) or split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
         extra_kwargs = cls._get_kwargs_from_urls(bit)
-        kws = kwargs.pop(protocol, {})
+        kws = kwargs.pop(protocol, {}).copy()
 
         if bit is bits[0]:
             kws.update(kwargs)
@@ -450,7 +450,7 @@ def open(
     newline=None,
     expand=None,
     **kwargs,
-):
+) -> OpenFile:
     """Given a path or paths, return one ``OpenFile`` object.
 
     Parameters
@@ -691,7 +691,7 @@ def get_fs_token_paths(
             _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
         ]
         if len({pc[1] for pc in pchains}) > 1:
-            raise ValueError("Protocol mismatch getting fs from %s", urlpath)
+            raise ValueError(f"Protocol mismatch getting fs from {urlpath}")
         paths = [pc[0] for pc in pchains]
     else:
         paths = fs._strip_protocol(paths)

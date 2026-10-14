@@ -10,6 +10,7 @@ import pytest
 
 import fsspec.utils
 from fsspec.utils import (
+    build_name_function,
     can_be_local,
     check_contained,
     common_prefix,
@@ -26,6 +27,25 @@ from fsspec.utils import (
 )
 
 WIN = sys.platform.startswith("win")
+
+
+@pytest.mark.parametrize(
+    "maximum", [0, 1, 9, 10, 1000, 10**7, 10**8, 10**16, 10**20, 1e8, 999.5]
+)
+def test_build_name_function_preserves_numeric_order(maximum):
+    name = build_name_function(maximum)
+    largest = int(maximum)
+    indices = sorted({0, largest // 2, largest})
+    names = [name(i) for i in indices]
+
+    assert names == sorted(names)
+    assert len({len(value) for value in names}) == 1
+
+
+@pytest.mark.parametrize("maximum", [-1, -100])
+def test_build_name_function_rejects_negative_maximum(maximum):
+    with pytest.raises(ValueError):
+        build_name_function(maximum)
 
 
 def test_read_block():
@@ -47,6 +67,41 @@ def test_read_block():
     for ols in [[(0, 3), (3, 3), (6, 3), (9, 2)], [(0, 4), (4, 4), (8, 4)]]:
         out = [read_block(f, o, l, b"\n") for o, l in ols]
         assert b"".join(filter(None, out)) == data
+
+
+@pytest.mark.parametrize("offset", [0, 1, 11, 12])
+@pytest.mark.parametrize("length", [None, 0, 100])
+@pytest.mark.parametrize("on_disk", [False, True])
+def test_read_block_without_delimiter_to_end(tmp_path, offset, length, on_disk):
+    data = b"123\n456\n789"
+    if on_disk:
+        path = tmp_path / "data"
+        path.write_bytes(data)
+        stream = path.open("rb")
+    else:
+        stream = io.BytesIO(data)
+    with stream:
+        expected = data[offset:] if length is None else data[offset : offset + length]
+        assert read_block(stream, offset, length) == expected
+
+
+@pytest.mark.parametrize("protocol", ["file", "memory"])
+@pytest.mark.parametrize("offset", [1, 3, 4, 5])
+@pytest.mark.parametrize("length", [None, 1])
+@pytest.mark.parametrize("delimiter", [None, b"\n"])
+def test_filesystem_read_block_at_or_past_eof(
+    tmp_path, protocol, offset, length, delimiter
+):
+    fs = fsspec.filesystem(protocol)
+    path = str(tmp_path / "data")
+    fs.pipe_file(path, b"abc")
+    try:
+        expected = (
+            b"" if offset >= 3 or delimiter else b"bc" if length is None else b"b"
+        )
+        assert fs.read_block(path, offset, length, delimiter) == expected
+    finally:
+        fs.rm(path)
 
 
 def test_read_block_split_before():
@@ -324,6 +379,8 @@ def test_common_prefix(paths, out):
     "paths, other, exists, expected",
     (
         (["/path1"], "/path2", False, ["/path2"]),
+        (["path1"], "/path2", False, ["/path2"]),
+        (["path1"], "/path2", True, ["/path2/path1"]),
         (["/path1"], "/path2", True, ["/path2/path1"]),
         (["/path1"], "/path2/", True, ["/path2/path1"]),
         (["/path1"], ["/path2"], False, ["/path2"]),
@@ -377,6 +434,18 @@ def test_common_prefix(paths, out):
 )
 def test_other_paths(paths, other, exists, expected):
     assert other_paths(paths, other, exists) == expected
+
+
+@pytest.mark.parametrize("prefix", ["", "/", "parent/", "/parent/"])
+@pytest.mark.parametrize("exists", [False, True])
+@pytest.mark.parametrize("target", ["target", "target/"])
+def test_other_paths_directory_nesting(prefix, exists, target):
+    source = prefix + "src"
+    paths = [source, source + "/file", source + "/nested/other"]
+    root = "target/src" if exists else "target"
+    expected = [root, root + "/file", root + "/nested/other"]
+
+    assert other_paths(paths, target, exists=exists) == expected
 
 
 def test_log():

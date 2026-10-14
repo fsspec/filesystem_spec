@@ -776,6 +776,160 @@ def test_instance_cache_concurrency():
     assert all(r is results[0] for r in results)
 
 
+def test_instance_created_once_concurrently():
+    import concurrent.futures
+    import time
+
+    inits = []
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(SleepyFS) for _ in range(10)]
+        results = [f.result() for f in futures]
+
+    # the threads wait for the instance instead of creating their own
+    assert len(inits) == 1
+    assert all(r is results[0] for r in results)
+    assert not SleepyFS._token_locks
+
+
+def test_instance_creation_error_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class FailingOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise RuntimeError("failed to create the instance")
+            super().__init__(*args, **kwargs)
+
+    FailingOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return FailingOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # the threads waiting for the instance fail like the one creating it, instead
+    # of retrying one after another (the last one failing after n attempts)
+    assert len(inits) == 1
+    assert all(isinstance(f.exception(), RuntimeError) for f in futures)
+    assert not FailingOnceFS._token_locks
+
+    # the error is not cached, a later call tries again
+    fs = FailingOnceFS()
+    assert len(inits) == 2
+    assert fs is FailingOnceFS()
+    assert not FailingOnceFS._token_locks
+
+
+def test_instance_creation_interrupted_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class Interrupted(BaseException):
+        pass
+
+    class InterruptedOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise Interrupted
+            super().__init__(*args, **kwargs)
+
+    InterruptedOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return InterruptedOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # an interruption (e.g. KeyboardInterrupt) only concerns the interrupted
+    # thread, one of the waiting threads creates the instance instead
+    errors = [f.exception() for f in futures if f.exception() is not None]
+    results = [f.result() for f in futures if f.exception() is None]
+    assert len(errors) == 1
+    assert isinstance(errors[0], Interrupted)
+    assert len(inits) == 2
+    assert len(results) == n - 1
+    assert all(r is results[0] for r in results)
+    assert not InterruptedOnceFS._token_locks
+
+
+def test_instance_created_reentrantly():
+    import threading
+
+    inits = []
+
+    class ReentrantFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            if len(inits) == 1:
+                # same token, same thread, while its instance is being created
+                ReentrantFS()
+            super().__init__(*args, **kwargs)
+
+    ReentrantFS.clear_instance_cache()
+
+    results = []
+    # run in a thread so that a deadlock fails the test instead of hanging it
+    t = threading.Thread(target=lambda: results.append(ReentrantFS()), daemon=True)
+    t.start()
+    t.join(timeout=5)
+
+    assert not t.is_alive(), "deadlock when creating the instance reentrantly"
+    assert len(inits) == 2
+    assert results[0] is ReentrantFS()
+    assert not ReentrantFS._token_locks
+
+
+def test_token_locks_cleared_on_pid_change():
+    class PidFS(DummyTestFS):
+        pass
+
+    PidFS._token_locks["stale"] = object()
+    PidFS._pid = -1  # pretend the process has changed, e.g. forked
+
+    PidFS()
+
+    assert PidFS._pid == os.getpid()
+    assert not PidFS._token_locks
+
+
 def test_uncached_instantiation_concurrency():
     import concurrent.futures
     import time
@@ -934,6 +1088,36 @@ def test_buffered_readlines(m, cache_type, content):
         stream.readlines()
 
 
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("blocks", [None, 1, 2, 3, 8])
+@pytest.mark.parametrize(
+    "content, delimiter, expected",
+    [
+        (b"a\r\nb\r\ntail", b"\r\n", [b"a\r\n", b"b\r\n", b"tail"]),
+        (b"a||||b||||tail", b"||||", [b"a||||", b"b||||", b"tail"]),
+        (b"xxababaYYababaZ", b"ababa", [b"xxababa", b"YYababa", b"Z"]),
+        (b"\r\n\r\n", b"\r\n", [b"\r\n", b"\r\n"]),
+        (b"abc\r", b"\r\n", [b"abc\r"]),
+        (b"", b"\r\n", []),
+        (b"a\nb\ntail", b"\n", [b"a\n", b"b\n", b"tail"]),
+    ],
+)
+def test_buffered_readuntil_delimiters(
+    m, cache_type, blocks, content, delimiter, expected
+):
+    m.pipe_file("delimiters", b"skip" + content)
+    with AbstractBufferedFile(
+        m, "delimiters", cache_type=cache_type, block_size=2
+    ) as stream:
+        position = stream.seek(4)
+        for part in expected:
+            assert stream.readuntil(delimiter, blocks=blocks) == part
+            position += len(part)
+            assert stream.tell() == position
+        assert stream.readuntil(delimiter, blocks=blocks) == b""
+        assert stream.tell() == position
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",
@@ -1071,6 +1255,36 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+@pytest.mark.parametrize("serializer", ["dict", "json"])
+@pytest.mark.parametrize(
+    "value", [None, [None], {"key": None}, {"key": [1, None, {"nested": None}]}]
+)
+def test_serialize_none(serializer, value):
+    fs = DummyTestFS(value, bar=value)
+    out = getattr(fs, f"to_{serializer}")()
+    expected = {
+        "cls": "fsspec.tests.test_spec:DummyTestFS",
+        "protocol": "mock",
+        "args": [value],
+        "bar": value,
+    }
+
+    assert (json.loads(out) if serializer == "json" else out) == expected
+    assert getattr(DummyTestFS, f"from_{serializer}")(out) is fs
+    assert fs.storage_args == (value,)
+    assert fs.storage_options == {"bar": value}
+
+
+def test_serialize_http_none():
+    fs = HTTPFileSystem(block_size=None, cache_options=None)
+    out = fs.to_dict()
+
+    assert out["block_size"] is None
+    assert out["cache_options"] is None
+    assert json.loads(fs.to_json()) == out
+    assert HTTPFileSystem.from_dict(out) is fs
 
 
 def test_json_path_attr():
@@ -1369,6 +1583,35 @@ class DummyOpenFS(DummyTestFS):
         stream = open(path, mode)
         stream.size = os.stat(path).st_size
         return stream
+
+
+@pytest.mark.parametrize("target_exists", [False, True])
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+def test_get_top_level_directory(tmp_path, monkeypatch, target_exists, trailing_slash):
+    monkeypatch.chdir(tmp_path)
+    source = Path("src")
+    (source / "nested").mkdir(parents=True)
+    files = {"file": b"top-level", "nested/other": b"nested"}
+    contents = [
+        {"name": "src", "type": "directory", "size": 0},
+        {"name": "src/nested", "type": "directory", "size": 0},
+    ]
+    for name, payload in files.items():
+        (source / name).write_bytes(payload)
+        contents.append({"name": "src/" + name, "type": "file", "size": len(payload)})
+    fs = DummyOpenFS(fs_content=contents)
+    target = tmp_path / "target"
+    if target_exists:
+        target.mkdir()
+
+    fs.get("src" + trailing_slash, str(target), recursive=True)
+
+    prefix = "src/" if target_exists and not trailing_slash else ""
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == {prefix + name: payload for name, payload in files.items()}
 
 
 class BasicCallback(fsspec.Callback):
@@ -1735,3 +1978,49 @@ def test_mv_into_own_subdirectory_is_refused(m):
 
     m.mv("/mvnest", "/mvnest2", recursive=True)  # a shared prefix is not nesting
     assert sorted(m.find("/mvnest2")) == ["/mvnest2/f", "/mvnest2/g"]
+
+
+class UnreadableSubdirFS(AbstractFileSystem):
+    """A tree in which the locked subdirectory cannot be listed."""
+
+    protocol = "unreadablesub"
+    cachable = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+def test_walk_on_error_reaches_subdirectories():
+    # on_error is documented to apply to any path whose listing fails, not only
+    # to the one handed to walk(), so the recursive call has to forward it.
+    fs = UnreadableSubdirFS()
+
+    # The default, omit, keeps skipping the unreadable directory.
+    assert list(fs.walk("")) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        list(fs.walk("", on_error="raise"))
+
+    handled = []
+    assert list(fs.walk("", on_error=handled.append)) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]

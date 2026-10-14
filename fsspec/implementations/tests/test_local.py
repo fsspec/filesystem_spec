@@ -9,6 +9,7 @@ import posixpath
 import sys
 import tempfile
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -249,6 +250,30 @@ def test_not_found():
     with pytest.raises((FileNotFoundError, OSError)):
         with OpenFile(fs, fn, mode="rb"):
             pass
+
+
+@pytest.mark.parametrize("source_kind", ["str", "path", "file", "local"])
+@pytest.mark.parametrize("file_like", [False, True])
+@pytest.mark.parametrize("data", [b"", b"\x00binary\xff\n"])
+def test_get_file_source_paths(tmp_path, source_kind, file_like, data):
+    fs = LocalFileSystem()
+    source = tmp_path / "source data %20.bin"
+    source.write_bytes(data)
+    if source_kind == "str":
+        source = str(source)
+    elif source_kind != "path":
+        source = f"{source_kind}://{source.as_posix()}"
+
+    target = BytesIO(b"prefix") if file_like else tmp_path / "copy.bin"
+    if file_like:
+        target.seek(0, 2)
+    fs.get_file(source, target)
+
+    if file_like:
+        assert not target.closed
+        assert target.getvalue() == b"prefix" + data
+    else:
+        assert target.read_bytes() == data
 
 
 def test_isfile():
@@ -913,6 +938,27 @@ def test_linked_directories(tmpdir):
     assert fs.isdir(subdir0)
 
 
+@pytest.mark.skipif(WIN, reason="Windows only toggles the read-only flag")
+def test_chmod_strips_protocol(tmpdir):
+    fs = LocalFileSystem()
+    path = make_path_posix(os.path.join(str(tmpdir), "afile"))
+    fs.touch(path)
+
+    fs.chmod(f"file://{path}", 0o600)
+
+    assert os.stat(path).st_mode & 0o777 == 0o600
+
+
+def test_lexists_strips_protocol(tmpdir):
+    fs = LocalFileSystem()
+    path = make_path_posix(os.path.join(str(tmpdir), "afile"))
+
+    assert not fs.lexists(f"file://{path}")
+    fs.touch(path)
+    assert fs.lexists(f"file://{path}")
+    assert fs.lexists(f"local://{path}")
+
+
 def test_isfilestore():
     fs = LocalFileSystem(auto_mkdir=False)
     assert fs._isfilestore()
@@ -1219,6 +1265,27 @@ def test_delete_non_recursive_dir_fails(tmpdir):
     fs.rm(subdir, recursive=True)
 
 
+def test_rm_recursive_maxdepth_keeps_deeper_files(tmpdir):
+    fs = LocalFileSystem()
+    src = make_path_posix(str(tmpdir / "src"))
+    fs.mkdir(src + "/sub/deeper")
+    fs.pipe(
+        {
+            src + "/top.txt": b"top",
+            src + "/sub/mid.txt": b"mid",
+            src + "/sub/deeper/low.txt": b"low",
+        }
+    )
+    fs.rm(src, recursive=True, maxdepth=2)
+    assert not fs.exists(src + "/top.txt")
+    assert not fs.exists(src + "/sub/mid.txt")
+    # beyond maxdepth, so it is kept along with its parent directories
+    assert fs.cat(src + "/sub/deeper/low.txt") == b"low"
+
+    fs.rm(src, recursive=True, maxdepth=3)
+    assert not fs.exists(src)
+
+
 @pytest.mark.parametrize(
     "opener, ext", [(bz2.open, ".bz2"), (gzip.open, ".gz"), (open, "")]
 )
@@ -1521,3 +1588,25 @@ def test_a_native_windows_pattern_is_normalised_before_the_translator_sees_it(tm
 
     # the mechanism itself, so it cannot rot silently
     assert "\\" not in make_path_posix(native)
+
+
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_append_opener_starts_at_end(tmp_path, mode):
+    path = tmp_path / "append.bin"
+    path.write_bytes(b"existing")
+    with LocalFileSystem().open(path, mode) as stream:
+        assert stream.tell() == len(b"existing")
+        if "+" in mode:
+            assert stream.read() == b""
+        stream.write(b" appended")
+    assert path.read_bytes() == b"existing appended"
+
+
+def test_compressed_local_opener_append(tmp_path):
+    path = str(tmp_path / "append.gz")
+    with gzip.open(path, "wb") as stream:
+        stream.write(b"existing")
+    with LocalFileOpener(path, "ab", compression="gzip") as stream:
+        stream.write(b" appended")
+    with gzip.open(path, "rb") as stream:
+        assert stream.read() == b"existing appended"

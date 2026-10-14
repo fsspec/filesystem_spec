@@ -94,6 +94,11 @@ def test_expand_fs_token_paths(mode):
     assert len(get_fs_token_paths("path", mode, num=2, expand=True)[-1]) == 2
 
 
+def test_get_fs_token_paths_protocol_mismatch():
+    with pytest.raises(ValueError, match=r"from \['memory://a', 'file:///b'\]$"):
+        get_fs_token_paths(["memory://a", "file:///b"])
+
+
 def test_openfile_api(m):
     m.open("somepath", "wb").write(b"data")
     of = OpenFile(m, "somepath")
@@ -183,7 +188,7 @@ def test_list():
 
 def test_open_expand(m, monkeypatch):
     m.pipe("/myfile", b"hello")
-    with pytest.raises(FileNotFoundError, match="expand=True"):
+    with pytest.raises(FileNotFoundError, match=r"(?s)^/my\* not found.*expand=True"):
         with fsspec.open("memory://my*", expand=False):
             pass
     with fsspec.open("memory://my*", expand=True) as f:
@@ -478,6 +483,47 @@ def test_chained_url(ftp_writable):
 def test_automkdir_local():
     fs, _ = fsspec.core.url_to_fs("file://", auto_mkdir=True)
     assert fs.auto_mkdir is True
+
+
+@pytest.mark.parametrize("entrypoint", ["open", "url_to_fs", "get_fs_token_paths"])
+@pytest.mark.parametrize("chained", [False, True])
+def test_protocol_options_not_mutated(entrypoint, chained, tmp_path):
+    original = object()
+    override = object()
+    if chained:
+        url = "filecache::memory://protocol-options"
+        options = {"cache_storage": str(tmp_path), "cache_check": 10}
+        kwargs = {"filecache": options, "memory": {"token": original}}
+        explicit = {"cache_check": 20}
+    else:
+        url = "memory://protocol-options"
+        options = {"token": original}
+        kwargs = {"memory": options}
+        explicit = {"token": override}
+    expected = options.copy()
+
+    def resolve(**storage_options):
+        if entrypoint == "open":
+            return fsspec.open(url, **storage_options).fs
+        if entrypoint == "url_to_fs":
+            return fsspec.core.url_to_fs(url, **storage_options)[0]
+        return get_fs_token_paths(url, storage_options=storage_options)[0]
+
+    fs = resolve(**kwargs, **explicit)
+    if chained:
+        assert fs.cache_check == 20
+        assert fs.fs.storage_options["token"] is original
+    else:
+        assert fs.storage_options["token"] is override
+
+    # Reusing caller-owned options must not retain the previous call's override.
+    fs = resolve(**kwargs)
+    if chained:
+        assert fs.cache_check == 10
+        assert fs.fs.storage_options["token"] is original
+    else:
+        assert fs.storage_options["token"] is original
+    assert options == expected
 
 
 def test_repeated_argument():
