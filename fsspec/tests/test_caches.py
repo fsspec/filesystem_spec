@@ -594,7 +594,7 @@ def test_block_cache_coalesces_contiguous_misses():
         4, _counting_fetcher(calls), len(string.ascii_letters), maxblocks=32
     )
 
-    # 8 blocks, none of them cached: one request, not eight
+    # A synchronous fetcher receives one range for eight blocks.
     assert cache._fetch(0, 32) == string.ascii_letters[:32].encode()
     assert calls == [(0, 32)]
     assert cache.cache_info().misses == 8
@@ -611,21 +611,39 @@ def test_block_cache_only_fetches_the_blocks_it_is_missing():
     cache._fetch(20, 24)  # block 5
     calls.clear()
 
-    # blocks 0-6, with 2 and 5 already held: the gaps are fetched, they are not
+    # blocks 0-6, with 2 and 5 already held: only the gaps are fetched
     assert cache._fetch(0, 28) == string.ascii_letters[:28].encode()
     assert calls == [(0, 8), (12, 20), (24, 28)]
 
 
 def test_block_cache_run_is_capped_at_maxblocks():
-    calls = []
+    multi_calls = []
+    data = string.ascii_letters.encode()
     maxblocks = 2
+
+    def cat_ranges(paths, starts, ends, on_error):
+        assert paths == ["file"] * len(starts)
+        assert on_error == "raise"
+        ranges = list(zip(starts, ends))
+        multi_calls.append(ranges)
+        return [data[start:end] for start, end in ranges]
+
     cache = BlockCache(
-        4, _counting_fetcher(calls), len(string.ascii_letters), maxblocks=maxblocks
+        4,
+        _counting_fetcher([]),
+        len(string.ascii_letters),
+        maxblocks=maxblocks,
+        _cat_ranges=cat_ranges,
+        _path="file",
     )
 
-    # a run longer than the cache holds is split, so one range stays bounded
+    # Each cat_ranges batch is bounded by the number of blocks the cache holds.
     assert cache._fetch(0, 24) == string.ascii_letters[:24].encode()
-    assert calls == [(0, 8), (8, 16), (16, 24)]
+    assert multi_calls == [
+        [(0, 4), (4, 8)],
+        [(8, 12), (12, 16)],
+        [(16, 20), (20, 24)],
+    ]
     assert cache.cache_info().misses == 6
 
 
@@ -638,23 +656,30 @@ def test_block_cache_run_stops_at_the_end_of_the_file():
     assert calls == [(0, size)]
 
 
-def test_block_cache_sends_every_run_in_one_multi_fetch():
+def test_block_cache_sends_missing_block_ranges_in_bounded_batches():
     calls, multi_calls = [], []
     data = string.ascii_letters.encode()
 
-    def multi_fetcher(ranges):
-        multi_calls.append(list(ranges))
+    def cat_ranges(paths, starts, ends, on_error):
+        assert paths == ["file"] * len(starts)
+        assert on_error == "raise"
+        ranges = list(zip(starts, ends))
+        multi_calls.append(ranges)
         return [data[start:end] for start, end in ranges]
 
     cache = BlockCache(
-        4, _counting_fetcher(calls), len(data), multi_fetcher=multi_fetcher
+        4,
+        _counting_fetcher(calls),
+        len(data),
+        _cat_ranges=cat_ranges,
+        _path="file",
     )
     cache._fetch(8, 12)  # block 2, read on its own
     cache._fetch(20, 24)  # block 5
     multi_calls.clear()
 
     assert cache._fetch(0, 28) == data[:28]
-    assert multi_calls == [[(0, 8), (12, 20), (24, 28)]]
+    assert multi_calls == [[(0, 4), (4, 8), (12, 16), (16, 20), (24, 28)]]
     assert calls == [(8, 12), (20, 24)]  # only the single-block reads above
     assert cache.miss_count == 7
 
@@ -669,6 +694,8 @@ def test_buffered_file_uses_cat_ranges_for_blockcache_on_async_fs():
         async_impl = True
 
         def cat_ranges(self, paths, starts, ends, on_error="return"):
+            assert paths == ["path"] * len(starts)
+            assert on_error == "raise"
             cat_ranges_calls.append(list(zip(starts, ends)))
             return [data[s:e] for s, e in zip(starts, ends)]
 
@@ -676,4 +703,4 @@ def test_buffered_file_uses_cat_ranges_for_blockcache_on_async_fs():
         FakeAsyncFS(), "path", cache_type="blockcache", block_size=4, size=len(data)
     )
     assert f.read(16) == data[:16]
-    assert cat_ranges_calls == [[(0, 16)]]
+    assert cat_ranges_calls == [[(0, 4), (4, 8), (8, 12), (12, 16)]]

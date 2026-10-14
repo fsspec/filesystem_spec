@@ -467,10 +467,6 @@ class BlockCache(BaseCache):
     maxblocks : int
         The maximum number of blocks to cache for. The maximum memory
         use for this cache is then ``blocksize * maxblocks``.
-    multi_fetcher : Callable, optional
-        Function of the form f([(start, end)]) returning the bytes of each range,
-        used to fetch several runs of missing blocks in one call. If not given,
-        ``fetcher`` is called once per run.
     """
 
     name = "blockcache"
@@ -481,12 +477,18 @@ class BlockCache(BaseCache):
         fetcher: Fetcher,
         size: int,
         maxblocks: int = 32,
-        multi_fetcher: MultiFetcher | None = None,
+        _cat_ranges: Callable | None = None,
+        _path: str | None = None,
     ) -> None:
+        if maxblocks < 1:
+            raise ValueError("maxblocks must be at least 1")
+        if _cat_ranges is not None and _path is None:
+            raise ValueError("_path is required when _cat_ranges is provided")
         super().__init__(blocksize, fetcher, size)
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
-        self.multi_fetcher = multi_fetcher
+        self._cat_ranges = _cat_ranges
+        self._path = _path
         self._fetch_block_cached = UpdatableLRU(self._fetch_block, maxblocks)
 
     def cache_info(self):
@@ -569,70 +571,95 @@ class BlockCache(BaseCache):
             return b"".join(blocks)
 
     def _fetch_blocks(self, first: int, last: int) -> list[bytes]:
-        """The contents of blocks ``first`` to ``last``, inclusive.
+        """Return blocks first to last, inclusive.
 
-        Blocks already held are taken from the cache. The rest are grouped into
-        runs of consecutive blocks, each fetched as one range rather than one
-        request per block: the old one-at-a-time loop turned a large read into as
-        many serialized round trips as it spanned blocks. With a
-        ``multi_fetcher`` (``cat_ranges`` on async filesystems) all runs go out
-        in a single call, so the backend can request them concurrently.
-
-        A run is capped at ``maxblocks``, the cache's own capacity, so one range
-        cannot be unbounded.
+        Cached blocks are read before misses are inserted, so an insertion cannot
+        evict a cached block that this read still needs. Missing block ranges are
+        sent to cat_ranges in batches no larger than the cache capacity when the
+        owning buffered file supplies the filesystem's range method.
         """
-        out: list[bytes | None] = []
-        runs: list[tuple[int, int]] = []
-        block_number = first
-        while block_number <= last:
-            if self._fetch_block_cached.is_key_cached(block_number):
-                # read it now: adding the fetched blocks below may evict it
-                out.append(self._fetch_block_cached(block_number))
-                block_number += 1
-                continue
-            run_end = block_number
-            while (
-                run_end < last
-                and run_end - block_number + 1 < self.maxblocks
-                and not self._fetch_block_cached.is_key_cached(run_end + 1)
-            ):
-                run_end += 1
-            runs.append((block_number, run_end))
-            out.extend([None] * (run_end - block_number + 1))
-            block_number = run_end + 1
-
-        if not runs:
-            return out  # type: ignore[return-value]
-        if runs[-1][1] > self.nblocks:
+        if last >= self.nblocks:
             raise ValueError(
-                f"'block_number={runs[-1][1]}' is greater than "
+                f"'block_number={last}' is greater than "
                 f"the number of blocks ({self.nblocks})"
             )
-        ranges = [
-            (a * self.blocksize, min((b + 1) * self.blocksize, self.size))
-            for a, b in runs
-        ]
-        for (a, b), (start, end) in zip(runs, ranges):
-            logger.info("BlockCache fetching blocks %d-%d", a, b)
-            self.total_requested_bytes += end - start
-            self.miss_count += b - a + 1
-        if self.multi_fetcher is not None:
-            payloads = self.multi_fetcher(ranges)
-        else:
-            payloads = [self.fetcher(start, end) for start, end in ranges]
 
-        fetched = {}
-        for (a, b), data in zip(runs, payloads):
-            if isinstance(data, Exception):
-                raise data
-            for offset, number in enumerate(range(a, b + 1)):
-                block = data[offset * self.blocksize : (offset + 1) * self.blocksize]
-                self._fetch_block_cached.add_key(block, number, count_miss=True)
-                fetched[number] = block
-        return [
-            fetched[first + i] if block is None else block
-            for i, block in enumerate(out)
-        ]
+        if self._cat_ranges is None:
+            out: list[bytes | None] = []
+            runs = []
+            block_number = first
+            while block_number <= last:
+                if self._fetch_block_cached.is_key_cached(block_number):
+                    out.append(self._fetch_block_cached(block_number))
+                    block_number += 1
+                    continue
+
+                run_end = block_number
+                while (
+                    run_end < last
+                    and run_end - block_number + 1 < self.maxblocks
+                    and not self._fetch_block_cached.is_key_cached(run_end + 1)
+                ):
+                    run_end += 1
+                runs.append((block_number, run_end))
+                out.extend([None] * (run_end - block_number + 1))
+                block_number = run_end + 1
+
+            fetched = {}
+            for start_block, end_block in runs:
+                start = start_block * self.blocksize
+                end = min((end_block + 1) * self.blocksize, self.size)
+                logger.info(
+                    "BlockCache fetching blocks %d-%d", start_block, end_block
+                )
+                self.total_requested_bytes += end - start
+                self.miss_count += end_block - start_block + 1
+                data = self.fetcher(start, end)
+                for offset, number in enumerate(range(start_block, end_block + 1)):
+                    block = data[offset * self.blocksize : (offset + 1) * self.blocksize]
+                    self._fetch_block_cached.add_key(block, number)
+                    fetched[number] = block
+
+            return [
+                fetched[first + i] if block is None else block
+                for i, block in enumerate(out)
+            ]
+
+        out: list[bytes | None] = [None] * (last - first + 1)
+        missing = []
+        for index, block_number in enumerate(range(first, last + 1)):
+            if self._fetch_block_cached.is_key_cached(block_number):
+                out[index] = self._fetch_block_cached(block_number)
+            else:
+                missing.append((index, block_number))
+
+        for offset in range(0, len(missing), self.maxblocks):
+            batch = missing[offset : offset + self.maxblocks]
+            ranges = [
+                (
+                    number * self.blocksize,
+                    min((number + 1) * self.blocksize, self.size),
+                )
+                for _, number in batch
+            ]
+            for (_, number), (start, end) in zip(batch, ranges):
+                logger.info("BlockCache fetching block %d", number)
+                self.total_requested_bytes += end - start
+                self.miss_count += 1
+
+            assert self._path is not None
+            payloads = self._cat_ranges(
+                [self._path] * len(ranges),
+                [start for start, _ in ranges],
+                [end for _, end in ranges],
+                on_error="raise",
+            )
+
+            for (index, number), block in zip(batch, payloads):
+                self._fetch_block_cached.add_key(block, number)
+                out[index] = block
+
+        return out  # type: ignore[return-value]
 
 
 class BytesCache(BaseCache):
@@ -923,16 +950,11 @@ class UpdatableLRU(Generic[P, T]):
         with self._lock:
             return args in self._cache
 
-    def add_key(self, result: T, *args: Any, count_miss: bool = False) -> None:
-        """Store a value fetched elsewhere.
-
-        ``count_miss`` counts it as a miss, for callers that fetched the value
-        themselves rather than letting this cache call the function.
-        """
+    def add_key(self, result: T, *args: Any) -> None:
+        """Store a value fetched elsewhere after a cache miss."""
         with self._lock:
             self._cache[args] = result
-            if count_miss:
-                self._misses += 1
+            self._misses += 1
             if len(self._cache) > self._max_size:
                 self._cache.popitem(last=False)
 
