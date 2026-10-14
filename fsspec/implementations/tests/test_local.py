@@ -1588,3 +1588,25 @@ def test_a_native_windows_pattern_is_normalised_before_the_translator_sees_it(tm
 
     # the mechanism itself, so it cannot rot silently
     assert "\\" not in make_path_posix(native)
+
+
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_append_opener_starts_at_end(tmp_path, mode):
+    path = tmp_path / "append.bin"
+    path.write_bytes(b"existing")
+    with LocalFileSystem().open(path, mode) as stream:
+        assert stream.tell() == len(b"existing")
+        if "+" in mode:
+            assert stream.read() == b""
+        stream.write(b" appended")
+    assert path.read_bytes() == b"existing appended"
+
+
+def test_compressed_local_opener_append(tmp_path):
+    path = str(tmp_path / "append.gz")
+    with gzip.open(path, "wb") as stream:
+        stream.write(b"existing")
+    with LocalFileOpener(path, "ab", compression="gzip") as stream:
+        stream.write(b" appended")
+    with gzip.open(path, "rb") as stream:
+        assert stream.read() == b"existing appended"

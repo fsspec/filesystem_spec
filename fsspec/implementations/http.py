@@ -695,6 +695,11 @@ class HTTPFile(AbstractBufferedFile):
         kwargs = self.kwargs.copy()
         headers = kwargs.pop("headers", {}).copy()
         headers["Range"] = f"bytes={start}-{end - 1}"
+        if not any(k.lower() == "accept-encoding" for k in headers) and not any(
+            k.lower() == "accept-encoding" for k in self.session.headers
+        ):
+            # Match the unencoded size from _file_info unless explicitly overridden.
+            headers["Accept-Encoding"] = "identity"
         logger.debug(f"{self.url} : {headers['Range']}")
         r = await self.session.get(
             self.fs.encode_url(self.url), headers=headers, **kwargs
@@ -807,6 +812,16 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         self.kwargs = kwargs
         super().__init__(fs=fs, path=url, mode=mode, cache_type="none")
         self.size = size
+
+    def seek(self, loc, whence=0):
+        if loc == 0 and whence == 1:
+            return
+        if loc == self.loc and whence == 0:
+            return
+        raise ValueError("Cannot seek streaming HTTP file")
+
+    def seekable(self):
+        return False
 
     async def read(self, num=-1):
         if self.r is None:
