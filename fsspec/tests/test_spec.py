@@ -1257,6 +1257,36 @@ def test_json():
     assert DummyTestFS.from_json(outb) is b
 
 
+@pytest.mark.parametrize("serializer", ["dict", "json"])
+@pytest.mark.parametrize(
+    "value", [None, [None], {"key": None}, {"key": [1, None, {"nested": None}]}]
+)
+def test_serialize_none(serializer, value):
+    fs = DummyTestFS(value, bar=value)
+    out = getattr(fs, f"to_{serializer}")()
+    expected = {
+        "cls": "fsspec.tests.test_spec:DummyTestFS",
+        "protocol": "mock",
+        "args": [value],
+        "bar": value,
+    }
+
+    assert (json.loads(out) if serializer == "json" else out) == expected
+    assert getattr(DummyTestFS, f"from_{serializer}")(out) is fs
+    assert fs.storage_args == (value,)
+    assert fs.storage_options == {"bar": value}
+
+
+def test_serialize_http_none():
+    fs = HTTPFileSystem(block_size=None, cache_options=None)
+    out = fs.to_dict()
+
+    assert out["block_size"] is None
+    assert out["cache_options"] is None
+    assert json.loads(fs.to_json()) == out
+    assert HTTPFileSystem.from_dict(out) is fs
+
+
 def test_json_path_attr():
     a = DummyTestFS(1)
     b = DummyTestFS(2, bar=Path("baz"))
