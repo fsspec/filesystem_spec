@@ -1113,7 +1113,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 if not rpaths:
                     return
 
-            if isinstance(lpath, str):
+            if isinstance(lpath, (str, os.PathLike)):
                 lpath = make_path_posix(lpath)
 
             source_is_file = len(rpaths) == 1
@@ -1581,7 +1581,7 @@ class AbstractFileSystem(metaclass=_Cached):
             if length is None:
                 length = size
             if size is not None and offset + length > size:
-                length = size - offset
+                length = max(0, size - offset)
             return read_block(f, offset, length, delimiter)
 
     def to_json(self, *, include_password: bool = True) -> str:
