@@ -123,6 +123,17 @@ def test_copy_preserves_tempdir_on_error(method, missing_source, m, tmp_path):
     assert list(tempdir.iterdir()) == [sentinel]
 
 
+def test_rsync_rejects_names_escaping_destination(tmp_path, m):
+    m.pipe({"/src/ok": b"ok", "/src/../../escaped": b"data"})
+    dest = tmp_path / "out" / "dest"
+    dest.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="outside the destination"):
+        rsync("memory://src", f"file://{dest}")
+    assert not (tmp_path / "escaped").exists()
+    assert not (dest / "ok").exists()
+
+
 def test_rsync(tmpdir, m):
     from fsspec.generic import GenericFileSystem, rsync
 
