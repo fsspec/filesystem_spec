@@ -134,6 +134,31 @@ def test_rsync_rejects_names_escaping_destination(tmp_path, m):
     assert not (dest / "ok").exists()
 
 
+@pytest.mark.parametrize("relative", ["ordinary.txt", "nested/memory:///src/data"])
+def test_rsync_preserves_source_url_in_relative_name(m, relative):
+    source = f"memory:///src/{relative}"
+    destination = f"memory:///dst/{relative}"
+    m.pipe_file(source, b"payload")
+
+    copied = rsync("memory:///src", "memory:///dst")
+
+    assert copied == {source: destination}
+    assert m.cat(destination) == b"payload"
+    assert m.find("/dst") == [destination.removeprefix("memory://")]
+
+
+@pytest.mark.parametrize("relative", ["ordinary.txt", "nested/memory:///dst/data"])
+def test_rsync_delete_missing_preserves_destination_url_in_relative_name(m, relative):
+    source = f"memory:///src/{relative}"
+    destination = f"memory:///dst/{relative}"
+    m.pipe({source: b"payload", destination: b"payload", "memory:///dst/obsolete": b"old"})
+
+    assert rsync("memory:///src", "memory:///dst", delete_missing=True) == {}
+
+    assert m.cat(destination) == b"payload"
+    assert not m.exists("/dst/obsolete")
+
+
 def test_rsync(tmpdir, m):
     from fsspec.generic import GenericFileSystem, rsync
 

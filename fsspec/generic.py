@@ -97,27 +97,27 @@ def rsync(
         raise ValueError("Can only rsync on a directory")
     # The names came from the source listing; ".." in one of them would
     # otherwise place the copy above the destination.
-    check_contained(destination, [a.replace(source, destination) for a in allfiles])
+    check_contained(destination, [a.replace(source, destination, 1) for a in allfiles])
     otherfiles = fs.find(destination, withdirs=True, detail=True)
     dirs = [
         a
         for a, v in allfiles.items()
-        if v["type"] == "directory" and a.replace(source, destination) not in otherfiles
+        if v["type"] == "directory" and a.replace(source, destination, 1) not in otherfiles
     ]
     logger.debug(f"{len(dirs)} directories to create")
     if dirs:
         fs.make_many_dirs(
-            [dirn.replace(source, destination) for dirn in dirs], exist_ok=True
+            [dirn.replace(source, destination, 1) for dirn in dirs], exist_ok=True
         )
     allfiles = {a: v for a, v in allfiles.items() if v["type"] == "file"}
     logger.debug(f"{len(allfiles)} files to consider for copy")
     to_delete = [
         o
         for o, v in otherfiles.items()
-        if o.replace(destination, source) not in allfiles and v["type"] == "file"
+        if o.replace(destination, source, 1) not in allfiles and v["type"] == "file"
     ]
     for k, v in allfiles.copy().items():
-        otherfile = k.replace(source, destination)
+        otherfile = k.replace(source, destination, 1)
         if otherfile in otherfiles:
             if update_cond == "always":
                 allfiles[k] = otherfile
