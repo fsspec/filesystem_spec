@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Avoid treating content-encoded transfer lengths as decoded file sizes in
+  the synchronous HTTP filesystem.
+
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 
 - Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
