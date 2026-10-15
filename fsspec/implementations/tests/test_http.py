@@ -898,6 +898,41 @@ def test_pipe_file(server, tmpdir, reset_files):
     assert fs.cat(server.address + "/piped_bytes") == b"BytesIO content"
 
 
+@pytest.mark.parametrize("mode", ["append", "create", "invalid", None])
+def test_pipe_file_rejects_unsupported_mode(server, reset_files, mode):
+    fs = fsspec.filesystem(
+        "http", headers={"accept_put": "true"}, skip_instance_cache=True
+    )
+    url = server.address + "/unsupported_pipe_mode"
+    try:
+        fs.pipe_file(url, b"original")
+        with pytest.raises(ValueError, match="only supports.*overwrite"):
+            fs.pipe_file(url, b"replacement", mode=mode)
+        assert fs.cat(url) == b"original"
+    finally:
+        fs.close_session(fs.loop, fs._session)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["append", "create", "invalid", None])
+async def test_async_pipe_file_rejects_unsupported_mode(server, reset_files, mode):
+    fs = fsspec.filesystem(
+        "http",
+        asynchronous=True,
+        headers={"accept_put": "true"},
+        skip_instance_cache=True,
+    )
+    url = server.address + "/unsupported_async_pipe_mode"
+    try:
+        await fs._pipe_file(url, b"original")
+        with pytest.raises(ValueError, match="only supports.*overwrite"):
+            await fs._pipe_file(url, b"replacement", mode=mode)
+        assert await fs._cat_file(url) == b"original"
+    finally:
+        if fs._session is not None:
+            await fs._session.close()
+
+
 @pytest.mark.parametrize("protocol", ["http", "https"])
 def test_protocol_independent_of_first_used_protocol(protocol):
     from fsspec import filesystem

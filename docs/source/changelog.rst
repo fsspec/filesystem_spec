@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Reject unsupported HTTP ``pipe_file`` modes before writing, rather than
+  silently overwriting the target.
+
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 
 - Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
