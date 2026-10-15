@@ -12,8 +12,8 @@ Enhancements
 
 Fixes
 
-- Reject unsupported HTTP ``pipe_file`` modes before writing, rather than
-  silently overwriting the target.
+- Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
+  since PUT behavior depends on the server (#2294).
 
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 

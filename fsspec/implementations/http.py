@@ -672,13 +672,18 @@ class HTTPFileSystem(AsyncFileSystem):
         value : bytes
             Data to be written
         mode : str
-            Only 'overwrite' is supported. Other modes are rejected because
-            this method sends an unconditional PUT request.
+            Only 'overwrite' is accepted, allowing an unconditional PUT request.
+            The server determines PUT behavior, so other modes are rejected
+            defensively rather than assuming append or create semantics.
         **kwargs : dict
             Additional parameters to pass to the HTTP request
         """
         if mode != "overwrite":
-            raise ValueError("HTTP pipe_file only supports mode='overwrite'")
+            raise ValueError(
+                "HTTP pipe_file only accepts mode='overwrite'; "
+                "PUT behavior is server-dependent, so other modes are "
+                "rejected defensively"
+            )
         url = self._strip_protocol(path)
         headers = kwargs.pop("headers", {})
         headers["Content-Length"] = str(len(value))

@@ -906,7 +906,7 @@ def test_pipe_file_rejects_unsupported_mode(server, reset_files, mode):
     url = server.address + "/unsupported_pipe_mode"
     try:
         fs.pipe_file(url, b"original")
-        with pytest.raises(ValueError, match="only supports.*overwrite"):
+        with pytest.raises(ValueError, match="PUT behavior is server-dependent"):
             fs.pipe_file(url, b"replacement", mode=mode)
         assert fs.cat(url) == b"original"
     finally:
@@ -925,7 +925,7 @@ async def test_async_pipe_file_rejects_unsupported_mode(server, reset_files, mod
     url = server.address + "/unsupported_async_pipe_mode"
     try:
         await fs._pipe_file(url, b"original")
-        with pytest.raises(ValueError, match="only supports.*overwrite"):
+        with pytest.raises(ValueError, match="PUT behavior is server-dependent"):
             await fs._pipe_file(url, b"replacement", mode=mode)
         assert await fs._cat_file(url) == b"original"
     finally:
