@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Dispatch mixed-protocol ``GenericFileSystem.copy`` batches by backend pair.
+
 - Reject ``generic.rsync`` source names whose ".." segments would place
   copies outside the destination
 

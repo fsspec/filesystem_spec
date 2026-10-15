@@ -338,6 +338,32 @@ class GenericFileSystem(AsyncFileSystem):
         fs = _resolve_fs(path1, self.method, storage_options=self.st_opts)
         fs2 = _resolve_fs(path2, self.method, storage_options=self.st_opts)
 
+        # A batch may contain several backend pairs. Keep each homogeneous
+        # group on its backend's native copy path rather than applying the
+        # first pair's filesystems to every URL.
+        groups = {}
+        for source, destination in zip(path1, path2):
+            source_fs = _resolve_fs(source, self.method, storage_options=self.st_opts)
+            destination_fs = _resolve_fs(
+                destination, self.method, storage_options=self.st_opts
+            )
+            key = (id(source_fs), id(destination_fs))
+            if key not in groups:
+                groups[key] = (source_fs, destination_fs, [], [])
+            groups[key][2].append(source)
+            groups[key][3].append(destination)
+        if len(groups) > 1:
+            for _, _, sources, destinations in groups.values():
+                await self._copy(
+                    sources,
+                    destinations,
+                    on_error=on_error,
+                    batch_size=batch_size,
+                    tempdir=tempdir,
+                    **kwargs,
+                )
+            return
+
         if fs is fs2:
             if fs.async_impl:
                 return await fs._copy(path1, path2, **kwargs)

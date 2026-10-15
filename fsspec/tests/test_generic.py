@@ -79,6 +79,53 @@ def test_cp_one(server, tmpdir):
     assert not fs.exists(fn)
 
 
+@pytest.mark.parametrize("mixed", ["source", "destination", "both"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_copy_mixed_protocols(m, tmp_path, mixed, reverse):
+    m.pipe_file("source-a", b"memory-a")
+    m.pipe_file("source-b", b"memory-b")
+    local_source = tmp_path / "source-b"
+    local_source.write_bytes(b"local-b")
+    local_destination = tmp_path / "destination-b"
+    fsspec.filesystem("file")
+    fs = fsspec.filesystem("generic", default_method="current")
+    sources = ["memory://source-a", "memory://source-b"]
+    destinations = ["memory://destination-a", "memory://destination-b"]
+    if mixed in ("source", "both"):
+        sources[1] = local_source.as_uri()
+    if mixed in ("destination", "both"):
+        destinations[1] = local_destination.as_uri()
+    if reverse:
+        sources.reverse()
+        destinations.reverse()
+
+    fs.copy(sources, destinations, on_error="raise")
+
+    assert m.cat_file("destination-a") == b"memory-a"
+    expected = b"local-b" if mixed in ("source", "both") else b"memory-b"
+    if mixed in ("destination", "both"):
+        assert local_destination.read_bytes() == expected
+        assert not m.exists(local_destination.as_uri())
+    else:
+        assert m.cat_file("destination-b") == expected
+
+
+def test_copy_mixed_async_source(server, m):
+    fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    m.pipe_file("source", b"memory-data")
+    fs = fsspec.filesystem("generic", default_method="current")
+
+    fs.copy(
+        [server.realfile, "memory://source"],
+        ["memory://from-http", "memory://from-memory"],
+        batch_size=1,
+        on_error="raise",
+    )
+
+    assert m.cat_file("from-http") == data
+    assert m.cat_file("from-memory") == b"memory-data"
+
+
 @pytest.mark.parametrize("method", ["copy", "cp_file"])
 def test_copy_preserves_tempdir(method, m, tmp_path):
     tempdir = tmp_path / "staging"
