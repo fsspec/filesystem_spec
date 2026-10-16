@@ -16,6 +16,8 @@ Fixes
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
+- Complete DBFS partial-delete retries without re-raising a recovered error.
+
 - Keep the HTTP link regex linear
 
 - Preserve single-source copy semantics for Paths in sync batch ops
