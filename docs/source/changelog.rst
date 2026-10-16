@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Complete DBFS partial-delete retries without re-raising a recovered error.
+
 - Preserve single-source copy semantics for PathLike sources in synchronous
   ``copy``, ``get`` and ``put`` instead of flattening their directory trees.
 
