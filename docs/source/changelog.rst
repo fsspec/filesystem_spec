@@ -47,6 +47,8 @@ Fixes
 
 - Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
 
+- Close memory-mapped cache resources when the owning buffered file is closed.
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
