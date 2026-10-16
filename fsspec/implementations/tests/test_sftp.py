@@ -814,33 +814,6 @@ def test_host_name_case_does_not_skip_the_check(sshd, home):
     assert _sees_no_authentication()
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "a b",
-        "a\nb",
-        "a\tb",
-        "a,b",
-        "*.example.com",
-        "",
-        "#comment",
-        "@revoked",
-        "!a",
-        "|1|x",
-    ],
-)
-def test_host_name_that_is_not_one_entry_is_not_written(tmp_path, name):
-    known_hosts = tmp_path / "known_hosts"
-    known_hosts.write_text("")
-    policy = fsspec.implementations.sftp._AutoAddPolicy(str(known_hosts))
-    key = paramiko.RSAKey.generate(2048)
-
-    with pytest.raises(paramiko.SSHException, match="cannot be written"):
-        policy.missing_host_key(paramiko.SSHClient(), name, key)
-
-    assert known_hosts.read_text() == ""
-
-
 def test_the_line_is_written_completely_in_pieces(tmp_path, monkeypatch):
     known_hosts = tmp_path / "known_hosts"
     key = paramiko.RSAKey.generate(2048)

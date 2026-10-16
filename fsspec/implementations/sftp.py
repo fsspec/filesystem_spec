@@ -21,19 +21,6 @@ def _fingerprint(key):
     return "SHA256:" + digest.decode().rstrip("=")
 
 
-def _check_host_name(hostname):
-    """Refuse a name that would not be a single entry in a ``known_hosts`` file."""
-    if (
-        not hostname
-        or hostname[0] in "#@!|"
-        or any(c in ",*?" or c.isspace() or not c.isprintable() for c in hostname)
-    ):
-        raise paramiko.SSHException(
-            f"Unknown host key of {hostname!r} refused: the name cannot be "
-            "written to a known_hosts file."
-        )
-
-
 def _append_known_host(path, hostname, key):
     """Add one line to the ``known_hosts`` file, as OpenSSH does.
 
@@ -82,7 +69,6 @@ class _AutoAddPolicy(paramiko.AutoAddPolicy):
                 what,
             )
         else:
-            _check_host_name(hostname)
             try:
                 _append_known_host(self.known_hosts, hostname, key)
             except OSError as exc:
