@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
 - Keep the HTTP link regex linear
 
 - Preserve single-source copy semantics for Paths in sync batch ops
