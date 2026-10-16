@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Keep the HTTP directory-listing link regex linear, so a listing page
+  with long whitespace runs inside an anchor no longer stalls ``ls``
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 
