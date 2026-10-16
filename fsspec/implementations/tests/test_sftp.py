@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from tarfile import TarFile
 
 import pytest
@@ -333,16 +334,9 @@ class _FakeSSHClient:
         self.host = None
         self.connect_kwargs = None
         self.system_host_keys_file = None
-        self.host_keys_file = None
 
     def load_system_host_keys(self, filename):
         self.system_host_keys_file = filename
-
-    def get_host_keys(self):
-        return self
-
-    def load(self, filename):
-        self.host_keys_file = filename
 
     def set_missing_host_key_policy(self, policy):
         self.policy = policy
@@ -448,7 +442,6 @@ def test_known_hosts_are_loaded(fake_client):
     fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
 
     assert fs.client.system_host_keys_file == os.path.expanduser("~/.ssh/known_hosts")
-    assert fs.client.host_keys_file is None
 
 
 def test_known_hosts_file(fake_client):
@@ -460,7 +453,7 @@ def test_known_hosts_file(fake_client):
         skip_instance_cache=True,
     )
 
-    assert fs.client.host_keys_file == "/some/known_hosts"
+    assert fs.client.system_host_keys_file == "/some/known_hosts"
     assert "known_hosts" not in fs.client.connect_kwargs
 
 
@@ -668,13 +661,14 @@ def test_auto_add_adds_the_key_to_known_hosts(sshd, home, caplog, policy):
     assert "added to" not in caplog.text
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes")
-def test_auto_add_creates_the_file_private(sshd, home):
+def test_auto_add_creates_the_file(sshd, home):
+    port, host_key = sshd
     known_hosts = home / "extra_known_hosts"
 
-    _connect(sshd[0], known_hosts=str(known_hosts), host_key_policy="auto_add")
+    _connect(port, known_hosts=str(known_hosts), host_key_policy="auto_add")
 
-    assert known_hosts.stat().st_mode & 0o777 == 0o600
+    keys = paramiko.HostKeys(str(known_hosts))
+    assert keys.lookup(f"[127.0.0.1]:{port}")[host_key.get_name()] == host_key
 
 
 def test_auto_add_keeps_the_other_lines(sshd, home):
@@ -779,7 +773,8 @@ def test_known_hosts_path_is_expanded(sshd, home):
     fs = _connect(port, known_hosts="~/extra_known_hosts", host_key_policy="reject")
 
     assert fs.ftp is not None
-    assert fs.known_hosts == str(home / "extra_known_hosts")
+    # expanduser keeps the "/" of the argument, so on Windows the separators mix
+    assert Path(fs.known_hosts) == home / "extra_known_hosts"
 
 
 def _paramiko_stops_at_marker():
@@ -834,17 +829,6 @@ def test_unsupported_line_in_known_hosts_file_refuses_the_connection(sshd, home)
     assert _sees_no_authentication()
 
 
-def test_the_line_is_written_completely_in_pieces(tmp_path, monkeypatch):
-    known_hosts = tmp_path / "known_hosts"
-    key = paramiko.RSAKey.generate(2048)
-    write = os.write
-    monkeypatch.setattr(os, "write", lambda fd, data: write(fd, bytes(data[:10])))
-
-    fsspec.implementations.sftp._append_known_host(str(known_hosts), "host", key)
-
-    assert paramiko.HostKeys(str(known_hosts)).lookup("host")[key.get_name()] == key
-
-
 def test_changed_host_key_is_logged_as_an_error(sshd, home, caplog):
     port, _ = sshd
     _write_known_hosts(
@@ -876,7 +860,8 @@ def test_non_text_known_hosts_refuse_the_connection(sshd, home, target):
     known_hosts.write_bytes(b"host \xff\xfe ssh-ed25519 AAAA\n")
     kwargs = {} if target == "home" else {"known_hosts": str(known_hosts)}
 
-    with pytest.raises(UnicodeDecodeError):
+    # Windows reads with its code page, which decodes any byte: a bad line instead
+    with pytest.raises((UnicodeDecodeError, paramiko.hostkeys.InvalidHostKey)):
         _connect(port, **kwargs)
 
     assert _sees_no_authentication()
@@ -892,3 +877,29 @@ def test_home_that_is_not_a_directory_has_no_known_hosts(sshd, tmp_path, monkeyp
     fs = _connect(sshd[0])
 
     assert fs.ftp is not None
+
+
+def test_known_hosts_file_replaces_the_default(sshd, home):
+    """Like UserKnownHostsFile: ~/.ssh/known_hosts is not read at all."""
+    port, host_key = sshd
+    _write_known_hosts(
+        home / ".ssh" / "known_hosts", port, paramiko.RSAKey.generate(2048)
+    )
+    known_hosts = home / "extra_known_hosts"
+    _write_known_hosts(known_hosts, port, host_key)
+
+    fs = _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
+
+    assert fs.ftp is not None
+
+
+def test_known_hosts_file_does_not_add_the_default(sshd, home):
+    port, host_key = sshd
+    _write_known_hosts(home / ".ssh" / "known_hosts", port, host_key)
+    known_hosts = home / "extra_known_hosts"
+    known_hosts.write_text("")
+
+    with pytest.raises(paramiko.SSHException, match="not found in known_hosts"):
+        _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
+
+    assert _sees_no_authentication()

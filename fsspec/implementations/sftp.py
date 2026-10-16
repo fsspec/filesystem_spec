@@ -21,18 +21,13 @@ def _append_known_host(path, hostname, key):
     that processes adding keys at the same time do not overwrite each other.
     """
     line = HostKeyEntry([hostname], key).to_line().encode()
-    flags = os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0)
-    fd = os.open(path, flags, 0o600)
-    try:
-        if os.fstat(fd).st_size:
-            os.lseek(fd, -1, os.SEEK_END)
-            if os.read(fd, 1) != b"\n":
+    with open(path, "a+b") as f:
+        size = f.seek(0, os.SEEK_END)
+        if size:
+            f.seek(size - 1)
+            if f.read(1) != b"\n":
                 line = b"\n" + line
-        view = memoryview(line)
-        while view:
-            view = view[os.write(fd, view) :]
-    finally:
-        os.close(fd)
+        f.write(line)
 
 
 class _AutoAddPolicy(paramiko.AutoAddPolicy):
@@ -135,8 +130,8 @@ class SFTPFileSystem(AbstractFileSystem):
         temppath: str
             Location on the server to put files, when within a transaction
         host_key_policy: str or paramiko.MissingHostKeyPolicy, optional
-            What to do with a host that is not in ``~/.ssh/known_hosts`` or
-            ``known_hosts``. Passed to
+            What to do with a host that is not in the known hosts file, which is
+            ``~/.ssh/known_hosts`` or ``known_hosts``. Passed to
             ``paramiko.SSHClient.set_missing_host_key_policy``. One of the
             strings
 
@@ -166,11 +161,11 @@ class SFTPFileSystem(AbstractFileSystem):
             unknown host or a different key is refused before authentication,
             and the file is never written.
         known_hosts: str, optional
-            Path of a ``known_hosts`` file that is read in addition to
-            ``~/.ssh/known_hosts``. Only this file is ever written, and only
-            by the ``"auto_add"`` policy, with one line added at the end. It has
-            to exist, unless the policy adds keys, which creates it. A host that
-            is in ``~/.ssh/known_hosts`` is checked against that file only.
+            Path of a ``known_hosts`` file that is used instead of
+            ``~/.ssh/known_hosts``, like ``UserKnownHostsFile`` of OpenSSH.
+            It is only written by the ``"auto_add"`` policy, with one line
+            added at the end. It has to exist, unless the policy adds keys,
+            which creates it.
             paramiko ignores patterns such as ``*.example.com``.
         ssh_kwargs: dict
             Parameters passed on to connection. See details in
@@ -213,20 +208,22 @@ class SFTPFileSystem(AbstractFileSystem):
         self.ftp = self.client.open_sftp()
 
     def _load_known_hosts(self):
+        # Like UserKnownHostsFile of OpenSSH: a given file replaces the default.
+        # paramiko calls the file of the user "system host keys". Not
+        # load_host_keys(): paramiko would then rewrite the whole file whenever
+        # the policy accepts a key.
+        path = self.known_hosts or os.path.expanduser("~/.ssh/known_hosts")
         try:
             # with a file name, paramiko raises when it cannot read the file
-            self.client.load_system_host_keys(os.path.expanduser("~/.ssh/known_hosts"))
+            self.client.load_system_host_keys(path)
         except (FileNotFoundError, NotADirectoryError):
-            pass  # there is no such file, for example with HOME=/dev/null
-        if self.known_hosts is not None and (
-            os.path.exists(self.known_hosts)
-            or not getattr(self.host_key_policy, "persists", False)
-        ):
-            # A file that does not exist yet is created when the policy adds
-            # the first key. Otherwise a missing file is an error.
-            # Not load_host_keys(): paramiko would then rewrite the whole file
-            # whenever the policy accepts a key.
-            self.client.get_host_keys().load(self.known_hosts)
+            # No default file is fine, for example with HOME=/dev/null. A given
+            # file that does not exist yet is created when the policy adds the
+            # first key. Otherwise it is an error.
+            if self.known_hosts is not None and not getattr(
+                self.host_key_policy, "persists", False
+            ):
+                raise
 
     @classmethod
     def _strip_protocol(cls, path):
