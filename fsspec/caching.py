@@ -227,7 +227,7 @@ class MMapCache(BaseCache):
         return self.cache[start:end]
 
     def close(self) -> None:
-        if not isinstance(self.cache, bytearray):
+        if hasattr(self.cache, "close"):
             self.cache.close()
 
     def __getstate__(self) -> dict[str, Any]:
