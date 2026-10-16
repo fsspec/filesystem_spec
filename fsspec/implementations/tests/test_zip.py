@@ -1,6 +1,8 @@
 import collections.abc
 import os.path
 import zipfile
+from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from shutil import make_archive
 
@@ -64,6 +66,53 @@ def test_write_seek(m):
     with m.open("afile.zip", "rb") as f:
         fs = fsspec.filesystem("zip", fo=f)
         assert fs.cat("another") == b"hi"
+
+
+@pytest.mark.parametrize("backend", ["memory", "file"])
+@pytest.mark.parametrize("mode", ["w", "a"])
+def test_close_commits_cached_archive(m, tmp_path, backend, mode):
+    path = "memory://close.zip" if backend == "memory" else str(tmp_path / "close.zip")
+    if mode == "a":
+        with fsspec.open(path, "wb") as file:
+            with zipfile.ZipFile(file, "w") as archive:
+                archive.writestr("existing", b"original")
+
+    fs = ZipFileSystem(
+        f"simplecache::{path}",
+        mode=mode,
+        target_options={"simplecache": {"cache_storage": str(tmp_path / "cache")}},
+    )
+    fs.pipe_file("added", b"new data")
+    fs.close()
+    fs.close()
+
+    # Keep fs alive: the completed archive must not depend on garbage collection.
+    with fsspec.open(path, "rb") as file:
+        with zipfile.ZipFile(file) as archive:
+            assert archive.read("added") == b"new data"
+            if mode == "a":
+                assert archive.read("existing") == b"original"
+    assert fs.fo.closed
+
+
+def test_close_exits_archive_context_once():
+    exits = []
+
+    @contextmanager
+    def archive_file():
+        with BytesIO() as file:
+            try:
+                yield file
+            finally:
+                exits.append(True)
+
+    fs = ZipFileSystem(archive_file(), mode="w")
+    fs.pipe_file("member", b"data")
+    fs.close()
+    fs.close()
+    assert exits == [True]
+    fs.__del__()
+    assert exits == [True]
 
 
 @pytest.mark.parametrize("prefix", ["", "/", "zip://", "zip:///"])

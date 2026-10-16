@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Commit ZIP writes through caching filesystems when ``ZipFileSystem.close()``
+  is called, without waiting for garbage collection (#2311).
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 
