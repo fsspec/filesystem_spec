@@ -3,12 +3,12 @@ from __future__ import annotations
 import inspect
 import logging
 import os
-import shutil
 import uuid
 
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
+from .utils import check_contained
 
 _generic_fs = {}
 logger = logging.getLogger("fsspec.generic")
@@ -95,6 +95,9 @@ def rsync(
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
         raise ValueError("Can only rsync on a directory")
+    # The names came from the source listing; ".." in one of them would
+    # otherwise place the copy above the destination.
+    check_contained(destination, [a.replace(source, destination) for a in allfiles])
     otherfiles = fs.find(destination, withdirs=True, detail=True)
     dirs = [
         a
@@ -351,8 +354,7 @@ async def copy_file_op(
 ):
     import tempfile
 
-    tempdir = tempdir or tempfile.mkdtemp()
-    try:
+    with tempfile.TemporaryDirectory(dir=tempdir) as tempdir:
         coros = [
             _copy_file_op(
                 fs1,
@@ -366,8 +368,6 @@ async def copy_file_op(
         out = await _run_coros_in_chunks(
             coros, batch_size=batch_size, return_exceptions=True
         )
-    finally:
-        shutil.rmtree(tempdir)
     if on_error == "return":
         return out
     elif on_error == "raise":

@@ -1,17 +1,179 @@
 import asyncio
+import gzip
 import io
 import json
 import os
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from types import SimpleNamespace
 
 import aiohttp
 import pytest
 
 import fsspec.asyn
 import fsspec.utils
-from fsspec.implementations.http import HTTPStreamFile
-from fsspec.tests.conftest import data, reset_files, server, win  # noqa: F401
+from fsspec.implementations.http import (
+    _RETRYABLE_STATUSES,
+    HTTPStreamFile,
+)
+from fsspec.tests.conftest import (  # noqa: F401
+    HTTPTestHandler,
+    data,
+    reset_faults,
+    reset_files,
+    server,
+    win,
+)
+
+
+@pytest.fixture
+def encoded_range_server(request):
+    content = getattr(request, "param", bytes(range(256)) * 32)
+    encoded = gzip.compress(content, mtime=0)
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def respond(self, head=False):
+            encoding = self.headers.get("Accept-Encoding", "")
+            compress = "gzip" in encoding or not encoding
+            representation = encoded if compress else content
+            total = len(representation)
+            headers = {"Accept-Ranges": "bytes", "Vary": "Accept-Encoding"}
+            if compress:
+                headers["Content-Encoding"] = "gzip"
+            requests.append((self.command, dict(self.headers)))
+            status = 200
+            if not head and "Range" in self.headers:
+                start, end = self.headers["Range"].removeprefix("bytes=").split("-")
+                start = int(start)
+                end = min(int(end), total - 1)
+                if start >= total:
+                    status = 416
+                    headers["Content-Range"] = f"bytes */{total}"
+                    representation = b""
+                else:
+                    status = 206
+                    headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+                    representation = representation[start : end + 1]
+            headers["Content-Length"] = str(len(representation))
+            self.send_response(status)
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.end_headers()
+            if not head:
+                self.wfile.write(representation)
+
+        def do_HEAD(self):
+            if "head_unavailable" in self.headers:
+                requests.append((self.command, dict(self.headers)))
+                self.send_response(405)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.respond(head=True)
+
+        def do_GET(self):
+            self.respond()
+
+        def log_message(self, *args):
+            pass
+
+    with HTTPServer(("127.0.0.1", 0), Handler) as httpd:
+        thread = threading.Thread(target=httpd.serve_forever)
+        thread.start()
+        try:
+            yield SimpleNamespace(
+                url=f"http://127.0.0.1:{httpd.server_port}/data",
+                content=content,
+                encoded=encoded,
+                requests=requests,
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+            assert not thread.is_alive()
+
+
+@pytest.mark.parametrize("start", [0, 4096])
+@pytest.mark.parametrize("metadata_method", ["HEAD", "GET"])
+def test_range_uses_identity_representation(
+    encoded_range_server, start, metadata_method
+):
+    server = encoded_range_server
+    headers = {"X-Test": "preserved"}
+    if metadata_method == "GET":
+        headers["head_unavailable"] = "true"
+    original = headers.copy()
+    fs = fsspec.filesystem("http", headers=headers)
+    with fs.open(server.url, block_size=16, cache_type="none") as f:
+        assert f.size == len(server.content)
+        f.seek(start)
+        assert f.read(5) == server.content[start : start + 5]
+    assert headers == original
+    assert all(h["X-Test"] == "preserved" for _, h in server.requests)
+    metadata = [(m, h) for m, h in server.requests if "Range" not in h]
+    assert [m for m, _ in metadata] == (
+        ["HEAD"] if metadata_method == "HEAD" else ["HEAD", "GET"]
+    )
+    assert all(h["Accept-Encoding"] == "identity" for _, h in metadata)
+
+
+@pytest.mark.parametrize(
+    "encoded_range_server",
+    [
+        b'def main():\n    print("Hallo, R\xc3\xa4uber Hotzenplotz.")  # noqa: T201\n'
+        b"    return 42\n"
+    ],
+    indirect=True,
+)
+def test_small_file_read_all_with_encoding(encoded_range_server):
+    server = encoded_range_server
+    assert len(server.encoded) > len(server.content)
+    fs = fsspec.filesystem("http")
+    with fs.open(server.url) as f:
+        assert f.size == len(server.content)
+        assert f.size < f.blocksize
+        assert f.read() == server.content
+    assert server.requests[-1][1]["Range"] == f"bytes=0-{len(server.content) - 1}"
+
+
+@pytest.mark.parametrize(
+    "header_name", ["Accept-Encoding", "accept-encoding", "aCcEpT-EnCoDiNg"]
+)
+@pytest.mark.parametrize("location", ["request", "session", "request_over_session"])
+def test_range_preserves_explicit_encoding(encoded_range_server, header_name, location):
+    server = encoded_range_server
+    headers = {header_name: "gzip", "X-Test": "preserved"}
+    original = headers.copy()
+    options = {"client_kwargs": {"auto_decompress": False}}
+    if location != "session":
+        options["headers"] = headers
+        if location == "request_over_session":
+            options["client_kwargs"]["headers"] = {"Accept-Encoding": "identity"}
+    else:
+        options["client_kwargs"]["headers"] = headers
+    fs = fsspec.filesystem("http", **options)
+    with fs.open(
+        server.url, size=len(server.encoded), block_size=16, cache_type="none"
+    ) as f:
+        assert f.read(5) == server.encoded[:5]
+        f.seek(100)
+        assert f.read(5) == server.encoded[100:105]
+    assert headers == original
+    assert all(h["X-Test"] == "preserved" for _, h in server.requests)
+
+
+@pytest.mark.parametrize("block_size", [0, 16])
+def test_full_read_preserves_compression(encoded_range_server, block_size):
+    server = encoded_range_server
+    fs = fsspec.filesystem("http")
+    with fs.open(server.url, block_size=block_size) as f:
+        assert f.read() == server.content
+    get_headers = [h for method, h in server.requests if method == "GET"]
+    assert len(get_headers) == 1
+    assert "gzip" in get_headers[0]["Accept-Encoding"]
 
 
 def test_list(server):
@@ -24,6 +186,60 @@ def test_list_invalid_args(server):
     with pytest.raises(TypeError):
         h = fsspec.filesystem("http", use_foobar=True)
         h.glob(server.address + "/index/*")
+
+
+@pytest.mark.parametrize("retry_without_slash", [False, True])
+def test_list_request_options(server, monkeypatch, retry_without_slash):
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    received = []
+    original_handler = HTTPTestHandler.do_GET
+
+    def respond(handler):
+        if handler.path not in ("/options", "/options/"):
+            return original_handler(handler)
+        received.append((handler.path, handler.headers.get("X-Listing")))
+        body = (
+            b"" if handler.path.endswith("/") else b'<a href="/options/file">file</a>'
+        )
+        handler._respond(data=body)
+
+    monkeypatch.setattr(HTTPTestHandler, "do_GET", respond)
+    h = fsspec.filesystem(
+        "http",
+        headers={"X-Listing": "default"},
+        allow_redirects=True,
+        skip_instance_cache=True,
+    )
+    session = fsspec.asyn.sync(h.loop, h.set_session)
+    redirects = []
+    original_get = session.get
+
+    def get(*args, **kwargs):
+        redirects.append(kwargs.get("allow_redirects"))
+        return original_get(*args, **kwargs)
+
+    monkeypatch.setattr(session, "get", get)
+    suffix = "/" if retry_without_slash else ""
+    url = server.address + "/options" + suffix
+    paths = ["/options/", "/options"] if retry_without_slash else ["/options"]
+    try:
+        assert h.ls(
+            url, detail=False, headers={"X-Listing": "call"}, allow_redirects=False
+        ) == [server.address + "/options/file"]
+        assert received == [(path, "call") for path in paths]
+        assert redirects == [False] * len(paths)
+        received.clear()
+        redirects.clear()
+        assert h.ls(url, detail=False) == [server.address + "/options/file"]
+        assert received == [(path, "default") for path in paths]
+        assert redirects == [True] * len(paths)
+        assert h.kwargs == {
+            "headers": {"X-Listing": "default"},
+            "allow_redirects": True,
+        }
+    finally:
+        h.close_session(h.loop, session)
 
 
 def test_list_cache(server):
@@ -682,6 +898,41 @@ def test_pipe_file(server, tmpdir, reset_files):
     assert fs.cat(server.address + "/piped_bytes") == b"BytesIO content"
 
 
+@pytest.mark.parametrize("mode", ["append", "create", "invalid", None])
+def test_pipe_file_rejects_unsupported_mode(server, reset_files, mode):
+    fs = fsspec.filesystem(
+        "http", headers={"accept_put": "true"}, skip_instance_cache=True
+    )
+    url = server.address + "/unsupported_pipe_mode"
+    try:
+        fs.pipe_file(url, b"original")
+        with pytest.raises(ValueError, match="PUT behavior is server-dependent"):
+            fs.pipe_file(url, b"replacement", mode=mode)
+        assert fs.cat(url) == b"original"
+    finally:
+        fs.close_session(fs.loop, fs._session)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["append", "create", "invalid", None])
+async def test_async_pipe_file_rejects_unsupported_mode(server, reset_files, mode):
+    fs = fsspec.filesystem(
+        "http",
+        asynchronous=True,
+        headers={"accept_put": "true"},
+        skip_instance_cache=True,
+    )
+    url = server.address + "/unsupported_async_pipe_mode"
+    try:
+        await fs._pipe_file(url, b"original")
+        with pytest.raises(ValueError, match="PUT behavior is server-dependent"):
+            await fs._pipe_file(url, b"replacement", mode=mode)
+        assert await fs._cat_file(url) == b"original"
+    finally:
+        if fs._session is not None:
+            await fs._session.close()
+
+
 @pytest.mark.parametrize("protocol", ["http", "https"])
 def test_protocol_independent_of_first_used_protocol(protocol):
     from fsspec import filesystem
@@ -692,3 +943,279 @@ def test_protocol_independent_of_first_used_protocol(protocol):
     fs1 = filesystem("https")
     p1 = fs1.protocol[0] if isinstance(fs1.protocol, tuple) else fs1.protocol
     assert p0 == p1 == "http"
+
+
+# --- retries -----------------------------------------------------------------
+# The server faults are driven by request headers, see HTTPTestHandler._serve_fault.
+
+_RETRY_HEADERS = {"give_length": "true", "head_ok": "true", "use_206": "true"}
+_REALFILE_PATH = "/index/realfile"
+
+
+def _retry_fs(fault_headers=None, **kwargs):
+    headers = dict(_RETRY_HEADERS, **(fault_headers or {}))
+    kwargs.setdefault("retry_wait", 0)
+    return fsspec.filesystem(
+        "http", headers=headers, skip_instance_cache=True, **kwargs
+    )
+
+
+def _gets(path=_REALFILE_PATH):
+    return HTTPTestHandler.get_counts.get(path, 0)
+
+
+def _heads(path=_REALFILE_PATH):
+    return HTTPTestHandler.head_counts.get(path, 0)
+
+
+def _faults(path=_REALFILE_PATH):
+    return HTTPTestHandler.fault_counts.get(path, 0)
+
+
+def _rearm():
+    """Restore the fault budget and request counters for a second read in a test."""
+    HTTPTestHandler.fault_counts.clear()
+    HTTPTestHandler.get_counts.clear()
+    HTTPTestHandler.head_counts.clear()
+
+
+def test_retry_503_then_succeeds(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+
+def test_retry_cat_file(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503", "fail_times": "2"})
+    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
+    assert _gets() == 3
+    HTTPTestHandler.fault_counts.clear()
+    HTTPTestHandler.get_counts.clear()
+    assert fs.cat_file(server.realfile) == data
+    assert _gets() == 3
+
+
+@pytest.mark.parametrize("status", [400, 403, 416])
+def test_retry_not_for_4xx(server, reset_faults, status):
+    # via cat_file, which has no notion of file size: a 416 there is final
+    fs = _retry_fs({"fail_status": str(status), "fail_times": "5"})
+    with pytest.raises(aiohttp.ClientResponseError) as e:
+        fs.cat_file(server.realfile)
+    assert e.value.status == status
+    assert _gets() == 1
+
+
+def test_retry_not_for_404(server, reset_faults):
+    fs = _retry_fs()
+    url = server.address + "/index/missing"
+    with pytest.raises(FileNotFoundError):
+        fs.cat_file(url)
+    assert _gets("/index/missing") == 1
+
+
+def test_retry_exhausted_raises_original(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503", "fail_times": "10"}, retries=2)
+    with pytest.raises(aiohttp.ClientResponseError) as e:
+        fs.cat_file(server.realfile)
+    assert e.value.status == 503
+    assert _gets() == 3
+
+
+def test_retry_disabled_keeps_old_behaviour(server, reset_faults):
+    fs = _retry_fs({"fail_status": "503"}, retries=0)
+    with pytest.raises(aiohttp.ClientResponseError) as e:
+        fs.cat_file(server.realfile)
+    assert e.value.status == 503
+    assert _gets() == 1
+
+
+def test_retry_truncated_body(server, reset_faults):
+    fs = _retry_fs({"truncate_body": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+    HTTPTestHandler.fault_counts.clear()
+    fs = _retry_fs({"truncate_body": "true"}, retries=0)
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError):
+            f.read(len(data))
+
+
+def test_retry_short_206_body(server, reset_faults):
+    # headers are self-consistent, so only the length check can notice
+    fs = _retry_fs({"short_body": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+    HTTPTestHandler.fault_counts.clear()
+    fs = _retry_fs({"short_body": "true"}, retries=0)
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError, match="expected"):
+            f.read(len(data))
+
+
+def test_retry_416_inside_file(server, reset_faults):
+    # a 416 for a range that lies inside the file is not EOF, see
+    # https://github.com/fsspec/filesystem_spec/issues/1895
+    fs = _retry_fs({"fail_status": "416"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _faults() == 1
+    assert _gets() == 2
+
+    HTTPTestHandler.fault_counts.clear()
+    fs = _retry_fs({"fail_status": "416"}, retries=0)
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError, match="unsatisfiable"):
+            f.read(len(data))
+
+
+def test_retry_honours_retry_after(server, reset_faults, monkeypatch):
+    sleeps = []
+
+    async def fake_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    fs = _retry_fs({"fail_status": "429", "retry_after": "7"}, retry_wait=1)
+    assert fs.cat_file(server.realfile) == data
+    assert sleeps == [7.0]
+
+    # ... but a server asking for an hour is capped
+    _rearm()
+    fs = _retry_fs({"fail_status": "429", "retry_after": "3600"}, retry_wait=1)
+    assert fs.cat_file(server.realfile) == data
+    assert sleeps == [7.0, 60.0]
+
+
+def test_retry_info_head(server, reset_faults):
+    # open() needs the size from a HEAD request; a failed HEAD falls back to
+    # GET at once, and the HEAD+GET sequence is what gets retried
+    fs = _retry_fs({"fail_status": "503", "fail_times": "2", "fail_head": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _heads() == 2  # 503, then 200 on the retry
+    assert _gets() == 2  # the 503 fallback, then the block read
+
+    # without retries the HEAD fails, the GET fallback fails too, and _info
+    # reports that as "not found" (pre-existing behaviour)
+    _rearm()
+    fs = _retry_fs(
+        {"fail_status": "503", "fail_times": "5", "fail_head": "true"}, retries=0
+    )
+    with pytest.raises(FileNotFoundError):
+        fs.open(server.realfile)
+    assert _heads() == 1
+    assert _gets() == 1
+
+
+def test_retry_backoff_sequence(server, reset_faults, monkeypatch):
+    sleeps = []
+
+    async def fake_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(fsspec.implementations.http.random, "random", lambda: 0.5)
+    fs = _retry_fs({"fail_status": "503", "fail_times": "3"}, retry_wait=1)
+    assert fs.cat_file(server.realfile) == data
+    assert sleeps == [1, 2, 4]
+    assert _gets() == 4
+
+
+def test_retry_option_validation():
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retries=-1, skip_instance_cache=True)
+    with pytest.raises(ValueError):
+        fsspec.filesystem("http", retry_wait=-1, skip_instance_cache=True)
+
+
+def test_retry_custom_statuses(server, reset_faults):
+    # 403 is not retried by default, but can be opted in
+    fs = _retry_fs({"fail_status": "403"}, retry_statuses=[403])
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _gets() == 2
+    _rearm()
+    assert fs.cat_file(server.realfile, start=10, end=200) == data[10:200]
+    assert _gets() == 2
+
+    # ... and the default codes can be opted out
+    fs = _retry_fs({"fail_status": "503"}, retry_statuses=[403])
+    _rearm()
+    with pytest.raises(aiohttp.ClientResponseError):
+        fs.cat_file(server.realfile)
+    assert _gets() == 1
+
+
+def test_retry_defaults():
+    fs = fsspec.filesystem("http", skip_instance_cache=True)
+    assert fs.retry_statuses == _RETRYABLE_STATUSES
+    assert fs.retry_exceptions is None
+
+
+def test_retry_custom_exceptions(server, reset_faults):
+    # a truncated body is retried by default ...
+    fs = _retry_fs({"truncate_body": "true"})
+    with fs.open(server.realfile) as f:
+        assert f.read(len(data)) == data
+    assert _gets() == 2
+
+    # ... but not when the retried exceptions are restricted
+    _rearm()
+    fs = _retry_fs({"truncate_body": "true"}, retry_exceptions=(TimeoutError,))
+    with fs.open(server.realfile) as f:
+        with pytest.raises(aiohttp.ClientPayloadError):
+            f.read(len(data))
+    assert _gets() == 1
+
+    # ... and can be opted back in, as a tuple or a single class
+    for exceptions in ((aiohttp.ClientPayloadError,), aiohttp.ClientPayloadError):
+        _rearm()
+        fs = _retry_fs({"truncate_body": "true"}, retry_exceptions=exceptions)
+        with fs.open(server.realfile) as f:
+            assert f.read(len(data)) == data
+        assert _gets() == 2
+
+
+@pytest.mark.asyncio
+async def test_async_stream_not_seekable(server):
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+    stream = await fs.open_async(server.realfile)
+    try:
+        assert stream.tell() == 0
+        stream.seek(0)
+        stream.seek(0, 1)
+        with pytest.raises(ValueError, match="Cannot seek streaming HTTP file"):
+            stream.seek(5)
+        assert stream.tell() == 0
+        assert await stream.read(5) == data[:5]
+        assert stream.tell() == 5
+        stream.seek(5)
+        stream.seek(0, 1)
+        for offset, whence in [(0, 0), (1, 1), (0, 2)]:
+            with pytest.raises(ValueError, match="Cannot seek streaming HTTP file"):
+                stream.seek(offset, whence)
+            assert stream.tell() == 5
+        assert await stream.read(5) == data[5:10]
+        assert stream.tell() == 10
+    finally:
+        await stream.close()
+        await fs._session.close()
+
+
+@pytest.mark.asyncio
+async def test_async_stream_seekable(server):
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+    stream = await fs.open_async(server.realfile)
+    try:
+        assert stream.seekable() is False
+    finally:
+        await stream.close()
+        await fs._session.close()

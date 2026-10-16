@@ -356,6 +356,8 @@ class WebHDFS(AbstractFileSystem):
             posix epresentation or permission, give as oct string, e.g, '777'
             or 0o777
         """
+        if isinstance(mod, int):
+            mod = format(mod, "o")
         self._call("SETPERMISSION", method="put", path=path, permission=mod)
 
     def chown(self, path, owner=None, group=None):
