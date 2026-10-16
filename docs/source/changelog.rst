@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Finalize ZIP filesystem-owned file contexts on explicit close, so cached
+  archive writes reach their destination without waiting for garbage collection (#2311).
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 
