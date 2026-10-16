@@ -14,6 +14,9 @@ Fixes
 
 - Dispatch mixed-protocol ``GenericFileSystem.copy`` batches by backend pair.
 
+- Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
+  since PUT behavior depends on the server (#2294).
+
 - Reject ``generic.rsync`` source names whose ".." segments would place
   copies outside the destination
 
