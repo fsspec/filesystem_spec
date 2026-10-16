@@ -8,6 +8,7 @@ import uuid
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
+from .utils import check_contained
 
 _generic_fs = {}
 logger = logging.getLogger("fsspec.generic")
@@ -94,6 +95,9 @@ def rsync(
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
         raise ValueError("Can only rsync on a directory")
+    # The names came from the source listing; ".." in one of them would
+    # otherwise place the copy above the destination.
+    check_contained(destination, [a.replace(source, destination) for a in allfiles])
     otherfiles = fs.find(destination, withdirs=True, detail=True)
     dirs = [
         a
