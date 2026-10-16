@@ -7,7 +7,10 @@ import pytest
 
 requests = pytest.importorskip("requests")
 
-from fsspec.implementations.dbfs import DatabricksException, DatabricksFileSystem  # noqa: E402
+from fsspec.implementations.dbfs import (  # noqa: E402
+    DatabricksException,
+    DatabricksFileSystem,
+)
 
 
 def response(error_code=None):
@@ -28,7 +31,7 @@ def fs():
     filesystem.session.close()
 
 
-@pytest.mark.parametrize("partial_responses", [0, 1, 2])
+@pytest.mark.parametrize("partial_responses", [0, 1, 2, 1100])
 def test_rm_partial_delete_completes_and_invalidates_cache(
     fs, monkeypatch, partial_responses
 ):
