@@ -7,7 +7,8 @@ Dev
 Enhancements
 
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
-  operations (#1623)
+  operations that fill the cache on a miss, so ``filecache``/``simplecache``
+  opens can report download progress (#1623)
 
 Fixes
 
@@ -18,6 +19,12 @@ Fixes
   key, and add the key to ``known_hosts`` if it is given (#2308)
 
 - Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+
+- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+
+- Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Keep the HTTP link regex linear
 
 - Preserve single-source copy semantics for Paths in sync batch ops
 
