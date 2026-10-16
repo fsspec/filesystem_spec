@@ -7,7 +7,7 @@ import pytest
 
 requests = pytest.importorskip("requests")
 
-from fsspec.implementations.dbfs import DatabricksException, DatabricksFileSystem
+from fsspec.implementations.dbfs import DatabricksException, DatabricksFileSystem  # noqa: E402
 
 
 def response(error_code=None):
