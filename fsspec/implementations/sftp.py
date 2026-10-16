@@ -151,7 +151,7 @@ class SFTPFileSystem(AbstractFileSystem):
 
     protocol = "sftp", "ssh"
 
-    def __init__(self, host, **ssh_kwargs):
+    def __init__(self, host, *, known_hosts=None, host_key_policy=None, **ssh_kwargs):
         """
 
         Parameters
@@ -207,12 +207,11 @@ class SFTPFileSystem(AbstractFileSystem):
             return
         super().__init__(**ssh_kwargs)
         self.temppath = ssh_kwargs.pop("temppath", "/tmp")  # remote temp directory
-        known_hosts = ssh_kwargs.pop("known_hosts", None)
         self.known_hosts = (
             None if known_hosts is None else os.path.expanduser(known_hosts)
         )
         self.host_key_policy = _resolve_host_key_policy(
-            ssh_kwargs.pop("host_key_policy", None), self.known_hosts
+            host_key_policy, self.known_hosts
         )
         self.host = host
         self.ssh_kwargs = ssh_kwargs

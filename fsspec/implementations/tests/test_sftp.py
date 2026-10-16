@@ -3,6 +3,7 @@ import hashlib
 import logging
 import multiprocessing
 import os
+import pickle
 import shlex
 import socket
 import subprocess
@@ -943,3 +944,44 @@ def test_host_name_with_non_ascii_characters_is_found_again(tmp_path):
 
     keys = paramiko.HostKeys(str(known_hosts))
     assert keys.lookup("b\u00fccher.example")[key.get_name()] == key
+
+
+def test_known_hosts_and_policy_survive_pickling(sshd, home):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    _write_known_hosts(known_hosts, port, host_key)
+    # not _connect(): its private key object cannot be pickled
+    fs = fsspec.filesystem(
+        "sftp",
+        host="127.0.0.1",
+        port=port,
+        username="user",
+        password="password",
+        allow_agent=False,
+        look_for_keys=False,
+        known_hosts=str(known_hosts),
+        host_key_policy="reject",
+        skip_instance_cache=True,
+    )
+
+    restored = pickle.loads(pickle.dumps(fs))
+
+    assert restored.known_hosts == str(known_hosts)
+    assert isinstance(restored.host_key_policy, paramiko.RejectPolicy)
+    assert restored.ftp is not None
+
+
+def test_known_hosts_and_policy_are_part_of_the_instance_cache(sshd, home):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    _write_known_hosts(known_hosts, port, host_key)
+    args = {"host": "127.0.0.1", "port": port, "username": "user", "password": "x"}
+
+    first = fsspec.filesystem("sftp", known_hosts=str(known_hosts), **args)
+    same = fsspec.filesystem("sftp", known_hosts=str(known_hosts), **args)
+    other = fsspec.filesystem(
+        "sftp", known_hosts=str(known_hosts), host_key_policy="reject", **args
+    )
+
+    assert first is same
+    assert first is not other
