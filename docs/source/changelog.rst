@@ -12,11 +12,11 @@ Enhancements
 
 Fixes
 
-- ``SFTPFileSystem`` checks ``~/.ssh/known_hosts``; new ``known_hosts``
+- Check ``~/.ssh/known_hosts`` in ``SFTPFileSystem`` and add a ``known_hosts``
   argument (#2308; issue #2119)
 
-- ``SFTPFileSystem``: ``auto_add`` warns with the fingerprint and adds the key
-  to ``known_hosts`` (#2308)
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
 
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
