@@ -1,12 +1,14 @@
 import base64
 import hashlib
 import logging
+import multiprocessing
 import os
 import shlex
 import socket
 import subprocess
 import threading
 import time
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from tarfile import TarFile
@@ -686,7 +688,7 @@ def test_auto_add_keeps_the_other_lines(sshd, home):
 
 
 @pytest.mark.skipif(
-    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    hasattr(os, "geteuid") and os.geteuid() == 0,
     reason="needs a file that the user cannot write",
 )
 @pytest.mark.parametrize("policy", [None, "auto_add"])
@@ -903,3 +905,41 @@ def test_known_hosts_file_does_not_add_the_default(sshd, home):
         _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
 
     assert _sees_no_authentication()
+
+
+def _append_many(path, count, key_bytes):
+    from fsspec.implementations.sftp import _append_known_host
+
+    key = paramiko.RSAKey(data=key_bytes)
+    for i in range(count):
+        _append_known_host(path, f"host-{os.getpid()}-{i}", key)
+
+
+def test_processes_adding_keys_at_the_same_time_lose_none(tmp_path):
+    known_hosts = tmp_path / "known_hosts"
+    key = paramiko.RSAKey.generate(2048)
+
+    # spawn: forking a process that runs threads is not safe
+    spawn = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(4, mp_context=spawn) as pool:
+        futures = [
+            pool.submit(_append_many, str(known_hosts), 25, key.asbytes())
+            for _ in range(4)
+        ]
+        for future in futures:
+            future.result()
+
+    assert len(paramiko.HostKeys(str(known_hosts))) == 100
+
+
+def test_host_name_with_non_ascii_characters_is_found_again(tmp_path):
+    """paramiko reads the file with the default encoding: so must we write it."""
+    known_hosts = tmp_path / "known_hosts"
+    key = paramiko.RSAKey.generate(2048)
+
+    fsspec.implementations.sftp._append_known_host(
+        str(known_hosts), "b\u00fccher.example", key
+    )
+
+    keys = paramiko.HostKeys(str(known_hosts))
+    assert keys.lookup("b\u00fccher.example")[key.get_name()] == key

@@ -1,4 +1,6 @@
+import contextlib
 import datetime
+import locale
 import logging
 import os
 import types
@@ -8,26 +10,55 @@ from stat import S_ISDIR, S_ISLNK
 import paramiko
 from paramiko.hostkeys import HostKeyEntry
 
+try:
+    import msvcrt
+except ImportError:  # not Windows
+    msvcrt = None
+
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
 
 logger = logging.getLogger("fsspec.sftp")
 
 
+@contextlib.contextmanager
+def _locked(f):
+    """Keep other processes from adding a line to the open file meanwhile.
+
+    On POSIX a write to a file in append mode is atomic. Windows seeks to the
+    end of the file first, so two processes can write to the same place. The
+    lock is on a byte far behind the end, which does not keep anyone from
+    reading the file.
+    """
+    if msvcrt is None:
+        yield
+        return
+    f.seek(1 << 30)
+    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+    try:
+        yield
+    finally:
+        f.seek(1 << 30)
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+
+
 def _append_known_host(path, hostname, key):
     """Add one line to the ``known_hosts`` file, as OpenSSH does.
 
-    The file is opened in append mode and the line is written in one call, so
-    that processes adding keys at the same time do not overwrite each other.
+    The line is written in one call to the file in append mode, so that
+    processes adding keys at the same time do not overwrite each other.
     """
-    line = HostKeyEntry([hostname], key).to_line().encode()
-    with open(path, "a+b") as f:
+    # paramiko reads the file with the default encoding of open()
+    encoding = locale.getpreferredencoding(False)
+    line = HostKeyEntry([hostname], key).to_line().encode(encoding)
+    with open(path, "a+b") as f, _locked(f):
         size = f.seek(0, os.SEEK_END)
         if size:
             f.seek(size - 1)
             if f.read(1) != b"\n":
                 line = b"\n" + line
         f.write(line)
+        f.flush()
 
 
 class _AutoAddPolicy(paramiko.AutoAddPolicy):
@@ -59,7 +90,7 @@ class _AutoAddPolicy(paramiko.AutoAddPolicy):
         else:
             try:
                 _append_known_host(self.known_hosts, hostname, key)
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
                 raise paramiko.SSHException(
                     f"Unknown host key of {hostname!r} ({what}) refused: it "
                     f"cannot be added to {self.known_hosts!r} ({exc}), so "
