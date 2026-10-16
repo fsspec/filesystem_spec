@@ -18,6 +18,8 @@ Fixes
 - Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
   key, and add the key to ``known_hosts`` if it is given (#2308)
 
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 

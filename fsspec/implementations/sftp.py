@@ -1,6 +1,4 @@
-import base64
 import datetime
-import hashlib
 import logging
 import os
 import types
@@ -8,17 +6,12 @@ import uuid
 from stat import S_ISDIR, S_ISLNK
 
 import paramiko
-from paramiko.hostkeys import HostKeyEntry, InvalidHostKey
+from paramiko.hostkeys import HostKeyEntry
 
 from .. import AbstractFileSystem
 from ..utils import infer_storage_options
 
 logger = logging.getLogger("fsspec.sftp")
-
-
-def _fingerprint(key):
-    digest = base64.b64encode(hashlib.sha256(key.asbytes()).digest())
-    return "SHA256:" + digest.decode().rstrip("=")
 
 
 def _append_known_host(path, hostname, key):
@@ -57,7 +50,7 @@ class _AutoAddPolicy(paramiko.AutoAddPolicy):
         return self.known_hosts is not None
 
     def missing_host_key(self, client, hostname, key):
-        what = f"{key.get_name()} {_fingerprint(key)}"
+        what = f"{key.get_name()} {key.fingerprint}"
         if self.known_hosts is None:
             logger.warning(
                 "Unknown host key of %r accepted without verification and NOT "
@@ -85,7 +78,7 @@ class _AutoAddPolicy(paramiko.AutoAddPolicy):
                 self.known_hosts,
                 what,
             )
-        client.get_host_keys().add(hostname, key.get_name(), key)
+        super().missing_host_key(client, hostname, key)
 
 
 #: Short names for the missing host key policies built into paramiko, accepted
@@ -178,9 +171,7 @@ class SFTPFileSystem(AbstractFileSystem):
             by the ``"auto_add"`` policy, with one line added at the end. It has
             to exist, unless the policy adds keys, which creates it. A host that
             is in ``~/.ssh/known_hosts`` is checked against that file only.
-            Host names are written in lower case. paramiko ignores patterns such
-            as ``*.example.com``, and stops reading a file at ``@cert-authority``
-            and ``@revoked`` lines: such a host is unknown.
+            paramiko ignores patterns such as ``*.example.com``.
         ssh_kwargs: dict
             Parameters passed on to connection. See details in
             https://docs.paramiko.org/en/3.3/api/client.html#paramiko.client.SSHClient.connect
@@ -208,43 +199,25 @@ class SFTPFileSystem(AbstractFileSystem):
         # policy accepts whatever key it is shown and a changed key goes unnoticed.
         self._load_known_hosts()
         self.client.set_missing_host_key_policy(self.host_key_policy)
-        # known_hosts compares host names exactly, and OpenSSH writes them in lower case
-        host = self.host if "%" in self.host else self.host.lower()
         try:
-            self.client.connect(host, **self.ssh_kwargs)
+            self.client.connect(self.host, **self.ssh_kwargs)
         except paramiko.BadHostKeyException as exc:
             logger.error(
                 "The host key of %r has CHANGED (%s). This can be a "
                 "man-in-the-middle attack. The connection was refused before "
                 "authentication.",
-                host,
+                self.host,
                 exc,
             )
             raise
         self.ftp = self.client.open_sftp()
 
     def _load_known_hosts(self):
-        path = os.path.expanduser("~/.ssh/known_hosts")
         try:
-            # paramiko ignores a file that it cannot read, without a word
-            open(path, "rb").close()
-        except FileNotFoundError:
-            pass
-        except OSError as exc:
-            logger.warning(
-                "%s cannot be read (%s): the hosts in it count as unknown.", path, exc
-            )
-        try:
-            self.client.load_system_host_keys()
-        except InvalidHostKey as exc:
-            # paramiko stops at a line it cannot read (@cert-authority, @revoked)
-            # and the hosts below it are not known. Do not fail every connection
-            # for it: before, this file was not read at all.
-            logger.warning(
-                "~/.ssh/known_hosts has a line that paramiko cannot read (%s): "
-                "the hosts after it count as unknown.",
-                exc.line[:40],
-            )
+            # with a file name, paramiko raises when it cannot read the file
+            self.client.load_system_host_keys(os.path.expanduser("~/.ssh/known_hosts"))
+        except (FileNotFoundError, NotADirectoryError):
+            pass  # there is no such file, for example with HOME=/dev/null
         if self.known_hosts is not None and (
             os.path.exists(self.known_hosts)
             or not getattr(self.host_key_policy, "persists", False)
@@ -253,11 +226,7 @@ class SFTPFileSystem(AbstractFileSystem):
             # the first key. Otherwise a missing file is an error.
             # Not load_host_keys(): paramiko would then rewrite the whole file
             # whenever the policy accepts a key.
-            try:
-                self.client.get_host_keys().load(self.known_hosts)
-            except InvalidHostKey as exc:
-                msg = f"{self.known_hosts!r} has a line that paramiko cannot read: {exc.line[:40]}"
-                raise paramiko.SSHException(msg) from exc
+            self.client.get_host_keys().load(self.known_hosts)
 
     @classmethod
     def _strip_protocol(cls, path):

@@ -332,11 +332,11 @@ class _FakeSSHClient:
         self.policy = None
         self.host = None
         self.connect_kwargs = None
-        self.system_host_keys_loaded = False
+        self.system_host_keys_file = None
         self.host_keys_file = None
 
-    def load_system_host_keys(self):
-        self.system_host_keys_loaded = True
+    def load_system_host_keys(self, filename):
+        self.system_host_keys_file = filename
 
     def get_host_keys(self):
         return self
@@ -447,7 +447,7 @@ def test_host_key_policy_wrong_type(fake_client):
 def test_known_hosts_are_loaded(fake_client):
     fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
 
-    assert fs.client.system_host_keys_loaded
+    assert fs.client.system_host_keys_file == os.path.expanduser("~/.ssh/known_hosts")
     assert fs.client.host_keys_file is None
 
 
@@ -782,34 +782,54 @@ def test_known_hosts_path_is_expanded(sshd, home):
     assert fs.known_hosts == str(home / "extra_known_hosts")
 
 
-def test_unsupported_lines_in_known_hosts_do_not_stop_the_connection(
-    sshd, home, caplog
+def _paramiko_stops_at_marker():
+    """Does paramiko give up on a ``@revoked`` line, and with it on the rest?"""
+    try:
+        paramiko.hostkeys.HostKeyEntry.from_line("@revoked host ssh-ed25519 AAAA")
+    except paramiko.hostkeys.InvalidHostKey:
+        return True
+    return False
+
+
+#: Older paramiko (up to 3.1) skips such a line and reads on, a fixed one will too.
+paramiko_stops_at_marker = pytest.mark.skipif(
+    not _paramiko_stops_at_marker(),
+    reason="this paramiko reads on after a line it does not understand",
+)
+
+
+@paramiko_stops_at_marker
+@pytest.mark.parametrize(
+    "marker", ["@cert-authority *.example.com", "@revoked other.example"]
+)
+@pytest.mark.parametrize("host_line_first", [True, False])
+@pytest.mark.parametrize("policy", [None, "reject"])
+def test_unsupported_line_in_known_hosts_refuses_every_connection(
+    sshd, home, marker, host_line_first, policy
 ):
+    """paramiko stops reading at such a line: refuse, wherever the host is."""
     port, host_key = sshd
-    known_hosts = home / ".ssh" / "known_hosts"
     line = f"{host_key.get_name()} {host_key.get_base64()}"
-    known_hosts.write_text(
-        f"@cert-authority *.example.com {line}\n"
-        f"@revoked other.example {line}\n"
-        f"[127.0.0.1]:{port} {line}\n"
-    )
+    lines = [f"[127.0.0.1]:{port} {line}\n", f"{marker} {line}\n"]
+    if not host_line_first:
+        lines.reverse()
+    (home / ".ssh" / "known_hosts").write_text("".join(lines))
 
-    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
-        fs = _connect(port)
+    kwargs = {} if policy is None else {"host_key_policy": policy}
+    with pytest.raises(paramiko.hostkeys.InvalidHostKey):
+        _connect(port, **kwargs)
 
-    assert fs.ftp is not None
-    assert "cannot read" in caplog.text
+    assert _sees_no_authentication()
 
 
-def test_host_name_case_does_not_skip_the_check(sshd, home):
-    port, _ = sshd
-    # OpenSSH writes the name in lower case
-    _write_known_hosts(
-        home / ".ssh" / "known_hosts", port, paramiko.RSAKey.generate(2048), "localhost"
-    )
+@paramiko_stops_at_marker
+def test_unsupported_line_in_known_hosts_file_refuses_the_connection(sshd, home):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    known_hosts.write_text(f"@revoked x.example {host_key.get_name()} AAAA\n")
 
-    with pytest.raises(paramiko.BadHostKeyException):
-        _connect(port, host="LocalHost")
+    with pytest.raises(paramiko.hostkeys.InvalidHostKey):
+        _connect(port, known_hosts=str(known_hosts))
 
     assert _sees_no_authentication()
 
@@ -839,13 +859,36 @@ def test_changed_host_key_is_logged_as_an_error(sshd, home, caplog):
     assert "man-in-the-middle" in caplog.text
 
 
-def test_known_hosts_that_cannot_be_read_are_reported(sshd, home, caplog):
+def test_known_hosts_that_cannot_be_read_refuse_the_connection(sshd, home):
     # a directory cannot be read as a file, on every system
     (home / ".ssh" / "known_hosts").mkdir()
 
-    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
-        fs = _connect(sshd[0])
+    with pytest.raises(OSError):
+        _connect(sshd[0])
+
+    assert _sees_no_authentication()
+
+
+@pytest.mark.parametrize("target", ["home", "file"])
+def test_non_text_known_hosts_refuse_the_connection(sshd, home, target):
+    port, _ = sshd
+    known_hosts = home / (".ssh/known_hosts" if target == "home" else "extra")
+    known_hosts.write_bytes(b"host \xff\xfe ssh-ed25519 AAAA\n")
+    kwargs = {} if target == "home" else {"known_hosts": str(known_hosts)}
+
+    with pytest.raises(UnicodeDecodeError):
+        _connect(port, **kwargs)
+
+    assert _sees_no_authentication()
+
+
+def test_home_that_is_not_a_directory_has_no_known_hosts(sshd, tmp_path, monkeypatch):
+    """HOME=/dev/null is common in services: there is no file to read."""
+    not_a_directory = tmp_path / "file"
+    not_a_directory.write_text("")
+    for name in ("HOME", "USERPROFILE"):
+        monkeypatch.setenv(name, str(not_a_directory))
+
+    fs = _connect(sshd[0])
 
     assert fs.ftp is not None
-    assert "cannot be read" in caplog.text
-    assert "count as unknown" in caplog.text
