@@ -12,8 +12,9 @@ Enhancements
 
 Fixes
 
-- Preserve single-source copy semantics for PathLike sources in synchronous
-  ``copy``, ``get`` and ``put`` instead of flattening their directory trees.
+- Keep the HTTP link regex linear
+
+- Preserve single-source copy semantics for Paths in sync batch ops
 
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
