@@ -12,6 +12,16 @@ Enhancements
 
 Fixes
 
+- ``SFTPFileSystem`` reads ``~/.ssh/known_hosts`` before connecting, so a known
+  host whose key changed is refused and ``host_key_policy="reject"`` accepts
+  the hosts that are listed. New ``known_hosts`` argument for another file.
+
+- ``SFTPFileSystem`` logs a warning with the fingerprint when the default
+  policy accepts an unknown host key. With ``known_hosts=<file>``, the
+  ``"auto_add"`` policy adds the key to that file (one line at the end), and
+  refuses the connection if that is not possible. The safest setup is a
+  ``known_hosts`` file filled beforehand with ``host_key_policy="reject"``.
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 

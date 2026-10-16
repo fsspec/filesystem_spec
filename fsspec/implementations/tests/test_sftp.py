@@ -1,6 +1,11 @@
+import base64
+import hashlib
+import logging
 import os
 import shlex
+import socket
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from tarfile import TarFile
@@ -327,6 +332,17 @@ class _FakeSSHClient:
         self.policy = None
         self.host = None
         self.connect_kwargs = None
+        self.system_host_keys_loaded = False
+        self.host_keys_file = None
+
+    def load_system_host_keys(self):
+        self.system_host_keys_loaded = True
+
+    def get_host_keys(self):
+        return self
+
+    def load(self, filename):
+        self.host_keys_file = filename
 
     def set_missing_host_key_policy(self, policy):
         self.policy = policy
@@ -426,3 +442,411 @@ def test_host_key_policy_wrong_type(fake_client):
         fsspec.filesystem(
             "sftp", host="host", host_key_policy=42, skip_instance_cache=True
         )
+
+
+def test_known_hosts_are_loaded(fake_client):
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+
+    assert fs.client.system_host_keys_loaded
+    assert fs.client.host_keys_file is None
+
+
+def test_known_hosts_file(fake_client):
+    fs = fsspec.filesystem(
+        "sftp",
+        host="host",
+        known_hosts="/some/known_hosts",
+        host_key_policy="reject",
+        skip_instance_cache=True,
+    )
+
+    assert fs.client.host_keys_file == "/some/known_hosts"
+    assert "known_hosts" not in fs.client.connect_kwargs
+
+
+# The tests below connect to an SSH server in this process, to see what
+# paramiko does with the keys that are known.
+
+
+class _Server(paramiko.ServerInterface):
+    attempts = []  # every authentication attempt that reached the server
+
+    def check_auth_publickey(self, username, key):
+        self.attempts.append("publickey")
+        return paramiko.AUTH_FAILED
+
+    def check_auth_password(self, username, password):
+        self.attempts.append("password")
+        return paramiko.AUTH_SUCCESSFUL
+
+    def get_allowed_auths(self, username):
+        return "password"
+
+    def check_channel_request(self, kind, chanid):
+        return paramiko.OPEN_SUCCEEDED
+
+
+@pytest.fixture
+def sshd():
+    """Start an SSH server with SFTP; yield ``(port, host_key)``."""
+    host_key = paramiko.RSAKey.generate(2048)
+    _Server.attempts.clear()
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(5)
+    transports = []
+
+    def serve():
+        while True:
+            try:
+                conn, _ = listener.accept()
+            except OSError:
+                return
+            transport = paramiko.Transport(conn)
+            transport.add_server_key(host_key)
+            transport.set_subsystem_handler(
+                "sftp", paramiko.SFTPServer, paramiko.SFTPServerInterface
+            )
+            transports.append(transport)
+            try:
+                transport.start_server(server=_Server())
+            except (paramiko.SSHException, EOFError, OSError):
+                pass  # the client left during the handshake
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield listener.getsockname()[1], host_key
+    listener.close()
+    for transport in transports:
+        transport.close()
+
+
+def _write_known_hosts(path, port, key, host="127.0.0.1"):
+    keys = paramiko.HostKeys()
+    keys.add(f"[{host}]:{port}", key.get_name(), key)
+    keys.save(str(path))
+
+
+_CLIENT_KEY = paramiko.RSAKey.generate(2048)
+
+
+def _connect(port, **kwargs):
+    return fsspec.filesystem(
+        "sftp",
+        **{"host": "127.0.0.1", **kwargs},
+        port=port,
+        username="user",
+        password="password",
+        # offered to the server before the password, if it gets that far
+        pkey=_CLIENT_KEY,
+        allow_agent=False,
+        look_for_keys=False,
+        skip_instance_cache=True,
+    )
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    """A home directory with an empty ``.ssh``."""
+    for name in ("HOME", "USERPROFILE"):
+        monkeypatch.setenv(name, str(tmp_path))
+    (tmp_path / ".ssh").mkdir()
+    return tmp_path
+
+
+@pytest.mark.parametrize("policy", ["auto_add", "reject"])
+def test_known_host_with_changed_key_is_refused(sshd, home, policy):
+    port, _ = sshd
+    _write_known_hosts(
+        home / ".ssh" / "known_hosts", port, paramiko.RSAKey.generate(2048)
+    )
+
+    with pytest.raises(paramiko.BadHostKeyException):
+        _connect(port, host_key_policy=policy)
+
+
+def test_known_host_with_matching_key_is_accepted(sshd, home):
+    port, host_key = sshd
+    _write_known_hosts(home / ".ssh" / "known_hosts", port, host_key)
+
+    fs = _connect(port, host_key_policy="reject")
+
+    assert fs.ftp is not None
+
+
+def test_unknown_host_is_rejected(sshd, home):
+    port, _ = sshd
+
+    with pytest.raises(paramiko.SSHException, match="not found in known_hosts"):
+        _connect(port, host_key_policy="reject")
+
+
+def test_known_hosts_file_with_changed_key_is_refused(sshd, home):
+    port, _ = sshd
+    known_hosts = home / "extra_known_hosts"
+    _write_known_hosts(known_hosts, port, paramiko.RSAKey.generate(2048))
+
+    with pytest.raises(paramiko.BadHostKeyException):
+        _connect(port, known_hosts=str(known_hosts))
+
+
+def test_known_host_leaves_the_file_alone(sshd, home):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    _write_known_hosts(known_hosts, port, host_key)
+    before = known_hosts.read_bytes()
+
+    _connect(port, known_hosts=str(known_hosts))
+
+    assert known_hosts.read_bytes() == before
+
+
+def test_unknown_host_is_accepted_with_a_warning(sshd, home, caplog):
+    port, host_key = sshd
+    fingerprint = base64.b64encode(hashlib.sha256(host_key.asbytes()).digest())
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        fs = _connect(port)
+
+    assert fs.ftp is not None
+    assert f"SHA256:{fingerprint.decode().rstrip('=')}" in caplog.text
+    assert "without verification" in caplog.text
+
+
+def test_known_host_is_accepted_without_a_warning(sshd, home, caplog):
+    port, host_key = sshd
+    _write_known_hosts(home / ".ssh" / "known_hosts", port, host_key)
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        _connect(port)
+
+    assert "without verification" not in caplog.text
+
+
+def test_explicit_paramiko_auto_add_policy_stays_silent(sshd, home, caplog):
+    port, _ = sshd
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        _connect(port, host_key_policy=paramiko.AutoAddPolicy())
+
+    assert "without verification" not in caplog.text
+
+
+def _sees_no_authentication():
+    return _Server.attempts == []
+
+
+@pytest.mark.parametrize("policy", [None, "auto_add"])
+def test_without_known_hosts_the_key_is_accepted_but_not_remembered(
+    sshd, home, caplog, policy
+):
+    """The default and ``"auto_add"`` are one policy."""
+    kwargs = {} if policy is None else {"host_key_policy": policy}
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        fs = _connect(sshd[0], **kwargs)
+
+    assert fs.ftp is not None
+    assert "NOT remembered" in caplog.text
+
+
+@pytest.mark.parametrize("policy", [None, "auto_add"])
+def test_auto_add_adds_the_key_to_known_hosts(sshd, home, caplog, policy):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    known_hosts.write_text("")
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        kwargs = {} if policy is None else {"host_key_policy": policy}
+        _connect(port, known_hosts=str(known_hosts), **kwargs)
+
+    assert "added to" in caplog.text
+    assert "SHA256:" in caplog.text
+    keys = paramiko.HostKeys(str(known_hosts))
+    assert keys.lookup(f"[127.0.0.1]:{port}")[host_key.get_name()] == host_key
+    # the host is known from now on
+    caplog.clear()
+    _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
+    assert "added to" not in caplog.text
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes")
+def test_auto_add_creates_the_file_private(sshd, home):
+    known_hosts = home / "extra_known_hosts"
+
+    _connect(sshd[0], known_hosts=str(known_hosts), host_key_policy="auto_add")
+
+    assert known_hosts.stat().st_mode & 0o777 == 0o600
+
+
+def test_auto_add_keeps_the_other_lines(sshd, home):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    # no newline at the end
+    known_hosts.write_text("# kept\nother.example ssh-rsa AAAA")
+
+    _connect(port, known_hosts=str(known_hosts), host_key_policy="auto_add")
+
+    lines = known_hosts.read_text().splitlines()
+    assert lines[:2] == ["# kept", "other.example ssh-rsa AAAA"]
+    assert len(lines) == 3
+    assert paramiko.HostKeys(str(known_hosts)).lookup(f"[127.0.0.1]:{port}")
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="needs a file that the user cannot write",
+)
+@pytest.mark.parametrize("policy", [None, "auto_add"])
+def test_read_only_known_hosts_refuses_an_unknown_host(sshd, home, policy):
+    known_hosts = home / "extra_known_hosts"
+    known_hosts.write_text("")
+    known_hosts.chmod(0o444)
+
+    kwargs = {} if policy is None else {"host_key_policy": policy}
+    with pytest.raises(paramiko.SSHException, match="cannot be added"):
+        _connect(sshd[0], known_hosts=str(known_hosts), **kwargs)
+
+    assert _sees_no_authentication()
+    assert known_hosts.read_text() == ""
+
+
+# The safest setup: a known_hosts file that is filled beforehand, and "reject".
+
+
+def test_prefilled_known_hosts_with_reject_connects(sshd, home, caplog):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    _write_known_hosts(known_hosts, port, host_key)
+    before = known_hosts.read_bytes()
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        fs = _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
+
+    assert fs.ftp is not None
+    assert caplog.text == ""
+    assert known_hosts.read_bytes() == before
+
+
+def test_prefilled_known_hosts_with_reject_refuses_a_different_key(sshd, home):
+    port, _ = sshd
+    known_hosts = home / "extra_known_hosts"
+    _write_known_hosts(known_hosts, port, paramiko.RSAKey.generate(2048))
+    before = known_hosts.read_bytes()
+
+    with pytest.raises(paramiko.BadHostKeyException):
+        _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
+
+    assert _sees_no_authentication()
+    assert known_hosts.read_bytes() == before
+
+
+def test_prefilled_known_hosts_with_reject_refuses_an_unknown_host(sshd, home):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    keys = paramiko.HostKeys()
+    keys.add("other.example", host_key.get_name(), host_key)
+    keys.save(str(known_hosts))
+    before = known_hosts.read_bytes()
+
+    with pytest.raises(paramiko.SSHException, match="not found in known_hosts"):
+        _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
+
+    assert _sees_no_authentication()
+    assert known_hosts.read_bytes() == before
+
+
+def test_prefilled_known_hosts_with_hashed_name(sshd, home):
+    port, host_key = sshd
+    known_hosts = home / "extra_known_hosts"
+    name = paramiko.HostKeys.hash_host(f"[127.0.0.1]:{port}")
+    known_hosts.write_text(f"{name} {host_key.get_name()} {host_key.get_base64()}\n")
+
+    fs = _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
+
+    assert fs.ftp is not None
+
+
+def test_missing_known_hosts_with_reject_is_an_error(sshd, home):
+    with pytest.raises(OSError, match="known_hosts"):
+        _connect(sshd[0], known_hosts=str(home / "nope"), host_key_policy="reject")
+
+    assert _sees_no_authentication()
+
+
+def test_known_hosts_path_is_expanded(sshd, home):
+    port, host_key = sshd
+    _write_known_hosts(home / "extra_known_hosts", port, host_key)
+
+    fs = _connect(port, known_hosts="~/extra_known_hosts", host_key_policy="reject")
+
+    assert fs.ftp is not None
+    assert fs.known_hosts == str(home / "extra_known_hosts")
+
+
+def test_unsupported_lines_in_known_hosts_do_not_stop_the_connection(
+    sshd, home, caplog
+):
+    port, host_key = sshd
+    known_hosts = home / ".ssh" / "known_hosts"
+    line = f"{host_key.get_name()} {host_key.get_base64()}"
+    known_hosts.write_text(
+        f"@cert-authority *.example.com {line}\n"
+        f"@revoked other.example {line}\n"
+        f"[127.0.0.1]:{port} {line}\n"
+    )
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        fs = _connect(port)
+
+    assert fs.ftp is not None
+    assert "cannot read" in caplog.text
+
+
+def test_host_name_case_does_not_skip_the_check(sshd, home):
+    port, _ = sshd
+    # OpenSSH writes the name in lower case
+    _write_known_hosts(
+        home / ".ssh" / "known_hosts", port, paramiko.RSAKey.generate(2048), "localhost"
+    )
+
+    with pytest.raises(paramiko.BadHostKeyException):
+        _connect(port, host="LocalHost")
+
+    assert _sees_no_authentication()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "a b",
+        "a\nb",
+        "a\tb",
+        "a,b",
+        "*.example.com",
+        "",
+        "#comment",
+        "@revoked",
+        "!a",
+        "|1|x",
+    ],
+)
+def test_host_name_that_is_not_one_entry_is_not_written(tmp_path, name):
+    known_hosts = tmp_path / "known_hosts"
+    known_hosts.write_text("")
+    policy = fsspec.implementations.sftp._AutoAddPolicy(str(known_hosts))
+    key = paramiko.RSAKey.generate(2048)
+
+    with pytest.raises(paramiko.SSHException, match="cannot be written"):
+        policy.missing_host_key(paramiko.SSHClient(), name, key)
+
+    assert known_hosts.read_text() == ""
+
+
+def test_the_line_is_written_completely_in_pieces(tmp_path, monkeypatch):
+    known_hosts = tmp_path / "known_hosts"
+    key = paramiko.RSAKey.generate(2048)
+    write = os.write
+    monkeypatch.setattr(os, "write", lambda fd, data: write(fd, bytes(data[:10])))
+
+    fsspec.implementations.sftp._append_known_host(str(known_hosts), "host", key)
+
+    assert paramiko.HostKeys(str(known_hosts)).lookup("host")[key.get_name()] == key
