@@ -12,9 +12,11 @@ Enhancements
 
 Fixes
 
-- Complete DBFS partial-delete retries without re-raising a recovered error.
+- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Complete DBFS partial-delete retries without re-raising a recovered error.
 
 - Keep the HTTP link regex linear
 
