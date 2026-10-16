@@ -850,3 +850,29 @@ def test_the_line_is_written_completely_in_pieces(tmp_path, monkeypatch):
     fsspec.implementations.sftp._append_known_host(str(known_hosts), "host", key)
 
     assert paramiko.HostKeys(str(known_hosts)).lookup("host")[key.get_name()] == key
+
+
+def test_changed_host_key_is_logged_as_an_error(sshd, home, caplog):
+    port, _ = sshd
+    _write_known_hosts(
+        home / ".ssh" / "known_hosts", port, paramiko.RSAKey.generate(2048)
+    )
+
+    with caplog.at_level(logging.ERROR, logger="fsspec.sftp"):
+        with pytest.raises(paramiko.BadHostKeyException):
+            _connect(port)
+
+    assert "CHANGED" in caplog.text
+    assert "man-in-the-middle" in caplog.text
+
+
+def test_known_hosts_that_cannot_be_read_are_reported(sshd, home, caplog):
+    # a directory cannot be read as a file, on every system
+    (home / ".ssh" / "known_hosts").mkdir()
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        fs = _connect(sshd[0])
+
+    assert fs.ftp is not None
+    assert "cannot be read" in caplog.text
+    assert "count as unknown" in caplog.text

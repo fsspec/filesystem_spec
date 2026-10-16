@@ -224,10 +224,30 @@ class SFTPFileSystem(AbstractFileSystem):
         self.client.set_missing_host_key_policy(self.host_key_policy)
         # known_hosts compares host names exactly, and OpenSSH writes them in lower case
         host = self.host if "%" in self.host else self.host.lower()
-        self.client.connect(host, **self.ssh_kwargs)
+        try:
+            self.client.connect(host, **self.ssh_kwargs)
+        except paramiko.BadHostKeyException as exc:
+            logger.error(
+                "The host key of %r has CHANGED (%s). This can be a "
+                "man-in-the-middle attack. The connection was refused before "
+                "authentication.",
+                host,
+                exc,
+            )
+            raise
         self.ftp = self.client.open_sftp()
 
     def _load_known_hosts(self):
+        path = os.path.expanduser("~/.ssh/known_hosts")
+        try:
+            # paramiko ignores a file that it cannot read, without a word
+            open(path, "rb").close()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            logger.warning(
+                "%s cannot be read (%s): the hosts in it count as unknown.", path, exc
+            )
         try:
             self.client.load_system_host_keys()
         except InvalidHostKey as exc:

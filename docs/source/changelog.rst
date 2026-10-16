@@ -15,6 +15,7 @@ Fixes
 - ``SFTPFileSystem`` reads ``~/.ssh/known_hosts`` before connecting, so a known
   host whose key changed is refused and ``host_key_policy="reject"`` accepts
   the hosts that are listed. New ``known_hosts`` argument for another file.
+  A changed host key is logged as an error.
 
 - ``SFTPFileSystem`` logs a warning with the fingerprint when the default
   policy accepts an unknown host key. With ``known_hosts=<file>``, the
