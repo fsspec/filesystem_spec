@@ -14,6 +14,8 @@ from fsspec.caching import (
     register_cache,
 )
 from fsspec.implementations.cached import WholeFileCacheFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
+from fsspec.spec import AbstractBufferedFile
 
 
 def test_cache_getitem(Cache_imp):
@@ -269,6 +271,47 @@ def test_first_cache_without_fetcher():
     assert c.cache == letters_fetcher(0, 5)
     c.fetcher = None
     assert c._fetch(1, 4) == letters_fetcher(1, 4)
+
+
+@pytest.mark.parametrize("payload", [b"payload", b""], ids=["nonempty", "empty"])
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("close_mode", ["explicit", "context", "exception"])
+def test_mmap_closes_with_file(payload, persistent, close_mode, tmp_path):
+    fs = MemoryFileSystem()
+    path = "/mmap-close-" + tmp_path.name
+    fs.pipe_file(path, payload)
+    stream = AbstractBufferedFile(
+        fs,
+        path,
+        mode="rb",
+        block_size=4,
+        cache_type="mmap",
+        cache_options={"location": str(tmp_path / "mapped") if persistent else None},
+    )
+    mapping = stream.cache.cache
+    try:
+        if close_mode == "explicit":
+            assert stream.read() == payload
+            stream.close()
+        elif close_mode == "context":
+            with stream:
+                assert stream.read() == payload
+        else:
+            with pytest.raises(RuntimeError, match="stop"):
+                with stream:
+                    assert stream.read() == payload
+                    raise RuntimeError("stop")
+        assert stream.closed
+        assert stream.cache is None
+        if payload:
+            assert mapping.closed
+            if persistent:
+                assert (tmp_path / "mapped").read_bytes() == payload
+        stream.close()
+    finally:
+        stream.close()
+        if payload:
+            mapping.close()
 
 
 def test_mmap_cache(mocker):

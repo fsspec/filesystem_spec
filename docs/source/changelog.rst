@@ -7,8 +7,7 @@ Dev
 Enhancements
 
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
-  operations that fill the cache on a miss, so ``filecache``/``simplecache``
-  opens can report download progress (#1623)
+  operations (#1623)
 
 Fixes
 
@@ -19,6 +18,8 @@ Fixes
   key, and add the key to ``known_hosts`` if it is given (#2308)
 
 - Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+
+- Preserve single-source copy semantics for Paths in sync batch ops
 
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
@@ -54,6 +55,8 @@ Fixes
 - Preserve caller-provided temporary directories during cross-filesystem copies.
 
 - Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
+
+- Close memory-mapped cache resources when the owning buffered file is closed.
 
 - Use the correct POST method in the Pyodide HTTP session shim.
 
