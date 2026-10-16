@@ -930,9 +930,9 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:
-            return
+            return self.loc
         if loc == self.loc and whence == 0:
-            return
+            return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
@@ -966,9 +966,9 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
 
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:
-            return
+            return self.loc
         if loc == self.loc and whence == 0:
-            return
+            return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     def seekable(self):

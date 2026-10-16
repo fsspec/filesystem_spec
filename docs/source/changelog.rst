@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Return the current position for accepted no-op seeks on HTTP streams,
+  preserving compatibility with ``io.BufferedReader`` without enabling random access.
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 
