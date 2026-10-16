@@ -14,6 +14,9 @@ Fixes
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
 
+- Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
+  since PUT behavior depends on the server (#2294).
+
 - Reject ``generic.rsync`` source names whose ".." segments would place
   copies outside the destination
 

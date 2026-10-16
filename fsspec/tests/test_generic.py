@@ -151,7 +151,9 @@ def test_rsync_preserves_source_url_in_relative_name(m, relative):
 def test_rsync_delete_missing_preserves_destination_url_in_relative_name(m, relative):
     source = f"memory:///src/{relative}"
     destination = f"memory:///dst/{relative}"
-    m.pipe({source: b"payload", destination: b"payload", "memory:///dst/obsolete": b"old"})
+    m.pipe(
+        {source: b"payload", destination: b"payload", "memory:///dst/obsolete": b"old"}
+    )
 
     assert rsync("memory:///src", "memory:///dst", delete_missing=True) == {}
 

@@ -102,7 +102,8 @@ def rsync(
     dirs = [
         a
         for a, v in allfiles.items()
-        if v["type"] == "directory" and a.replace(source, destination, 1) not in otherfiles
+        if v["type"] == "directory"
+        and a.replace(source, destination, 1) not in otherfiles
     ]
     logger.debug(f"{len(dirs)} directories to create")
     if dirs:
