@@ -15,6 +15,12 @@ Fixes
 - Avoid treating content-encoded transfer lengths as decoded file sizes in
   the synchronous HTTP filesystem.
 
+- Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
+  since PUT behavior depends on the server (#2294).
+
+- Reject ``generic.rsync`` source names whose ".." segments would place
+  copies outside the destination
+
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 
 - Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
