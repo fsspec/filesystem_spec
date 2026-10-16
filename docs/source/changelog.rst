@@ -12,7 +12,8 @@ Enhancements
 
 Fixes
 
-- Dispatch mixed-protocol ``GenericFileSystem.copy`` batches by backend pair.
+- Reject mixed source or destination backends in ``GenericFileSystem.copy``
+  before copying any files (#2302).
 
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).

@@ -99,15 +99,14 @@ def test_copy_mixed_protocols(m, tmp_path, mixed, reverse):
         sources.reverse()
         destinations.reverse()
 
-    fs.copy(sources, destinations, on_error="raise")
+    side = "destination" if mixed == "destination" else "source"
+    with pytest.raises(ValueError, match=f"Multiple {side} backends"):
+        fs.copy(sources, destinations, on_error="raise")
 
-    assert m.cat_file("destination-a") == b"memory-a"
-    expected = b"local-b" if mixed in ("source", "both") else b"memory-b"
-    if mixed in ("destination", "both"):
-        assert local_destination.read_bytes() == expected
-        assert not m.exists(local_destination.as_uri())
-    else:
-        assert m.cat_file("destination-b") == expected
+    assert not m.exists("destination-a")
+    assert not m.exists("destination-b")
+    assert not m.exists(local_destination.as_uri())
+    assert not local_destination.exists()
 
 
 def test_copy_mixed_async_source(server, m):
@@ -115,15 +114,38 @@ def test_copy_mixed_async_source(server, m):
     m.pipe_file("source", b"memory-data")
     fs = fsspec.filesystem("generic", default_method="current")
 
-    fs.copy(
-        [server.realfile, "memory://source"],
-        ["memory://from-http", "memory://from-memory"],
-        batch_size=1,
-        on_error="raise",
-    )
+    with pytest.raises(ValueError, match="Multiple source backends"):
+        fs.copy(
+            [server.realfile, "memory://source"],
+            ["memory://from-http", "memory://from-memory"],
+            batch_size=1,
+            on_error="raise",
+        )
 
-    assert m.cat_file("from-http") == data
-    assert m.cat_file("from-memory") == b"memory-data"
+    assert not m.exists("from-http")
+    assert not m.exists("from-memory")
+
+
+@pytest.mark.parametrize("local", [False, True])
+def test_copy_homogeneous_batches(m, tmp_path, local):
+    m.pipe({"source-a": b"a", "source-b": b"b"})
+    if local:
+        fsspec.filesystem("file")
+        destinations = [(tmp_path / name).as_uri() for name in ("a", "b")]
+        # Different protocol aliases still resolve to the same backend.
+        destinations[1] = destinations[1].replace("file://", "local://", 1)
+    else:
+        destinations = ["memory://a", "memory://b"]
+    fs = fsspec.filesystem("generic", default_method="current")
+
+    fs.copy(["memory://source-a", "memory://source-b"], destinations, on_error="raise")
+
+    if local:
+        assert (tmp_path / "a").read_bytes() == b"a"
+        assert (tmp_path / "b").read_bytes() == b"b"
+    else:
+        assert m.cat_file("a") == b"a"
+        assert m.cat_file("b") == b"b"
 
 
 @pytest.mark.parametrize("method", ["copy", "cp_file"])
