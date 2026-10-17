@@ -150,9 +150,9 @@ class MMapCache(BaseCache):
 
         # posix version
         if self.location is None or not os.path.exists(self.location):
+            self.blocks.clear()
             if self.location is None:
                 fd = tempfile.TemporaryFile()
-                self.blocks = set()
             else:
                 fd = open(self.location, "wb+")
             fd.seek(self.size - 1)
@@ -225,6 +225,10 @@ class MMapCache(BaseCache):
                 self.blocks.update(block_groups[idx])
 
         return self.cache[start:end]
+
+    def close(self) -> None:
+        if hasattr(self.cache, "close"):
+            self.cache.close()
 
     def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
@@ -340,12 +344,20 @@ class AdaptiveReadaheadCache(BaseCache):
         try:
             from .prefetcher import BackgroundPrefetcher
 
+            try:
+                fs_loop = fetcher.__self__.fs.loop
+            except AttributeError:
+                fs_loop = None
             self._prefetcher = BackgroundPrefetcher(
                 fetcher=_default_fetcher_async,
                 size=size,
                 concurrency=concurrency,
                 max_prefetch_size=max_prefetch_size,
-                loop=fsspec_asyn.get_loop(),
+                loop=(
+                    fs_loop
+                    if isinstance(fs_loop, asyncio.AbstractEventLoop)
+                    else fsspec_asyn.get_loop()
+                ),
             )
             logger.info(
                 "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",

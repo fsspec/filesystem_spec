@@ -477,6 +477,64 @@ def test_get_sync(tmpdir):
     assert (tmpdir / "c" / "d").read_binary() == b"123456"
 
 
+@pytest.mark.parametrize(
+    ("maxdepth", "expected"),
+    [
+        (1, {"shallow.txt": b"shallow"}),
+        (2, {"shallow.txt": b"shallow", "deep/file.txt": b"deep"}),
+        (
+            None,
+            {
+                "shallow.txt": b"shallow",
+                "deep/file.txt": b"deep",
+                "deep/nested/file.txt": b"nested",
+            },
+        ),
+    ],
+)
+def test_get_respects_maxdepth(tmp_path, maxdepth, expected):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": b"deep",
+        "dir/deep/nested/file.txt": b"nested",
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=maxdepth)
+
+    actual = {
+        path.relative_to(dest).as_posix(): path.read_bytes()
+        for path in dest.rglob("*")
+        if path.is_file()
+    }
+    assert actual == expected
+
+
+def test_get_maxdepth_skips_deeper_remote_references(tmp_path):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": ("memory://maxdepth-regression-missing", 0, 4),
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=1)
+
+    assert (dest / "shallow.txt").read_bytes() == b"shallow"
+    assert not (dest / "deep" / "file.txt").exists()
+
+
+@pytest.mark.parametrize("maxdepth", [0, -1])
+def test_get_rejects_invalid_maxdepth(tmp_path, maxdepth):
+    fs = ReferenceFileSystem(
+        fo={"dir/shallow.txt": b"shallow"}, skip_instance_cache=True
+    )
+
+    with pytest.raises(ValueError, match="maxdepth must be at least 1"):
+        fs.get("dir", str(tmp_path / "dest"), recursive=True, maxdepth=maxdepth)
+
+
 def test_get_does_not_write_above_destination(tmp_path):
     # Reference keys come from the spec, so a key holding ".." must not
     # place the copy above the destination the caller asked for.
