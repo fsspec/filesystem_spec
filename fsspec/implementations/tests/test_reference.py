@@ -385,6 +385,20 @@ def test_spec1_expand_simple():
     assert fs.cat("key5") == json_impl.dumps(in_data["refs"]["key5"]).encode("utf-8")
 
 
+@pytest.mark.parametrize(
+    "field", ["u.__class__", "f.__globals__[os].environ[HOME]", "u[0]"]
+)
+def test_spec1_simple_templates_reject_attribute_lookup(field):
+    pytest.importorskip("jinja2")
+    in_data = {
+        "version": 1,
+        "templates": {"u": "server.domain/path", "f": "{{c}}"},
+        "refs": {"key": ["http://{{" + field + "}}"]},
+    }
+    with pytest.raises(KeyError):
+        fsspec.filesystem("reference", fo=in_data, target_protocol="http")
+
+
 def test_spec1_gen_variants():
     pytest.importorskip("jinja2")
     with pytest.raises(ValueError):
