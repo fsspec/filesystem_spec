@@ -997,38 +997,29 @@ class BackgroundBlockCache(BaseCache):
             # Background thread is running. Check we we can or must join it.
             if self._fetch_future is not None:
                 assert self._fetch_future_block_number is not None
-                if self._fetch_future.done():
-                    logger.info("BlockCache joined background fetch without waiting.")
-                    self._fetch_block_cached.add_key(
-                        self._fetch_future.result(), self._fetch_future_block_number
-                    )
-                    # Cleanup the fetch variables. Done with fetching the block.
+                must_join = (
+                    start_block_number
+                    <= self._fetch_future_block_number
+                    <= end_block_number
+                )
+                if self._fetch_future.done() or must_join:
+                    # Detach before retrieving the result, which may fail.
+                    # Wait outside the lock if this read needs a pending block.
+                    fetch_future_block_number = self._fetch_future_block_number
+                    fetch_future = self._fetch_future
                     self._fetch_future_block_number = None
                     self._fetch_future = None
-                else:
-                    # Must join if we need the block for the current fetch
-                    must_join = bool(
-                        start_block_number
-                        <= self._fetch_future_block_number
-                        <= end_block_number
-                    )
-                    if must_join:
-                        # Copy to the local variables to release lock
-                        # before waiting for result
-                        fetch_future_block_number = self._fetch_future_block_number
-                        fetch_future = self._fetch_future
 
-                        # Cleanup the fetch variables. Have a local copy.
-                        self._fetch_future_block_number = None
-                        self._fetch_future = None
-
-        # Need to wait for the future for the current read
         if fetch_future is not None:
             logger.info("BlockCache waiting for background fetch.")
-            # Wait until result and put it in cache
-            self._fetch_block_cached.add_key(
-                fetch_future.result(), fetch_future_block_number
-            )
+            try:
+                block = fetch_future.result()
+            except Exception:
+                # Speculative failures must not poison cached reads. If needed,
+                # _read_cache retries this block through the foreground fetcher.
+                logger.debug("Background block fetch failed", exc_info=True)
+            else:
+                self._fetch_block_cached.add_key(block, fetch_future_block_number)
 
         # fetch next block in the background if nothing is running in the background,
         # the block is within file and it is not already cached
