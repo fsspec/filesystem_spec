@@ -339,6 +339,18 @@ class GenericFileSystem(AsyncFileSystem):
         fs = _resolve_fs(path1, self.method, storage_options=self.st_opts)
         fs2 = _resolve_fs(path2, self.method, storage_options=self.st_opts)
 
+        # Validate both entire batches before copying any files.
+        for paths, backend, side in (
+            (path1, fs, "source"),
+            (path2, fs2, "destination"),
+        ):
+            if any(
+                _resolve_fs(path, self.method, storage_options=self.st_opts)
+                is not backend
+                for path in paths
+            ):
+                raise ValueError(f"Multiple {side} backends are not supported")
+
         if fs is fs2:
             if fs.async_impl:
                 return await fs._copy(path1, path2, **kwargs)
