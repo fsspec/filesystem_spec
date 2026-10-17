@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve literal local paths whose apparent URI scheme does not start with a letter.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
