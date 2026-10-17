@@ -1,4 +1,5 @@
 import glob
+import http.client
 import io
 import json
 import os
@@ -1086,6 +1087,67 @@ def test_buffered_readlines(m, cache_type, content):
 
     with pytest.raises(ValueError, match="closed file"):
         stream.readlines()
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("size", [None, -1, 0, 1, 3, 4, 5, 100])
+@pytest.mark.parametrize("content", [b"", b"\nabc\n", b"abc\r\ndef\ntail"])
+def test_buffered_readline_size(m, cache_type, size, content):
+    m.pipe_file("lines", content)
+    with (
+        AbstractBufferedFile(m, "lines", cache_type=cache_type, block_size=2) as stream,
+        io.BytesIO(content) as expected,
+    ):
+        for _ in range(len(content) + 2):
+            assert stream.readline(size) == expected.readline(size)
+            assert stream.tell() == expected.tell()
+
+        stream.seek(min(2, len(content)))
+        expected.seek(min(2, len(content)))
+        assert stream.readline(size) == expected.readline(size)
+        assert stream.tell() == expected.tell()
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+def test_buffered_readline_default(m, cache_type):
+    content = b"first\nsecond\nlast"
+    m.pipe_file("lines", content)
+    with (
+        AbstractBufferedFile(m, "lines", cache_type=cache_type, block_size=2) as stream,
+        io.BytesIO(content) as expected,
+    ):
+        assert list(stream) == list(expected)
+        assert stream.readline() == expected.readline()
+
+
+@pytest.mark.parametrize("size", [1.5, "4"])
+def test_buffered_readline_invalid_size(m, size):
+    m.pipe_file("lines", b"first\nsecond")
+    with AbstractBufferedFile(m, "lines") as stream:
+        with pytest.raises(TypeError):
+            stream.readline(size)
+        assert stream.tell() == 0
+
+
+@pytest.mark.parametrize("size", [None, -1, 0, 1])
+def test_buffered_readline_size_closed(m, size):
+    m.pipe_file("lines", b"content")
+    stream = AbstractBufferedFile(m, "lines")
+    stream.close()
+    with pytest.raises(ValueError, match="closed file"):
+        stream.readline(size)
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+def test_buffered_readline_http_headers(m, cache_type):
+    content = b"Content-Type: application/json\r\nX-Record: 1\r\n\r\nbody"
+    m.pipe_file("headers", content)
+    with AbstractBufferedFile(
+        m, "headers", cache_type=cache_type, block_size=8
+    ) as stream:
+        headers = http.client.parse_headers(stream)
+        assert dict(headers) == {"Content-Type": "application/json", "X-Record": "1"}
+        assert stream.read() == b"body"
 
 
 @pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
