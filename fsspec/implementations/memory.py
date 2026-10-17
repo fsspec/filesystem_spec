@@ -112,6 +112,18 @@ class MemoryFileSystem(AbstractFileSystem):
             # Register every directory implied between ``path`` and ``name`` that
             # is within maxdepth, mirroring how walk() surfaces implied dirs.
             idx = name.rfind("/")
+            if maxdepth is not None:
+                # Start at the deepest ancestor that can appear in the result.
+                limit = name.find("/", len(prefix))
+                depth = 1
+                while limit >= 0 and depth + 1 <= maxdepth:
+                    next_limit = name.find("/", limit + 1)
+                    if next_limit < 0:
+                        break
+                    limit = next_limit
+                    depth += 1
+                if limit >= 0:
+                    idx = min(idx, limit)
             while idx > len(path):
                 parent = name[:idx]
                 if parent in dirs:
