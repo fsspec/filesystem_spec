@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Close sync HTTP download files on success or failure, without closing caller-owned streams.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
