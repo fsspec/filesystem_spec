@@ -182,6 +182,20 @@ def test_list(server):
     assert out == [server.realfile]
 
 
+def test_list_pathological_listing(server, reset_files):
+    # a long whitespace run inside an anchor used to make the link regex
+    # backtrack cubically, so listing this page took about a minute
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    body = b"<a" + b" " * 1500 + b'x><a href="/slow/file">file</a>'
+    HTTPTestHandler.dynamic_files["/slow"] = body
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+    start = time.monotonic()
+    out = h.ls(server.address + "/slow", detail=False)
+    assert time.monotonic() - start < 10
+    assert out == [server.address + "/slow/file"]
+
+
 def test_list_invalid_args(server):
     with pytest.raises(TypeError):
         h = fsspec.filesystem("http", use_foobar=True)
@@ -534,14 +548,24 @@ def test_no_range_support(server, headers):
 def test_stream_seek(server):
     h = fsspec.filesystem("http")
     url = server.realfile
-    with h.open(url, "rb") as f:
-        f.seek(0)  # is OK
+    with h.open(url, "rb", block_size=0) as f:
+        assert isinstance(f, HTTPStreamFile)
+        assert f.seek(0) == 0
         data1 = f.read(5)
         assert len(data1) == 5
-        f.seek(5)
-        f.seek(0, 1)
+        assert f.seek(5) == 5
+        assert f.seek(0, 1) == 5
         data2 = f.read()
         assert data1 + data2 == data
+
+
+def test_stream_buffered_reader_noop_seek(server):
+    h = fsspec.filesystem("http")
+    with io.BufferedReader(h.open(server.realfile, "rb", block_size=0)) as f:
+        assert f.seek(0, 1) == 0
+        assert f.read(5) == data[:5]
+        assert f.seek(0, 1) == 5
+        assert f.read() == data[5:]
 
 
 def test_mapper_url(server):
@@ -1190,15 +1214,15 @@ async def test_async_stream_not_seekable(server):
     stream = await fs.open_async(server.realfile)
     try:
         assert stream.tell() == 0
-        stream.seek(0)
-        stream.seek(0, 1)
+        assert stream.seek(0) == 0
+        assert stream.seek(0, 1) == 0
         with pytest.raises(ValueError, match="Cannot seek streaming HTTP file"):
             stream.seek(5)
         assert stream.tell() == 0
         assert await stream.read(5) == data[:5]
         assert stream.tell() == 5
-        stream.seek(5)
-        stream.seek(0, 1)
+        assert stream.seek(5) == 5
+        assert stream.seek(0, 1) == 5
         for offset, whence in [(0, 0), (1, 1), (0, 2)]:
             with pytest.raises(ValueError, match="Cannot seek streaming HTTP file"):
                 stream.seek(offset, whence)
