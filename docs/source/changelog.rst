@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
