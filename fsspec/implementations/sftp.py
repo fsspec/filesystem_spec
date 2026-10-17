@@ -58,6 +58,9 @@ def _append_known_host(path, hostname, key):
             if f.read(1) != b"\n":
                 line = b"\n" + line
         f.write(line)
+        # On Windows, write the line out while the lock is still held.
+        # Otherwise it would sit in the write buffer until the file is closed,
+        # which is after the unlock.
         f.flush()
 
 
