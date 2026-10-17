@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import operator
 import os
 import threading
 import warnings
@@ -2332,13 +2333,36 @@ class AbstractBufferedFile(io.IOBase):
             tail = data[-overlap:] if overlap else b""
         return b"".join(out)
 
-    def readline(self):
+    def readline(self, size=-1):
         """Read until and including the first occurrence of newline character
 
         Note that, because of character encoding, this is not necessarily a
         true line ending.
+
+        Parameters
+        ----------
+        size: int or None
+            Maximum number of bytes to return. Negative values or None read
+            until the newline or end of file without a size limit.
         """
-        return self.readuntil(b"\n")
+        size = -1 if size is None else operator.index(size)
+        if size < 0:
+            return self.readuntil(b"\n")
+        if size == 0:
+            return self.read(0)
+        out = []
+        while size > 0:
+            part = self.read(min(size, self.blocksize))
+            if not part:
+                break
+            end = part.find(b"\n") + 1
+            if end:
+                out.append(part[:end])
+                self.seek(end - len(part), 1)
+                break
+            out.append(part)
+            size -= len(part)
+        return b"".join(out)
 
     def __next__(self):
         out = self.readline()

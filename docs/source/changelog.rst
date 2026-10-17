@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Support the size limit in buffered-file ``readline()`` while preserving
+  the unread part of the line.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
