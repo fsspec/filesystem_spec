@@ -14,6 +14,14 @@ Fixes
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
+- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+
+- Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Keep the HTTP link regex linear
+
+- Preserve single-source copy semantics for Paths in sync batch ops
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 
@@ -48,6 +56,8 @@ Fixes
 - Preserve caller-provided temporary directories during cross-filesystem copies.
 
 - Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
+
+- Close memory-mapped cache resources when the owning buffered file is closed.
 
 - Use the correct POST method in the Pyodide HTTP session shim.
 
