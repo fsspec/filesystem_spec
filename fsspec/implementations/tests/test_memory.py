@@ -823,6 +823,23 @@ def test_find_matches_generic(m):
                     assert got == expected, (root, maxdepth, withdirs, detail)
 
 
+@pytest.mark.parametrize("root", ["", "/data"])
+@pytest.mark.parametrize("maxdepth", [1, 2, 5, None])
+@pytest.mark.parametrize("detail", [False, True])
+def test_find_deep_ancestors(m, root, maxdepth, detail):
+    from fsspec.spec import AbstractFileSystem
+
+    deep = "/data/" + "/".join(f"level{i}" for i in range(40))
+    m.pipe_file(deep + "/file", b"content")
+    m.mkdir(deep + "/empty")
+    m.pipe_file("/database/unrelated", b"other")
+    assert m.find(root, maxdepth=maxdepth, withdirs=True, detail=detail) == (
+        AbstractFileSystem.find(
+            m, root, maxdepth=maxdepth, withdirs=True, detail=detail
+        )
+    )
+
+
 def test_find_snapshots_store_before_iterating(m):
     # `store` is a class attribute shared by every MemoryFileSystem instance, so
     # another instance can add or remove a path while find() is walking it.
