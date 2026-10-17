@@ -6,6 +6,9 @@ Dev
 
 Enhancements
 
+- Add ``follow_symlinks=False`` to SFTP ``info()`` to inspect symlink metadata,
+  including dangling links (#1679).
+
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
   operations that fill the cache on a miss, so ``filecache``/``simplecache``
   opens can report download progress (#1623)

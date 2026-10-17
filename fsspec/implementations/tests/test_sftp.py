@@ -368,6 +368,63 @@ def test_makedirs_with_url(fake_client, tmp_path, protocol):
         fs.makedirs(url)
 
 
+@pytest.mark.parametrize("protocol", [None, "sftp", "ssh"])
+@pytest.mark.parametrize("target_type", ["file", "directory", "missing"])
+def test_info_follow_symlinks(fake_client, tmp_path, protocol, target_type):
+    class LocalSFTP:
+        def stat(self, path):
+            return paramiko.SFTPAttributes.from_stat(
+                (tmp_path / path.lstrip("/")).stat()
+            )
+
+        def lstat(self, path):
+            return paramiko.SFTPAttributes.from_stat(
+                (tmp_path / path.lstrip("/")).lstat()
+            )
+
+        def listdir_iter(self, path):
+            for entry in (tmp_path / path.lstrip("/")).iterdir():
+                yield paramiko.SFTPAttributes.from_stat(entry.lstat(), entry.name)
+
+    target = tmp_path / "target"
+    if target_type == "file":
+        target.write_bytes(b"contents")
+    elif target_type == "directory":
+        target.mkdir()
+    try:
+        (tmp_path / "link").symlink_to("target", target_is_directory=target.is_dir())
+    except OSError:
+        if os.name == "nt":
+            pytest.xfail("Creating symlinks requires administrator permissions")
+        raise
+
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = LocalSFTP()
+    path = f"{protocol}://host/link" if protocol else "/link"
+
+    for kwargs in ({}, {"follow_symlinks": True}):
+        if target_type == "missing":
+            with pytest.raises(FileNotFoundError):
+                fs.info(path, **kwargs)
+        else:
+            info = fs.info(path, **kwargs)
+            assert info["name"] == "/link"
+            assert info["type"] == target_type
+            assert info["size"] == target.stat().st_size
+
+    listing = {entry["name"]: entry for entry in fs.ls("/", detail=True)}
+    info = fs.info(path, follow_symlinks=False)
+    assert info == listing["/link"]
+    assert info["type"] == "link"
+    assert info["size"] == (tmp_path / "link").lstat().st_size
+
+    if target_type == "missing":
+        with pytest.raises(FileNotFoundError):
+            fs.info("/target", follow_symlinks=False)
+    else:
+        assert fs.info("/target", follow_symlinks=False) == fs.info("/target")
+
+
 def test_host_key_policy_default(fake_client):
     fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
 
