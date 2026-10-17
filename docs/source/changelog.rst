@@ -12,6 +12,14 @@ Enhancements
 
 Fixes
 
+- Check ``~/.ssh/known_hosts`` in ``SFTPFileSystem`` and add a ``known_hosts``
+  argument (#2308; issue #2119)
+
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
+
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
