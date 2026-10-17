@@ -27,7 +27,7 @@ def _locked(f):
 
     On POSIX a write to a file in append mode is atomic. Windows seeks to the
     end of the file first, so two processes can write to the same place. The
-    lock is on a byte far behind the end, which does not keep anyone from
+    lock is on a byte far beyond the end, which does not keep anyone from
     reading the file.
     """
     if msvcrt is None:
