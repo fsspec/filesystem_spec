@@ -5,6 +5,7 @@ import itertools
 import logging
 import math
 import os
+import string
 from functools import lru_cache
 from itertools import chain
 from typing import TYPE_CHECKING, Literal
@@ -40,6 +41,21 @@ class ReferenceNotReachable(RuntimeError):
 
     def __str__(self):
         return f'Reference "{self.reference}" failed to fetch target {self.target}'
+
+
+class _SimpleTemplateFormatter(string.Formatter):
+    """str.format that only substitutes plain template names
+
+    Reference files are often untrusted, and full format fields such as
+    ``{u.__globals__[os].environ[KEY]}`` would walk attributes of the template
+    values and read arbitrary process state into the target URL.
+    """
+
+    def get_field(self, field_name, args, kwargs):
+        return kwargs[field_name], field_name
+
+
+_simple_formatter = _SimpleTemplateFormatter()
 
 
 def _first(d):
@@ -1071,10 +1087,10 @@ class ReferenceFileSystem(AsyncFileSystem):
                 u = v[0]
                 if "{{" in u:
                     if self.simple_templates:
-                        u = (
-                            u.replace("{{", "{")
-                            .replace("}}", "}")
-                            .format(**self.templates)
+                        u = _simple_formatter.vformat(
+                            u.replace("{{", "{").replace("}}", "}"),
+                            (),
+                            self.templates,
                         )
                     else:
                         u = _render_jinja(u)

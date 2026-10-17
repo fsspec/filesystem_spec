@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Only substitute plain template names in ``ReferenceFileSystem`` simple
+  templates, so reference files cannot read attributes of template values
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
