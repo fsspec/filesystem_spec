@@ -141,6 +141,20 @@ def test_list(server, sync):
     assert out == [server.address + "/index/realfile"]
 
 
+def test_list_pathological_listing(server, sync, reset_files):
+    # a long whitespace run inside an anchor used to make the link regex
+    # backtrack cubically, so listing this page took about a minute
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    body = b"<a" + b" " * 1500 + b'x><a href="/slow/file">file</a>'
+    HTTPTestHandler.dynamic_files["/slow"] = body
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+    start = time.monotonic()
+    out = h.ls(server.address + "/slow", detail=False)
+    assert time.monotonic() - start < 10
+    assert out == [server.address + "/slow/file"]
+
+
 def test_list_invalid_args(server, sync):
     with pytest.raises(TypeError):
         h = fsspec.filesystem("http", use_foobar=True)

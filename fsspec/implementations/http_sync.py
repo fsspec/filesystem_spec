@@ -23,7 +23,11 @@ from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
-ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
+# The attribute scan must stay linear: it stops at the next "<" or ">" and the
+# whitespace before href is a lookbehind rather than a second quantifier, so a
+# page cannot make it backtrack cubically (1 KB of whitespace after "<a"
+# used to stall ls() for seconds, 10 KB for hours).
+ex = re.compile(r"""<(a|A)\s[^<>]*?(?<=\s)(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
 
