@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Avoid treating content-encoded transfer lengths as decoded file sizes in
+  the synchronous HTTP filesystem.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
