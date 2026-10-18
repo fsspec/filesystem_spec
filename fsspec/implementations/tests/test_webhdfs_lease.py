@@ -1,11 +1,14 @@
 """Writing to WebHDFS while the datanode still holds the lease of the file.
 
 The server below is a minimal WebHDFS (namenode redirecting to datanode). Like
-HDFS, its datanode rejects with a 403 ``AlreadyBeingCreatedException`` any
-write that arrives while the lease of the previous write is still held.
+HDFS, its datanode rejects with a 403 ``AlreadyBeingCreatedException`` the
+writes that arrive while the lease of the previous write is still held. To keep
+the tests deterministic the lease is not timed: after every write it rejects the
+next ``lease_held_for`` APPEND attempts.
 """
 
 import json
+import math
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -15,17 +18,22 @@ import pytest
 
 import fsspec
 
-LEASE_SECONDS = 0.15
+requests = pytest.importorskip("requests")
 
 
 class FakeHDFS:
     def __init__(self):
         self.files = {}
-        self.lease_until = {}
+        self.leases = {}
+        self.lease_held_for = 2
         self.appends = 0
         self.rejections = 0
         self.denied = False
         self.lock = threading.Lock()
+
+
+def remote_exception(exception, message):
+    return {"RemoteException": {"exception": exception, "message": message}}
 
 
 def make_handler(state):
@@ -51,10 +59,10 @@ def make_handler(state):
             query = parse_qs(url.query)
             operation = query["op"][0]
             if url.path.startswith("/webhdfs/v1"):
-                # Namenode: redirect the write to the datanode.
+                # Namenode: redirect the write, with its parameters, to the datanode.
                 port = self.server.server_address[1]
                 location = f"http://127.0.0.1:{port}/dn{url.path[len('/webhdfs/v1') :]}"
-                self._send(307, headers={"Location": f"{location}?op={operation}"})
+                self._send(307, headers={"Location": f"{location}?{url.query}"})
                 return
             path = url.path[len("/dn") :]
             data = self._body()
@@ -64,30 +72,34 @@ def make_handler(state):
                     if state.denied:
                         self._send(
                             403,
-                            {
-                                "RemoteException": {
-                                    "exception": "AccessControlException",
-                                    "message": "Permission denied",
-                                }
-                            },
+                            remote_exception(
+                                "AccessControlException", "Permission denied"
+                            ),
                         )
                         return
-                    if time.monotonic() < state.lease_until.get(path, 0):
+                    if state.leases.get(path, 0) > 0:
+                        state.leases[path] -= 1
                         state.rejections += 1
                         self._send(
                             403,
-                            {
-                                "RemoteException": {
-                                    "exception": "AlreadyBeingCreatedException",
-                                    "message": "Failed to APPEND_FILE: lease held",
-                                }
-                            },
+                            remote_exception(
+                                "AlreadyBeingCreatedException",
+                                "Failed to APPEND_FILE: lease held",
+                            ),
                         )
                         return
                     state.files[path] += data
                 else:
+                    if path in state.files and query["overwrite"] == ["false"]:
+                        self._send(
+                            403,
+                            remote_exception(
+                                "FileAlreadyExistsException", f"{path} already exists"
+                            ),
+                        )
+                        return
                     state.files[path] = bytearray(data)
-                state.lease_until[path] = time.monotonic() + LEASE_SECONDS
+                state.leases[path] = state.lease_held_for
             self._send(200)
 
         do_PUT = do_POST = _handle
@@ -107,6 +119,14 @@ def hdfs():
     server.server_close()
 
 
+@pytest.fixture
+def delays(monkeypatch):
+    """The waits between retries, recorded instead of slept."""
+    waited = []
+    monkeypatch.setattr(time, "sleep", waited.append)
+    return waited
+
+
 def webhdfs(state, **kwargs):
     return fsspec.filesystem(
         "webhdfs",
@@ -118,19 +138,21 @@ def webhdfs(state, **kwargs):
     )
 
 
-def test_many_blocks_survive_a_held_lease(hdfs):
+def test_many_blocks_survive_a_held_lease(hdfs, delays):
     fs = webhdfs(hdfs)
     payload = bytes(range(256)) * 400  # 100 KiB in ten blocks of 10 KiB
     with fs.open("/lake/table.parquet", "wb", block_size=10 * 1024) as f:
         for start in range(0, len(payload), 10 * 1024):
             f.write(payload[start : start + 10 * 1024])
     assert bytes(hdfs.files["/lake/table.parquet"]) == payload
-    # The first block travelled in the CREATE request; rejected attempts count too.
-    assert hdfs.appends - hdfs.rejections == 9
-    assert hdfs.rejections > 0  # the retries were really needed
+    # The first block travelled in the CREATE request; each of the other nine
+    # was rejected twice before its APPEND went through.
+    assert hdfs.rejections == 9 * 2
+    assert hdfs.appends == 9 * 3
+    assert delays == [0.05, 0.1] * 9
 
 
-def test_small_file_is_one_request(hdfs):
+def test_small_file_is_one_request(hdfs, delays):
     fs = webhdfs(hdfs)
     with fs.open("/lake/_SUCCESS", "wb") as f:
         f.write(b"INE-2026")
@@ -138,14 +160,14 @@ def test_small_file_is_one_request(hdfs):
     assert hdfs.appends == 0  # data travelled in the CREATE request
 
 
-def test_empty_file(hdfs):
+def test_empty_file(hdfs, delays):
     fs = webhdfs(hdfs)
     with fs.open("/lake/empty", "wb"):
         pass
     assert bytes(hdfs.files["/lake/empty"]) == b""
 
 
-def test_overwrite_replaces_content(hdfs):
+def test_overwrite_replaces_content(hdfs, delays):
     fs = webhdfs(hdfs)
     with fs.open("/lake/f", "wb") as f:
         f.write(b"long old content")
@@ -154,7 +176,20 @@ def test_overwrite_replaces_content(hdfs):
     assert bytes(hdfs.files["/lake/f"]) == b"new"
 
 
-def test_other_rejections_are_not_retried(hdfs):
+def test_exclusive_create_keeps_an_existing_file(hdfs, delays):
+    fs = webhdfs(hdfs)
+    with fs.open("/lake/new", "xb") as f:
+        f.write(b"first")
+    assert bytes(hdfs.files["/lake/new"]) == b"first"
+    f = fs.open("/lake/new", "xb")
+    f.write(b"second")
+    with pytest.raises(FileExistsError):
+        f.close()
+    f.closed = True
+    assert bytes(hdfs.files["/lake/new"]) == b"first"
+
+
+def test_other_rejections_are_not_retried(hdfs, delays):
     fs = webhdfs(hdfs)
     f = fs.open("/lake/f", "wb", block_size=1024)
     f.write(b"x" * 4096)  # the first block creates the file
@@ -164,13 +199,14 @@ def test_other_rejections_are_not_retried(hdfs):
     f.closed = True
     assert "403" in str(error.value)
     assert hdfs.appends == 1  # no retry for an AccessControlException
+    assert delays == []
 
 
-def test_gives_up_after_the_retries(hdfs, monkeypatch):
+def test_gives_up_after_the_retries(hdfs, delays, monkeypatch):
     from fsspec.implementations.webhdfs import WebHDFile
 
     monkeypatch.setattr(WebHDFile, "append_retries", 2)
-    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    hdfs.lease_held_for = math.inf  # the lease is never released
     fs = webhdfs(hdfs)
     f = fs.open("/lake/f", "wb", block_size=1024)
     f.write(b"x" * 4096)  # the first block creates the file
@@ -179,3 +215,4 @@ def test_gives_up_after_the_retries(hdfs, monkeypatch):
     f.closed = True
     assert "403" in str(error.value)
     assert hdfs.appends == 3  # the first attempt and two retries
+    assert delays == [0.05, 0.1]

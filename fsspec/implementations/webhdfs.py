@@ -456,16 +456,15 @@ class WebHDFile(AbstractBufferedFile):
     # 0.2 s... (at most 2 s) between attempts: about 20 s in total.
     append_retries = 12
 
-    @classmethod
-    def _lease_conflict(cls, response):
-        """Whether a rejected request failed because of a held lease."""
+    @staticmethod
+    def _remote_exception(response):
+        """Name of the Java exception behind a 403 from the datanode, if any."""
         if response.status_code != 403:
-            return False
+            return None
         try:
-            exception = response.json()["RemoteException"]["exception"]
+            return response.json()["RemoteException"]["exception"]
         except (ValueError, KeyError, TypeError):
-            return False
-        return exception in cls._LEASE_EXCEPTIONS
+            return None
 
     def _upload_chunk(self, final=False):
         """Write one part of a multi-block file upload
@@ -496,12 +495,15 @@ class WebHDFile(AbstractBufferedFile):
     def _create(self, data):
         """Create the file with its first block of data in a single request"""
         kwargs = self.kwargs.copy()
-        kwargs["overwrite"] = "true"
+        # Exclusive creation ("xb") must fail on an existing file
+        kwargs["overwrite"] = "false" if "x" in self.mode else "true"
         out = self.fs._call("CREATE", "PUT", self.path, redirect=False, **kwargs)
         location = self.fs._apply_proxy(out.headers["Location"])
         out2 = self.fs.session.put(
             location, data=data, headers={"content-type": "application/octet-stream"}
         )
+        if self._remote_exception(out2) == "FileAlreadyExistsException":
+            raise FileExistsError(self.path)
         out2.raise_for_status()
         self._created = True
 
@@ -518,7 +520,10 @@ class WebHDFile(AbstractBufferedFile):
             )
             if out2.ok:
                 return
-            if attempt == self.append_retries or not self._lease_conflict(out2):
+            if (
+                attempt == self.append_retries
+                or self._remote_exception(out2) not in self._LEASE_EXCEPTIONS
+            ):
                 out2.raise_for_status()
             delay = min(0.05 * 2**attempt, 2.0)
             logger.debug("lease held on %s, retrying in %.2f s", self.path, delay)
