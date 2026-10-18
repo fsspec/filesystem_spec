@@ -458,6 +458,13 @@ class LocalFileOpener(io.IOBase):
             # be pending here. Windows also refuses to rename an open file.
             self.f.close()
         try:
+            # The temporary file replaces the target, so an existing file would
+            # otherwise lose its mode (a 0o600 file became 0o644); keep it, as
+            # a plain open() in write mode would.
+            mode = stat.S_IMODE(os.stat(self.path).st_mode)
+        except OSError:
+            mode = None
+        try:
             shutil.move(self.temp, self.path)
         except PermissionError as e:
             # shutil.move raises PermissionError if os.rename
@@ -469,8 +476,10 @@ class LocalFileOpener(io.IOBase):
         else:
             # If PermissionError is not raised, permissions can be set.
             try:
-                mask = 0o666
-                os.chmod(self.path, mask & ~get_umask(mask))
+                if mode is None:
+                    mask = 0o666
+                    mode = mask & ~get_umask(mask)
+                os.chmod(self.path, mode)
             except RuntimeError:
                 pass
 

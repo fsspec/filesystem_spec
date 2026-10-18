@@ -6,6 +6,7 @@ import os
 import os.path
 import pickle
 import posixpath
+import stat
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -606,6 +607,23 @@ def test_same_permissions_with_and_without_transaction(tmpdir):
         f.write(b"data")
 
     assert fs.info(tmpdir + "/afile")["mode"] == fs.info(tmpdir + "/bfile")["mode"]
+
+
+@pytest.mark.skipif(WIN, reason="posix file modes")
+def test_transaction_keeps_mode_of_existing_file(tmpdir):
+    # the commit replaces the file with the temporary one, which used to
+    # reset a restrictive mode to the umask default
+    path = str(tmpdir / "afile")
+    with open(path, "wb") as f:
+        f.write(b"old")
+    os.chmod(path, 0o600)
+
+    fs = LocalFileSystem()
+    with fs.transaction, fs.open(path, "wb") as f:
+        f.write(b"new")
+
+    assert fs.cat(path) == b"new"
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 
 
 def test_get_umask_uses_cache():
