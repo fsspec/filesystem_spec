@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
