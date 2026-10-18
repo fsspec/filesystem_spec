@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Update contributor linting and formatting instructions to use the configured
+  Ruff and pre-commit checks.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
