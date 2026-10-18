@@ -65,6 +65,50 @@ def test_simple(jupyter):
     assert "cfile" in os.listdir(d)
     assert "bfile" not in os.listdir(d)
 
+    with pytest.raises(requests.HTTPError):
+        fs.mv("not-exist", "another-file")
+    with pytest.raises(requests.HTTPError):
+        fs.rm("not-exist")
+
+
+@pytest.mark.parametrize("status_code", [403, 404, 500])
+@pytest.mark.parametrize(
+    "operation,method,args",
+    [
+        ("pipe_file", "put", ("afile", b"data")),
+        ("mkdir", "put", ("adir",)),
+        ("mv", "patch", ("afile", "bfile")),
+        ("rm", "delete", ("afile",)),
+    ],
+)
+def test_mutations_raise_http_errors(mocker, operation, method, args, status_code):
+    fs = fsspec.filesystem(
+        "jupyter", url="http://localhost:5566", skip_instance_cache=True
+    )
+    response = requests.Response()
+    response.status_code = status_code
+    response.url = f"{fs.url}/{args[0]}"
+    mocker.patch.object(fs.session, method, return_value=response)
+
+    with pytest.raises(requests.HTTPError) as error:
+        getattr(fs, operation)(*args)
+
+    assert error.value.response is response
+
+
+def test_buffered_write_raises_http_error_on_close(mocker):
+    fs = fsspec.filesystem(
+        "jupyter", url="http://localhost:5566", skip_instance_cache=True
+    )
+    response = requests.Response()
+    response.status_code = 403
+    response.url = f"{fs.url}/afile"
+    mocker.patch.object(fs.session, "put", return_value=response)
+
+    with pytest.raises(requests.HTTPError):
+        with fs.open("afile", "wb") as f:
+            f.write(b"data")
+
 
 def test_notebook_contents(jupyter):
     # The contents API returns notebooks as parsed JSON (format "json") and

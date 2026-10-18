@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Raise HTTP errors from failed Jupyter file writes, directory creation, moves,
+  and deletes instead of silently ignoring the server response.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
