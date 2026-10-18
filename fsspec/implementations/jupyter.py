@@ -86,7 +86,8 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "format": "base64",
             "type": "file",
         }
-        self.session.put(f"{self.url}/{path}", json=json)
+        r = self.session.put(f"{self.url}/{path}", json=json)
+        r.raise_for_status()
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
@@ -99,16 +100,19 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "content": None,
             "type": "directory",
         }
-        self.session.put(f"{self.url}/{path}", json=json)
+        r = self.session.put(f"{self.url}/{path}", json=json)
+        r.raise_for_status()
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         if path1 == path2:
             return
-        self.session.patch(f"{self.url}/{path1}", json={"path": path2})
+        r = self.session.patch(f"{self.url}/{path1}", json={"path": path2})
+        r.raise_for_status()
 
     def _rm(self, path):
         path = self._strip_protocol(path)
-        self.session.delete(f"{self.url}/{path}")
+        r = self.session.delete(f"{self.url}/{path}")
+        r.raise_for_status()
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
