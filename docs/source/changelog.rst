@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
