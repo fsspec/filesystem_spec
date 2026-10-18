@@ -5,6 +5,7 @@ import os
 import secrets
 import shutil
 import tempfile
+import time
 import uuid
 from contextlib import suppress
 from datetime import datetime
@@ -445,8 +446,34 @@ class WebHDFile(AbstractBufferedFile):
             self.target = self.path
             self.path = os.path.join(tempdir, str(uuid.uuid4()))
 
+    # HDFS lets one client write to a file at a time. The datanode that served
+    # the previous request may not have released its lease on the file yet
+    # when the next one arrives, and the namenode then answers with one of
+    # these exceptions (HTTP 403). The request has written nothing, so it can
+    # safely be repeated.
+    _LEASE_EXCEPTIONS = ("AlreadyBeingCreatedException", "RecoveryInProgressException")
+    # Repeat a rejected APPEND up to this many times, waiting 0.05 s, 0.1 s,
+    # 0.2 s... (at most 2 s) between attempts: about 20 s in total.
+    append_retries = 12
+
+    @classmethod
+    def _lease_conflict(cls, response):
+        """Whether a rejected request failed because of a held lease."""
+        if response.status_code != 403:
+            return False
+        try:
+            exception = response.json()["RemoteException"]["exception"]
+        except (ValueError, KeyError, TypeError):
+            return False
+        return exception in cls._LEASE_EXCEPTIONS
+
     def _upload_chunk(self, final=False):
         """Write one part of a multi-block file upload
+
+        The first block of a new file travels in the ``CREATE`` request itself,
+        so the file is never left empty waiting for an ``APPEND`` that could
+        collide with the lease of the request that created it. Later blocks
+        use ``APPEND``, repeated if the datanode still holds the lease.
 
         Parameters
         ==========
@@ -454,33 +481,48 @@ class WebHDFile(AbstractBufferedFile):
             This is the last block, so should complete file, if
             self.autocommit is True.
         """
-        out = self.fs.session.post(
-            self.location,
-            data=self.buffer.getvalue(),
-            headers={"content-type": "application/octet-stream"},
-        )
-        out.raise_for_status()
+        data = self.buffer.getvalue()
+        if not self._created:
+            self._create(data)
+        elif data:
+            self._append(data)
         return True
 
     def _initiate_upload(self):
-        """Create remote file/upload"""
+        """Prepare the upload; nothing is sent until the first block is ready"""
+        # An append starts on a file that already exists
+        self._created = "a" in self.mode
+
+    def _create(self, data):
+        """Create the file with its first block of data in a single request"""
         kwargs = self.kwargs.copy()
-        if "a" in self.mode:
-            op, method = "APPEND", "POST"
-        else:
-            op, method = "CREATE", "PUT"
-            kwargs["overwrite"] = "true"
-        out = self.fs._call(op, method, self.path, redirect=False, **kwargs)
+        kwargs["overwrite"] = "true"
+        out = self.fs._call("CREATE", "PUT", self.path, redirect=False, **kwargs)
         location = self.fs._apply_proxy(out.headers["Location"])
-        if "w" in self.mode:
-            # create empty file to append to
-            out2 = self.fs.session.put(
-                location, headers={"content-type": "application/octet-stream"}
+        out2 = self.fs.session.put(
+            location, data=data, headers={"content-type": "application/octet-stream"}
+        )
+        out2.raise_for_status()
+        self._created = True
+
+    def _append(self, data):
+        """Append a block of data, repeating the request on a lease conflict"""
+        kwargs = self.kwargs.copy()
+        for attempt in range(self.append_retries + 1):
+            out = self.fs._call("APPEND", "POST", self.path, redirect=False, **kwargs)
+            location = self.fs._apply_proxy(out.headers["Location"])
+            out2 = self.fs.session.post(
+                location,
+                data=data,
+                headers={"content-type": "application/octet-stream"},
             )
-            out2.raise_for_status()
-            # after creating empty file, change location to append to
-            out2 = self.fs._call("APPEND", "POST", self.path, redirect=False, **kwargs)
-            self.location = self.fs._apply_proxy(out2.headers["Location"])
+            if out2.ok:
+                return
+            if attempt == self.append_retries or not self._lease_conflict(out2):
+                out2.raise_for_status()
+            delay = min(0.05 * 2**attempt, 2.0)
+            logger.debug("lease held on %s, retrying in %.2f s", self.path, delay)
+            time.sleep(delay)
 
     def _fetch_range(self, start, end):
         start = max(start, 0)
