@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Keep the mode of an existing local file when a transaction commit replaces it,
+  instead of resetting it to the umask default
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
