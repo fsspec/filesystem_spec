@@ -12,8 +12,7 @@ Enhancements
 
 Fixes
 
-- Preserve JSON values, binary request bodies and their content types in the
-  Pyodide HTTP session shim (#2293).
+- Propagate backend removal errors from ``FSMap``
 
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
 
@@ -38,6 +37,9 @@ Fixes
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Preserve JSON values, binary request bodies and their content types in the
+  Pyodide HTTP session shim (#2293).
 
 - Keep the HTTP link regex linear
 
