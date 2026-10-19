@@ -13,7 +13,10 @@ Enhancements
 Fixes
 
 - Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
-  writes instead of forwarding the mode to ``zipfile.writestr``.
+
+- Bound block-cache fetch ranges by the file size, including background reads.
+
+- Exclude URL fragments when decoding data URLs.
 
 - Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
 
