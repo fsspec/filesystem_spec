@@ -650,6 +650,14 @@ def test_cat_file_range(server):
     assert h.cat(urla, end=-10) == data[:-10]
 
 
+@pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
+def test_cat_file_empty_range_does_not_make_request(server, reset_faults, start, end):
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+
+    assert h.cat_file(server.realfile, start=start, end=end) == b""
+    assert HTTPTestHandler.get_counts.get("/index/realfile", 0) == 0
+
+
 def test_cat_file_range_numpy(server):
     np = pytest.importorskip("numpy")
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
