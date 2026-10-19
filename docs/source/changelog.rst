@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Make the file-system quick-start example runnable and independent of listing order.
+
 - Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
 
 - Bound block-cache fetch ranges by the file size, including background reads.

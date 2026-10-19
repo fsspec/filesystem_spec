@@ -64,17 +64,25 @@ full list: :class:`fsspec.spec.AbstractFileSystem`).
 Note that this quick-start will prefer posix-style naming, but
 many common operations are aliased: ``cp()`` and ``copy()`` are identical, for instance.
 Functionality is generally chosen to be as close to the builtin ``os`` module's working for things like
-``glob`` as possible. The following block of operations should seem very familiar.
+``glob`` as possible. The following example uses an in-memory file-system, so it
+can run without a remote service or credentials. Directory listing order can vary
+between backends, so the assertion sorts the returned paths.
 
 .. code-block:: python
 
+    import fsspec
+
+    fs = fsspec.filesystem("memory", global_store=False, skip_instance_cache=True)
     fs.mkdir("/remote/output")
     fs.touch("/remote/output/success")  # creates empty file
     assert fs.exists("/remote/output/success")
     assert fs.isfile("/remote/output/success")
     assert fs.cat("/remote/output/success") == b""  # get content as bytestring
     fs.copy("/remote/output/success", "/remote/output/copy")
-    assert fs.ls("/remote/output", detail=False) == ["/remote/output/success", "/remote/output/copy")
+    assert sorted(fs.ls("/remote/output", detail=False)) == [
+        "/remote/output/copy",
+        "/remote/output/success",
+    ]
     fs.rm("/remote/output", recursive=True)
 
 The ``open()`` method will return a file-like object which can be passed to any other library that expects
