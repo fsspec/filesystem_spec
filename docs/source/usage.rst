@@ -65,8 +65,7 @@ Note that this quick-start will prefer posix-style naming, but
 many common operations are aliased: ``cp()`` and ``copy()`` are identical, for instance.
 Functionality is generally chosen to be as close to the builtin ``os`` module's working for things like
 ``glob`` as possible. The following example uses an in-memory file-system, so it
-can run without a remote service or credentials. Directory listing order can vary
-between backends, so the assertion sorts the returned paths.
+can run without a remote service or credentials.
 
 .. code-block:: python
 
@@ -79,7 +78,7 @@ between backends, so the assertion sorts the returned paths.
     assert fs.isfile("/remote/output/success")
     assert fs.cat("/remote/output/success") == b""  # get content as bytestring
     fs.copy("/remote/output/success", "/remote/output/copy")
-    assert sorted(fs.ls("/remote/output", detail=False)) == [
+    assert fs.ls("/remote/output", detail=False) == [
         "/remote/output/copy",
         "/remote/output/success",
     ]
