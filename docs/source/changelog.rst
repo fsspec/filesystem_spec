@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Measure directory listing cache expiry with a monotonic clock so system clock
+  adjustments do not change the configured lifetime.
+
 - Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
 
 - Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)

@@ -58,7 +58,7 @@ class DirCache(MutableMapping):
             raise KeyError(item)
 
         if self.listings_expiry_time is not None and item in self._cache:
-            if time.time() - self._times.get(item, 0) > self.listings_expiry_time:
+            if time.monotonic() - self._times.get(item, 0) > self.listings_expiry_time:
                 del self[item]
                 raise KeyError(item)
 
@@ -79,7 +79,7 @@ class DirCache(MutableMapping):
             return False
 
         if self.listings_expiry_time is not None:
-            if time.time() - self._times.get(item, 0) > self.listings_expiry_time:
+            if time.monotonic() - self._times.get(item, 0) > self.listings_expiry_time:
                 del self[item]
                 return False
 
@@ -91,7 +91,7 @@ class DirCache(MutableMapping):
 
         self._cache[key] = value
         if self.listings_expiry_time is not None:
-            self._times[key] = time.time()
+            self._times[key] = time.monotonic()
 
         if self.max_paths:
             self._cache.move_to_end(key)
@@ -111,7 +111,7 @@ class DirCache(MutableMapping):
             yield from self._cache
             return
 
-        now = time.time()
+        now = time.monotonic()
         for key in list(self._cache):
             if now - self._times.get(key, 0) > self.listings_expiry_time:
                 del self[key]

@@ -1,5 +1,6 @@
 import pickle
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -154,3 +155,38 @@ def test_dircache_pickle_roundtrip():
     assert dc2.use_listings_cache is True
     assert dc2.listings_expiry_time == 10
     assert dc2.max_paths == 5
+
+
+@pytest.mark.parametrize("operation", ["get", "contains", "iter"])
+@pytest.mark.parametrize(
+    "elapsed,wall_jump,present",
+    [(1, 1000, True), (6, -1000, False), (1, 0, True), (6, 0, False)],
+)
+def test_expiry_ignores_system_clock_changes(
+    monkeypatch, operation, elapsed, wall_jump, present
+):
+    clock = {"wall": 10000, "elapsed": 0}
+    monkeypatch.setattr(
+        "fsspec.dircache.time",
+        SimpleNamespace(
+            time=lambda: clock["wall"],
+            monotonic=lambda: clock["elapsed"],
+        ),
+    )
+    cache = DirCache(listings_expiry_time=5)
+    listing = [{"name": "directory/file", "size": 1, "type": "file"}]
+    cache["directory"] = listing
+
+    clock["wall"] += elapsed + wall_jump
+    clock["elapsed"] += elapsed
+
+    if operation == "get":
+        if present:
+            assert cache["directory"] == listing
+        else:
+            with pytest.raises(KeyError):
+                cache["directory"]
+    elif operation == "contains":
+        assert ("directory" in cache) is present
+    else:
+        assert list(cache) == (["directory"] if present else [])
