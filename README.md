@@ -83,19 +83,23 @@ test_downstream.py module in this repo.
 
 ### Code Formatting
 
-fsspec uses [Black](https://black.readthedocs.io/en/stable) to ensure
-a consistent code format throughout the project.
-Run ``black fsspec`` from the root of the filesystem_spec repository to
-auto-format your code. Additionally, many editors have plugins that will apply
-``black`` as you edit files. ``black`` is included in the ``tox`` environments.
+fsspec uses [Ruff](https://docs.astral.sh/ruff/) for Python linting and formatting.
+The development dependencies installed above include Ruff and pre-commit.
+From the repository root, run:
+
+```bash
+ruff check fsspec
+ruff format --check fsspec
+```
+
+To apply formatting changes, run `ruff format fsspec` without `--check`.
 
 Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com) to
-automatically run ``black`` when you make a git commit.
+run the project's checks when you make a git commit.
 Run ``pre-commit install --install-hooks`` from the root of the
-filesystem_spec repository to setup pre-commit hooks. ``black`` will now be run
-before you commit, reformatting any changed files. You can format without
-committing via ``pre-commit run`` or skip these checks with ``git commit
---no-verify``.
+filesystem_spec repository to set up pre-commit hooks. The hooks include Ruff,
+whitespace checks, and spell checking. Run `pre-commit run --all-files` to check
+the whole repository without making a commit.
 
 ## Support
 

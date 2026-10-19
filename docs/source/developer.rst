@@ -114,8 +114,12 @@ well as Docker. Most implementation-specific tests should skip if their requirem
 not met.
 
 Development happens by submitting pull requests (PRs) on github.
-This repo adheres to flake8 and black coding conventions. You may wish to install
-commit hooks if you intend to make PRs, as linting is done as part of the CI.
+This repo uses Ruff for Python linting and formatting. Run ``ruff check fsspec``
+and ``ruff format --check fsspec`` from the repository root to check your changes.
+Run ``ruff format fsspec`` to apply formatting. You may wish to install
+the project's commit hooks with ``pre-commit install --install-hooks``, as
+linting is done as part of the CI. Run ``pre-commit run --all-files`` to run all
+configured hooks without making a commit.
 
 Docs use sphinx and the numpy docstring style. Please add an entry to the changelog
 along with any PR.
