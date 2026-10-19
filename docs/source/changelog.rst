@@ -12,8 +12,9 @@ Enhancements
 
 Fixes
 
-- Update contributor linting and formatting instructions to use the configured
-  Ruff and pre-commit checks.
+- Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
+
+- Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
 
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
@@ -73,6 +74,8 @@ Fixes
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
+
+- Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
