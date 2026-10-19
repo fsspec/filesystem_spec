@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Propagate backend removal errors from ``FSMap``
+
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
 
 - Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host

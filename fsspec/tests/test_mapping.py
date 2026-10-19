@@ -270,3 +270,119 @@ def test_pop_existing_key_returns_and_removes_value(tmp_path, protocol):
 
     assert mapper.pop("key", None) == b"value"
     assert "key" not in mapper
+
+
+@pytest.mark.parametrize("operation", ["delete", "clear", "pop"])
+@pytest.mark.parametrize("error_type", [PermissionError, OSError])
+def test_removal_propagates_backend_failures(monkeypatch, operation, error_type):
+    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
+    mapper = fs.get_mapper("/mapping", create=True)
+    mapper["key"] = b"value"
+    failure = error_type("backend could not remove the file")
+
+    def fail_remove(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(fs, "rm", fail_remove)
+
+    with pytest.raises(error_type) as exc:
+        if operation == "delete":
+            del mapper["key"]
+        elif operation == "clear":
+            mapper.clear()
+        else:
+            mapper.pop("key")
+
+    assert exc.value is failure
+    assert mapper["key"] == b"value"
+
+
+def test_clear_missing_root():
+    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
+    mapper = fs.get_mapper("/missing")
+
+    mapper.clear()
+
+    assert len(mapper) == 0
+
+
+def test_delete_missing_key():
+    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
+    mapper = fs.get_mapper("/mapping", create=True)
+
+    with pytest.raises(KeyError) as exc:
+        del mapper["missing"]
+
+    assert isinstance(exc.value.__cause__, FileNotFoundError)
+
+
+@pytest.mark.parametrize("error_type", [PermissionError, OSError, FileExistsError])
+def test_clear_propagates_recreation_failure(monkeypatch, error_type):
+    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
+    mapper = fs.get_mapper("/mapping", create=True)
+    mapper["key"] = b"value"
+    failure = error_type("backend could not recreate the directory")
+
+    def fail_mkdir(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(fs, "mkdir", fail_mkdir)
+
+    with pytest.raises(error_type) as exc:
+        mapper.clear()
+
+    assert exc.value is failure
+
+
+@pytest.mark.parametrize("protocol", ["memory", "file"])
+def test_delete_directory_key_raises_key_error(tmp_path, protocol):
+    mapper = fsspec.get_mapper(
+        f"{protocol}://{tmp_path.as_posix()}/mapping", create=True
+    )
+    mapper["dir/key"] = b"value"
+
+    with pytest.raises(KeyError):
+        del mapper["dir"]
+
+    assert mapper["dir/key"] == b"value"
+
+
+def test_delete_preserves_removal_error_when_directory_check_fails(monkeypatch):
+    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
+    mapper = fs.get_mapper("/mapping", create=True)
+    mapper["key"] = b"value"
+    failure = PermissionError("backend could not remove the file")
+
+    def fail_remove(*args, **kwargs):
+        raise failure
+
+    def fail_info(*args, **kwargs):
+        raise RuntimeError("backend could not check the path")
+
+    monkeypatch.setattr(fs, "rm", fail_remove)
+    monkeypatch.setattr(fs, "info", fail_info)
+
+    with pytest.raises(PermissionError) as exc:
+        del mapper["key"]
+
+    assert exc.value is failure
+    assert mapper["key"] == b"value"
+
+
+def test_delete_preserves_file_error_when_path_is_also_a_directory(monkeypatch):
+    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
+    mapper = fs.get_mapper("/mapping", create=True)
+    mapper["key"] = b"value"
+    failure = PermissionError("backend could not remove the file")
+
+    def fail_remove(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(fs, "rm", fail_remove)
+    monkeypatch.setattr(fs, "isdir", lambda path: True)
+
+    with pytest.raises(PermissionError) as exc:
+        del mapper["key"]
+
+    assert exc.value is failure
+    assert mapper["key"] == b"value"
