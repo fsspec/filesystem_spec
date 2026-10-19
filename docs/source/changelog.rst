@@ -29,7 +29,7 @@ Fixes
 - Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
 
 - Refuse a recursive ``mv`` into a subdirectory of its own source, which used
-  to delete both the source and the copy.
+  to delete both the source and the copy (#2339)
 
 - Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
 
