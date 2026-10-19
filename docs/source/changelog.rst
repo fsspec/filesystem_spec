@@ -38,8 +38,7 @@ Fixes
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
-- Preserve JSON values, binary request bodies and their content types in the
-  Pyodide HTTP session shim (#2293).
+- Complete DBFS partial-delete retries without re-raising a recovered error.
 
 - Keep the HTTP link regex linear
 
@@ -83,6 +82,9 @@ Fixes
 - Close memory-mapped cache resources when the owning buffered file is closed.
 
 - Use the correct POST method in the Pyodide HTTP session shim.
+
+- Preserve JSON values, binary request bodies and their content types in the
+  Pyodide HTTP session shim (#2293).
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
 
