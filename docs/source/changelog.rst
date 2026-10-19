@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
+
 - Bound block-cache fetch ranges by the file size, including background reads.
 
 - Exclude URL fragments when decoding data URLs.
