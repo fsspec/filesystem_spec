@@ -1054,12 +1054,14 @@ async def test_async_pathlike_operations(pathlike_dirfs, path_type):
 def test_pathlike_join_semantics(pathlike_dirfs, path_type):
     fs = pathlike_dirfs
     assert fs._join(path_type("file")) == fs._join("file")
-    assert fs._join(path_type("foo/../file")) == fs._join("foo/../file")
+    path = path_type("foo/../file")
+    assert fs._join(path) == fs._join(os.fspath(path))
     if isinstance(fs.fs, LocalFileSystem):
         with pytest.raises(ValueError, match="escapes"):
-            fs._join(path_type("../file"))
+            fs._join(path_type(".."))
     else:
-        assert fs._join(path_type("../file")) == fs._join("../file")
+        path = path_type("../file")
+        assert fs._join(path) == fs._join(os.fspath(path))
 
 
 @pytest.mark.parametrize("path", ["", "dir://file", "file/", "dir://file/"])
