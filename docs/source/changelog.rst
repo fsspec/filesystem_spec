@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
+
 - Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
 
 - Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
