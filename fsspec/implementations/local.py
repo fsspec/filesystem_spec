@@ -157,7 +157,9 @@ class LocalFileSystem(AbstractFileSystem):
         else:
             return self.cp_file(path1, path2, **kwargs)
 
-    def put_file(self, path1, path2, callback=None, **kwargs):
+    def put_file(self, path1, path2, callback=None, mode="overwrite", **kwargs):
+        if mode == "create" and self.exists(path2):
+            raise FileExistsError(path2)
         return self.cp_file(path1, path2, **kwargs)
 
     def mv(self, path1, path2, recursive: bool = True, **kwargs):

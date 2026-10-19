@@ -1,5 +1,6 @@
 from .. import filesystem
 from ..asyn import AsyncFileSystem
+from ..utils import stringify_path
 from .chained import ChainedFileSystem
 from .local import LocalFileSystem
 
@@ -64,6 +65,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         self.async_impl = fs.async_impl
 
     def _join(self, path):
+        path = stringify_path(path)
         if isinstance(path, str):
             if not self.path:
                 return path

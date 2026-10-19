@@ -226,6 +226,10 @@ class MMapCache(BaseCache):
 
         return self.cache[start:end]
 
+    def close(self) -> None:
+        if hasattr(self.cache, "close"):
+            self.cache.close()
+
     def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
@@ -340,12 +344,20 @@ class AdaptiveReadaheadCache(BaseCache):
         try:
             from .prefetcher import BackgroundPrefetcher
 
+            try:
+                fs_loop = fetcher.__self__.fs.loop
+            except AttributeError:
+                fs_loop = None
             self._prefetcher = BackgroundPrefetcher(
                 fetcher=_default_fetcher_async,
                 size=size,
                 concurrency=concurrency,
                 max_prefetch_size=max_prefetch_size,
-                loop=fsspec_asyn.get_loop(),
+                loop=(
+                    fs_loop
+                    if isinstance(fs_loop, asyncio.AbstractEventLoop)
+                    else fsspec_asyn.get_loop()
+                ),
             )
             logger.info(
                 "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",
@@ -525,7 +537,9 @@ class BlockCache(BaseCache):
             )
 
         start = block_number * self.blocksize
-        end = start + self.blocksize
+        if start >= self.size:
+            return b""
+        end = min(start + self.blocksize, self.size)
         self.total_requested_bytes += end - start
         self.miss_count += 1
         logger.info("BlockCache fetching block %d", block_number)
@@ -1050,7 +1064,9 @@ class BackgroundBlockCache(BaseCache):
             )
 
         start = block_number * self.blocksize
-        end = start + self.blocksize
+        if start >= self.size:
+            return b""
+        end = min(start + self.blocksize, self.size)
         logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
         self.total_requested_bytes += end - start
         self.miss_count += 1

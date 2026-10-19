@@ -78,9 +78,13 @@ class FSMap(MutableMapping):
         logger.info("Clear mapping at %s", self.root)
         try:
             self.fs.rm(self.root, True)
+        except self.missing_exceptions:
+            return
+        try:
             self.fs.mkdir(self.root)
-        except:  # noqa: E722
-            pass
+        except FileExistsError:
+            if not self.fs.isdir(self.root):
+                raise
 
     def getitems(self, keys, on_error="raise"):
         """Fetch multiple items from the store
@@ -197,10 +201,20 @@ class FSMap(MutableMapping):
 
     def __delitem__(self, key):
         """Remove key"""
+        path = self._key_to_str(key)
         try:
-            self.fs.rm(self._key_to_str(key))
+            self.fs.rm(path)
+        except self.missing_exceptions as exc:
+            raise KeyError(key) from exc
         except Exception as exc:
-            raise KeyError from exc
+            try:
+                is_directory = self.fs.info(path)["type"] == "directory"
+            except Exception:
+                # Keep the removal error if classifying the path also fails.
+                is_directory = False
+            if is_directory:
+                raise KeyError(key) from exc
+            raise
 
     def __contains__(self, key):
         """Does key exist in mapping?"""

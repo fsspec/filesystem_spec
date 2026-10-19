@@ -4,7 +4,64 @@ Changelog
 Dev
 ---
 
+Enhancements
+
+- Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
+  operations that fill the cache on a miss, so ``filecache``/``simplecache``
+  opens can report download progress (#1623)
+
 Fixes
+
+- Propagate backend removal errors from ``FSMap``
+
+- Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
+
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
+
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+- Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
+
+- Bound block-cache fetch ranges by the file size, including background reads.
+
+- Exclude URL fragments when decoding data URLs.
+
+- Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
+
+- Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
+
+- Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
+
+- Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
+
+- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+
+- Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Complete DBFS partial-delete retries without re-raising a recovered error.
+
+- Keep the HTTP link regex linear
+
+- Preserve single-source copy semantics for Paths in sync batch ops
+
+- Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
+  since PUT behavior depends on the server (#2294).
+
+- Reject ``generic.rsync`` source names whose ".." segments would place
+  copies outside the destination
+
+- Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
+
+- Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
+
+- Support ``length=None`` in ``utils.read_block`` without a delimiter (#2262)
+
+- Reject memory fs copies whose destination conflicts with an existing
+  file or directory (#2268)
+
+- Preserve ``None`` values when serializing filesystem arguments (#2264)
+
+- Correct file name padding for large integer maxima so lexical order matches numeric order (#2263)
 
 - Preserve caller-owned protocol options when merging per-call overrides (#2279)
 
@@ -22,6 +79,8 @@ Fixes
 
 - Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
 
+- Close memory-mapped cache resources when the owning buffered file is closed.
+
 - Use the correct POST method in the Pyodide HTTP session shim.
 
 - Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
@@ -35,6 +94,8 @@ Fixes
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
+
+- Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
@@ -126,6 +187,13 @@ Enhancements
 
 - Allow ``simplecache`` files to be removed by age using their modification
   times (#2118)
+
+- HTTP: retry transient failures (408/425/429/5xx, dropped connections,
+  timeouts, truncated range bodies, a 416 inside the file) of ``cat_file``,
+  ``HTTPFile`` block reads and the size lookup behind ``open``, controlled
+  by the new ``retries``,
+  ``retry_wait``, ``retry_statuses`` and ``retry_exceptions`` options
+  (#2124)
 
 Fixes
 

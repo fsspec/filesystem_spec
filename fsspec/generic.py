@@ -8,6 +8,7 @@ import uuid
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
+from .utils import check_contained
 
 _generic_fs = {}
 logger = logging.getLogger("fsspec.generic")
@@ -94,6 +95,9 @@ def rsync(
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
         raise ValueError("Can only rsync on a directory")
+    # The names came from the source listing; ".." in one of them would
+    # otherwise place the copy above the destination.
+    check_contained(destination, [a.replace(source, destination) for a in allfiles])
     otherfiles = fs.find(destination, withdirs=True, detail=True)
     dirs = [
         a
@@ -333,6 +337,18 @@ class GenericFileSystem(AsyncFileSystem):
 
         fs = _resolve_fs(path1, self.method, storage_options=self.st_opts)
         fs2 = _resolve_fs(path2, self.method, storage_options=self.st_opts)
+
+        # Validate both entire batches before copying any files.
+        for paths, backend, side in (
+            (path1, fs, "source"),
+            (path2, fs2, "destination"),
+        ):
+            if any(
+                _resolve_fs(path, self.method, storage_options=self.st_opts)
+                is not backend
+                for path in paths
+            ):
+                raise ValueError(f"Multiple {side} backends are not supported")
 
         if fs is fs2:
             if fs.async_impl:
