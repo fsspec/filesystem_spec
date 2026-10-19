@@ -1448,6 +1448,42 @@ def test_write_transaction(tmpdir, m, monkeypatch):
     assert called[0] == 1  # copy was done in one go
 
 
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("writes", [1, 2])
+@pytest.mark.parametrize("mode", ["wb", "ab"])
+def test_write_transaction_abort(tmp_path, m, existing, writes, mode):
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    path = "/transaction-file"
+    if existing:
+        m.pipe(path, b"original")
+        assert fs.cat(path) == b"original"
+
+    with pytest.raises(RuntimeError, match="abort transaction"):
+        with fs.transaction:
+            for _ in range(writes):
+                with fs.open(path, mode) as f:
+                    f.write(b"aborted")
+            raise RuntimeError("abort transaction")
+
+    assert not fs._intrans
+    assert fs._transaction is None
+    assert not list(tmp_path.iterdir())
+    fresh = fsspec.filesystem(
+        "simplecache", fs=m, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    for reader in (m, fs, fresh):
+        if existing:
+            assert reader.cat(path) == b"original"
+        else:
+            with pytest.raises(FileNotFoundError):
+                reader.cat_file(path)
+
+    # A rollback must not leave later writes trapped in a dead transaction.
+    with fs.open(path, "wb") as f:
+        f.write(b"subsequent")
+    assert m.cat(path) == b"subsequent"
+
+
 def test_filecache_write(tmpdir, m):
     fs = fsspec.filesystem(
         "filecache", target_protocol="memory", cache_storage=str(tmpdir)

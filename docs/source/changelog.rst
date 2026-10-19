@@ -12,8 +12,19 @@ Enhancements
 
 Fixes
 
-- Propagate backend removal errors from ``FSMap`` instead of hiding failed
-  ``clear`` and ``pop`` operations or reporting deletion failures as missing keys.
+- Propagate backend removal errors from ``FSMap``
+
+- Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
+
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
+
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+- Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
+
+- Bound block-cache fetch ranges by the file size, including background reads.
+
+- Exclude URL fragments when decoding data URLs.
 
 - Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
 
