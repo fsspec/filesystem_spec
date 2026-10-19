@@ -250,6 +250,15 @@ def test_ls(m):
     assert len(m.ls("/dir/afile")) == 1
 
 
+def test_info_created_matches_ls(m):
+    m.pipe_file("/dir/afile", b"data")
+
+    info = m.info("/dir/afile")
+    assert info["created"] == m.created("/dir/afile").timestamp()
+    assert info == m.ls("/dir/afile")[0]
+    assert info == m.find("/dir", detail=True)["/dir/afile"]
+
+
 def test_directories(m):
     m.mkdir("outer/inner")
     assert m.info("outer/inner")["type"] == "directory"

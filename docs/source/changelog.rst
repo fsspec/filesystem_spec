@@ -14,6 +14,16 @@ Fixes
 
 - Bound block-cache fetch ranges by the file size, including background reads.
 
+- Exclude URL fragments when decoding data URLs.
+
+- Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
+
+- Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
+
+- Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
+
+- Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
@@ -72,6 +82,8 @@ Fixes
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
+
+- Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
