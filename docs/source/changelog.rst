@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
+
 - Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
 
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
