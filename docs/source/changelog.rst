@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Propagate backend removal errors from ``FSMap`` instead of hiding failed
+  ``clear`` and ``pop`` operations or reporting deletion failures as missing keys.
+
 - Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
 
 - Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
