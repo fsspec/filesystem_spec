@@ -12,6 +12,12 @@ Enhancements
 
 Fixes
 
+- Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
+
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
+
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
 - Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
 
 - Bound block-cache fetch ranges by the file size, including background reads.
