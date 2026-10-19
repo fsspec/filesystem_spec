@@ -799,7 +799,8 @@ class BackgroundPrefetcher:
         async with self._async_lock:
             logger.debug("Signaling prefetcher stop and tearing down producer.")
 
-            if self.producer and not self.producer.is_stopped:
+            # Reaching EOF stops scheduling, but can leave fetch tasks in flight.
+            if self.producer:
                 await self.producer.stop()
 
             self.consumer.clear_buffer()

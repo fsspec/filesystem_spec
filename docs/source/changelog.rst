@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
+
 - Propagate backend removal errors from ``FSMap``
 
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)

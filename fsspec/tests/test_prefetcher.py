@@ -852,6 +852,54 @@ def test_close_default_timeout_waits_for_teardown(prefetcher_factory):
     assert bp.producer.is_stopped is True
 
 
+@pytest.mark.parametrize("size", [64, 80])
+def test_close_drains_pending_fetch_after_producer_reaches_eof(
+    prefetcher_factory, size
+):
+    async def check():
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        finished = asyncio.Event()
+        data = bytes(range(size))
+
+        async def fetcher(start, length, split_factor=1):
+            if start >= 48:
+                entered.set()
+                await release.wait()
+                finished.set()
+            return data[start : start + length]
+
+        bp = prefetcher_factory(
+            fetcher=fetcher, size=size, concurrency=1, max_prefetch_size=64
+        )
+        for start in (0, 16, 32):
+            assert await bp.afetch(start, start + 16) == data[start : start + 16]
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        assert bp.producer.is_stopped is (size == 64)
+        assert bp.producer._active_tasks
+
+        closing = asyncio.create_task(bp.aclose())
+        # Give teardown a loop turn, without releasing the outstanding fetch.
+        await asyncio.sleep(0)
+        try:
+            assert not closing.done()
+            assert not finished.is_set()
+        finally:
+            release.set()
+            await asyncio.wait_for(closing, timeout=2)
+            # Also clean up the original implementation after the assertion
+            # fails; an EOF producer can still own this pending task.
+            await asyncio.wait_for(
+                asyncio.gather(*tuple(bp.producer._active_tasks)), timeout=2
+            )
+
+        assert finished.is_set()
+        assert bp.queue.empty()
+        assert not bp.producer._active_tasks
+
+    fsspec.asyn.sync(fsspec.asyn.get_loop(), check)
+
+
 def test_close_none_timeout_waits_for_teardown(prefetcher_factory):
     """timeout=None adheres to standard Python library semantics, waiting
     indefinitely until teardown finishes."""
