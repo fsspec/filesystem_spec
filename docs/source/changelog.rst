@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Close the owning OpenFile and use exception-safe cleanup in developer examples.
+
 - Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
 
 - Bound block-cache fetch ranges by the file size, including background reads.
