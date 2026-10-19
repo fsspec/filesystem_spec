@@ -25,7 +25,11 @@ from fsspec.utils import (
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
-ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
+# The attribute scan must stay linear: it stops at the next "<" or ">" and the
+# whitespace before href is a lookbehind rather than a second quantifier, so a
+# page cannot make it backtrack cubically (1 KB of whitespace after "<a"
+# used to stall ls() for seconds, 10 KB for hours).
+ex = re.compile(r"""<(a|A)\s[^<>]*?(?<=\s)(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
 
@@ -344,7 +348,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(url)
 
         if start is not None or end is not None:
-            if start == end:
+            if start == end or (start is None and end == 0):
                 return b""
             headers = kw.pop("headers", {}).copy()
 
@@ -930,9 +934,9 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:
-            return
+            return self.loc
         if loc == self.loc and whence == 0:
-            return
+            return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
@@ -966,9 +970,9 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
 
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:
-            return
+            return self.loc
         if loc == self.loc and whence == 0:
-            return
+            return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     def seekable(self):

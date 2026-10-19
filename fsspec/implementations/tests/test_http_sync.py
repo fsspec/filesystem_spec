@@ -6,7 +6,15 @@ import time
 import pytest
 
 import fsspec.utils
-from fsspec.tests.conftest import data, requests, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import (  # noqa: F401
+    HTTPTestHandler,
+    data,
+    requests,
+    reset_faults,
+    reset_files,
+    server,
+    win,
+)
 
 
 @pytest.fixture()
@@ -41,6 +49,20 @@ def test_list(server, sync):
     h = fsspec.filesystem("http")
     out = h.glob(server.address + "/index/*")
     assert out == [server.address + "/index/realfile"]
+
+
+def test_list_pathological_listing(server, sync, reset_files):
+    # a long whitespace run inside an anchor used to make the link regex
+    # backtrack cubically, so listing this page took about a minute
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    body = b"<a" + b" " * 1500 + b'x><a href="/slow/file">file</a>'
+    HTTPTestHandler.dynamic_files["/slow"] = body
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+    start = time.monotonic()
+    out = h.ls(server.address + "/slow", detail=False)
+    assert time.monotonic() - start < 10
+    assert out == [server.address + "/slow/file"]
 
 
 def test_list_invalid_args(server, sync):
@@ -401,6 +423,16 @@ def test_cat_file_range(server, sync):
     assert h.cat(urla, start=-10, end=-2) == data[-10:-2]
 
     assert h.cat(urla, end=-10) == data[:-10]
+
+
+@pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
+def test_cat_file_empty_range_does_not_make_request(
+    server, sync, reset_faults, start, end
+):
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+
+    assert h.cat_file(server.realfile, start=start, end=end) == b""
+    assert HTTPTestHandler.get_counts.get("/index/realfile", 0) == 0
 
 
 def test_mcat_cache(server, sync):

@@ -185,22 +185,23 @@ class DatabricksFileSystem(AbstractFileSystem):
         recursive: bool
             Recursively delete all files in a folder.
         """
-        try:
-            self._send_to_api(
-                method="post",
-                endpoint="delete",
-                json={"path": path, "recursive": recursive},
-            )
-        except DatabricksException as e:
-            # This is not really an exception, it just means
-            # not everything was deleted so far
-            if e.error_code == "PARTIAL_DELETE":
-                self.rm(path=path, recursive=recursive)
-            elif e.error_code == "IO_ERROR":
-                # Using the same exception as the os module would use here
-                raise OSError(e.message) from e
+        while True:
+            try:
+                self._send_to_api(
+                    method="post",
+                    endpoint="delete",
+                    json={"path": path, "recursive": recursive},
+                )
+            except DatabricksException as e:
+                # Not everything was deleted so far; retry without recursion.
+                if e.error_code == "PARTIAL_DELETE":
+                    continue
+                elif e.error_code == "IO_ERROR":
+                    # Using the same exception as the os module would use here
+                    raise OSError(e.message) from e
 
-            raise
+                raise
+            break
         self.invalidate_cache(self._parent(path))
 
     def mv(
