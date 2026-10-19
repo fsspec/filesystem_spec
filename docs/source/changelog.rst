@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
+  writes instead of forwarding the mode to ``zipfile.writestr``.
+
 - Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
 
 - Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
