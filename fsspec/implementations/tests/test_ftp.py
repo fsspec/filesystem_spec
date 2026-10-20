@@ -1,5 +1,6 @@
 import io
 import os
+import ssl
 import subprocess
 import sys
 import time
@@ -71,6 +72,34 @@ def test_tls_v12(ftp_tlsv12, tls, exp_cls):
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
+
+
+def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
+    host, port = ftp
+    fs = FTPFileSystem(host, port, tls=True)
+    first = fs.ftp
+
+    def abort():
+        raise ftplib.error_proto("500 Unknown command.")
+
+    # a server that rejects ABOR makes a partial read reconnect
+    monkeypatch.setattr(first, "abort", abort)
+    with fs.open(f"/{os.path.basename(__file__)}", block_size=100) as f:
+        f.read(100)
+    assert fs.ftp is not first
+
+    tls_data = []
+    ntransfercmd = fs.ftp.ntransfercmd
+
+    def spy(cmd, rest=None):
+        conn, size = ntransfercmd(cmd, rest)
+        tls_data.append(isinstance(conn, ssl.SSLSocket))
+        return conn, size
+
+    monkeypatch.setattr(fs.ftp, "ntransfercmd", spy)
+    out = fs.cat(f"/{os.path.basename(__file__)}")
+    assert out == open(__file__, "rb").read()
+    assert tls_data == [True]
 
 
 @pytest.mark.parametrize(
