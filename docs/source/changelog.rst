@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Request a protected data channel again when ``FTPFileSystem`` reconnects
+  with ``tls=True``
+
 - Decompress cache downloads made by ``cat`` so
   subsequent cached reads use the same contents as ``open``.
 
