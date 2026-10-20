@@ -91,3 +91,26 @@ def test_percent_encoded_base64(data, expected):
     fs, path = fsspec.core.url_to_fs(uri)
     assert fs.info(path)["size"] == len(expected)
     assert fs.cat_file(path, start=-1) == expected[-1:]
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("data:text/plain,Hello", b"Hello"),
+        ("data:text/plain;base64,SGVsbG8h", b"Hello!"),
+        ("data:text/plain,Hello%23world", b"Hello#world"),
+        ("data:text/plain,Hello?world", b"Hello?world"),
+        ("data:text/plain;base64,SGVsbG8%3D", b"Hello"),
+        ("data:,", b""),
+    ],
+)
+@pytest.mark.parametrize("fragment", ["#", "#AAAA", "#part#two"])
+def test_data_url_fragment(uri, expected, fragment):
+    uri += fragment
+    fs, path = fsspec.core.url_to_fs(uri)
+    assert fs.cat_file(uri) == expected
+    assert fs.cat_file(path, start=1, end=4) == expected[1:4]
+    assert fs.cat_file(path, start=-2) == expected[-2:]
+    assert fs.info(path)["size"] == len(expected)
+    with fsspec.open(uri, "rb") as stream:
+        assert stream.read() == expected
