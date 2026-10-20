@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Finalize zip-fs file contexts on explicit close (#2311).
+
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
 - Propagate backend removal errors from ``FSMap``
