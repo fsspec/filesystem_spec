@@ -2086,6 +2086,16 @@ class AbstractBufferedFile(io.IOBase):
             self.location = None
 
     @property
+    def len(self):
+        """Total size in bytes, independent of the current file position.
+
+        Raises AttributeError when the backend has not provided a known size.
+        """
+        if self.size is None:
+            raise AttributeError("File size is unknown")
+        return self.size
+
+    @property
     def details(self):
         if self._details is None:
             self._details = self.fs.info(self.path)

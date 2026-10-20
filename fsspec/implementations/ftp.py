@@ -109,8 +109,6 @@ class FTPFileSystem(AbstractFileSystem):
             self.blocksize = 2**16
         self.tls = tls
         self._connect()
-        if isinstance(self.tls, bool) and self.tls:
-            self.ftp.prot_p()
 
     def _connect(self):
         security = None
@@ -132,6 +130,9 @@ class FTPFileSystem(AbstractFileSystem):
             self.ftp.ssl_version = security
         self.ftp.connect(self.host, self.port)
         self.ftp.login(*self.cred)
+        if isinstance(self.tls, bool) and self.tls:
+            # also on a reconnect, which would otherwise send data in clear
+            self.ftp.prot_p()
 
     @classmethod
     def _strip_protocol(cls, path):

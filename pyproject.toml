@@ -84,6 +84,7 @@ test = [
     "numpy",
     "pytest",
     "requests",
+    "requests-toolbelt",
     "pytest-benchmark",
     "pytest-cov",
     "pytest-mock",

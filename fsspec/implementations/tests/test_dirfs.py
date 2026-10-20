@@ -573,12 +573,14 @@ def test_walk(dirfs):
 
 
 def test_walk_detail(dirfs):
+    dir_info = {"name": f"{PATH}/root/foo", "type": "directory"}
+    file_info = {"name": f"{PATH}/root/baz", "type": "file"}
     dirfs.fs.walk.return_value = iter(
         [
             (
                 f"{PATH}/root",
-                {"foo": {"name": f"{PATH}/root/foo", "type": "directory"}},
-                {"baz": {"name": f"{PATH}/root/baz", "type": "file"}},
+                {"foo": dir_info},
+                {"baz": file_info},
             )
         ]
     )
@@ -590,6 +592,44 @@ def test_walk_detail(dirfs):
             {"baz": {"name": "root/baz", "type": "file"}},
         )
     ]
+    assert dir_info["name"] == f"{PATH}/root/foo"
+    assert file_info["name"] == f"{PATH}/root/baz"
+
+
+@pytest.mark.parametrize("detail", [False, True])
+def test_walk_prune(m, detail):
+    m.pipe({"/root/keep/data.csv": b"data", "/root/skip/data.csv": b"skip"})
+    dirfs = DirFileSystem("/root", m)
+
+    visited = []
+    for root, dirs, files in dirfs.walk("", detail=detail):
+        if "skip" in dirs:
+            if detail:
+                del dirs["skip"]
+            else:
+                dirs.remove("skip")
+        visited.append(root)
+
+    assert visited == ["", "keep"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("detail", [False, True])
+async def test_async_walk_prune(m, detail):
+    m.pipe({"/root/keep/data.csv": b"data", "/root/skip/data.csv": b"skip"})
+    fs = AsyncFileSystemWrapper(fs=m, asynchronous=True)
+    dirfs = DirFileSystem("/root", fs, asynchronous=True)
+
+    visited = []
+    async for root, dirs, files in dirfs._walk("", detail=detail):
+        if "skip" in dirs:
+            if detail:
+                del dirs["skip"]
+            else:
+                dirs.remove("skip")
+        visited.append(root)
+
+    assert visited == ["", "keep"]
 
 
 @pytest.mark.asyncio
