@@ -12,6 +12,19 @@ Enhancements
 
 Fixes
 
+- Decompress cache downloads made by ``cat`` so
+  subsequent cached reads use the same contents as ``open``.
+
+- Retain the selected local file when a ``filecache`` entry expires during open.
+
+- Fix the syntax and add a memory filesystem to the quick-start example (#2337).
+
+- Preserve directory pruning in ``DirFileSystem.walk(detail=True)``
+
+- Finalize zip-fs file contexts on explicit close (#2311).
+
+- Close sync HTTP download files on success or failure, without closing caller-owned streams.
+
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 
 - Propagate backend removal errors from ``FSMap``
