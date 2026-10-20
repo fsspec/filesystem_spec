@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Retain the selected local file when a ``filecache`` entry expires during open.
+
 - Propagate backend removal errors from ``FSMap``
 
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
