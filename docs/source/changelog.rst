@@ -12,7 +12,7 @@ Enhancements
 
 Fixes
 
-- Preserve directory pruning in ``DirFileSystem.walk(detail=True)`` 
+- Preserve directory pruning in ``DirFileSystem.walk(detail=True)``
 
 - Finalize zip-fs file contexts on explicit close (#2311).
 
