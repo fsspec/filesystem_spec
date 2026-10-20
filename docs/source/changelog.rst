@@ -14,6 +14,11 @@ Fixes
 
 - Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
 
+- Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
+
+- Request a protected data channel again when ``FTPFileSystem`` reconnects
+  with ``tls=True``
+
 - Decompress cache downloads made by ``cat`` so
   subsequent cached reads use the same contents as ``open``.
 
@@ -26,6 +31,8 @@ Fixes
 - Finalize zip-fs file contexts on explicit close (#2311).
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
+
+- Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 
 - Propagate backend removal errors from ``FSMap``
 
