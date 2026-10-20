@@ -348,7 +348,7 @@ class HTTPFileSystem(AsyncFileSystem):
         logger.debug(url)
 
         if start is not None or end is not None:
-            if start == end:
+            if start == end or (start is None and end == 0):
                 return b""
             headers = kw.pop("headers", {}).copy()
 
