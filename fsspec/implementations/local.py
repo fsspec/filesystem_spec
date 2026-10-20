@@ -128,7 +128,7 @@ class LocalFileSystem(AbstractFileSystem):
         return result
 
     def lexists(self, path, **kwargs):
-        return osp.lexists(path)
+        return osp.lexists(self._strip_protocol(path))
 
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
@@ -152,12 +152,14 @@ class LocalFileSystem(AbstractFileSystem):
 
     def get_file(self, path1, path2, callback=None, **kwargs):
         if isfilelike(path2):
-            with open(path1, "rb") as f:
+            with open(self._strip_protocol(path1), "rb") as f:
                 shutil.copyfileobj(f, path2)
         else:
             return self.cp_file(path1, path2, **kwargs)
 
-    def put_file(self, path1, path2, callback=None, **kwargs):
+    def put_file(self, path1, path2, callback=None, mode="overwrite", **kwargs):
+        if mode == "create" and self.exists(path2):
+            raise FileExistsError(path2)
         return self.cp_file(path1, path2, **kwargs)
 
     def mv(self, path1, path2, recursive: bool = True, **kwargs):
@@ -200,7 +202,17 @@ class LocalFileSystem(AbstractFileSystem):
                     raise ValueError("Cannot delete directory, set recursive=True")
                 if osp.abspath(p) == os.getcwd():
                     raise ValueError("Cannot delete current working directory")
-                shutil.rmtree(p)
+                if maxdepth is None:
+                    shutil.rmtree(p)
+                else:
+                    # only delete down to maxdepth; a directory still holding
+                    # deeper files is kept
+                    paths = self.expand_path(p, recursive=True, maxdepth=maxdepth)
+                    for sub in reversed(paths):
+                        if not self.isdir(sub) or self.islink(sub):
+                            os.remove(sub)
+                        elif not os.listdir(sub):
+                            os.rmdir(sub)
             else:
                 os.remove(p)
 
@@ -405,7 +417,7 @@ class LocalFileOpener(io.IOBase):
                 os.close(i)  # we want normal open and normal buffered file
                 self.temp = name
                 self.f = open(name, mode=self.mode)
-            if "w" not in self.mode:
+            if "r" in self.mode:
                 self.size = self.f.seek(0, 2)
                 self.f.seek(0)
                 self.f.size = self.size

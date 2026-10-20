@@ -1088,6 +1088,76 @@ def test_buffered_readlines(m, cache_type, content):
         stream.readlines()
 
 
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("blocks", [None, 1, 2, 3, 8])
+@pytest.mark.parametrize(
+    "content, delimiter, expected",
+    [
+        (b"a\r\nb\r\ntail", b"\r\n", [b"a\r\n", b"b\r\n", b"tail"]),
+        (b"a||||b||||tail", b"||||", [b"a||||", b"b||||", b"tail"]),
+        (b"xxababaYYababaZ", b"ababa", [b"xxababa", b"YYababa", b"Z"]),
+        (b"\r\n\r\n", b"\r\n", [b"\r\n", b"\r\n"]),
+        (b"abc\r", b"\r\n", [b"abc\r"]),
+        (b"", b"\r\n", []),
+        (b"a\nb\ntail", b"\n", [b"a\n", b"b\n", b"tail"]),
+    ],
+)
+def test_buffered_readuntil_delimiters(
+    m, cache_type, blocks, content, delimiter, expected
+):
+    m.pipe_file("delimiters", b"skip" + content)
+    with AbstractBufferedFile(
+        m, "delimiters", cache_type=cache_type, block_size=2
+    ) as stream:
+        position = stream.seek(4)
+        for part in expected:
+            assert stream.readuntil(delimiter, blocks=blocks) == part
+            position += len(part)
+            assert stream.tell() == position
+        assert stream.readuntil(delimiter, blocks=blocks) == b""
+        assert stream.tell() == position
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+@pytest.mark.parametrize("position", [0, 13])
+@pytest.mark.parametrize(
+    "buffer_kind", ["bytes", "readonly-view", "readonly-numpy", "empty-readonly"]
+)
+def test_buffered_readinto_readonly(m, cache_type, method, position, buffer_kind):
+    content = bytes(range(64))
+    m.pipe_file("buffer", content)
+    if buffer_kind == "bytes":
+        target = b"readonly"
+    elif buffer_kind == "readonly-view":
+        target = memoryview(b"readonly")
+    elif buffer_kind == "readonly-numpy":
+        target = np.zeros((2, 4), dtype="uint32")
+        target.flags.writeable = False
+    else:
+        target = b""
+
+    with AbstractBufferedFile(
+        m, "buffer", cache_type=cache_type, block_size=8
+    ) as stream:
+        stream.seek(position)
+        with pytest.raises(TypeError):
+            getattr(stream, method)(target)
+        assert stream.tell() == position
+        writable = bytearray(8)
+        assert getattr(stream, method)(writable) == len(writable)
+        assert writable == content[position : position + len(writable)]
+
+
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+def test_buffered_readinto_readonly_closed(m, method):
+    m.pipe_file("buffer", b"content")
+    stream = AbstractBufferedFile(m, "buffer")
+    stream.close()
+    with pytest.raises(ValueError, match="closed file"):
+        getattr(stream, method)(b"readonly")
+
+
 def test_cache_not_pickled(server):
     fs = fsspec.filesystem(
         "http",
@@ -1225,6 +1295,36 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+@pytest.mark.parametrize("serializer", ["dict", "json"])
+@pytest.mark.parametrize(
+    "value", [None, [None], {"key": None}, {"key": [1, None, {"nested": None}]}]
+)
+def test_serialize_none(serializer, value):
+    fs = DummyTestFS(value, bar=value)
+    out = getattr(fs, f"to_{serializer}")()
+    expected = {
+        "cls": "fsspec.tests.test_spec:DummyTestFS",
+        "protocol": "mock",
+        "args": [value],
+        "bar": value,
+    }
+
+    assert (json.loads(out) if serializer == "json" else out) == expected
+    assert getattr(DummyTestFS, f"from_{serializer}")(out) is fs
+    assert fs.storage_args == (value,)
+    assert fs.storage_options == {"bar": value}
+
+
+def test_serialize_http_none():
+    fs = HTTPFileSystem(block_size=None, cache_options=None)
+    out = fs.to_dict()
+
+    assert out["block_size"] is None
+    assert out["cache_options"] is None
+    assert json.loads(fs.to_json()) == out
+    assert HTTPFileSystem.from_dict(out) is fs
 
 
 def test_json_path_attr():
@@ -1902,3 +2002,49 @@ def test_cat_ranges_forwards_kwargs():
     fs.cat_ranges(["a", "b"], [0, 0], [1, 1], block_size=42)
 
     assert received == [{"block_size": 42}, {"block_size": 42}]
+
+
+class UnreadableSubdirFS(AbstractFileSystem):
+    """A tree in which the ``locked`` subdirectory cannot be listed."""
+
+    protocol = "unreadablesub"
+    cachable = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+def test_walk_on_error_reaches_subdirectories():
+    # on_error is documented to apply to any path whose listing fails, not only
+    # to the one handed to walk(), so the recursive call has to forward it.
+    fs = UnreadableSubdirFS()
+
+    # the default, "omit", keeps skipping the unreadable directory
+    assert list(fs.walk("")) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        list(fs.walk("", on_error="raise"))
+
+    handled = []
+    assert list(fs.walk("", on_error=handled.append)) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]

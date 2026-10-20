@@ -235,7 +235,7 @@ class MemoryFileSystem(AbstractFileSystem):
         try:
             self.mkdir(path, create_parents=True)
         except FileExistsError:
-            if not exist_ok:
+            if not exist_ok or self.isfile(path):
                 raise
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
@@ -276,7 +276,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "name": path,
                 "size": filelike.size,
                 "type": "file",
-                "created": getattr(filelike, "created", None),
+                "created": filelike.created.timestamp(),
             }
         else:
             raise FileNotFoundError(path)
@@ -293,7 +293,9 @@ class MemoryFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         if "x" in mode and self.exists(path):
             raise FileExistsError
-        if path in self.pseudo_dirs:
+        if path in self.pseudo_dirs or (
+            path not in self.store and any(p.startswith(path + "/") for p in self.store)
+        ):
             raise IsADirectoryError(path)
         parent = path
         while len(parent) > 1:
@@ -339,15 +341,25 @@ class MemoryFileSystem(AbstractFileSystem):
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
-        if self.isfile(path1):
+        source_is_file = self.isfile(path1)
+        if not source_is_file and not self.isdir(path1):
+            raise FileNotFoundError(path1)
+        parent = path2
+        while len(parent) > 1:
+            parent = self._parent(parent)
+            if self.isfile(parent):
+                raise FileExistsError(parent)
+        if source_is_file:
+            if self.isdir(path2):
+                raise IsADirectoryError(path2)
             self.store[path2] = MemoryFile(
                 self, path2, self.store[path1].getvalue()
             )  # implicit copy
-        elif self.isdir(path1):
+        else:
+            if self.isfile(path2):
+                raise FileExistsError(path2)
             if path2 not in self.pseudo_dirs:
                 self.pseudo_dirs.append(path2)
-        else:
-            raise FileNotFoundError(path1)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         logger.debug("cat: %s", path)
@@ -401,6 +413,9 @@ class MemoryFileSystem(AbstractFileSystem):
                 # not, and raises like rm_file and the other filesystems do.
                 if p not in existed:
                     raise FileNotFoundError(p)
+                continue
+            elif maxdepth is not None and self.ls(p, detail=False):
+                # a directory still holding files deeper than maxdepth is kept
                 continue
             else:
                 self.rmdir(p)

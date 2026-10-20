@@ -151,10 +151,10 @@ class TarFileSystem(AbstractArchiveFileSystem):
         if mode != "rb":
             raise ValueError("Read-only filesystem implementation")
         path = self._normalize_path(path)
-        try:
-            details, _, orig_name = self.index[path]
-        except KeyError as exc:
-            raise FileNotFoundError(path) from exc
+        member = self.index.get(path)
+        if member is None or member[0]["type"] == "directory":
+            raise self._not_a_file(path)
+        details, _, orig_name = member
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
         out = self.tar.extractfile(orig_name)

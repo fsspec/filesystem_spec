@@ -116,9 +116,15 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 )
                 self.dir_cache[f["name"]] = f
 
-    def pipe_file(self, path, value, **kwargs):
+    def pipe_file(self, path, value, mode="overwrite", **kwargs):
         # override upstream, because we know the exact file size in this case
         path = self._strip_protocol(path)
+        if mode not in {"create", "overwrite"}:
+            raise ValueError(f"Unsupported ZIP write mode: {mode!r}")
+        if mode == "create":
+            path = self._strip_protocol(zipfile.ZipInfo(path).filename)
+            if self.exists(path):
+                raise FileExistsError(path)
         self.zip.writestr(path, value, **kwargs)
 
     def _open(
@@ -142,7 +148,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         except KeyError as exc:
             # zipfile reports a missing member as KeyError; fsspec callers,
             # including FSMap's missing_exceptions, expect FileNotFoundError.
-            raise FileNotFoundError(path) from exc
+            raise self._not_a_file(path) from exc
         if "r" in mode:
             info = self.info(path)
             out.size = info["size"]

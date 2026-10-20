@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 
@@ -168,6 +169,30 @@ def test_size_of_whole_file_reference(m):
     assert fs.size("b") == len(data)
     assert fs.sizes(["a", "c"]) == [len(data), 4]
     assert fs.du("") == 2 * len(data) + 4
+
+
+def test_size_of_inline_data_is_the_decoded_length():
+    # an inline reference is stored in an encoded form ("base64:" or text),
+    # so its size is the length cat() returns, not the length of the encoding
+    binary = b"\x00\xff not utf-8 decodable"
+    refs = {
+        "a": "base64:" + base64.b64encode(binary).decode(),
+        "b": b"base64:" + base64.b64encode(binary),
+        "c": binary,
+        "d": "héllo",
+    }
+    fs = fsspec.filesystem("reference", fo=refs)
+    assert fs.cat("a") == binary
+    assert fs.size("a") == len(binary)
+    assert fs.sizes(["a", "b", "c"]) == 3 * [len(binary)]
+    assert fs.size("d") == len("héllo".encode())
+    assert {e["name"]: e["size"] for e in fs.ls("", detail=True)} == {
+        "a": len(binary),
+        "b": len(binary),
+        "c": len(binary),
+        "d": len("héllo".encode()),
+    }
+    assert fs.du("") == 3 * len(binary) + len("héllo".encode())
 
 
 def test_mutable(server, m):
@@ -450,6 +475,64 @@ def test_get_sync(tmpdir):
     fs.get("c", str(tmpdir / "c"), recursive=True)
     assert (tmpdir / "c").isdir()
     assert (tmpdir / "c" / "d").read_binary() == b"123456"
+
+
+@pytest.mark.parametrize(
+    ("maxdepth", "expected"),
+    [
+        (1, {"shallow.txt": b"shallow"}),
+        (2, {"shallow.txt": b"shallow", "deep/file.txt": b"deep"}),
+        (
+            None,
+            {
+                "shallow.txt": b"shallow",
+                "deep/file.txt": b"deep",
+                "deep/nested/file.txt": b"nested",
+            },
+        ),
+    ],
+)
+def test_get_respects_maxdepth(tmp_path, maxdepth, expected):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": b"deep",
+        "dir/deep/nested/file.txt": b"nested",
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=maxdepth)
+
+    actual = {
+        path.relative_to(dest).as_posix(): path.read_bytes()
+        for path in dest.rglob("*")
+        if path.is_file()
+    }
+    assert actual == expected
+
+
+def test_get_maxdepth_skips_deeper_remote_references(tmp_path):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": ("memory://maxdepth-regression-missing", 0, 4),
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=1)
+
+    assert (dest / "shallow.txt").read_bytes() == b"shallow"
+    assert not (dest / "deep" / "file.txt").exists()
+
+
+@pytest.mark.parametrize("maxdepth", [0, -1])
+def test_get_rejects_invalid_maxdepth(tmp_path, maxdepth):
+    fs = ReferenceFileSystem(
+        fo={"dir/shallow.txt": b"shallow"}, skip_instance_cache=True
+    )
+
+    with pytest.raises(ValueError, match="maxdepth must be at least 1"):
+        fs.get("dir", str(tmp_path / "dest"), recursive=True, maxdepth=maxdepth)
 
 
 def test_get_does_not_write_above_destination(tmp_path):

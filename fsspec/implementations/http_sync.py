@@ -22,7 +22,11 @@ from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
 from ..caching import AllBytes
 
 # https://stackoverflow.com/a/15926317/3821154
-ex = re.compile(r"""<(a|A)\s+(?:[^>]*?\s+)?(href|HREF)=["'](?P<url>[^"']+)""")
+# The attribute scan must stay linear: it stops at the next "<" or ">" and the
+# whitespace before href is a lookbehind rather than a second quantifier, so a
+# page cannot make it backtrack cubically (1 KB of whitespace after "<a"
+# used to stall ls() for seconds, 10 KB for hours).
+ex = re.compile(r"""<(a|A)\s[^<>]*?(?<=\s)(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
 
@@ -177,7 +181,7 @@ class RequestsSessionShim:
         return self.request("HEAD", url, **kwargs)
 
     def post(self, url, **kwargs):
-        return self.request("POST}", url, **kwargs)
+        return self.request("POST", url, **kwargs)
 
     def put(self, url, **kwargs):
         return self.request("PUT", url, **kwargs)
@@ -296,7 +300,7 @@ class HTTPFileSystem(AbstractFileSystem):
         kw = self.kwargs.copy()
         kw.update(kwargs)
         logger.debug(url)
-        r = self.session.get(self.encode_url(url), **self.kwargs)
+        r = self.session.get(self.encode_url(url), **kw)
         self._raise_not_found_for_status(r, url)
         text = r.text
         if self.simple_links:
@@ -324,7 +328,7 @@ class HTTPFileSystem(AbstractFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            out = self._ls_real(url.rstrip("/"), detail=False)
+            out = self._ls_real(url.rstrip("/"), detail=False, **kwargs)
         if detail:
             return [
                 {
@@ -341,9 +345,11 @@ class HTTPFileSystem(AbstractFileSystem):
         if self.use_listings_cache and url in self.dircache:
             out = self.dircache[url]
         else:
-            out = self._ls_real(url, detail=detail, **kwargs)
+            out = self._ls_real(url, detail=True, **kwargs)
             self.dircache[url] = out
-        return out
+        if detail:
+            return out
+        return sorted(entry["name"] for entry in out)
 
     def _raise_not_found_for_status(self, response, url):
         """
@@ -359,7 +365,7 @@ class HTTPFileSystem(AbstractFileSystem):
         logger.debug(url)
 
         if start is not None or end is not None:
-            if start == end:
+            if start == end or (start is None and end == 0):
                 return b""
             headers = kw.pop("headers", {}).copy()
 
