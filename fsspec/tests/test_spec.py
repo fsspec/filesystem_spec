@@ -1055,6 +1055,59 @@ def test_fork_deadlock():
     assert result is True
 
 
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+def test_buffered_file_len(m, content):
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        assert stream.len == len(content)
+        stream.read(3)
+        assert stream.len == len(content)
+        stream.seek(0)
+        assert stream.len == len(content)
+        stream.seek(0, 2)
+        assert stream.len == len(content)
+        with pytest.raises(TypeError):
+            len(stream)
+
+
+@pytest.mark.parametrize("mode", ["wb", "ab", "xb"])
+def test_buffered_file_len_without_size(m, mode):
+    with AbstractBufferedFile(m, "data", mode=mode) as stream:
+        assert not hasattr(stream, "size")
+        assert not hasattr(stream, "len")
+
+
+def test_buffered_file_len_unknown_size(m):
+    m.pipe_file("data", b"content")
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.size = None
+        with pytest.raises(AttributeError, match="File size is unknown"):
+            _ = stream.len
+        assert not hasattr(stream, "len")
+        stream.size = 7
+        assert stream.len == 7
+
+
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+@pytest.mark.parametrize("position", [0, 3, 11])
+def test_buffered_file_multipart_encoder(m, content, position):
+    MultipartEncoder = pytest.importorskip("requests_toolbelt").MultipartEncoder
+    position = min(position, len(content))
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.seek(position)
+        encoder = MultipartEncoder(
+            fields={"file": ("data", stream)}, boundary="fsspec-boundary"
+        )
+        expected = MultipartEncoder(
+            fields={"file": ("data", io.BytesIO(content[position:]))},
+            boundary="fsspec-boundary",
+        ).to_string()
+        assert encoder.len == len(expected)
+        assert encoder.read(13) + encoder.read() == expected
+        assert stream.tell() == len(content)
+
+
 @pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
 @pytest.mark.parametrize(
     "content",
