@@ -38,9 +38,10 @@ class DataFileSystem(AbstractFileSystem):
         return path
 
     def cat_file(self, path, start=None, end=None, **kwargs):
-        pref, data = path.split(",", 1)
-        if pref.endswith("base64"):
-            return base64.b64decode(data)[start:end]
+        # Strip the fragment before decoding so an encoded %23 remains data.
+        pref, data = path.split("#", 1)[0].split(",", 1)
+        if pref.endswith(";base64"):
+            return base64.b64decode(unquote_to_bytes(data))[start:end]
         return unquote_to_bytes(data)[start:end]
 
     def info(self, path, **kwargs):

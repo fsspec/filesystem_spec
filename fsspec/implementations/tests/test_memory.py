@@ -3,7 +3,7 @@ import pickle
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from io import UnsupportedOperation
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -251,6 +251,15 @@ def test_ls(m):
     assert len(m.ls("/dir/afile")) == 1
 
 
+def test_info_created_matches_ls(m):
+    m.pipe_file("/dir/afile", b"data")
+
+    info = m.info("/dir/afile")
+    assert info["created"] == m.created("/dir/afile").timestamp()
+    assert info == m.ls("/dir/afile")[0]
+    assert info == m.find("/dir", detail=True)["/dir/afile"]
+
+
 def test_directories(m):
     m.mkdir("outer/inner")
     assert m.info("outer/inner")["type"] == "directory"
@@ -303,6 +312,93 @@ def test_touch(m):
     with pytest.raises(FileExistsError):
         m.touch("/root/a/b/c")
     assert not m.exists("/root/a/b/")
+
+
+@pytest.mark.parametrize("method", ["cp_file", "copy", "mv"])
+@pytest.mark.parametrize("destination", ["/parent/child", "memory://parent/sub/child"])
+def test_copy_rejects_file_parent(m, method, destination):
+    m.pipe("/src", b"source")
+    m.pipe("/parent", b"parent")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(FileExistsError):
+        getattr(m, method)("/src", destination)
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+    assert m.cat("/src") == b"source"
+    assert m.cat("/parent") == b"parent"
+    assert not m.exists(destination)
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_cp_file_rejects_directory_destination(m, explicit):
+    m.pipe("/src", b"source")
+    if explicit:
+        m.mkdir("/destination")
+    else:
+        m.pipe("/destination/child", b"child")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(IsADirectoryError):
+        m.cp_file("/src", "/destination")
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+    assert m.isdir("/destination")
+    assert not m.isfile("/destination")
+
+
+def test_cp_directory_rejects_file_parent(m):
+    m.mkdir("/src")
+    m.pipe("/parent", b"parent")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(FileExistsError):
+        m.cp_file("/src", "/parent/sub/destination")
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+
+
+def test_cp_directory_rejects_file_destination(m):
+    m.mkdir("/src")
+    m.pipe("/destination", b"destination")
+    store = m.store.copy()
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(FileExistsError):
+        m.cp_file("/src", "/destination")
+
+    assert m.store == store
+    assert m.pseudo_dirs == directories
+    assert m.cat("/destination") == b"destination"
+
+
+@pytest.mark.parametrize("method", ["cp_file", "copy"])
+def test_copy_creates_missing_parents_and_overwrites_file(m, method):
+    m.pipe("/src", b"source")
+    copy = getattr(m, method)
+    copy("/src", "/new/sub/destination")
+    assert m.cat("/new/sub/destination") == b"source"
+    m.pipe("/src", b"updated")
+    copy("/src", "/new/sub/destination")
+    assert m.cat("/new/sub/destination") == b"updated"
+    assert m.cat("/src") == b"updated"
+
+
+def test_copy_to_existing_directory(m):
+    m.pipe("/src", b"source")
+    m.mkdir("/destination")
+    m.copy("/src", "/destination")
+    assert m.cat("/destination/src") == b"source"
+    m.mkdir("/empty")
+    m.cp_file("/empty", "/new/empty")
+    m.cp_file("/empty", "/new/empty")
+    assert m.isdir("/new/empty")
 
 
 def test_mv_recursive(m):
@@ -392,6 +488,19 @@ def test_dir_errors(m):
     m.touch("/afile")
     with pytest.raises(NotADirectoryError):
         m.mkdir("/afile/nodir")
+
+
+@pytest.mark.parametrize("path", ["afile", "/afile", "memory://afile"])
+@pytest.mark.parametrize("exist_ok", [False, True])
+@pytest.mark.parametrize("method", ["makedirs", "mkdirs"])
+def test_makedirs_existing_file(m, path, exist_ok, method):
+    m.pipe_file("/afile", b"payload")
+
+    with pytest.raises(FileExistsError):
+        getattr(m, method)(path, exist_ok=exist_ok)
+
+    assert m.cat_file(path) == b"payload"
+    assert not m.isdir(path)
 
 
 def test_no_rewind_append_mode(m):
@@ -615,6 +724,38 @@ def test_live_read_methods_have_independent_cursors(m, method):
     assert first.tell() == 4
 
 
+def test_handle_call_accepts_bound_method(m):
+    m.pipe("file", b"abcdef")
+    first = m.open("file", "rb")
+    second = m.open("file", "rb")
+    first.seek(1)
+    second.seek(4)
+
+    assert first._call(first._file.read, 2) == b"bc"
+    assert first.tell() == 3
+    assert second.tell() == 4
+
+
+@pytest.mark.parametrize("data", [b"XY", None])
+def test_handle_call_forwards_keyword_arguments(m, data):
+    m.pipe("file", b"abcdef")
+    writer = m.open("file", "r+b")
+    reader = m.open("file", "rb")
+    writer.seek(1)
+    reader.seek(4)
+
+    if data is None:
+        with pytest.raises(TypeError, match="bytes-like object"):
+            writer._call(writer._file.write, data=data)
+        assert writer.tell() == 1
+        assert reader.getvalue() == b"abcdef"
+    else:
+        assert writer._call(writer._file.write, data=data) == 2
+        assert writer.tell() == 3
+        assert reader.getvalue() == b"aXYdef"
+    assert reader.tell() == 4
+
+
 @pytest.mark.parametrize("mode", ["ab", "a+b"])
 def test_append_handles_write_at_current_end(m, mode):
     m.pipe("file", b"old")
@@ -791,7 +932,46 @@ def test_cp_directory_recursive(m):
         assert m.find(target) == correct
 
 
-def test_get_directory_recursive(m, tmpdir):
+class _LocalPathLike:
+    def __init__(self, path):
+        self.path = path
+
+    def __fspath__(self):
+        return str(self.path)
+
+
+@pytest.mark.parametrize("path_type", [str, Path, _LocalPathLike])
+@pytest.mark.parametrize("source_kind", ["file", "directory", "glob", "list", "pairs"])
+def test_get_local_pathlike(m, tmp_path, path_type, source_kind):
+    m.pipe({"/src/a": b"a", "/src/b": b"b"})
+    target = tmp_path / "target"
+    if source_kind == "file":
+        source = "/src/a"
+        destination = path_type(target / "renamed")
+        expected = {"renamed": b"a"}
+    else:
+        target.mkdir()
+        source = "/src/a" if source_kind == "directory" else "/src/*"
+        destination = path_type(target)
+        expected = {"a": b"a"}
+        if source_kind in ("glob", "list", "pairs"):
+            expected["b"] = b"b"
+        if source_kind in ("list", "pairs"):
+            source = ["/src/a", "/src/b"]
+        if source_kind == "pairs":
+            destination = [path_type(target / "a"), path_type(target / "b")]
+
+    m.get(source, destination)
+
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == expected
+
+
+@pytest.mark.parametrize("path_type", [str, Path, _LocalPathLike])
+def test_get_directory_recursive(m, tmpdir, path_type):
     # https://github.com/fsspec/filesystem_spec/issues/1062
     # Recursive cp/get/put of source directory into non-existent target directory.
     src = "/src"
@@ -799,7 +979,7 @@ def test_get_directory_recursive(m, tmpdir):
     m.mkdir(src)
     m.touch(src_file)
 
-    target = os.path.join(tmpdir, "target")
+    target = path_type(os.path.join(tmpdir, "target"))
     target_fs = LocalFileSystem()
 
     # get without slash

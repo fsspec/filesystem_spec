@@ -1363,6 +1363,26 @@ def test_symlink(tmpdir):
 
 
 # https://github.com/fsspec/filesystem_spec/issues/967
+@pytest.mark.parametrize("as_uri", [False, True])
+@pytest.mark.parametrize("target_exists", [False, True])
+def test_put_file_create_mode(tmp_path, as_uri, target_exists):
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.write_bytes(b"new data")
+    if target_exists:
+        target.write_bytes(b"existing data")
+    destination = target.as_uri() if as_uri else str(target)
+    fs = LocalFileSystem()
+
+    if target_exists:
+        with pytest.raises(FileExistsError):
+            fs.put_file(str(source), destination, mode="create")
+        assert target.read_bytes() == b"existing data"
+    else:
+        fs.put_file(str(source), destination, mode="create")
+        assert target.read_bytes() == b"new data"
+
+
 def test_put_file_to_dir(tmpdir):
     src_file = os.path.join(str(tmpdir), "src")
     target_dir = os.path.join(str(tmpdir), "target")
@@ -1588,3 +1608,127 @@ def test_a_native_windows_pattern_is_normalised_before_the_translator_sees_it(tm
 
     # the mechanism itself, so it cannot rot silently
     assert "\\" not in make_path_posix(native)
+
+
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_append_opener_starts_at_end(tmp_path, mode):
+    path = tmp_path / "append.bin"
+    path.write_bytes(b"existing")
+    with LocalFileSystem().open(path, mode) as stream:
+        assert stream.tell() == len(b"existing")
+        if "+" in mode:
+            assert stream.read() == b""
+        stream.write(b" appended")
+    assert path.read_bytes() == b"existing appended"
+
+
+def test_compressed_local_opener_append(tmp_path):
+    path = str(tmp_path / "append.gz")
+    with gzip.open(path, "wb") as stream:
+        stream.write(b"existing")
+    with LocalFileOpener(path, "ab", compression="gzip") as stream:
+        stream.write(b" appended")
+    with gzip.open(path, "rb") as stream:
+        assert stream.read() == b"existing appended"
+
+
+class _SourcePathLike:
+    def __init__(self, path):
+        self.path = path
+
+    def __fspath__(self):
+        return str(self.path)
+
+
+@pytest.mark.parametrize("method", ["copy", "get", "put"])
+@pytest.mark.parametrize("path_type", [str, Path, _SourcePathLike])
+@pytest.mark.parametrize("target_exists", [False, True])
+def test_pathlike_recursive_source_preserves_tree(
+    tmp_path, method, path_type, target_exists
+):
+    source = tmp_path / "source"
+    contents = {"a/file": b"a", "b/file": b"b"}
+    for name, data in contents.items():
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    target = tmp_path / "target"
+    if target_exists:
+        target.mkdir()
+    fs = LocalFileSystem(auto_mkdir=True)
+
+    getattr(fs, method)(path_type(source), str(target), recursive=True)
+
+    prefix = "source/" if target_exists else ""
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == {prefix + name: data for name, data in contents.items()}
+    assert {name: (source / name).read_bytes() for name in contents} == contents
+
+
+@pytest.mark.parametrize("method", ["copy", "get", "put"])
+@pytest.mark.parametrize("path_type", [str, Path, _SourcePathLike])
+def test_pathlike_nonrecursive_directory_is_not_copied(tmp_path, method, path_type):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "file").write_bytes(b"content")
+    target = tmp_path / "target"
+    fs = LocalFileSystem(auto_mkdir=True)
+
+    getattr(fs, method)(path_type(source), str(target))
+
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("method", ["copy", "get", "put"])
+@pytest.mark.parametrize("path_type", [str, Path, _SourcePathLike])
+def test_pathlike_source_list_still_flattens(tmp_path, method, path_type):
+    sources = [tmp_path / "a" / "first", tmp_path / "b" / "second"]
+    for source in sources:
+        source.parent.mkdir()
+        source.write_bytes(source.name.encode())
+    target = tmp_path / "target"
+    target.mkdir()
+    fs = LocalFileSystem(auto_mkdir=True)
+
+    getattr(fs, method)([path_type(source) for source in sources], str(target))
+
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == {source.name: source.name.encode() for source in sources}
+
+
+@pytest.mark.parametrize("method", ["copy", "get", "put"])
+@pytest.mark.parametrize("path_type", [str, Path, _SourcePathLike])
+@pytest.mark.parametrize("source_kind", ["file", "glob", "pairs"])
+def test_pathlike_source_file_glob_and_pairs(tmp_path, method, path_type, source_kind):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "a").write_bytes(b"a")
+    (source / "b").write_bytes(b"b")
+    target = tmp_path / "target"
+    fs = LocalFileSystem(auto_mkdir=True)
+    if source_kind == "file":
+        sources = path_type(source / "a")
+        destination = str(target / "renamed")
+        expected = {"renamed": b"a"}
+    elif source_kind == "glob":
+        sources = path_type(source / "*")
+        destination = str(target) + "/"
+        expected = {"a": b"a", "b": b"b"}
+    else:
+        sources = [path_type(source / "a"), path_type(source / "b")]
+        destination = [str(target / "first"), str(target / "second")]
+        expected = {"first": b"a", "second": b"b"}
+
+    getattr(fs, method)(sources, destination)
+
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == expected
