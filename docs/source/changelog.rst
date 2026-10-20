@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Retain the selected local file when a ``filecache`` entry expires during open.
+
 - Fix the syntax and add a memory filesystem to the quick-start example (#2337).
 
 - Preserve directory pruning in ``DirFileSystem.walk(detail=True)``
