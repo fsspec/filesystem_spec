@@ -17,6 +17,43 @@ import fsspec.asyn
 from fsspec.asyn import _run_coros_in_chunks
 
 
+@pytest.mark.parametrize("cancel_task", [False, True])
+def test_sync_propagates_cancellation(cancel_task):
+    cleanup = []
+
+    async def cancelled():
+        try:
+            if cancel_task:
+                asyncio.current_task().cancel("backend-cancelled")
+                await asyncio.sleep(0)
+            else:
+                raise asyncio.CancelledError("backend-cancelled")
+        finally:
+            cleanup.append("done")
+
+    with pytest.raises(asyncio.CancelledError, match="backend-cancelled"):
+        fsspec.asyn.sync(fsspec.asyn.get_loop(), cancelled)
+    assert cleanup == ["done"]
+
+    async def healthy():
+        return 42
+
+    assert fsspec.asyn.sync(fsspec.asyn.get_loop(), healthy) == 42
+
+
+def test_sync_filesystem_info_propagates_cancellation():
+    class CancelledInfoFileSystem(fsspec.asyn.AsyncFileSystem):
+        async def _info(self, path, **kwargs):
+            if path == "cancelled":
+                raise asyncio.CancelledError("backend-info-cancelled")
+            return {"name": path, "size": 4, "type": "file"}
+
+    fs = CancelledInfoFileSystem(skip_instance_cache=True)
+    with pytest.raises(asyncio.CancelledError, match="backend-info-cancelled"):
+        fs.info("cancelled")
+    assert fs.info("healthy") == {"name": "healthy", "size": 4, "type": "file"}
+
+
 def test_get_lock_is_thread_safe(monkeypatch):
     barrier = threading.Barrier(2)
     real_threading = fsspec.asyn.threading

@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Propagate coroutine cancellation through synchronous filesystem wrappers.
+
 - Propagate backend removal errors from ``FSMap``
 
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
