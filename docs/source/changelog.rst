@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
+
 - Propagate backend removal errors from ``FSMap``
 
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
