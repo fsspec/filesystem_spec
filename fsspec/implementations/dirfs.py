@@ -357,10 +357,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         # still carry the full name in the wrapped filesystem
         if not isinstance(entries, dict):
             return entries
-        return {
-            name: {**info, "name": self._relpath(info["name"])}
-            for name, info in entries.items()
-        }
+        # Keep the mapping so callers can prune the wrapped walk in place.
+        for name, info in entries.items():
+            entries[name] = {**info, "name": self._relpath(info["name"])}
+        return entries
 
     async def _walk(self, path, *args, **kwargs):
         async for root, dirs, files in self.fs._walk(self._join(path), *args, **kwargs):
