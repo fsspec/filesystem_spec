@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Cancel the submitted async call when ``sync()`` is interrupted, stopping
+  HTTP ``get_file`` transfers after a keyboard interrupt (#1667).
+
 - Propagate backend removal errors from ``FSMap``
 
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)

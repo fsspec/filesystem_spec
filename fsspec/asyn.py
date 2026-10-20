@@ -85,15 +85,22 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     coro = func(*args, **kwargs)
     result = [None]
     event = threading.Event()
-    asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
-    while True:
-        # this loops allows thread to get interrupted
-        if event.wait(1):
-            break
-        if timeout is not None:
-            timeout -= 1
-            if timeout < 0:
-                raise FSTimeoutError
+    future = asyncio.run_coroutine_threadsafe(
+        _runner(event, coro, result, timeout), loop
+    )
+    try:
+        while True:
+            # this loop allows the thread to get interrupted
+            if event.wait(1):
+                break
+            if timeout is not None:
+                timeout -= 1
+                if timeout < 0:
+                    raise FSTimeoutError
+    except KeyboardInterrupt:
+        # Cancel only this call; the shared IO loop may have other work.
+        future.cancel()
+        raise
 
     return_result = result[0]
     if isinstance(return_result, asyncio.TimeoutError):
