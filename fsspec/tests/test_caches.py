@@ -70,6 +70,30 @@ def test_block_cache_lru():
     assert cache.total_requested_bytes == block_size * cache.miss_count
 
 
+@pytest.mark.parametrize("cache_cls", [BlockCache, BackgroundBlockCache])
+@pytest.mark.parametrize("size", [1, 6, 8])
+def test_block_cache_final_range(cache_cls, size):
+    data = b"abcdefgh"[:size]
+    requests = []
+
+    def fetch(start, end):
+        assert 0 <= start < end <= len(data)
+        requests.append((start, end))
+        return data[start:end]
+
+    cache = cache_cls(4, fetch, len(data))
+    try:
+        assert cache._fetch(0, None) == data
+        expected = [(start, min(start + 4, size)) for start in range(0, size, 4)]
+        assert requests == expected
+        assert cache.total_requested_bytes == size
+        assert cache._fetch(size - 1, size) == data[-1:]
+        assert requests == expected
+    finally:
+        if isinstance(cache, BackgroundBlockCache):
+            cache.close()
+
+
 def test_block_cache_lru_no_redundant_reads():
     block_size = 4
     maxblocks = 2

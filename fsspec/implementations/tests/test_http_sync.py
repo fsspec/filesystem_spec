@@ -6,7 +6,15 @@ import time
 import pytest
 
 import fsspec.utils
-from fsspec.tests.conftest import data, requests, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import (  # noqa: F401
+    HTTPTestHandler,
+    data,
+    requests,
+    reset_faults,
+    reset_files,
+    server,
+    win,
+)
 
 
 @pytest.fixture()
@@ -417,6 +425,16 @@ def test_cat_file_range(server, sync):
     assert h.cat(urla, end=-10) == data[:-10]
 
 
+@pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
+def test_cat_file_empty_range_does_not_make_request(
+    server, sync, reset_faults, start, end
+):
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+
+    assert h.cat_file(server.realfile, start=start, end=end) == b""
+    assert HTTPTestHandler.get_counts.get("/index/realfile", 0) == 0
+
+
 def test_mcat_cache(server, sync):
     urla = server.address + "/index/realfile"
     urlb = server.address + "/index/otherfile"
@@ -460,6 +478,55 @@ def test_put_file(server, tmp_path, method, reset_files, sync):
 
     fs.put_file(io.BytesIO(b"yyy"), server.address + "/hey_3", method=method)
     assert fs.cat(server.address + "/hey_3") == b"yyy"
+
+
+@pytest.mark.parametrize("caller_owned", [False, True])
+@pytest.mark.parametrize("callback_fails", [False, True])
+def test_get_file_closes_only_owned_output(
+    server, sync, tmp_path, monkeypatch, caller_owned, callback_fails
+):
+    from fsspec.callbacks import Callback
+    from fsspec.implementations import http_sync
+
+    destination = tmp_path / "download"
+    opened = []
+    builtin_open = open
+
+    def track_open(path, mode):
+        stream = builtin_open(path, mode)
+        opened.append(stream)
+        return stream
+
+    def progress(size, value):
+        if callback_fails and value:
+            raise RuntimeError("progress callback failed")
+
+    monkeypatch.setattr(http_sync, "open", track_open, raising=False)
+    output = io.BytesIO() if caller_owned else destination
+    callback = Callback(hooks={"progress": progress})
+    fs = fsspec.filesystem("http")
+    try:
+        if callback_fails:
+            # Keep the traceback alive: GC is not error-path resource cleanup.
+            with pytest.raises(RuntimeError, match="progress callback failed") as exc:
+                fs.get_file(server.realfile, output, chunk_size=5, callback=callback)
+            assert exc.value.__traceback__ is not None
+        else:
+            fs.get_file(server.realfile, output, chunk_size=5, callback=callback)
+
+        if caller_owned:
+            assert opened == []
+            assert not output.closed
+            assert output.getvalue() == (data[:5] if callback_fails else data)
+        else:
+            assert len(opened) == 1
+            assert opened[0].closed
+            assert destination.read_bytes() == (data[:5] if callback_fails else data)
+    finally:
+        for stream in opened:
+            stream.close()
+        if caller_owned:
+            output.close()
 
 
 def test_encoded(server, sync):
