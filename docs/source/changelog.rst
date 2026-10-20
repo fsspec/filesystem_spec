@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
+
 - Decompress cache downloads made by ``cat`` so
   subsequent cached reads use the same contents as ``open``.
 
