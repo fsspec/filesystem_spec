@@ -1328,6 +1328,71 @@ def test_expiry():
     assert detail["time"] - start_time > 0.09
 
 
+@pytest.mark.parametrize("expires_during", ["download", "save", "cache_hit"])
+def test_open_uses_selected_file_when_cache_expires(
+    tmp_path, monkeypatch, expires_during
+):
+    from types import SimpleNamespace
+
+    from fsspec.implementations import cache_metadata, cached
+
+    now = 1000.0
+    clock = SimpleNamespace(time=lambda: now)
+    monkeypatch.setattr(cached, "time", clock)
+    monkeypatch.setattr(cache_metadata, "time", clock)
+    backend = MemoryFileSystem(skip_instance_cache=True)
+    path = "/expires-during-open"
+    backend.pipe_file(path, b"first")
+    fs = WholeFileCacheFileSystem(
+        fs=backend,
+        cache_storage=str(tmp_path),
+        cache_check=False,
+        expiry_time=1,
+        skip_instance_cache=True,
+    )
+    if expires_during == "cache_hit":
+        with fs.open(path, "rb") as f:
+            assert f.read() == b"first"
+        original = WholeFileCacheFileSystem._check_file
+
+        def check_file(self, path):
+            nonlocal now
+            result = original(self, path)
+            now += 2
+            return result
+
+        with monkeypatch.context() as patch:
+            patch.setattr(WholeFileCacheFileSystem, "_check_file", check_file)
+            with fs.open(path, "rb") as f:
+                assert f.read() == b"first"
+    else:
+        # Advance the clock after real I/O, without sleeping or bypassing it.
+        target = (
+            MemoryFileSystem
+            if expires_during == "download"
+            else cache_metadata.CacheMetadata
+        )
+        method = "get_file" if expires_during == "download" else "_save"
+        original = getattr(target, method)
+
+        def delayed(self, *args, **kwargs):
+            nonlocal now
+            result = original(self, *args, **kwargs)
+            now += 2
+            return result
+
+        with monkeypatch.context() as patch:
+            patch.setattr(target, method, delayed)
+            with fs.open(path, "rb") as f:
+                assert f.read() == b"first"
+
+    # The selected read may finish, but the next open must still refresh expiry.
+    backend.pipe_file(path, b"second")
+    assert fs._check_file(path) is False
+    with fs.open(path, "rb") as f:
+        assert f.read() == b"second"
+
+
 def test_equality(tmpdir):
     """Test sane behaviour for equality and hashing.
 

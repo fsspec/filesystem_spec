@@ -818,19 +818,20 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             with _tempfile(fn) as tmp:
                 self.fs.get_file(path, tmp, callback=self.callback)
         self.save_cache()
+        return self._metadata.cached_files[-1][path].copy(), fn
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         # For read (or append), (try) download from remote
         if "r" in mode or "a" in mode:
-            if not self._check_file(path):
+            cached = self._check_file(path)
+            if not cached:
                 if self.fs.exists(path):
-                    self._get_cached_file_before_open(path, **kwargs)
+                    cached = self._get_cached_file_before_open(path, **kwargs)
                 elif "r" in mode:
                     raise FileNotFoundError(path)
 
-            # 2026-10-09: New append targets do not have cached metadata yet.
-            cached = self._check_file(path)
+            # Use this open's selected file, even if it expired during download.
             if cached:
                 detail, fn = cached
                 _, blocks = detail["fn"], detail["blocks"]
