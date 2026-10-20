@@ -1,4 +1,5 @@
 import collections.abc
+import io
 import os.path
 import zipfile
 from io import BytesIO
@@ -66,6 +67,105 @@ def test_write_seek(m):
     with m.open("afile.zip", "rb") as f:
         fs = fsspec.filesystem("zip", fo=f)
         assert fs.cat("another") == b"hi"
+
+
+@pytest.mark.parametrize("backend", ["memory", "file"])
+def test_close_publishes_cached_archive(m, tmp_path, backend):
+    path = "closed.zip" if backend == "memory" else str(tmp_path / "closed.zip")
+    target = m if backend == "memory" else fsspec.filesystem("file")
+    fs = ZipFileSystem(
+        f"simplecache::{backend}://{path}",
+        mode="w",
+        target_options={"simplecache": {"cache_storage": str(tmp_path / "cache")}},
+    )
+    fs.pipe_file("data.jsonl", b'{"text":"example"}\n')
+    fs.close()
+
+    # Keep fs alive: publishing must not depend on its destructor.
+    assert target.exists(path)
+    with zipfile.ZipFile(io.BytesIO(target.cat_file(path))) as archive:
+        assert archive.namelist() == ["data.jsonl"]
+        assert archive.read("data.jsonl") == b'{"text":"example"}\n'
+    assert fs.fo.closed
+    fs.close()
+
+
+def test_close_releases_open_file_context(m, tmp_path):
+    of = fsspec.open(
+        "simplecache::memory://context.zip",
+        "wb",
+        simplecache={"cache_storage": str(tmp_path)},
+    )
+    fs = ZipFileSystem(of, mode="w")
+    fs.pipe_file("member", b"complete")
+    fs.close()
+
+    assert m.exists("context.zip")
+    assert of.fobjects == []
+    fs.close()
+
+
+def test_close_releases_owned_read_handle(m):
+    writer = ZipFileSystem("memory://read.zip", mode="w")
+    writer.pipe_file("member", b"complete")
+    writer.close()
+    fs = ZipFileSystem("memory://read.zip")
+    fs.close()
+
+    assert fs.of.fobjects == []
+    fs.close()
+
+
+@pytest.mark.parametrize("backend", ["buffer", "file"])
+def test_close_keeps_caller_file_open(tmp_path, backend):
+    fo = io.BytesIO() if backend == "buffer" else open(tmp_path / "borrowed.zip", "w+b")
+    with fo:
+        fs = ZipFileSystem(fo, mode="w")
+        fs.pipe_file("member", b"complete")
+        fs.close()
+        fs.close()
+
+        assert not fo.closed
+        fo.seek(0)
+        with zipfile.ZipFile(fo) as archive:
+            assert archive.read("member") == b"complete"
+
+
+def test_close_with_open_member_can_be_retried(m, tmp_path):
+    fs = ZipFileSystem(
+        "simplecache::memory://retry.zip",
+        mode="w",
+        target_options={"simplecache": {"cache_storage": str(tmp_path)}},
+    )
+    with fs.open("member", "wb") as member:
+        member.write(b"complete")
+        with pytest.raises(ValueError, match="open writing handle"):
+            fs.close()
+        assert not fs.fo.closed
+        assert not m.exists("retry.zip")
+
+    fs.close()
+    with zipfile.ZipFile(io.BytesIO(m.cat_file("retry.zip"))) as archive:
+        assert archive.read("member") == b"complete"
+
+
+def test_close_propagates_cached_upload_error(m, tmp_path, monkeypatch):
+    fs = ZipFileSystem(
+        "simplecache::memory://failed.zip",
+        mode="w",
+        target_options={"simplecache": {"cache_storage": str(tmp_path)}},
+    )
+    fs.pipe_file("member", b"complete")
+
+    def fail_upload(*args, **kwargs):
+        # The ZIP central directory must be finalized before upload is attempted.
+        assert fs.zip.fp is None
+        raise OSError("upload failed")
+
+    monkeypatch.setattr(fs.fo, "commit", fail_upload)
+    with pytest.raises(OSError, match="upload failed"):
+        fs.close()
+    assert not m.exists("failed.zip")
 
 
 @pytest.mark.parametrize("prefix", ["", "/", "zip://", "zip:///"])
