@@ -760,9 +760,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             try:
                 detail = self._check_file(p)
                 if not detail:
-                    fn = self._make_local_details(p)
-                    getpaths.append(p)
-                    storepaths.append(fn)
+                    if self.compression:
+                        self._get_cached_file_before_open(p)
+                        fn = os.path.join(self.storage[-1], self._mapper(p))
+                    else:
+                        fn = self._make_local_details(p)
+                        getpaths.append(p)
+                        storepaths.append(fn)
                 else:
                     detail, fn = detail if isinstance(detail, tuple) else (None, detail)
                 fns.append(fn)

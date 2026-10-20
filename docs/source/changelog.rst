@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Decompress cache downloads made by ``cat`` so
+  subsequent cached reads use the same contents as ``open``.
+
 - Retain the selected local file when a ``filecache`` entry expires during open.
 
 - Fix the syntax and add a memory filesystem to the quick-start example (#2337).
