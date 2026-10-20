@@ -72,6 +72,8 @@ def _atomic_get(fs, rpaths, lpaths, callback=DEFAULT_CALLBACK):
 
 class WriteCachedTransaction(Transaction):
     def complete(self, commit=True):
+        if not commit:
+            return super().complete(commit=False)
         rpaths = [f.path for f in self.files]
         lpaths = [f.fn for f in self.files]
         if commit:
@@ -1200,7 +1202,9 @@ class LocalTempFile:
 
     def discard(self):
         self.fh.close()
-        os.remove(self.fn)
+        # Repeated writes in one transaction can share a cache filename.
+        with suppress(FileNotFoundError):
+            os.remove(self.fn)
 
     def commit(self):
         # calling put() with list arguments avoids path expansion and additional operations

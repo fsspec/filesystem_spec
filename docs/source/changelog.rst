@@ -15,9 +15,33 @@ Fixes
 - Decompress ``filecache`` and ``simplecache`` downloads made by ``cat`` so
   subsequent cached reads use the same contents as ``open``.
 
+- Propagate backend removal errors from ``FSMap``
+
+- Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
+
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
+
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+- Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
+
+- Bound block-cache fetch ranges by the file size, including background reads.
+
+- Exclude URL fragments when decoding data URLs.
+
+- Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
+
+- Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
+
+- Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
+
+- Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
+
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Complete DBFS partial-delete retries without re-raising a recovered error.
 
 - Keep the HTTP link regex linear
 
@@ -73,6 +97,8 @@ Fixes
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
+
+- Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
