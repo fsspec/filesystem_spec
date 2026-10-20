@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Fix the syntax and add a memory filesystem to the quick-start example (#2337).
+
 - Preserve directory pruning in ``DirFileSystem.walk(detail=True)``
 
 - Finalize zip-fs file contexts on explicit close (#2311).
