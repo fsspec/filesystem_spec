@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Report local file read and write capabilities from the underlying file, allowing text update mode writes.
+
 - Propagate backend removal errors from ``FSMap``
 
 - Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
