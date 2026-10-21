@@ -892,6 +892,42 @@ def test_concurrent_handles_keep_independent_positions(m):
     assert results == [(data, len(data))] * 16
 
 
+@pytest.mark.parametrize(
+    "mode", ["r+b", "rb+", "w+b", "wb+", "a+b", "ab+", "x+b", "xb+"]
+)
+@pytest.mark.parametrize("exists", [False, True])
+def test_binary_update_modes(m, mode, exists):
+    path = "update.txt"
+    if exists:
+        m.pipe_file(path, b"abc")
+    if mode.startswith("r") and not exists:
+        with pytest.raises(FileNotFoundError):
+            m.open(path, mode)
+        return
+    if mode.startswith("x") and exists:
+        with pytest.raises(FileExistsError):
+            m.open(path, mode)
+        assert m.cat_file(path) == b"abc"
+        return
+    expected = b"abcXY" if mode.startswith("a") and exists else b"XY"
+    if mode.startswith("r"):
+        expected = b"XYc"
+    with m.open(path, mode) as f:
+        assert f.tell() == (3 if mode.startswith("a") and exists else 0)
+        f.write(b"XY")
+        f.seek(0)
+        assert f.read() == expected
+    assert m.cat_file(path) == expected
+
+
+@pytest.mark.parametrize("mode", ["rbb+", "rw+b", "rb++"])
+def test_invalid_update_modes(m, mode):
+    m.pipe_file("update.txt", b"abc")
+    with pytest.raises(ValueError, match="unsupported file mode"):
+        m.open("update.txt", mode)
+    assert m.cat_file("update.txt") == b"abc"
+
+
 def test_remove_all(m):
     m.touch("afile")
     m.rm("/", recursive=True)
