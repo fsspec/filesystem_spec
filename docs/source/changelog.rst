@@ -12,8 +12,9 @@ Enhancements
 
 Fixes
 
-- Make the FUSE CLI ``-f`` / ``--foreground`` option enable foreground mode,
-  matching its documented default of background mode (#1586).
+- Make FUSE CLI ``-f`` match its documented default (#1586).
+
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
 
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
