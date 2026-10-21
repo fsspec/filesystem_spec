@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Make the FUSE CLI ``-f`` / ``--foreground`` option enable foreground mode,
+  matching its documented default of background mode (#1586).
+
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
 - Request a protected data channel again when ``FTPFileSystem`` reconnects
