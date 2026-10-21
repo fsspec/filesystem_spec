@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Drain batch-owned tasks and close unstarted coroutines when a bulk async
+  operation is cancelled or fails.
+
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
 - Request a protected data channel again when ``FTPFileSystem`` reconnects

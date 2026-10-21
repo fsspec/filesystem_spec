@@ -354,6 +354,75 @@ def test_running_async():
     asyncio.run(go())
 
 
+@pytest.mark.asyncio
+async def test_bulk_get_cancellation_drains_downloads(tmp_path):
+    started, resume, cleaned = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    active = 0
+
+    class DownloadFS(fsspec.asyn.AsyncFileSystem):
+        async def _get_file(self, rpath, lpath, **kwargs):
+            nonlocal active
+            active += 1
+            started.set()
+            try:
+                # Tiny local writes make post-cancellation side effects visible.
+                with open(lpath, "wb") as output:  # noqa: ASYNC230
+                    output.write(b"before")
+                    await resume.wait()
+                    output.write(b"after")
+            finally:
+                active -= 1
+                cleaned.set()
+
+    fs = DownloadFS(asynchronous=True, skip_instance_cache=True)
+    target = tmp_path / "download"
+    bulk = asyncio.create_task(fs._get(["source"], [str(target)], batch_size=1))
+    await asyncio.wait_for(started.wait(), 2)
+    bulk.cancel()
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await bulk
+        active_at_return = active
+    finally:
+        resume.set()
+        await asyncio.wait_for(cleaned.wait(), 2)
+    assert active_at_return == 0
+    assert target.read_bytes() == b"before"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_parent", [False, True])
+async def test_chunk_runner_closes_unscheduled_coroutines(cancel_parent):
+    started, release = asyncio.Event(), asyncio.Event()
+    children = set()
+
+    async def work():
+        children.add(asyncio.current_task())
+        started.set()
+        await release.wait()
+        raise OSError("download failed")
+
+    coros = [work(), work(), work()]
+    batch = asyncio.create_task(_run_coros_in_chunks(coros, batch_size=1))
+    await asyncio.wait_for(started.wait(), 2)
+    try:
+        if cancel_parent:
+            batch.cancel()
+            error = asyncio.CancelledError
+        else:
+            release.set()
+            error = OSError
+        with pytest.raises(error):
+            await batch
+        assert all(inspect.getcoroutinestate(c) == inspect.CORO_CLOSED for c in coros)
+    finally:
+        # Preserve deterministic cleanup when this test is run on old source.
+        release.set()
+        await asyncio.gather(*children, return_exceptions=True)
+        for coro in coros:
+            coro.close()
+
+
 class DummyAsyncFS(fsspec.asyn.AsyncFileSystem):
     _file_class = fsspec.asyn.AbstractAsyncStreamedFile
 
