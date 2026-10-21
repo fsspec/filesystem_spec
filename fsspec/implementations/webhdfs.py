@@ -434,6 +434,12 @@ class WebHDFile(AbstractBufferedFile):
 
     def __init__(self, fs, path, **kwargs):
         super().__init__(fs, path, **kwargs)
+        # WebHDFS names the CREATE parameter "permission" and parses it as octal
+        permission = self.kwargs.pop("permissions", None)
+        if permission is not None:
+            if isinstance(permission, int):
+                permission = format(permission, "o")
+            self.kwargs["permission"] = permission
         kwargs = kwargs.copy()
         if kwargs.get("permissions", None) is None:
             kwargs.pop("permissions", None)
