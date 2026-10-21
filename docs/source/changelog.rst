@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
+
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
 - Request a protected data channel again when ``FTPFileSystem`` reconnects
