@@ -12,8 +12,8 @@ Enhancements
 
 Fixes
 
-- Only substitute plain template names in ``ReferenceFileSystem`` simple
-  templates, so reference files cannot read attributes of template values
+- Reject dunder lookups in ``ReferenceFileSystem`` simple template fields, so
+  reference files cannot reach module globals through template values
 
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 

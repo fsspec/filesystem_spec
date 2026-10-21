@@ -386,9 +386,9 @@ def test_spec1_expand_simple():
 
 
 @pytest.mark.parametrize(
-    "field", ["u.__class__", "f.__globals__[os].environ[HOME]", "u[0]"]
+    "field", ["u.__class__", "f.__globals__[os].environ[HOME]", "u[__x]"]
 )
-def test_spec1_simple_templates_reject_attribute_lookup(field):
+def test_spec1_simple_templates_reject_dunder_lookup(field):
     pytest.importorskip("jinja2")
     in_data = {
         "version": 1,
@@ -397,6 +397,16 @@ def test_spec1_simple_templates_reject_attribute_lookup(field):
     }
     with pytest.raises(KeyError):
         fsspec.filesystem("reference", fo=in_data, target_protocol="http")
+
+
+def test_spec1_simple_templates_allow_lookup():
+    in_data = {
+        "version": 1,
+        "templates": {"u": "server.domain/path"},
+        "refs": {"key": ["http://{{u[0]}}/{{u:>20}}"]},
+    }
+    fs = fsspec.filesystem("reference", fo=in_data, remote_protocol="memory")
+    assert fs.references["key"] == ["http://s/  server.domain/path"]
 
 
 def test_spec1_gen_variants():

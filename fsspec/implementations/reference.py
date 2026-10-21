@@ -44,15 +44,17 @@ class ReferenceNotReachable(RuntimeError):
 
 
 class _SimpleTemplateFormatter(string.Formatter):
-    """str.format that only substitutes plain template names
+    """str.format that refuses dunder lookups in template fields
 
-    Reference files are often untrusted, and full format fields such as
+    Reference files are often untrusted, and fields such as
     ``{u.__globals__[os].environ[KEY]}`` would walk attributes of the template
     values and read arbitrary process state into the target URL.
     """
 
     def get_field(self, field_name, args, kwargs):
-        return kwargs[field_name], field_name
+        if "__" in field_name:
+            raise KeyError(field_name)
+        return super().get_field(field_name, args, kwargs)
 
 
 _simple_formatter = _SimpleTemplateFormatter()
