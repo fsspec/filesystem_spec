@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Normalize negative HTTP read bounds before checking for empty ranges, without issuing a data request for those empty reads.
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
