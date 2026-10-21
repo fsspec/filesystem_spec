@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve entry names when listing the SFTP current directory with an empty path (#759).
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
