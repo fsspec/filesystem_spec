@@ -99,7 +99,14 @@ def sync(loop, func, *args, timeout=None, **kwargs):
                     raise FSTimeoutError
     except KeyboardInterrupt:
         # Cancel only this call; the shared IO loop may have other work.
-        future.cancel()
+        # Queue cancellation after the runner's first step, so it takes
+        # ownership of coro even if the loop has not started yet. Cancelling
+        # the Future immediately can prevent the runner from ever starting.
+        try:
+            loop.call_soon_threadsafe(loop.call_soon, future.cancel)
+        except RuntimeError:
+            # A concurrently closed loop must not mask the original interrupt.
+            pass
         raise
 
     return_result = result[0]
