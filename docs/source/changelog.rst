@@ -14,6 +14,8 @@ Fixes
 
 - Preserve explicit download filenames for HTTP URLs containing query parameters (#1505).
 
+- Make FUSE CLI ``-f`` match its documented default (#1586).
+
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
 
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
@@ -158,6 +160,9 @@ Fixes
 
 - Request identity encoding for buffered HTTP range reads by default, while
   preserving explicitly configured request and session encodings (#1748).
+
+- Avoid treating content-encoded transfer lengths as decoded file sizes in
+  the synchronous HTTP filesystem.
 
 - Resolve negative FTP read offsets relative to the end of the file.
 
