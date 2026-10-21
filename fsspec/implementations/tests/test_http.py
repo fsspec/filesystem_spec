@@ -678,14 +678,19 @@ def test_cat_file_empty_range_does_not_get_data(server, reset_faults, start, end
 
     assert h.cat_file(server.realfile, start=start, end=end) == b""
     assert HTTPTestHandler.get_counts.get("/index/realfile", 0) == 0
+    if start == end or end == 0:
+        assert HTTPTestHandler.head_counts.get("/index/realfile", 0) == 0
 
 
 def test_cat_file_suffix_range_does_not_need_size(server, reset_faults):
     h = fsspec.filesystem(
-        "http", headers={"give_length": "true"}, skip_instance_cache=True
+        "http",
+        headers={"give_length": "true", "head_ok": "true"},
+        skip_instance_cache=True,
     )
     assert h.cat_file(server.realfile, start=-2) == data[-2:]
     assert HTTPTestHandler.get_counts["/index/realfile"] == 1
+    assert HTTPTestHandler.head_counts.get("/index/realfile", 0) == 0
 
 
 def test_cat_file_range_numpy(server):
