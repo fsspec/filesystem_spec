@@ -12,7 +12,7 @@ Enhancements
 
 Fixes
 
-- Preserve delimiter lookahead when reading lines from forward-only HTTP streams (#2349).
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
 
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
@@ -160,6 +160,8 @@ Fixes
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
+
+- Preserve delimiter lookahead when reading lines from forward-only HTTP streams (#2349).
 
 - Normalize protocol prefixes and leading slashes before listing archive paths.
 
