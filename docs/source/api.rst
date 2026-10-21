@@ -198,7 +198,7 @@ Built-in Implementations
    :members: __init__
 
 .. autoclass:: fsspec.implementations.sftp.SFTPFileSystem
-   :members: __init__
+   :members: __init__, info
 
 .. autoclass:: fsspec.implementations.smb.SMBFileSystem
    :members: __init__

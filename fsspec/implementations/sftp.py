@@ -299,9 +299,25 @@ class SFTPFileSystem(AbstractFileSystem):
         logger.debug("Removing folder %s", path)
         self.ftp.rmdir(path)
 
-    def info(self, path):
+    def info(self, path, follow_symlinks=True):
+        """Return metadata for a remote path.
+
+        Parameters
+        ----------
+        path: str
+            Path or SFTP/SSH URL to inspect.
+        follow_symlinks: bool, default True
+            Follow symbolic links and return metadata for their targets.
+            If False, return metadata for the link itself, as for symlink
+            entries in ``ls(path, detail=True)``. This also works for dangling
+            links, whose targets do not exist.
+        """
         path = self._strip_protocol(path)
-        stat = self._decode_stat(self.ftp.stat(path))
+        if follow_symlinks:
+            stat = self.ftp.stat(path)
+        else:
+            stat = self.ftp.lstat(path)
+        stat = self._decode_stat(stat)
         stat["name"] = path
         return stat
 
