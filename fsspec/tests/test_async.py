@@ -423,6 +423,31 @@ async def test_chunk_runner_closes_unscheduled_coroutines(cancel_parent):
             coro.close()
 
 
+@pytest.mark.asyncio
+async def test_chunk_runner_cancelled_before_children_start(monkeypatch):
+    tasks = set()
+
+    async def cancel_before_wait(pending, **kwargs):
+        tasks.update(pending)
+        raise asyncio.CancelledError
+
+    async def work():
+        return 1
+
+    proxy = SimpleNamespace(**vars(asyncio))
+    proxy.wait = cancel_before_wait
+    monkeypatch.setattr(fsspec.asyn, "asyncio", proxy)
+    coros = [work(), work()]
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await _run_coros_in_chunks(coros, batch_size=1)
+        assert all(inspect.getcoroutinestate(c) == inspect.CORO_CLOSED for c in coros)
+    finally:
+        await asyncio.gather(*tasks, return_exceptions=True)
+        for coro in coros:
+            coro.close()
+
+
 class DummyAsyncFS(fsspec.asyn.AsyncFileSystem):
     _file_class = fsspec.asyn.AbstractAsyncStreamedFile
 
