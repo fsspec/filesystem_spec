@@ -12,7 +12,7 @@ Enhancements
 
 Fixes
 
-- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
 
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
@@ -45,6 +45,8 @@ Fixes
 - Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
 
 - Bound block-cache fetch ranges by the file size, including background reads.
+
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
 
 - Exclude URL fragments when decoding data URLs.
 
