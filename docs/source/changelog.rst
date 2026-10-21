@@ -157,6 +157,9 @@ Fixes
 - Request identity encoding for buffered HTTP range reads by default, while
   preserving explicitly configured request and session encodings (#1748).
 
+- Avoid treating content-encoded transfer lengths as decoded file sizes in
+  the synchronous HTTP filesystem.
+
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
