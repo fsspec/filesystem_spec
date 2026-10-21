@@ -911,14 +911,17 @@ def _file_info(url, session, size_policy="head", **kwargs):
     #  recognise lack of 'Accept-Ranges',
     #                 or 'Accept-Ranges': 'none' (not 'bytes')
     #  to mean streaming only, no random access => return None
-    if "Content-Length" in r.headers:
-        info["size"] = int(r.headers["Content-Length"])
-    elif "Content-Range" in r.headers:
-        info["size"] = int(r.headers["Content-Range"].split("/")[1])
-    elif "content-length" in r.headers:
-        info["size"] = int(r.headers["content-length"])
-    elif "content-range" in r.headers:
-        info["size"] = int(r.headers["content-range"].split("/")[1])
+    encoding = r.headers.get("Content-Encoding", r.headers.get("content-encoding", ""))
+    # The transport length is not the size of the decoded stream.
+    if encoding in ("identity", ""):
+        if "Content-Length" in r.headers:
+            info["size"] = int(r.headers["Content-Length"])
+        elif "Content-Range" in r.headers:
+            info["size"] = int(r.headers["Content-Range"].split("/")[1])
+        elif "content-length" in r.headers:
+            info["size"] = int(r.headers["content-length"])
+        elif "content-range" in r.headers:
+            info["size"] = int(r.headers["content-range"].split("/")[1])
 
     for checksum_field in ["ETag", "Content-MD5", "Digest"]:
         if r.headers.get(checksum_field):
