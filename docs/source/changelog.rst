@@ -12,7 +12,7 @@ Enhancements
 
 Fixes
 
-- Propagate coroutine cancellation through synchronous filesystem wrappers.
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
 
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
@@ -131,6 +131,8 @@ Fixes
   cannot crash the process (#2241).
 
 - Avoid deadlocks in ``sync()`` when the default IO thread has stopped (#1723).
+
+- Propagate coroutine cancellation through synchronous filesystem wrappers.
 
 - Percent-encode GitHub branch and tag names in API URLs so refs containing ``#``, ``&`` or ``%`` select the intended revision.
 
