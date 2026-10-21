@@ -42,9 +42,9 @@ http = ["aiohttp !=4.0.0a0, !=4.0.0a1"]
 libarchive = ["libarchive-c"]
 oci = ["ocifs"]
 s3 = ["s3fs >=2026.6.0"]
-sftp = ["paramiko"]
+sftp = ["paramiko>=3.4"]
 smb = ["smbprotocol"]
-ssh = ["paramiko"]
+ssh = ["paramiko>=3.4"]
 tqdm = ["tqdm"]
 full = [
     'fsspec[abfs]',
@@ -84,6 +84,7 @@ test = [
     "numpy",
     "pytest",
     "requests",
+    "requests-toolbelt",
     "pytest-benchmark",
     "pytest-cov",
     "pytest-mock",

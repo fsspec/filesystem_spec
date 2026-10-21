@@ -1103,6 +1103,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 trailing_sep,
             )
 
+            rpath = stringify_path(rpath)
             source_is_str = isinstance(rpath, str)
             rpaths = self.expand_path(
                 rpath, recursive=recursive, maxdepth=maxdepth, **kwargs
@@ -1113,7 +1114,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 if not rpaths:
                     return
 
-            if isinstance(lpath, str):
+            if isinstance(lpath, (str, os.PathLike)):
                 lpath = make_path_posix(lpath)
 
             source_is_file = len(rpaths) == 1
@@ -1195,6 +1196,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 trailing_sep,
             )
 
+            lpath = stringify_path(lpath)
             source_is_str = isinstance(lpath, str)
             if source_is_str:
                 lpath = make_path_posix(lpath)
@@ -1272,6 +1274,7 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             from .implementations.local import trailing_sep
 
+            path1 = stringify_path(path1)
             source_is_str = isinstance(path1, str)
             paths1 = self.expand_path(
                 path1, recursive=recursive, maxdepth=maxdepth, **kwargs
@@ -1581,7 +1584,7 @@ class AbstractFileSystem(metaclass=_Cached):
             if length is None:
                 length = size
             if size is not None and offset + length > size:
-                length = size - offset
+                length = max(0, size - offset)
             return read_block(f, offset, length, delimiter)
 
     def to_json(self, *, include_password: bool = True) -> str:
@@ -2083,6 +2086,16 @@ class AbstractBufferedFile(io.IOBase):
             self.location = None
 
     @property
+    def len(self):
+        """Total size in bytes, independent of the current file position.
+
+        Raises AttributeError when the backend has not provided a known size.
+        """
+        if self.size is None:
+            raise AttributeError("File size is unknown")
+        return self.size
+
+    @property
     def details(self):
         if self._details is None:
             self._details = self.fs.info(self.path)
@@ -2289,6 +2302,9 @@ class AbstractBufferedFile(io.IOBase):
         https://docs.python.org/3/library/io.html#io.RawIOBase.readinto
         """
         out = memoryview(b).cast("B")
+        if out.readonly:
+            self.read(0)
+            raise TypeError("readinto() argument must be read-write bytes-like object")
         data = self.read(out.nbytes)
         out[: len(data)] = data
         return len(data)

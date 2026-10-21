@@ -27,6 +27,8 @@ class GitFileSystem(AbstractFileSystem):
             level function such as fsspec.open(), may be of the form
             "git://[path-to-repo[:]][ref@]path/to/file" (but the actual
             file path should not contain "@" or ":").
+            For example, "git://C:/repo:master@file" selects a branch in
+            a Windows repository, and "git://C:/repo:file" uses the default ref.
         fo: str (optional)
             Same as ``path``, but passed as part of a chained URL. This one
             takes precedence if both are given.
@@ -44,7 +46,7 @@ class GitFileSystem(AbstractFileSystem):
     def _strip_protocol(cls, path):
         path = super()._strip_protocol(path).lstrip("/")
         if ":" in path:
-            path = path.split(":", 1)[1]
+            path = path.rsplit(":", 1)[1]
         if "@" in path:
             path = path.split("@", 1)[1]
         return path.lstrip("/")
@@ -65,7 +67,7 @@ class GitFileSystem(AbstractFileSystem):
         path = path.removeprefix("git://")
         out = {}
         if ":" in path:
-            out["path"], path = path.split(":", 1)
+            out["path"], path = path.rsplit(":", 1)
         if "@" in path:
             out["ref"], path = path.split("@", 1)
         return out

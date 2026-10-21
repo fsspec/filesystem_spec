@@ -485,6 +485,47 @@ def test_automkdir_local():
     assert fs.auto_mkdir is True
 
 
+@pytest.mark.parametrize("entrypoint", ["open", "url_to_fs", "get_fs_token_paths"])
+@pytest.mark.parametrize("chained", [False, True])
+def test_protocol_options_not_mutated(entrypoint, chained, tmp_path):
+    original = object()
+    override = object()
+    if chained:
+        url = "filecache::memory://protocol-options"
+        options = {"cache_storage": str(tmp_path), "cache_check": 10}
+        kwargs = {"filecache": options, "memory": {"token": original}}
+        explicit = {"cache_check": 20}
+    else:
+        url = "memory://protocol-options"
+        options = {"token": original}
+        kwargs = {"memory": options}
+        explicit = {"token": override}
+    expected = options.copy()
+
+    def resolve(**storage_options):
+        if entrypoint == "open":
+            return fsspec.open(url, **storage_options).fs
+        if entrypoint == "url_to_fs":
+            return fsspec.core.url_to_fs(url, **storage_options)[0]
+        return get_fs_token_paths(url, storage_options=storage_options)[0]
+
+    fs = resolve(**kwargs, **explicit)
+    if chained:
+        assert fs.cache_check == 20
+        assert fs.fs.storage_options["token"] is original
+    else:
+        assert fs.storage_options["token"] is override
+
+    # Reusing caller-owned options must not retain the previous call's override.
+    fs = resolve(**kwargs)
+    if chained:
+        assert fs.cache_check == 10
+        assert fs.fs.storage_options["token"] is original
+    else:
+        assert fs.storage_options["token"] is original
+    assert options == expected
+
+
 def test_repeated_argument():
     pytest.importorskip("adlfs")
     from fsspec.core import url_to_fs

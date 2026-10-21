@@ -1055,6 +1055,59 @@ def test_fork_deadlock():
     assert result is True
 
 
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+def test_buffered_file_len(m, content):
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        assert stream.len == len(content)
+        stream.read(3)
+        assert stream.len == len(content)
+        stream.seek(0)
+        assert stream.len == len(content)
+        stream.seek(0, 2)
+        assert stream.len == len(content)
+        with pytest.raises(TypeError):
+            len(stream)
+
+
+@pytest.mark.parametrize("mode", ["wb", "ab", "xb"])
+def test_buffered_file_len_without_size(m, mode):
+    with AbstractBufferedFile(m, "data", mode=mode) as stream:
+        assert not hasattr(stream, "size")
+        assert not hasattr(stream, "len")
+
+
+def test_buffered_file_len_unknown_size(m):
+    m.pipe_file("data", b"content")
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.size = None
+        with pytest.raises(AttributeError, match="File size is unknown"):
+            _ = stream.len
+        assert not hasattr(stream, "len")
+        stream.size = 7
+        assert stream.len == 7
+
+
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+@pytest.mark.parametrize("position", [0, 3, 11])
+def test_buffered_file_multipart_encoder(m, content, position):
+    MultipartEncoder = pytest.importorskip("requests_toolbelt").MultipartEncoder
+    position = min(position, len(content))
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.seek(position)
+        encoder = MultipartEncoder(
+            fields={"file": ("data", stream)}, boundary="fsspec-boundary"
+        )
+        expected = MultipartEncoder(
+            fields={"file": ("data", io.BytesIO(content[position:]))},
+            boundary="fsspec-boundary",
+        ).to_string()
+        assert encoder.len == len(expected)
+        assert encoder.read(13) + encoder.read() == expected
+        assert stream.tell() == len(content)
+
+
 @pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
 @pytest.mark.parametrize(
     "content",
@@ -1116,6 +1169,46 @@ def test_buffered_readuntil_delimiters(
             assert stream.tell() == position
         assert stream.readuntil(delimiter, blocks=blocks) == b""
         assert stream.tell() == position
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+@pytest.mark.parametrize("position", [0, 13])
+@pytest.mark.parametrize(
+    "buffer_kind", ["bytes", "readonly-view", "readonly-numpy", "empty-readonly"]
+)
+def test_buffered_readinto_readonly(m, cache_type, method, position, buffer_kind):
+    content = bytes(range(64))
+    m.pipe_file("buffer", content)
+    if buffer_kind == "bytes":
+        target = b"readonly"
+    elif buffer_kind == "readonly-view":
+        target = memoryview(b"readonly")
+    elif buffer_kind == "readonly-numpy":
+        target = np.zeros((2, 4), dtype="uint32")
+        target.flags.writeable = False
+    else:
+        target = b""
+
+    with AbstractBufferedFile(
+        m, "buffer", cache_type=cache_type, block_size=8
+    ) as stream:
+        stream.seek(position)
+        with pytest.raises(TypeError):
+            getattr(stream, method)(target)
+        assert stream.tell() == position
+        writable = bytearray(8)
+        assert getattr(stream, method)(writable) == len(writable)
+        assert writable == content[position : position + len(writable)]
+
+
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+def test_buffered_readinto_readonly_closed(m, method):
+    m.pipe_file("buffer", b"content")
+    stream = AbstractBufferedFile(m, "buffer")
+    stream.close()
+    with pytest.raises(ValueError, match="closed file"):
+        getattr(stream, method)(b"readonly")
 
 
 def test_cache_not_pickled(server):
@@ -1255,6 +1348,36 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+@pytest.mark.parametrize("serializer", ["dict", "json"])
+@pytest.mark.parametrize(
+    "value", [None, [None], {"key": None}, {"key": [1, None, {"nested": None}]}]
+)
+def test_serialize_none(serializer, value):
+    fs = DummyTestFS(value, bar=value)
+    out = getattr(fs, f"to_{serializer}")()
+    expected = {
+        "cls": "fsspec.tests.test_spec:DummyTestFS",
+        "protocol": "mock",
+        "args": [value],
+        "bar": value,
+    }
+
+    assert (json.loads(out) if serializer == "json" else out) == expected
+    assert getattr(DummyTestFS, f"from_{serializer}")(out) is fs
+    assert fs.storage_args == (value,)
+    assert fs.storage_options == {"bar": value}
+
+
+def test_serialize_http_none():
+    fs = HTTPFileSystem(block_size=None, cache_options=None)
+    out = fs.to_dict()
+
+    assert out["block_size"] is None
+    assert out["cache_options"] is None
+    assert json.loads(fs.to_json()) == out
+    assert HTTPFileSystem.from_dict(out) is fs
 
 
 def test_json_path_attr():

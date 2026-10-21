@@ -64,17 +64,24 @@ full list: :class:`fsspec.spec.AbstractFileSystem`).
 Note that this quick-start will prefer posix-style naming, but
 many common operations are aliased: ``cp()`` and ``copy()`` are identical, for instance.
 Functionality is generally chosen to be as close to the builtin ``os`` module's working for things like
-``glob`` as possible. The following block of operations should seem very familiar.
+``glob`` as possible. The following example uses an in-memory file-system, so it
+can run without a remote service or credentials.
 
 .. code-block:: python
 
+    import fsspec
+
+    fs = fsspec.filesystem("memory", global_store=False, skip_instance_cache=True)
     fs.mkdir("/remote/output")
     fs.touch("/remote/output/success")  # creates empty file
     assert fs.exists("/remote/output/success")
     assert fs.isfile("/remote/output/success")
     assert fs.cat("/remote/output/success") == b""  # get content as bytestring
     fs.copy("/remote/output/success", "/remote/output/copy")
-    assert fs.ls("/remote/output", detail=False) == ["/remote/output/success", "/remote/output/copy")
+    assert fs.ls("/remote/output", detail=False) == [
+        "/remote/output/copy",
+        "/remote/output/success",
+    ]
     fs.rm("/remote/output", recursive=True)
 
 The ``open()`` method will return a file-like object which can be passed to any other library that expects
@@ -117,6 +124,54 @@ or write mode (create names). Critically, the file on the backend system is not 
             print(line)
             if "KENYA" in line:
                 break
+
+Compressed files
+----------------
+
+Use the ``compression`` argument to :func:`fsspec.open` to read or write an
+individual compressed file. This wraps the file object; it does not compress the
+whole file-system. For example, write a gzip-compressed text file and read it back:
+
+.. code-block:: python
+
+    import fsspec
+
+    with fsspec.open("example.txt.gz", "wt", compression="gzip", encoding="utf-8") as f:
+        f.write("Hello from fsspec!\n")
+
+    with fsspec.open("example.txt.gz", "rt", compression="infer", encoding="utf-8") as f:
+        assert f.read() == "Hello from fsspec!\n"
+
+``compression="infer"`` selects a registered codec from the filename suffix,
+such as ``.gz`` for gzip. Compression is not inferred by default:
+``compression=None`` leaves the bytes unchanged, even if the filename ends in
+``.gz``. The same ``compression`` argument is available on :func:`fsspec.open_files`.
+
+Available codecs depend on your Python installation and optional packages.
+Call :func:`fsspec.available_compressions` to see the codecs registered in the
+current process. For example, ``"gzip"`` is a codec name, while ``None`` means no
+compression.
+
+For Zstandard (``compression="zstd"``, or ``compression="infer"`` with a ``.zst``
+filename), fsspec first tries the standard-library ``compression.zstd`` module
+on Python 3.14 and later. On older Python versions, install ``backports.zstd``:
+
+.. code-block:: console
+
+    python -m pip install backports.zstd
+
+If that backend is unavailable, fsspec also supports the ``zstandard`` package
+as a fallback. Other optional codecs include ``lz4`` (install ``lz4``) and
+``snappy`` (install ``python-snappy``). Install optional packages before importing
+fsspec, or restart your Python process after installation so the codecs can be
+registered.
+
+Explicitly requesting an unavailable codec raises ``ValueError`` with a message
+such as ``Compression type zstd not supported``. Inference only recognizes
+suffixes registered by available codecs: if a suffix is not recognized,
+``compression="infer"`` passes through the stored bytes without compression or
+decompression. Use an explicit codec name
+when you want a missing dependency to produce an error.
 
 .. raw:: html
 

@@ -91,6 +91,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
     def close(self):
         """Commits any write changes to the file. Done on ``del`` too."""
         self.zip.close()
+        if isinstance(self.of, fsspec.core.OpenFile):
+            self.of.close()
 
     def _get_dirs(self):
         if self.dir_cache is None or self.mode in set("wa"):
@@ -116,9 +118,15 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 )
                 self.dir_cache[f["name"]] = f
 
-    def pipe_file(self, path, value, **kwargs):
+    def pipe_file(self, path, value, mode="overwrite", **kwargs):
         # override upstream, because we know the exact file size in this case
         path = self._strip_protocol(path)
+        if mode not in {"create", "overwrite"}:
+            raise ValueError(f"Unsupported ZIP write mode: {mode!r}")
+        if mode == "create":
+            path = self._strip_protocol(zipfile.ZipInfo(path).filename)
+            if self.exists(path):
+                raise FileExistsError(path)
         self.zip.writestr(path, value, **kwargs)
 
     def _open(
