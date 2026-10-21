@@ -290,6 +290,8 @@ class MemoryFileSystem(AbstractFileSystem):
         cache_options=None,
         **kwargs,
     ):
+        if mode in {"rb+", "wb+", "ab+", "xb+"}:
+            mode = mode[0] + "+b"
         path = self._strip_protocol(path)
         if "x" in mode and self.exists(path):
             raise FileExistsError
