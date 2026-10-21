@@ -96,19 +96,25 @@ def in_domain(host, domain):
     return host == domain or host.endswith("." + domain)
 
 
-def authorized_request_class(authorization, domain, base=aiohttp.ClientRequest):
+def authorized_request_class(
+    authorization, domain, base=aiohttp.ClientRequest, https_only=True
+):
     """A ``ClientRequest`` that sends ``authorization`` to every host in ``domain``.
 
     aiohttp drops ``Authorization`` when a redirect changes origin, and every
     archive.org download is such a redirect (to a data node). It builds a new
     request from the session's ``request_class`` for each hop, so setting the header
     here puts it back on the data-node hop; testing the host keeps it from leaving
-    ``domain`` should a data node redirect elsewhere.
+    ``domain`` should a data node redirect elsewhere. With ``https_only``, a plain
+    http hop gets no header either, as aiohttp would also have dropped it on an
+    https -> http redirect.
     """
 
     class AuthorizedRequest(base):
         def update_headers(self, headers):
             super().update_headers(headers)
+            if https_only and self.url.scheme != "https":
+                return
             if in_domain(self.url.host, domain):
                 self.headers[hdrs.AUTHORIZATION] = authorization
 
@@ -136,9 +142,10 @@ class InternetArchiveFileSystem(HTTPFileSystem):
         IA S3 keys, sent as ``Authorization: LOW <access>:<secret>`` to every
         archive.org host, including the data node the download URL redirects to
         (aiohttp drops the header on a cross-origin redirect; the session's request
-        class puts it back, and only for ``.archive.org`` hosts). Both or neither;
-        ``IA_ACCESS_KEY_ID`` / ``IA_SECRET_ACCESS_KEY`` in the environment override
-        ``ia.ini``. Pass empty strings to stay anonymous despite an ``ia.ini``.
+        class puts it back, and only for ``.archive.org`` hosts over https). Both
+        or neither; ``IA_ACCESS_KEY_ID`` / ``IA_SECRET_ACCESS_KEY`` in the
+        environment override ``ia.ini``. Pass empty strings to stay anonymous
+        despite an ``ia.ini``.
     config_file: str, optional
         Path to an ``ia.ini`` to read credentials from instead of the default lookup.
     kwargs:
@@ -164,6 +171,7 @@ class InternetArchiveFileSystem(HTTPFileSystem):
                 self.authorization,
                 self.auth_domain,
                 client_kwargs.get("request_class", aiohttp.ClientRequest),
+                https_only=self.download_url.startswith("https://"),
             )
             kwargs["client_kwargs"] = client_kwargs
         super().__init__(**kwargs)

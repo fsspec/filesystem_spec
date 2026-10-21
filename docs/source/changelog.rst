@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Only send ``ia://`` credentials over https when the download URL is https.
+
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
 - Request a protected data channel again when ``FTPFileSystem`` reconnects
