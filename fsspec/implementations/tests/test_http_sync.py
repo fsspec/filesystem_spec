@@ -376,6 +376,55 @@ def test_content_length_zero(server, sync):
         assert f.read() == data
 
 
+@pytest.mark.parametrize("head_ok", [False, True])
+@pytest.mark.parametrize("chunked", [False, True])
+def test_content_encoded_response_is_streamed(server, sync, head_ok, chunked):
+    headers = {"give_length": "true", "gzip_encoding": "true"}
+    if head_ok:
+        headers["head_ok"] = "true"
+    h = fsspec.filesystem("http", headers=headers, block_size=512)
+    try:
+        with h.open(server.realfile, "rb") as f:
+            if chunked:
+                chunks = []
+                while chunk := f.read(17):
+                    chunks.append(chunk)
+                actual = b"".join(chunks)
+            else:
+                actual = f.read()
+            assert actual == data
+    finally:
+        h.session.close()
+
+
+@pytest.mark.parametrize("lowercase", [False, True])
+@pytest.mark.parametrize("encoding", ["", "identity", "gzip"])
+def test_file_info_content_encoding_preserves_checksums(lowercase, encoding):
+    from fsspec.implementations.http_sync import _file_info
+
+    headers = {"Content-Length": "5", "Content-Encoding": encoding}
+    if lowercase:
+        headers = {k.lower(): v for k, v in headers.items()}
+    headers["ETag"] = "checksum"
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+    class Session:
+        def head(self, *args, **kwargs):
+            response = Response()
+            response.headers = headers
+            return response
+
+    info = _file_info("https://example.com/data", Session())
+    assert info["ETag"] == "checksum"
+    if encoding == "gzip":
+        assert "size" not in info
+    else:
+        assert info["size"] == 5
+
+
 def test_download(server, tmpdir, sync):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     url = server.address + "/index/realfile"
@@ -478,6 +527,55 @@ def test_put_file(server, tmp_path, method, reset_files, sync):
 
     fs.put_file(io.BytesIO(b"yyy"), server.address + "/hey_3", method=method)
     assert fs.cat(server.address + "/hey_3") == b"yyy"
+
+
+@pytest.mark.parametrize("caller_owned", [False, True])
+@pytest.mark.parametrize("callback_fails", [False, True])
+def test_get_file_closes_only_owned_output(
+    server, sync, tmp_path, monkeypatch, caller_owned, callback_fails
+):
+    from fsspec.callbacks import Callback
+    from fsspec.implementations import http_sync
+
+    destination = tmp_path / "download"
+    opened = []
+    builtin_open = open
+
+    def track_open(path, mode):
+        stream = builtin_open(path, mode)
+        opened.append(stream)
+        return stream
+
+    def progress(size, value):
+        if callback_fails and value:
+            raise RuntimeError("progress callback failed")
+
+    monkeypatch.setattr(http_sync, "open", track_open, raising=False)
+    output = io.BytesIO() if caller_owned else destination
+    callback = Callback(hooks={"progress": progress})
+    fs = fsspec.filesystem("http")
+    try:
+        if callback_fails:
+            # Keep the traceback alive: GC is not error-path resource cleanup.
+            with pytest.raises(RuntimeError, match="progress callback failed") as exc:
+                fs.get_file(server.realfile, output, chunk_size=5, callback=callback)
+            assert exc.value.__traceback__ is not None
+        else:
+            fs.get_file(server.realfile, output, chunk_size=5, callback=callback)
+
+        if caller_owned:
+            assert opened == []
+            assert not output.closed
+            assert output.getvalue() == (data[:5] if callback_fails else data)
+        else:
+            assert len(opened) == 1
+            assert opened[0].closed
+            assert destination.read_bytes() == (data[:5] if callback_fails else data)
+    finally:
+        for stream in opened:
+            stream.close()
+        if caller_owned:
+            output.close()
 
 
 def test_encoded(server, sync):

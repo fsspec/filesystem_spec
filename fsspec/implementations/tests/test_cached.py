@@ -993,6 +993,76 @@ def test_with_compression(impl, compression):
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("compression", [None, "gzip", "bz2", "infer"])
+@pytest.mark.parametrize("selection", ["single", "list", "glob"])
+@pytest.mark.parametrize("warm", [False, True])
+def test_cat_with_compression(tmp_path, m, protocol, compression, selection, warm):
+    codec = "bz2" if compression == "bz2" else "gzip"
+    suffix = "bz2" if codec == "bz2" else "gz"
+    paths = [f"/cat-compression/{name}.{suffix}" for name in ("one", "two")]
+    expected = {}
+    for path in paths:
+        data = f"uncompressed contents of {path}".encode()
+        with m.open(path, "wb") as raw:
+            with compr[codec](raw, mode="wb") as compressed:
+                compressed.write(data)
+        expected[path] = data if compression else m.cat_file(path)
+
+    options = {
+        "fs": m,
+        "cache_storage": str(tmp_path),
+        "compression": compression,
+        "skip_instance_cache": True,
+    }
+    fs = fsspec.filesystem(protocol, **options)
+    if warm:
+        for path in paths:
+            with fs.open(path, "rb") as f:
+                assert f.read() == expected[path]
+
+    if selection == "single":
+        assert fs.cat(paths[0]) == expected[paths[0]]
+        paths = paths[:1]
+    else:
+        argument = paths if selection == "list" else f"/cat-compression/*.{suffix}"
+        assert fs.cat(argument) == expected
+
+    # cat must populate the same cache representation as open, including after
+    # the cache is loaded by another instance.
+    reloaded = fsspec.filesystem(protocol, **options)
+    for path in paths:
+        for cached_fs in (fs, reloaded):
+            with cached_fs.open(path, "rb") as f:
+                assert f.read() == expected[path]
+        cached = fs._check_file(path)
+        fn = cached[1] if isinstance(cached, tuple) else cached
+        assert pathlib.Path(fn).read_bytes() == expected[path]
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("compression", ["gzip", "bz2", "infer"])
+def test_cat_does_not_poison_compressed_open(tmp_path, m, protocol, compression):
+    codec = "bz2" if compression == "bz2" else "gzip"
+    path = "/cat-poison.bz2" if codec == "bz2" else "/cat-poison.gz"
+    data = b"decompressed cache contents"
+    with m.open(path, "wb") as raw:
+        with compr[codec](raw, mode="wb") as compressed:
+            compressed.write(data)
+
+    options = {"fs": m, "compression": compression, "skip_instance_cache": True}
+    control = fsspec.filesystem(
+        protocol, cache_storage=str(tmp_path / "open"), **options
+    )
+    with control.open(path, "rb") as f:
+        assert f.read() == data
+
+    fs = fsspec.filesystem(protocol, cache_storage=str(tmp_path / "cat"), **options)
+    fs.cat(path)
+    with fs.open(path, "rb") as f:
+        assert f.read() == data
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_again(protocol):
     fn = "memory://afile"
     with fsspec.open(fn, "wb") as f:
@@ -1258,6 +1328,71 @@ def test_expiry():
     assert detail["time"] - start_time > 0.09
 
 
+@pytest.mark.parametrize("expires_during", ["download", "save", "cache_hit"])
+def test_open_uses_selected_file_when_cache_expires(
+    tmp_path, monkeypatch, expires_during
+):
+    from types import SimpleNamespace
+
+    from fsspec.implementations import cache_metadata, cached
+
+    now = 1000.0
+    clock = SimpleNamespace(time=lambda: now)
+    monkeypatch.setattr(cached, "time", clock)
+    monkeypatch.setattr(cache_metadata, "time", clock)
+    backend = MemoryFileSystem(skip_instance_cache=True)
+    path = "/expires-during-open"
+    backend.pipe_file(path, b"first")
+    fs = WholeFileCacheFileSystem(
+        fs=backend,
+        cache_storage=str(tmp_path),
+        cache_check=False,
+        expiry_time=1,
+        skip_instance_cache=True,
+    )
+    if expires_during == "cache_hit":
+        with fs.open(path, "rb") as f:
+            assert f.read() == b"first"
+        original = WholeFileCacheFileSystem._check_file
+
+        def check_file(self, path):
+            nonlocal now
+            result = original(self, path)
+            now += 2
+            return result
+
+        with monkeypatch.context() as patch:
+            patch.setattr(WholeFileCacheFileSystem, "_check_file", check_file)
+            with fs.open(path, "rb") as f:
+                assert f.read() == b"first"
+    else:
+        # Advance the clock after real I/O, without sleeping or bypassing it.
+        target = (
+            MemoryFileSystem
+            if expires_during == "download"
+            else cache_metadata.CacheMetadata
+        )
+        method = "get_file" if expires_during == "download" else "_save"
+        original = getattr(target, method)
+
+        def delayed(self, *args, **kwargs):
+            nonlocal now
+            result = original(self, *args, **kwargs)
+            now += 2
+            return result
+
+        with monkeypatch.context() as patch:
+            patch.setattr(target, method, delayed)
+            with fs.open(path, "rb") as f:
+                assert f.read() == b"first"
+
+    # The selected read may finish, but the next open must still refresh expiry.
+    backend.pipe_file(path, b"second")
+    assert fs._check_file(path) is False
+    with fs.open(path, "rb") as f:
+        assert f.read() == b"second"
+
+
 def test_equality(tmpdir):
     """Test sane behaviour for equality and hashing.
 
@@ -1446,6 +1581,42 @@ def test_write_transaction(tmpdir, m, monkeypatch):
     assert m.cat("myfile") == b"1"
     assert m.cat("otherfile") == b"2"
     assert called[0] == 1  # copy was done in one go
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("writes", [1, 2])
+@pytest.mark.parametrize("mode", ["wb", "ab"])
+def test_write_transaction_abort(tmp_path, m, existing, writes, mode):
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    path = "/transaction-file"
+    if existing:
+        m.pipe(path, b"original")
+        assert fs.cat(path) == b"original"
+
+    with pytest.raises(RuntimeError, match="abort transaction"):
+        with fs.transaction:
+            for _ in range(writes):
+                with fs.open(path, mode) as f:
+                    f.write(b"aborted")
+            raise RuntimeError("abort transaction")
+
+    assert not fs._intrans
+    assert fs._transaction is None
+    assert not list(tmp_path.iterdir())
+    fresh = fsspec.filesystem(
+        "simplecache", fs=m, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    for reader in (m, fs, fresh):
+        if existing:
+            assert reader.cat(path) == b"original"
+        else:
+            with pytest.raises(FileNotFoundError):
+                reader.cat_file(path)
+
+    # A rollback must not leave later writes trapped in a dead transaction.
+    with fs.open(path, "wb") as f:
+        f.write(b"subsequent")
+    assert m.cat(path) == b"subsequent"
 
 
 def test_filecache_write(tmpdir, m):
