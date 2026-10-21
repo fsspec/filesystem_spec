@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
