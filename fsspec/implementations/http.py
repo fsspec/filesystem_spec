@@ -931,6 +931,7 @@ class HTTPStreamFile(AbstractBufferedFile):
 
         self.r = sync(self.loop, cor)
         self.loop = fs.loop
+        self._leftover = b""
 
     def seek(self, loc, whence=0):
         if loc == 0 and whence == 1:
@@ -940,17 +941,32 @@ class HTTPStreamFile(AbstractBufferedFile):
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
-        out = await self.r.content.read(num)
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
+        if num < 0:
+            out = self._leftover + await self.r.content.read(num)
+            self._leftover = b""
+        elif len(self._leftover) >= num:
+            out, self._leftover = self._leftover[:num], self._leftover[num:]
+        else:
+            out = self._leftover + await self.r.content.read(num - len(self._leftover))
+            self._leftover = b""
         self.loc += len(out)
         return out
 
     read = sync_wrapper(_read)
+
+    def _unread(self, data):
+        self._leftover = data + self._leftover
+        self.loc -= len(data)
 
     async def _close(self):
         self.r.close()
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+        self._leftover = b""
         super().close()
 
 

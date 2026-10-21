@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve delimiter lookahead when reading lines from forward-only HTTP streams (#2349).
+
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
 - Request a protected data channel again when ``FTPFileSystem`` reconnects

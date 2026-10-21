@@ -2327,7 +2327,6 @@ class AbstractBufferedFile(io.IOBase):
         tail = b""
         overlap = max(len(char) - 1, 0)
         while True:
-            start = self.tell()
             part = self.read(blocks or self.blocksize)
             if len(part) == 0:
                 break
@@ -2336,11 +2335,15 @@ class AbstractBufferedFile(io.IOBase):
             if found > -1:
                 consumed = found + len(char) - len(tail)
                 out.append(part[:consumed])
-                self.seek(start + consumed)
+                self._unread(part[consumed:])
                 break
             out.append(part)
             tail = data[-overlap:] if overlap else b""
         return b"".join(out)
+
+    def _unread(self, data):
+        """Return delimiter lookahead to a seekable file or a stream buffer."""
+        self.seek(self.tell() - len(data))
 
     def readline(self):
         """Read until and including the first occurrence of newline character

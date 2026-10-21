@@ -846,6 +846,8 @@ class HTTPStreamFile(AbstractBufferedFile):
         raise ValueError("Cannot seek streaming HTTP file")
 
     def read(self, num=-1):
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
         bufs = [self.leftover]
         leng = len(self.leftover)
         while leng < num or num < 0:
@@ -867,8 +869,13 @@ class HTTPStreamFile(AbstractBufferedFile):
         self.loc += len(out)
         return out
 
+    def _unread(self, data):
+        self.leftover = data + self.leftover
+        self.loc -= len(data)
+
     def close(self):
         self.r.close()
+        self.leftover = b""
         self.closed = True
 
 
