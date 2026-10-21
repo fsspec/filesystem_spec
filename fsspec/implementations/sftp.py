@@ -276,7 +276,7 @@ class SFTPFileSystem(AbstractFileSystem):
             raise FileExistsError(f"File exists: {path}")
 
         if create_parents:
-            self.makedirs(path)
+            self.makedirs(path, mode=mode)
         else:
             self.ftp.mkdir(path, mode)
 
