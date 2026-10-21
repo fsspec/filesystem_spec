@@ -12,8 +12,7 @@ Enhancements
 
 Fixes
 
-- Drain batch-owned tasks and close unstarted coroutines when a bulk async
-  operation is cancelled or fails.
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
 
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
@@ -66,6 +65,9 @@ Fixes
 - Keep the HTTP link regex linear
 
 - Preserve single-source copy semantics for Paths in sync batch ops
+
+- Drain batch-owned tasks and close unstarted coroutines when a bulk async
+  operation is cancelled or fails.
 
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
