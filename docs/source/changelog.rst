@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Reject Git paths below files and preserve complete file names in Git metadata.
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
