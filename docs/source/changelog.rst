@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Reject writes through read-only memory file handles (#2193).
+
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
 - Request a protected data channel again when ``FTPFileSystem`` reconnects
