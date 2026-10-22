@@ -93,7 +93,8 @@ def test_http_stream_line_lookahead_survives_mixed_reads(server, stream_fs):
 def test_http_stream_line_lookahead_after_close(server, stream_fs, method):
     with stream_fs.open(server.realfile, block_size=0) as stream:
         assert stream.readline() == data[: data.index(b"\n") + 1]
-        assert stream.read(1) == data[stream.tell() - 1 : stream.tell()]
+        position = stream.tell()
+        assert stream.read(1) == data[position : position + 1]
         with pytest.raises(ValueError, match="Cannot seek"):
             stream.seek(0)
     with pytest.raises(ValueError, match="closed file"):
