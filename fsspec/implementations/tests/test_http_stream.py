@@ -15,12 +15,14 @@ def stream_fs(request):
     if request.param == "aiohttp":
         from fsspec.implementations.http import HTTPFileSystem
     else:
-        from fsspec.implementations.http_sync import HTTPFileSystem
+        from fsspec.implementations.http_sync import HTTPFileSystem, unregister
 
     fs = HTTPFileSystem(skip_instance_cache=True)
     yield fs
     if request.param == "aiohttp" and fs._session is not None:
         fs.close_session(fs.loop, fs._session)
+    elif request.param == "requests":
+        unregister()
 
 
 @pytest.mark.parametrize("block_size", [0, 32])
