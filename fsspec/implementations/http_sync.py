@@ -839,10 +839,26 @@ class HTTPStreamFile(AbstractBufferedFile):
         self.fs._raise_not_found_for_status(r, url)
         self.it = r.iter_content(1024, False)
         self.leftover = b""
+        self._last_read = b""
 
         self.r = r
 
-    def seek(self, *args, **kwargs):
+    def seek(self, loc, whence=0):
+        """Allow delimiter lookahead to rewind within the last bounded read."""
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        if whence == 1:
+            loc += self.loc
+        elif whence != 0:
+            raise ValueError("Cannot seek streaming HTTP file")
+        if loc == self.loc:
+            return self.loc
+        rewind = self.loc - loc
+        if 0 < rewind <= len(self._last_read):
+            self.leftover = self._last_read[-rewind:] + self.leftover
+            self._last_read = self._last_read[:-rewind]
+            self.loc = loc
+            return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     def read(self, num=-1):
@@ -866,16 +882,15 @@ class HTTPStreamFile(AbstractBufferedFile):
             out = out[:num]
         else:
             self.leftover = b""
+        if num:
+            # A full-file read must not leave the entire response retained.
+            self._last_read = out if num > 0 else b""
         self.loc += len(out)
         return out
 
-    def _unread(self, data):
-        self.leftover = data + self.leftover
-        self.loc -= len(data)
-
     def close(self):
         self.r.close()
-        self.leftover = b""
+        self.leftover = self._last_read = b""
         self.closed = True
 
 
