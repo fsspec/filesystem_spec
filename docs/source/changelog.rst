@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.

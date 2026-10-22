@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import io
 import logging
 import multiprocessing
 import os
@@ -385,6 +386,30 @@ def test_host_key_policy_default(fake_client):
     fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
 
     assert isinstance(fs.client.policy, paramiko.AutoAddPolicy)
+
+
+@pytest.mark.parametrize("autocommit", [True, False])
+@pytest.mark.parametrize("block_size", [None, 0, 1, 4096])
+def test_open_buffer_size(fake_client, autocommit, block_size):
+    calls = []
+
+    class RecordingSFTP:
+        def open(self, path, mode, bufsize):
+            calls.append((path, mode, bufsize))
+            return io.BytesIO()
+
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = RecordingSFTP()
+    with fs.open("/target", "wb", block_size=block_size, autocommit=autocommit) as f:
+        assert f.write(b"data") == 4
+        expected_path = "/target" if autocommit else f.temppath
+        assert calls == [
+            (expected_path, "wb", -1 if block_size is None else block_size)
+        ]
+        if not autocommit:
+            assert f.targetpath == "/target"
+            assert f.fs is fs
+            assert f in fs.transaction.files
 
 
 @pytest.mark.parametrize(
