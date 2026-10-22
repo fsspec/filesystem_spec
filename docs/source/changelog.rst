@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Keep literal ``=PLACEHOLDER=`` text in synchronous HTTP glob patterns.
+
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
 
 - Only send ``ia://`` credentials over https when the download URL is https.
