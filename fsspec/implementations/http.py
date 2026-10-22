@@ -972,6 +972,8 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         return False
 
     async def read(self, num=-1):
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
         if self.r is None:
             r = await self.session.get(
                 self.fs.encode_url(self.url), **self.kwargs

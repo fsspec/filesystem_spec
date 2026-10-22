@@ -1273,3 +1273,30 @@ async def test_async_stream_seekable(server):
     finally:
         await stream.close()
         await fs._session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initial_read", [None, 1, -1])
+@pytest.mark.parametrize("read_size", [0, 1, -1])
+async def test_async_stream_read_after_close(
+    encoded_range_server, initial_read, read_size
+):
+    server = encoded_range_server
+    fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
+    stream = await fs.open_async(server.url, size=len(server.content))
+    try:
+        if initial_read is not None:
+            expected = (
+                server.content if initial_read < 0 else server.content[:initial_read]
+            )
+            assert await stream.read(initial_read) == expected
+        await stream.close()
+        assert stream.closed
+        requests_before = len(server.requests)
+        with pytest.raises(ValueError, match="I/O operation on closed file"):
+            await stream.read(read_size)
+        assert len(server.requests) == requests_before
+        assert stream.r is None
+    finally:
+        await stream.close()
+        await fs._session.close()
