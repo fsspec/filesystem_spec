@@ -12,9 +12,11 @@ Enhancements
 
 Fixes
 
-- Keep literal ``=PLACEHOLDER=`` text in synchronous HTTP glob patterns.
+- Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
+- Keep literal ``=PLACEHOLDER=`` text in synchronous HTTP glob patterns.
 
 - Only send ``ia://`` credentials over https when the download URL is https.
 
