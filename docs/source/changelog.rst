@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Reject reads on closed asynchronous HTTP streams without reopening a request.
+
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
 
 - Only send ``ia://`` credentials over https when the download URL is https.
