@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import io
 import logging
 import multiprocessing
 import os
@@ -430,10 +431,63 @@ def test_info_without_stat_filename(fake_client, tmp_path):
     assert result["type"] == "file"
 
 
+@pytest.mark.parametrize("create_parents", [True, False])
+@pytest.mark.parametrize("mode", [0o700, 0o750, None])
+def test_mkdir_permissions(fake_client, tmp_path, create_parents, mode):
+    calls = []
+
+    class LocalSFTP:
+        def stat(self, path):
+            return (tmp_path / path.lstrip("/")).stat()
+
+        def mkdir(self, path, mode=0o777):
+            calls.append((path, mode))
+            (tmp_path / path.lstrip("/")).mkdir(mode=mode)
+
+    if not create_parents:
+        (tmp_path / "parent").mkdir()
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = LocalSFTP()
+    kwargs = {} if mode is None else {"mode": mode}
+    fs.mkdir("parent/child", create_parents=create_parents, **kwargs)
+
+    expected_mode = 0o777 if mode is None else mode
+    expected_paths = ["parent", "parent/child"] if create_parents else ["parent/child"]
+    assert calls == [(path, expected_mode) for path in expected_paths]
+    assert (tmp_path / "parent/child").is_dir()
+    with pytest.raises(FileExistsError):
+        fs.mkdir("parent/child", create_parents=create_parents, **kwargs)
+    assert len(calls) == len(expected_paths)
+
+
 def test_host_key_policy_default(fake_client):
     fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
 
     assert isinstance(fs.client.policy, paramiko.AutoAddPolicy)
+
+
+@pytest.mark.parametrize("autocommit", [True, False])
+@pytest.mark.parametrize("block_size", [None, 0, 1, 4096])
+def test_open_buffer_size(fake_client, autocommit, block_size):
+    calls = []
+
+    class RecordingSFTP:
+        def open(self, path, mode, bufsize):
+            calls.append((path, mode, bufsize))
+            return io.BytesIO()
+
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = RecordingSFTP()
+    with fs.open("/target", "wb", block_size=block_size, autocommit=autocommit) as f:
+        assert f.write(b"data") == 4
+        expected_path = "/target" if autocommit else f.temppath
+        assert calls == [
+            (expected_path, "wb", -1 if block_size is None else block_size)
+        ]
+        if not autocommit:
+            assert f.targetpath == "/target"
+            assert f.fs is fs
+            assert f in fs.transaction.files
 
 
 @pytest.mark.parametrize(
