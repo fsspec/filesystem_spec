@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Only send ``ia://`` credentials over https when the download URL is https.
+
 - Honor ``block_size=0`` for direct and transactional SFTP file opens.
 
 - Make FUSE CLI ``-f`` match its documented default (#1586).
