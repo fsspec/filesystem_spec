@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
 - Only send ``ia://`` credentials over https when the download URL is https.
 
 - Honor ``block_size=0`` for direct and transactional SFTP file opens.
