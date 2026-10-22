@@ -14,6 +14,12 @@ Fixes
 
 - Only send ``ia://`` credentials over https when the download URL is https.
 
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
+
+- Make FUSE CLI ``-f`` match its documented default (#1586).
+
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
+
 - Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
 
 - Request a protected data channel again when ``FTPFileSystem`` reconnects
@@ -156,6 +162,9 @@ Fixes
 
 - Request identity encoding for buffered HTTP range reads by default, while
   preserving explicitly configured request and session encodings (#1748).
+
+- Avoid treating content-encoded transfer lengths as decoded file sizes in
+  the synchronous HTTP filesystem.
 
 - Resolve negative FTP read offsets relative to the end of the file.
 
