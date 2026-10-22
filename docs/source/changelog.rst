@@ -40,6 +40,8 @@ Fixes
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
+- Honor ``same_scheme=True`` when listing HTTP directories in both HTTP backends.
+
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 
 - Propagate backend removal errors from ``FSMap``
