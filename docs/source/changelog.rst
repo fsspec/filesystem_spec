@@ -14,6 +14,12 @@ Fixes
 
 - Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
 
+- Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
+- Only send ``ia://`` credentials over https when the download URL is https.
+
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.

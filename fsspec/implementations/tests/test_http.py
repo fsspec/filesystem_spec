@@ -662,6 +662,28 @@ def test_cat_file_range(server):
     assert h.cat(urla, end=-10) == data[:-10]
 
 
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"ignore_range": "true", "give_length": "true"},
+        {"ignore_range": "true", "give_range": "true"},
+    ],
+)
+def test_cat_file_range_when_server_ignores_range(server, headers):
+    """The body of a server that ignores ``Range`` is the whole file, not the
+    window that was asked for, so the window is read out of it instead."""
+    h = fsspec.filesystem("http", headers=headers)
+    urla = server.realfile
+    assert h.cat_file(urla, start=0, end=10) == data[:10]
+    assert h.cat_file(urla, end=10) == data[:10]
+    assert h.cat_file(urla, start=-10) == data[-10:]
+
+    # a window that starts inside the file cannot be told apart from a response
+    # that served more of the range than was asked for
+    with pytest.raises(ValueError):
+        h.cat_file(urla, start=1, end=10)
+
+
 @pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
 def test_cat_file_empty_range_does_not_make_request(server, reset_faults, start, end):
     h = fsspec.filesystem("http", skip_instance_cache=True)
