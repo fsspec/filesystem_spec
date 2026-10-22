@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
+
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
