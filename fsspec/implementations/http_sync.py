@@ -21,7 +21,6 @@ from fsspec.utils import (
     DEFAULT_BLOCK_SIZE,
     isfilelike,
     nullcontext,
-    parse_content_range_header,
     range_response_window,
     response_is_requested_range,
     tokenize,
@@ -765,10 +764,6 @@ class HTTPFile(AbstractBufferedFile):
             out = r.content
             self.cache = AllBytes(size=len(out), fetcher=None, blocksize=None, data=out)
             self.size = len(out)
-
-    def _parse_content_range(self, headers):
-        """Parse the Content-Range header"""
-        return parse_content_range_header(headers)
 
     def _fetch_range(self, start, end):
         """Download a block of data

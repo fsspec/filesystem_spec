@@ -19,7 +19,6 @@ from fsspec.utils import (
     glob_translate,
     isfilelike,
     nullcontext,
-    parse_content_range_header,
     range_response_window,
     response_is_requested_range,
     tokenize,
@@ -807,10 +806,6 @@ class HTTPFile(AbstractBufferedFile):
                 self.size = len(out)
 
     _fetch_all = sync_wrapper(async_fetch_all)
-
-    def _parse_content_range(self, headers):
-        """Parse the Content-Range header"""
-        return parse_content_range_header(headers)
 
     async def async_fetch_range(self, start, end):
         """Download a block of data
