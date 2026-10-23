@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Reject Git paths below files and preserve complete file names in Git metadata.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
