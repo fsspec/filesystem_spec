@@ -122,6 +122,47 @@ def test_mapper():
     assert hash(BasenameCacheMapper(2)) == hash(mapper3)
 
 
+def test_basename_mapper_keeps_metadata_file(tmpdir):
+    # The metadata of a cache directory lives in <storage>/cache; a remote
+    # file with that basename must not be downloaded over it, or its contents
+    # end up merged into the metadata on the next save.
+    for levels in [0, 1, 2]:
+        assert BasenameCacheMapper(levels)("/cache") != "cache"
+        assert BasenameCacheMapper(levels)("/dir/cache") != "cache"
+
+    source = os.path.join(tmpdir, "source")
+    os.mkdir(source)
+    afile = os.path.join(source, "afile")
+    open(afile, "w").write("test")
+    outside = os.path.join(tmpdir, "outside")
+    open(outside, "w").write("not the cached copy")
+    storage = os.path.join(tmpdir, "storage")
+    # a metadata document that points another path at a file outside storage
+    poison = os.path.join(source, "cache")
+    with open(poison, "w") as f:
+        json.dump(
+            {
+                make_path_posix(afile): {
+                    "original": afile,
+                    "fn": os.path.relpath(outside, storage),
+                    "blocks": True,
+                    "time": time.time(),
+                    "uid": "x",
+                }
+            },
+            f,
+        )
+
+    fs = fsspec.filesystem(
+        "filecache", target_protocol="file", cache_storage=storage, same_names=True
+    )
+    with open(poison, "rb") as f:
+        assert fs.cat(poison) == f.read()
+    assert fs.cat(afile) == b"test"
+    with open(os.path.join(storage, "cache")) as f:
+        assert make_path_posix(afile) in json.load(f)
+
+
 @pytest.mark.parametrize(
     "cache_mapper", [BasenameCacheMapper(), BasenameCacheMapper(1), HashCacheMapper()]
 )

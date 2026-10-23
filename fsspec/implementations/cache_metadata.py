@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 
     Detail: TypeAlias = dict[str, Any]
 
+# Name of the metadata file inside each cache storage directory.
+METADATA_FILENAME = "cache"
+
 
 class CacheMetadata:
     """Cache metadata.
@@ -80,7 +83,7 @@ class CacheMetadata:
             writable = i == n - 1
             if writable_only and not writable:
                 continue
-            yield os.path.join(storage, "cache"), storage, writable
+            yield os.path.join(storage, METADATA_FILENAME), storage, writable
 
     def check_file(
         self, path: str, cfs: CachingFileSystem | None
@@ -129,7 +132,7 @@ class CacheMetadata:
                 self.cached_files[-1].pop(path)
 
         if self.cached_files[-1]:
-            cache_path = os.path.join(self._storage[-1], "cache")
+            cache_path = os.path.join(self._storage[-1], METADATA_FILENAME)
             self._save(self.cached_files[-1], cache_path)
 
         writable_cache_empty = not self.cached_files[-1]
