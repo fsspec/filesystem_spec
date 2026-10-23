@@ -12,7 +12,13 @@ Enhancements
 
 Fixes
 
-- Normalize negative HTTP read bounds before checking for empty ranges, without issuing a data request for those empty reads.
+- Reject reads on closed asynchronous HTTP streams without reopening a request.
+
+- Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
+- Only send ``ia://`` credentials over https when the download URL is https.
+
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
 
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
@@ -35,6 +41,8 @@ Fixes
 - Finalize zip-fs file contexts on explicit close (#2311).
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
+
+- Normalize negative HTTP read bounds before checking for empty ranges, without issuing a data request for those empty reads.
 
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 
