@@ -924,16 +924,42 @@ class HTTPStreamFile(AbstractBufferedFile):
 
         self.r = sync(self.loop, cor)
         self.loop = fs.loop
+        self.leftover = b""
+        self._last_read = b""
 
     def seek(self, loc, whence=0):
-        if loc == 0 and whence == 1:
+        """Allow delimiter lookahead to rewind within the last bounded read."""
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        if whence == 1:
+            loc += self.loc
+        elif whence != 0:
+            raise ValueError("Cannot seek streaming HTTP file")
+        if loc == self.loc:
             return self.loc
-        if loc == self.loc and whence == 0:
+        rewind = self.loc - loc
+        if 0 < rewind <= len(self._last_read):
+            self.leftover = self._last_read[-rewind:] + self.leftover
+            self._last_read = self._last_read[:-rewind]
+            self.loc = loc
             return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
-        out = await self.r.content.read(num)
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
+        if num < 0:
+            out = self.leftover + await self.r.content.read(num)
+            self.leftover = b""
+        elif len(self.leftover) >= num:
+            out, self.leftover = self.leftover[:num], self.leftover[num:]
+        else:
+            out = self.leftover + await self.r.content.read(num - len(self.leftover))
+            self.leftover = b""
+        if num:
+            # A full-file read must not leave the entire response retained.
+            self._last_read = out if num > 0 else b""
         self.loc += len(out)
         return out
 
@@ -944,6 +970,7 @@ class HTTPStreamFile(AbstractBufferedFile):
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+        self.leftover = self._last_read = b""
         super().close()
 
 
