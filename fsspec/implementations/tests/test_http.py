@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from types import SimpleNamespace
 
 import aiohttp
@@ -618,6 +619,22 @@ def test_multi_download(server, tmpdir):
     h.get([urla, urlb], [fna, fnb])
     assert open(fna, "rb").read() == data
     assert open(fnb, "rb").read() == data
+
+
+@pytest.mark.parametrize("path_type", [str, Path])
+@pytest.mark.parametrize("parent", ["", "nested"])
+def test_multi_download_relative_destinations(
+    server, tmp_path, monkeypatch, path_type, parent
+):
+    monkeypatch.chdir(tmp_path)
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    destinations = [
+        path_type(os.path.join(parent, name)) for name in ("afile", "bfile")
+    ]
+
+    h.get([server.realfile, server.address + "/index/otherfile"], destinations)
+
+    assert all(Path(path).read_bytes() == data for path in destinations)
 
 
 def test_ls(server):
