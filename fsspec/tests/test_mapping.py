@@ -321,11 +321,9 @@ def test_setitems_memory_nested(batch):
     assert dict(m) == SETITEMS_BATCHES[batch]
 
 
-def test_setitems_local_overwrite_and_partial_batch(tmp_path):
+def test_setitems_local_overwrite_and_buffer_values(tmp_path):
     m = _local_mapper(tmp_path, root_exists=True)
     m["existing"] = b"old"
-    # "existing" and "flat" can be written before the missing parent fails,
-    # so the retry rewrites them; the final bytes must be the new ones
     batch = {"existing": b"new", "flat": b"f", "missing/k": b"m"}
     m.setitems(batch)
     assert dict(m) == batch
@@ -343,8 +341,7 @@ def test_setitems_empty_batch_creates_nothing(tmp_path):
 def test_setitems_parent_is_file_still_errors(tmp_path):
     m = _local_mapper(tmp_path, root_exists=True)
     m["blocker"] = b"file"
-    # the exact error is platform dependent (NotADirectoryError on POSIX;
-    # Windows may report FileNotFoundError then FileExistsError from mkdirs)
+    # The exact error from creating a directory below a file is platform dependent.
     with pytest.raises(OSError):
         m.setitems({"blocker/child": b"x"})
     assert m["blocker"] == b"file"
@@ -369,7 +366,7 @@ class _RecordingFS(MemoryFileSystem):
         return super().pipe(path, value, **kwargs)
 
     def makedirs(self, path, exist_ok=False):
-        self.calls.append(("makedirs", path))
+        self.calls.append(("makedirs", path, exist_ok))
         if self.mkdirs_error is not None:
             raise self.mkdirs_error
         return super().makedirs(path, exist_ok=exist_ok)
@@ -380,31 +377,14 @@ def _recording_mapper(**kwargs):
     return fs.get_mapper(f"/rec-{uuid.uuid4().hex}")
 
 
-def test_setitems_success_makes_no_directory_calls():
-    # directory-free backends must keep one bulk write and no mkdirs
-    m = _recording_mapper(mkdirs_error=AssertionError("mkdirs must not run"))
-    m.setitems({"a/b": b"1", "c": b"2"})
-    assert [c[0] for c in m.fs.calls] == ["pipe"]
-    assert m["a/b"] == b"1"
-
-
-def test_setitems_retries_once_after_missing_parent():
-    m = _recording_mapper(pipe_errors=[FileNotFoundError("parent")])
+def test_setitems_creates_distinct_parents_before_writing():
+    m = _recording_mapper()
     m.setitems({"x/a": b"1", "x/b": b"2", "y/z/c": b"3", "d": b"4"})
     root = m.root
     assert m.fs.calls == [
-        (
-            "pipe",
-            {
-                f"{root}/x/a": b"1",
-                f"{root}/x/b": b"2",
-                f"{root}/y/z/c": b"3",
-                f"{root}/d": b"4",
-            },
-        ),
-        ("makedirs", f"{root}/x"),
-        ("makedirs", f"{root}/y/z"),
-        ("makedirs", root),
+        ("makedirs", f"{root}/x", True),
+        ("makedirs", f"{root}/y/z", True),
+        ("makedirs", root, True),
         (
             "pipe",
             {
@@ -417,45 +397,54 @@ def test_setitems_retries_once_after_missing_parent():
     ]
 
 
-def test_setitems_second_missing_error_propagates():
-    m = _recording_mapper(pipe_errors=[FileNotFoundError("1"), FileNotFoundError("2")])
-    with pytest.raises(FileNotFoundError, match="2"):
+def test_setitems_empty_batch_keeps_bulk_call():
+    m = _recording_mapper()
+    m.setitems({})
+    assert m.fs.calls == [("pipe", {})]
+
+
+def test_setitems_mkdirs_error_prevents_writing():
+    failure = PermissionError("mk")
+    m = _recording_mapper(mkdirs_error=failure)
+    with pytest.raises(PermissionError) as exc:
         m.setitems({"x/a": b"1"})
-    assert [c[0] for c in m.fs.calls] == ["pipe", "makedirs", "pipe"]
+    assert exc.value is failure
+    assert m.fs.calls == [("makedirs", f"{m.root}/x", True)]
+    assert "x/a" not in m
 
 
-def test_setitems_mkdirs_error_propagates():
-    m = _recording_mapper(
-        pipe_errors=[FileNotFoundError("1")], mkdirs_error=PermissionError("mk")
-    )
-    with pytest.raises(PermissionError, match="mk"):
+@pytest.mark.parametrize(
+    "error_type", [FileNotFoundError, PermissionError, NotADirectoryError, ValueError]
+)
+def test_setitems_write_errors_not_retried(error_type):
+    failure = error_type("write failed")
+    m = _recording_mapper(pipe_errors=[failure])
+    with pytest.raises(error_type) as exc:
         m.setitems({"x/a": b"1"})
-    assert [c[0] for c in m.fs.calls] == ["pipe", "makedirs"]
+    assert exc.value is failure
+    assert [c[0] for c in m.fs.calls] == ["makedirs", "pipe"]
 
 
-@pytest.mark.parametrize("exc", [PermissionError, NotADirectoryError, ValueError])
-def test_setitems_other_errors_not_retried(exc):
-    m = _recording_mapper(
-        pipe_errors=[exc("first")], mkdirs_error=AssertionError("no mkdirs")
-    )
-    with pytest.raises(exc, match="first"):
-        m.setitems({"x/a": b"1"})
-    assert [c[0] for c in m.fs.calls] == ["pipe"]
-
-
-def test_setitems_local_transaction_parent_gap(tmp_path):
-    # Known limitation, unchanged by GH#1041: in a local transaction pipe
-    # defers to temp files, so a missing parent only fails at commit, after
-    # setitems returned. __setitem__ creates parents up front and succeeds.
-    m = _local_mapper(tmp_path, root_exists=True)
-    with pytest.raises(FileNotFoundError):
-        with m.fs.transaction:
-            m.setitems({"txn/k": b"v"})
-    assert "txn/k" not in m
-    assert not m.fs._intrans
+@pytest.mark.parametrize("root_exists", [True, False])
+def test_setitems_local_transaction_creates_parents(tmp_path, root_exists):
+    m = _local_mapper(tmp_path, root_exists=root_exists)
+    values = {"txn/k": b"v", "txn/other": b"other", "deep/dir/k": b"deep"}
     with m.fs.transaction:
-        m["txn/k"] = b"v"
-    assert m["txn/k"] == b"v"
+        m.setitems(values)
+        assert not any(key in m for key in values)
+    assert dict(m) == values
+    assert not m.fs._intrans
+
+
+def test_setitems_local_transaction_discard(tmp_path):
+    m = _local_mapper(tmp_path, root_exists=True)
+    m["existing"] = b"old"
+    with pytest.raises(ValueError, match="abort"):
+        with m.fs.transaction:
+            m.setitems({"existing": b"new", "txn/k": b"v"})
+            raise ValueError("abort")
+    assert dict(m) == {"existing": b"old"}
+    assert not m.fs._intrans
 
 
 @pytest.mark.parametrize("operation", ["delete", "clear", "pop"])

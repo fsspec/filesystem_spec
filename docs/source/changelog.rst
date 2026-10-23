@@ -151,10 +151,8 @@ Fixes
 
 - Make async loop lock initialization thread-safe (#1783)
 
-- Create missing parent directories in ``FSMap.setitems`` and retry the bulk write once,
-  matching ``__setitem__`` (#1041). Any ``FileNotFoundError`` from the first write triggers
-  the retry, so a backend's ``makedirs`` may run (e.g. for a missing bucket). Keys already
-  written by the first attempt are rewritten; deferred writes inside a transaction are unchanged.
+- Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
+  and allowing deferred local transaction writes to commit to missing parents (#1041).
 
 
 2026.9.0
