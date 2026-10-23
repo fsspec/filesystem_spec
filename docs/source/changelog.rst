@@ -15,6 +15,14 @@ Fixes
 - Cancel the submitted async call when ``sync()`` is interrupted, stopping
   HTTP ``get_file`` transfers after a keyboard interrupt (#1667).
 
+- Reject reads on closed asynchronous HTTP streams without reopening a request.
+
+- Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
+- Only send ``ia://`` credentials over https when the download URL is https.
+
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
