@@ -1,3 +1,4 @@
+import errno
 import os
 import pickle
 from contextlib import nullcontext
@@ -273,6 +274,22 @@ def test_directories(m):
     m.rmdir("outer")
 
     assert not m.store
+
+
+def test_rmdir_implied_directory(m):
+    # "/outer" was never created with mkdir; it exists only because of the
+    # file below it, so it is a directory that is not empty
+    m.pipe("/outer/afile", b"data")
+    assert m.isdir("/outer")
+
+    with pytest.raises(OSError) as e:
+        m.rmdir("/outer")
+    assert not isinstance(e.value, FileNotFoundError)
+    assert e.value.errno == errno.ENOTEMPTY
+    assert m.cat("/outer/afile") == b"data"
+
+    with pytest.raises(FileNotFoundError):
+        m.rmdir("/missing")
 
 
 def test_exists_isdir_isfile(m):
