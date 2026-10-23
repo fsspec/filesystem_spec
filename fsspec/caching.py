@@ -299,7 +299,8 @@ class AdaptiveReadaheadCache(BaseCache):
     Parameters
     ----------
     blocksize: int
-        Nominal read size used by callers.
+        Nominal read size used by callers. The first read after opening the
+        file or after a seek fetches at least this many bytes.
     fetcher: Fetcher
         Function of the form ``f(start, end)`` that returns bytes.
     size: int
@@ -358,6 +359,7 @@ class AdaptiveReadaheadCache(BaseCache):
                     if isinstance(fs_loop, asyncio.AbstractEventLoop)
                     else fsspec_asyn.get_loop()
                 ),
+                block_size=blocksize,
             )
             logger.info(
                 "AdaptiveReadaheadCache enabled (blocksize=%d, size=%d, concurrency=%d, max_prefetch_size=%s)",
