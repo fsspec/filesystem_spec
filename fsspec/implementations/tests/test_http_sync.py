@@ -470,6 +470,7 @@ def test_cat_file_range(server, sync):
 
     assert h.cat(urla, start=-10) == data[-10:]
     assert h.cat(urla, start=-10, end=-2) == data[-10:-2]
+    assert h.cat(urla, start=1, end=-1) == data[1:-1]
 
     assert h.cat(urla, end=-10) == data[:-10]
 
@@ -496,14 +497,47 @@ def test_cat_file_range_when_server_ignores_range(server, headers, sync):
         h.cat_file(urla, start=1, end=10)
 
 
-@pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
-def test_cat_file_empty_range_does_not_make_request(
-    server, sync, reset_faults, start, end
-):
-    h = fsspec.filesystem("http", skip_instance_cache=True)
+@pytest.mark.parametrize(
+    "start,end",
+    [
+        (None, 0),
+        (0, 0),
+        (1, 1),
+        (-1, -1),
+        (-2, len(data) - 2),
+        (len(data) - 2, -2),
+        (None, -len(data)),
+        (1, -len(data)),
+        (-len(data) - 2, -len(data) - 1),
+        (-2, 1),
+        (5, 1),
+        (-1, 0),
+    ],
+)
+def test_cat_file_empty_range_does_not_get_data(server, sync, reset_faults, start, end):
+    """A HEAD may resolve relative offsets; an empty slice needs no GET."""
+    h = fsspec.filesystem(
+        "http",
+        headers={"give_length": "true", "head_ok": "true"},
+        skip_instance_cache=True,
+    )
 
     assert h.cat_file(server.realfile, start=start, end=end) == b""
     assert HTTPTestHandler.get_counts.get("/index/realfile", 0) == 0
+    if start == end or end == 0:
+        assert HTTPTestHandler.head_counts.get("/index/realfile", 0) == 0
+
+
+def test_cat_file_suffix_range_does_not_need_size(server, sync, reset_faults):
+    h = fsspec.filesystem(
+        "http",
+        headers={"give_length": "true", "head_ok": "true"},
+        skip_instance_cache=True,
+    )
+    assert h.cat_file(server.realfile, start=-2) == data[-2:]
+    assert HTTPTestHandler.get_counts["/index/realfile"] == 1
+    assert HTTPTestHandler.head_counts.get("/index/realfile", 0) == 0
+    h.session.close()
 
 
 def test_mcat_cache(server, sync):
