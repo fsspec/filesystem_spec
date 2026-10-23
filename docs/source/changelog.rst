@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Limit concurrent calls in ``AsyncFileSystemWrapper`` to ``max_concurrent_tasks``
+  when it is given, and accept ``target_protocol`` without ``target_options``.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
