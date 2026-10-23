@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Cache local and network-mounted file reads through ``blockcache`` and release
+  the cache when the file closes (#1618).
+
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.

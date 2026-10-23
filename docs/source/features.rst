@@ -304,7 +304,7 @@ remote one, if only certain parts of it are required.
 
 Whereas "filecache" works for all file system implementations, and provides a real local file for other
 libraries to use, "blockcache" has restrictions: that you have a storage/OS combination which supports
-sparse files, that the backend implementation uses files which derive ``from AbstractBufferedFile``,
+sparse files, that the backend is local or uses files which derive ``from AbstractBufferedFile``,
 and that the library you pass the resultant object to accepts generic python file-like objects. You
 should not mix block- and file-caches in the same directory. "simplecache" is the same as "filecache",
 except without the options for cache expiry and to check the original source - it can be used where the

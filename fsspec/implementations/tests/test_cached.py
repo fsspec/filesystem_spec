@@ -219,6 +219,104 @@ def test_idempotent():
     assert fs3.storage == fs.storage
 
 
+@pytest.mark.parametrize("protocol", ["blockcache", "cached"])
+@pytest.mark.parametrize("directory_wrapper", [False, True])
+def test_blockcache_local_partial_reopen(tmp_path, mocker, protocol, directory_wrapper):
+    source = tmp_path / "source"
+    data = b"abcdefghijklmnopqrstuvwxyz"
+    source.write_bytes(data)
+    target = fsspec.filesystem("file")
+    path = str(source)
+    if directory_wrapper:
+        target = fsspec.filesystem("dir", path=str(tmp_path), fs=target)
+        path = "source"
+    options = {
+        "fs": target,
+        "cache_storage": str(tmp_path / "cache"),
+        "skip_instance_cache": True,
+    }
+    fs = fsspec.filesystem(protocol, **options)
+    fetch = mocker.spy(target, "cat_ranges")
+
+    with fs.open(path, "rb", block_size=4) as f:
+        mmap = f.cache.cache
+        assert f.read(3) == data[:3]
+        assert f.cache.blocks == {0}
+        assert f.tell() == 3
+    assert f.closed
+    assert mmap.closed
+    f.close()
+    assert fetch.call_count == 1
+
+    # A new filesystem instance must use the recorded blocks without reading
+    # the corresponding bytes from the source again.
+    fs = fsspec.filesystem(protocol, **options)
+    with fs.open(path, "rb", block_size=4) as f:
+        assert f.read(3) == data[:3]
+        assert fetch.call_count == 1
+        f.seek(9)
+        assert f.read(2) == data[9:11]
+        assert fetch.call_count == 2
+        assert f.cache.blocks == {0, 2}
+        f.seek(0)
+        assert f.read() == data
+    assert (
+        json.loads((tmp_path / "cache" / "cache").read_text())[path]["blocks"] is True
+    )
+
+    # Once all blocks are cached, subsequent opens are wholly local.
+    mocker.patch.object(target, "_open", side_effect=AssertionError("source reopened"))
+    fs = fsspec.filesystem(protocol, **options)
+    with fs.open(path, "rb") as f:
+        assert f.read() == data
+
+
+@pytest.mark.parametrize("data", [b"", b"first line\nsecond line\nlast line"])
+def test_blockcache_local_file_interface(tmp_path, data):
+    source = tmp_path / "source"
+    source.write_bytes(data)
+    fs = fsspec.filesystem(
+        "blockcache", target_protocol="file", cache_storage=str(tmp_path / "cache")
+    )
+    with fs.open(source, "rb", block_size=4) as f:
+        assert f.read(0) == b""
+        buffer = bytearray(3)
+        count = f.readinto(buffer)
+        assert bytes(buffer[:count]) == data[:3]
+        f.seek(0)
+        assert list(f) == data.splitlines(keepends=True)
+        assert f.read() == b""
+    with pytest.raises(ValueError, match="closed"):
+        f.read(1)
+
+
+def test_blockcache_local_close(tmp_path):
+    source = tmp_path / "source"
+    source.write_bytes(b"abc")
+    fs = fsspec.filesystem(
+        "blockcache", target_protocol="file", cache_storage=str(tmp_path / "cache")
+    )
+    f = fs.open(source, "rb", block_size=4)
+    mmap = f.cache.cache
+    f.close()
+    f.close()
+    assert f.closed
+    assert mmap.closed
+
+
+def test_blockcache_local_write_passthrough(tmp_path):
+    source = tmp_path / "source"
+    fs = fsspec.filesystem(
+        "blockcache", target_protocol="file", cache_storage=str(tmp_path / "cache")
+    )
+    with fs.open(source, "wb") as f:
+        f.write(b"abc")
+    with fs.open(source, "ab") as f:
+        f.write(b"def")
+    assert source.read_bytes() == b"abcdef"
+    assert list((tmp_path / "cache").iterdir()) == []
+
+
 def test_blockcache_workflow(ftp_writable, tmp_path):
     host, port, user, pw = ftp_writable
     fs = FTPFileSystem(host, port, user, pw)

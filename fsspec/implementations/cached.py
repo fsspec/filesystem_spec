@@ -10,6 +10,7 @@ import time
 import weakref
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, suppress
+from functools import partial
 from hashlib import sha256
 from shutil import rmtree
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -99,8 +100,8 @@ class CachingFileSystem(ChainedFileSystem):
 
     - the block-size must be the same for each access of a given file, unless
       all blocks of the file have already been read
-    - caching can only be applied to file-systems which produce files
-      derived from fsspec.spec.AbstractBufferedFile.
+    - caching can only be applied to local files or file-systems which produce
+      files derived from fsspec.spec.AbstractBufferedFile.
     """
 
     protocol: ClassVar[str | tuple[str, ...]] = ("blockcache", "cached")
@@ -413,9 +414,15 @@ class CachingFileSystem(ChainedFileSystem):
         # for any file that is read over a network, e.g. S3.
         size = detail.get("size")
 
-        # call target filesystems open
+        # LocalFileOpener reads directly from its file handle, so attaching a
+        # cache to it has no effect. Use buffered range reads only within this
+        # wrapper, leaving ordinary local filesystem opens unchanged.
+        open_file = self.fs._open
+        if isinstance(self.fs, LocalFileSystem):
+            open_file = partial(AbstractBufferedFile, self.fs)
+
         self._mkcache()
-        f = self.fs._open(
+        f = open_file(
             path,
             mode=mode,
             block_size=block_size,
