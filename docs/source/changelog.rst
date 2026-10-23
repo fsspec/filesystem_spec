@@ -79,6 +79,9 @@ Fixes
 
 - Preserve single-source copy semantics for Paths in sync batch ops
 
+- Make the ``.fuse_ready`` file of ``fsspec.fuse`` stat-able and readable when
+  ``ready_file=True``, instead of failing with an I/O error (#1587)
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 
