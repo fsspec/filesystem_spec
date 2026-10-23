@@ -256,6 +256,9 @@ class MemoryFileSystem(AbstractFileSystem):
                 self.pseudo_dirs.remove(path)
             else:
                 raise OSError(ENOTEMPTY, "Directory not empty", path)
+        elif self.isdir(path):
+            # a directory implied by the files below it is never empty
+            raise OSError(ENOTEMPTY, "Directory not empty", path)
         else:
             raise FileNotFoundError(path)
 

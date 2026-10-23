@@ -12,6 +12,10 @@ Enhancements
 
 Fixes
 
+- Raise "Directory not empty" instead of ``FileNotFoundError`` when
+  ``MemoryFileSystem.rmdir`` is given a directory that only exists because
+  of the files below it.
+
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
