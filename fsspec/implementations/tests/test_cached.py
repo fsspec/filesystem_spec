@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 
 import pytest
 
@@ -1552,6 +1553,49 @@ def test_spurious_directory_issue1410(tmpdir):
     # would be created and the next assertion would fail.
     assert len(os.listdir()) == 1
     assert fs._parent("/any/path") == "any"  # correct for ZIP, which has no leading /
+
+
+@pytest.mark.parametrize("transactional", [False, True])
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize("method", ["pipe_file", "pipe"])
+def test_simplecache_pipe_create_existing(tmp_path, m, transactional, cached, method):
+    path = "/create-existing"
+    m.pipe_file(path, b"original")
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    if cached:
+        assert fs.cat_file(path) == b"original"
+
+    with fs.transaction if transactional else nullcontext():
+        with pytest.raises(FileExistsError):
+            getattr(fs, method)(path, b"replacement", mode="create")
+
+    assert m.cat_file(path) == b"original"
+    assert fs.cat_file(path) == b"original"
+
+
+@pytest.mark.parametrize("transactional", [False, True])
+@pytest.mark.parametrize("method", ["pipe_file", "pipe"])
+def test_simplecache_pipe_create_missing(tmp_path, m, transactional, method):
+    path = "/create-missing"
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    with fs.transaction if transactional else nullcontext():
+        getattr(fs, method)(path, b"created", mode="create")
+        if transactional:
+            assert not m.exists(path)
+    assert m.cat_file(path) == b"created"
+    assert fs.cat_file(path) == b"created"
+
+
+def test_simplecache_pipe_create_staged(tmp_path, m):
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    with fs.transaction:
+        fs.pipe({"/staged": b"first"}, mode="create")
+        assert not m.exists("/staged")
+        with pytest.raises(FileExistsError):
+            fs.pipe({"/staged": b"second"}, mode="create")
+        assert fs.cat_file("/staged") == b"first"
+
+    assert m.cat_file("/staged") == b"first"
 
 
 def test_write_transaction(tmpdir, m, monkeypatch):
