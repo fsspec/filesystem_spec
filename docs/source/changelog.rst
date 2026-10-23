@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Leave out the passwords of nested filesystems, such as the ``fs`` of a
+  ``DirFileSystem``, when serializing with ``include_password=False``.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
