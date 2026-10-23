@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Accept bare relative filenames in lists of local destinations for async ``get``.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
