@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Verify the server certificate and host name for ``FTPFileSystem`` TLS
+  connections; pass ``ssl_context=`` to trust a private or self-signed one.
+
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.

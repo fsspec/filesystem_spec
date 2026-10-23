@@ -35,7 +35,7 @@ class ImplicitFTPTLS(FTP_TLS):
     def sock(self, value):
         """When modifying the socket, ensure that it is ssl wrapped."""
         if value is not None and not isinstance(value, ssl.SSLSocket):
-            value = self.context.wrap_socket(value)
+            value = self.context.wrap_socket(value, server_hostname=self.host)
         self._sock = value
 
 
@@ -58,6 +58,7 @@ class FTPFileSystem(AbstractFileSystem):
         timeout=30,
         encoding="utf-8",
         tls=False,
+        ssl_context=None,
         **kwargs,
     ):
         """
@@ -95,6 +96,10 @@ class FTPFileSystem(AbstractFileSystem):
                 - "tlsv1": TLS v1.0
                 - "tlsv1_1": TLS v1.1
                 - "tlsv1_2": TLS v1.2
+        ssl_context: ssl.SSLContext or None
+            Context for the TLS connections. The default verifies the server
+            certificate and host name against the system trust store; pass a
+            context to trust a private CA or a self-signed certificate.
         """
         super().__init__(**kwargs)
         self.host = host
@@ -108,11 +113,15 @@ class FTPFileSystem(AbstractFileSystem):
         else:
             self.blocksize = 2**16
         self.tls = tls
+        self.ssl_context = ssl_context
         self._connect()
 
     def _connect(self):
         security = None
+        kwargs = {}
         if self.tls:
+            # ftplib's own default context does not check the certificate
+            kwargs["context"] = self.ssl_context or ssl.create_default_context()
             if isinstance(self.tls, str):
                 ftp_cls = ImplicitFTPTLS
                 security = SECURITY_PROTOCOL_MAP.get(
@@ -125,7 +134,7 @@ class FTPFileSystem(AbstractFileSystem):
                 ftp_cls = FTP_TLS
         else:
             ftp_cls = FTP
-        self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding)
+        self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding, **kwargs)
         if security:
             self.ftp.ssl_version = security
         self.ftp.connect(self.host, self.port)
