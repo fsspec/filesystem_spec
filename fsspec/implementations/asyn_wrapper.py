@@ -48,6 +48,10 @@ class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
     ----------
     sync_fs : AbstractFileSystem
         The synchronous filesystem instance to wrap.
+    semaphore : asyncio.Semaphore, optional
+        Limits the number of concurrent calls to the wrapped filesystem.
+    max_concurrent_tasks : int, optional
+        If ``semaphore`` is not given, the number of concurrent calls to allow.
     """
 
     protocol = "asyncwrapper", "async_wrapper"
@@ -69,12 +73,14 @@ class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
         if fs is not None:
             self.sync_fs = fs
         else:
-            self.sync_fs = fsspec.filesystem(target_protocol, **target_options)
+            self.sync_fs = fsspec.filesystem(target_protocol, **(target_options or {}))
         self.protocol = self.sync_fs.protocol
         # paths must be normalized the way the wrapped filesystem does it
         self.root_marker = self.sync_fs.root_marker
         self._strip_protocol = self.sync_fs._strip_protocol
         self._parent = self.sync_fs._parent
+        if semaphore is None and max_concurrent_tasks is not None:
+            semaphore = asyncio.Semaphore(max_concurrent_tasks)
         self.semaphore = semaphore
         self._wrap_all_sync_methods()
 
