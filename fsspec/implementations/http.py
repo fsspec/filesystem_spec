@@ -594,6 +594,11 @@ class HTTPFileSystem(AsyncFileSystem):
 
         return {"name": url, "size": None, **info, "type": "file"}
 
+    @staticmethod
+    def _has_magic(path):
+        # A question mark is a URL query delimiter, not a glob wildcard.
+        return has_magic(path)
+
     async def _glob(self, path, maxdepth=None, **kwargs):
         """
         Find files by glob-matching.

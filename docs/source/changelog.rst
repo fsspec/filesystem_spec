@@ -17,6 +17,8 @@ Fixes
 
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
+- Preserve explicit download filenames for HTTP URLs containing query parameters (#1505).
+
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
 
 - Only send ``ia://`` credentials over https when the download URL is https.

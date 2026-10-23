@@ -487,6 +487,9 @@ class AsyncFileSystem(AbstractFileSystem):
     mirror_sync_methods = True
     disable_throttling = False
 
+    # Backends can define protocol-specific glob syntax for download paths.
+    _has_magic = staticmethod(has_magic)
+
     def __init__(self, *args, asynchronous=False, loop=None, batch_size=None, **kwargs):
         self.asynchronous = asynchronous
         self._pid = os.getpid()
@@ -847,8 +850,12 @@ class AsyncFileSystem(AbstractFileSystem):
             )
 
             exists = source_is_str and (
-                (has_magic(rpath) and source_is_file)
-                or (not has_magic(rpath) and dest_is_dir and source_not_trailing_sep)
+                (self._has_magic(rpath) and source_is_file)
+                or (
+                    not self._has_magic(rpath)
+                    and dest_is_dir
+                    and source_not_trailing_sep
+                )
             )
             lpaths = other_paths(
                 rpaths,
