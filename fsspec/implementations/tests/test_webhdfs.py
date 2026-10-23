@@ -309,3 +309,29 @@ def test_chmod_sends_octal_permission(monkeypatch, mode):
     monkeypatch.setattr(fs.session, "request", request)
     fs.chmod("/user/testuser/file", mode)
     assert sent["permission"] == "755"
+
+
+@pytest.mark.parametrize("mode", [0o755, "755"], ids=["int", "str"])
+def test_open_sends_octal_permission(monkeypatch, mode):
+    fs = WebHDFS("localhost", skip_instance_cache=True)
+    sent = {}
+
+    def request(method, url, params, **kwargs):
+        sent[params["op"]] = params
+        response = requests.Response()
+        response.status_code = 307
+        response.headers["Location"] = "http://datanode/"
+        return response
+
+    def upload(url, **kwargs):
+        response = requests.Response()
+        response.status_code = 200
+        return response
+
+    monkeypatch.setattr(fs.session, "request", request)
+    monkeypatch.setattr(fs.session, "put", upload)
+    monkeypatch.setattr(fs.session, "post", upload)
+    with fs.open("/user/testuser/file", "wb", permissions=mode) as f:
+        f.write(b"data")
+    assert sent["CREATE"]["permission"] == "755"
+    assert "permissions" not in sent["CREATE"]
