@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Defer memory-file updates in ``r+`` mode until transaction commit and discard
+  them on rollback.
+
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
