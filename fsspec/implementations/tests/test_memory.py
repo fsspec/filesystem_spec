@@ -542,6 +542,39 @@ def test_transaction_append_existing_file(m, global_store, mode, rollback):
     assert fs.cat_file("file") == expected
 
 
+@pytest.mark.parametrize("global_store", [False, True])
+@pytest.mark.parametrize("mode", ["r+b", "rb+", "r+"])
+@pytest.mark.parametrize("operation", ["write", "truncate"])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_transaction_update_existing_file(m, global_store, mode, operation, rollback):
+    fs = filesystem("memory", global_store=global_store, skip_instance_cache=True)
+    fs.pipe_file("file", b"original")
+    created = fs.created("file")
+    modified = fs.modified("file")
+
+    with pytest.raises(RuntimeError) if rollback else nullcontext():
+        with fs.transaction:
+            with fs.open("file", mode) as f:
+                assert f.read() == (b"original" if "b" in mode else "original")
+                if operation == "write":
+                    f.seek(2)
+                    f.write(b"XY" if "b" in mode else "XY")
+                else:
+                    f.truncate(3)
+                f.flush()
+            assert fs.cat_file("file") == b"original"
+            assert fs.created("file") == created
+            assert fs.modified("file") == modified
+            if rollback:
+                raise RuntimeError("discard transaction")
+
+    expected = b"orXYinal" if operation == "write" else b"ori"
+    assert fs.cat_file("file") == (b"original" if rollback else expected)
+    assert fs.created("file") == created
+    if rollback:
+        assert fs.modified("file") == modified
+
+
 def test_moves(m):
     m.touch("source.txt")
     m.mv("source.txt", "target.txt")
