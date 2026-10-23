@@ -785,7 +785,7 @@ class BackgroundPrefetcher:
             except Exception as e:
                 logger.exception("Exception raised during asynchronous fetch.")
                 self._error = e
-                if self.producer and not self.producer.is_stopped:
+                if self.producer:
                     await self.producer.stop()
                 raise
 

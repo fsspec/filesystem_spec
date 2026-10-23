@@ -887,11 +887,6 @@ def test_close_drains_pending_fetch_after_producer_reaches_eof(
         finally:
             release.set()
             await asyncio.wait_for(closing, timeout=2)
-            # Also clean up the original implementation after the assertion
-            # fails; an EOF producer can still own this pending task.
-            await asyncio.wait_for(
-                asyncio.gather(*tuple(bp.producer._active_tasks)), timeout=2
-            )
 
         assert finished.is_set()
         assert bp.queue.empty()
