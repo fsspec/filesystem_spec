@@ -42,6 +42,8 @@ Fixes
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
+- Iterate buffered Pyodide HTTP responses when a server ignores Range requests.
+
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 
 - Propagate backend removal errors from ``FSMap``
