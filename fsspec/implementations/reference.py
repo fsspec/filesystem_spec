@@ -1248,9 +1248,11 @@ class ReferenceFileSystem(AsyncFileSystem):
             return super().find(
                 path, maxdepth=maxdepth, withdirs=withdirs, detail=detail, **kwargs
             )
+        # 2026-10-09: Match complete paths or descendants, not sibling prefixes.
+        path = self._strip_protocol(path)
         if path:
-            path = self._strip_protocol(path)
-            r = sorted(k for k in self.references if k.startswith(path))
+            prefix = path + "/"
+            r = sorted(k for k in self.references if k == path or k.startswith(prefix))
         else:
             r = sorted(self.references)
         if detail:
