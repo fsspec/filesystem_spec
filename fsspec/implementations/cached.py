@@ -1026,13 +1026,6 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         with _tempfile(fn) as tmp:
             await self.fs._get_file(path, tmp, **kwargs)
 
-    def pipe_file(self, path, value=None, **kwargs):
-        if self._intrans:
-            with self.open(path, "wb") as f:
-                f.write(value)
-        else:
-            super().pipe_file(path, value)
-
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         details = []

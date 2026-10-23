@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Honor ``mode="create"`` in simplecache pipe writes, including transactions,
+  rather than overwriting existing files.
+
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
