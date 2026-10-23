@@ -432,6 +432,21 @@ def test_mv_same_paths(m):
     assert m.exists("src/file.txt")
 
 
+def test_mv_recursive_into_itself(m):
+    m.pipe({"/src/file.txt": b"data", "/src/sub/deep.txt": b"deep"})
+    with pytest.raises(ValueError, match="into itself"):
+        m.mv("/src", "/src/sub/dest", recursive=True)
+    assert m.cat("/src/file.txt") == b"data"
+    assert m.cat("/src/sub/deep.txt") == b"deep"
+
+
+def test_mv_recursive_to_sibling_with_shared_prefix(m):
+    m.pipe("/src/file.txt", b"data")
+    m.mv("/src", "/src2", recursive=True)
+    assert m.cat("/src2/file.txt") == b"data"
+    assert not m.exists("/src")
+
+
 def test_mv_recursive_propagates_cp_file_errors(m, monkeypatch):
     m.mkdir("src")
     m.touch("src/file.txt")
