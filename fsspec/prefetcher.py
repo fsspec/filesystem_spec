@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import numbers
 import weakref
 from collections import deque
 
@@ -8,6 +9,16 @@ from .asyn import sync_teardown
 from .utils import _fast_slice
 
 logger = logging.getLogger(__name__)
+
+
+def _round_up_to_multiple(value: int, multiple: int) -> int:
+    """Returns the smallest multiple of ``multiple`` that is >= ``value``."""
+    return (value + multiple - 1) // multiple * multiple
+
+
+def _round_down_to_multiple(value: int, multiple: int) -> int:
+    """Returns the largest multiple of ``multiple`` that is <= ``value``."""
+    return value // multiple * multiple
 
 
 class RunningAverageTracker:
@@ -320,7 +331,16 @@ class PrefetchProducer:
         # example sparse Parquet column chunks) are served from the buffered
         # block via a soft/local seek instead of restarting the producer.
         if streak == 0 and self.block_size > io_size:
-            io_size = self.block_size
+            # Use a whole number of reads so that, with constant read sizes,
+            # the leftover in the first block does not leave less than one
+            # chunk of free space and stall the next prefetch cycle.
+            first_block = _round_up_to_multiple(self.block_size, io_size)
+            if first_block > self.max_prefetch_size:
+                # Stay within the cap, but never below a single read.
+                first_block = max(
+                    io_size, _round_down_to_multiple(self.max_prefetch_size, io_size)
+                )
+            io_size = first_block
 
         prefetch_size = min(prefetch_multiplier * io_size, self.max_prefetch_size)
         if self.consumer.offset + prefetch_size < self.consumer.target_offset:
@@ -630,12 +650,14 @@ class BackgroundPrefetcher:
                 inherit the user's currently running event loop.
             block_size (int, optional): Minimum number of bytes to fetch on the first
                 read after opening the file or after a hard seek, so that nearby
-                reads that follow are served from memory. ``None`` or ``0``
-                fetches only what the user asked for.
+                reads that follow are served from memory. The size is rounded up
+                to a multiple of the read size and capped by the maximum prefetch
+                size and the end of the file. ``None`` or ``0`` fetches only what
+                the user asked for.
 
         Raises:
             ValueError: If max_prefetch_size is provided but is not a positive integer,
-                or if block_size is negative.
+                or if block_size is not a non-negative integer.
         """
         logger.debug(
             "Starting BackgroundPrefetcher. Size: %d, Concurrency: %d, Max Prefetch: %s, "
@@ -656,7 +678,9 @@ class BackgroundPrefetcher:
                 "max_prefetch_size should be a positive integer to use adaptive prefetching!"
             )
 
-        if block_size is not None and block_size < 0:
+        if block_size is not None and (
+            not isinstance(block_size, numbers.Integral) or block_size < 0
+        ):
             logger.error("Invalid block_size provided: %s", block_size)
             raise ValueError("block_size should be a non-negative integer!")
 

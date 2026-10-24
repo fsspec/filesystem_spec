@@ -1052,6 +1052,8 @@ def test_first_read_fetches_at_least_block_size(prefetcher_factory):
     calls = fetcher.call_count
     assert bp.fetch(50, 60) == data[50:60]
     assert bp.fetch(150, 160) == data[150:160]
+    # A backward read inside the block is served by a local seek.
+    assert bp.fetch(20, 30) == data[20:30]
     assert fetcher.call_count == calls
 
     # A hard seek is a new "first read", so it fetches block_size again.
@@ -1060,15 +1062,56 @@ def test_first_read_fetches_at_least_block_size(prefetcher_factory):
     assert fetcher.calls[-1]["size"] == 200
 
 
-def test_block_size_only_applies_to_first_read(prefetcher_factory):
-    data = b"X" * 1000
+@pytest.mark.parametrize(
+    "reads",
+    [
+        # Soft seek to the end of the first block.
+        [(0, 10), (200, 210)],
+        # Sequential reads across the end of the first block.
+        [(0, 100), (100, 200), (200, 210)],
+    ],
+)
+def test_block_size_only_applies_to_first_read(prefetcher_factory, reads):
+    data = bytes(range(250)) * 4
     fetcher = MockFetcher(data)
-    bp = prefetcher_factory(fetcher=fetcher, size=1000, concurrency=4, block_size=200)
+    bp = prefetcher_factory(
+        fetcher=fetcher, size=len(data), concurrency=4, block_size=200
+    )
 
-    assert bp.fetch(0, 10) == data[0:10]
+    for start, end in reads:
+        assert bp.fetch(start, end) == data[start:end]
     # Reading past the first block continues with the read size, not block_size.
-    assert bp.fetch(200, 210) == data[200:210]
     assert [c["size"] for c in fetcher.calls] == [200, 10]
+
+
+@pytest.mark.parametrize(
+    "value, multiple, up, down",
+    [(500, 300, 600, 300), (600, 300, 600, 600), (1, 300, 300, 0), (0, 7, 0, 0)],
+)
+def test_round_to_multiple(value, multiple, up, down):
+    from fsspec.prefetcher import _round_down_to_multiple, _round_up_to_multiple
+
+    assert _round_up_to_multiple(value, multiple) == up
+    assert _round_down_to_multiple(value, multiple) == down
+
+
+def test_first_block_rounded_to_read_size_keeps_prefetching(prefetcher_factory):
+    # Scaled-down model of a 5 MiB block with 3 MiB sequential reads. Without
+    # rounding, the 200 B left over from a 500 B first block leaves less than
+    # one chunk of free space, so the background wakeups schedule nothing.
+    data = b"P" * 3000
+    fetcher = MockFetcher(data)
+    bp = prefetcher_factory(
+        fetcher=fetcher, size=len(data), concurrency=4, block_size=500
+    )
+    bp.producer.MIN_CHUNK_SIZE = 500
+
+    for i in range(4):
+        assert bp.fetch(i * 300, (i + 1) * 300) == data[i * 300 : (i + 1) * 300]
+    fsspec.asyn.sync(bp.loop, asyncio.sleep, 0.1)
+
+    assert fetcher.calls[0]["size"] == 600
+    assert bp.queue.qsize() > 0
 
 
 def test_first_read_larger_than_block_size(prefetcher_factory):
@@ -1117,18 +1160,26 @@ def test_no_block_size_fetches_read_size(prefetcher_factory, block_size):
     assert fetcher.calls[0]["size"] == 10
 
 
-def test_init_negative_block_size():
+@pytest.mark.parametrize("block_size", [-1, 100.5])
+def test_init_invalid_block_size(block_size):
     with pytest.raises(ValueError, match="block_size"):
         BackgroundPrefetcher(
             fetcher=MockFetcher(b""),
             size=100,
             concurrency=4,
             loop=fsspec.asyn.get_loop(),
-            block_size=-1,
+            block_size=block_size,
         )
 
 
-@mock.patch("fsspec.utils.HAS_CPYTHON_API", False)
+@pytest.mark.parametrize("blocksize", [-1, 100.5])
+def test_adaptive_cache_rejects_invalid_blocksize(blocksize):
+    from fsspec.caching import AdaptiveReadaheadCache
+
+    with pytest.raises(ValueError, match="blocksize"):
+        AdaptiveReadaheadCache(blocksize, mock.Mock(), 100)
+
+
 def test_adaptive_cache_passes_blocksize_to_prefetcher():
     from fsspec.caching import AdaptiveReadaheadCache
 

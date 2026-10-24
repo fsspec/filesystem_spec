@@ -5,6 +5,7 @@ import collections
 import functools
 import logging
 import math
+import numbers
 import os
 import threading
 from collections import OrderedDict
@@ -300,7 +301,8 @@ class AdaptiveReadaheadCache(BaseCache):
     ----------
     blocksize: int
         Nominal read size used by callers. The first read after opening the
-        file or after a seek fetches at least this many bytes.
+        file or after a hard seek fetches at least this many bytes, capped by
+        ``max_prefetch_size`` and the end of the file.
     fetcher: Fetcher
         Function of the form ``f(start, end)`` that returns bytes.
     size: int
@@ -321,6 +323,10 @@ class AdaptiveReadaheadCache(BaseCache):
         concurrency: int = 4,
         max_prefetch_size: int | None = None,
     ) -> None:
+        if blocksize is not None and (
+            not isinstance(blocksize, numbers.Integral) or blocksize < 0
+        ):
+            raise ValueError("blocksize should be a non-negative integer!")
         super().__init__(blocksize, fetcher, size)
         self._fallback = ReadAheadCache(blocksize, fetcher, size)
         self._prefetcher = None
