@@ -1,5 +1,7 @@
 import pickle
 import string
+import threading
+from concurrent.futures import wait
 
 import pytest
 
@@ -618,6 +620,108 @@ def test_background_shutdown_on_close():
     with pytest.raises(RuntimeError, match="cannot schedule new futures"):
         executor.submit(lambda: None)
     assert cache_ref() is None
+
+
+@pytest.mark.parametrize("completed", [False, True])
+@pytest.mark.parametrize("persistent", [False, True])
+def test_background_prefetch_failure_recovery(monkeypatch, completed, persistent):
+    from fsspec.spec import AbstractBufferedFile
+
+    data = b"abcdefghijkl"
+    started = threading.Event()
+    release = threading.Event()
+    attempts = []
+
+    class RemoteFile(AbstractBufferedFile):
+        def _fetch_range(self, start, end):
+            if start == 4:
+                attempts.append(start)
+                if len(attempts) == 1:
+                    started.set()
+                    assert release.wait(5)
+                if persistent or len(attempts) == 1:
+                    raise OSError("remote read failed")
+            return data[start:end]
+
+    f = RemoteFile(
+        None, "remote", size=len(data), block_size=4, cache_type="background"
+    )
+    try:
+        assert f.read(4) == data[:4]
+        assert started.wait(5)
+        future = f.cache._fetch_future
+        if completed:
+            release.set()
+            assert not wait([future], timeout=5).not_done
+        else:
+            result = future.result
+
+            def release_on_join(*args, **kwargs):
+                release.set()
+                return result(*args, **kwargs)
+
+            monkeypatch.setattr(future, "result", release_on_join)
+            assert not future.done()
+            f.seek(0)
+            assert f.read(4) == data[:4]
+            assert not release.is_set()
+
+        # A failed speculative read must not prevent a foreground retry.
+        for _ in range(2):
+            f.seek(4)
+            if persistent:
+                with pytest.raises(OSError, match="remote read failed"):
+                    f.read(4)
+                assert f.tell() == 4
+            else:
+                assert f.read(4) == data[4:8]
+
+        assert len(attempts) == (3 if persistent else 2)
+        f.seek(0)
+        assert f.read(4) == data[:4]
+    finally:
+        release.set()
+        f.close()
+
+
+def test_background_failed_prefetch_does_not_break_cached_read():
+    from fsspec.spec import AbstractBufferedFile
+
+    data = b"abcdefghijkl"
+
+    class RemoteFile(AbstractBufferedFile):
+        def _fetch_range(self, start, end):
+            if start == 4:
+                raise OSError("prefetch failed")
+            return data[start:end]
+
+    with RemoteFile(
+        None, "remote", size=len(data), block_size=4, cache_type="background"
+    ) as f:
+        assert f.read(4) == data[:4]
+        assert not wait([f.cache._fetch_future], timeout=5).not_done
+        f.seek(0)
+        assert f.read(4) == data[:4]
+
+
+def test_background_completed_prefetch_is_reused():
+    from fsspec.spec import AbstractBufferedFile
+
+    data = b"abcdefghijkl"
+    attempts = []
+
+    class RemoteFile(AbstractBufferedFile):
+        def _fetch_range(self, start, end):
+            attempts.append(start)
+            return data[start:end]
+
+    with RemoteFile(
+        None, "remote", size=len(data), block_size=4, cache_type="background"
+    ) as f:
+        assert f.read(4) == data[:4]
+        assert not wait([f.cache._fetch_future], timeout=5).not_done
+        assert f.read(4) == data[4:8]
+        assert attempts.count(4) == 1
 
 
 def test_register_cache():
