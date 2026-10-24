@@ -562,6 +562,8 @@ class HTTPFileSystem(AsyncFileSystem):
         corresponding file will not work).
         """
         info = {}
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
         session = await self.set_session()
 
         async def _once():
@@ -575,8 +577,7 @@ class HTTPFileSystem(AsyncFileSystem):
                             self.encode_url(url),
                             size_policy=policy,
                             session=session,
-                            **self.kwargs,
-                            **kwargs,
+                            **kw,
                         )
                     )
                     if info.get("size") is not None:
