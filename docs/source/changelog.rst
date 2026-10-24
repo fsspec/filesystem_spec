@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Cancel the submitted async call when ``sync()`` is interrupted, stopping
+  HTTP ``get_file`` transfers after a keyboard interrupt (#1667).
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 

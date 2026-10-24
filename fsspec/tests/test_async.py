@@ -116,6 +116,212 @@ def test_sync_live_io_thread(monkeypatch, finalizing):
     assert fsspec.asyn.sync(live_loop, work, timeout=1) == 42
 
 
+@pytest.mark.parametrize("timeout", [None, 10])
+def test_sync_keyboard_interrupt_cancels_only_its_call(monkeypatch, timeout):
+    loop = fsspec.asyn.get_loop()
+    started = threading.Event()
+    cleaned = threading.Event()
+    unrelated_started = threading.Event()
+    interrupt = KeyboardInterrupt("interrupted wait")
+    tasks = []
+
+    async def work():
+        tasks.append(asyncio.current_task())
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+
+    async def unrelated():
+        unrelated_started.set()
+        await asyncio.Event().wait()
+
+    other = asyncio.run_coroutine_threadsafe(unrelated(), loop)
+    assert unrelated_started.wait(5)
+    real_event = threading.Event
+
+    def interruptible_event():
+        event = real_event()
+
+        def wait(timeout):
+            assert started.wait(5)
+            raise interrupt
+
+        event.wait = wait
+        return event
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                fsspec.asyn, "threading", SimpleNamespace(Event=interruptible_event)
+            )
+            with pytest.raises(KeyboardInterrupt) as caught:
+                fsspec.asyn.sync(loop, work, timeout=timeout)
+        assert caught.value is interrupt
+        assert cleaned.wait(5)
+        assert not other.done()
+        assert fsspec.asyn.sync(loop, asyncio.sleep, 0, result=42) == 42
+    finally:
+        other.cancel()
+        # Also clean up when testing the unfixed implementation.
+        if not cleaned.is_set():
+
+            async def cleanup():
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+            asyncio.run_coroutine_threadsafe(cleanup(), loop).result(5)
+
+
+@pytest.mark.parametrize("timeout", [None, 10])
+@pytest.mark.parametrize("loop_running", [False, True])
+def test_sync_keyboard_interrupt_before_runner_starts(
+    monkeypatch, timeout, loop_running
+):
+    loop = asyncio.new_event_loop()
+    cleaned = threading.Event()
+    blocked = threading.Event()
+    release = threading.Event()
+    interrupt = KeyboardInterrupt("interrupted before the runner starts")
+    coro = None
+
+    async def work():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+
+    def create_work():
+        nonlocal coro
+        coro = work()
+        return coro
+
+    event = threading.Event()
+
+    def interrupted_wait(timeout):
+        raise interrupt
+
+    def block_loop():
+        blocked.set()
+        assert release.wait(5)
+
+    event.wait = interrupted_wait
+    thread = threading.Thread(target=loop.run_forever)
+    try:
+        if loop_running:
+            loop.call_soon(block_loop)
+            thread.start()
+            assert blocked.wait(5)
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                fsspec.asyn, "threading", SimpleNamespace(Event=lambda: event)
+            )
+            with pytest.raises(KeyboardInterrupt) as caught:
+                fsspec.asyn.sync(loop, create_work, timeout=timeout)
+        assert caught.value is interrupt
+        if loop_running:
+            release.set()
+        else:
+            thread.start()
+        assert cleaned.wait(5)
+        # Let the coroutine finish its finally block before checking its state.
+        asyncio.run_coroutine_threadsafe(asyncio.sleep(0), loop).result(5)
+        assert inspect.getcoroutinestate(coro) == inspect.CORO_CLOSED
+    finally:
+
+        async def cleanup():
+            pending = [
+                t for t in asyncio.all_tasks() if t is not asyncio.current_task()
+            ]
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        release.set()
+        if thread.is_alive():
+            asyncio.run_coroutine_threadsafe(cleanup(), loop).result(5)
+            loop.call_soon_threadsafe(loop.stop)
+            thread.join(5)
+        loop.close()
+
+
+def test_sync_keyboard_interrupt_after_completion(monkeypatch):
+    event = threading.Event()
+    real_wait = event.wait
+    interrupt = KeyboardInterrupt("completed while interrupted")
+
+    def interrupted_wait(timeout):
+        assert real_wait(5)
+        raise interrupt
+
+    event.wait = interrupted_wait
+    with monkeypatch.context() as patch:
+        patch.setattr(fsspec.asyn, "threading", SimpleNamespace(Event=lambda: event))
+        with pytest.raises(KeyboardInterrupt) as caught:
+            fsspec.asyn.sync(fsspec.asyn.get_loop(), asyncio.sleep, 0, result=42)
+    assert caught.value is interrupt
+
+
+def test_sync_keyboard_interrupt_after_loop_closes(monkeypatch):
+    loop = asyncio.new_event_loop()
+    event = threading.Event()
+    interrupt = KeyboardInterrupt("loop closed while interrupted")
+
+    async def work():
+        return 42
+
+    def interrupted_wait(timeout):
+        # Finish the submitted call, then close its loop before cancellation
+        # can be queued. No extra thread or timing-dependent sleep is needed.
+        loop.run_until_complete(asyncio.sleep(0))
+        assert event.is_set()
+        assert not asyncio.all_tasks(loop)
+        loop.close()
+        raise interrupt
+
+    event.wait = interrupted_wait
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                fsspec.asyn, "threading", SimpleNamespace(Event=lambda: event)
+            )
+            with pytest.raises(KeyboardInterrupt) as caught:
+                fsspec.asyn.sync(loop, work)
+        assert caught.value is interrupt
+    finally:
+        loop.close()
+
+
+@pytest.mark.parametrize("timeout", [None, 10])
+def test_sync_result_and_exception(timeout):
+    loop = fsspec.asyn.get_loop()
+    assert fsspec.asyn.sync(loop, asyncio.sleep, 0, result=42, timeout=timeout) == 42
+    error = ValueError("original error")
+
+    async def fail():
+        raise error
+
+    with pytest.raises(ValueError) as caught:
+        fsspec.asyn.sync(loop, fail, timeout=timeout)
+    assert caught.value is error
+
+
+def test_sync_timeout_cleans_up():
+    cleaned = threading.Event()
+
+    async def work():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+
+    with pytest.raises(fsspec.asyn.FSTimeoutError):
+        fsspec.asyn.sync(fsspec.asyn.get_loop(), work, timeout=0.01)
+    assert cleaned.wait(5)
+
+
 def _run_python(script, **kwargs):
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
     return subprocess.Popen(
