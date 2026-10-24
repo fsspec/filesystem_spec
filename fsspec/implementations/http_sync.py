@@ -92,8 +92,11 @@ class ResponseProxy:
             )
 
     def iter_content(self, chunksize, *_, **__):
+        raw = self.raw
+        if isinstance(raw, bytes):
+            raw = io.BytesIO(raw)
         while True:
-            out = self.raw.read(chunksize)
+            out = raw.read(chunksize)
             if out:
                 yield out
             else:

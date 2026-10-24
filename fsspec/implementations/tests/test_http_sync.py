@@ -45,6 +45,30 @@ def test_session_shim_request_method(monkeypatch, method):
     assert calls == [(method.upper(), url, options)]
 
 
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("chunksize", [1, 3, 8, None])
+@pytest.mark.parametrize("payload", [b"", b"a\x00b\xffcdef"])
+def test_response_proxy_iter_content(stream, chunksize, payload):
+    from fsspec.implementations.http_sync import ResponseProxy
+
+    class Buffer:
+        def to_bytes(self):
+            return payload
+
+    class Request:
+        response = Buffer()
+
+    response = ResponseProxy(Request(), stream=stream)
+    size = chunksize or len(payload) or 1
+    expected = [payload[i : i + size] for i in range(0, len(payload), size)]
+    assert list(response.iter_content(chunksize)) == expected
+    if not stream:
+        assert response.content == payload
+        assert list(response.iter_content(chunksize)) == expected
+    else:
+        assert list(response.iter_content(chunksize)) == []
+
+
 def test_list(server, sync):
     h = fsspec.filesystem("http")
     out = h.glob(server.address + "/index/*")
