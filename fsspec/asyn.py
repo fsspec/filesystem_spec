@@ -96,13 +96,21 @@ def sync(loop, func, *args, timeout=None, **kwargs):
                 raise FSTimeoutError
 
     return_result = result[0]
-    if isinstance(return_result, asyncio.TimeoutError):
-        # suppress asyncio.TimeoutError, raise FSTimeoutError
-        raise FSTimeoutError from return_result
-    elif isinstance(return_result, BaseException):
-        raise return_result
-    else:
-        return return_result
+    # the traceback of a stored exception includes _runner's frame, which holds
+    # ``result``: empty it so that frame does not refer back to the exception
+    result[0] = None
+    try:
+        if isinstance(return_result, asyncio.TimeoutError):
+            # suppress asyncio.TimeoutError, raise FSTimeoutError
+            raise FSTimeoutError from return_result
+        elif isinstance(return_result, BaseException):
+            raise return_result
+        else:
+            return return_result
+    finally:
+        # the traceback also includes this frame, so don't keep the exception
+        # in a local either: that would be a reference cycle
+        del return_result
 
 
 _deferred_close_tasks = set()
@@ -427,7 +435,12 @@ async def _run_coros_in_chunks(
                         first_exc = exc
 
             if first_exc is not None:
-                raise first_exc
+                try:
+                    raise first_exc
+                finally:
+                    # The traceback includes this frame: keep neither the
+                    # exception nor the finished task referencing it here.
+                    del first_exc, task
     finally:
         remaining = pending | done
         for task in remaining:
@@ -586,7 +599,10 @@ class AsyncFileSystem(AbstractFileSystem):
         for ex in filter(is_exception, result):
             if on_error == "ignore" and isinstance(ex, FileNotFoundError):
                 continue
-            raise ex
+            try:
+                raise ex
+            finally:
+                del ex, result
 
     async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
         raise NotImplementedError
@@ -642,7 +658,10 @@ class AsyncFileSystem(AbstractFileSystem):
         if on_error == "raise":
             ex = next(filter(is_exception, out), False)
             if ex:
-                raise ex
+                try:
+                    raise ex
+                finally:
+                    del ex, out
         if (
             len(paths) > 1
             or isinstance(path, list)
@@ -702,7 +721,10 @@ class AsyncFileSystem(AbstractFileSystem):
         if on_error != "return":
             ex = next(filter(is_exception, out), None)
             if ex is not None:
-                raise ex
+                try:
+                    raise ex
+                finally:
+                    del ex, out
         return out
 
     async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):

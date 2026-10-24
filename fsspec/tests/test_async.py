@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import inspect
 import io
 import os
@@ -7,6 +8,7 @@ import sys
 import textwrap
 import threading
 import time
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
@@ -842,3 +844,51 @@ async def test_async_walk_on_error_reaches_subdirectories():
     handled = []
     assert [entry async for entry in fs._walk("", on_error=handled.append)] == yielded
     assert [str(exc) for exc in handled] == ["no access to top/locked"]
+
+
+class _Boom(Exception):
+    """An exception that can be weakly referenced, to tell when it is freed."""
+
+
+class _AlwaysFailsFS(fsspec.asyn.AsyncFileSystem):
+    protocol = "alwaysfails"
+    cachable = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.errors = []
+
+    def _fail(self, path):
+        exc = _Boom(path)
+        self.errors.append(weakref.ref(exc))
+        return exc
+
+    async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
+        raise self._fail(path)
+
+
+@pytest.mark.skipif(
+    sys.implementation.name != "cpython", reason="relies on reference counting"
+)
+def test_failed_call_is_freed_without_gc():
+    # An exception raised by sync() has the frames it passed through in its
+    # traceback. If any of them refers back to it, it can only be freed by the
+    # cyclic garbage collector, and so can everything else those frames hold.
+    fs = _AlwaysFailsFS(asynchronous=False)
+    gc.collect()
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        try:
+            fs.pipe({"a": b"1", "b": b"2"})
+        except _Boom:
+            pass
+        else:
+            raise AssertionError("expected the call to fail")
+        # let the IO thread finish with the call too
+        fsspec.asyn.sync(fs.loop, asyncio.sleep, 0)
+        assert fs.errors
+        assert all(ref() is None for ref in fs.errors), "exception kept alive"
+    finally:
+        if was_enabled:
+            gc.enable()

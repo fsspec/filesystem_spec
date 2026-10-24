@@ -376,6 +376,55 @@ def test_content_length_zero(server, sync):
         assert f.read() == data
 
 
+@pytest.mark.parametrize("head_ok", [False, True])
+@pytest.mark.parametrize("chunked", [False, True])
+def test_content_encoded_response_is_streamed(server, sync, head_ok, chunked):
+    headers = {"give_length": "true", "gzip_encoding": "true"}
+    if head_ok:
+        headers["head_ok"] = "true"
+    h = fsspec.filesystem("http", headers=headers, block_size=512)
+    try:
+        with h.open(server.realfile, "rb") as f:
+            if chunked:
+                chunks = []
+                while chunk := f.read(17):
+                    chunks.append(chunk)
+                actual = b"".join(chunks)
+            else:
+                actual = f.read()
+            assert actual == data
+    finally:
+        h.session.close()
+
+
+@pytest.mark.parametrize("lowercase", [False, True])
+@pytest.mark.parametrize("encoding", ["", "identity", "gzip"])
+def test_file_info_content_encoding_preserves_checksums(lowercase, encoding):
+    from fsspec.implementations.http_sync import _file_info
+
+    headers = {"Content-Length": "5", "Content-Encoding": encoding}
+    if lowercase:
+        headers = {k.lower(): v for k, v in headers.items()}
+    headers["ETag"] = "checksum"
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+    class Session:
+        def head(self, *args, **kwargs):
+            response = Response()
+            response.headers = headers
+            return response
+
+    info = _file_info("https://example.com/data", Session())
+    assert info["ETag"] == "checksum"
+    if encoding == "gzip":
+        assert "size" not in info
+    else:
+        assert info["size"] == 5
+
+
 def test_download(server, tmpdir, sync):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     url = server.address + "/index/realfile"
@@ -423,6 +472,28 @@ def test_cat_file_range(server, sync):
     assert h.cat(urla, start=-10, end=-2) == data[-10:-2]
 
     assert h.cat(urla, end=-10) == data[:-10]
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"ignore_range": "true", "give_length": "true"},
+        {"ignore_range": "true", "give_range": "true"},
+    ],
+)
+def test_cat_file_range_when_server_ignores_range(server, headers, sync):
+    """The body of a server that ignores ``Range`` is the whole file, not the
+    window that was asked for, so the window is read out of it instead."""
+    h = fsspec.filesystem("http", headers=headers)
+    urla = server.address + "/index/realfile"
+    assert h.cat_file(urla, start=0, end=10) == data[:10]
+    assert h.cat_file(urla, end=10) == data[:10]
+    assert h.cat_file(urla, start=-10) == data[-10:]
+
+    # a window that starts inside the file cannot be told apart from a response
+    # that served more of the range than was asked for
+    with pytest.raises(ValueError):
+        h.cat_file(urla, start=1, end=10)
 
 
 @pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
