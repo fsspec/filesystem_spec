@@ -411,37 +411,48 @@ async def _run_coros_in_chunks(
     n = len(coros)
     results = [None] * n
     pending = set()
+    done = set()
+    try:
+        while pending or i < n:
+            while len(pending) < batch_size and i < n:
+                pending.add(asyncio.ensure_future(_run_coro(coros[i], i)))
+                i += 1
 
-    while pending or i < n:
-        while len(pending) < batch_size and i < n:
-            pending.add(asyncio.ensure_future(_run_coro(coros[i], i)))
-            i += 1
+            if not pending:
+                break
 
-        if not pending:
-            break
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            first_exc = None
+            while done:
+                task = done.pop()
+                try:
+                    result, k = await task
+                    results[k] = result
+                except Exception as exc:
+                    if first_exc is None:
+                        first_exc = exc
 
-        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-        first_exc = None
-        while done:
-            task = done.pop()
-            try:
-                result, k = await task
-                results[k] = result
-            except Exception as exc:
-                if first_exc is None:
-                    first_exc = exc
-
-        if first_exc is not None:
-            for task in pending:
+            if first_exc is not None:
+                try:
+                    raise first_exc
+                finally:
+                    # The traceback includes this frame: keep neither the
+                    # exception nor the finished task referencing it here.
+                    del first_exc, task
+    finally:
+        remaining = pending | done
+        for task in remaining:
+            if not task.done():
                 task.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
-            try:
-                raise first_exc
-            finally:
-                # the traceback includes this frame, so it must not refer back
-                # to the exception: directly or through the finished task
-                del first_exc, task
+        if remaining:
+            await asyncio.gather(*remaining, return_exceptions=True)
+        # A queued coroutine may never have started, including one whose
+        # wrapper was cancelled before its first event-loop turn.
+        for coro in coros:
+            if inspect.iscoroutine(coro):
+                coro.close()
 
     return results
 
