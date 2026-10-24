@@ -14,6 +14,17 @@ Fixes
 
 - Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
 
+- Omit unreachable references from ``ReferenceFileSystem.cat`` results when
+  ``on_error="omit"``.
+
+- Reject reads on closed asynchronous HTTP streams without reopening a request.
+
+- Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
+- Only send ``ia://`` credentials over https when the download URL is https.
+
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
@@ -75,6 +86,10 @@ Fixes
 
 - Reject ``generic.rsync`` source names whose ".." segments would place
   copies outside the destination
+
+- Avoid reference cycles when a synchronous call into an async filesystem
+  fails, so its frames and the data they hold are freed straight away instead
+  of waiting for the garbage collector (#2295)
 
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 
