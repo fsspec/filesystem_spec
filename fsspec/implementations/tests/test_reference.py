@@ -146,6 +146,39 @@ def test_nested_dirs_ls():
     assert {e["name"] for e in fs.ls("B")} == {"B/C", "B/_"}
 
 
+@pytest.mark.parametrize("path", ["new", "existing/new", "new/deep/file"])
+def test_pipe_file_refreshes_listings(path):
+    fs = ReferenceFileSystem(
+        {"existing/file": b"old", "keep": b"unchanged"}, skip_instance_cache=True
+    )
+    assert fs.ls("", detail=False) == ["existing", "keep"]
+
+    fs.pipe_file(path, b"new data")
+
+    assert fs.cat_file(path) == b"new data"
+    assert fs.find("", detail=True) == {
+        "existing/file": {"name": "existing/file", "type": "file", "size": 3},
+        "keep": {"name": "keep", "type": "file", "size": 9},
+        path: {"name": path, "type": "file", "size": 8},
+    }
+    if "/" in path:
+        assert fs.isdir(path.rsplit("/", 1)[0])
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [(b"updated", b"updated"), ("héllo", "héllo".encode()), ("base64:bmV3", b"new")],
+)
+def test_pipe_file_refreshes_cached_size(value, expected):
+    fs = ReferenceFileSystem({"file": b"old data"}, skip_instance_cache=True)
+    assert fs.ls("") == [{"name": "file", "type": "file", "size": 8}]
+
+    fs.pipe_file("file", value)
+
+    assert fs.cat_file("file") == expected
+    assert fs.ls("") == [{"name": "file", "type": "file", "size": len(expected)}]
+
+
 def test_info(server):
     refs = {
         "a": b"data",
