@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Refresh reference filesystem directory listings after ``pipe_file`` writes.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 

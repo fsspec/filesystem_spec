@@ -886,6 +886,7 @@ class ReferenceFileSystem(AsyncFileSystem):
     def pipe_file(self, path, value, **_):
         """Temporarily add binary data or reference as a file"""
         self.references[path] = value
+        self.dircache.clear()
 
     async def _get_file(self, rpath, lpath, **kwargs):
         if self.isdir(rpath):
