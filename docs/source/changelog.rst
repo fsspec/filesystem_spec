@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
+
 - Make FUSE CLI ``-f`` match its documented default (#1586).
 
 - Preserve source and destination URL text within relative names during ``generic.rsync``.
