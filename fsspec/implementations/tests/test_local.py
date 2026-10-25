@@ -551,6 +551,101 @@ def test_commit_discard(tmpdir):
         assert not fs.exists(tmpdir + "/bfile")
 
 
+@pytest.mark.parametrize("mode", ["wb", "w"])
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("close_before_rollback", [False, True])
+def test_transaction_rollback_closes_files_and_preserves_error(
+    tmp_path, mode, existing, close_before_rollback
+):
+    fs = LocalFileSystem()
+    destination = tmp_path / "output"
+    if existing:
+        destination.write_bytes(b"original")
+    error = RuntimeError("abort transaction")
+    stream = None
+    staged = None
+
+    try:
+        with pytest.raises(RuntimeError) as exc:
+            with fs.transaction as transaction:
+                stream = fs.open(destination, mode)
+                stream.write(b"replacement" if "b" in mode else "replacement")
+                staged = Path(transaction.files[0].temp)
+                if close_before_rollback:
+                    stream.close()
+                raise error
+
+        assert exc.value is error
+        assert stream.closed
+        assert not staged.exists()
+        assert fs._intrans is False
+        assert fs._transaction is None
+        if existing:
+            assert destination.read_bytes() == b"original"
+        else:
+            assert not destination.exists()
+    finally:
+        if stream is not None:
+            stream.close()
+        if staged is not None:
+            staged.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("commit", [False, True])
+def test_explicit_transaction_completion_closes_all_local_files(tmp_path, commit):
+    fs = LocalFileSystem()
+    transaction = fs.start_transaction()
+    streams = []
+    staged = []
+    destinations = []
+    try:
+        for existing in (False, True):
+            for closed in (False, True):
+                destination = tmp_path / f"output-{existing}-{closed}"
+                destinations.append((destination, existing))
+                if existing:
+                    destination.write_bytes(b"original")
+                stream = fs.open(destination, "wb")
+                streams.append(stream)
+                staged.append(Path(stream.temp))
+                stream.write(b"replacement")
+                if closed:
+                    stream.close()
+
+        transaction.complete(commit=commit)
+
+        assert all(stream.closed for stream in streams)
+        assert not any(path.exists() for path in staged)
+        assert fs._intrans is False
+        assert fs._transaction is None
+        assert not transaction.files
+        for destination, existing in destinations:
+            if commit:
+                assert destination.read_bytes() == b"replacement"
+            elif existing:
+                assert destination.read_bytes() == b"original"
+            else:
+                assert not destination.exists()
+    finally:
+        for stream in streams:
+            stream.close()
+        for path in staged:
+            path.unlink(missing_ok=True)
+
+
+def test_discard_rejects_autocommit_without_closing_file(tmp_path):
+    fs = LocalFileSystem()
+    destination = tmp_path / "output"
+
+    with fs.open(destination, "wb") as stream:
+        with pytest.raises(RuntimeError, match="Cannot discard if set to autocommit"):
+            stream.discard()
+        assert not stream.closed
+        stream.write(b"data")
+
+    assert destination.read_bytes() == b"data"
+
+
 def test_transaction_with_compression(tmpdir):
     path = str(tmpdir / "afile.gz")
     fs = LocalFileSystem()

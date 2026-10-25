@@ -477,6 +477,8 @@ class LocalFileOpener(io.IOBase):
     def discard(self):
         if self.autocommit:
             raise RuntimeError("Cannot discard if set to autocommit")
+        if not self.f.closed:
+            self.f.close()
         os.remove(self.temp)
 
     def readable(self) -> bool:

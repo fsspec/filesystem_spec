@@ -24,6 +24,9 @@ Fixes
 
 - Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
 
+- Close local transactional write handles before deleting their temporary files
+  during rollback, avoiding Windows sharing errors and leaked handles.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
