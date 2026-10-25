@@ -14,6 +14,9 @@ Fixes
 
 - Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
 
+- Omit unreachable references from ``ReferenceFileSystem.cat`` results when
+  ``on_error="omit"``.
+
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
@@ -83,6 +86,10 @@ Fixes
 
 - Reject ``generic.rsync`` source names whose ".." segments would place
   copies outside the destination
+
+- Avoid reference cycles when a synchronous call into an async filesystem
+  fails, so its frames and the data they hold are freed straight away instead
+  of waiting for the garbage collector (#2295)
 
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 
