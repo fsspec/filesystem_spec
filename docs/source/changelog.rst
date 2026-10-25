@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Honor exclusive creation mode in DBFS file opens instead of overwriting an
+  existing file.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
