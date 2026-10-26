@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
