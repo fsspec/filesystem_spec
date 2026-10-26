@@ -207,6 +207,9 @@ Fixes
 
 - Make async loop lock initialization thread-safe (#1783)
 
+- Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
+  and allowing deferred local transaction writes to commit to missing parents (#1041).
+
 
 2026.9.0
 --------
