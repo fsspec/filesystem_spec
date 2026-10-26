@@ -1781,16 +1781,17 @@ def test_recursive_copy_preserves_directory_symlink(tmp_path):
     (model / "weights").write_bytes(b"model bytes")
     link = source / "sparse_embeddings"
     try:
-        link.symlink_to("model/sparse_embeddings", target_is_directory=True)
+        link.symlink_to(Path("model") / "sparse_embeddings", target_is_directory=True)
     except OSError:
         if WIN:
             pytest.xfail("Ran on win without admin permissions")
         raise
+    assert (link / "weights").read_bytes() == b"model bytes"
     destination = tmp_path / "destination"
     fs = LocalFileSystem()
     fs.copy(str(source), str(destination), recursive=True, follow_symlinks=False)
     assert (destination / "sparse_embeddings").is_symlink()
-    assert os.readlink(destination / "sparse_embeddings") == "model/sparse_embeddings"
+    assert os.readlink(destination / "sparse_embeddings") == os.readlink(link)
     assert (
         destination / "sparse_embeddings" / "weights"
     ).read_bytes() == b"model bytes"
