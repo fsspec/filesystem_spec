@@ -1,5 +1,6 @@
 """DBFS error handling without a live service or recorded credentials."""
 
+import base64
 import json
 from unittest.mock import Mock, call
 
@@ -67,3 +68,59 @@ def test_rm_preserves_terminal_error(fs, monkeypatch, partial_responses, error_c
         fs.rm("/parent/directory", recursive=True)
 
     assert post.call_count == partial_responses + 1
+
+
+@pytest.mark.parametrize("mode,overwrite", [("wb", True), ("xb", False)])
+@pytest.mark.parametrize(
+    "data",
+    [b"", b"new contents", b"x" * (2**20 + 1)],
+    ids=["empty", "small", "multi-block"],
+)
+def test_open_write_mode_controls_overwrite(fs, monkeypatch, mode, overwrite, data):
+    created = requests.Response()
+    created.status_code = 200
+    created._content = b'{"handle": 1}'
+    post = Mock(
+        side_effect=lambda url, json: created if url.endswith("/create") else response()
+    )
+    monkeypatch.setattr(fs.session, "post", post)
+
+    with fs.open("/file", mode) as file:
+        file.write(data)
+
+    assert post.call_args_list[0] == call(
+        "https://example.invalid/api/2.0/dbfs/create",
+        json={"path": "/file", "overwrite": overwrite},
+    )
+    assert post.call_args_list[-1] == call(
+        "https://example.invalid/api/2.0/dbfs/close", json={"handle": 1}
+    )
+    uploaded = b"".join(
+        base64.b64decode(request.kwargs["json"]["data"])
+        for request in post.call_args_list
+        if request.args[0].endswith("/add-block")
+    )
+    assert uploaded == data
+
+
+@pytest.mark.parametrize(
+    "data",
+    [b"", b"new contents", b"x" * (2**20 + 1)],
+    ids=["empty", "small", "multi-block"],
+)
+def test_exclusive_create_existing_file_stops_before_upload(fs, monkeypatch, data):
+    def create(url, json):
+        if url.endswith("/create") and not json["overwrite"]:
+            return response("RESOURCE_ALREADY_EXISTS")
+        result = response()
+        result._content = b'{"handle": 1}'
+        return result
+
+    post = Mock(side_effect=create)
+    monkeypatch.setattr(fs.session, "post", post)
+
+    with pytest.raises(FileExistsError, match="RESOURCE_ALREADY_EXISTS"):
+        with fs.open("/existing", "xb") as file:
+            file.write(data)
+
+    assert post.call_count == 1

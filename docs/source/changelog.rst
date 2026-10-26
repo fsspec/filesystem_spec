@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Honor exclusive creation mode in DBFS file opens instead of overwriting an
+  existing file.
+
 - Honor ``create_parents=False`` in ``MemoryFileSystem.mkdir`` when the parent
   directory does not exist.
 
