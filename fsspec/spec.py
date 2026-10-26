@@ -1669,7 +1669,11 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         from .json import FilesystemJSONEncoder
 
-        json_encoder = FilesystemJSONEncoder()
+        json_encoder = type(
+            "_FilesystemJSONEncoder",
+            (FilesystemJSONEncoder,),
+            {"include_password": include_password},
+        )()
 
         cls = type(self)
         proto = self.protocol
