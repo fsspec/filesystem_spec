@@ -209,6 +209,15 @@ Built-in Implementations
 .. autoclass:: fsspec.implementations.webhdfs.WebHDFS
    :members: __init__
 
+   .. note::
+
+      ``copy`` and ``cp_file`` do not use a server-side copy operation.
+      The client reads the source and streams it back to a temporary file in
+      the destination directory, then renames that file to the destination.
+      Even when both paths are on the same cluster, file contents travel through
+      the machine running fsspec. Allow for this network traffic when copying
+      large files.
+
 .. autoclass:: fsspec.implementations.zip.ZipFileSystem
    :members: __init__
 

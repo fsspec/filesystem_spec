@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Document client-side data transfers when copying files with WebHDFS (#763).
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
