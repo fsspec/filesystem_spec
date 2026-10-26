@@ -12,6 +12,9 @@ Enhancements
 
 Fixes
 
+- Honor ``create_parents=False`` in ``MemoryFileSystem.mkdir`` when the parent
+  directory does not exist.
+
 - Leave out the passwords of nested FSs when serializing with ``include_password=False``.
 
 - Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
