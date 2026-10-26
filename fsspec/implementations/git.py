@@ -56,10 +56,11 @@ class GitFileSystem(AbstractFileSystem):
         parts = path.split("/")
         tree = comm.tree
         for part in parts:
-            if part and isinstance(tree, pygit2.Tree):
-                if part not in tree:
-                    raise FileNotFoundError(path)
-                tree = tree[part]
+            if not part:
+                continue
+            if not isinstance(tree, pygit2.Tree) or part not in tree:
+                raise FileNotFoundError(path)
+            tree = tree[part]
         return tree
 
     @staticmethod
@@ -87,17 +88,23 @@ class GitFileSystem(AbstractFileSystem):
         }
 
     def ls(self, path, detail=True, ref=None, **kwargs):
-        tree = self._path_to_object(self._strip_protocol(path), ref)
+        path = self._strip_protocol(path).rstrip("/")
+        tree = self._path_to_object(path, ref)
+        if not isinstance(tree, pygit2.Tree):
+            return [self.info(path, ref=ref)] if detail else [path]
         return [
             GitFileSystem._object_to_info(obj, path)
             if detail
             else GitFileSystem._object_to_info(obj, path)["name"]
-            for obj in (tree if isinstance(tree, pygit2.Tree) else [tree])
+            for obj in tree
         ]
 
     def info(self, path, ref=None, **kwargs):
-        tree = self._path_to_object(self._strip_protocol(path), ref)
-        return GitFileSystem._object_to_info(tree, path)
+        path = self._strip_protocol(path).rstrip("/")
+        tree = self._path_to_object(path, ref)
+        info = GitFileSystem._object_to_info(tree)
+        info["name"] = path
+        return info
 
     def ukey(self, path, ref=None):
         return self.info(path, ref=ref)["hex"]
