@@ -12,8 +12,9 @@ Enhancements
 
 Fixes
 
-- Leave out the passwords of nested filesystems, such as the ``fs`` of a
-  ``DirFileSystem``, when serializing with ``include_password=False``.
+- Leave out the passwords of nested FSs when serializing with ``include_password=False``.
+
+- Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
 
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
@@ -61,6 +62,8 @@ Fixes
 - Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
 
 - Bound block-cache fetch ranges by the file size, including background reads.
+
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
 
 - Exclude URL fragments when decoding data URLs.
 

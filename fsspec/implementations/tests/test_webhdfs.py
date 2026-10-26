@@ -309,3 +309,23 @@ def test_chmod_sends_octal_permission(monkeypatch, mode):
     monkeypatch.setattr(fs.session, "request", request)
     fs.chmod("/user/testuser/file", mode)
     assert sent["permission"] == "755"
+
+
+def test_rename_response_checked(monkeypatch):
+    """WebHDFS must not report success when HDFS refuses a rename."""
+    from unittest.mock import Mock
+
+    fs = object.__new__(WebHDFS)
+    response = Mock()
+    response.json.return_value = {"boolean": False}
+    call = Mock(return_value=response)
+    monkeypatch.setattr(fs, "_call", call)
+
+    with pytest.raises(OSError, match="failed to rename"):
+        fs.mv("/source", "/existing")
+    call.assert_called_once_with(
+        "RENAME", method="put", path="/source", destination="/existing"
+    )
+
+    response.json.return_value = {"boolean": True}
+    fs.mv("/source", "/target")
