@@ -137,7 +137,14 @@ class LocalFileSystem(AbstractFileSystem):
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
         if not follow_symlinks and self.islink(path1):
-            shutil.copyfile(path1, path2, follow_symlinks=False)
+            if (
+                os.name == "nt"
+                and os.lstat(path1).st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY
+            ):
+                # Windows links retain their directory type even if dangling.
+                os.symlink(os.readlink(path1), path2, target_is_directory=True)
+            else:
+                shutil.copyfile(path1, path2, follow_symlinks=False)
         elif self.isfile(path1):
             shutil.copyfile(path1, path2)
         elif self.isdir(path1):

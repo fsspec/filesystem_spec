@@ -1734,7 +1734,9 @@ def test_pathlike_source_file_glob_and_pairs(tmp_path, method, path_type, source
     } == expected
 
 
-@pytest.mark.parametrize("kind", ["file", "directory", "dangling"])
+@pytest.mark.parametrize(
+    "kind", ["file", "directory", "dangling", "dangling_directory"]
+)
 def test_copy_preserves_symlink_when_requested(tmp_path, kind):
     target = tmp_path / "target"
     if kind == "file":
@@ -1744,7 +1746,9 @@ def test_copy_preserves_symlink_when_requested(tmp_path, kind):
         (target / "payload").write_bytes(b"payload")
     link = tmp_path / "link"
     try:
-        link.symlink_to("target", target_is_directory=kind == "directory")
+        link.symlink_to(
+            "target", target_is_directory=kind in ("directory", "dangling_directory")
+        )
     except OSError:
         if WIN:
             pytest.xfail("Ran on win without admin permissions")
@@ -1754,6 +1758,17 @@ def test_copy_preserves_symlink_when_requested(tmp_path, kind):
     fs.cp_file(link, copied, follow_symlinks=False)
     assert copied.is_symlink()
     assert os.readlink(copied) == "target"
+    if WIN:
+        import stat
+
+        assert bool(
+            os.lstat(copied).st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY
+        ) == (kind in ("directory", "dangling_directory"))
+    if kind == "dangling_directory":
+        copied_target = copied.parent / "target"
+        copied_target.mkdir()
+        (copied_target / "payload").write_bytes(b"appeared later")
+        assert (copied / "payload").read_bytes() == b"appeared later"
     # Preserve link text, not an absolute resolved target (including dangling links).
     with pytest.raises(FileExistsError):
         fs.cp_file(link, copied, follow_symlinks=False)
