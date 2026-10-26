@@ -59,6 +59,8 @@ Fixes
 
 - Bound block-cache fetch ranges by the file size, including background reads.
 
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
+
 - Exclude URL fragments when decoding data URLs.
 
 - Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
