@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve local symbolic links when copying with ``follow_symlinks=False`` (#1843).
+
 - Honor exclusive creation mode in DBFS file opens instead of overwriting an
   existing file.
 

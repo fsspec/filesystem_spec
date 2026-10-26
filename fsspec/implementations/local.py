@@ -130,12 +130,22 @@ class LocalFileSystem(AbstractFileSystem):
     def lexists(self, path, **kwargs):
         return osp.lexists(self._strip_protocol(path))
 
-    def cp_file(self, path1, path2, **kwargs):
+    def cp_file(self, path1, path2, follow_symlinks=True, **kwargs):
+        """Copy a file, or copy the link itself when follow_symlinks is False."""
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
         if self.auto_mkdir:
             self.makedirs(self._parent(path2), exist_ok=True)
-        if self.isfile(path1):
+        if not follow_symlinks and self.islink(path1):
+            if (
+                os.name == "nt"
+                and os.lstat(path1).st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY
+            ):
+                # Windows links retain their directory type even if dangling.
+                os.symlink(os.readlink(path1), path2, target_is_directory=True)
+            else:
+                shutil.copyfile(path1, path2, follow_symlinks=False)
+        elif self.isfile(path1):
             shutil.copyfile(path1, path2)
         elif self.isdir(path1):
             self.mkdirs(path2, exist_ok=True)
