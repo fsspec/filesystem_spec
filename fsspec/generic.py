@@ -8,7 +8,7 @@ import uuid
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
-from .utils import check_contained
+from .utils import check_contained, other_paths
 
 _generic_fs = {}
 logger = logging.getLogger("fsspec.generic")
@@ -335,6 +335,7 @@ class GenericFileSystem(AsyncFileSystem):
             raise NotImplementedError("Please use fsspec.generic.rsync")
         path1 = [path1] if isinstance(path1, str) else path1
         path2 = [path2] if isinstance(path2, str) else path2
+        path2 = other_paths(path1, path2)
 
         fs = _resolve_fs(path1, self.method, storage_options=self.st_opts)
         fs2 = _resolve_fs(path2, self.method, storage_options=self.st_opts)
@@ -366,6 +367,9 @@ async def copy_file_op(
     fs1, url1, fs2, url2, tempdir=None, batch_size=20, on_error="ignore"
 ):
     import tempfile
+
+    if isinstance(url1, list) and isinstance(url2, list):
+        url2 = other_paths(url1, url2)
 
     with tempfile.TemporaryDirectory(dir=tempdir) as tempdir:
         coros = [

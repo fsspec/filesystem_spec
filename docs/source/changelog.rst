@@ -24,6 +24,10 @@ Fixes
 
 - Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
 
+- Reject unequal source and destination lists in bulk copy, get and put before
+  transferring files, preventing moves from deleting sources that were not copied.
+  Invalid list lengths raise ``ValueError``, including under optimized Python.
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 

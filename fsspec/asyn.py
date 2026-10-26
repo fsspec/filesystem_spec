@@ -549,7 +549,7 @@ class AsyncFileSystem(AbstractFileSystem):
             # No need to expand paths when both source and destination
             # are provided as lists
             paths1 = path1
-            paths2 = path2
+            paths2 = other_paths(paths1, path2)
         else:
             source_is_str = isinstance(path1, str)
             paths1 = await self._expand_path(
@@ -745,8 +745,8 @@ class AsyncFileSystem(AbstractFileSystem):
         if isinstance(lpath, list) and isinstance(rpath, list):
             # No need to expand paths when both source and destination
             # are provided as lists
-            rpaths = rpath
             lpaths = lpath
+            rpaths = other_paths(lpaths, rpath)
         else:
             source_is_str = isinstance(lpath, str)
             if source_is_str:
@@ -823,7 +823,7 @@ class AsyncFileSystem(AbstractFileSystem):
             # No need to expand paths when both source and destination
             # are provided as lists
             rpaths = rpath
-            lpaths = lpath
+            lpaths = other_paths(rpaths, lpath)
         else:
             source_is_str = isinstance(rpath, str)
             # First check for rpath trailing slash as _strip_protocol removes it.
