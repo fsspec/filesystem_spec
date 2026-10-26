@@ -1732,3 +1732,80 @@ def test_pathlike_source_file_glob_and_pairs(tmp_path, method, path_type, source
         for path in target.rglob("*")
         if path.is_file()
     } == expected
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "dangling"])
+def test_copy_preserves_symlink_when_requested(tmp_path, kind):
+    target = tmp_path / "target"
+    if kind == "file":
+        target.write_bytes(b"payload")
+    elif kind == "directory":
+        target.mkdir()
+        (target / "payload").write_bytes(b"payload")
+    link = tmp_path / "link"
+    try:
+        link.symlink_to("target", target_is_directory=kind == "directory")
+    except OSError:
+        if WIN:
+            pytest.xfail("Ran on win without admin permissions")
+        raise
+    fs = LocalFileSystem(auto_mkdir=True)
+    copied = tmp_path / "nested" / "copied"
+    fs.cp_file(link, copied, follow_symlinks=False)
+    assert copied.is_symlink()
+    assert os.readlink(copied) == "target"
+    # Preserve link text, not an absolute resolved target (including dangling links).
+    with pytest.raises(FileExistsError):
+        fs.cp_file(link, copied, follow_symlinks=False)
+
+
+def test_recursive_copy_preserves_directory_symlink(tmp_path):
+    source = tmp_path / "source"
+    model = source / "model" / "sparse_embeddings"
+    model.mkdir(parents=True)
+    (model / "weights").write_bytes(b"model bytes")
+    link = source / "sparse_embeddings"
+    try:
+        link.symlink_to("model/sparse_embeddings", target_is_directory=True)
+    except OSError:
+        if WIN:
+            pytest.xfail("Ran on win without admin permissions")
+        raise
+    destination = tmp_path / "destination"
+    fs = LocalFileSystem()
+    fs.copy(str(source), str(destination), recursive=True, follow_symlinks=False)
+    assert (destination / "sparse_embeddings").is_symlink()
+    assert os.readlink(destination / "sparse_embeddings") == "model/sparse_embeddings"
+    assert (
+        destination / "sparse_embeddings" / "weights"
+    ).read_bytes() == b"model bytes"
+    assert (
+        destination / "model" / "sparse_embeddings" / "weights"
+    ).read_bytes() == b"model bytes"
+
+
+@pytest.mark.parametrize("follow_symlinks", [True, False])
+def test_copy_regular_file_with_follow_symlinks(tmp_path, follow_symlinks):
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.write_bytes(b"source bytes")
+    destination.write_bytes(b"old bytes")
+    LocalFileSystem().cp_file(source, destination, follow_symlinks=follow_symlinks)
+    assert not destination.is_symlink()
+    assert destination.read_bytes() == b"source bytes"
+
+
+def test_copy_file_symlink_follows_by_default(tmp_path):
+    target = tmp_path / "target"
+    target.write_bytes(b"payload")
+    link = tmp_path / "link"
+    try:
+        link.symlink_to("target")
+    except OSError:
+        if WIN:
+            pytest.xfail("Ran on win without admin permissions")
+        raise
+    copied = tmp_path / "copied"
+    LocalFileSystem().cp_file(link, copied)
+    assert not copied.is_symlink()
+    assert copied.read_bytes() == b"payload"

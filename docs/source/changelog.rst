@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Preserve local symbolic links when copying with ``follow_symlinks=False`` (#1843).
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
