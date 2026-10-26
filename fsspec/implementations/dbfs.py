@@ -460,7 +460,7 @@ class DatabricksFile(AbstractBufferedFile):
 
     def _initiate_upload(self):
         """Internal function to start a file upload"""
-        self.handle = self.fs._create_handle(self.path)
+        self.handle = self.fs._create_handle(self.path, overwrite="x" not in self.mode)
 
     def _upload_chunk(self, final=False):
         """Internal function to add a chunk of data to a started upload"""

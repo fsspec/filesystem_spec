@@ -1527,6 +1527,14 @@ def test_serialize_no_password():
     assert "password" not in fs.to_dict(include_password=False)
 
 
+def test_serialize_no_password_nested():
+    fs = DummyTestFS(2, fs=DummyTestFS(1, password="admin"))
+
+    assert "password" not in fs.to_json(include_password=False)
+    assert "password" not in fs.to_dict(include_password=False)["fs"]
+    assert fs.to_dict(include_password=True)["fs"]["password"] == "admin"
+
+
 def test_serialize_with_password():
     fs = DummyTestFS(1, password="admin")
 
