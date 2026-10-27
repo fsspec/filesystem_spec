@@ -14,6 +14,9 @@ Fixes
 
 - Point contributor setup instructions to the current CI environment files (#626).
 
+- Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
+  ``OpenFile`` does not take them since #1029.
+
 - Recognize ASCII case and permitted spaces in data URL base64 markers.
 
 - Accept bare relative filenames in lists of local destinations for async ``get``.
