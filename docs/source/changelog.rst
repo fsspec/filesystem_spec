@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Keep directory listing expiry stable across system clock changes (#2330).
+
 - Reject Git paths below files and preserve complete file names in Git metadata.
 
 - Honor exclusive creation mode in DBFS file opens instead of overwriting an

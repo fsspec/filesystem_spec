@@ -1,9 +1,59 @@
 import pickle
 import time
+from types import SimpleNamespace
 
 import pytest
 
 from fsspec.dircache import DirCache
+
+
+@pytest.fixture
+def clocks(monkeypatch):
+    clocks = SimpleNamespace(wall=10_000, elapsed=100)
+    monkeypatch.setattr(
+        "fsspec.dircache.time",
+        SimpleNamespace(
+            time=lambda: clocks.wall,
+            monotonic=lambda: clocks.elapsed,
+        ),
+    )
+    return clocks
+
+
+@pytest.mark.parametrize("operation", ["lookup", "membership", "iteration"])
+@pytest.mark.parametrize("elapsed,wall_jump", [(1, 1000), (6, -1000)])
+def test_dircache_expiry_ignores_wall_clock_changes(
+    clocks, operation, elapsed, wall_jump
+):
+    cache = DirCache(listings_expiry_time=5)
+    listing = [{"name": "directory/file", "type": "file", "size": 1}]
+    cache["directory"] = listing
+    clocks.elapsed += elapsed
+    clocks.wall += elapsed + wall_jump
+    valid = elapsed < 5
+
+    if operation == "lookup":
+        if valid:
+            assert cache["directory"] is listing
+        else:
+            with pytest.raises(KeyError):
+                cache["directory"]
+    elif operation == "membership":
+        assert ("directory" in cache) is valid
+    else:
+        assert list(cache) == (["directory"] if valid else [])
+
+
+def test_dircache_without_expiry_ignores_both_clocks(clocks):
+    cache = DirCache()
+    listing = []
+    cache["directory"] = listing
+    clocks.elapsed += 1_000_000
+    clocks.wall -= 1_000_000
+
+    assert cache["directory"] is listing
+    assert "directory" in cache
+    assert list(cache) == ["directory"]
 
 
 def test_dircache_evicts_oldest_when_capacity_exceeded():
