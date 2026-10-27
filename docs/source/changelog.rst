@@ -12,6 +12,17 @@ Enhancements
 
 Fixes
 
+- Point contributor setup instructions to the current CI environment files (#626).
+
+- Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
+  ``OpenFile`` does not take them since #1029.
+
+- Recognize ASCII case and permitted spaces in data URL base64 markers.
+
+- Accept bare relative filenames in lists of local destinations for async ``get``.
+
+- Reject Git paths below files and preserve complete file names in Git metadata.
+
 - Honor exclusive creation mode in DBFS file opens instead of overwriting an
   existing file.
 
@@ -23,6 +34,9 @@ Fixes
 - Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
 
 - Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
+
+- Close local transactional write handles before deleting their temporary files
+  during rollback, avoiding Windows sharing errors and leaked handles.
 
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
@@ -206,6 +220,9 @@ Fixes
 - Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
 
 - Make async loop lock initialization thread-safe (#1783)
+
+- Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
+  and allowing deferred local transaction writes to commit to missing parents (#1041).
 
 
 2026.9.0
