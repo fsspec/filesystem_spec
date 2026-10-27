@@ -5,7 +5,6 @@ import urllib
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
-from typing_extensions import override
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
@@ -59,7 +58,6 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         super().__init__(**kwargs)
 
-    @override
     def _ls_from_cache(self, path) -> list[dict[str, str | int]] | None:
         """Check cache for listing
 

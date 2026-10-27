@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+
 - Reject Git paths below files and preserve complete file names in Git metadata.
 
 - Honor exclusive creation mode in DBFS file opens instead of overwriting an
@@ -83,7 +85,7 @@ Fixes
 
 - Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
 
-- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
