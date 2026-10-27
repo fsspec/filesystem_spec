@@ -37,6 +37,47 @@ class TarFileSystem(AbstractArchiveFileSystem):
         # An explicit './' member represents the root, not one of its children.
         return [entry for entry in entries if (entry["name"] if detail else entry)]
 
+    def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+        # Leave custom walking/listing behavior and unusual depth values alone.
+        if (
+            type(self) is not TarFileSystem
+            or kwargs
+            or type(withdirs) is not bool
+            or type(detail) is not bool
+            or (maxdepth is not None and (type(maxdepth) is not int or maxdepth < 1))
+        ):
+            return super().find(path, maxdepth, withdirs, detail, **kwargs)
+
+        path = self._strip_protocol(path)
+        self._get_dirs()
+        if path in self.dir_cache and self.dir_cache[path]["type"] != "directory":
+            return super().find(path, maxdepth, withdirs, detail)
+
+        prefix = path + "/" if path else ""
+        depth = prefix.count("/")
+        out = {}
+        for name, info in self.dir_cache.items():
+            if not name:
+                continue
+            if name == path:
+                if withdirs:
+                    out[name] = info
+                continue
+            if not name.startswith(prefix):
+                continue
+            if maxdepth is not None and name.count("/") - depth >= maxdepth:
+                continue
+            # A file can mask a directory with the same name in a TAR archive.
+            parent = name.rpartition("/")[0]
+            while parent and parent != path:
+                if self.dir_cache[parent]["type"] != "directory":
+                    return super().find(path, maxdepth, withdirs, detail)
+                parent = parent.rpartition("/")[0]
+            if withdirs or info["type"] != "directory":
+                out[name] = info
+        names = sorted(out)
+        return {name: out[name] for name in names} if detail else names
+
     def __init__(
         self,
         fo="",
