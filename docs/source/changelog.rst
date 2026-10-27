@@ -15,6 +15,18 @@ Fixes
 - Cancel the submitted async call when ``sync()`` is interrupted, stopping
   HTTP ``get_file`` transfers after a keyboard interrupt (#1667).
 
+- Reject Git paths below files and preserve complete file names in Git metadata.
+
+- Honor exclusive creation mode in DBFS file opens instead of overwriting an
+  existing file.
+
+- Honor ``create_parents=False`` in ``MemoryFileSystem.mkdir`` when the parent
+  directory does not exist.
+
+- Leave out the passwords of nested FSs when serializing with ``include_password=False``.
+
+- Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
+
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.
 
@@ -61,6 +73,8 @@ Fixes
 - Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
 
 - Bound block-cache fetch ranges by the file size, including background reads.
+
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
 
 - Exclude URL fragments when decoding data URLs.
 
@@ -195,6 +209,9 @@ Fixes
 - Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
 
 - Make async loop lock initialization thread-safe (#1783)
+
+- Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
+  and allowing deferred local transaction writes to commit to missing parents (#1041).
 
 
 2026.9.0
