@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Point contributor setup instructions to the current CI environment files (#626).
+
 - Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
   ``OpenFile`` does not take them since #1029.
 
