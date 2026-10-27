@@ -45,6 +45,26 @@ def test_session_shim_request_method(monkeypatch, method):
     assert calls == [(method.upper(), url, options)]
 
 
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("content-length: 8\r\n", {"content-length": "8"}),
+        ("x-description: a: b\r\n", {"x-description": "a: b"}),
+        ("", {}),
+        ("x-empty: \r\n", {"x-empty": ""}),
+    ],
+)
+def test_response_proxy_headers(raw, expected):
+    from fsspec.implementations.http_sync import ResponseProxy
+
+    class Request:
+        def getAllResponseHeaders(self):
+            return raw
+
+    response = ResponseProxy(Request())
+    assert response.headers == expected
+
+
 @pytest.mark.parametrize("stream", [False, True])
 @pytest.mark.parametrize("chunksize", [1, 3, 8, None])
 @pytest.mark.parametrize("payload", [b"", b"a\x00b\xffcdef"])

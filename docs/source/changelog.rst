@@ -42,7 +42,8 @@ Fixes
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
-- Iterate buffered Pyodide HTTP responses when a server ignores Range requests.
+- Iterate buffered Pyodide HTTP responses when a server ignores Range requests,
+  and preserve colon-containing or empty response-header values.
 
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 

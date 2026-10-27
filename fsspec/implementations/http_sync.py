@@ -75,8 +75,9 @@ class ResponseProxy:
         if self._headers is None:
             self._headers = dict(
                 [
-                    _.split(": ")
-                    for _ in self.request.getAllResponseHeaders().strip().split("\r\n")
+                    _.split(": ", 1)
+                    for _ in self.request.getAllResponseHeaders().split("\r\n")
+                    if _
                 ]
             )
         return self._headers
