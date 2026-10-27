@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Recognize ASCII case and permitted spaces in data URL base64 markers.
+
 - Accept bare relative filenames in lists of local destinations for async ``get``.
 
 - Reject Git paths below files and preserve complete file names in Git metadata.
