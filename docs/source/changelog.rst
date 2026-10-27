@@ -12,6 +12,8 @@ Enhancements
 
 Fixes
 
+- Recognize ASCII case and permitted spaces in data URL base64 markers.
+
 - Reject Git paths below files and preserve complete file names in Git metadata.
 
 - Honor exclusive creation mode in DBFS file opens instead of overwriting an
