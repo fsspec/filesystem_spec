@@ -862,7 +862,9 @@ class AsyncFileSystem(AbstractFileSystem):
                 # lpath is a list the caller named every destination itself.
                 check_contained(lpath, lpaths)
 
-        [os.makedirs(os.path.dirname(lp) or os.curdir, exist_ok=True) for lp in lpaths]
+        for lp in lpaths:
+            if parent := os.path.dirname(lp):
+                os.makedirs(parent, exist_ok=True)
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []

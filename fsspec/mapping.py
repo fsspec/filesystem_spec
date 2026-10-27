@@ -132,6 +132,8 @@ class FSMap(MutableMapping):
         values_dict: dict(str, bytes)
         """
         values = {self._key_to_str(k): maybe_convert(v) for k, v in values_dict.items()}
+        for parent in dict.fromkeys(self.fs._parent(k) for k in values):
+            self.fs.mkdirs(parent, exist_ok=True)
         self.fs.pipe(values)
 
     def delitems(self, keys):

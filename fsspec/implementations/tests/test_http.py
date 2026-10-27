@@ -627,6 +627,13 @@ def test_multi_download_relative_destinations(
     server, tmp_path, monkeypatch, path_type, parent
 ):
     monkeypatch.chdir(tmp_path)
+    makedirs = os.makedirs
+
+    def make_parent(path, **kwargs):
+        assert os.fspath(path) not in ("", os.curdir)
+        return makedirs(path, **kwargs)
+
+    monkeypatch.setattr(os, "makedirs", make_parent)
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     destinations = [
         path_type(os.path.join(parent, name)) for name in ("afile", "bfile")
