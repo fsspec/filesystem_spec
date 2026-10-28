@@ -1,9 +1,35 @@
 import pickle
 import time
+from types import SimpleNamespace
 
 import pytest
 
 from fsspec.dircache import DirCache
+
+
+@pytest.mark.parametrize("operation", ["get", "contains", "iter"])
+@pytest.mark.parametrize("elapsed, wall_jump", [(1, 1000), (6, -1000)])
+def test_expiry_uses_elapsed_time(monkeypatch, operation, elapsed, wall_jump):
+    clock = {"wall": 10000, "elapsed": 0}
+    monkeypatch.setattr(
+        "fsspec.dircache.time",
+        SimpleNamespace(time=lambda: clock["wall"], monotonic=lambda: clock["elapsed"]),
+    )
+    dc = DirCache(listings_expiry_time=5)
+    dc["directory"] = ["file"]
+    clock["wall"] += elapsed + wall_jump
+    clock["elapsed"] += elapsed
+
+    if operation == "get":
+        if elapsed > 5:
+            with pytest.raises(KeyError):
+                dc["directory"]
+        else:
+            assert dc["directory"] == ["file"]
+    elif operation == "contains":
+        assert ("directory" in dc) == (elapsed <= 5)
+    else:
+        assert list(dc) == (["directory"] if elapsed <= 5 else [])
 
 
 def test_dircache_evicts_oldest_when_capacity_exceeded():

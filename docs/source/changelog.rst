@@ -15,6 +15,9 @@ Enhancements
 
 Fixes
 
+- Use elapsed time for directory listing expiry so system clock changes do not
+  expire fresh listings or keep stale ones alive (#2330).
+
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
 
 - Use the documentation extra when setting up a local documentation build.
