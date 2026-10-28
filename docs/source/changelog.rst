@@ -15,6 +15,9 @@ Enhancements
 
 Fixes
 
+- Document the Zstandard fallback's backward-seeking limitation and the
+  ``backports.zstd`` option for reading TAR archive members (#1590).
+
 - Point contributor setup instructions to the current CI environment files (#626).
 
 - Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
