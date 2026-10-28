@@ -1,10 +1,12 @@
 Changelog
-=========
-
+==
 Dev
 ---
 
 Enhancements
+
+- List TAR archive descendants from the existing directory cache without
+  rescanning the full archive for each directory.
 
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
   operations that fill the cache on a miss, so ``filecache``/``simplecache``
@@ -13,6 +15,18 @@ Enhancements
 Fixes
 
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+- Use the documentation extra when setting up a local documentation build.
+
+- Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
+
+- Point contributor setup instructions to the current CI environment files (#626).
+
+- Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
+  ``OpenFile`` does not take them since #1029.
+
+- Recognize ASCII case and permitted spaces in data URL base64 markers.
+
+- Accept bare relative filenames in lists of local destinations for async ``get``.
 
 - Reject Git paths below files and preserve complete file names in Git metadata.
 
@@ -25,6 +39,11 @@ Fixes
 - Leave out the passwords of nested FSs when serializing with ``include_password=False``.
 
 - Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
+
+- Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
+
+- Close local transactional write handles before deleting their temporary files
+  during rollback, avoiding Windows sharing errors and leaked handles.
 
 - Omit unreachable references from ``ReferenceFileSystem.cat`` results when
   ``on_error="omit"``.

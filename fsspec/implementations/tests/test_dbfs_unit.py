@@ -32,6 +32,53 @@ def fs():
     filesystem.session.close()
 
 
+@pytest.mark.parametrize(
+    "error_code", ["PERMISSION_DENIED", "INTERNAL_ERROR", "IO_ERROR"]
+)
+def test_makedirs_preserves_status_error(fs, monkeypatch, error_code):
+    get = Mock(return_value=response(error_code))
+    post = Mock(return_value=response())
+    monkeypatch.setattr(fs.session, "get", get)
+    monkeypatch.setattr(fs.session, "post", post)
+    fs.dircache["/parent"] = []
+
+    with pytest.raises(DatabricksException, match=error_code) as exc:
+        fs.makedirs("/parent/directory", exist_ok=False)
+
+    assert exc.value.error_code == error_code
+    post.assert_not_called()
+    assert "/parent" in fs.dircache
+
+
+@pytest.mark.parametrize("exist_ok", [False, True])
+def test_makedirs_missing_path(fs, monkeypatch, exist_ok):
+    get = Mock(return_value=response("RESOURCE_DOES_NOT_EXIST"))
+    post = Mock(return_value=response())
+    monkeypatch.setattr(fs.session, "get", get)
+    monkeypatch.setattr(fs.session, "post", post)
+    fs.dircache["/parent"] = []
+
+    fs.makedirs("/parent/directory", exist_ok=exist_ok)
+
+    assert get.call_count == (0 if exist_ok else 1)
+    post.assert_called_once_with(
+        "https://example.invalid/api/2.0/dbfs/mkdirs",
+        json={"path": "/parent/directory"},
+    )
+    assert "/parent" not in fs.dircache
+
+
+def test_makedirs_existing_path(fs, monkeypatch):
+    monkeypatch.setattr(fs.session, "get", Mock(return_value=response()))
+    post = Mock(return_value=response())
+    monkeypatch.setattr(fs.session, "post", post)
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        fs.makedirs("/parent/directory", exist_ok=False)
+
+    post.assert_not_called()
+
+
 @pytest.mark.parametrize("partial_responses", [0, 1, 2, 1100])
 def test_rm_partial_delete_completes_and_invalidates_cache(
     fs, monkeypatch, partial_responses
