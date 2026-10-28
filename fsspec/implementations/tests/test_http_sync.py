@@ -282,7 +282,8 @@ def test_exists_strict(server, sync):
     assert e.value.response.status_code == 401
 
 
-def test_read(server, sync):
+@pytest.mark.parametrize("length", [None, -1])
+def test_read(server, sync, length):
     h = fsspec.filesystem("http")
     out = server.address + "/index/realfile"
     # with h.open(out, "rb") as f:
@@ -291,8 +292,19 @@ def test_read(server, sync):
     #    assert f.read() == data
     with h.open(out, "rb") as f:
         o1 = f.read(100)
-        o2 = f.read()
+        o2 = f.read(length)
         assert o1 + o2 == data
+
+
+@pytest.mark.parametrize("block_size", [0, 32, 2**20])
+@pytest.mark.parametrize("position", [0, 10])
+def test_read_none(server, sync, block_size, position):
+    h = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    with h.open(server.realfile, block_size=block_size) as f:
+        assert f.read(position) == data[:position]
+        assert f.read(None) == data[position:]
+        assert f.tell() == len(data)
+        assert f.read(None) == b""
 
 
 def test_methods(server, sync):
@@ -472,6 +484,28 @@ def test_cat_file_range(server, sync):
     assert h.cat(urla, start=-10, end=-2) == data[-10:-2]
 
     assert h.cat(urla, end=-10) == data[:-10]
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"ignore_range": "true", "give_length": "true"},
+        {"ignore_range": "true", "give_range": "true"},
+    ],
+)
+def test_cat_file_range_when_server_ignores_range(server, headers, sync):
+    """The body of a server that ignores ``Range`` is the whole file, not the
+    window that was asked for, so the window is read out of it instead."""
+    h = fsspec.filesystem("http", headers=headers)
+    urla = server.address + "/index/realfile"
+    assert h.cat_file(urla, start=0, end=10) == data[:10]
+    assert h.cat_file(urla, end=10) == data[:10]
+    assert h.cat_file(urla, start=-10) == data[-10:]
+
+    # a window that starts inside the file cannot be told apart from a response
+    # that served more of the range than was asked for
+    with pytest.raises(ValueError):
+        h.cat_file(urla, start=1, end=10)
 
 
 @pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])

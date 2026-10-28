@@ -1019,6 +1019,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                     raise new_ex
                 elif on_error != "omit":
                     out[k] = new_ex
+                else:
+                    del out[k]
 
         if len(out) == 1 and isinstance(path, str) and "*" not in path:
             return _first(out)
