@@ -1,5 +1,6 @@
 Changelog
-==
+=========
+
 Dev
 ---
 
@@ -15,6 +16,7 @@ Enhancements
 Fixes
 
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+
 - Use the documentation extra when setting up a local documentation build.
 
 - Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
