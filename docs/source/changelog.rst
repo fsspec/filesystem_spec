@@ -15,6 +15,8 @@ Enhancements
 
 Fixes
 
+- Use the documentation extra when setting up a local documentation build.
+
 - Point contributor setup instructions to the current CI environment files (#626).
 
 - Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
