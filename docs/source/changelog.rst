@@ -15,6 +15,8 @@ Enhancements
 
 Fixes
 
+- Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+
 - Use the documentation extra when setting up a local documentation build.
 
 - Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
@@ -104,7 +106,7 @@ Fixes
 
 - Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
 
-- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
