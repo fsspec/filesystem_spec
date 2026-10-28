@@ -164,6 +164,89 @@ def test_openfiles_failed_entry_closes_previous_files(tmp_path, recorded_local_f
     assert opened[0].closed
 
 
+def test_openfile_flush_failure_still_closes_file(
+    tmp_path, recorded_local_files, monkeypatch
+):
+    fs, _ = recorded_local_files
+    file = OpenFile(fs, str(tmp_path / "file.txt"), mode="wb")
+    stream = file.open()
+
+    def fail_flush():
+        raise OSError("flush failed")
+
+    monkeypatch.setattr(stream, "flush", fail_flush)
+    with pytest.raises(OSError, match="flush failed"):
+        file.close()
+    assert stream.closed
+
+
+@pytest.mark.parametrize("failure", ["flush", "close"])
+def test_openfiles_close_failure_still_closes_other_files(
+    tmp_path, recorded_local_files, monkeypatch, failure
+):
+    fs, opened = recorded_local_files
+    files = OpenFiles(
+        [OpenFile(fs, str(tmp_path / name), mode="wb") for name in ["first", "second"]],
+        mode="wb",
+        fs=fs,
+    )
+    with pytest.raises(OSError, match="close failed"):
+        with files as streams:
+            streams[0].write(b"first")
+            streams[1].write(b"second")
+            original_close = streams[0].close
+
+            def fail():
+                if failure == "close":
+                    was_closed = streams[0].closed
+                    original_close()
+                    if was_closed:
+                        return
+                raise OSError("close failed")
+
+            monkeypatch.setattr(streams[0], failure, fail)
+    assert all(stream.closed for stream in opened)
+    assert (tmp_path / "second").read_bytes() == b"second"
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_cached_openfiles_close_failure_still_closes_other_readers(
+    tmp_path, m, monkeypatch, protocol
+):
+    m.pipe({"first": b"first", "second": b"second"})
+    files = fsspec.open_files(
+        [f"{protocol}::memory:///{name}" for name in ["first", "second"]],
+        cache_storage=str(tmp_path),
+    )
+    opened = []
+    try:
+        with pytest.raises(OSError, match="close failed"):
+            with files as streams:
+                opened = streams
+                assert [stream.read() for stream in streams] == [b"first", b"second"]
+                original_close = streams[0].close
+
+                def fail_close():
+                    was_closed = streams[0].closed
+                    original_close()
+                    if not was_closed:
+                        raise OSError("close failed")
+
+                monkeypatch.setattr(streams[0], "close", fail_close)
+        assert all(stream.closed for stream in opened)
+    finally:
+        for stream in opened:
+            stream.close()
+
+
+def test_openfiles_preserves_close_order_for_duplicate_write_paths(tmp_path):
+    path = tmp_path / "file.txt"
+    with fsspec.open_files([str(path), str(path)], mode="wb") as files:
+        files[0].write(b"first")
+        files[1].write(b"second")
+    assert path.read_bytes() == b"second"
+
+
 def test_open_local_w_cache():
     d1 = str(tempfile.mkdtemp())
     f1 = os.path.join(d1, "f1")

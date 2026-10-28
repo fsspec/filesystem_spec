@@ -149,10 +149,17 @@ class OpenFile:
 
     def close(self):
         """Close all encapsulated file objects"""
-        for f in reversed(self.fobjects):
-            if "r" not in self.mode and not f.closed:
-                f.flush()
-            f.close()
+
+        def close_one(f):
+            try:
+                if "r" not in self.mode and not f.closed:
+                    f.flush()
+            finally:
+                f.close()
+
+        with ExitStack() as stack:
+            for f in self.fobjects:
+                stack.callback(close_one, f)
         self.fobjects.clear()
 
 
@@ -195,12 +202,14 @@ class OpenFiles(list):
 
     def __exit__(self, *args):
         fs = self.fs
-        [s.__exit__(*args) for s in self]
-        if "r" in self.mode:
-            # open_many() returns files without populating the OpenFile objects.
-            for f in self.files:
-                f.close()
-        else:
+        with ExitStack() as stack:
+            if "r" in self.mode:
+                # open_many() returns files without populating the OpenFile objects.
+                for f in reversed(self.files):
+                    stack.callback(f.close)
+            for s in reversed(self):
+                stack.callback(s.__exit__, *args)
+        if "r" not in self.mode:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
