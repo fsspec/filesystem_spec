@@ -1,6 +1,7 @@
 import os
 import ssl
 import uuid
+import warnings
 from ftplib import FTP, FTP_TLS, Error, error_perm
 from typing import Any
 
@@ -99,7 +100,9 @@ class FTPFileSystem(AbstractFileSystem):
         ssl_context: ssl.SSLContext or None
             Context for the TLS connections. The default verifies the server
             certificate and host name against the system trust store; pass a
-            context to trust a private CA or a self-signed certificate.
+            context to trust a private CA or a self-signed certificate. For
+            now, a server that fails verification is still connected to, with
+            a FutureWarning; a future release will refuse it.
         """
         super().__init__(**kwargs)
         self.host = host
@@ -117,11 +120,29 @@ class FTPFileSystem(AbstractFileSystem):
         self._connect()
 
     def _connect(self):
+        if self.tls and self.ssl_context is None:
+            try:
+                self._login(ssl.create_default_context())
+            except ssl.SSLCertVerificationError as e:
+                self.ftp.close()
+                warnings.warn(
+                    f"The TLS certificate of FTP server {self.host!r} could not "
+                    f"be verified ({e.verify_message}); connecting anyway. A "
+                    "future release will refuse such connections; pass "
+                    "ssl_context= with a context that trusts this server.",
+                    FutureWarning,
+                )
+                # ftplib's own default context, which does not check anything
+                self._login(None)
+        else:
+            self._login(self.ssl_context)
+
+    def _login(self, context):
         security = None
         kwargs = {}
         if self.tls:
-            # ftplib's own default context does not check the certificate
-            kwargs["context"] = self.ssl_context or ssl.create_default_context()
+            if context is not None:
+                kwargs["context"] = context
             if isinstance(self.tls, str):
                 ftp_cls = ImplicitFTPTLS
                 security = SECURITY_PROTOCOL_MAP.get(

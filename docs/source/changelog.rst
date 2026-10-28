@@ -14,6 +14,7 @@ Fixes
 
 - Verify the server certificate and host name for ``FTPFileSystem`` TLS
   connections; pass ``ssl_context=`` to trust a private or self-signed one.
+  An unverifiable server still connects for now, with a ``FutureWarning``.
 
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 

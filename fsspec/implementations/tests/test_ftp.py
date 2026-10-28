@@ -109,12 +109,19 @@ def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
     assert tls_data == [True]
 
 
-def test_tls_rejects_untrusted_certificate(ftp):
+def test_tls_warns_on_untrusted_certificate(ftp):
     host, port = ftp
-    # the test server's certificate is not in the default trust store, so the
-    # login must not go ahead over an unauthenticated connection
-    with pytest.raises(ssl.SSLCertVerificationError):
-        FTPFileSystem(host, port, "user", "pass", tls=True)
+    # the test server's certificate is not in the default trust store; for one
+    # release this still connects, but warns that it will be refused
+    with pytest.warns(FutureWarning, match="could not be verified"):
+        fs = FTPFileSystem(host, port, "user", "pass", tls=True)
+    assert fs.ls("/", detail=False) == sorted(os.listdir(here))
+
+
+def test_tls_trusted_certificate_does_not_warn(ftp, recwarn):
+    host, port = ftp
+    FTPFileSystem(host, port, "user", "pass", tls=True, ssl_context=trust_test_cert())
+    assert not [w for w in recwarn if issubclass(w.category, FutureWarning)]
 
 
 @pytest.mark.parametrize(
