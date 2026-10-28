@@ -41,9 +41,9 @@ def readinto(path, out, offset, *, library, control):
         ctypes.c_void_p,
     ]
     read.restype = ctypes.c_ssize_t
-    count = read(out.data.ptr, out.nbytes, offset, callback_ptr, None)
+    count = read(int(out.handle), out.size, offset, callback_ptr, None)
     if errors:
         raise errors[0]
-    if count != out.nbytes:
-        raise OSError(f"cuObject read failed: expected {out.nbytes}, got {count}")
+    if count != out.size:
+        raise OSError(f"cuObject read failed: expected {out.size}, got {count}")
     return count

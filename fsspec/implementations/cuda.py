@@ -4,8 +4,10 @@ Optional imports are deferred until data is transferred. See ``docs/source/gpu.r
 for completion, ownership, and backend semantics.
 """
 
+import ctypes
 import io
 import itertools
+import math
 import threading
 
 from fsspec import AbstractFileSystem, filesystem
@@ -14,6 +16,41 @@ from fsspec.utils import stringify_path
 
 # KvikIO's Python CuFile constructor reads process-global defaults.
 _cufile_lock = threading.Lock()
+
+
+def _host_view(buffer):
+    """Expose a host-accessible Buffer to Python I/O, retaining its owner."""
+    if buffer.is_closed or not buffer.is_host_accessible:
+        raise ValueError("Buffer must be open and host accessible")
+    array = (ctypes.c_ubyte * buffer.size).from_address(int(buffer.handle))
+    array._owner = buffer
+    return memoryview(array).cast("B")
+
+
+def _buffer_view(buffer, offset=0, size=None):
+    """Create a non-owning byte range that keeps its allocation alive."""
+    from cuda.core import Buffer
+
+    if buffer.is_closed:
+        raise ValueError("CUDA buffer is closed")
+    size = buffer.size - offset if size is None else size
+    if offset < 0 or size < 0 or offset + size > buffer.size:
+        raise ValueError("Buffer view is outside the allocation")
+    return Buffer.from_handle(int(buffer.handle) + offset, size, owner=buffer)
+
+
+class _KvikioBuffer:
+    """Adapt a Buffer to KvikIO's CUDA Array Interface without an array library."""
+
+    def __init__(self, buffer, stream):
+        self.buffer = buffer
+        self.__cuda_array_interface__ = {
+            "shape": (buffer.size,),
+            "typestr": "|u1",
+            "data": (int(buffer.handle), False),
+            "version": 3,
+            "stream": int(stream.handle) or 1,
+        }
 
 
 def cuda_filesystem_class(protocol):
@@ -34,13 +71,14 @@ def cuda_filesystem_class(protocol):
 
 
 class CUDAFileSystem(ChainedFileSystem):
-    """Wrap an fsspec filesystem, returning CuPy uint8 arrays for byte reads.
+    """Wrap an fsspec filesystem, returning cuda.core.Buffer byte allocations.
 
     ``method`` is one of ``pinned`` (default), ``cufile``, ``bounce``,
     ``kvikio``, or ``cuobject``. ``stream`` selects one CUDA stream;
     ``streams`` selects a round-robin pool (an integer creates that many
-    nonblocking streams). With neither set, use the calling thread's current
-    stream. Options can also be set in fsspec's ``cuda`` configuration section.
+    nonblocking streams). With neither set, use the device's CUDA Core default
+    stream. Options can also be set in fsspec's ``cuda``
+    configuration section.
 
     Metadata and server-side manipulation use the underlying filesystem.
     Call ``synchronize()`` to finish transfers and report deferred I/O errors.
@@ -110,10 +148,17 @@ class CUDAFileSystem(ChainedFileSystem):
         return self.fs._strip_protocol(path)
 
     def _stream(self, stream=None):
-        import cupy as cp
+        from cuda.core import Device, Stream
+
+        device = Device()
+        device.set_current()
 
         def wrap(s):
-            return cp.cuda.ExternalStream(s) if isinstance(s, int) else s
+            if isinstance(s, Stream):
+                return s
+            if isinstance(s, int):
+                return Stream.from_handle(s)
+            return device.create_stream(s)
 
         if stream is not None:
             return wrap(stream)
@@ -123,7 +168,7 @@ class CUDAFileSystem(ChainedFileSystem):
                 if isinstance(spec, (int, str)):
                     if int(spec) < 1:
                         raise ValueError("streams must be positive")
-                    spec = [cp.cuda.Stream(non_blocking=True) for _ in range(int(spec))]
+                    spec = [device.create_stream() for _ in range(int(spec))]
                 spec = [wrap(s) for s in spec]
                 if not spec:
                     raise ValueError("streams must not be empty")
@@ -132,13 +177,10 @@ class CUDAFileSystem(ChainedFileSystem):
                 return next(self._streams)
         if self._stream_spec is not None:
             return wrap(self._stream_spec)
-        return cp.cuda.get_current_stream()
+        return device.default_stream
 
     def _retain(self, stream, resources, check=None, close=None):
-        import cupy as cp
-
-        event = cp.cuda.Event()
-        event.record(stream)
+        event = stream.record()
         with self._lock:
             self._pending.append((event, (stream, resources), check, close))
 
@@ -148,7 +190,7 @@ class CUDAFileSystem(ChainedFileSystem):
         with self._lock:
             ready, pending = [], []
             for transfer in self._pending:
-                (ready if transfer[0].done else pending).append(transfer)
+                (ready if transfer[0].is_done else pending).append(transfer)
             self._pending = pending
         self._finish(ready)
 
@@ -163,7 +205,7 @@ class CUDAFileSystem(ChainedFileSystem):
         error = None
         for event, resources, check, close in pending:
             try:
-                event.synchronize()
+                event.sync()
                 if check is not None:
                     check()
             except Exception as exc:
@@ -182,14 +224,12 @@ class CUDAFileSystem(ChainedFileSystem):
 
         Use synchronize separately to check deferred cuFile completion counts.
         """
-        import cupy as cp
+        from cuda.core import Device
 
-        stream = (
-            cp.cuda.get_current_stream() if stream is None else self._stream(stream)
-        )
+        stream = Device().default_stream if stream is None else self._stream(stream)
         with self._lock:
             for event, *_ in self._pending:
-                stream.wait_event(event)
+                stream.wait(event)
         return stream
 
     close = synchronize
@@ -198,24 +238,45 @@ class CUDAFileSystem(ChainedFileSystem):
         if getattr(self, "_pending", None):
             self.synchronize()
 
-    def _device_bytes(self, buffer, writable=True):
-        import cupy as cp
+    def _device_bytes(self, buffer, stream, writable=True):
+        from cuda.core import Buffer
+        from cuda.core.utils import StridedMemoryView
 
-        if not hasattr(buffer, "__cuda_array_interface__"):
-            raise TypeError("Expected a writable contiguous CUDA buffer")
-        array = cp.asarray(buffer)
-        if not array.flags.c_contiguous:
-            raise ValueError("CUDA buffer must be C contiguous")
-        if writable and buffer.__cuda_array_interface__.get("data", (None, False))[1]:
+        if isinstance(buffer, Buffer):
+            if buffer.is_closed:
+                raise ValueError("CUDA buffer is closed")
+            if not buffer.is_device_accessible:
+                raise ValueError("Buffer must be device accessible")
+            return buffer
+        if not (
+            hasattr(buffer, "__cuda_array_interface__") or hasattr(buffer, "__dlpack__")
+        ):
+            raise TypeError("Expected a CUDA Buffer or contiguous CUDA object")
+        view = StridedMemoryView.from_any_interface(
+            buffer, stream_ptr=int(stream.handle) or 1
+        )
+        if not view.is_device_accessible:
+            raise ValueError("Buffer must be device accessible")
+        strides = view.strides
+        expected = 1
+        for axis in reversed(range(len(view.shape))):
+            if (
+                view.shape[axis] > 1
+                and strides is not None
+                and strides[axis] != expected
+            ):
+                raise ValueError("CUDA buffer must be C contiguous")
+            expected *= view.shape[axis]
+        if writable and view.readonly:
             raise ValueError("CUDA buffer is read-only")
-        return array.view(cp.uint8).reshape(-1)
+        size = math.prod(view.shape) * view.dtype.itemsize
+        return Buffer.from_handle(view.ptr, size, owner=view)
 
     def _readinto(self, path, out, offset, stream):
-        import cupy as cp
-        import numpy as np
+        from cuda.core import LegacyPinnedMemoryResource
 
         self._reap()
-        size = out.nbytes
+        size = out.size
         if not size:
             return 0
         method = self.method
@@ -232,9 +293,10 @@ class CUDAFileSystem(ChainedFileSystem):
                 defaults.set("compat_mode", kvikio.CompatMode.OFF),
             ):
                 handle = kvikio.CuFile(path, "r")
+            adapter = _KvikioBuffer(out, stream)
             try:
                 future = handle.raw_read_async(
-                    out, stream.ptr, size=size, file_offset=offset
+                    adapter, int(stream.handle), size=size, file_offset=offset
                 )
             except BaseException:
                 handle.close()
@@ -245,7 +307,7 @@ class CUDAFileSystem(ChainedFileSystem):
                 if count != size:
                     raise OSError(f"Short CUDA read: expected {size}, got {count}")
 
-            self._retain(stream, (out, handle, future), check, handle.close)
+            self._retain(stream, (out, adapter, handle, future), check, handle.close)
             return size
         if method == "cuobject":
             # cuObject exposes a C++ callback interface, not a Python SDK.
@@ -253,7 +315,7 @@ class CUDAFileSystem(ChainedFileSystem):
             # callback; the callback must verify the server's RDMA reply.
             from fsspec.implementations.cuda_cuobject import readinto
 
-            stream.synchronize()
+            stream.sync()
             count = readinto(path, out, offset, **self.backend_options)
             self._retain(stream, (out,))
             return count
@@ -271,54 +333,46 @@ class CUDAFileSystem(ChainedFileSystem):
                 raise ValueError("kvikio method requires HTTP or S3")
             # RemoteFile has no CUDA stream API. Its future must complete on
             # the host before data can be consumed on the selected stream.
-            stream.synchronize()
+            stream.sync()
             with handle:
-                count = handle.pread(out, size=size, file_offset=offset).get()
+                count = handle.pread(
+                    _KvikioBuffer(out, stream), size=size, file_offset=offset
+                ).get()
             if count != size:
                 raise OSError(f"Short remote read: expected {size}, got {count}")
             self._retain(stream, (out,))
             return count
-        host = np.frombuffer(
-            cp.cuda.alloc_pinned_memory(size), dtype=np.uint8, count=size
-        )
+        host = LegacyPinnedMemoryResource().allocate(size, stream=stream)
+        host_view = _host_view(host)
         if method == "bounce":
             import kvikio
 
             if self.fs.protocol not in ("file", "local", ("file", "local")):
                 raise ValueError("bounce requires a local filesystem")
             with kvikio.CuFile(path, "r") as handle:
-                count = handle.pread(host, size=size, file_offset=offset).get()
+                count = handle.pread(host_view, size=size, file_offset=offset).get()
         else:
             with self.fs.open(path, "rb") as file:
                 file.seek(offset)
                 count = 0
                 while count < size:
-                    n = file.readinto(host[count:])
+                    n = file.readinto(host_view[count:])
                     if not n:
                         break
                     count += n
         if count != size:
             raise OSError(f"Short read: expected {size}, got {count}")
-        cp.cuda.runtime.memcpyAsync(
-            out.data.ptr,
-            host.ctypes.data,
-            size,
-            cp.cuda.runtime.memcpyHostToDevice,
-            stream.ptr,
-        )
+        out.copy_from(host, stream=stream)
         self._retain(stream, (host, out))
         return count
 
     def cat_file(self, path, start=None, end=None, stream=None, **kwargs):
-        import cupy as cp
-
         path = self._path(path)
         size = self.fs.size(path)
         start, end, _ = slice(start, end).indices(size)
         stream = self._stream(stream)
-        with stream:
-            out = cp.empty(max(0, end - start), dtype=cp.uint8)
-            self._readinto(path, out, start, stream)
+        out = stream.device.allocate(max(0, end - start), stream=stream)
+        self._readinto(path, out, start, stream)
         return out
 
     def open(
@@ -393,17 +447,14 @@ class CUDAFile(io.RawIOBase):
         return loc
 
     def read(self, size=-1):
-        import cupy as cp
-
         self._checkClosed()
         if not self.readable():
             raise io.UnsupportedOperation("not readable")
         count = max(0, self.size - self.loc)
         if size is not None and size >= 0:
             count = min(count, size)
-        with self.stream:
-            out = cp.empty(count, dtype=cp.uint8)
-            self.readinto(out)
+        out = self.stream.device.allocate(count, stream=self.stream)
+        self.readinto(out)
         return out
 
     read1 = read
@@ -413,41 +464,30 @@ class CUDAFile(io.RawIOBase):
         self._checkClosed()
         if not self.readable():
             raise io.UnsupportedOperation("not readable")
-        with self.stream:
-            out = self.fs._device_bytes(buffer)
-            count = min(out.nbytes, max(0, self.size - self.loc))
-            self.fs._readinto(self.path, out[:count], self.loc, self.stream)
+        out = self.fs._device_bytes(buffer, self.stream)
+        count = min(out.size, max(0, self.size - self.loc))
+        self.fs._readinto(
+            self.path, _buffer_view(out, size=count), self.loc, self.stream
+        )
         self.loc += count
         return count
 
     readinto1 = readinto
 
     def write(self, buffer):
-        import cupy as cp
-        import numpy as np
+        from cuda.core import LegacyPinnedMemoryResource
 
         self._checkClosed()
         if not self.writable():
             raise io.UnsupportedOperation("not writable")
-        with self.stream:
-            data = self.fs._device_bytes(buffer, writable=False)
-            if data.nbytes == 0:
-                return 0
-            host = np.frombuffer(
-                cp.cuda.alloc_pinned_memory(data.nbytes),
-                dtype=np.uint8,
-                count=data.nbytes,
-            )
-            cp.cuda.runtime.memcpyAsync(
-                host.ctypes.data,
-                data.data.ptr,
-                data.nbytes,
-                cp.cuda.runtime.memcpyDeviceToHost,
-                self.stream.ptr,
-            )
-            # A synchronous fsspec writer cannot consume a pending D2H copy.
-            self.stream.synchronize()
-            count = self._file.write(host)
+        data = self.fs._device_bytes(buffer, self.stream, writable=False)
+        if data.size == 0:
+            return 0
+        host = LegacyPinnedMemoryResource().allocate(data.size, stream=self.stream)
+        host.copy_from(data, stream=self.stream)
+        # A synchronous fsspec writer cannot consume a pending D2H copy.
+        self.stream.sync()
+        count = self._file.write(_host_view(host))
         self.loc += count
         self.size = max(self.loc, self.size)
         return count

@@ -2,35 +2,53 @@ Experimental CUDA buffer I/O
 ===========================
 
 ``cuda+file``, ``cuda+http``, ``cuda+https``, and ``cuda+s3`` wrap the existing
-filesystems and change byte reads to return one-dimensional CuPy ``uint8`` arrays.
-The prefix works with other registered protocols as well. CuPy and a working CUDA
-runtime are needed for transfers, but are not imported for metadata operations.
-KvikIO is optional except for methods that explicitly select it.
+filesystems and change byte reads to return ``cuda.core.Buffer`` allocations.
+The prefix works with other registered protocols as well. CUDA Core (1.2 or newer)
+and a working CUDA runtime are needed for transfers, but are not imported for
+metadata operations. Install the Python dependency with ``pip install fsspec[cuda]``.
+CuPy is not required. KvikIO is optional except for methods that explicitly select it.
 
 .. code-block:: python
 
-   import cupy as cp
+   from cuda.core import Buffer, Device
    import fsspec
 
-   stream = cp.cuda.Stream(non_blocking=True)
+   device = Device()
+   device.set_current()
+   stream = device.create_stream()
    fs = fsspec.filesystem("cuda+file", method="pinned", stream=stream)
    data = fs.cat_file("/data/example.bin", start=4096, end=8192)
-   with stream:
-       # Work submitted here follows the transfer.
-       result = data + 1
+   assert isinstance(data, Buffer)
+   assert data.size == 4096  # bytes, independent of any dtype or shape
+   # A device copy submitted here follows the read on the same stream.
+   result = data.copy_to(stream=stream)
    fs.synchronize()  # also checks deferred I/O errors
 
    with fs.open("/data/example.bin", "rb") as file:
        file.seek(32)
-       destination = cp.empty(100, dtype="u1")
+       destination = device.allocate(100, stream=stream)
        count = file.readinto(destination)
    fs.synchronize()
 
 ``cat``, ``cat_file``, ``cat_ranges``, ``read_block`` without delimiters,
 ``read``, ``read1``, ``readall``, ``readinto``, and ``readinto1`` use CUDA buffers.
-``readinto`` accepts writable C-contiguous objects implementing the CUDA array
-interface and returns the byte count. Reads at EOF produce empty arrays or zero.
+``readinto`` accepts device-accessible ``Buffer`` objects and returns the byte
+count. Writable C-contiguous CUDA Array Interface and DLPack objects are also
+accepted, without converting them through an array library. Foreign object
+producer streams are ordered before the I/O stream through CUDA Core's interop
+utilities. Native Buffer inputs must already be ready for use on the selected
+stream. Reads at EOF produce zero-size buffers or a zero byte count.
 Negative ``cat_file`` bounds follow Python slice semantics.
+
+Buffers expose their byte size as ``.size`` and pointer as ``int(buffer.handle)``.
+For a zero-copy byte range, retain the allocation through ``owner=``:
+
+.. code-block:: python
+
+   subset = Buffer.from_handle(int(data.handle) + 128, 256, owner=data)
+
+Array libraries can import the allocation through DLPack to apply their own dtype
+and shape interpretation. ``Buffer`` itself does not supply array arithmetic.
 
 ``pipe``, ``pipe_file`` and binary ``write`` consume CUDA buffers. Writes currently
 stage through pinned host memory and wait for the device-to-host copy before
@@ -45,12 +63,16 @@ usual fsspec behavior. CPU byte consumers cannot use CUDA file objects unchanged
 Configuration and streams
 -------------------------
 
-Use ``stream=`` for a CuPy stream or a raw stream pointer, or ``streams=`` for a
+Use ``stream=`` for a CUDA Core stream, an object implementing ``__cuda_stream__``,
+or a raw stream pointer. Use ``streams=`` for a
 sequence of streams or a positive integer creating a pool of nonblocking streams.
 Pools select streams round-robin per ``cat_file`` or opened file. Without either
-option the calling thread's current CuPy stream is used. Use one filesystem per
-device and do not change its device while transfers are pending. External stream
-owners must keep those streams alive. Per-call ``stream=`` overrides the selection.
+option the device's CUDA Core default stream is used: the legacy default unless
+``CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM`` selects the per-thread default.
+There is no implicit selection of an array library's current stream. Use one
+filesystem per device and do not change its device while transfers are pending.
+Raw stream pointer owners must keep those streams alive. Per-call ``stream=``
+overrides the selection.
 
 Options are read from fsspec's existing ``cuda`` and ``cuda+<protocol>`` config
 sections. Explicit constructor/storage options take precedence:
@@ -76,11 +98,20 @@ example ``cuda::s3://bucket/key``.
 Completion and ownership
 ------------------------
 
-This is CUDA stream concurrency, not an asyncio interface. Returned arrays may
+This is CUDA stream concurrency, not an asyncio interface. Returned buffers may
 still have pending transfers. Consume them on the selected stream or call
 ``fs.wait(consumer_stream)`` before using them on a different stream. A host wait
 via ``fs.synchronize()`` or ``fs.close()`` completes submitted reads and checks
 cuFile byte counts. A file's ``close()`` does not wait for pending reads.
+``fs.wait()`` without an argument orders the device's CUDA Core default stream.
+
+Returned allocations are owned by CUDA Core memory resources, with deallocation
+ordered on their allocation stream. Keep a buffer alive until all consumers have
+finished, including consumers on other streams. To release it asynchronously on
+a different consumer stream, use ``buffer.set_deallocation_stream(consumer_stream)``
+after establishing the required read-to-consumer ordering. Non-owning byte views
+keep their allocation owners alive; do not explicitly close the owner while a
+view still needs it.
 
 The filesystem retains destination buffers, pinned staging allocations, streams,
 cuFile handles and futures until completion. Completed transfers are reclaimed
