@@ -187,21 +187,22 @@ def test_equal_generic_batches_preserve_pair_order(
     "source_count,destination_count", [(2, 1), (1, 2), (2, 0), (0, 2)]
 )
 @pytest.mark.parametrize("on_error", ["raise", "ignore", "return"])
+@pytest.mark.parametrize("container", [list, tuple, iter])
 def test_invalid_copy_file_op_batches_preserve_sources_and_destinations(
-    local_batch, m, source_count, destination_count, on_error
+    local_batch, m, source_count, destination_count, on_error, container
 ):
     sources, _ = local_batch
     destinations = ["/destination-b", "/destination-a"]
     before = dict.fromkeys(destinations, b"keep existing destination")
     m.pipe(before)
 
-    with pytest.raises(ValueError, match="same length"):
+    with pytest.raises(ValueError):
         asyncio.run(
             copy_file_op(
                 fsspec.filesystem("file"),
-                [str(path) for path in sources[:source_count]],
+                container(str(path) for path in sources[:source_count]),
                 m,
-                destinations[:destination_count],
+                container(destinations[:destination_count]),
                 on_error=on_error,
             )
         )
@@ -227,6 +228,41 @@ def test_equal_copy_file_op_batches_preserve_pair_order(local_batch, m, containe
 
     assert [path.read_bytes() for path in sources] == [b"first", b"second"]
     assert [m.cat_file(path) for path in destinations] == [b"first", b"second"]
+
+
+def test_copy_file_op_shared_iterator_preserves_pairs(local_batch, m):
+    sources, _ = local_batch
+    destinations = ["/destination-b", "/destination-a"]
+    paths = iter([str(sources[0]), destinations[0], str(sources[1]), destinations[1]])
+
+    asyncio.run(
+        copy_file_op(fsspec.filesystem("file"), paths, m, paths, on_error="raise")
+    )
+
+    assert [path.read_bytes() for path in sources] == [b"first", b"second"]
+    assert [m.cat_file(path) for path in destinations] == [b"first", b"second"]
+
+
+@pytest.mark.parametrize("container", [list, tuple, iter])
+@pytest.mark.parametrize("on_error", ["raise", "ignore", "return"])
+def test_empty_copy_file_op_batches_are_noops(local_batch, m, container, on_error):
+    sources, destinations = local_batch
+    before = {path: path.read_bytes() for path in sources + destinations}
+    m.pipe_file("source", b"keep memory file")
+
+    result = asyncio.run(
+        copy_file_op(
+            fsspec.filesystem("file"),
+            container([]),
+            m,
+            container([]),
+            on_error=on_error,
+        )
+    )
+
+    assert result == ([] if on_error == "return" else None)
+    assert {path: path.read_bytes() for path in before} == before
+    assert m.cat_file("source") == b"keep memory file"
 
 
 @pytest.mark.parametrize("glob_source", [False, True])

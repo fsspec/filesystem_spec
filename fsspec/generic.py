@@ -370,8 +370,7 @@ async def copy_file_op(
 ):
     import tempfile
 
-    if isinstance(url1, list) and isinstance(url2, list):
-        url2 = other_paths(url1, url2)
+    pairs = list(zip(url1, url2, strict=True))
 
     with tempfile.TemporaryDirectory(dir=tempdir) as tempdir:
         coros = [
@@ -382,7 +381,7 @@ async def copy_file_op(
                 u2,
                 os.path.join(tempdir, uuid.uuid4().hex),
             )
-            for u1, u2 in zip(url1, url2)
+            for u1, u2 in pairs
         ]
         out = await _run_coros_in_chunks(
             coros, batch_size=batch_size, return_exceptions=True

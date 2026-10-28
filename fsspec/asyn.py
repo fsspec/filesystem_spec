@@ -743,8 +743,6 @@ class AsyncFileSystem(AbstractFileSystem):
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
         if isinstance(lpath, list) and isinstance(rpath, list):
-            # No need to expand paths when both source and destination
-            # are provided as lists
             lpaths = lpath
             rpaths = other_paths(lpaths, rpath)
         else:
@@ -820,8 +818,6 @@ class AsyncFileSystem(AbstractFileSystem):
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
         if isinstance(lpath, list) and isinstance(rpath, list):
-            # No need to expand paths when both source and destination
-            # are provided as lists
             rpaths = rpath
             lpaths = other_paths(rpaths, lpath)
         else:
