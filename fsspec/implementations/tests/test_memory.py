@@ -1,7 +1,7 @@
 import os
 import pickle
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
@@ -25,12 +25,12 @@ from fsspec.implementations.memory import MemoryFileSystem
 def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
     m.pipe_file("file", b"abc")
     created = m.created("file")
-    modified = datetime(2100, 1, 1, tzinfo=timezone.utc)
+    modified = datetime(2100, 1, 1, tzinfo=UTC)
 
     class Clock:
         @staticmethod
         def now(tz):
-            assert tz is timezone.utc
+            assert tz is UTC
             return modified
 
     with m.open("file", mode) as f:
@@ -44,7 +44,7 @@ def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
 
 def test_modified_after_partial_writelines(m):
     m.pipe_file("file", b"abc")
-    original = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    original = datetime(2000, 1, 1, tzinfo=UTC)
 
     with m.open("file", "ab") as f:
         f.modified = original

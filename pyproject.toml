@@ -226,6 +226,7 @@ ignore = [
     "Q003",
     "COM812",
     "COM819",
+    "ASYNC109"
 ]
 
 [tool.pytest.ini_options]
