@@ -770,11 +770,12 @@ class HTTPFile(AbstractBufferedFile):
 
         Parameters
         ----------
-        length: int
-            Read up to this many bytes. If negative, read all content to end of
+        length: int or None
+            Read up to this many bytes. If negative or None, read all content to end of
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
+        length = -1 if length is None else length
         if (
             (length < 0 and self.loc == 0)  # explicit read all
             # but not when the size is known and fits into a block anyways
@@ -933,6 +934,7 @@ class HTTPStreamFile(AbstractBufferedFile):
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
+        num = -1 if num is None else num
         out = await self.r.content.read(num)
         self.loc += len(out)
         return out
@@ -974,6 +976,7 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
     async def read(self, num=-1):
         if self.closed:
             raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
         if self.r is None:
             r = await self.session.get(
                 self.fs.encode_url(self.url), **self.kwargs
