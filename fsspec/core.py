@@ -4,6 +4,7 @@ import io
 import logging
 import posixpath
 import re
+from contextlib import ExitStack
 from glob import has_magic
 from pathlib import Path
 
@@ -112,17 +113,21 @@ class OpenFile:
 
         self.fobjects = [f]
 
-        if self.compression is not None:
-            compress = compr[self.compression]
-            f = compress(f, mode=mode[0])
-            self.fobjects.append(f)
+        try:
+            if self.compression is not None:
+                compress = compr[self.compression]
+                f = compress(f, mode=mode[0])
+                self.fobjects.append(f)
 
-        if "b" not in self.mode:
-            # assume, for example, that 'r' is equivalent to 'rt' as in builtin
-            f = PickleableTextIOWrapper(
-                f, encoding=self.encoding, errors=self.errors, newline=self.newline
-            )
-            self.fobjects.append(f)
+            if "b" not in self.mode:
+                # assume, for example, that 'r' is equivalent to 'rt' as in builtin
+                f = PickleableTextIOWrapper(
+                    f, encoding=self.encoding, errors=self.errors, newline=self.newline
+                )
+                self.fobjects.append(f)
+        except BaseException:
+            self.close()
+            raise
 
         return self.fobjects[-1]
 
@@ -183,7 +188,10 @@ class OpenFiles(list):
                 fs = fs.fs
             else:
                 break
-        return [s.__enter__() for s in self]
+        with ExitStack() as stack:
+            files = [stack.enter_context(s) for s in self]
+            stack.pop_all()
+            return files
 
     def __exit__(self, *args):
         fs = self.fs

@@ -119,6 +119,51 @@ def test_openfile_open(m):
     assert m.size("somepath") == 5
 
 
+@pytest.fixture
+def recorded_local_files(monkeypatch):
+    fs = fsspec.filesystem("file")
+    opened = []
+    original_open = fs.open
+
+    def record_open(*args, **kwargs):
+        stream = original_open(*args, **kwargs)
+        opened.append(stream)
+        return stream
+
+    monkeypatch.setattr(fs, "open", record_open)
+    try:
+        yield fs, opened
+    finally:
+        for stream in opened:
+            stream.close()
+
+
+def test_openfile_failed_text_wrapper_closes_file(tmp_path, recorded_local_files):
+    fs, opened = recorded_local_files
+    path = tmp_path / "file.txt"
+    path.write_text("content")
+    file = OpenFile(fs, str(path), mode="rt", encoding="unknown-codec")
+    with pytest.raises(LookupError):
+        with file:
+            pass
+    assert len(opened) == 1
+    assert opened[0].closed
+
+
+def test_openfiles_failed_entry_closes_previous_files(tmp_path, recorded_local_files):
+    fs, opened = recorded_local_files
+    path = tmp_path / "file.txt"
+    path.write_text("content")
+    files = OpenFiles(
+        [OpenFile(fs, str(path)), OpenFile(fs, str(tmp_path / "missing.txt"))], fs=fs
+    )
+    with pytest.raises(FileNotFoundError):
+        with files:
+            pass
+    assert len(opened) == 1
+    assert opened[0].closed
+
+
 def test_open_local_w_cache():
     d1 = str(tempfile.mkdtemp())
     f1 = os.path.join(d1, "f1")
