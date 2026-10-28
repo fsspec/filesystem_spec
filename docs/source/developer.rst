@@ -66,8 +66,8 @@ We may eventually refactor ``AbstractFileSystem`` to split the default implement
 the set of methods that you might implement in a new backend, and the
 documented end-user API.
 
-In order to register a new backend with fsspec, new backends should register
-themselves using the `entry_points <https://setuptools.readthedocs.io/en/latest/userguide/quickstart.html#entry-points-and-automatic-script-creation>`_
+New backends should register themselves with fsspec using the
+`entry_points <https://setuptools.readthedocs.io/en/latest/userguide/quickstart.html#entry-points-and-automatic-script-creation>`_
 facility from setuptools. In particular, if you want to register a new
 filesystem protocol ``myfs`` which is provided by the ``MyFS`` class in
 the ``myfs`` package, add the following to your ``setup.py``:
@@ -85,9 +85,9 @@ the ``myfs`` package, add the following to your ``setup.py``:
     )
 
 
-Alternatively, the previous method of registering a new backend can be used.
+Alternatively, an older method of registering a new backend can be used.
 That is, new backends must register themselves on import
-(``register_implementation``) or post a PR to the ``fsspec`` repo
+(with ``register_implementation``) or post a PR to the ``fsspec`` repo
 asking to be included in ``fsspec.registry.known_implementations``.
 
 Implementing async
