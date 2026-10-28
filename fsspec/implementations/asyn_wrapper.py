@@ -46,8 +46,13 @@ class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
 
     Parameters
     ----------
-    sync_fs : AbstractFileSystem
+    fs : AbstractFileSystem, optional
         The synchronous filesystem instance to wrap.
+    target_protocol : str, optional
+        If ``fs`` is not given, the protocol of the synchronous filesystem to
+        create and wrap.
+    target_options : dict, optional
+        Keyword arguments for creating the ``target_protocol`` filesystem.
     semaphore : asyncio.Semaphore, optional
         Limits the number of concurrent calls to the wrapped filesystem.
     max_concurrent_tasks : int, optional

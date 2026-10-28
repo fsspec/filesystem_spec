@@ -223,6 +223,16 @@ async def test_max_concurrent_tasks():
 
     assert set(results) == {path.encode() for path in paths}
 
+    # an explicit semaphore takes precedence over max_concurrent_tasks
+    semaphore = asyncio.Semaphore(3)
+    fs = AsyncFileSystemWrapper(
+        LockedFileSystem(),
+        asynchronous=False,
+        semaphore=semaphore,
+        max_concurrent_tasks=1,
+    )
+    assert fs.semaphore is semaphore
+
 
 def test_target_protocol_without_target_options():
     fs = AsyncFileSystemWrapper(target_protocol="memory", asynchronous=False)
