@@ -15,6 +15,8 @@ Enhancements
 
 Fixes
 
+- Reject writes through read-only memory file handles (#2193).
+
 - Point contributor setup instructions to the current CI environment files (#626).
 
 - Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
