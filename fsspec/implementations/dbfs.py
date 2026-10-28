@@ -145,8 +145,8 @@ class DatabricksFileSystem(AbstractFileSystem):
                 )
                 raise FileExistsError(f"Path {path} already exists")
             except DatabricksException as e:
-                if e.error_code == "RESOURCE_DOES_NOT_EXIST":
-                    pass
+                if e.error_code != "RESOURCE_DOES_NOT_EXIST":
+                    raise
 
         try:
             self._send_to_api(method="post", endpoint="mkdirs", json={"path": path})
