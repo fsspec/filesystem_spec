@@ -161,7 +161,15 @@ on Python 3.14 and later. On older Python versions, install ``backports.zstd``:
     python -m pip install backports.zstd
 
 If that backend is unavailable, fsspec also supports the ``zstandard`` package
-as a fallback. Other optional codecs include ``lz4`` (install ``lz4``) and
+as a fallback. The fallback's read stream cannot seek backwards. This matters
+for TAR archives: listing members can succeed, but reading them afterwards
+requires seeking back through the compressed stream. For ``.tar.zst`` archives
+on Python versions older than 3.14, use ``backports.zstd`` rather than the
+``zstandard`` fallback. With the standard-library or backport backend,
+backward seeks may re-decompress data from the start; they are not constant-time
+random access, and the underlying file must also support seeking.
+
+Other optional codecs include ``lz4`` (install ``lz4``) and
 ``snappy`` (install ``python-snappy``). Install optional packages before importing
 fsspec, or restart your Python process after installation so the codecs can be
 registered.
