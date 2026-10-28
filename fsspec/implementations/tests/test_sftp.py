@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 from concurrent.futures import ProcessPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from tarfile import TarFile
 
@@ -279,7 +279,7 @@ def test_modified_time(ssh, root_path):
     modified_dir_date: datetime = f.modified(dir_path)
 
     # I think it is the only thing we can assume, but I'm not sure if the server has a different time
-    assert modified_dir_date <= datetime.now(timezone.utc)
+    assert modified_dir_date <= datetime.now(UTC)
 
     # Create a file and check modified time again
     with f.open(file_path, "wb") as wf:
@@ -287,7 +287,7 @@ def test_modified_time(ssh, root_path):
 
     modified_file_date: datetime = f.modified(file_path)
     assert modified_file_date >= modified_dir_date
-    assert modified_file_date <= datetime.now(timezone.utc)
+    assert modified_file_date <= datetime.now(UTC)
 
 
 # NOTE: These following two tests are a copy of the modified ones, as we are using
@@ -315,7 +315,7 @@ def test_created_time(ssh, root_path):
     created_dir_date: datetime = f.created(dir_path)
 
     # I think it is the only thing we can assume, but I'm not sure if the server has a different time
-    assert created_dir_date <= datetime.now(timezone.utc)
+    assert created_dir_date <= datetime.now(UTC)
 
     # Create a file and check modified time again
     with f.open(file_path, "wb") as wf:
@@ -323,7 +323,7 @@ def test_created_time(ssh, root_path):
 
     created_file_date: datetime = f.created(file_path)
     assert created_file_date >= created_dir_date
-    assert created_file_date <= datetime.now(timezone.utc)
+    assert created_file_date <= datetime.now(UTC)
 
 
 # The tests below do not need a server: they check how the client is set up

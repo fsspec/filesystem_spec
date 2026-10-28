@@ -1,10 +1,13 @@
 import os
 import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 import time
 from collections import deque
 from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 
 import pytest
 
@@ -100,6 +103,45 @@ def instance_caches() -> Generator[InstanceCacheInspector, None, None]:
         ic.clear()
 
 
+@contextmanager
+def _ftp_server(command, host="localhost", port=2121, timeout=10, ssl_context=None):
+    # A file avoids filling a subprocess pipe while the tests use the server.
+    with tempfile.TemporaryFile(mode="w+t") as output:
+        process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
+        try:
+            deadline = time.monotonic() + timeout
+            while process.poll() is None and time.monotonic() < deadline:
+                try:
+                    with socket.create_connection((host, port), timeout=0.1) as sock:
+                        if ssl_context is not None:
+                            with ssl_context.wrap_socket(sock, server_hostname=host):
+                                pass
+                except OSError:
+                    time.sleep(0.05)
+                else:
+                    yield
+                    return
+
+            status = process.poll()
+            reason = (
+                f"exited with code {status}"
+                if status is not None
+                else f"did not become ready within {timeout}s"
+            )
+            output.seek(0)
+            pytest.fail(
+                f"FTP server at {host}:{port} {reason}:\n{output.read()}",
+                pytrace=False,
+            )
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+
+
 @pytest.fixture(scope="function")
 def ftp_writable(tmpdir):
     """
@@ -110,15 +152,11 @@ def ftp_writable(tmpdir):
     d = str(tmpdir)
     with open(os.path.join(d, "out"), "wb") as f:
         f.write(b"hello" * 10000)
-    P = subprocess.Popen(
-        [sys.executable, "-m", "pyftpdlib", "-d", d, "-u", "user", "-P", "pass", "-w"]
-    )
+    args = ["-d", d, "-u", "user", "-P", "pass", "-w"]
     try:
-        time.sleep(1)
-        yield "localhost", 2121, "user", "pass"
+        with _ftp_server([sys.executable, "-m", "pyftpdlib", *args]):
+            yield "localhost", 2121, "user", "pass"
     finally:
-        P.terminate()
-        P.wait()
         try:
             shutil.rmtree(tmpdir)
         except Exception:
