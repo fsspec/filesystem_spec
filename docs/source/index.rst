@@ -115,6 +115,7 @@ The current list of known implementations can be found as follows
    copying.rst
    developer.rst
    async.rst
+   gpu.rst
    api.rst
    changelog.rst
    code-of-conduct.rst
