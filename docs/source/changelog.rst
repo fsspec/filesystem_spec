@@ -15,6 +15,10 @@ Enhancements
 
 Fixes
 
+- Cancel the submitted async call when ``sync()`` is interrupted, stopping
+  HTTP ``get_file`` transfers after ``KeyboardInterrupt`` or ``SystemExit``
+  in the calling thread (#1667).
+
 - Point contributor setup instructions to the current CI environment files (#626).
 
 - Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
