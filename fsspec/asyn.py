@@ -97,11 +97,12 @@ def sync(loop, func, *args, timeout=None, **kwargs):
                 timeout -= 1
                 if timeout < 0:
                     raise FSTimeoutError
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         # Cancel only this call; the shared IO loop may have other work.
-        # Queue cancellation after the runner's first step, so it takes
-        # ownership of coro even if the loop has not started yet. Cancelling
-        # the Future immediately can prevent the runner from ever starting.
+        # Task creation queues the runner's first step. Defer cancellation
+        # one more loop turn so the runner takes ownership of coro first.
+        # A single call_soon_threadsafe(future.cancel) can cancel the Task
+        # before that first step when the loop has not started or is blocked.
         try:
             loop.call_soon_threadsafe(loop.call_soon, future.cancel)
         except RuntimeError:
@@ -876,7 +877,9 @@ class AsyncFileSystem(AbstractFileSystem):
                 # lpath is a list the caller named every destination itself.
                 check_contained(lpath, lpaths)
 
-        [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
+        for lp in lpaths:
+            if parent := os.path.dirname(lp):
+                os.makedirs(parent, exist_ok=True)
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []

@@ -117,12 +117,13 @@ def test_sync_live_io_thread(monkeypatch, finalizing):
 
 
 @pytest.mark.parametrize("timeout", [None, 10])
-def test_sync_keyboard_interrupt_cancels_only_its_call(monkeypatch, timeout):
+@pytest.mark.parametrize("interrupt_type", [KeyboardInterrupt, SystemExit])
+def test_sync_interrupt_cancels_only_its_call(monkeypatch, timeout, interrupt_type):
     loop = fsspec.asyn.get_loop()
     started = threading.Event()
     cleaned = threading.Event()
     unrelated_started = threading.Event()
-    interrupt = KeyboardInterrupt("interrupted wait")
+    interrupt = interrupt_type("interrupted wait")
     tasks = []
 
     async def work():
@@ -156,7 +157,7 @@ def test_sync_keyboard_interrupt_cancels_only_its_call(monkeypatch, timeout):
             patch.setattr(
                 fsspec.asyn, "threading", SimpleNamespace(Event=interruptible_event)
             )
-            with pytest.raises(KeyboardInterrupt) as caught:
+            with pytest.raises(interrupt_type) as caught:
                 fsspec.asyn.sync(loop, work, timeout=timeout)
         assert caught.value is interrupt
         assert cleaned.wait(5)
@@ -177,14 +178,15 @@ def test_sync_keyboard_interrupt_cancels_only_its_call(monkeypatch, timeout):
 
 @pytest.mark.parametrize("timeout", [None, 10])
 @pytest.mark.parametrize("loop_running", [False, True])
-def test_sync_keyboard_interrupt_before_runner_starts(
-    monkeypatch, timeout, loop_running
+@pytest.mark.parametrize("interrupt_type", [KeyboardInterrupt, SystemExit])
+def test_sync_interrupt_before_runner_starts(
+    monkeypatch, timeout, loop_running, interrupt_type
 ):
     loop = asyncio.new_event_loop()
     cleaned = threading.Event()
     blocked = threading.Event()
     release = threading.Event()
-    interrupt = KeyboardInterrupt("interrupted before the runner starts")
+    interrupt = interrupt_type("interrupted before the runner starts")
     coro = None
 
     async def work():
@@ -218,7 +220,7 @@ def test_sync_keyboard_interrupt_before_runner_starts(
             patch.setattr(
                 fsspec.asyn, "threading", SimpleNamespace(Event=lambda: event)
             )
-            with pytest.raises(KeyboardInterrupt) as caught:
+            with pytest.raises(interrupt_type) as caught:
                 fsspec.asyn.sync(loop, create_work, timeout=timeout)
         assert caught.value is interrupt
         if loop_running:
@@ -247,10 +249,11 @@ def test_sync_keyboard_interrupt_before_runner_starts(
         loop.close()
 
 
-def test_sync_keyboard_interrupt_after_completion(monkeypatch):
+@pytest.mark.parametrize("interrupt_type", [KeyboardInterrupt, SystemExit])
+def test_sync_interrupt_after_completion(monkeypatch, interrupt_type):
     event = threading.Event()
     real_wait = event.wait
-    interrupt = KeyboardInterrupt("completed while interrupted")
+    interrupt = interrupt_type("completed while interrupted")
 
     def interrupted_wait(timeout):
         assert real_wait(5)
@@ -259,15 +262,16 @@ def test_sync_keyboard_interrupt_after_completion(monkeypatch):
     event.wait = interrupted_wait
     with monkeypatch.context() as patch:
         patch.setattr(fsspec.asyn, "threading", SimpleNamespace(Event=lambda: event))
-        with pytest.raises(KeyboardInterrupt) as caught:
+        with pytest.raises(interrupt_type) as caught:
             fsspec.asyn.sync(fsspec.asyn.get_loop(), asyncio.sleep, 0, result=42)
     assert caught.value is interrupt
 
 
-def test_sync_keyboard_interrupt_after_loop_closes(monkeypatch):
+@pytest.mark.parametrize("interrupt_type", [KeyboardInterrupt, SystemExit])
+def test_sync_interrupt_after_loop_closes(monkeypatch, interrupt_type):
     loop = asyncio.new_event_loop()
     event = threading.Event()
-    interrupt = KeyboardInterrupt("loop closed while interrupted")
+    interrupt = interrupt_type("loop closed while interrupted")
 
     async def work():
         return 42
@@ -287,7 +291,7 @@ def test_sync_keyboard_interrupt_after_loop_closes(monkeypatch):
             patch.setattr(
                 fsspec.asyn, "threading", SimpleNamespace(Event=lambda: event)
             )
-            with pytest.raises(KeyboardInterrupt) as caught:
+            with pytest.raises(interrupt_type) as caught:
                 fsspec.asyn.sync(loop, work)
         assert caught.value is interrupt
     finally:
