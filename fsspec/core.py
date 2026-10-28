@@ -56,10 +56,6 @@ class OpenFile:
         How to handle encoding errors if opened in text mode.
     newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
-    autoopen: bool
-        If True, calls open() immediately. Mostly used by pickle
-    pos: int
-        If given and autoopen is True, seek to this location immediately
     """
 
     def __init__(
@@ -361,7 +357,7 @@ def _un_chain(path, kwargs):
         protocol = kwargs.pop("protocol", None) or split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
         extra_kwargs = cls._get_kwargs_from_urls(bit)
-        kws = kwargs.pop(protocol, {})
+        kws = kwargs.pop(protocol, {}).copy()
 
         if bit is bits[0]:
             kws.update(kwargs)

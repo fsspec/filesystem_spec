@@ -1,14 +1,14 @@
 import io
 import os
-import subprocess
+import ssl
 import sys
-import time
 from ftplib import FTP, FTP_TLS
 
 import pytest
 
 import fsspec
 from fsspec import open_files
+from fsspec.conftest import _ftp_server
 from fsspec.implementations.ftp import FTPFileSystem, ImplicitFTPTLS, _mlsd2
 
 ftplib = pytest.importorskip("ftplib")
@@ -18,33 +18,23 @@ here = os.path.dirname(os.path.abspath(__file__))
 @pytest.fixture()
 def ftp():
     pytest.importorskip("pyftpdlib")
-    P = subprocess.Popen(
-        [sys.executable, os.path.join(here, "ftp_tls.py")],
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-    )
-    try:
-        time.sleep(1)
+    pytest.importorskip("OpenSSL")
+    with _ftp_server([sys.executable, os.path.join(here, "ftp_tls.py")]):
         yield "localhost", 2121
-    finally:
-        P.terminate()
-        P.wait()
 
 
 @pytest.fixture()
 def ftp_tlsv12():
     pytest.importorskip("pyftpdlib")
-    P = subprocess.Popen(
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    with _ftp_server(
         [sys.executable, os.path.join(here, "ftp_tlsv12.py")],
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-    )
-    try:
-        time.sleep(1)
+        port=2122,
+        ssl_context=context,
+    ):
         yield "localhost", 2122
-    finally:
-        P.terminate()
-        P.wait()
 
 
 @pytest.mark.parametrize(
@@ -71,6 +61,34 @@ def test_tls_v12(ftp_tlsv12, tls, exp_cls):
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
+
+
+def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
+    host, port = ftp
+    fs = FTPFileSystem(host, port, tls=True)
+    first = fs.ftp
+
+    def abort():
+        raise ftplib.error_proto("500 Unknown command.")
+
+    # a server that rejects ABOR makes a partial read reconnect
+    monkeypatch.setattr(first, "abort", abort)
+    with fs.open(f"/{os.path.basename(__file__)}", block_size=100) as f:
+        f.read(100)
+    assert fs.ftp is not first
+
+    tls_data = []
+    ntransfercmd = fs.ftp.ntransfercmd
+
+    def spy(cmd, rest=None):
+        conn, size = ntransfercmd(cmd, rest)
+        tls_data.append(isinstance(conn, ssl.SSLSocket))
+        return conn, size
+
+    monkeypatch.setattr(fs.ftp, "ntransfercmd", spy)
+    out = fs.cat(f"/{os.path.basename(__file__)}")
+    assert out == open(__file__, "rb").read()
+    assert tls_data == [True]
 
 
 @pytest.mark.parametrize(

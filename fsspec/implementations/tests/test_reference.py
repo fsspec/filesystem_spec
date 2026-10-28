@@ -477,6 +477,64 @@ def test_get_sync(tmpdir):
     assert (tmpdir / "c" / "d").read_binary() == b"123456"
 
 
+@pytest.mark.parametrize(
+    ("maxdepth", "expected"),
+    [
+        (1, {"shallow.txt": b"shallow"}),
+        (2, {"shallow.txt": b"shallow", "deep/file.txt": b"deep"}),
+        (
+            None,
+            {
+                "shallow.txt": b"shallow",
+                "deep/file.txt": b"deep",
+                "deep/nested/file.txt": b"nested",
+            },
+        ),
+    ],
+)
+def test_get_respects_maxdepth(tmp_path, maxdepth, expected):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": b"deep",
+        "dir/deep/nested/file.txt": b"nested",
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=maxdepth)
+
+    actual = {
+        path.relative_to(dest).as_posix(): path.read_bytes()
+        for path in dest.rglob("*")
+        if path.is_file()
+    }
+    assert actual == expected
+
+
+def test_get_maxdepth_skips_deeper_remote_references(tmp_path):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": ("memory://maxdepth-regression-missing", 0, 4),
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=1)
+
+    assert (dest / "shallow.txt").read_bytes() == b"shallow"
+    assert not (dest / "deep" / "file.txt").exists()
+
+
+@pytest.mark.parametrize("maxdepth", [0, -1])
+def test_get_rejects_invalid_maxdepth(tmp_path, maxdepth):
+    fs = ReferenceFileSystem(
+        fo={"dir/shallow.txt": b"shallow"}, skip_instance_cache=True
+    )
+
+    with pytest.raises(ValueError, match="maxdepth must be at least 1"):
+        fs.get("dir", str(tmp_path / "dest"), recursive=True, maxdepth=maxdepth)
+
+
 def test_get_does_not_write_above_destination(tmp_path):
     # Reference keys come from the spec, so a key holding ".." must not
     # place the copy above the destination the caller asked for.
@@ -742,6 +800,36 @@ def test_cat_missing(m, fo):
 
     out = mapper.getitems(["c", "d"], on_error="omit")
     assert list(out) == ["c"]
+
+
+@pytest.mark.parametrize(
+    "reference", [["memory://missing"], ["memory://missing", 1, 3]]
+)
+@pytest.mark.parametrize("path", ["missing", ["missing"]])
+def test_cat_omit_unreachable(m, reference, path):
+    fs = fsspec.filesystem("reference", fo={"missing": reference})
+
+    assert fs.cat(path, on_error="omit") == {}
+
+
+def test_cat_omit_unreachable_mixed(m):
+    m.pipe("data", b"0123456789")
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "inline": b"inline data",
+            "whole": ["memory://data"],
+            "range": ["memory://data", 1, 3],
+            "missing_whole": ["memory://missing"],
+            "missing_range": ["memory://missing", 1, 3],
+        },
+    )
+
+    assert fs.cat([*fs.references, "unknown"], on_error="omit") == {
+        "inline": b"inline data",
+        "whole": b"0123456789",
+        "range": b"123",
+    }
 
 
 def test_df_single(m):
