@@ -19,6 +19,8 @@ from fsspec.utils import (
     glob_translate,
     isfilelike,
     nullcontext,
+    range_response_window,
+    response_is_requested_range,
     tokenize,
 )
 
@@ -347,8 +349,9 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(url)
 
-        if start is not None or end is not None:
-            if start == end:
+        ranged = start is not None or end is not None
+        if ranged:
+            if start == end or (start is None and end == 0):
                 return b""
             headers = kw.pop("headers", {}).copy()
 
@@ -360,7 +363,13 @@ class HTTPFileSystem(AsyncFileSystem):
             async with session.get(self.encode_url(url), **kw) as r:
                 out = await r.read()
                 self._raise_not_found_for_status(r, url)
-            return out
+                # a server that ignores the Range header replies with the whole
+                # file, which is not the window the caller asked for
+                return (
+                    range_response_window(out, r.status, r.headers, start, end)
+                    if ranged
+                    else out
+                )
 
         return await _with_retries(_once, self, url)
 
@@ -761,11 +770,12 @@ class HTTPFile(AbstractBufferedFile):
 
         Parameters
         ----------
-        length: int
-            Read up to this many bytes. If negative, read all content to end of
+        length: int or None
+            Read up to this many bytes. If negative or None, read all content to end of
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
+        length = -1 if length is None else length
         if (
             (length < 0 and self.loc == 0)  # explicit read all
             # but not when the size is known and fits into a block anyways
@@ -797,20 +807,6 @@ class HTTPFile(AbstractBufferedFile):
                 self.size = len(out)
 
     _fetch_all = sync_wrapper(async_fetch_all)
-
-    def _parse_content_range(self, headers):
-        """Parse the Content-Range header"""
-        s = headers.get("Content-Range", "")
-        m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", s)
-        if not m:
-            return None, None, None
-
-        if m[1] == "*":
-            start = end = None
-        else:
-            start, end = [int(x) for x in m[1].split("-")]
-        total = None if m[2] == "*" else int(m[2])
-        return start, end, total
 
     async def async_fetch_range(self, start, end):
         """Download a block of data
@@ -857,10 +853,8 @@ class HTTPFile(AbstractBufferedFile):
                 # suitable Content-Range header or a Content-Length no more
                 # than the requested range also mean we have got the desired
                 # range.
-                response_is_range = (
-                    r.status == 206
-                    or self._parse_content_range(r.headers)[0] == start
-                    or int(r.headers.get("Content-Length", end + 1)) <= end - start
+                response_is_range = response_is_requested_range(
+                    r.status, r.headers, start, end
                 )
 
                 if response_is_range:
@@ -940,6 +934,7 @@ class HTTPStreamFile(AbstractBufferedFile):
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
+        num = -1 if num is None else num
         out = await self.r.content.read(num)
         self.loc += len(out)
         return out
@@ -979,6 +974,9 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         return False
 
     async def read(self, num=-1):
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
         if self.r is None:
             r = await self.session.get(
                 self.fs.encode_url(self.url), **self.kwargs

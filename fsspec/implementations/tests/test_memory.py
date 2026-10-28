@@ -1,7 +1,7 @@
 import os
 import pickle
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
@@ -25,12 +25,12 @@ from fsspec.implementations.memory import MemoryFileSystem
 def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
     m.pipe_file("file", b"abc")
     created = m.created("file")
-    modified = datetime(2100, 1, 1, tzinfo=timezone.utc)
+    modified = datetime(2100, 1, 1, tzinfo=UTC)
 
     class Clock:
         @staticmethod
         def now(tz):
-            assert tz is timezone.utc
+            assert tz is UTC
             return modified
 
     with m.open("file", mode) as f:
@@ -44,7 +44,7 @@ def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
 
 def test_modified_after_partial_writelines(m):
     m.pipe_file("file", b"abc")
-    original = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    original = datetime(2000, 1, 1, tzinfo=UTC)
 
     with m.open("file", "ab") as f:
         f.modified = original
@@ -248,6 +248,15 @@ def test_ls(m):
 
     assert len(m.ls("/dir/dir1")) == 2
     assert len(m.ls("/dir/afile")) == 1
+
+
+def test_info_created_matches_ls(m):
+    m.pipe_file("/dir/afile", b"data")
+
+    info = m.info("/dir/afile")
+    assert info["created"] == m.created("/dir/afile").timestamp()
+    assert info == m.ls("/dir/afile")[0]
+    assert info == m.find("/dir", detail=True)["/dir/afile"]
 
 
 def test_directories(m):
@@ -493,6 +502,34 @@ def test_makedirs_existing_file(m, path, exist_ok, method):
     assert not m.isdir(path)
 
 
+@pytest.mark.parametrize(
+    "path", ["missing/child", "/missing/child", "memory://missing/child"]
+)
+def test_mkdir_without_parents_missing(m, path):
+    with pytest.raises(FileNotFoundError):
+        m.mkdir(path, create_parents=False)
+
+    assert m.pseudo_dirs == [""]
+    assert m.find("", withdirs=True) == []
+
+
+@pytest.mark.parametrize("parent", ["root", "explicit", "implicit"])
+def test_mkdir_without_parents_existing(m, parent):
+    if parent == "root":
+        path = "/child"
+    else:
+        path = "/parent/child"
+        if parent == "explicit":
+            m.mkdir("/parent")
+        else:
+            m.pipe_file("/parent/file", b"payload")
+
+    m.mkdir(path, create_parents=False)
+
+    assert path in m.pseudo_dirs
+    assert m.isdir(path)
+
+
 def test_no_rewind_append_mode(m):
     # https://github.com/fsspec/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:
@@ -569,6 +606,42 @@ def test_open_mode(m, mode):
     m.touch(filename)
     with m.open(filename, mode=mode) as _:
         pass
+
+
+@pytest.mark.parametrize(
+    "mode", ["r+b", "rb+", "w+b", "wb+", "a+b", "ab+", "x+b", "xb+"]
+)
+@pytest.mark.parametrize("exists", [False, True])
+def test_binary_update_modes(m, mode, exists):
+    path = "update.txt"
+    if exists:
+        m.pipe_file(path, b"abc")
+    if mode.startswith("r") and not exists:
+        with pytest.raises(FileNotFoundError):
+            m.open(path, mode)
+        return
+    if mode.startswith("x") and exists:
+        with pytest.raises(FileExistsError):
+            m.open(path, mode)
+        assert m.cat_file(path) == b"abc"
+        return
+    expected = b"abcXY" if mode.startswith("a") and exists else b"XY"
+    if mode.startswith("r"):
+        expected = b"XYc"
+    with m.open(path, mode) as f:
+        assert f.tell() == (3 if mode.startswith("a") and exists else 0)
+        f.write(b"XY")
+        f.seek(0)
+        assert f.read() == expected
+    assert m.cat_file(path) == expected
+
+
+@pytest.mark.parametrize("mode", ["rbb+", "rw+b", "rb++"])
+def test_invalid_update_modes(m, mode):
+    m.pipe_file("update.txt", b"abc")
+    with pytest.raises(ValueError, match="unsupported file mode"):
+        m.open("update.txt", mode)
+    assert m.cat_file("update.txt") == b"abc"
 
 
 def test_remove_all(m):

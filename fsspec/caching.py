@@ -537,7 +537,9 @@ class BlockCache(BaseCache):
             )
 
         start = block_number * self.blocksize
-        end = start + self.blocksize
+        if start >= self.size:
+            return b""
+        end = min(start + self.blocksize, self.size)
         self.total_requested_bytes += end - start
         self.miss_count += 1
         logger.info("BlockCache fetching block %d", block_number)
@@ -1062,7 +1064,9 @@ class BackgroundBlockCache(BaseCache):
             )
 
         start = block_number * self.blocksize
-        end = start + self.blocksize
+        if start >= self.size:
+            return b""
+        end = min(start + self.blocksize, self.size)
         logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
         self.total_requested_bytes += end - start
         self.miss_count += 1

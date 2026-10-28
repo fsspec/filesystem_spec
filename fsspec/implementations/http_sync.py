@@ -17,7 +17,14 @@ except (ImportError, ModuleNotFoundError, OSError):
 from fsspec.callbacks import _DEFAULT_CALLBACK
 from fsspec.registry import register_implementation
 from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
-from fsspec.utils import DEFAULT_BLOCK_SIZE, isfilelike, nullcontext, tokenize
+from fsspec.utils import (
+    DEFAULT_BLOCK_SIZE,
+    isfilelike,
+    nullcontext,
+    range_response_window,
+    response_is_requested_range,
+    tokenize,
+)
 
 from ..caching import AllBytes
 
@@ -364,8 +371,9 @@ class HTTPFileSystem(AbstractFileSystem):
         kw.update(kwargs)
         logger.debug(url)
 
-        if start is not None or end is not None:
-            if start == end:
+        ranged = start is not None or end is not None
+        if ranged:
+            if start == end or (start is None and end == 0):
                 return b""
             headers = kw.pop("headers", {}).copy()
 
@@ -373,7 +381,11 @@ class HTTPFileSystem(AbstractFileSystem):
             kw["headers"] = headers
         r = self.session.get(self.encode_url(url), **kw)
         self._raise_not_found_for_status(r, url)
-        return r.content
+        if not ranged:
+            return r.content
+        # a server that ignores the Range header replies with the whole file,
+        # which is not the window the caller asked for
+        return range_response_window(r.content, r.status_code, r.headers, start, end)
 
     def get_file(
         self, rpath, lpath, chunk_size=5 * 2**20, callback=_DEFAULT_CALLBACK, **kwargs
@@ -392,11 +404,11 @@ class HTTPFileSystem(AbstractFileSystem):
 
         callback.set_size(size)
         self._raise_not_found_for_status(r, rpath)
-        if not isfilelike(lpath):
-            lpath = open(lpath, "wb")
-        for chunk in r.iter_content(chunk_size, decode_unicode=False):
-            lpath.write(chunk)
-            callback.relative_update(len(chunk))
+        context = nullcontext(lpath) if isfilelike(lpath) else open(lpath, "wb")
+        with context as outfile:
+            for chunk in r.iter_content(chunk_size, decode_unicode=False):
+                outfile.write(chunk)
+                callback.relative_update(len(chunk))
 
     def put_file(
         self,
@@ -721,11 +733,12 @@ class HTTPFile(AbstractBufferedFile):
 
         Parameters
         ----------
-        length: int
-            Read up to this many bytes. If negative, read all content to end of
+        length: int or None
+            Read up to this many bytes. If negative or None, read all content to end of
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
+        length = -1 if length is None else length
         if (
             (length < 0 and self.loc == 0)  # explicit read all
             # but not when the size is known and fits into a block anyways
@@ -753,20 +766,6 @@ class HTTPFile(AbstractBufferedFile):
             self.cache = AllBytes(size=len(out), fetcher=None, blocksize=None, data=out)
             self.size = len(out)
 
-    def _parse_content_range(self, headers):
-        """Parse the Content-Range header"""
-        s = headers.get("Content-Range", "")
-        m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", s)
-        if not m:
-            return None, None, None
-
-        if m[1] == "*":
-            start = end = None
-        else:
-            start, end = [int(x) for x in m[1].split("-")]
-        total = None if m[2] == "*" else int(m[2])
-        return start, end, total
-
     def _fetch_range(self, start, end):
         """Download a block of data
 
@@ -790,14 +789,7 @@ class HTTPFile(AbstractBufferedFile):
         # with status 206 (partial content). But we'll guess that a suitable
         # Content-Range header or a Content-Length no more than the
         # requested range also mean we have got the desired range.
-        cl = r.headers.get("Content-Length", r.headers.get("content-length", end + 1))
-        response_is_range = (
-            r.status_code == 206
-            or self._parse_content_range(r.headers)[0] == start
-            or int(cl) <= end - start
-        )
-
-        if response_is_range:
+        if response_is_requested_range(r.status_code, r.headers, start, end):
             # partial content, as expected
             out = r.content
         elif start > 0:
@@ -846,6 +838,7 @@ class HTTPStreamFile(AbstractBufferedFile):
         raise ValueError("Cannot seek streaming HTTP file")
 
     def read(self, num=-1):
+        num = -1 if num is None else num
         bufs = [self.leftover]
         leng = len(self.leftover)
         while leng < num or num < 0:
@@ -909,14 +902,17 @@ def _file_info(url, session, size_policy="head", **kwargs):
     #  recognise lack of 'Accept-Ranges',
     #                 or 'Accept-Ranges': 'none' (not 'bytes')
     #  to mean streaming only, no random access => return None
-    if "Content-Length" in r.headers:
-        info["size"] = int(r.headers["Content-Length"])
-    elif "Content-Range" in r.headers:
-        info["size"] = int(r.headers["Content-Range"].split("/")[1])
-    elif "content-length" in r.headers:
-        info["size"] = int(r.headers["content-length"])
-    elif "content-range" in r.headers:
-        info["size"] = int(r.headers["content-range"].split("/")[1])
+    encoding = r.headers.get("Content-Encoding", r.headers.get("content-encoding", ""))
+    # The transport length is not the size of the decoded stream.
+    if encoding in ("identity", ""):
+        if "Content-Length" in r.headers:
+            info["size"] = int(r.headers["Content-Length"])
+        elif "Content-Range" in r.headers:
+            info["size"] = int(r.headers["Content-Range"].split("/")[1])
+        elif "content-length" in r.headers:
+            info["size"] = int(r.headers["content-length"])
+        elif "content-range" in r.headers:
+            info["size"] = int(r.headers["content-range"].split("/")[1])
 
     for checksum_field in ["ETag", "Content-MD5", "Digest"]:
         if r.headers.get(checksum_field):

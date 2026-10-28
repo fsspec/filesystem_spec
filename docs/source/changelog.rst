@@ -6,6 +6,9 @@ Dev
 
 Enhancements
 
+- List TAR archive descendants from the existing directory cache without
+  rescanning the full archive for each directory.
+
 - Avoid traversing excluded deep ancestors in shallow memory filesystem searches.
 
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
@@ -14,9 +17,102 @@ Enhancements
 
 Fixes
 
-- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+
+- Use the documentation extra when setting up a local documentation build.
+
+- Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
+
+- Point contributor setup instructions to the current CI environment files (#626).
+
+- Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
+  ``OpenFile`` does not take them since #1029.
+
+- Recognize ASCII case and permitted spaces in data URL base64 markers.
+
+- Accept bare relative filenames in lists of local destinations for async ``get``.
+
+- Reject Git paths below files and preserve complete file names in Git metadata.
+
+- Honor exclusive creation mode in DBFS file opens instead of overwriting an
+  existing file.
+
+- Honor ``create_parents=False`` in ``MemoryFileSystem.mkdir`` when the parent
+  directory does not exist.
+
+- Leave out the passwords of nested FSs when serializing with ``include_password=False``.
+
+- Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
+
+- Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
+
+- Close local transactional write handles before deleting their temporary files
+  during rollback, avoiding Windows sharing errors and leaked handles.
+
+- Omit unreachable references from ``ReferenceFileSystem.cat`` results when
+  ``on_error="omit"``.
+
+- Reject reads on closed asynchronous HTTP streams without reopening a request.
+
+- Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
+- Only send ``ia://`` credentials over https when the download URL is https.
+
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
+
+- Make FUSE CLI ``-f`` match its documented default (#1586).
+
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
+
+- Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
+
+- Request a protected data channel again when ``FTPFileSystem`` reconnects
+  with ``tls=True``
+
+- Decompress cache downloads made by ``cat`` so
+  subsequent cached reads use the same contents as ``open``.
+
+- Retain the selected local file when a ``filecache`` entry expires during open.
+
+- Fix the syntax and add a memory filesystem to the quick-start example (#2337).
+
+- Preserve directory pruning in ``DirFileSystem.walk(detail=True)``
+
+- Finalize zip-fs file contexts on explicit close (#2311).
+
+- Close sync HTTP download files on success or failure, without closing caller-owned streams.
+
+- Expose known buffered-file sizes through a ``len`` property for multipart encoders.
+
+- Propagate backend removal errors from ``FSMap``
+
+- Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
+
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
+
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+- Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
+
+- Bound block-cache fetch ranges by the file size, including background reads.
+
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
+
+- Exclude URL fragments when decoding data URLs.
+
+- Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
+
+- Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
+
+- Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
+
+- Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
+
+- Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Complete DBFS partial-delete retries without re-raising a recovered error.
 
 - Keep the HTTP link regex linear
 
@@ -27,6 +123,10 @@ Fixes
 
 - Reject ``generic.rsync`` source names whose ".." segments would place
   copies outside the destination
+
+- Avoid reference cycles when a synchronous call into an async filesystem
+  fails, so its frames and the data they hold are freed straight away instead
+  of waiting for the garbage collector (#2295)
 
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 
@@ -73,6 +173,8 @@ Fixes
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
 
+- Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
+
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
 
 - Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
@@ -111,6 +213,9 @@ Fixes
 - Request identity encoding for buffered HTTP range reads by default, while
   preserving explicitly configured request and session encodings (#1748).
 
+- Avoid treating content-encoded transfer lengths as decoded file sizes in
+  the synchronous HTTP filesystem.
+
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
@@ -126,6 +231,9 @@ Fixes
 - Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
 
 - Make async loop lock initialization thread-safe (#1783)
+
+- Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
+  and allowing deferred local transaction writes to commit to missing parents (#1041).
 
 
 2026.9.0

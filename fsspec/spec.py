@@ -1669,7 +1669,11 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         from .json import FilesystemJSONEncoder
 
-        json_encoder = FilesystemJSONEncoder()
+        json_encoder = type(
+            "_FilesystemJSONEncoder",
+            (FilesystemJSONEncoder,),
+            {"include_password": include_password},
+        )()
 
         cls = type(self)
         proto = self.protocol
@@ -2084,6 +2088,16 @@ class AbstractBufferedFile(io.IOBase):
             self.offset = None
             self.forced = False
             self.location = None
+
+    @property
+    def len(self):
+        """Total size in bytes, independent of the current file position.
+
+        Raises AttributeError when the backend has not provided a known size.
+        """
+        if self.size is None:
+            raise AttributeError("File size is unknown")
+        return self.size
 
     @property
     def details(self):
