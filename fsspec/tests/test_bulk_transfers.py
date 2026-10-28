@@ -145,6 +145,22 @@ def test_invalid_generic_batches_preserve_all_sources_and_destinations(
     assert [m.cat_file(path) for path in memory_sources] == [b"first", b"second"]
 
 
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_empty_generic_copy_batches_are_noops(local_batch, m, asynchronous):
+    sources, destinations = local_batch
+    before = {path: path.read_bytes() for path in sources + destinations}
+    m.pipe_file("source", b"keep memory file")
+    fs = fsspec.filesystem("generic", asynchronous=asynchronous)
+
+    if asynchronous:
+        asyncio.run(fs._copy([], []))
+    else:
+        fs.copy([], [])
+
+    assert {path: path.read_bytes() for path in before} == before
+    assert m.cat_file("source") == b"keep memory file"
+
+
 @pytest.mark.parametrize("method", ["copy", "mv"])
 @pytest.mark.parametrize("source_backend", ["file", "memory"])
 def test_equal_generic_batches_preserve_pair_order(

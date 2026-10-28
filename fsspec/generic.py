@@ -336,6 +336,8 @@ class GenericFileSystem(AsyncFileSystem):
         path1 = [path1] if isinstance(path1, str) else path1
         path2 = [path2] if isinstance(path2, str) else path2
         path2 = other_paths(path1, path2)
+        if not path1:
+            return
 
         fs = _resolve_fs(path1, self.method, storage_options=self.st_opts)
         fs2 = _resolve_fs(path2, self.method, storage_options=self.st_opts)
