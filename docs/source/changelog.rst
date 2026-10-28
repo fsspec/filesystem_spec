@@ -15,6 +15,8 @@ Enhancements
 
 Fixes
 
+- Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
+
 - Point contributor setup instructions to the current CI environment files (#626).
 
 - Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
