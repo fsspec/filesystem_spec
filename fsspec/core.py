@@ -56,10 +56,6 @@ class OpenFile:
         How to handle encoding errors if opened in text mode.
     newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
-    autoopen: bool
-        If True, calls open() immediately. Mostly used by pickle
-    pos: int
-        If given and autoopen is True, seek to this location immediately
     """
 
     def __init__(

@@ -230,6 +230,8 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileExistsError(path)
         if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
+        if not create_parents and not self.isdir(self._parent(path)):
+            raise FileNotFoundError(self._parent(path))
         if create_parents and self._parent(path).strip("/"):
             try:
                 self.mkdir(self._parent(path), create_parents, **kwargs)

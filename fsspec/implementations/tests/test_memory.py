@@ -503,6 +503,34 @@ def test_makedirs_existing_file(m, path, exist_ok, method):
     assert not m.isdir(path)
 
 
+@pytest.mark.parametrize(
+    "path", ["missing/child", "/missing/child", "memory://missing/child"]
+)
+def test_mkdir_without_parents_missing(m, path):
+    with pytest.raises(FileNotFoundError):
+        m.mkdir(path, create_parents=False)
+
+    assert m.pseudo_dirs == [""]
+    assert m.find("", withdirs=True) == []
+
+
+@pytest.mark.parametrize("parent", ["root", "explicit", "implicit"])
+def test_mkdir_without_parents_existing(m, parent):
+    if parent == "root":
+        path = "/child"
+    else:
+        path = "/parent/child"
+        if parent == "explicit":
+            m.mkdir("/parent")
+        else:
+            m.pipe_file("/parent/file", b"payload")
+
+    m.mkdir(path, create_parents=False)
+
+    assert path in m.pseudo_dirs
+    assert m.isdir(path)
+
+
 def test_no_rewind_append_mode(m):
     # https://github.com/fsspec/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:

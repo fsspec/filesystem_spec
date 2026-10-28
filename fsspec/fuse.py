@@ -253,7 +253,7 @@ def main(args):
     parser.add_argument(
         "-f",
         "--foreground",
-        action="store_false",
+        action="store_true",
         help="Running in foreground or not (Default: False)",
     )
     parser.add_argument(
