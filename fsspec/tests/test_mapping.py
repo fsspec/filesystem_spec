@@ -2,7 +2,6 @@ import array
 import os
 import pickle
 import platform
-import sys
 import uuid
 
 import pytest
@@ -110,23 +109,15 @@ def test_multi():
     assert not list(m)
 
 
-def test_setitem_types():
-    import array
-
+@pytest.mark.parametrize("bulk", [False, True], ids=["setitem", "setitems"])
+@pytest.mark.parametrize("value", [array.array("i", [1]), bytearray(b"123")])
+def test_setitem_types(bulk, value):
     m = fsspec.get_mapper("memory://")
-    m["a"] = array.array("i", [1])
-    if sys.byteorder == "little":
-        assert m["a"] == b"\x01\x00\x00\x00"
+    if bulk:
+        m.setitems({"a": value})
     else:
-        assert m["a"] == b"\x00\x00\x00\x01"
-    m["b"] = bytearray(b"123")
-    assert m["b"] == b"123"
-    m.setitems({"c": array.array("i", [1]), "d": bytearray(b"123")})
-    if sys.byteorder == "little":
-        assert m["c"] == b"\x01\x00\x00\x00"
-    else:
-        assert m["c"] == b"\x00\x00\x00\x01"
-    assert m["d"] == b"123"
+        m["a"] = value
+    assert m["a"] == bytes(value)
 
 
 def test_setitem_numpy():
@@ -447,7 +438,9 @@ def test_setitems_local_transaction_discard(tmp_path):
     assert not m.fs._intrans
 
 
-@pytest.mark.parametrize("operation", ["delete", "clear", "pop"])
+@pytest.mark.parametrize(
+    "operation", ["delete", "clear", "pop", "delete-info-error", "delete-isdir"]
+)
 @pytest.mark.parametrize("error_type", [PermissionError, OSError])
 def test_removal_propagates_backend_failures(monkeypatch, operation, error_type):
     fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
@@ -460,8 +453,17 @@ def test_removal_propagates_backend_failures(monkeypatch, operation, error_type)
 
     monkeypatch.setattr(fs, "rm", fail_remove)
 
+    if operation == "delete-info-error":
+
+        def fail_info(*args, **kwargs):
+            raise RuntimeError("backend could not check the path")
+
+        monkeypatch.setattr(fs, "info", fail_info)
+    elif operation == "delete-isdir":
+        monkeypatch.setattr(fs, "isdir", lambda path: True)
+
     with pytest.raises(error_type) as exc:
-        if operation == "delete":
+        if operation.startswith("delete"):
             del mapper["key"]
         elif operation == "clear":
             mapper.clear()
@@ -520,44 +522,3 @@ def test_delete_directory_key_raises_key_error(tmp_path, protocol):
         del mapper["dir"]
 
     assert mapper["dir/key"] == b"value"
-
-
-def test_delete_preserves_removal_error_when_directory_check_fails(monkeypatch):
-    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
-    mapper = fs.get_mapper("/mapping", create=True)
-    mapper["key"] = b"value"
-    failure = PermissionError("backend could not remove the file")
-
-    def fail_remove(*args, **kwargs):
-        raise failure
-
-    def fail_info(*args, **kwargs):
-        raise RuntimeError("backend could not check the path")
-
-    monkeypatch.setattr(fs, "rm", fail_remove)
-    monkeypatch.setattr(fs, "info", fail_info)
-
-    with pytest.raises(PermissionError) as exc:
-        del mapper["key"]
-
-    assert exc.value is failure
-    assert mapper["key"] == b"value"
-
-
-def test_delete_preserves_file_error_when_path_is_also_a_directory(monkeypatch):
-    fs = MemoryFileSystem(global_store=False, skip_instance_cache=True)
-    mapper = fs.get_mapper("/mapping", create=True)
-    mapper["key"] = b"value"
-    failure = PermissionError("backend could not remove the file")
-
-    def fail_remove(*args, **kwargs):
-        raise failure
-
-    monkeypatch.setattr(fs, "rm", fail_remove)
-    monkeypatch.setattr(fs, "isdir", lambda path: True)
-
-    with pytest.raises(PermissionError) as exc:
-        del mapper["key"]
-
-    assert exc.value is failure
-    assert mapper["key"] == b"value"
