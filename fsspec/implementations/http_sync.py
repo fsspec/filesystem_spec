@@ -836,7 +836,7 @@ class HTTPStreamFile(AbstractBufferedFile):
         self.r = r
 
     def seek(self, loc, whence=0):
-        """Allow delimiter lookahead to rewind within the last bounded read."""
+        """Allow delimiter lookahead to rewind at most one block."""
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         if whence == 1:
@@ -876,10 +876,14 @@ class HTTPStreamFile(AbstractBufferedFile):
         else:
             self.leftover = b""
         if num:
-            # A full-file read must not leave the entire response retained.
-            self._last_read = out if num > 0 else b""
+            # Retain at most one block, even after a large bounded read.
+            self._last_read = out[-self.blocksize :] if num > 0 else b""
         self.loc += len(out)
         return out
+
+    def readuntil(self, char=b"\n", blocks=None):
+        # The unused delimiter lookahead must fit in the rewind buffer.
+        return super().readuntil(char, min(blocks or self.blocksize, self.blocksize))
 
     def close(self):
         self.r.close()

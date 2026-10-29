@@ -132,3 +132,41 @@ def test_http_stream_bounded_rewind(server, stream_fs):
         with pytest.raises(ValueError, match="Cannot seek"):
             stream.seek(0)
     assert stream._last_read == stream.leftover == b""
+
+
+def test_http_stream_large_read_limits_rewind(server, stream_fs, monkeypatch):
+    from fsspec.spec import AbstractBufferedFile
+
+    monkeypatch.setattr(AbstractBufferedFile, "DEFAULT_BLOCK_SIZE", 32)
+    with stream_fs.open(server.realfile, block_size=0) as stream:
+        assert stream.read(256) == data[:256]
+        assert len(stream._last_read) <= 32
+        assert stream.read(0) == b""
+        with pytest.raises(ValueError, match="Cannot seek"):
+            stream.seek(-33, 1)
+        assert stream.tell() == 256
+        assert stream.seek(-32, 1) == 224
+        assert stream.read(32) == data[224:256]
+        assert stream.read(None) == data[256:]
+        assert stream._last_read == stream.leftover == b""
+
+
+def test_http_stream_large_delimiter_blocks(
+    server, stream_fs, reset_files, monkeypatch
+):
+    from fsspec.spec import AbstractBufferedFile
+
+    monkeypatch.setattr(AbstractBufferedFile, "DEFAULT_BLOCK_SIZE", 8)
+    content = b"x" * 7 + b"<>" + b"y" * 40 + b"<>tail"
+    HTTPTestHandler.dynamic_files["/large-stream-blocks"] = content
+    with stream_fs.open(
+        server.address + "/large-stream-blocks", block_size=0
+    ) as stream:
+        assert stream.readuntil(b"<>", blocks=256) == content[:9]
+        assert stream.tell() == 9
+        assert len(stream._last_read) <= 8
+        assert len(stream.leftover) <= 8 + 1024
+        assert stream.readuntil(b"<>", blocks=256) == content[9:51]
+        assert stream.tell() == 51
+        assert stream.readline() == b"tail"
+        assert stream.read() == b""
