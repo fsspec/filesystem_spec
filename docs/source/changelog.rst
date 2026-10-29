@@ -15,6 +15,9 @@ Enhancements
 
 Fixes
 
+- Exclude literal file paths ending in a separator from synchronous and
+  asynchronous glob results.
+
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
 
 - Use the documentation extra when setting up a local documentation build.

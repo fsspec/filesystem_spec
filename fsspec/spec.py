@@ -711,10 +711,14 @@ class AbstractFileSystem(metaclass=_Cached):
 
         if not has_magic(path):
             if self.exists(path, **kwargs):
+                if ends_with_sep:
+                    info = self.info(path, **kwargs)
+                    if info["type"] != "directory":
+                        return {} if detail else []
                 if not detail:
                     return [path]
                 else:
-                    return {path: self.info(path, **kwargs)}
+                    return {path: info if ends_with_sep else self.info(path, **kwargs)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
