@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Accept path-like archive locations in ``TarFileSystem``, including compression
+  inference from their filenames.
+
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).

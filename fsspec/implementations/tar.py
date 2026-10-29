@@ -1,4 +1,5 @@
 import logging
+import os
 import tarfile
 
 import fsspec
@@ -90,7 +91,9 @@ class TarFileSystem(AbstractArchiveFileSystem):
         super().__init__(**kwargs)
         target_options = target_options or {}
 
-        if isinstance(fo, str):
+        if isinstance(fo, str) or (
+            isinstance(fo, os.PathLike) and not hasattr(fo, "read")
+        ):
             self.of = fsspec.open(fo, protocol=target_protocol, **target_options)
             fo = self.of.open()  # keep the reference
 
