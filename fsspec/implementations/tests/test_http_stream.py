@@ -106,6 +106,16 @@ def test_http_stream_line_lookahead_after_close(server, stream_fs, method):
             getattr(stream, method)()
 
 
+def test_http_stream_read_none_after_line_lookahead(server, stream_fs):
+    with stream_fs.open(server.realfile, block_size=0) as stream:
+        reference = io.BytesIO(data)
+        assert stream.readline() == reference.readline()
+        assert stream.read(None) == reference.read(None)
+        assert stream.tell() == reference.tell()
+        assert stream._last_read == stream.leftover == b""
+        assert stream.read(None) == b""
+
+
 def test_http_stream_bounded_rewind(server, stream_fs):
     with stream_fs.open(server.realfile, block_size=0) as stream:
         assert stream.read(8) == data[:8]

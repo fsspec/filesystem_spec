@@ -551,6 +551,16 @@ def test_commit_discard(tmpdir):
         assert not fs.exists(tmpdir + "/bfile")
 
 
+def test_discard_closes_file(tmp_path):
+    stream = LocalFileOpener(tmp_path / "output", "wb", autocommit=False)
+    try:
+        stream.discard()
+        assert stream.closed
+    finally:
+        stream.close()
+        Path(stream.temp).unlink(missing_ok=True)
+
+
 def test_transaction_with_compression(tmpdir):
     path = str(tmpdir / "afile.gz")
     fs = LocalFileSystem()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
@@ -223,6 +223,8 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileExistsError(path)
         if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
+        if not create_parents and not self.isdir(self._parent(path)):
+            raise FileNotFoundError(self._parent(path))
         if create_parents and self._parent(path).strip("/"):
             try:
                 self.mkdir(self._parent(path), create_parents, **kwargs)
@@ -435,8 +437,8 @@ class MemoryFile(BytesIO):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
-        self.created = datetime.now(tz=timezone.utc)
-        self.modified = datetime.now(tz=timezone.utc)
+        self.created = datetime.now(tz=UTC)
+        self.modified = datetime.now(tz=UTC)
         if data:
             super().__init__(data)
             self.seek(0)
@@ -448,7 +450,7 @@ class MemoryFile(BytesIO):
     def write(self, data):
         written = super().write(data)
         if written:
-            self.modified = datetime.now(tz=timezone.utc)
+            self.modified = datetime.now(tz=UTC)
         return written
 
     def writelines(self, lines):
@@ -457,7 +459,7 @@ class MemoryFile(BytesIO):
 
     def truncate(self, size=None):
         size = super().truncate(size)
-        self.modified = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=UTC)
         return size
 
     def __enter__(self):
@@ -471,4 +473,4 @@ class MemoryFile(BytesIO):
 
     def commit(self):
         self.fs.store[self.path] = self
-        self.modified = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=UTC)
