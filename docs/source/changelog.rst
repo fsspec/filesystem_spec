@@ -118,6 +118,8 @@ Fixes
 
 - Preserve single-source copy semantics for Paths in sync batch ops
 
+- Honor a single SMB session registration retry without dividing by zero.
+
 - Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
   since PUT behavior depends on the server (#2294).
 

@@ -7,6 +7,7 @@ import os
 import shlex
 import subprocess
 import time
+from unittest.mock import Mock
 
 import pytest
 
@@ -182,3 +183,84 @@ def test_parent_pathlike():
         register_session_retries=-1,
     )
     assert fsmb._parent(PurePosixPath("/share/dir/file.txt")) == "/share/dir"
+
+
+@pytest.fixture
+def session_registration(monkeypatch):
+    register = Mock()
+    sleep = Mock()
+    monkeypatch.setattr("smbclient.register_session", register)
+    monkeypatch.setattr(time, "sleep", sleep)
+    return register, sleep
+
+
+@pytest.mark.parametrize(
+    "retries, exponents",
+    [(0, []), (1, [0]), (2, [-1, 0]), (4, [-1, -2 / 3, -1 / 3, 0])],
+)
+@pytest.mark.parametrize("wait, factor", [(0, 10), (2, 1), (2, 10)])
+@pytest.mark.parametrize("succeed", [False, True])
+def test_session_registration_retries(
+    session_registration, retries, exponents, wait, factor, succeed
+):
+    register, sleep = session_registration
+    errors = [OSError(f"connection attempt {i}") for i in range(retries + 1)]
+    register.side_effect = errors[:-1] + [None] if succeed else errors
+    kwargs = {
+        "host": "example",
+        "register_session_retries": retries,
+        "register_session_retry_wait": wait,
+        "register_session_retry_factor": factor,
+        "skip_instance_cache": True,
+    }
+    if succeed:
+        fsspec.get_filesystem_class("smb")(**kwargs)
+    else:
+        with pytest.raises(OSError) as exc:
+            fsspec.get_filesystem_class("smb")(**kwargs)
+        assert exc.value is errors[-1]
+
+    assert register.call_count == retries + 1
+    assert [call.args[0] for call in sleep.call_args_list] == pytest.approx(
+        [wait * factor**exponent for exponent in exponents]
+    )
+
+
+@pytest.mark.parametrize("retries", [-2, -1, 0, 1, 4])
+def test_session_registration_without_retries(session_registration, retries):
+    register, sleep = session_registration
+    fsspec.get_filesystem_class("smb")(
+        host="example", register_session_retries=retries, skip_instance_cache=True
+    )
+    assert register.call_count == (0 if retries < 0 else 1)
+    sleep.assert_not_called()
+
+
+@pytest.mark.parametrize("error", ["authentication", "logon", "configuration"])
+def test_session_registration_non_retryable_error(session_registration, error):
+    from smbprotocol.exceptions import LogonFailure, SMBAuthenticationError
+
+    register, sleep = session_registration
+    exc = {
+        "authentication": SMBAuthenticationError("invalid credentials"),
+        "logon": LogonFailure(),
+        "configuration": ValueError("invalid configuration"),
+    }[error]
+    register.side_effect = exc
+    with pytest.raises(type(exc)) as raised:
+        fsspec.get_filesystem_class("smb")(
+            host="example", register_session_retries=1, skip_instance_cache=True
+        )
+    assert raised.value is exc
+    register.assert_called_once()
+    sleep.assert_not_called()
+
+
+def test_session_registration_retries_network_value_error(session_registration):
+    register, sleep = session_registration
+    register.side_effect = [ValueError("[Errno -2] Name or service not known"), None]
+    fsspec.get_filesystem_class("smb")(
+        host="example", register_session_retries=1, skip_instance_cache=True
+    )
+    assert register.call_count == 2
+    sleep.assert_called_once_with(1)
