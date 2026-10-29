@@ -81,6 +81,49 @@ def test_compressions(recipe):
         assert fs.cat("b") == b"hello"
 
 
+@pytest.mark.parametrize("compression", ["", "gz", "bz2", "xz"])
+@pytest.mark.parametrize("custom_path", [False, True], ids=["pathlib", "fspath"])
+def test_pathlike_archive(compression, custom_path, tmp_path):
+    path = tmp_path / ("archive.tar" + (f".{compression}" if compression else ""))
+    data = b"path-like archive contents"
+    with tarfile.open(path, mode=f"w:{compression}") as archive:
+        member = tarfile.TarInfo("entry.txt")
+        member.size = len(data)
+        archive.addfile(member, BytesIO(data))
+
+    class ArchivePath:
+        def __fspath__(self):
+            return str(path)
+
+    fo = ArchivePath() if custom_path else path
+    fs = TarFileSystem(fo=fo)
+    try:
+        assert fs.cat_file("entry.txt") == data
+        assert fs.info("entry.txt")["size"] == len(data)
+    finally:
+        fs.close()
+
+
+def test_pathlike_file_object_is_not_reopened(tmp_path):
+    class ArchiveFile(BytesIO):
+        def __fspath__(self):
+            return str(tmp_path / "not-opened.tar")
+
+    with ArchiveFile() as fo:
+        with tarfile.open(fileobj=fo, mode="w") as archive:
+            member = tarfile.TarInfo("entry.txt")
+            member.size = 7
+            archive.addfile(member, BytesIO(b"payload"))
+        fo.seek(0)
+
+        fs = TarFileSystem(fo=fo)
+        try:
+            assert fs.cat_file("entry.txt") == b"payload"
+        finally:
+            fs.close()
+        assert not fo.closed
+
+
 @pytest.mark.parametrize(
     "recipe",
     [
