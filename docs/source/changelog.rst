@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Limit concurrent calls in ``AsyncFileSystemWrapper`` to ``max_concurrent_tasks``
+  when it is given, and accept ``target_protocol`` without ``target_options``.
+
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
 
 - Use the documentation extra when setting up a local documentation build.

@@ -10,6 +10,7 @@ import fsspec
 from fsspec.asyn import AsyncFileSystem
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
 
 from .test_local import csv_files, filetexts
 
@@ -209,6 +210,33 @@ async def test_semaphore_synchronous():
     results = await asyncio.gather(*(fs._cat_file(path) for path in paths))
 
     assert set(results) == {path.encode() for path in paths}
+
+
+@pytest.mark.asyncio
+async def test_max_concurrent_tasks():
+    fs = AsyncFileSystemWrapper(
+        LockedFileSystem(), asynchronous=False, max_concurrent_tasks=1
+    )
+
+    paths = [f"path_{i}" for i in range(1, 3)]
+    results = await asyncio.gather(*(fs._cat_file(path) for path in paths))
+
+    assert set(results) == {path.encode() for path in paths}
+
+    # an explicit semaphore takes precedence over max_concurrent_tasks
+    semaphore = asyncio.Semaphore(3)
+    fs = AsyncFileSystemWrapper(
+        LockedFileSystem(),
+        asynchronous=False,
+        semaphore=semaphore,
+        max_concurrent_tasks=1,
+    )
+    assert fs.semaphore is semaphore
+
+
+def test_target_protocol_without_target_options():
+    fs = AsyncFileSystemWrapper(target_protocol="memory", asynchronous=False)
+    assert isinstance(fs.sync_fs, MemoryFileSystem)
 
 
 @pytest.mark.asyncio
