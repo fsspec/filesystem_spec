@@ -1,6 +1,7 @@
 import os
 import ssl
 import uuid
+import warnings
 from ftplib import FTP, FTP_TLS, Error, error_perm
 from typing import Any
 
@@ -35,7 +36,7 @@ class ImplicitFTPTLS(FTP_TLS):
     def sock(self, value):
         """When modifying the socket, ensure that it is ssl wrapped."""
         if value is not None and not isinstance(value, ssl.SSLSocket):
-            value = self.context.wrap_socket(value)
+            value = self.context.wrap_socket(value, server_hostname=self.host)
         self._sock = value
 
 
@@ -58,6 +59,7 @@ class FTPFileSystem(AbstractFileSystem):
         timeout=30,
         encoding="utf-8",
         tls=False,
+        ssl_context=None,
         **kwargs,
     ):
         """
@@ -95,6 +97,12 @@ class FTPFileSystem(AbstractFileSystem):
                 - "tlsv1": TLS v1.0
                 - "tlsv1_1": TLS v1.1
                 - "tlsv1_2": TLS v1.2
+        ssl_context: ssl.SSLContext or None
+            Context for the TLS connections. The default verifies the server
+            certificate and host name against the system trust store; pass a
+            context to trust a private CA or a self-signed certificate. For
+            now, a server that fails verification is still connected to, with
+            a FutureWarning; a future release will refuse it.
         """
         super().__init__(**kwargs)
         self.host = host
@@ -108,11 +116,33 @@ class FTPFileSystem(AbstractFileSystem):
         else:
             self.blocksize = 2**16
         self.tls = tls
+        self.ssl_context = ssl_context
         self._connect()
 
     def _connect(self):
+        if self.tls and self.ssl_context is None:
+            try:
+                self._login(ssl.create_default_context())
+            except ssl.SSLCertVerificationError as e:
+                self.ftp.close()
+                warnings.warn(
+                    f"The TLS certificate of FTP server {self.host!r} could not "
+                    f"be verified ({e.verify_message}); connecting anyway. A "
+                    "future release will refuse such connections; pass "
+                    "ssl_context= with a context that trusts this server.",
+                    FutureWarning,
+                )
+                # ftplib's own default context, which does not check anything
+                self._login(None)
+        else:
+            self._login(self.ssl_context)
+
+    def _login(self, context):
         security = None
+        kwargs = {}
         if self.tls:
+            if context is not None:
+                kwargs["context"] = context
             if isinstance(self.tls, str):
                 ftp_cls = ImplicitFTPTLS
                 security = SECURITY_PROTOCOL_MAP.get(
@@ -125,7 +155,7 @@ class FTPFileSystem(AbstractFileSystem):
                 ftp_cls = FTP_TLS
         else:
             ftp_cls = FTP
-        self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding)
+        self.ftp = ftp_cls(timeout=self.timeout, encoding=self.encoding, **kwargs)
         if security:
             self.ftp.ssl_version = security
         self.ftp.connect(self.host, self.port)

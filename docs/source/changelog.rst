@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Verify the server certificate and host name for FTPFileSystem`` TLS
+
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
 
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
