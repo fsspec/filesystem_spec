@@ -1,7 +1,7 @@
 import os
 import pickle
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
@@ -25,12 +25,12 @@ from fsspec.implementations.memory import MemoryFileSystem
 def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
     m.pipe_file("file", b"abc")
     created = m.created("file")
-    modified = datetime(2100, 1, 1, tzinfo=timezone.utc)
+    modified = datetime(2100, 1, 1, tzinfo=UTC)
 
     class Clock:
         @staticmethod
         def now(tz):
-            assert tz is timezone.utc
+            assert tz is UTC
             return modified
 
     with m.open("file", mode) as f:
@@ -44,7 +44,7 @@ def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
 
 def test_modified_after_partial_writelines(m):
     m.pipe_file("file", b"abc")
-    original = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    original = datetime(2000, 1, 1, tzinfo=UTC)
 
     with m.open("file", "ab") as f:
         f.modified = original
@@ -502,6 +502,34 @@ def test_makedirs_existing_file(m, path, exist_ok, method):
     assert not m.isdir(path)
 
 
+@pytest.mark.parametrize(
+    "path", ["missing/child", "/missing/child", "memory://missing/child"]
+)
+def test_mkdir_without_parents_missing(m, path):
+    with pytest.raises(FileNotFoundError):
+        m.mkdir(path, create_parents=False)
+
+    assert m.pseudo_dirs == [""]
+    assert m.find("", withdirs=True) == []
+
+
+@pytest.mark.parametrize("parent", ["root", "explicit", "implicit"])
+def test_mkdir_without_parents_existing(m, parent):
+    if parent == "root":
+        path = "/child"
+    else:
+        path = "/parent/child"
+        if parent == "explicit":
+            m.mkdir("/parent")
+        else:
+            m.pipe_file("/parent/file", b"payload")
+
+    m.mkdir(path, create_parents=False)
+
+    assert path in m.pseudo_dirs
+    assert m.isdir(path)
+
+
 def test_no_rewind_append_mode(m):
     # https://github.com/fsspec/filesystem_spec/issues/349
     with m.open("src/file.txt", "w") as f:
@@ -866,6 +894,23 @@ def test_find_matches_generic(m):
                         m, root, maxdepth=maxdepth, withdirs=withdirs, detail=detail
                     )
                     assert got == expected, (root, maxdepth, withdirs, detail)
+
+
+@pytest.mark.parametrize("root", ["", "/data"])
+@pytest.mark.parametrize("maxdepth", [1, 2, 5, None])
+@pytest.mark.parametrize("detail", [False, True])
+def test_find_deep_ancestors(m, root, maxdepth, detail):
+    from fsspec.spec import AbstractFileSystem
+
+    deep = "/data/" + "/".join(f"level{i}" for i in range(40))
+    m.pipe_file(deep + "/file", b"content")
+    m.mkdir(deep + "/empty")
+    m.pipe_file("/database/unrelated", b"other")
+    assert m.find(root, maxdepth=maxdepth, withdirs=True, detail=detail) == (
+        AbstractFileSystem.find(
+            m, root, maxdepth=maxdepth, withdirs=True, detail=detail
+        )
+    )
 
 
 def test_find_snapshots_store_before_iterating(m):

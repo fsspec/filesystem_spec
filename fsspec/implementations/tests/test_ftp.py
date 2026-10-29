@@ -1,15 +1,14 @@
 import io
 import os
 import ssl
-import subprocess
 import sys
-import time
 from ftplib import FTP, FTP_TLS
 
 import pytest
 
 import fsspec
 from fsspec import open_files
+from fsspec.conftest import _ftp_server
 from fsspec.implementations.ftp import FTPFileSystem, ImplicitFTPTLS, _mlsd2
 
 ftplib = pytest.importorskip("ftplib")
@@ -26,33 +25,23 @@ def trust_test_cert():
 @pytest.fixture()
 def ftp():
     pytest.importorskip("pyftpdlib")
-    P = subprocess.Popen(
-        [sys.executable, os.path.join(here, "ftp_tls.py")],
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-    )
-    try:
-        time.sleep(1)
+    pytest.importorskip("OpenSSL")
+    with _ftp_server([sys.executable, os.path.join(here, "ftp_tls.py")]):
         yield "localhost", 2121
-    finally:
-        P.terminate()
-        P.wait()
 
 
 @pytest.fixture()
 def ftp_tlsv12():
     pytest.importorskip("pyftpdlib")
-    P = subprocess.Popen(
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    with _ftp_server(
         [sys.executable, os.path.join(here, "ftp_tlsv12.py")],
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-    )
-    try:
-        time.sleep(1)
+        port=2122,
+        ssl_context=context,
+    ):
         yield "localhost", 2122
-    finally:
-        P.terminate()
-        P.wait()
 
 
 @pytest.mark.parametrize(

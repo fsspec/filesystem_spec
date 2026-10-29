@@ -6,15 +6,55 @@ Dev
 
 Enhancements
 
+- List TAR archive descendants from the existing directory cache without
+  rescanning the full archive for each directory.
+
+- Avoid traversing excluded deep ancestors in shallow memory filesystem searches.
+
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
   operations that fill the cache on a miss, so ``filecache``/``simplecache``
   opens can report download progress (#1623)
 
 Fixes
 
-- Verify the server certificate and host name for ``FTPFileSystem`` TLS
-  connections; pass ``ssl_context=`` to trust a private or self-signed one.
-  An unverifiable server still connects for now, with a ``FutureWarning``.
+- Verify the server certificate and host name for FTPFileSystem`` TLS
+
+- Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
+
+- Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+
+- Use the documentation extra when setting up a local documentation build.
+
+- Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
+
+- Point contributor setup instructions to the current CI environment files (#626).
+
+- Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
+  ``OpenFile`` does not take them since #1029.
+
+- Recognize ASCII case and permitted spaces in data URL base64 markers.
+
+- Accept bare relative filenames in lists of local destinations for async ``get``.
+
+- Reject Git paths below files and preserve complete file names in Git metadata.
+
+- Honor exclusive creation mode in DBFS file opens instead of overwriting an
+  existing file.
+
+- Honor ``create_parents=False`` in ``MemoryFileSystem.mkdir`` when the parent
+  directory does not exist.
+
+- Leave out the passwords of nested FSs when serializing with ``include_password=False``.
+
+- Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
+
+- Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
+
+- Close local transactional write handles before deleting their temporary files
+  during rollback, avoiding Windows sharing errors and leaked handles.
+
+- Omit unreachable references from ``ReferenceFileSystem.cat`` results when
+  ``on_error="omit"``.
 
 - Reject reads on closed asynchronous HTTP streams without reopening a request.
 
@@ -60,6 +100,8 @@ Fixes
 
 - Bound block-cache fetch ranges by the file size, including background reads.
 
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
+
 - Exclude URL fragments when decoding data URLs.
 
 - Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
@@ -70,7 +112,7 @@ Fixes
 
 - Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
 
-- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
@@ -85,6 +127,10 @@ Fixes
 
 - Reject ``generic.rsync`` source names whose ".." segments would place
   copies outside the destination
+
+- Avoid reference cycles when a synchronous call into an async filesystem
+  fails, so its frames and the data they hold are freed straight away instead
+  of waiting for the garbage collector (#2295)
 
 - Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
 
@@ -189,6 +235,9 @@ Fixes
 - Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
 
 - Make async loop lock initialization thread-safe (#1783)
+
+- Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
+  and allowing deferred local transaction writes to commit to missing parents (#1041).
 
 
 2026.9.0
