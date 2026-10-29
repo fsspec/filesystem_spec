@@ -54,6 +54,8 @@ Fixes
 
 - Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
 
+- Keep literal ``=PLACEHOLDER=`` text in synchronous HTTP glob patterns.
+
 - Only send ``ia://`` credentials over https when the download URL is https.
 
 - Honor ``block_size=0`` for direct and transactional SFTP file opens.

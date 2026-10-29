@@ -51,6 +51,44 @@ def test_list(server, sync):
     assert out == [server.address + "/index/realfile"]
 
 
+@pytest.mark.parametrize("detail", [False, True])
+@pytest.mark.parametrize("recursive", [False, True])
+@pytest.mark.parametrize("literal", [False, True])
+def test_glob_literal_placeholder(
+    server, sync, reset_files, detail, recursive, literal
+):
+    files = ["a=PLACEHOLDER=x.txt", "aZZZx.txt"]
+    HTTPTestHandler.dynamic_files["/glob-literals"] = (
+        "".join(f'<a href="/glob-literals/{name}">{name}</a>' for name in files)
+        + '<a href="/glob-literals/sub/">sub</a>'
+    ).encode()
+    HTTPTestHandler.dynamic_files["/glob-literals/sub"] = "".join(
+        f'<a href="/glob-literals/sub/{name}">{name}</a>' for name in files
+    ).encode()
+    for directory in ("", "sub/"):
+        for name in files:
+            HTTPTestHandler.dynamic_files[f"/glob-literals/{directory}{name}"] = b"data"
+
+    pattern = "**" if recursive else "*"
+    if literal:
+        pattern += "=PLACEHOLDER=*"
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+    try:
+        result = h.glob(
+            server.address + "/glob-literals/" + pattern + ".txt", detail=detail
+        )
+        expected = sorted(
+            server.address + f"/glob-literals/{directory}{name}"
+            for directory in (("", "sub/") if recursive else ("",))
+            for name in (files[:1] if literal else files)
+        )
+        assert list(result) == expected
+        if detail:
+            assert all(info["name"] == name for name, info in result.items())
+    finally:
+        h.session.close()
+
+
 def test_list_pathological_listing(server, sync, reset_files):
     # a long whitespace run inside an anchor used to make the link regex
     # backtrack cubically, so listing this page took about a minute
