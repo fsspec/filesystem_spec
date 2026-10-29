@@ -15,6 +15,8 @@ Enhancements
 
 Fixes
 
+- Retry transient DBFS directory-creation requests without replaying other POST operations.
+
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
 
 - Use the documentation extra when setting up a local documentation build.

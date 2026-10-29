@@ -171,3 +171,104 @@ def test_exclusive_create_existing_file_stops_before_upload(fs, monkeypatch, dat
             file.write(data)
 
     assert post.call_count == 1
+
+
+@pytest.fixture
+def retry_server(monkeypatch):
+    """Exercise the real adapter retry loop against a local HTTP server."""
+    import socket
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+    from urllib.parse import urlsplit
+
+    state = {"calls": [], "failures": 2, "json": True, "sleeps": []}
+
+    class Handler(BaseHTTPRequestHandler):
+        def handle_request(self):
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            state["calls"].append((self.command, self.path))
+            status = 429 if len(state["calls"]) <= state["failures"] else 200
+            body = json.dumps(
+                {"error_code": "RATE_LIMIT", "message": "slow down"}
+                if status == 429
+                else {}
+            ).encode()
+            if status == 429 and not state["json"]:
+                body = b"slow down"
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Retry-After", "1")
+            self.end_headers()
+            self.wfile.write(body)
+
+        do_GET = handle_request
+        do_POST = handle_request
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever)
+    thread.start()
+    original_connect = socket.socket.connect
+
+    def connect(sock, address):
+        assert address[0] == "127.0.0.1"
+        return original_connect(sock, address)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    original_send = requests.adapters.HTTPAdapter.send
+
+    def send(adapter, request, **kwargs):
+        # Session already selected its production HTTPS adapter. Change only the
+        # test destination, retaining the selected adapter's real retry policy.
+        parsed = urlsplit(request.url)
+        assert parsed.hostname == "example.invalid"
+        request.url = f"http://127.0.0.1:{server.server_port}{parsed.path}"
+        kwargs["proxies"] = {}
+        kwargs["timeout"] = 5
+        return original_send(adapter, request, **kwargs)
+
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", send)
+    monkeypatch.setattr("urllib3.util.retry.time.sleep", state["sleeps"].append)
+    try:
+        yield state
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+@pytest.mark.parametrize("json_response", [False, True])
+def test_mkdirs_retries_rate_limit(fs, retry_server, json_response):
+    retry_server["json"] = json_response
+    fs.makedirs("/parent/directory")
+    assert retry_server["calls"] == [("POST", "/api/2.0/dbfs/mkdirs")] * 3
+    assert retry_server["sleeps"] == [1, 1]
+
+
+@pytest.mark.parametrize("json_response", [False, True])
+def test_mkdirs_retry_exhaustion_preserves_error(fs, retry_server, json_response):
+    retry_server.update(failures=100, json=json_response)
+    adapter = fs.session.get_adapter("https://example.invalid/api/2.0/dbfs/mkdirs")
+    assert adapter.max_retries.total == 10
+    adapter.max_retries = adapter.max_retries.new(total=2)
+    expected = DatabricksException if json_response else requests.HTTPError
+    with pytest.raises(expected, match="slow down|429"):
+        fs.makedirs("/parent/directory")
+    assert len(retry_server["calls"]) == 3
+    assert retry_server["sleeps"] == [1, 1]
+
+
+def test_other_post_not_retried(fs, retry_server):
+    with pytest.raises(DatabricksException, match="slow down"):
+        fs._send_to_api("post", "add-block", {"handle": 1, "data": "YQ=="})
+    assert retry_server["calls"] == [("POST", "/api/2.0/dbfs/add-block")]
+    assert retry_server["sleeps"] == []
+    assert "POST" not in fs.retries.allowed_methods
+
+
+def test_get_retry_unchanged(fs, retry_server):
+    fs._send_to_api("get", "list", {"path": "/parent"})
+    assert retry_server["calls"] == [("GET", "/api/2.0/dbfs/list")] * 3
+    assert retry_server["sleeps"] == [1, 1]
