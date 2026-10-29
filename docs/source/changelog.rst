@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
+
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
 
 - Use the documentation extra when setting up a local documentation build.
