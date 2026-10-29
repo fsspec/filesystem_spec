@@ -157,6 +157,7 @@ class OpenFile:
             finally:
                 f.close()
 
+        # Unwind in reverse order, attempting every close even if one fails.
         with ExitStack() as stack:
             for f in self.fobjects:
                 stack.callback(close_one, f)
@@ -197,6 +198,8 @@ class OpenFiles(list):
                 break
         with ExitStack() as stack:
             files = [stack.enter_context(s) for s in self]
+            # All files opened: transfer cleanup to OpenFiles.__exit__ so they
+            # stay open after this temporary entry-failure guard exits.
             stack.pop_all()
             return files
 
@@ -208,7 +211,7 @@ class OpenFiles(list):
                 for f in reversed(self.files):
                     stack.callback(f.close)
             for s in reversed(self):
-                stack.callback(s.__exit__, *args)
+                stack.callback(s.close)
         if "r" not in self.mode:
             while True:
                 if hasattr(fs, "open_many"):
