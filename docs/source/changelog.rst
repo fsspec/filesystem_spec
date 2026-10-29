@@ -44,6 +44,8 @@ Fixes
 
 - Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
 
+- Reject unequal source and destination lists in bulk copy, get and put
+
 - Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
 
 - Close local transactional write handles before deleting their temporary files
