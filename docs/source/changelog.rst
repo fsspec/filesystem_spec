@@ -9,6 +9,8 @@ Enhancements
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
+- Avoid traversing excluded deep ancestors in shallow memory filesystem searches.
+
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
   operations that fill the cache on a miss, so ``filecache``/``simplecache``
   opens can report download progress (#1623)
