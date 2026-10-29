@@ -54,6 +54,15 @@ class DatabricksFileSystem(AbstractFileSystem):
         )
 
         self.session.mount("https://", HTTPAdapter(max_retries=self.retries))
+        # Creating an existing directory is harmless, unlike replaying add-block.
+        mkdirs_url = urllib.parse.urljoin(
+            f"https://{self.instance}/api/2.0/dbfs/", "mkdirs"
+        )
+        mkdirs_retries = self.retries.new(
+            allowed_methods=self.retries.allowed_methods | {"POST"},
+            raise_on_status=False,
+        )
+        self.session.mount(mkdirs_url, HTTPAdapter(max_retries=mkdirs_retries))
         self.session.headers.update({"Authorization": f"Bearer {self.token}"})
 
         super().__init__(**kwargs)
