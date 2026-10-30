@@ -363,6 +363,14 @@ class FTPFile(AbstractBufferedFile):
         cache_options=None,
         **kwargs,
     ):
+        if mode == "ab" and not autocommit:
+            raise NotImplementedError("FTP append mode does not support transactions")
+        append_size = 0
+        if mode == "ab":
+            try:
+                append_size = fs.info(path)["size"]
+            except FileNotFoundError:
+                pass
         super().__init__(
             fs,
             path,
@@ -373,6 +381,8 @@ class FTPFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs,
         )
+        if mode == "ab":
+            self.loc = append_size
         if not autocommit:
             self.target = self.path
             self.path = "/".join([kwargs["tempdir"], str(uuid.uuid4())])
@@ -426,9 +436,17 @@ class FTPFile(AbstractBufferedFile):
 
     def _upload_chunk(self, final=False):
         self.buffer.seek(0)
-        self.fs.ftp.storbinary(
-            f"STOR {self.path}", self.buffer, blocksize=self.blocksize, rest=self.offset
-        )
+        if self.mode == "ab":
+            self.fs.ftp.storbinary(
+                f"APPE {self.path}", self.buffer, blocksize=self.blocksize
+            )
+        else:
+            self.fs.ftp.storbinary(
+                f"STOR {self.path}",
+                self.buffer,
+                blocksize=self.blocksize,
+                rest=self.offset,
+            )
         return True
 
 

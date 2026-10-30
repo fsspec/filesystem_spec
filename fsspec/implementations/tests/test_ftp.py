@@ -426,3 +426,60 @@ def test_mlsd2_skips_short_lines():
     )
     out = _mlsd2(ftp, "/data")
     assert [name for name, _ in out] == ["keep.txt"]
+
+
+@pytest.mark.parametrize("initial", [None, b"", b"original-content"])
+@pytest.mark.parametrize("chunks", [[], [b"ADD"], [b"12345", b"67890", b"Z"]])
+def test_append_preserves_existing_data(ftp_writable, initial, chunks):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw, skip_instance_cache=True)
+    path = "/append-target"
+    if initial is not None:
+        fs.pipe_file(path, initial)
+    with fs.open(path, "ab", block_size=4) as f:
+        assert f.tell() == len(initial or b"")
+        for chunk in chunks:
+            f.write(chunk)
+        assert f.tell() == len(initial or b"") + sum(map(len, chunks))
+    assert fs.cat_file(path) == (initial or b"") + b"".join(chunks)
+
+
+@pytest.mark.parametrize("initial", [None, b"", b"original-content"])
+@pytest.mark.parametrize("transaction", [False, True])
+def test_transactional_append_is_rejected(ftp_writable, initial, transaction):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw, skip_instance_cache=True)
+    path = "/append-target"
+    if initial is not None:
+        fs.pipe_file(path, initial)
+    if transaction:
+        with fs.transaction:
+            with pytest.raises(NotImplementedError, match="append.*transactions"):
+                fs.open(path, "ab")
+    else:
+        with pytest.raises(NotImplementedError, match="append.*transactions"):
+            fs.open(path, "ab", autocommit=False)
+    if initial is None:
+        assert not fs.exists(path)
+    else:
+        assert fs.cat_file(path) == initial
+
+
+def test_append_multiple_flushes_and_sessions(ftp_writable):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw, skip_instance_cache=True)
+    path = "/append-target"
+    fs.pipe_file(path, b"original")
+    with fs.open(path, "ab", block_size=3) as f:
+        f.write(b"123")
+        f.flush()
+        f.flush()
+        f.write(b"45")
+        f.flush()
+    with fs.open(path, "ab", block_size=3) as f:
+        assert f.tell() == len(b"original12345")
+        f.write(b"678")
+    assert fs.cat_file(path) == b"original12345678"
+    with fs.open(path, "wb") as f:
+        f.write(b"replacement")
+    assert fs.cat_file(path) == b"replacement"

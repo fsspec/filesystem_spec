@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Preserve existing FTP file contents in append mode, and reject unsupported
+  transactional append before modifying the target.
+
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
