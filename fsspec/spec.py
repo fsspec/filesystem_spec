@@ -1364,6 +1364,15 @@ class AbstractFileSystem(metaclass=_Cached):
         if path1 == path2:
             logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
+            if recursive and isinstance(path1, str) and isinstance(path2, str):
+                # copying into a subdirectory and then removing the source
+                # would delete the copy too
+                src = self._strip_protocol(path1).rstrip("/")
+                dst = self._strip_protocol(path2).rstrip("/")
+                if dst.startswith(src + "/"):
+                    raise ValueError(
+                        f"Cannot move a directory {path1!r} into itself, {path2!r}"
+                    )
             if recursive and maxdepth is not None:
                 # copy only reaches maxdepth, so only remove what it copied
                 paths = self.expand_path(path1, recursive=True, maxdepth=maxdepth)
