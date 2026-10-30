@@ -426,3 +426,253 @@ def test_mlsd2_skips_short_lines():
     )
     out = _mlsd2(ftp, "/data")
     assert [name for name, _ in out] == ["keep.txt"]
+
+
+@pytest.mark.parametrize("tls", [False, True])
+def test_concurrent_commands_keep_response_owner(ftp, monkeypatch, tmp_path, tls):
+    import threading
+
+    host, port = ftp
+    fs = FTPFileSystem(
+        host, port, "user", "pass", tls=tls, ssl_context=trust_test_cert()
+    )
+    base = "/" + tmp_path.name
+    fs.mkdir(base)
+    fs.mkdir(base + "/existing")
+    paused, release, attempted = (threading.Event() for _ in range(3))
+    original = fs.ftp.getresp
+    outcomes = {}
+    original_lock = fs._lock
+    original_putcmd = fs.ftp.putcmd
+    commands = []
+
+    class ObservedLock:
+        def __enter__(self):
+            if threading.current_thread().name == "existing-directory":
+                attempted.set()
+            original_lock.acquire()
+
+        def __exit__(self, *exc):
+            original_lock.release()
+
+    def putcmd(command):
+        commands.append(command)
+        return original_putcmd(command)
+
+    monkeypatch.setattr(fs, "_lock", ObservedLock())
+    monkeypatch.setattr(fs.ftp, "putcmd", putcmd)
+
+    def getresp():
+        if threading.current_thread().name == "new-directory":
+            paused.set()
+            assert release.wait(5)
+        return original()
+
+    monkeypatch.setattr(fs.ftp, "getresp", getresp)
+
+    def create(name):
+        try:
+            fs.mkdir(base + "/" + name, create_parents=False)
+            outcomes[name] = "success"
+        except Exception as exc:
+            outcomes[name] = exc
+
+    a = threading.Thread(target=create, args=("new",), name="new-directory")
+    b = threading.Thread(target=create, args=("existing",), name="existing-directory")
+    try:
+        a.start()
+        assert paused.wait(5)
+        b.start()
+        assert attempted.wait(5)
+        assert commands == ["MKD " + base + "/new"]
+        release.set()
+        a.join(5)
+        b.join(5)
+        assert not a.is_alive() and not b.is_alive()
+        assert outcomes["new"] == "success"
+        assert isinstance(outcomes["existing"], ftplib.error_perm)
+    finally:
+        release.set()
+        a.join(5)
+        if b.ident is not None:
+            b.join(5)
+        monkeypatch.setattr(fs.ftp, "getresp", original)
+        monkeypatch.setattr(fs, "_lock", original_lock)
+        fs.rm(base, recursive=True)
+
+
+@pytest.mark.parametrize("tls", [False, True])
+def test_transfer_callback_reentry_and_recovery(ftp, tls):
+    host, port = ftp
+    fs = FTPFileSystem(host, port, tls=tls, ssl_context=trust_test_cert())
+    path = "/" + os.path.basename(__file__)
+
+    class Reenter(io.BytesIO):
+        def write(self, data):
+            fs.ls("/")
+
+    with pytest.raises(RuntimeError, match="transfer callback"):
+        fs.get_file(path, Reenter())
+    assert fs.cat_file(path) == open(__file__, "rb").read()
+
+
+def test_pickle_preserves_file_position_with_new_lock(ftp):
+    import pickle
+    import threading
+
+    host, port = ftp
+    fs = FTPFileSystem(host, port)
+    with fs.open("/" + os.path.basename(__file__), "rb") as file:
+        file.read(7)
+        with pickle.loads(pickle.dumps(file)) as restored:
+            assert restored.fs is not fs
+            assert restored.fs._lock is not fs._lock
+            assert restored.tell() == 7
+            assert restored.read(19) == file.read(19)
+            acquired = threading.Event()
+
+            def independent():
+                with restored.fs._lock:
+                    acquired.set()
+
+            with fs._lock:
+                worker = threading.Thread(target=independent)
+                worker.start()
+                assert acquired.wait(5)
+                worker.join(5)
+
+
+def test_partially_initialized_ftp_finalizer():
+    FTPFileSystem.__new__(FTPFileSystem).__del__()
+
+
+@pytest.mark.parametrize("tls", [False, True])
+def test_transfer_serializes_metadata_until_final_response(ftp, monkeypatch, tls):
+    import threading
+
+    host, port = ftp
+    fs = FTPFileSystem(host, port, tls=tls, ssl_context=trust_test_cert())
+    paused, release, attempted = (threading.Event() for _ in range(3))
+    original_lock = fs._lock
+    commands = []
+    errors = []
+    original_putcmd = fs.ftp.putcmd
+
+    class ObservedLock:
+        def __enter__(self):
+            if threading.current_thread().name == "metadata":
+                attempted.set()
+            original_lock.acquire()
+
+        def __exit__(self, *exc):
+            original_lock.release()
+
+    def putcmd(command):
+        commands.append((threading.current_thread().name, command))
+        return original_putcmd(command)
+
+    class Sink(io.BytesIO):
+        def write(self, data):
+            paused.set()
+            assert release.wait(5)
+            return super().write(data)
+
+    sink = Sink()
+    monkeypatch.setattr(fs, "_lock", ObservedLock())
+    monkeypatch.setattr(fs.ftp, "putcmd", putcmd)
+
+    def download():
+        try:
+            fs.get_file("/" + os.path.basename(__file__), sink)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def metadata():
+        try:
+            fs.invalidate_cache()
+            fs.ls("/")
+        except BaseException as exc:
+            errors.append(exc)
+
+    a = threading.Thread(target=download)
+    b = threading.Thread(target=metadata, name="metadata")
+    try:
+        a.start()
+        assert paused.wait(5)
+        b.start()
+        assert attempted.wait(5)
+        assert not any(name == "metadata" for name, _ in commands)
+        release.set()
+        a.join(5)
+        b.join(5)
+        assert not a.is_alive() and not b.is_alive()
+        assert not errors
+        assert sink.getvalue() == open(__file__, "rb").read()
+        assert any(name == "metadata" for name, _ in commands)
+    finally:
+        release.set()
+        a.join(5)
+        if b.ident is not None:
+            b.join(5)
+        monkeypatch.setattr(fs, "_lock", original_lock)
+
+
+@pytest.mark.parametrize("owned", [False, True])
+@pytest.mark.parametrize("close_fails", [False, True])
+def test_get_file_preserves_primary_error_during_cleanup(
+    monkeypatch, owned, close_fails
+):
+    import threading
+
+    import fsspec.implementations.ftp as ftp_module
+
+    class CallbackError(Exception):
+        pass
+
+    class CleanupInterrupt(BaseException):
+        pass
+
+    primary = CallbackError("callback failed")
+    attempts = []
+
+    class BrokenFTP:
+        def retrbinary(self, command, blocksize, callback):
+            callback(b"payload")
+
+        def close(self):
+            attempts.append("connection close")
+            if close_fails:
+                raise OSError("close failed")
+
+    class Sink(io.BytesIO):
+        def write(self, data):
+            raise primary
+
+        def close(self):
+            attempts.append("destination close")
+            raise CleanupInterrupt("destination close interrupted")
+
+    def reconnect():
+        attempts.append("reconnect")
+        raise CleanupInterrupt("reconnect interrupted")
+
+    fs = object.__new__(FTPFileSystem)
+    fs._lock = threading.RLock()
+    fs._in_callback = False
+    fs.ftp = BrokenFTP()
+    fs.blocksize = 8192
+    fs.isdir = lambda path: False
+    fs._connect = reconnect
+    sink = Sink()
+    monkeypatch.setattr(ftp_module, "open", lambda *args: sink, raising=False)
+    try:
+        with pytest.raises(CallbackError) as exc:
+            fs.get_file("/payload", "local-path" if owned else sink)
+        assert exc.value is primary
+        assert attempts == ["connection close", "reconnect"] + (
+            ["destination close"] if owned else []
+        )
+        assert not fs._in_callback
+    finally:
+        fs.ftp = None
+        io.BytesIO.close(sink)

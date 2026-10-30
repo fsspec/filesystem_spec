@@ -17,6 +17,10 @@ Enhancements
 
 Fixes
 
+- Serialize FTP operations sharing a control connection, including complete data
+  transfers and recovery, and reject reentrant filesystem operations from
+  download callbacks. Independent filesystem instances retain independent locks.
+
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
