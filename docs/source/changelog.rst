@@ -43,6 +43,8 @@ Fixes
 
 - Reject Git paths below files and preserve complete file names in Git metadata.
 
+- Avoid ``KeyError`` if files are deleted during memory filesystem listings.
+
 - Honor exclusive creation mode in DBFS file opens instead of overwriting an
   existing file.
 
