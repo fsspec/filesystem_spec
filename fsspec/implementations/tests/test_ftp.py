@@ -15,6 +15,13 @@ ftplib = pytest.importorskip("ftplib")
 here = os.path.dirname(os.path.abspath(__file__))
 
 
+def trust_test_cert():
+    """A context that accepts the self-signed certificate of the test servers"""
+    ctx = ssl.create_default_context(cafile=os.path.join(here, "keycert.pem"))
+    ctx.check_hostname = False  # the test certificate names no host
+    return ctx
+
+
 @pytest.fixture()
 def ftp():
     pytest.importorskip("pyftpdlib")
@@ -46,7 +53,7 @@ def ftp_tlsv12():
 )
 def test_tls(ftp, tls, exp_cls):
     host, port = ftp
-    fs = FTPFileSystem(host, port, tls=tls)
+    fs = FTPFileSystem(host, port, tls=tls, ssl_context=trust_test_cert())
     assert isinstance(fs.ftp, exp_cls)
 
 
@@ -56,7 +63,7 @@ def test_tls(ftp, tls, exp_cls):
 )
 def test_tls_v12(ftp_tlsv12, tls, exp_cls):
     host, port = ftp_tlsv12
-    fs = FTPFileSystem(host, port, tls=tls)
+    fs = FTPFileSystem(host, port, tls=tls, ssl_context=trust_test_cert())
     assert isinstance(fs.ftp, exp_cls)
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
@@ -65,7 +72,7 @@ def test_tls_v12(ftp_tlsv12, tls, exp_cls):
 
 def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
     host, port = ftp
-    fs = FTPFileSystem(host, port, tls=True)
+    fs = FTPFileSystem(host, port, tls=True, ssl_context=trust_test_cert())
     first = fs.ftp
 
     def abort():
@@ -91,6 +98,21 @@ def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
     assert tls_data == [True]
 
 
+def test_tls_warns_on_untrusted_certificate(ftp):
+    host, port = ftp
+    # the test server's certificate is not in the default trust store; for one
+    # release this still connects, but warns that it will be refused
+    with pytest.warns(FutureWarning, match="could not be verified"):
+        fs = FTPFileSystem(host, port, "user", "pass", tls=True)
+    assert fs.ls("/", detail=False) == sorted(os.listdir(here))
+
+
+def test_tls_trusted_certificate_does_not_warn(ftp, recwarn):
+    host, port = ftp
+    FTPFileSystem(host, port, "user", "pass", tls=True, ssl_context=trust_test_cert())
+    assert not [w for w in recwarn if issubclass(w.category, FutureWarning)]
+
+
 @pytest.mark.parametrize(
     "tls,username,password",
     (
@@ -102,7 +124,9 @@ def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
 )
 def test_basic(ftp, tls, username, password):
     host, port = ftp
-    fs = FTPFileSystem(host, port, username, password, tls=tls)
+    fs = FTPFileSystem(
+        host, port, username, password, tls=tls, ssl_context=trust_test_cert()
+    )
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
