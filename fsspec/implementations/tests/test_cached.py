@@ -52,6 +52,13 @@ def local_filecache():
     return data, original_file, cache_location, fs
 
 
+def test_local_file_attribute(tmp_path):
+    fs = WholeFileCacheFileSystem(
+        target_protocol="memory", cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    assert fs.local_file is True
+
+
 def test_mapper():
     mapper0 = create_cache_mapper(True)
     assert mapper0("somefile") == "somefile"

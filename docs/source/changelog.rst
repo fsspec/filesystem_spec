@@ -235,6 +235,8 @@ Fixes
 
 - Update memory file modification times after writes and truncation.
 
+- Return the boolean ``local_file`` flag from whole-file cache filesystems (#823).
+
 - Preserve binary bytes in percent-encoded data URLs without base64 encoding.
 
 - Keep failed memory-mapped cache reads retriable without discarding completed ranges.
