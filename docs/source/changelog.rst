@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Measure directory listing cache expiry with a monotonic clock so system clock
+  changes do not invalidate listings early or keep stale listings alive (#2330).
+
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
