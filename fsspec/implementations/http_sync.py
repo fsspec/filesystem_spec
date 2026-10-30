@@ -567,6 +567,8 @@ class HTTPFileSystem(AbstractFileSystem):
         corresponding file will not work).
         """
         info = {}
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
         for policy in ["head", "get"]:
             try:
                 info.update(
@@ -574,8 +576,7 @@ class HTTPFileSystem(AbstractFileSystem):
                         self.encode_url(url),
                         size_policy=policy,
                         session=self.session,
-                        **self.kwargs,
-                        **kwargs,
+                        **kw,
                     )
                 )
                 if info.get("size") is not None:
