@@ -2111,3 +2111,63 @@ def test_callback_reports_download_async(tmp_path, protocol):
         assert callback.sizes == []
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_proactive_cache_files(tmp_path, protocol, monkeypatch):
+    source = fsspec.filesystem("memory")
+    source.pipe_file("/prefetch/a", b"abc")
+    source.pipe_file("/prefetch/b", b"defgh")
+    fs = fsspec.filesystem(protocol, fs=source, cache_storage=str(tmp_path))
+    calls = []
+    get_file = source.get_file
+
+    def tracked(path, local, **kwargs):
+        calls.append(path)
+        return get_file(path, local, **kwargs)
+
+    monkeypatch.setattr(source, "get_file", tracked)
+    paths = fs.cache_files(["/prefetch/b", "/prefetch/a", "/prefetch/b"])
+    assert [pathlib.Path(p).read_bytes() for p in paths] == [b"defgh", b"abc", b"defgh"]
+    assert paths[0] == paths[2]
+    assert len(calls) == 2
+    assert fs.cache_files("/prefetch/a") == paths[1]
+    assert fs.cache_files([]) == []
+    assert len(calls) == 2
+    assert fs.cache_size() >= 8
+
+
+def test_prefetch_failed_refresh_does_not_validate_old_file(tmp_path, monkeypatch):
+    source = fsspec.filesystem("memory")
+    source.pipe_file("/prefetch/refresh", b"old")
+    fs = WholeFileCacheFileSystem(
+        fs=source, cache_storage=str(tmp_path), check_files=True
+    )
+    local = fs.cache_files("/prefetch/refresh")
+    old_uid = fs._metadata.cached_files[-1]["/prefetch/refresh"]["uid"]
+    source.pipe_file("/prefetch/refresh", b"new contents")
+    get_file = source.get_file
+
+    def failed(path, local, **kwargs):
+        pathlib.Path(local).write_bytes(b"partial")
+        raise OSError("download failed")
+
+    monkeypatch.setattr(source, "get_file", failed)
+    with pytest.raises(OSError, match="download failed"):
+        fs.cache_files("/prefetch/refresh")
+    assert pathlib.Path(local).read_bytes() == b"old"
+    assert fs._metadata.cached_files[-1]["/prefetch/refresh"]["uid"] == old_uid
+    assert not list(tmp_path.glob("*.part"))
+    monkeypatch.setattr(source, "get_file", get_file)
+    assert (
+        pathlib.Path(fs.cache_files("/prefetch/refresh")).read_bytes()
+        == b"new contents"
+    )
+
+
+def test_prefetch_literal_paths(tmp_path):
+    source = fsspec.filesystem("memory")
+    source.pipe_file("/prefetch/[literal]", b"literal")
+    fs = WholeFileCacheFileSystem(fs=source, cache_storage=str(tmp_path))
+    local = fs.cache_files("/prefetch/[literal]")
+    assert pathlib.Path(local).read_bytes() == b"literal"

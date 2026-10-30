@@ -28,6 +28,7 @@ classifiers = [
 abfs = ["adlfs"]
 adl = ["adlfs"]
 arrow = ["pyarrow >= 1"]
+cuda = ["cuda-core >=1.2.0"]
 dask = ["dask", "distributed"]
 dropbox = ["dropbox", "dropboxdrivefs", "requests"]
 entrypoints = []
