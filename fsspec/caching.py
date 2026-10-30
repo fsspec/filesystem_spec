@@ -429,8 +429,8 @@ class FirstChunkCache(BaseCache):
 
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         start = start or 0
-        if start > self.size:
-            logger.debug("FirstChunkCache: requested start > file size")
+        if start >= self.size:
+            logger.debug("FirstChunkCache: requested start >= file size")
             return b""
 
         if end is None:

@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Avoid empty backend range requests at EOF with the first-chunk cache.
+
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
