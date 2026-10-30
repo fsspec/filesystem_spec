@@ -22,7 +22,6 @@ from fsspec.implementations.cache_mapper import (
 from fsspec.implementations.cached import (
     CachingFileSystem,
     LocalTempFile,
-    SimpleCacheFileSystem,
     WholeFileCacheFileSystem,
     _tempfile,
 )
