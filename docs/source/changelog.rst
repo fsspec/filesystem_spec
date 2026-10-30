@@ -6,8 +6,6 @@ Dev
 
 Fixes
 
-- Return the boolean ``local_file`` flag from whole-file cache filesystems (#823).
-
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
@@ -23,6 +21,8 @@ Fixes
 - Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
 
 - Make async loop lock initialization thread-safe (#1783)
+
+- Return the boolean ``local_file`` flag from whole-file cache filesystems (#823).
 
 
 2026.9.0
