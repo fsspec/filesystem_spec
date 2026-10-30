@@ -1,51 +1,47 @@
 import io
 import os
 import ssl
-import subprocess
 import sys
-import time
 from ftplib import FTP, FTP_TLS
 
 import pytest
 
 import fsspec
 from fsspec import open_files
+from fsspec.conftest import _ftp_server
 from fsspec.implementations.ftp import FTPFileSystem, ImplicitFTPTLS, _mlsd2
 
 ftplib = pytest.importorskip("ftplib")
 here = os.path.dirname(os.path.abspath(__file__))
 
 
+def trust_test_cert():
+    """A context that accepts the self-signed certificate of the test servers"""
+    ctx = ssl.create_default_context(cafile=os.path.join(here, "keycert.pem"))
+    ctx.check_hostname = False  # the test certificate names no host
+    return ctx
+
+
 @pytest.fixture()
 def ftp():
     pytest.importorskip("pyftpdlib")
-    P = subprocess.Popen(
-        [sys.executable, os.path.join(here, "ftp_tls.py")],
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-    )
-    try:
-        time.sleep(1)
+    pytest.importorskip("OpenSSL")
+    with _ftp_server([sys.executable, os.path.join(here, "ftp_tls.py")]):
         yield "localhost", 2121
-    finally:
-        P.terminate()
-        P.wait()
 
 
 @pytest.fixture()
 def ftp_tlsv12():
     pytest.importorskip("pyftpdlib")
-    P = subprocess.Popen(
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    with _ftp_server(
         [sys.executable, os.path.join(here, "ftp_tlsv12.py")],
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-    )
-    try:
-        time.sleep(1)
+        port=2122,
+        ssl_context=context,
+    ):
         yield "localhost", 2122
-    finally:
-        P.terminate()
-        P.wait()
 
 
 @pytest.mark.parametrize(
@@ -57,7 +53,7 @@ def ftp_tlsv12():
 )
 def test_tls(ftp, tls, exp_cls):
     host, port = ftp
-    fs = FTPFileSystem(host, port, tls=tls)
+    fs = FTPFileSystem(host, port, tls=tls, ssl_context=trust_test_cert())
     assert isinstance(fs.ftp, exp_cls)
 
 
@@ -67,7 +63,7 @@ def test_tls(ftp, tls, exp_cls):
 )
 def test_tls_v12(ftp_tlsv12, tls, exp_cls):
     host, port = ftp_tlsv12
-    fs = FTPFileSystem(host, port, tls=tls)
+    fs = FTPFileSystem(host, port, tls=tls, ssl_context=trust_test_cert())
     assert isinstance(fs.ftp, exp_cls)
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
@@ -76,7 +72,7 @@ def test_tls_v12(ftp_tlsv12, tls, exp_cls):
 
 def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
     host, port = ftp
-    fs = FTPFileSystem(host, port, tls=True)
+    fs = FTPFileSystem(host, port, tls=True, ssl_context=trust_test_cert())
     first = fs.ftp
 
     def abort():
@@ -102,6 +98,21 @@ def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
     assert tls_data == [True]
 
 
+def test_tls_warns_on_untrusted_certificate(ftp):
+    host, port = ftp
+    # the test server's certificate is not in the default trust store; for one
+    # release this still connects, but warns that it will be refused
+    with pytest.warns(FutureWarning, match="could not be verified"):
+        fs = FTPFileSystem(host, port, "user", "pass", tls=True)
+    assert fs.ls("/", detail=False) == sorted(os.listdir(here))
+
+
+def test_tls_trusted_certificate_does_not_warn(ftp, recwarn):
+    host, port = ftp
+    FTPFileSystem(host, port, "user", "pass", tls=True, ssl_context=trust_test_cert())
+    assert not [w for w in recwarn if issubclass(w.category, FutureWarning)]
+
+
 @pytest.mark.parametrize(
     "tls,username,password",
     (
@@ -113,7 +124,9 @@ def test_tls_reconnect_keeps_data_channel_protected(ftp, monkeypatch):
 )
 def test_basic(ftp, tls, username, password):
     host, port = ftp
-    fs = FTPFileSystem(host, port, username, password, tls=tls)
+    fs = FTPFileSystem(
+        host, port, username, password, tls=tls, ssl_context=trust_test_cert()
+    )
     assert fs.ls("/", detail=False) == sorted(os.listdir(here))
     out = fs.cat(f"/{os.path.basename(__file__)}")
     assert out == open(__file__, "rb").read()
@@ -413,3 +426,50 @@ def test_mlsd2_skips_short_lines():
     )
     out = _mlsd2(ftp, "/data")
     assert [name for name, _ in out] == ["keep.txt"]
+
+
+@pytest.mark.parametrize("cache_type", ["none", "all", "readahead", "bytes", "mmap"])
+def test_open_cache_type(ftp_writable, cache_type, monkeypatch):
+    from fsspec.caching import caches
+
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    expected = fs.cat_file("/out")
+    calls = []
+    retrbinary = fs.ftp.retrbinary
+
+    def record(*args, **kwargs):
+        calls.append(kwargs.get("rest"))
+        return retrbinary(*args, **kwargs)
+
+    monkeypatch.setattr(fs.ftp, "retrbinary", record)
+    with fs.open("/out", cache_type=cache_type, block_size=10) as f:
+        assert type(f.cache) is caches[cache_type]
+        assert len(calls) == (1 if cache_type == "all" else 0)
+        assert f.read(5) == expected[:5]
+        f.seek(0)
+        assert f.read(5) == expected[:5]
+        if cache_type == "all":
+            assert len(calls) == 1
+        elif cache_type == "none":
+            assert len(calls) == 2
+
+
+def test_open_cache_default(ftp_writable):
+    from fsspec.caching import ReadAheadCache
+
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/out") as f:
+        assert type(f.cache) is ReadAheadCache
+
+
+def test_open_cache_options(ftp_writable):
+    from fsspec.caching import BytesCache
+
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/out", cache_type="bytes", cache_options={"trim": False}) as f:
+        assert type(f.cache) is BytesCache
+        assert f.cache.trim is False
+        assert f.read(5) == b"hello"

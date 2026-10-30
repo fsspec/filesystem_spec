@@ -147,11 +147,14 @@ def test_nested_dirs_ls():
 
 
 @pytest.mark.parametrize("path", ["new", "existing/new", "new/deep/file"])
-def test_pipe_file_refreshes_listings(path):
+def test_pipe_file_refreshes_listings(path, monkeypatch):
     fs = ReferenceFileSystem(
         {"existing/file": b"old", "keep": b"unchanged"}, skip_instance_cache=True
     )
     assert fs.ls("", detail=False) == ["existing", "keep"]
+    monkeypatch.setattr(
+        fs, "_dircache_from_items", lambda: pytest.fail("cache rebuilt")
+    )
 
     fs.pipe_file(path, b"new data")
 
@@ -169,14 +172,70 @@ def test_pipe_file_refreshes_listings(path):
     "value, expected",
     [(b"updated", b"updated"), ("héllo", "héllo".encode()), ("base64:bmV3", b"new")],
 )
-def test_pipe_file_refreshes_cached_size(value, expected):
+def test_pipe_file_refreshes_cached_size(value, expected, monkeypatch):
     fs = ReferenceFileSystem({"file": b"old data"}, skip_instance_cache=True)
     assert fs.ls("") == [{"name": "file", "type": "file", "size": 8}]
+    monkeypatch.setattr(
+        fs, "_dircache_from_items", lambda: pytest.fail("cache rebuilt")
+    )
 
     fs.pipe_file("file", value)
 
     assert fs.cat_file("file") == expected
     assert fs.ls("") == [{"name": "file", "type": "file", "size": len(expected)}]
+
+
+def test_pipe_file_updates_cached_reference_types(m, monkeypatch):
+    m.pipe("/reference-data", b"0123456789")
+    fs = ReferenceFileSystem({"file": b"old"}, fs=m, skip_instance_cache=True)
+    fs.ls("")
+    monkeypatch.setattr(
+        fs, "_dircache_from_items", lambda: pytest.fail("cache rebuilt")
+    )
+
+    fs.pipe_file("file", ["memory://reference-data", 2, 4])
+    assert fs.cat_file("file") == b"2345"
+    assert fs.ls("") == [{"name": "file", "type": "file", "size": 4}]
+
+    fs.pipe_file("file", ["memory://reference-data"])
+    assert fs.cat_file("file") == b"0123456789"
+    assert fs.ls("") == [{"name": "file", "type": "file", "size": None}]
+
+
+def test_pipe_file_preserves_overlapping_directory(monkeypatch):
+    fs = ReferenceFileSystem({"dir/child": b"child"}, skip_instance_cache=True)
+    assert fs.ls("") == [{"name": "dir", "type": "directory", "size": 0}]
+    monkeypatch.setattr(
+        fs, "_dircache_from_items", lambda: pytest.fail("cache rebuilt")
+    )
+
+    fs.pipe_file("dir", b"first")
+    fs.pipe_file("dir", b"last")
+
+    assert fs.ls("") == [
+        {"name": "dir", "type": "directory", "size": 0},
+        {"name": "dir", "type": "file", "size": 4},
+    ]
+    assert fs.ls("dir") == [{"name": "dir/child", "type": "file", "size": 5}]
+    assert fs.cat_file("dir") == b"last"
+
+
+def test_pipe_file_before_first_listing():
+    fs = ReferenceFileSystem({"old": b"old"}, skip_instance_cache=True)
+    fs.pipe_file("nested/new", b"new")
+    assert fs.ls("nested") == [{"name": "nested/new", "type": "file", "size": 3}]
+
+
+def test_mapper_write_updates_cached_listing(monkeypatch):
+    fs = ReferenceFileSystem({"dir/old": b"old"}, skip_instance_cache=True)
+    fs.ls("")
+    monkeypatch.setattr(
+        fs, "_dircache_from_items", lambda: pytest.fail("cache rebuilt")
+    )
+
+    fs.get_mapper("dir")["new"] = b"new"
+
+    assert fs.ls("dir", detail=False) == ["dir/old", "dir/new"]
 
 
 def test_info(server):

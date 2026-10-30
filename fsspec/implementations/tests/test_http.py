@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from types import SimpleNamespace
 
 import aiohttp
@@ -443,15 +444,27 @@ def test_exists_strict(server):
     assert e.value.status == 401
 
 
-def test_read(server):
+@pytest.mark.parametrize("length", [None, -1])
+def test_read(server, length):
     h = fsspec.filesystem("http")
     out = server.realfile
     with h.open(out, "rb") as f:
-        assert f.read() == data
+        assert f.read(length) == data
     with h.open(out, "rb", block_size=0) as f:
-        assert f.read() == data
+        assert f.read(length) == data
     with h.open(out, "rb") as f:
-        assert f.read(100) + f.read() == data
+        assert f.read(100) + f.read(length) == data
+
+
+@pytest.mark.parametrize("block_size", [0, 32, 2**20])
+@pytest.mark.parametrize("position", [0, 10])
+def test_read_none(server, block_size, position):
+    h = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    with h.open(server.realfile, block_size=block_size) as f:
+        assert f.read(position) == data[:position]
+        assert f.read(None) == data[position:]
+        assert f.tell() == len(data)
+        assert f.read(None) == b""
 
 
 def test_file_pickle(server):
@@ -618,6 +631,29 @@ def test_multi_download(server, tmpdir):
     h.get([urla, urlb], [fna, fnb])
     assert open(fna, "rb").read() == data
     assert open(fnb, "rb").read() == data
+
+
+@pytest.mark.parametrize("path_type", [str, Path])
+@pytest.mark.parametrize("parent", ["", "nested"])
+def test_multi_download_relative_destinations(
+    server, tmp_path, monkeypatch, path_type, parent
+):
+    monkeypatch.chdir(tmp_path)
+    makedirs = os.makedirs
+
+    def make_parent(path, **kwargs):
+        assert os.fspath(path) not in ("", os.curdir)
+        return makedirs(path, **kwargs)
+
+    monkeypatch.setattr(os, "makedirs", make_parent)
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    destinations = [
+        path_type(os.path.join(parent, name)) for name in ("afile", "bfile")
+    ]
+
+    h.get([server.realfile, server.address + "/index/otherfile"], destinations)
+
+    assert all(Path(path).read_bytes() == data for path in destinations)
 
 
 def test_ls(server):
@@ -840,14 +876,15 @@ def test_close(get_client):
 
 
 @pytest.mark.asyncio
-async def test_async_file(server):
+@pytest.mark.parametrize("length", [None, -1])
+async def test_async_file(server, length):
     fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
     fn = server.realfile
     of = await fs.open_async(fn)
     async with of as f:
         out1 = await f.read(10)
         assert data.startswith(out1)
-        out2 = await f.read()
+        out2 = await f.read(length)
         assert data == out1 + out2
     await fs._session.close()
 

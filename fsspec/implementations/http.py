@@ -770,11 +770,12 @@ class HTTPFile(AbstractBufferedFile):
 
         Parameters
         ----------
-        length: int
-            Read up to this many bytes. If negative, read all content to end of
+        length: int or None
+            Read up to this many bytes. If negative or None, read all content to end of
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
+        length = -1 if length is None else length
         if (
             (length < 0 and self.loc == 0)  # explicit read all
             # but not when the size is known and fits into a block anyways
@@ -924,26 +925,57 @@ class HTTPStreamFile(AbstractBufferedFile):
 
         self.r = sync(self.loop, cor)
         self.loop = fs.loop
+        self.leftover = b""
+        self._last_read = b""
 
     def seek(self, loc, whence=0):
-        if loc == 0 and whence == 1:
+        """Allow delimiter lookahead to rewind at most one block."""
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        if whence == 1:
+            loc += self.loc
+        elif whence != 0:
+            raise ValueError("Cannot seek streaming HTTP file")
+        if loc == self.loc:
             return self.loc
-        if loc == self.loc and whence == 0:
+        rewind = self.loc - loc
+        if 0 < rewind <= len(self._last_read):
+            self.leftover = self._last_read[-rewind:] + self.leftover
+            self._last_read = self._last_read[:-rewind]
+            self.loc = loc
             return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
-        out = await self.r.content.read(num)
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
+        if num < 0:
+            out = self.leftover + await self.r.content.read(num)
+            self.leftover = b""
+        elif len(self.leftover) >= num:
+            out, self.leftover = self.leftover[:num], self.leftover[num:]
+        else:
+            out = self.leftover + await self.r.content.read(num - len(self.leftover))
+            self.leftover = b""
+        if num:
+            # Retain at most one block, even after a large bounded read.
+            self._last_read = out[-self.blocksize :] if num > 0 else b""
         self.loc += len(out)
         return out
 
     read = sync_wrapper(_read)
+
+    def readuntil(self, char=b"\n", blocks=None):
+        # The unused delimiter lookahead must fit in the rewind buffer.
+        return super().readuntil(char, min(blocks or self.blocksize, self.blocksize))
 
     async def _close(self):
         self.r.close()
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+        self.leftover = self._last_read = b""
         super().close()
 
 
@@ -974,6 +1006,7 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
     async def read(self, num=-1):
         if self.closed:
             raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
         if self.r is None:
             r = await self.session.get(
                 self.fs.encode_url(self.url), **self.kwargs

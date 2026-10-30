@@ -282,7 +282,8 @@ def test_exists_strict(server, sync):
     assert e.value.response.status_code == 401
 
 
-def test_read(server, sync):
+@pytest.mark.parametrize("length", [None, -1])
+def test_read(server, sync, length):
     h = fsspec.filesystem("http")
     out = server.address + "/index/realfile"
     # with h.open(out, "rb") as f:
@@ -291,8 +292,19 @@ def test_read(server, sync):
     #    assert f.read() == data
     with h.open(out, "rb") as f:
         o1 = f.read(100)
-        o2 = f.read()
+        o2 = f.read(length)
         assert o1 + o2 == data
+
+
+@pytest.mark.parametrize("block_size", [0, 32, 2**20])
+@pytest.mark.parametrize("position", [0, 10])
+def test_read_none(server, sync, block_size, position):
+    h = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    with h.open(server.realfile, block_size=block_size) as f:
+        assert f.read(position) == data[:position]
+        assert f.read(None) == data[position:]
+        assert f.tell() == len(data)
+        assert f.read(None) == b""
 
 
 def test_methods(server, sync):

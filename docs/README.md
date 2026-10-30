@@ -1,12 +1,12 @@
 # Building Documentation
 
-A basic python environment with packages listed in `./requirements.txt` is
-required to build the docs, see ``environment.yml``.
-
-To make HTML documentation:
+From the repository root, install the documentation dependencies and build the
+HTML documentation:
 
 ```bash
+python -m pip install -e ".[doc]"
+cd docs
 make html
 ```
 
-Outputs to `build/html/index.html`
+Outputs to `docs/build/html/index.html` from the repository root.
