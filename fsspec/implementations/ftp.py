@@ -1,12 +1,31 @@
 import os
 import ssl
+import threading
 import uuid
 import warnings
 from ftplib import FTP, FTP_TLS, Error, error_perm
+from functools import wraps
 from typing import Any
 
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options, isfilelike
+
+
+def _locked(method):
+    """Serialize whole operations sharing a control connection."""
+
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        fs = self if isinstance(self, FTPFileSystem) else self.fs
+        with fs._lock:
+            if fs._in_callback:
+                raise RuntimeError(
+                    "FTP operations cannot be reentered from a transfer callback"
+                )
+            return method(self, *args, **kwargs)
+
+    return wrapped
+
 
 SECURITY_PROTOCOL_MAP = {
     "tls": ssl.PROTOCOL_TLS,
@@ -41,7 +60,12 @@ class ImplicitFTPTLS(FTP_TLS):
 
 
 class FTPFileSystem(AbstractFileSystem):
-    """A filesystem over classic FTP"""
+    """A filesystem over classic FTP.
+
+    Operations on one instance are serialized. This does not make concurrent
+    access to the same file object safe. Transfer callbacks must not call back
+    into this filesystem, or wait for another thread using this filesystem.
+    """
 
     root_marker = "/"
     cachable = False
@@ -104,6 +128,8 @@ class FTPFileSystem(AbstractFileSystem):
             now, a server that fails verification is still connected to, with
             a FutureWarning; a future release will refuse it.
         """
+        self._lock = threading.RLock()
+        self._in_callback = False
         super().__init__(**kwargs)
         self.host = host
         self.port = port
@@ -119,6 +145,7 @@ class FTPFileSystem(AbstractFileSystem):
         self.ssl_context = ssl_context
         self._connect()
 
+    @_locked
     def _connect(self):
         if self.tls and self.ssl_context is None:
             try:
@@ -137,6 +164,7 @@ class FTPFileSystem(AbstractFileSystem):
         else:
             self._login(self.ssl_context)
 
+    @_locked
     def _login(self, context):
         security = None
         kwargs = {}
@@ -175,6 +203,7 @@ class FTPFileSystem(AbstractFileSystem):
         out.pop("protocol", None)
         return out
 
+    @_locked
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         out = []
@@ -212,6 +241,7 @@ class FTPFileSystem(AbstractFileSystem):
             return sorted([fn for fn, details in files])
         return [details for fn, details in files]
 
+    @_locked
     def info(self, path, **kwargs):
         # implement with direct method
         path = self._strip_protocol(path)
@@ -225,7 +255,14 @@ class FTPFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path) from exc
         return out
 
+    @_locked
     def get_file(self, rpath, lpath, **kwargs):
+        """Download without interleaving operations on the shared connection.
+
+        A filelike destination's write callback must not reenter this filesystem
+        or wait for another thread using it. On transfer failure, connection
+        cleanup/reconnection is best effort and the original error is preserved.
+        """
         rpath = self._strip_protocol(rpath)
         if self.isdir(rpath):
             if not os.path.exists(lpath):
@@ -237,16 +274,40 @@ class FTPFileSystem(AbstractFileSystem):
             outfile = open(lpath, "wb")
 
         def cb(x):
-            outfile.write(x)
+            self._in_callback = True
+            try:
+                outfile.write(x)
+            finally:
+                self._in_callback = False
 
-        self.ftp.retrbinary(
-            f"RETR {rpath}",
-            blocksize=self.blocksize,
-            callback=cb,
-        )
-        if not isfilelike(lpath):
-            outfile.close()
+        try:
+            self.ftp.retrbinary(
+                f"RETR {rpath}",
+                blocksize=self.blocksize,
+                callback=cb,
+            )
+        except BaseException:
+            # A failed callback can leave a transfer response unread. Do not
+            # expose that response to the next operation on this instance.
+            try:
+                self.ftp.close()
+            except BaseException:
+                pass  # cleanup must not replace the transfer/callback error
+            try:
+                self._connect()
+            except BaseException:
+                pass
+            if not isfilelike(lpath):
+                try:
+                    outfile.close()
+                except BaseException:
+                    pass
+            raise
+        else:
+            if not isfilelike(lpath):
+                outfile.close()
 
+    @_locked
     def cat_file(self, path, start=None, end=None, **kwargs):
         path = self._strip_protocol(path)
         if end is not None or (start is not None and start < 0):
@@ -288,11 +349,13 @@ class FTPFileSystem(AbstractFileSystem):
             cache_options=cache_options,
         )
 
+    @_locked
     def _rm(self, path):
         path = self._strip_protocol(path)
         self.ftp.delete(path)
         self.invalidate_cache(self._parent(path))
 
+    @_locked
     def rm(self, path, recursive=False, maxdepth=None):
         paths = self.expand_path(path, recursive=recursive, maxdepth=maxdepth)
         for p in reversed(paths):
@@ -301,6 +364,7 @@ class FTPFileSystem(AbstractFileSystem):
             else:
                 self.rmdir(p)
 
+    @_locked
     def mkdir(self, path: str, create_parents: bool = True, **kwargs: Any) -> None:
         path = self._strip_protocol(path)
         parent = self._parent(path)
@@ -310,6 +374,7 @@ class FTPFileSystem(AbstractFileSystem):
         self.ftp.mkd(path)
         self.invalidate_cache(self._parent(path))
 
+    @_locked
     def makedirs(self, path: str, exist_ok: bool = False) -> None:
         path = self._strip_protocol(path)
         if self.exists(path):
@@ -320,11 +385,13 @@ class FTPFileSystem(AbstractFileSystem):
         else:
             self.mkdir(path, create_parents=True)
 
+    @_locked
     def rmdir(self, path):
         path = self._strip_protocol(path)
         self.ftp.rmd(path)
         self.invalidate_cache(self._parent(path))
 
+    @_locked
     def mv(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
@@ -333,8 +400,18 @@ class FTPFileSystem(AbstractFileSystem):
         self.invalidate_cache(self._parent(path2))
 
     def __del__(self):
-        self.ftp.close()
+        # Construction may have failed before either attribute was assigned.
+        # Finalization must not wait indefinitely for an in-flight operation.
+        lock = getattr(self, "_lock", None)
+        if lock is not None and lock.acquire(blocking=False):
+            try:
+                ftp = getattr(self, "ftp", None)
+                if ftp is not None and not self._in_callback:
+                    ftp.close()
+            finally:
+                lock.release()
 
+    @_locked
     def invalidate_cache(self, path=None):
         if path is None:
             self.dircache.clear()
@@ -383,6 +460,7 @@ class FTPFile(AbstractBufferedFile):
     def discard(self):
         self.fs.rm(self.path)
 
+    @_locked
     def _fetch_range(self, start, end):
         """Get bytes between given byte limits
 
@@ -424,6 +502,7 @@ class FTPFile(AbstractBufferedFile):
 
         return b"".join(out)
 
+    @_locked
     def _upload_chunk(self, final=False):
         self.buffer.seek(0)
         self.fs.ftp.storbinary(
