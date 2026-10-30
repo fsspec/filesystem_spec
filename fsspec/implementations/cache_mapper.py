@@ -62,7 +62,7 @@ class HashCacheMapper(AbstractCacheMapper):
     """Cache mapper that uses a hash of the remote URL."""
 
     def __call__(self, path: str) -> str:
-        return hashlib.sha256(path.encode()).hexdigest()
+        return hashlib.sha256(path.encode("utf-8", "surrogatepass")).hexdigest()
 
 
 def create_cache_mapper(same_names: bool) -> AbstractCacheMapper:
