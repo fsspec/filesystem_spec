@@ -204,3 +204,109 @@ The bridge can be compiled locally without an RDMA endpoint; testing an actual
 transfer requires a compatible service. See the
 `NVIDIA cuObject documentation <https://docs.nvidia.com/gpudirect-storage/cuobject/>`_
 and `KvikIO API <https://docs.rapids.ai/api/kvikio/stable/api/>`_ for prerequisites.
+
+Caching
+-------
+
+Whole files on local storage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Wrap a ``filecache`` or ``simplecache`` filesystem to reuse its local files.
+``cache_files`` proactively downloads complete files and returns their local
+filenames; it finishes before returning and does not initialize CUDA. Repeated
+paths are downloaded once. Paths are literal filenames, without glob expansion.
+
+.. code-block:: python
+
+   from fsspec.implementations.cuda import CUDAFileSystem
+
+   disk = fsspec.filesystem(
+       "filecache",
+       target_protocol="s3",
+       cache_storage="/local/nvme/fsspec-cache",
+       check_files=True,
+   )
+   fs = CUDAFileSystem(fs=disk, method="cufile", stream=stream)
+   paths = ["bucket/a.bin", "bucket/b.bin"]
+   local_paths = fs.cache_files(paths)  # synchronous remote-to-local download
+   data = fs.cat_file(paths[0], start=4096, end=8192)
+   fs.synchronize()
+
+Alternatively, construct the same layers with a single chained URL. Pass each
+layer's options under its protocol name:
+
+.. code-block:: python
+
+   fs, path = fsspec.core.url_to_fs(
+       "cuda::filecache::s3://bucket/a.bin",
+       cuda={"method": "cufile", "stream": stream},
+       filecache={
+           "cache_storage": "/local/nvme/fsspec-cache",
+           "check_files": True,
+       },
+   )
+   local_path = fs.cache_files(path)
+   data = fs.cat_file(path, start=4096, end=8192)
+   fs.synchronize()
+
+The same prefetch operation is available directly as ``disk.cache_files(paths)``.
+A single filename returns a string; an iterable returns a list in input order.
+Downloads use the existing host download methods. CUDA reads resolve the cached
+filename and use local cuFile I/O, so they do not read the payload through Python
+host buffers. GDS still requires a supported local filesystem and hardware.
+Files missing from the disk cache are also downloaded on first read.
+
+Use ``method="pinned"`` to trial the same cache without GDS, or ``"bounce"``
+for the explicit KvikIO host path. ``kvikio`` and ``cuobject`` are remote readers
+and cannot be selected with a whole-file cache. Compression is unsupported in
+this CUDA composition. Source listings and size queries still use the wrapped
+filesystem. Disk expiry and version checking follow the selected cache's policy;
+``simplecache`` assumes immutable files. Keep source files stable during reads.
+Do not remove or replace cache files while cuFile transfers are pending.
+
+Blocks in device memory
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Set ``block_cache_size`` to a positive byte budget to cache blocks on demand in
+GPU memory. This works with any CUDA transfer method and can also be combined
+with a whole-file disk cache.
+
+.. code-block:: python
+
+   fs = fsspec.filesystem(
+       "cuda+s3",
+       method="pinned",  # or a configured direct remote transfer method
+       stream=stream,
+       block_size=4 * 2**20,
+       block_cache_size=256 * 2**20,
+       cache_check_files=True,
+       cache_expiry=3600,
+   )
+   first = fs.cat_file("bucket/a.bin", 0, 1024)  # fetches the first block
+   again = fs.cat_file("bucket/a.bin", 32, 64)  # device-to-device cache hit
+   fs.synchronize()
+   fs.clear_device_cache("bucket/a.bin")  # omit path to drop all blocks
+   fs.close()
+
+The filesystem instance shares an LRU cache across opened files and streams.
+Blocks are fetched at ``block_size`` granularity (default 5 MiB), with the final
+block clipped to EOF. Returned data is copied into an independent allocation,
+and ``readinto`` copies directly into the caller's device buffer. Modifying a
+result does not modify cached bytes. Cross-stream hits wait on the fill's CUDA
+event. Eviction retains allocations still needed by pending I/O or copies.
+Deferred transfer failures clear the device cache when reported.
+
+``block_cache_size=0`` disables device caching, which is the default. Blocks
+larger than the budget are used for the current read but are not retained in the
+cache. The budget covers cache residency, not result buffers or pending
+transfers; call ``synchronize`` periodically to release completed resources.
+``close`` synchronizes and clears the device cache. File close does not.
+
+``cache_check_files`` defaults to false. When enabled, the source ``ukey`` is
+checked on each nonempty read and forms part of the block key along with file
+size, device and offset. Its reliability depends on the source filesystem.
+``cache_expiry`` defaults to one week from the block's fill; zero disables expiry.
+For external changes, clear the device cache or enable source checks. CUDA writes
+and delegated mutation operations clear affected device data. If both cache tiers
+are enabled, configure disk-cache validity separately: checking the remote version
+for GPU blocks cannot refresh a disk cache configured to serve stale files.

@@ -15,11 +15,13 @@ def gpu():
     from types import SimpleNamespace
 
     core = pytest.importorskip("cuda.core")
+    from cuda.core._utils.cuda_utils import CUDAError
+
     try:
         device = core.Device()
         device.set_current()
         stream = device.create_stream()
-    except (RuntimeError, core.CUDAError) as exc:
+    except (RuntimeError, CUDAError) as exc:
         pytest.skip(str(exc))
     yield SimpleNamespace(core=core, device=device, stream=stream)
     stream.sync()
@@ -476,3 +478,53 @@ def test_io_without_cupy(gpu, source, tmp_path, monkeypatch, method):
     target = tmp_path / "copy"
     fs.pipe_file(target, result)
     assert target.read_bytes() == source.read_bytes()
+
+
+def test_device_block_cache(gpu, source, monkeypatch):
+    fs = CUDAFileSystem(block_cache_size=8192, block_size=4096, streams=2)
+    fills = []
+    original = fs._readinto_backend
+
+    def fetch(path, out, offset, stream):
+        fills.append(offset)
+        return original(path, out, offset, stream)
+
+    monkeypatch.setattr(fs, "_readinto_backend", fetch)
+    first = fs.cat_file(source, 20, 60)
+    second = fs.cat_file(source, 30, 70)  # possibly pending, on another stream
+    with fs.open(source) as file:
+        file.seek(4090)
+        destination = gpu.device.allocate(20, stream=file.stream)
+        assert file.readinto(destination) == 20
+    fs.synchronize()
+    assert fills == [0, 4096]
+    assert download(first, gpu) == source.read_bytes()[20:60]
+    assert download(second, gpu) == source.read_bytes()[30:70]
+    assert download(destination, gpu) == source.read_bytes()[4090:4110]
+    first.fill(255, stream=gpu.stream)
+    gpu.stream.sync()
+    fresh = fs.cat_file(source, 20, 60)
+    fs.synchronize()
+    assert download(fresh, gpu) == source.read_bytes()[20:60]
+    fs.close()
+    assert fs._device_cache_bytes == 0
+
+
+@pytest.mark.parametrize("method", ["pinned", "cufile"])
+def test_cuda_whole_file_cache(gpu, source, tmp_path, method):
+    if method == "cufile":
+        pytest.importorskip("kvikio")
+        from kvikio.cufile_driver import properties
+
+        if not properties.is_gds_available:
+            pytest.skip("GDS not available")
+    disk = fsspec.filesystem(
+        "filecache", target_protocol="file", cache_storage=str(tmp_path / "cache")
+    )
+    fs = CUDAFileSystem(fs=disk, method=method, stream=gpu.stream)
+    local = fs.cache_files(source)
+    assert local != str(source)
+    data = fs.cat_file(source, 4096, 8192)
+    fs.synchronize()
+    assert download(data, gpu) == source.read_bytes()[4096:8192]
+    fs.close()

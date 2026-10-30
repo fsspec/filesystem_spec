@@ -8,7 +8,10 @@ import ctypes
 import io
 import itertools
 import math
+import os
 import threading
+from collections import OrderedDict
+from time import monotonic
 
 from fsspec import AbstractFileSystem, filesystem
 from fsspec.implementations.chained import ChainedFileSystem
@@ -83,6 +86,18 @@ class CUDAFileSystem(ChainedFileSystem):
     Metadata and server-side manipulation use the underlying filesystem.
     Call ``synchronize()`` to finish transfers and report deferred I/O errors.
     File close does not synchronize reads. The filesystem owns pending transfers.
+
+    Wrap a ``filecache`` or ``simplecache`` filesystem and call ``cache_files``
+    to proactively download whole files. ``pinned``, ``bounce`` and ``cufile``
+    then read their local cache paths.
+
+    ``block_cache_size`` enables a device-memory LRU cache with this byte budget
+    (zero disables it). ``block_size`` controls the fetch granularity. The cache
+    is shared by files and streams on this instance. ``cache_check_files`` checks
+    source ukeys on every read; otherwise sources are assumed immutable until
+    ``cache_expiry`` seconds (default one week), or ``clear_device_cache``.
+    An expiry of zero disables expiry. Pending transfers can retain additional
+    allocations beyond the cache budget. Returned buffers never alias the cache.
     """
 
     protocol = "cuda"
@@ -98,6 +113,10 @@ class CUDAFileSystem(ChainedFileSystem):
         stream=None,
         streams=None,
         backend_options=None,
+        block_cache_size=0,
+        block_size=5 * 2**20,
+        cache_check_files=False,
+        cache_expiry=604800,
         fo=None,
         **kwargs,
     ):
@@ -106,6 +125,12 @@ class CUDAFileSystem(ChainedFileSystem):
             raise ValueError(f"Unknown CUDA I/O method: {method}")
         if stream is not None and streams is not None:
             raise ValueError("Specify stream or streams, not both")
+        if not isinstance(block_cache_size, int) or block_cache_size < 0:
+            raise ValueError("block_cache_size must be a nonnegative integer")
+        if not isinstance(block_size, int) or block_size <= 0:
+            raise ValueError("block_size must be a positive integer")
+        if cache_expiry < 0:
+            raise ValueError("cache_expiry must be nonnegative")
         self.fs = (
             fs
             if fs is not None
@@ -121,6 +146,12 @@ class CUDAFileSystem(ChainedFileSystem):
         self._streams = None
         self._pending = []
         self._lock = threading.RLock()
+        self.block_cache_size = block_cache_size
+        self.block_size = block_size
+        self.cache_check_files = cache_check_files
+        self.cache_expiry = cache_expiry
+        self._device_cache = OrderedDict()
+        self._device_cache_bytes = 0
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -200,8 +231,7 @@ class CUDAFileSystem(ChainedFileSystem):
             pending, self._pending = self._pending, []
         self._finish(pending)
 
-    @staticmethod
-    def _finish(pending):
+    def _finish(self, pending):
         error = None
         for event, resources, check, close in pending:
             try:
@@ -217,6 +247,9 @@ class CUDAFileSystem(ChainedFileSystem):
                     except Exception as exc:
                         error = error or exc
         if error is not None:
+            # A submitted read may have populated an entry before its deferred
+            # byte-count check failed. Never allow that data to remain cached.
+            self.clear_device_cache()
             raise error
 
     def wait(self, stream=None):
@@ -232,7 +265,36 @@ class CUDAFileSystem(ChainedFileSystem):
                 stream.wait(event)
         return stream
 
-    close = synchronize
+    def clear_device_cache(self, path=None):
+        """Drop GPU cache entries, retaining buffers used by pending transfers."""
+        path = self._path(path) if path is not None else None
+        with self._lock:
+            for key in list(self._device_cache):
+                if path is None or key[0] == path:
+                    buffer, *_ = self._device_cache.pop(key)
+                    self._device_cache_bytes -= buffer.size
+
+    def close(self):
+        try:
+            self.synchronize()
+        finally:
+            self.clear_device_cache()
+
+    def cache_files(self, paths):
+        """Proactively download whole files through a wrapped filecache/simplecache.
+
+        Returns local filenames; no CUDA runtime or GPU allocation is needed.
+        """
+        from fsspec.implementations.cached import WholeFileCacheFileSystem
+
+        if not isinstance(self.fs, WholeFileCacheFileSystem):
+            raise ValueError(
+                "cache_files requires a filecache or simplecache filesystem"
+            )
+        single = isinstance(paths, (str, os.PathLike))
+        paths = [paths] if single else list(paths)
+        result = self.fs.cache_files([self._path(path) for path in paths])
+        return result[0] if single else result
 
     def __del__(self):
         if getattr(self, "_pending", None):
@@ -272,16 +334,79 @@ class CUDAFileSystem(ChainedFileSystem):
         size = math.prod(view.shape) * view.dtype.itemsize
         return Buffer.from_handle(view.ptr, size, owner=view)
 
-    def _readinto(self, path, out, offset, stream):
+    def _readinto(self, path, out, offset, stream, file_size=None):
+        self._reap()
+        if not out.size:
+            return 0
+        if not self.block_cache_size:
+            return self._readinto_backend(path, out, offset, stream)
+
+        # Serialize lookup and submission, so concurrent readers share a fill.
+        # GPU work remains asynchronous; a hit on another stream waits on the
+        # fill event rather than synchronizing the host.
+        with self._lock:
+            size = self.fs.size(path) if file_size is None else file_size
+            uid = self.fs.ukey(path) if self.cache_check_files else None
+            device = stream.device.device_id
+            end = offset + out.size
+            for start in range(
+                offset // self.block_size * self.block_size, end, self.block_size
+            ):
+                key = (path, uid, size, device, start)
+                entry = self._device_cache.pop(key, None)
+                if entry is not None:
+                    self._device_cache_bytes -= entry[0].size
+                    if self.cache_expiry and monotonic() - entry[3] > self.cache_expiry:
+                        entry = None
+                if entry is None:
+                    count = min(self.block_size, size - start)
+                    buffer = stream.device.allocate(count, stream=stream)
+                    self._readinto_backend(path, buffer, start, stream)
+                    entry = (buffer, stream.record(), stream, monotonic())
+                buffer, event, producer, _ = entry
+                stream.wait(event)
+                first, last = max(offset, start), min(end, start + buffer.size)
+                destination = _buffer_view(out, first - offset, last - first)
+                source = _buffer_view(buffer, first - start, last - first)
+                destination.copy_from(source, stream=stream)
+                # Eviction removes only the cache's reference, not references
+                # held by in-flight I/O or device-to-device copies.
+                self._retain(stream, (buffer, producer, source, destination, out))
+                if buffer.size <= self.block_cache_size:
+                    while (
+                        self._device_cache_bytes + buffer.size > self.block_cache_size
+                    ):
+                        _, old = self._device_cache.popitem(last=False)
+                        self._device_cache_bytes -= old[0].size
+                    self._device_cache[key] = entry
+                    self._device_cache_bytes += buffer.size
+            return out.size
+
+    def _readinto_backend(self, path, out, offset, stream):
         from cuda.core import LegacyPinnedMemoryResource
 
-        self._reap()
+        from fsspec.implementations.cached import WholeFileCacheFileSystem
+
         size = out.size
         if not size:
             return 0
         method = self.method
+        fs = self.fs
+        if isinstance(fs, WholeFileCacheFileSystem):
+            if method not in {"pinned", "bounce", "cufile"}:
+                raise ValueError(
+                    "Whole-file CUDA caches require pinned, bounce or cufile"
+                )
+            if fs.compression:
+                raise NotImplementedError(
+                    "CUDA whole-file caches do not support compression"
+                )
+            path = fs.cache_files(path)
+            from fsspec.implementations.local import LocalFileSystem
+
+            fs = LocalFileSystem()
         if method == "cufile":
-            if self.fs.protocol not in ("file", "local", ("file", "local")):
+            if fs.protocol not in ("file", "local", ("file", "local")):
                 raise ValueError("cufile requires a local filesystem")
             import kvikio
             from kvikio import defaults
@@ -322,7 +447,7 @@ class CUDAFileSystem(ChainedFileSystem):
         if method == "kvikio":
             import kvikio
 
-            protocol = self.fs.protocol
+            protocol = fs.protocol
             protocols = (protocol,) if isinstance(protocol, str) else protocol
             if "s3" in protocols:
                 bucket, key = path.removeprefix("s3://").split("/", 1)
@@ -347,12 +472,12 @@ class CUDAFileSystem(ChainedFileSystem):
         if method == "bounce":
             import kvikio
 
-            if self.fs.protocol not in ("file", "local", ("file", "local")):
+            if fs.protocol not in ("file", "local", ("file", "local")):
                 raise ValueError("bounce requires a local filesystem")
             with kvikio.CuFile(path, "r") as handle:
                 count = handle.pread(host_view, size=size, file_offset=offset).get()
         else:
-            with self.fs.open(path, "rb") as file:
+            with fs.open(path, "rb") as file:
                 file.seek(offset)
                 count = 0
                 while count < size:
@@ -372,7 +497,7 @@ class CUDAFileSystem(ChainedFileSystem):
         start, end, _ = slice(start, end).indices(size)
         stream = self._stream(stream)
         out = stream.device.allocate(max(0, end - start), stream=stream)
-        self._readinto(path, out, start, stream)
+        self._readinto(path, out, start, stream, file_size=size)
         return out
 
     def open(
@@ -417,6 +542,7 @@ class CUDAFile(io.RawIOBase):
         if mode == "rb":
             self.size = fs.fs.size(path)
         else:
+            fs.clear_device_cache(path)
             self._file = fs.fs.open(path, mode)
             self.loc = self._file.tell()
             self.size = self.loc
@@ -467,7 +593,11 @@ class CUDAFile(io.RawIOBase):
         out = self.fs._device_bytes(buffer, self.stream)
         count = min(out.size, max(0, self.size - self.loc))
         self.fs._readinto(
-            self.path, _buffer_view(out, size=count), self.loc, self.stream
+            self.path,
+            _buffer_view(out, size=count),
+            self.loc,
+            self.stream,
+            file_size=self.size,
         )
         self.loc += count
         return count
@@ -488,6 +618,7 @@ class CUDAFile(io.RawIOBase):
         # A synchronous fsspec writer cannot consume a pending D2H copy.
         self.stream.sync()
         count = self._file.write(_host_view(host))
+        self.fs.clear_device_cache(self.path)
         self.loc += count
         self.size = max(self.loc, self.size)
         return count
@@ -510,6 +641,8 @@ class CUDAFile(io.RawIOBase):
 
 def _delegate(name):
     def method(self, path, *args, **kwargs):
+        if name in {"rm", "rm_file", "touch"}:
+            self.clear_device_cache()
         return getattr(self.fs, name)(self._path(path), *args, **kwargs)
 
     method.__name__ = name
@@ -518,6 +651,7 @@ def _delegate(name):
 
 def _delegate_pair(name):
     def method(self, path1, path2, *args, **kwargs):
+        self.clear_device_cache()
         return getattr(self.fs, name)(
             self._path(path1), self._path(path2), *args, **kwargs
         )
