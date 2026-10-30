@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Close internally opened TAR archive files and compression wrappers on explicit
+  filesystem close, without closing caller-provided streams.
+
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
