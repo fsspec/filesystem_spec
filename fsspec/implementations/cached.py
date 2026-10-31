@@ -119,6 +119,7 @@ class CachingFileSystem(ChainedFileSystem):
         compression=None,
         cache_mapper: AbstractCacheMapper | None = None,
         cache_storage_mode=None,
+        cache_metadata_name="cache",
         callback=DEFAULT_CALLBACK,
         **kwargs,
     ):
@@ -169,6 +170,12 @@ class CachingFileSystem(ChainedFileSystem):
             behaviour. Pass an octal mode such as ``0o700`` to keep the cache
             directory, and so the cached data files within it, readable by the
             owner only.
+        cache_metadata_name: str (optional)
+            Name of the file holding the cache metadata inside each cache
+            storage directory, "cache" by default. With ``same_names=True``
+            a remote file called "cache" would be stored under that same name
+            and replace the metadata, so choose a different name here if the
+            target has such a file.
         callback: fsspec.callbacks.Callback (optional)
             Receives the progress of the downloads made into the cache on a
             cache miss, i.e. the ``get`` operations on the target filesystem
@@ -195,6 +202,7 @@ class CachingFileSystem(ChainedFileSystem):
             else:
                 storage = cache_storage
         self.cache_storage_mode = cache_storage_mode
+        self.cache_metadata_name = cache_metadata_name
         self._makedirs(storage[-1])
         self.storage = storage
         self.kwargs = target_options or {}
@@ -226,7 +234,7 @@ class CachingFileSystem(ChainedFileSystem):
             if isinstance(target_protocol, str)
             else (fs.protocol if isinstance(fs.protocol, str) else fs.protocol[0])
         )
-        self._metadata = CacheMetadata(self.storage)
+        self._metadata = CacheMetadata(self.storage, self.cache_metadata_name)
         self.load_cache()
         self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
 
@@ -598,6 +606,7 @@ class CachingFileSystem(ChainedFileSystem):
             and self.check_files == other.check_files
             and self.expiry == other.expiry
             and self.compression == other.compression
+            and self.cache_metadata_name == other.cache_metadata_name
             and self._mapper == other._mapper
             and self.target_protocol == other.target_protocol
         )
@@ -611,6 +620,7 @@ class CachingFileSystem(ChainedFileSystem):
             ^ hash(self.check_files)
             ^ hash(self.expiry)
             ^ hash(self.compression)
+            ^ hash(self.cache_metadata_name)
             ^ hash(self._mapper)
             ^ hash(self.target_protocol)
         )
