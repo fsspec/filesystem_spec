@@ -75,8 +75,9 @@ class ResponseProxy:
         if self._headers is None:
             self._headers = dict(
                 [
-                    _.split(": ")
-                    for _ in self.request.getAllResponseHeaders().strip().split("\r\n")
+                    _.split(": ", 1)
+                    for _ in self.request.getAllResponseHeaders().split("\r\n")
+                    if _
                 ]
             )
         return self._headers
@@ -92,8 +93,11 @@ class ResponseProxy:
             )
 
     def iter_content(self, chunksize, *_, **__):
+        raw = self.raw
+        if isinstance(raw, bytes):
+            raw = io.BytesIO(raw)
         while True:
-            out = self.raw.read(chunksize)
+            out = raw.read(chunksize)
             if out:
                 yield out
             else:
