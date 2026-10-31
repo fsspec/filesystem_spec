@@ -483,6 +483,29 @@ _memory_strip = MemoryFileSystem.__dict__["_strip_protocol"]
 MemoryFileSystem.walk.__doc__ = AbstractFileSystem.walk.__doc__
 
 
+def _standard_container_reads(container, builtin):
+    """Allow mutation hooks only when reads still use builtin semantics."""
+    cls = type(container)
+    if cls is builtin:
+        return True
+    return (
+        type(cls) is type
+        and issubclass(cls, builtin)
+        and all(
+            next(base.__dict__[name] for base in cls.__mro__ if name in base.__dict__)
+            is getattr(builtin, name)
+            for name in (
+                "__iter__",
+                "__len__",
+                "__contains__",
+                "__getitem__",
+                "__getattribute__",
+            )
+        )
+        and not any("__missing__" in base.__dict__ for base in cls.__mro__)
+    )
+
+
 def _can_index_walk(fs):
     return (
         type(fs) is MemoryFileSystem
@@ -492,8 +515,8 @@ def _can_index_walk(fs):
         and "ls" not in fs.__dict__
         and "walk" not in fs.__dict__
         and "_strip_protocol" not in fs.__dict__
-        and type(fs.store) is dict
-        and type(fs.pseudo_dirs) is list
+        and _standard_container_reads(fs.store, dict)
+        and _standard_container_reads(fs.pseudo_dirs, list)
     )
 
 
@@ -508,6 +531,7 @@ class _MemoryWalk:
     def __init__(self, fs):
         self.fs = fs
         self.root = None
+        self.indexable_root = True
         self.listings = 0
         self.keys = self.pdirs = None
         self.entries = {}
@@ -558,7 +582,16 @@ class _MemoryWalk:
         # not pay for constructing an index of the whole subtree.
         if self.root is None:
             self.root = path
-        if self.listings <= 32 or not _can_index_walk(fs) or path in fs.store:
+            # walk() preserves its own stripped path as the yielded label, but
+            # ls() strips it again. A non-idempotent root (e.g. two protocols)
+            # need not name the subtree that the label suggests.
+            self.indexable_root = fs._strip_protocol(path) == path
+        if (
+            self.listings <= 32
+            or not self.indexable_root
+            or not _can_index_walk(fs)
+            or path in fs.store
+        ):
             return fs.ls(path, detail=detail, **kwargs)
 
         keys, pdirs = tuple(fs.store), tuple(fs.pseudo_dirs)

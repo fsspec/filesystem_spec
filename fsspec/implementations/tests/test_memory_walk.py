@@ -272,3 +272,211 @@ def test_walk_conflicting_and_unusual_names(topdown, detail):
         return list(fs.walk("/tree", topdown=topdown, detail=detail))
 
     assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("path", ["memory://tree", "memory://memory://tree"])
+@pytest.mark.parametrize("detail", [True, False])
+@pytest.mark.parametrize("topdown", [True, False])
+@pytest.mark.parametrize("on_error", ["omit", "raise", "callback"])
+@pytest.mark.parametrize("keep", [31, 32, 40])
+def test_walk_repeated_protocol(path, detail, topdown, on_error, keep):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        errors = []
+        mode = errors.append if on_error == "callback" else on_error
+        rows = []
+        for row in fs.walk(path, detail=detail, topdown=topdown, on_error=mode):
+            if row[0] in ("/tree", "memory://tree") and topdown:
+                if detail:
+                    for name in list(row[1])[keep:]:
+                        del row[1][name]
+                else:
+                    row[1][:] = row[1][:keep]
+            rows.append(copy.deepcopy(row))
+        assert errors == []
+        root = "/tree" if path == "memory://tree" else "memory://tree"
+        assert rows[0 if topdown else -1][0] == root
+        return rows
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("detail", [True, False])
+@pytest.mark.parametrize("topdown", [True, False])
+def test_walk_containers_with_mutation_hooks(monkeypatch, detail, topdown):
+    import fsspec.implementations.memory as memory
+
+    class Store(dict):
+        def __setitem__(self, key, value):
+            super().__setitem__(key, value)
+
+    class Directories(list):
+        def append(self, value):
+            super().append(value)
+
+    rebuilds = []
+    original = memory._MemoryWalk._rebuild
+
+    def rebuild(self, *args):
+        rebuilds.append(self.fs)
+        return original(self, *args)
+
+    monkeypatch.setattr(memory._MemoryWalk, "_rebuild", rebuild)
+
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        fs.store = Store(fs.store)
+        fs.pseudo_dirs = Directories(fs.pseudo_dirs)
+        rows = []
+        for row in fs.walk("/tree", detail=detail, topdown=topdown):
+            rows.append(copy.deepcopy(row))
+            if row[0] == "/tree/d040":
+                fs.store["/tree/d079/new"] = MemoryFile(data=b"new")
+                fs.store["/tree/d079/new"].created = datetime(2020, 1, 1, tzinfo=UTC)
+                fs.pseudo_dirs.append("/tree/d079/new-dir")
+        return rows, fs
+
+    actual, fs = run(MemoryFileSystem)
+    expected, _ = run(GenericMemory)
+    assert actual == expected
+    assert fs in rebuilds
+
+
+@pytest.mark.parametrize("container", ["store", "pseudo_dirs"])
+@pytest.mark.parametrize(
+    "method", ["__iter__", "__len__", "__contains__", "__getitem__"]
+)
+@pytest.mark.parametrize("during", [False, True])
+def test_walk_custom_container_reads(monkeypatch, container, method, during):
+    import fsspec.implementations.memory as memory
+
+    rebuilds = []
+    original = memory._MemoryWalk._rebuild
+
+    def rebuild(self, *args):
+        rebuilds.append(self.fs)
+        return original(self, *args)
+
+    monkeypatch.setattr(memory._MemoryWalk, "_rebuild", rebuild)
+
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        builtin = dict if container == "store" else list
+        calls = []
+
+        def read(self, *args):
+            calls.append((method, args))
+            return getattr(builtin, method)(self, *args)
+
+        custom = type("CustomReads", (builtin,), {method: read})
+
+        def install():
+            setattr(fs, container, custom(getattr(fs, container)))
+
+        if not during:
+            install()
+        rows = []
+        for row in fs.walk("/tree", detail=True):
+            rows.append(copy.deepcopy(row))
+            if during and row[0] == "/tree/d040":
+                install()
+                rebuilds.clear()
+        return rows, calls, fs
+
+    actual, calls, fs = run(MemoryFileSystem)
+    assert fs not in rebuilds
+    expected, expected_calls, _ = run(GenericMemory)
+    assert actual == expected
+    assert calls == expected_calls
+
+
+@pytest.mark.parametrize("container", ["store", "pseudo_dirs"])
+@pytest.mark.parametrize("during", [False, True])
+def test_walk_custom_container_error_timing(container, during):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        builtin = dict if container == "store" else list
+
+        class Unreadable(builtin):
+            def __iter__(self):
+                raise PermissionError("custom iteration")
+
+        if not during:
+            setattr(fs, container, Unreadable(getattr(fs, container)))
+        rows, errors = [], []
+        for row in fs.walk("/tree", on_error=errors.append):
+            rows.append(copy.deepcopy(row))
+            if during and row[0] == "/tree/d040":
+                setattr(fs, container, Unreadable(getattr(fs, container)))
+        return rows, [(type(e), str(e)) for e in errors]
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("container", ["store", "pseudo_dirs"])
+def test_walk_container_read_descriptor(container):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        builtin = dict if container == "store" else list
+        calls = []
+
+        class Iteration:
+            def __get__(self, instance, owner):
+                if instance is None:
+                    return builtin.__iter__
+
+                def read():
+                    calls.append("iterated")
+                    return builtin.__iter__(instance)
+
+                return read
+
+        class Custom(builtin):
+            __iter__ = Iteration()
+
+        setattr(fs, container, Custom(getattr(fs, container)))
+        rows = list(fs.walk("/tree"))
+        return rows, calls
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("container", ["store", "pseudo_dirs"])
+def test_walk_container_class_property(container):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        calls = []
+
+        class Custom:
+            def __init__(self, values):
+                self.values = values
+
+            def __iter__(self):
+                return iter(self.values)
+
+            def __len__(self):
+                return len(self.values)
+
+            def __contains__(self, value):
+                return value in self.values
+
+            def __getitem__(self, key):
+                return self.values[key]
+
+            @property
+            def __class__(self):
+                calls.append("class property read")
+                return type(self)
+
+        setattr(fs, container, Custom(getattr(fs, container)))
+        rows = list(fs.walk("/tree"))
+        assert calls == []
+        return rows
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
