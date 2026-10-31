@@ -480,6 +480,7 @@ class MemoryFileSystem(AbstractFileSystem):
 _memory_ls = MemoryFileSystem.ls
 _memory_walk = MemoryFileSystem.walk
 _memory_strip = MemoryFileSystem.__dict__["_strip_protocol"]
+_memory_instance_dict = AbstractFileSystem.__dict__["__dict__"]
 MemoryFileSystem.walk.__doc__ = AbstractFileSystem.walk.__doc__
 
 
@@ -507,14 +508,39 @@ def _standard_container_reads(container, builtin):
 
 
 def _can_index_walk(fs):
+    if type(fs) is not MemoryFileSystem:
+        return False
+    # Inspect class namespaces without resolving filesystem attributes. Even a
+    # descriptor returning an ordinary container must be left to the original
+    # ls() call, inside its validation and error-handling boundary.
+    namespaces = [
+        type.__getattribute__(base, "__dict__")
+        for base in type.__getattribute__(MemoryFileSystem, "__mro__")
+    ]
+    if (
+        next(ns["__getattribute__"] for ns in namespaces if "__getattribute__" in ns)
+        is not object.__getattribute__
+        or any("__getattr__" in ns for ns in namespaces)
+        or next((ns["__dict__"] for ns in namespaces if "__dict__" in ns), None)
+        is not _memory_instance_dict
+    ):
+        return False
+    for name, builtin in (("store", dict), ("pseudo_dirs", list)):
+        value = next((ns[name] for ns in namespaces if name in ns), None)
+        if not _standard_container_reads(value, builtin) or any(
+            "__get__" in type.__getattribute__(base, "__dict__")
+            for base in type.__getattribute__(type(value), "__mro__")
+        ):
+            return False
+    attrs = fs.__dict__
     return (
-        type(fs) is MemoryFileSystem
-        and MemoryFileSystem.__dict__.get("ls") is _memory_ls
-        and MemoryFileSystem.__dict__.get("walk") is _memory_walk
-        and MemoryFileSystem.__dict__.get("_strip_protocol") is _memory_strip
-        and "ls" not in fs.__dict__
-        and "walk" not in fs.__dict__
-        and "_strip_protocol" not in fs.__dict__
+        type(attrs) is dict
+        and namespaces[0].get("ls") is _memory_ls
+        and namespaces[0].get("walk") is _memory_walk
+        and namespaces[0].get("_strip_protocol") is _memory_strip
+        and "ls" not in attrs
+        and "walk" not in attrs
+        and "_strip_protocol" not in attrs
         and _standard_container_reads(fs.store, dict)
         and _standard_container_reads(fs.pseudo_dirs, list)
     )
