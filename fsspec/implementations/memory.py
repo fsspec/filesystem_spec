@@ -231,7 +231,7 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
-        if path in self.store or path in self.pseudo_dirs:
+        if path in self.store or self.isdir(path):
             raise FileExistsError(path)
         if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))

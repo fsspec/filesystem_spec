@@ -502,6 +502,35 @@ def test_makedirs_existing_file(m, path, exist_ok, method):
     assert not m.isdir(path)
 
 
+@pytest.mark.parametrize("path", ["parent", "/parent", "memory://parent"])
+@pytest.mark.parametrize("method", ["makedirs", "mkdirs"])
+@pytest.mark.parametrize("exist_ok", [False, True])
+def test_makedirs_implied_directory(m, path, method, exist_ok):
+    m.pipe_file("/parent/nested/file", b"payload")
+    directories = m.pseudo_dirs.copy()
+
+    with nullcontext() if exist_ok else pytest.raises(FileExistsError):
+        getattr(m, method)(path, exist_ok=exist_ok)
+
+    assert m.pseudo_dirs == directories
+    assert m.cat_file("/parent/nested/file") == b"payload"
+
+
+@pytest.mark.parametrize("create_parents", [False, True])
+@pytest.mark.parametrize("implied_by", ["file", "directory"])
+def test_mkdir_implied_directory(m, create_parents, implied_by):
+    if implied_by == "file":
+        m.pipe_file("/parent/nested/file", b"payload")
+    else:
+        m.pseudo_dirs.append("/parent/nested")
+    directories = m.pseudo_dirs.copy()
+
+    with pytest.raises(FileExistsError):
+        m.mkdir("/parent", create_parents=create_parents)
+
+    assert m.pseudo_dirs == directories
+
+
 @pytest.mark.parametrize(
     "path", ["missing/child", "/missing/child", "memory://missing/child"]
 )
