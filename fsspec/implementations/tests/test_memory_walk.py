@@ -480,3 +480,164 @@ def test_walk_container_class_property(container):
         return rows
 
     assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("container", ["store", "pseudo_dirs"])
+@pytest.mark.parametrize("kind", ["property", "nondata", "shadowed", "binding"])
+@pytest.mark.parametrize("mode", ["reads", "omit", "callback", "raise", "depth"])
+def test_walk_filesystem_container_descriptor(monkeypatch, container, kind, mode):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        values = getattr(fs, container)
+        calls, errors = [], []
+
+        def read(instance):
+            calls.append(container)
+            if mode != "reads":
+                raise PermissionError("container access")
+            return values
+
+        class Nondata:
+            def __get__(self, instance, owner):
+                assert instance is not None
+                return read(instance)
+
+        class Binding(dict if container == "store" else list):
+            # A container can itself be a descriptor, even though all its read
+            # operations inherit builtin semantics.
+            def __get__(self, instance, owner):
+                assert instance is not None
+                return read(instance)
+
+        descriptor = (
+            property(read)
+            if kind == "property"
+            else Binding(values)
+            if kind == "binding"
+            else Nondata()
+        )
+        if kind != "shadowed":
+            del fs.__dict__[container]
+        with monkeypatch.context() as patch:
+            patch.setattr(MemoryFileSystem, container, descriptor)
+            kwargs = {"maxdepth": 0 if mode == "depth" else 1}
+            if mode == "callback":
+                kwargs["on_error"] = errors.append
+            elif mode == "raise":
+                kwargs["on_error"] = "raise"
+            if mode == "depth":
+                with pytest.raises(ValueError, match="maxdepth"):
+                    list(fs.walk("", **kwargs))
+                result = "invalid depth"
+            elif mode == "raise" and kind != "shadowed":
+                with pytest.raises(PermissionError, match="container access"):
+                    list(fs.walk("", **kwargs))
+                result = "container error"
+            else:
+                result = list(fs.walk("", **kwargs))
+        return result, calls, [(type(e), str(e)) for e in errors]
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("container", ["store", "pseudo_dirs"])
+@pytest.mark.parametrize("after", [0, 35])
+@pytest.mark.parametrize("raises", [False, True])
+def test_walk_filesystem_descriptor_replaced_during_iteration(
+    monkeypatch, container, after, raises
+):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        values = getattr(fs, container)
+        calls, errors, out = [], [], []
+
+        def read(instance):
+            calls.append(container)
+            if raises:
+                raise PermissionError("container access")
+            return values
+
+        with monkeypatch.context() as patch:
+            for pos, row in enumerate(fs.walk("/tree", on_error=errors.append)):
+                out.append(copy.deepcopy(row))
+                if pos == after:
+                    patch.setattr(MemoryFileSystem, container, property(read))
+        return out, calls, [(type(e), str(e)) for e in errors]
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("attribute", ["__getattribute__", "__getattr__"])
+@pytest.mark.parametrize("after", [None, 35])
+def test_walk_filesystem_attribute_protocol(monkeypatch, attribute, after):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        calls, out = [], []
+        instance_dict = fs.__dict__
+
+        def getattribute(instance, name):
+            if name in ("store", "pseudo_dirs", "__dict__"):
+                calls.append(name)
+            return object.__getattribute__(instance, name)
+
+        def getattr_missing(instance, name):
+            calls.append(name)
+            if name == "store":
+                return values
+            raise AttributeError(name)
+
+        with monkeypatch.context() as patch:
+
+            def replace():
+                if attribute == "__getattr__":
+                    # Force the missing-attribute path without changing the
+                    # store used by ls().
+                    instance_dict.pop("store")
+                    patch.delattr(MemoryFileSystem, "store")
+                patch.setattr(
+                    MemoryFileSystem,
+                    attribute,
+                    getattribute
+                    if attribute == "__getattribute__"
+                    else getattr_missing,
+                    raising=False,
+                )
+
+            values = fs.store
+            if after is None:
+                replace()
+            for pos, row in enumerate(fs.walk("/tree")):
+                out.append(copy.deepcopy(row))
+                if pos == after:
+                    replace()
+        return out, calls
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
+
+
+@pytest.mark.parametrize("after", [None, 35])
+def test_walk_filesystem_instance_namespace(after):
+    def run(cls):
+        fs = cls(global_store=False, skip_instance_cache=True)
+        populate(fs)
+        calls, out = [], []
+
+        class Namespace(dict):
+            def __contains__(self, name):
+                calls.append(name)
+                return super().__contains__(name)
+
+        def replace():
+            fs.__dict__ = Namespace(fs.__dict__)
+
+        if after is None:
+            replace()
+        for pos, row in enumerate(fs.walk("/tree")):
+            out.append(copy.deepcopy(row))
+            if pos == after:
+                replace()
+        return out, calls
+
+    assert run(MemoryFileSystem) == run(GenericMemory)
