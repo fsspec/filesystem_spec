@@ -14,8 +14,8 @@ Fixes
 
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 
-- Keep a remote file named ``cache`` from being downloaded over the cache metadata
-  file when the caching filesystems use ``same_names=True``
+- Add ``cache_metadata_name=`` to the caching filesystems so the metadata file can
+  be given a name that a remote file stored with ``same_names=True`` cannot replace
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 

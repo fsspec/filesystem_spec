@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 import hashlib
 
-from fsspec.implementations.cache_metadata import METADATA_FILENAME
 from fsspec.implementations.local import make_path_posix
 
 
@@ -48,14 +47,9 @@ class BasenameCacheMapper(AbstractCacheMapper):
         path = make_path_posix(path)
         prefix, *bits = path.rsplit("/", self.directory_levels + 1)
         if bits:
-            name = self._separator.join(bits)
+            return self._separator.join(bits)
         else:
-            name = prefix  # No separator found, simple filename
-        if name == METADATA_FILENAME:
-            # The storage directory keeps its metadata under this name, so a
-            # remote file called the same would be written over it.
-            return hashlib.sha256(path.encode()).hexdigest()
-        return name
+            return prefix  # No separator found, simple filename
 
     def __eq__(self, other: object) -> bool:
         return super().__eq__(other) and self.directory_levels == other.directory_levels

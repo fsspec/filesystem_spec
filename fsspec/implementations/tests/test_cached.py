@@ -122,14 +122,10 @@ def test_mapper():
     assert hash(BasenameCacheMapper(2)) == hash(mapper3)
 
 
-def test_basename_mapper_keeps_metadata_file(tmpdir):
-    # The metadata of a cache directory lives in <storage>/cache; a remote
-    # file with that basename must not be downloaded over it, or its contents
-    # end up merged into the metadata on the next save.
-    for levels in [0, 1, 2]:
-        assert BasenameCacheMapper(levels)("/cache") != "cache"
-        assert BasenameCacheMapper(levels)("/dir/cache") != "cache"
-
+def test_cache_metadata_name(tmpdir):
+    # With same_names=True a remote file named "cache" is stored under the
+    # same name as the metadata file and replaces it; the metadata file name
+    # can be configured so the two never meet.
     source = os.path.join(tmpdir, "source")
     os.mkdir(source)
     afile = os.path.join(source, "afile")
@@ -154,13 +150,24 @@ def test_basename_mapper_keeps_metadata_file(tmpdir):
         )
 
     fs = fsspec.filesystem(
-        "filecache", target_protocol="file", cache_storage=storage, same_names=True
+        "filecache",
+        target_protocol="file",
+        cache_storage=storage,
+        same_names=True,
+        cache_metadata_name="metadata.json",
     )
     with open(poison, "rb") as f:
         assert fs.cat(poison) == f.read()
     assert fs.cat(afile) == b"test"
-    with open(os.path.join(storage, "cache")) as f:
+    with open(os.path.join(storage, "metadata.json")) as f:
         assert make_path_posix(afile) in json.load(f)
+
+    # the option is part of the instance identity
+    fs2 = fsspec.filesystem(
+        "filecache", target_protocol="file", cache_storage=storage, same_names=True
+    )
+    assert fs2 != fs
+    assert fs2.cache_metadata_name == "cache"
 
 
 @pytest.mark.parametrize(
