@@ -913,6 +913,27 @@ def test_find_deep_ancestors(m, root, maxdepth, detail):
     )
 
 
+@pytest.mark.parametrize("root", ["", "/data", "/data/file"])
+@pytest.mark.parametrize("withdirs", [False, True])
+def test_find_names_does_not_read_metadata(m, mocker, root, withdirs):
+    m.pipe_file("/data/file", b"data")
+    expected = m.find(root, withdirs=withdirs)
+    size = mocker.patch.object(
+        type(m.store["/data/file"]),
+        "size",
+        new_callable=mocker.PropertyMock,
+        return_value=4,
+    )
+
+    assert m.find(root, withdirs=withdirs) == expected
+    size.assert_not_called()
+
+    detailed = m.find(root, withdirs=withdirs, detail=True)
+    assert list(detailed) == expected
+    assert detailed["/data/file"]["size"] == 4
+    size.assert_called_once_with()
+
+
 def test_find_snapshots_store_before_iterating(m):
     # `store` is a class attribute shared by every MemoryFileSystem instance, so
     # another instance can add or remove a path while find() is walking it.
@@ -947,10 +968,12 @@ def test_find_snapshots_store_before_iterating(m):
     real = m.store["/data/file0.txt"]
     m.store["/data/file0.txt"] = MutatesStoreOnRead(real, m.store)
 
-    out = m.find("/data")
+    out = m.find("/data", detail=True)
 
     # The snapshot is taken before the concurrent write, so the new path is not
     # part of this result; the point is that find() completes instead of raising.
+    assert "/data/concurrent.txt" in m.store
+    assert "/data/concurrent.txt" not in out
     assert "/data/file4.txt" in out
     assert len(out) == 5
 
