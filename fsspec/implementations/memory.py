@@ -8,6 +8,7 @@ from pathlib import PurePath, PureWindowsPath
 from typing import Any
 
 from fsspec import AbstractFileSystem
+from fsspec.implementations._memory_index import _MemoryDirectories, _MemoryStore
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path, tokenize
 
@@ -22,8 +23,8 @@ class MemoryFileSystem(AbstractFileSystem):
     with an independent store instead.
     """
 
-    store: dict[str, Any] = {}  # shared by default
-    pseudo_dirs = [""]  # shared by default
+    store: dict[str, Any] = _MemoryStore()  # shared by default
+    pseudo_dirs = _MemoryDirectories([""])  # shared by default
     protocol = "memory"
     root_marker = "/"
 
@@ -43,8 +44,8 @@ class MemoryFileSystem(AbstractFileSystem):
         super().__init__(*args, **kwargs)
         self.global_store = global_store
         if not global_store:
-            self.store = {}
-            self.pseudo_dirs = [""]
+            self.store = _MemoryStore()
+            self.pseudo_dirs = _MemoryDirectories([""])
 
     @property
     def _fs_token(self):
@@ -231,7 +232,7 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
-        if path in self.store or self.isdir(path):
+        if path in self.store or self._is_directory(path):
             raise FileExistsError(path)
         if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
@@ -276,9 +277,7 @@ class MemoryFileSystem(AbstractFileSystem):
     def info(self, path, **kwargs):
         logger.debug("info: %s", path)
         path = self._strip_protocol(path)
-        if path in self.pseudo_dirs or any(
-            p.startswith(path + "/") for p in list(self.store) + self.pseudo_dirs
-        ):
+        if self._is_directory(path):
             return {
                 "name": path,
                 "size": 0,
@@ -294,6 +293,20 @@ class MemoryFileSystem(AbstractFileSystem):
             }
         else:
             raise FileNotFoundError(path)
+
+    def _is_directory(self, path):
+        # Keep a scan fallback for callers replacing the public containers with
+        # ordinary dictionaries/lists; never cache results for untracked edits.
+        if isinstance(self.pseudo_dirs, _MemoryDirectories):
+            if self.pseudo_dirs.has_directory(path):
+                return True
+        elif path in self.pseudo_dirs or any(
+            p.startswith(path + "/") for p in self.pseudo_dirs
+        ):
+            return True
+        if isinstance(self.store, _MemoryStore):
+            return self.store.has_directory(path)
+        return any(p.startswith(path + "/") for p in tuple(self.store))
 
     def _open(
         self,

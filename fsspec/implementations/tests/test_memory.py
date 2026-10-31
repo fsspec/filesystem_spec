@@ -531,6 +531,78 @@ def test_mkdir_implied_directory(m, create_parents, implied_by):
     assert m.pseudo_dirs == directories
 
 
+def test_mkdir_does_not_scan_paths(m, monkeypatch):
+    m.pipe_file("/parent/nested/file", b"payload")
+    m.pseudo_dirs.append("/explicit/child")
+
+    class NoStoreIteration(type(m.store)):
+        forbid_iteration = False
+
+        def __iter__(self):
+            assert not self.forbid_iteration, "mkdir scanned stored file paths"
+            return super().__iter__()
+
+    class NoDirectoryIteration(type(m.pseudo_dirs)):
+        forbid_iteration = False
+
+        def __iter__(self):
+            assert not self.forbid_iteration, "mkdir scanned directory paths"
+            return super().__iter__()
+
+    store = NoStoreIteration(m.store)
+    dirs = NoDirectoryIteration(m.pseudo_dirs)
+    store.forbid_iteration = dirs.forbid_iteration = True
+    monkeypatch.setattr(m, "store", store)
+    monkeypatch.setattr(m, "pseudo_dirs", dirs)
+    for path in ["/parent", "/explicit"]:
+        with pytest.raises(FileExistsError):
+            m.mkdir(path, create_parents=False)
+    m.mkdir("/new", create_parents=False)
+    m.mkdir("/new/nested")
+    m.makedirs("/parent", exist_ok=True)
+    assert m.isdir("/new/nested")
+
+
+def test_directory_index_shared_mutations(m):
+    other = filesystem("memory", skip_instance_cache=True)
+    m.pipe_file("/parent/file", b"payload")
+    assert other.isdir("/parent")
+    other.rm_file("/parent/file")
+    assert not m.isdir("/parent")
+    other.store.update({"/parent/nested/file": None})
+    with pytest.raises(FileExistsError):
+        m.mkdir("/parent")
+    del m.store["/parent/nested/file"]
+    assert not other.isdir("/parent")
+    m.pseudo_dirs.append("/parent/explicit")
+    with pytest.raises(FileExistsError):
+        other.mkdir("/parent")
+    other.pseudo_dirs.remove("/parent/explicit")
+    assert not m.isdir("/parent")
+
+
+def test_directory_index_plain_container_replacement(m, monkeypatch):
+    # Existing references to replacement plain containers can mutate them in
+    # ways the filesystem cannot track: keep the scan fallback for those.
+    store = {"/parent/file": None}
+    dirs = [""]
+    monkeypatch.setattr(m, "store", store)
+    monkeypatch.setattr(m, "pseudo_dirs", dirs)
+    assert m.isdir("/parent")
+    del store["/parent/file"]
+    store["/other/file"] = None
+    assert not m.isdir("/parent")
+    assert m.isdir("/other")
+    dirs.append("/parent/nested")
+    with pytest.raises(FileExistsError):
+        m.mkdir("/parent")
+    dirs[:] = ["", "/different/nested"]
+    assert not m.isdir("/parent")
+    assert m.isdir("/different")
+    m.mkdir("/parent", create_parents=False)
+    assert "/parent" in dirs
+
+
 @pytest.mark.parametrize(
     "path", ["missing/child", "/missing/child", "memory://missing/child"]
 )
