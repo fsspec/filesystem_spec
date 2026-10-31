@@ -6,6 +6,8 @@ Dev
 
 Enhancements
 
+- Skip file metadata and directory info construction in names-only memory finds.
+
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
