@@ -868,7 +868,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         protocol, _ = split_protocol(part_or_url)
         try:
             return await self.fss[protocol]._cat_file(
-                part_or_url, start=start0, end=end0
+                part_or_url, start=start0, end=end0, **kwargs
             )
         except Exception as e:
             raise ReferenceNotReachable(path, part_or_url) from e
@@ -879,7 +879,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
         try:
-            return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)
+            return self.fss[protocol].cat_file(
+                part_or_url, start=start0, end=end0, **kwargs
+            )
         except Exception as e:
             raise ReferenceNotReachable(path, part_or_url) from e
 
