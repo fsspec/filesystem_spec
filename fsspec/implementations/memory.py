@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
@@ -112,6 +112,18 @@ class MemoryFileSystem(AbstractFileSystem):
             # Register every directory implied between ``path`` and ``name`` that
             # is within maxdepth, mirroring how walk() surfaces implied dirs.
             idx = name.rfind("/")
+            if maxdepth is not None:
+                # Start at the deepest ancestor that can appear in the result.
+                limit = name.find("/", len(prefix))
+                depth = 1
+                while limit >= 0 and depth + 1 <= maxdepth:
+                    next_limit = name.find("/", limit + 1)
+                    if next_limit < 0:
+                        break
+                    limit = next_limit
+                    depth += 1
+                if limit >= 0:
+                    idx = min(idx, limit)
             while idx > len(path):
                 parent = name[:idx]
                 if parent in dirs:
@@ -223,6 +235,8 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileExistsError(path)
         if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
+        if not create_parents and not self.isdir(self._parent(path)):
+            raise FileNotFoundError(self._parent(path))
         if create_parents and self._parent(path).strip("/"):
             try:
                 self.mkdir(self._parent(path), create_parents, **kwargs)
@@ -235,7 +249,7 @@ class MemoryFileSystem(AbstractFileSystem):
         try:
             self.mkdir(path, create_parents=True)
         except FileExistsError:
-            if not exist_ok:
+            if not exist_ok or self.isfile(path):
                 raise
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
@@ -276,7 +290,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "name": path,
                 "size": filelike.size,
                 "type": "file",
-                "created": getattr(filelike, "created", None),
+                "created": filelike.created.timestamp(),
             }
         else:
             raise FileNotFoundError(path)
@@ -290,10 +304,14 @@ class MemoryFileSystem(AbstractFileSystem):
         cache_options=None,
         **kwargs,
     ):
+        if mode in {"rb+", "wb+", "ab+", "xb+"}:
+            mode = mode[0] + "+b"
         path = self._strip_protocol(path)
         if "x" in mode and self.exists(path):
             raise FileExistsError
-        if path in self.pseudo_dirs:
+        if path in self.pseudo_dirs or (
+            path not in self.store and any(p.startswith(path + "/") for p in self.store)
+        ):
             raise IsADirectoryError(path)
         parent = path
         while len(parent) > 1:
@@ -339,15 +357,25 @@ class MemoryFileSystem(AbstractFileSystem):
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)
         path2 = self._strip_protocol(path2)
-        if self.isfile(path1):
+        source_is_file = self.isfile(path1)
+        if not source_is_file and not self.isdir(path1):
+            raise FileNotFoundError(path1)
+        parent = path2
+        while len(parent) > 1:
+            parent = self._parent(parent)
+            if self.isfile(parent):
+                raise FileExistsError(parent)
+        if source_is_file:
+            if self.isdir(path2):
+                raise IsADirectoryError(path2)
             self.store[path2] = MemoryFile(
                 self, path2, self.store[path1].getvalue()
             )  # implicit copy
-        elif self.isdir(path1):
+        else:
+            if self.isfile(path2):
+                raise FileExistsError(path2)
             if path2 not in self.pseudo_dirs:
                 self.pseudo_dirs.append(path2)
-        else:
-            raise FileNotFoundError(path1)
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         logger.debug("cat: %s", path)
@@ -421,8 +449,8 @@ class MemoryFile(BytesIO):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
-        self.created = datetime.now(tz=timezone.utc)
-        self.modified = datetime.now(tz=timezone.utc)
+        self.created = datetime.now(tz=UTC)
+        self.modified = datetime.now(tz=UTC)
         if data:
             super().__init__(data)
             self.seek(0)
@@ -434,7 +462,7 @@ class MemoryFile(BytesIO):
     def write(self, data):
         written = super().write(data)
         if written:
-            self.modified = datetime.now(tz=timezone.utc)
+            self.modified = datetime.now(tz=UTC)
         return written
 
     def writelines(self, lines):
@@ -443,7 +471,7 @@ class MemoryFile(BytesIO):
 
     def truncate(self, size=None):
         size = super().truncate(size)
-        self.modified = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=UTC)
         return size
 
     def __enter__(self):
@@ -457,4 +485,4 @@ class MemoryFile(BytesIO):
 
     def commit(self):
         self.fs.store[self.path] = self
-        self.modified = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=UTC)

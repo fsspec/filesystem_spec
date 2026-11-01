@@ -1,5 +1,6 @@
 import base64
 import json
+from unittest.mock import Mock
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import pytest
@@ -136,3 +137,47 @@ def test_remove_reserved_path_characters(github_contents, cached, path):
         ["DELETE"] if cached else ["GET", "DELETE"]
     )
     assert not urlsplit(calls[-1].url).fragment
+
+
+@pytest.mark.parametrize("content", [b"", b"file contents", b"\x00\xff\x80"])
+def test_open_inline_file_without_http(github_contents, content):
+    fs, files, calls = github_contents
+    files["file.txt"] = content
+    fs.http_fs = None
+
+    with fs.open("file.txt", "rb") as stream:
+        assert stream.read() == content
+        assert stream.size == len(content)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "content,encoding",
+    [(b"", "none"), (b"version https://git-lfs.github.com/spec/v1\n", "base64")],
+)
+@pytest.mark.parametrize("http_available", [True, False])
+def test_open_download_fallback(
+    github_contents, monkeypatch, content, encoding, http_available
+):
+    fs, _, _ = github_contents
+    response = requests.Response()
+    response.status_code = 200
+    response._content = json.dumps(
+        {
+            "content": base64.b64encode(content).decode(),
+            "encoding": encoding,
+            "download_url": "https://example.com/download",
+        }
+    ).encode()
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: response)
+    if not http_available:
+        fs.http_fs = None
+        with pytest.raises(ImportError, match=r"fsspec\[http\]"):
+            fs._open("file.txt", block_size=32)
+        return
+    fs.http_fs = Mock()
+
+    assert fs._open("file.txt", block_size=32) is fs.http_fs.open.return_value
+    fs.http_fs.open.assert_called_once_with(
+        "https://example.com/download", mode="rb", block_size=32, cache_options=None
+    )

@@ -8,7 +8,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import partial
 from hashlib import md5
 from importlib.metadata import version
@@ -184,10 +184,9 @@ def build_name_function(max_int: float) -> Callable[[int], str]:
     >>> build_name_function(0)(0)
     '0'
     """
-    # handle corner cases max_int is 0 or exact power of 10
-    max_int += 1e-8
-
-    pad_length = int(math.ceil(math.log10(max_int)))
+    if max_int < 0:
+        raise ValueError("max_int must be non-negative")
+    pad_length = len(str(int(max_int)))
 
     def name_function(i: int) -> str:
         return str(i).zfill(pad_length)
@@ -259,7 +258,7 @@ def read_block(
         Open file
     offset: int
         Byte offset to start read
-    length: int
+    length: int or None
         Number of bytes to read, read through end of file if None
     delimiter: bytes (optional)
         Ensure reading starts and stops at delimiter bytestring
@@ -312,10 +311,7 @@ def read_block(
 
     f.seek(offset)
 
-    # TODO: allow length to be None and read to the end of the file?
-    assert length is not None
-    b = f.read(length)
-    return b
+    return f.read(length)
 
 
 def tokenize(*args: Any, **kwargs: Any) -> str:
@@ -581,6 +577,61 @@ def mirror_from(
 @contextlib.contextmanager
 def nullcontext(obj: T) -> Iterator[T]:
     yield obj
+
+
+def parse_content_range_header(
+    headers: Mapping[str, str],
+) -> tuple[int | None, int | None, int | None]:
+    """Return ``(start, end, total)`` from a ``Content-Range`` header."""
+    m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", headers.get("Content-Range", ""))
+    if not m:
+        return None, None, None
+    if m[1] == "*":
+        start = end = None
+    else:
+        start, end = [int(x) for x in m[1].split("-")]
+    return start, end, None if m[2] == "*" else int(m[2])
+
+
+def response_is_requested_range(
+    status: int, headers: Mapping[str, str], start: int | None, end: int | None
+) -> bool:
+    """Whether the response is the requested range, not the whole file."""
+    if status == 206:
+        return True
+    if start is not None and parse_content_range_header(headers)[0] == start:
+        return True
+    if start is None or start < 0 or end is None:
+        return False
+    return int(headers.get("Content-Length", end + 1)) <= end - start
+
+
+def range_response_window(
+    out: bytes,
+    status: int,
+    headers: Mapping[str, str],
+    start: int | None,
+    end: int | None,
+) -> bytes:
+    """The requested window of a response body that may be the whole file."""
+    lo = 0 if start is None else start
+    if lo < 0 and (end is None or end >= len(out)):
+        # a suffix range asks for the tail of either response
+        return out[lo:]
+    if status != 206:
+        window = end - lo if end is not None and (lo >= 0) == (end >= 0) else None
+        content_range_start = parse_content_range_header(headers)[0]
+        if lo >= 0 and content_range_start is not None and content_range_start != lo:
+            window = 0
+        if window is not None and len(out) > window:
+            if lo > 0:
+                raise ValueError(
+                    "The HTTP server doesn't appear to support range requests. "
+                    "Only reading this file from the beginning is supported. "
+                    "Open with block_size=0 for a streaming file interface."
+                )
+            return out[:end] if lo == 0 else out[len(out) + lo : end]
+    return out
 
 
 def merge_offset_ranges(

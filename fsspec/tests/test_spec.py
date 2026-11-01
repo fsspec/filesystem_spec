@@ -1055,6 +1055,96 @@ def test_fork_deadlock():
     assert result is True
 
 
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+def test_buffered_file_len(m, content):
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        assert stream.full_name == m.unstrip_protocol("data")
+        assert stream.info() == m.info("data")
+        assert stream == stream and stream != object()
+        assert stream == AbstractBufferedFile(m, "data")
+        assert stream.seekable()
+        stream.flush()
+        assert stream.len == len(content)
+        stream.read(3)
+        assert stream.len == len(content)
+        stream.seek(0)
+        assert stream.len == len(content)
+        stream.seek(0, 2)
+        assert stream.len == len(content)
+        with pytest.raises(TypeError):
+            len(stream)
+
+
+def test_tree(m):
+    m.pipe(
+        {
+            "/root/a/file": b"x",
+            "/root/a/sub/data": b"xx",
+            "/root/b/sub/data": b"x",
+            "/root/z": b"x" * 1024,
+        }
+    )
+    m.makedirs("/root/empty")
+    assert m.tree(
+        "/root", recursion_limit=3, max_display=None, display_size=True
+    ).splitlines() == [
+        "/root",
+        "├── a (1 file, 1 subfolder)",
+        "│   ├── sub (1 file)",
+        "│   │   └── data (2B)",
+        "│   └── file (1B)",
+        "├── b (1 subfolder)",
+        "│   └── sub (1 file)",
+        "│       └── data (1B)",
+        "├── empty (empty folder)",
+        "└── z (1.00 kb)",
+    ]
+    assert m.tree("/root", recursion_limit=0) == "/root"
+    assert m.tree("/root", max_display=0) == "/root\n└── 4 more item(s) not displayed."
+    assert m.tree("/root", recursion_limit=1, indent_size=2) == (
+        "/root\n├ a\n├ b\n├ empty\n└ z"
+    )
+
+
+@pytest.mark.parametrize("mode", ["wb", "ab", "xb"])
+def test_buffered_file_len_without_size(m, mode):
+    with AbstractBufferedFile(m, "data", mode=mode) as stream:
+        assert not hasattr(stream, "size")
+        assert not hasattr(stream, "len")
+
+
+def test_buffered_file_len_unknown_size(m):
+    m.pipe_file("data", b"content")
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.size = None
+        with pytest.raises(AttributeError, match="File size is unknown"):
+            _ = stream.len
+        assert not hasattr(stream, "len")
+        stream.size = 7
+        assert stream.len == 7
+
+
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+@pytest.mark.parametrize("position", [0, 3, 11])
+def test_buffered_file_multipart_encoder(m, content, position):
+    MultipartEncoder = pytest.importorskip("requests_toolbelt").MultipartEncoder
+    position = min(position, len(content))
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.seek(position)
+        encoder = MultipartEncoder(
+            fields={"file": ("data", stream)}, boundary="fsspec-boundary"
+        )
+        expected = MultipartEncoder(
+            fields={"file": ("data", io.BytesIO(content[position:]))},
+            boundary="fsspec-boundary",
+        ).to_string()
+        assert encoder.len == len(expected)
+        assert encoder.read(13) + encoder.read() == expected
+        assert stream.tell() == len(content)
+
+
 @pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
 @pytest.mark.parametrize(
     "content",
@@ -1076,6 +1166,8 @@ def test_buffered_readlines(m, cache_type, content):
     ):
         assert stream.readlines() == expected.readlines()
         assert stream.readlines() == []
+        stream.seek(0)
+        assert list(stream) == io.BytesIO(content).readlines()
 
         stream.seek(0)
         expected.seek(0)
@@ -1116,6 +1208,46 @@ def test_buffered_readuntil_delimiters(
             assert stream.tell() == position
         assert stream.readuntil(delimiter, blocks=blocks) == b""
         assert stream.tell() == position
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+@pytest.mark.parametrize("position", [0, 13])
+@pytest.mark.parametrize(
+    "buffer_kind", ["bytes", "readonly-view", "readonly-numpy", "empty-readonly"]
+)
+def test_buffered_readinto_readonly(m, cache_type, method, position, buffer_kind):
+    content = bytes(range(64))
+    m.pipe_file("buffer", content)
+    if buffer_kind == "bytes":
+        target = b"readonly"
+    elif buffer_kind == "readonly-view":
+        target = memoryview(b"readonly")
+    elif buffer_kind == "readonly-numpy":
+        target = np.zeros((2, 4), dtype="uint32")
+        target.flags.writeable = False
+    else:
+        target = b""
+
+    with AbstractBufferedFile(
+        m, "buffer", cache_type=cache_type, block_size=8
+    ) as stream:
+        stream.seek(position)
+        with pytest.raises(TypeError):
+            getattr(stream, method)(target)
+        assert stream.tell() == position
+        writable = bytearray(8)
+        assert getattr(stream, method)(writable) == len(writable)
+        assert writable == content[position : position + len(writable)]
+
+
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+def test_buffered_readinto_readonly_closed(m, method):
+    m.pipe_file("buffer", b"content")
+    stream = AbstractBufferedFile(m, "buffer")
+    stream.close()
+    with pytest.raises(ValueError, match="closed file"):
+        getattr(stream, method)(b"readonly")
 
 
 def test_cache_not_pickled(server):
@@ -1255,6 +1387,36 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+@pytest.mark.parametrize("serializer", ["dict", "json"])
+@pytest.mark.parametrize(
+    "value", [None, [None], {"key": None}, {"key": [1, None, {"nested": None}]}]
+)
+def test_serialize_none(serializer, value):
+    fs = DummyTestFS(value, bar=value)
+    out = getattr(fs, f"to_{serializer}")()
+    expected = {
+        "cls": "fsspec.tests.test_spec:DummyTestFS",
+        "protocol": "mock",
+        "args": [value],
+        "bar": value,
+    }
+
+    assert (json.loads(out) if serializer == "json" else out) == expected
+    assert getattr(DummyTestFS, f"from_{serializer}")(out) is fs
+    assert fs.storage_args == (value,)
+    assert fs.storage_options == {"bar": value}
+
+
+def test_serialize_http_none():
+    fs = HTTPFileSystem(block_size=None, cache_options=None)
+    out = fs.to_dict()
+
+    assert out["block_size"] is None
+    assert out["cache_options"] is None
+    assert json.loads(fs.to_json()) == out
+    assert HTTPFileSystem.from_dict(out) is fs
 
 
 def test_json_path_attr():
@@ -1402,6 +1564,14 @@ def test_serialize_no_password():
 
     assert "password" not in fs.to_json(include_password=False)
     assert "password" not in fs.to_dict(include_password=False)
+
+
+def test_serialize_no_password_nested():
+    fs = DummyTestFS(2, fs=DummyTestFS(1, password="admin"))
+
+    assert "password" not in fs.to_json(include_password=False)
+    assert "password" not in fs.to_dict(include_password=False)["fs"]
+    assert fs.to_dict(include_password=True)["fs"]["password"] == "admin"
 
 
 def test_serialize_with_password():
@@ -1646,29 +1816,20 @@ def test_dummy_callbacks_file(tmpdir):
     assert destination.read_text("utf-8") == "x" * 100
 
 
-def test_get_file_to_supplied_outfile(tmpdir):
-    fs = DummyOpenFS()
-    source = tmpdir / "source.txt"
-    source.write_text("data", "utf-8")
-    outfile = io.BytesIO()
-
-    fs.get_file(source, outfile=outfile)
-
-    assert not outfile.closed
-    assert outfile.getvalue() == b"data"
-
-
-def test_get_file_explicit_outfile_takes_precedence(tmpdir):
+@pytest.mark.parametrize("supply_lpath", [False, True])
+def test_get_file_to_supplied_outfile(tmpdir, supply_lpath):
     fs = DummyOpenFS()
     source = tmpdir / "source.txt"
     source.write_text("data", "utf-8")
     lpath = io.BytesIO()
     outfile = io.BytesIO()
+    args = (lpath,) if supply_lpath else ()
 
-    fs.get_file(source, lpath, outfile=outfile)
+    fs.get_file(source, *args, outfile=outfile)
 
-    assert lpath.getvalue() == b""
+    assert not outfile.closed
     assert outfile.getvalue() == b"data"
+    assert lpath.getvalue() == b""
 
 
 def test_dummy_callbacks_files(tmpdir):
@@ -1863,17 +2024,10 @@ def test_cat_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     assert len(file_contents) == 2
 
 
-def test_get_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
+@pytest.mark.parametrize("method", ["get", "copy"])
+def test_transfer_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir, method):
     dest = tmpdir / "dest"
-    tmpfs.get(tmpdir / "*", str(dest), limit=2)
-
-    assert len(dest.listdir()) == 2
-
-
-def test_copy_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
-    dest = tmpdir / "dest"
-    tmpfs.copy(tmpdir / "*", str(dest), limit=2)
-
+    getattr(tmpfs, method)(tmpdir / "*", str(dest), limit=2)
     assert len(dest.listdir()) == 2
 
 
@@ -1882,38 +2036,26 @@ def test_expand_path_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     assert len(expanded_paths) == 2
 
 
-def test_expand_path_special_characters():
-    fs_contents = (
-        {"name": "bucket", "type": "directory"},
-        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
-        {"name": "bucket/file?.txt", "type": "file", "size": 100},
-        {"name": "bucket/normal.txt", "type": "file", "size": 100},
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        (
+            "bucket",
+            ["bucket", "bucket/file[1].txt", "bucket/file?.txt", "bucket/normal.txt"],
+        ),
+        ("bucket/file*.txt", ["bucket/file[1].txt", "bucket/file?.txt"]),
+    ],
+)
+def test_expand_path_special_characters(path, expected):
+    fs = DummyTestFS(
+        fs_content=(
+            {"name": "bucket", "type": "directory"},
+            {"name": "bucket/file[1].txt", "type": "file", "size": 100},
+            {"name": "bucket/file?.txt", "type": "file", "size": 100},
+            {"name": "bucket/normal.txt", "type": "file", "size": 100},
+        )
     )
-    fs = DummyTestFS(fs_content=fs_contents)
-    paths = fs.expand_path("bucket", recursive=True)
-    expected = [
-        "bucket",
-        "bucket/file[1].txt",
-        "bucket/file?.txt",
-        "bucket/normal.txt",
-    ]
-    assert sorted(paths) == sorted(expected)
-
-
-def test_expand_path_with_magic_input():
-    fs_contents = (
-        {"name": "bucket", "type": "directory"},
-        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
-        {"name": "bucket/file?.txt", "type": "file", "size": 100},
-        {"name": "bucket/normal.txt", "type": "file", "size": 100},
-    )
-    fs = DummyTestFS(fs_content=fs_contents)
-    paths = fs.expand_path("bucket/file*.txt", recursive=True)
-    expected = [
-        "bucket/file[1].txt",
-        "bucket/file?.txt",
-    ]
-    assert sorted(paths) == sorted(expected)
+    assert sorted(fs.expand_path(path, recursive=True)) == sorted(expected)
 
 
 def test_cat_ranges_forwards_kwargs():

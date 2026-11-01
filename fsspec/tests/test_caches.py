@@ -14,6 +14,8 @@ from fsspec.caching import (
     register_cache,
 )
 from fsspec.implementations.cached import WholeFileCacheFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
+from fsspec.spec import AbstractBufferedFile
 
 
 def test_cache_getitem(Cache_imp):
@@ -66,6 +68,30 @@ def test_block_cache_lru():
     assert cache.hit_count == 5
     assert cache.miss_count == 3
     assert cache.total_requested_bytes == block_size * cache.miss_count
+
+
+@pytest.mark.parametrize("cache_cls", [BlockCache, BackgroundBlockCache])
+@pytest.mark.parametrize("size", [1, 6, 8])
+def test_block_cache_final_range(cache_cls, size):
+    data = b"abcdefgh"[:size]
+    requests = []
+
+    def fetch(start, end):
+        assert 0 <= start < end <= len(data)
+        requests.append((start, end))
+        return data[start:end]
+
+    cache = cache_cls(4, fetch, len(data))
+    try:
+        assert cache._fetch(0, None) == data
+        expected = [(start, min(start + 4, size)) for start in range(0, size, 4)]
+        assert requests == expected
+        assert cache.total_requested_bytes == size
+        assert cache._fetch(size - 1, size) == data[-1:]
+        assert requests == expected
+    finally:
+        if isinstance(cache, BackgroundBlockCache):
+            cache.close()
 
 
 def test_block_cache_lru_no_redundant_reads():
@@ -271,6 +297,47 @@ def test_first_cache_without_fetcher():
     assert c._fetch(1, 4) == letters_fetcher(1, 4)
 
 
+@pytest.mark.parametrize("payload", [b"payload", b""], ids=["nonempty", "empty"])
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("close_mode", ["explicit", "context", "exception"])
+def test_mmap_closes_with_file(payload, persistent, close_mode, tmp_path):
+    fs = MemoryFileSystem()
+    path = "/mmap-close-" + tmp_path.name
+    fs.pipe_file(path, payload)
+    stream = AbstractBufferedFile(
+        fs,
+        path,
+        mode="rb",
+        block_size=4,
+        cache_type="mmap",
+        cache_options={"location": str(tmp_path / "mapped") if persistent else None},
+    )
+    mapping = stream.cache.cache
+    try:
+        if close_mode == "explicit":
+            assert stream.read() == payload
+            stream.close()
+        elif close_mode == "context":
+            with stream:
+                assert stream.read() == payload
+        else:
+            with pytest.raises(RuntimeError, match="stop"):
+                with stream:
+                    assert stream.read() == payload
+                    raise RuntimeError("stop")
+        assert stream.closed
+        assert stream.cache is None
+        if payload:
+            assert mapping.closed
+            if persistent:
+                assert (tmp_path / "mapped").read_bytes() == payload
+        stream.close()
+    finally:
+        stream.close()
+        if payload:
+            mapping.close()
+
+
 def test_mmap_cache(mocker):
     fetcher = mocker.Mock(wraps=letters_fetcher)
     c = MMapCache(5, fetcher, 52)
@@ -290,6 +357,69 @@ def test_mmap_cache(mocker):
     assert m._fetch(1, 38) == letters_fetcher(1, 38)
     assert multi_fetcher.call_count == 3
     assert fetcher.call_count == 5
+
+
+@pytest.mark.parametrize("remove_location", [False, True])
+def test_mmap_cache_pickle_named_location(tmp_path, remove_location):
+    location = tmp_path / "cached"
+    cache = MMapCache(5, letters_fetcher, 52, location=str(location))
+    assert cache._fetch(6, 8) == letters_fetcher(6, 8)
+    payload = pickle.dumps(cache)
+    requested = cache.total_requested_bytes
+    cache.cache.close()
+    if remove_location:
+        location.unlink()
+
+    restored = pickle.loads(payload)
+    try:
+        assert restored._fetch(6, 8) == letters_fetcher(6, 8)
+        assert restored.total_requested_bytes == requested + (
+            5 if remove_location else 0
+        )
+    finally:
+        restored.cache.close()
+
+
+def test_mmap_cache_new_named_location_clears_shared_blocks(tmp_path):
+    blocks = {1}
+    cache = MMapCache(5, letters_fetcher, 52, str(tmp_path / "cached"), blocks)
+    try:
+        assert cache.blocks is blocks
+        assert blocks == set()
+        assert cache._fetch(6, 8) == letters_fetcher(6, 8)
+        assert blocks == {1}
+    finally:
+        cache.cache.close()
+
+
+def test_mmap_cache_http_reader_recreates_location(server, tmp_path):
+    import fsspec
+
+    location = tmp_path / "cached"
+    fs = fsspec.filesystem(
+        "http", headers={"head_ok": "true", "head_give_length": "true"}
+    )
+    with fs.open(
+        server.realfile,
+        block_size=5,
+        cache_type="mmap",
+        cache_options={"location": str(location)},
+    ) as reader:
+        expected = reader.read(2)
+        blocks = reader.cache.blocks
+        reader.cache.cache.close()
+    location.unlink()
+
+    with fs.open(
+        server.realfile,
+        block_size=5,
+        cache_type="mmap",
+        cache_options={"location": str(location), "blocks": blocks},
+    ) as reader:
+        try:
+            assert reader.read(2) == expected
+        finally:
+            reader.cache.cache.close()
 
 
 @pytest.mark.parametrize("use_multi_fetcher", [False, True])
