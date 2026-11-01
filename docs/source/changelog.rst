@@ -18,6 +18,10 @@ Enhancements
 Fixes
 
 - Avoid empty backend range requests at EOF with the first-chunk cache.
+- Honor the per-file ``cache_type`` option when opening FTP files.
+
+- Close internally opened TAR archive files and compression wrappers on explicit
+  filesystem close, without closing caller-provided streams.
 
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
@@ -225,6 +229,8 @@ Fixes
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
+
+- Preserve delimiter lookahead when reading lines from forward-only HTTP streams (#2349).
 
 - Normalize protocol prefixes and leading slashes before listing archive paths.
 
