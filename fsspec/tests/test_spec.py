@@ -1059,6 +1059,12 @@ def test_fork_deadlock():
 def test_buffered_file_len(m, content):
     m.pipe_file("data", content)
     with AbstractBufferedFile(m, "data") as stream:
+        assert stream.full_name == m.unstrip_protocol("data")
+        assert stream.info() == m.info("data")
+        assert stream == stream and stream != object()
+        assert stream == AbstractBufferedFile(m, "data")
+        assert stream.seekable()
+        stream.flush()
         assert stream.len == len(content)
         stream.read(3)
         assert stream.len == len(content)
@@ -1068,6 +1074,37 @@ def test_buffered_file_len(m, content):
         assert stream.len == len(content)
         with pytest.raises(TypeError):
             len(stream)
+
+
+def test_tree(m):
+    m.pipe(
+        {
+            "/root/a/file": b"x",
+            "/root/a/sub/data": b"xx",
+            "/root/b/sub/data": b"x",
+            "/root/z": b"x" * 1024,
+        }
+    )
+    m.makedirs("/root/empty")
+    assert m.tree(
+        "/root", recursion_limit=3, max_display=None, display_size=True
+    ).splitlines() == [
+        "/root",
+        "├── a (1 file, 1 subfolder)",
+        "│   ├── sub (1 file)",
+        "│   │   └── data (2B)",
+        "│   └── file (1B)",
+        "├── b (1 subfolder)",
+        "│   └── sub (1 file)",
+        "│       └── data (1B)",
+        "├── empty (empty folder)",
+        "└── z (1.00 kb)",
+    ]
+    assert m.tree("/root", recursion_limit=0) == "/root"
+    assert m.tree("/root", max_display=0) == "/root\n└── 4 more item(s) not displayed."
+    assert m.tree("/root", recursion_limit=1, indent_size=2) == (
+        "/root\n├ a\n├ b\n├ empty\n└ z"
+    )
 
 
 @pytest.mark.parametrize("mode", ["wb", "ab", "xb"])
@@ -1129,6 +1166,8 @@ def test_buffered_readlines(m, cache_type, content):
     ):
         assert stream.readlines() == expected.readlines()
         assert stream.readlines() == []
+        stream.seek(0)
+        assert list(stream) == io.BytesIO(content).readlines()
 
         stream.seek(0)
         expected.seek(0)
@@ -1777,29 +1816,20 @@ def test_dummy_callbacks_file(tmpdir):
     assert destination.read_text("utf-8") == "x" * 100
 
 
-def test_get_file_to_supplied_outfile(tmpdir):
-    fs = DummyOpenFS()
-    source = tmpdir / "source.txt"
-    source.write_text("data", "utf-8")
-    outfile = io.BytesIO()
-
-    fs.get_file(source, outfile=outfile)
-
-    assert not outfile.closed
-    assert outfile.getvalue() == b"data"
-
-
-def test_get_file_explicit_outfile_takes_precedence(tmpdir):
+@pytest.mark.parametrize("supply_lpath", [False, True])
+def test_get_file_to_supplied_outfile(tmpdir, supply_lpath):
     fs = DummyOpenFS()
     source = tmpdir / "source.txt"
     source.write_text("data", "utf-8")
     lpath = io.BytesIO()
     outfile = io.BytesIO()
+    args = (lpath,) if supply_lpath else ()
 
-    fs.get_file(source, lpath, outfile=outfile)
+    fs.get_file(source, *args, outfile=outfile)
 
-    assert lpath.getvalue() == b""
+    assert not outfile.closed
     assert outfile.getvalue() == b"data"
+    assert lpath.getvalue() == b""
 
 
 def test_dummy_callbacks_files(tmpdir):
@@ -1994,17 +2024,10 @@ def test_cat_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     assert len(file_contents) == 2
 
 
-def test_get_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
+@pytest.mark.parametrize("method", ["get", "copy"])
+def test_transfer_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir, method):
     dest = tmpdir / "dest"
-    tmpfs.get(tmpdir / "*", str(dest), limit=2)
-
-    assert len(dest.listdir()) == 2
-
-
-def test_copy_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
-    dest = tmpdir / "dest"
-    tmpfs.copy(tmpdir / "*", str(dest), limit=2)
-
+    getattr(tmpfs, method)(tmpdir / "*", str(dest), limit=2)
     assert len(dest.listdir()) == 2
 
 
@@ -2013,38 +2036,26 @@ def test_expand_path_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     assert len(expanded_paths) == 2
 
 
-def test_expand_path_special_characters():
-    fs_contents = (
-        {"name": "bucket", "type": "directory"},
-        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
-        {"name": "bucket/file?.txt", "type": "file", "size": 100},
-        {"name": "bucket/normal.txt", "type": "file", "size": 100},
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        (
+            "bucket",
+            ["bucket", "bucket/file[1].txt", "bucket/file?.txt", "bucket/normal.txt"],
+        ),
+        ("bucket/file*.txt", ["bucket/file[1].txt", "bucket/file?.txt"]),
+    ],
+)
+def test_expand_path_special_characters(path, expected):
+    fs = DummyTestFS(
+        fs_content=(
+            {"name": "bucket", "type": "directory"},
+            {"name": "bucket/file[1].txt", "type": "file", "size": 100},
+            {"name": "bucket/file?.txt", "type": "file", "size": 100},
+            {"name": "bucket/normal.txt", "type": "file", "size": 100},
+        )
     )
-    fs = DummyTestFS(fs_content=fs_contents)
-    paths = fs.expand_path("bucket", recursive=True)
-    expected = [
-        "bucket",
-        "bucket/file[1].txt",
-        "bucket/file?.txt",
-        "bucket/normal.txt",
-    ]
-    assert sorted(paths) == sorted(expected)
-
-
-def test_expand_path_with_magic_input():
-    fs_contents = (
-        {"name": "bucket", "type": "directory"},
-        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
-        {"name": "bucket/file?.txt", "type": "file", "size": 100},
-        {"name": "bucket/normal.txt", "type": "file", "size": 100},
-    )
-    fs = DummyTestFS(fs_content=fs_contents)
-    paths = fs.expand_path("bucket/file*.txt", recursive=True)
-    expected = [
-        "bucket/file[1].txt",
-        "bucket/file?.txt",
-    ]
-    assert sorted(paths) == sorted(expected)
+    assert sorted(fs.expand_path(path, recursive=True)) == sorted(expected)
 
 
 def test_cat_ranges_forwards_kwargs():

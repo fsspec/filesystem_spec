@@ -336,12 +336,8 @@ class SFTPFileSystem(AbstractFileSystem):
             "type": t,
             "uid": stat.st_uid,
             "gid": stat.st_gid,
-            "time": datetime.datetime.fromtimestamp(
-                stat.st_atime, tz=datetime.timezone.utc
-            ),
-            "mtime": datetime.datetime.fromtimestamp(
-                stat.st_mtime, tz=datetime.timezone.utc
-            ),
+            "time": datetime.datetime.fromtimestamp(stat.st_atime, tz=datetime.UTC),
+            "mtime": datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC),
         }
         if parent_path:
             out["name"] = "/".join([parent_path.rstrip("/"), stat.filename])

@@ -1,8 +1,10 @@
 import io
 import os
 import random
+import re
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path, PurePath
 from unittest.mock import Mock
 
@@ -21,6 +23,8 @@ from fsspec.utils import (
     merge_offset_ranges,
     mirror_from,
     other_paths,
+    parse_content_range_header,
+    range_response_window,
     read_block,
     seek_delimiter,
     setup_logging,
@@ -63,6 +67,7 @@ def test_read_block():
     assert read_block(f, 1, 1, delimiter=b"\n") == b""
     assert read_block(f, 1, 5, delimiter=b"\n") == b"456\n"
     assert read_block(f, 1, 8, delimiter=b"\n") == b"456\n789"
+    assert read_block(f, 1, None, delimiter=b"\n") == b"456\n789"
 
     for ols in [[(0, 3), (3, 3), (6, 3), (9, 2)], [(0, 4), (4, 4), (8, 4)]]:
         out = [read_block(f, o, l, b"\n") for o, l in ols]
@@ -453,6 +458,79 @@ def test_log():
 
     logger = setup_logging(logger_name="fsspec.test")
     assert logger.level == logging.DEBUG
+    with pytest.raises(ValueError, match="Provide either"):
+        setup_logging()
+
+
+def test_package_version(monkeypatch):
+    import importlib
+    from types import SimpleNamespace
+
+    name = "__fsspec_test_version__"
+    module = SimpleNamespace(__version__="1.2")
+    monkeypatch.setitem(sys.modules, name, module)
+    assert fsspec.utils.get_package_version_without_import(name) == "1.2"
+    del module.__version__
+    assert fsspec.utils.get_package_version_without_import(name) is None
+    monkeypatch.setattr(fsspec.utils, "version", lambda _: "2.0")
+    assert fsspec.utils.get_package_version_without_import(name) == "2.0"
+    monkeypatch.delitem(sys.modules, name)
+    monkeypatch.setattr(fsspec.utils, "version", Mock(side_effect=ImportError))
+    assert fsspec.utils.get_package_version_without_import(name) is None
+    module.__version__ = "1.2"
+    monkeypatch.setattr(importlib, "import_module", lambda _: module)
+    assert fsspec.utils.get_package_version_without_import(name) == "1.2"
+
+
+@pytest.mark.parametrize(
+    "header,expected",
+    [
+        ("bytes 2-4/10", (2, 4, 10)),
+        ("bytes 2-4/*", (2, 4, None)),
+        ("bytes */10", (None, None, 10)),
+        ("invalid", (None, None, None)),
+    ],
+)
+def test_content_range(header, expected):
+    assert parse_content_range_header({"Content-Range": header}) == expected
+
+
+@pytest.mark.parametrize(
+    "status,header,start,end,expected",
+    [
+        (206, {}, 2, 5, b"012345"),
+        (200, {}, None, 3, b"012"),
+        (200, {}, -2, None, b"45"),
+        (200, {}, -4, -1, b"234"),
+        (200, {"Content-Range": "bytes 0-5/6"}, 2, 4, None),
+        (200, {}, 2, 4, None),
+        (200, {}, 0, None, b"012345"),
+    ],
+)
+def test_range_response_window(status, header, start, end, expected):
+    if expected is None:
+        with pytest.raises(ValueError, match="support range requests"):
+            range_response_window(b"012345", status, header, start, end)
+    else:
+        assert range_response_window(b"012345", status, header, start, end) == expected
+
+
+@pytest.mark.parametrize(
+    "pattern,text,expected",
+    [
+        ("[a-c]", "b", True),
+        ("[z-a]", "z", False),
+        ("[a-c-e]", "-", True),
+        ("[a-c-]", "-", True),
+        ("[!a-c]", "z", True),
+        ("[^a]", "^", True),
+        ("[[]", "[", True),
+        ("[a&&b]", "&", True),
+        (r"[a\b]", "\\", True),
+    ],
+)
+def test_glob_character_classes(pattern, text, expected):
+    assert bool(re.fullmatch(glob_translate(pattern), text)) is expected
 
 
 @pytest.mark.parametrize(
@@ -761,6 +839,20 @@ def test_size():
     f = io.BytesIO(b"hello")
     assert fsspec.utils.file_size(f) == 5
     assert f.tell() == 0
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_atomic_write(tmp_path, fail):
+    path = tmp_path / "data"
+    path.write_bytes(b"old")
+    with pytest.raises(ValueError) if fail else nullcontext():
+        with fsspec.utils.atomic_write(path) as stream:
+            stream.write(b"new")
+            assert path.read_bytes() == b"old"
+            if fail:
+                raise ValueError("abort")
+    assert path.read_bytes() == (b"old" if fail else b"new")
+    assert list(tmp_path.iterdir()) == [path]
 
 
 class _HasFspath:

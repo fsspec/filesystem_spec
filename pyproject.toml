@@ -9,18 +9,18 @@ description = "File-system specification"
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 maintainers = [{ name = "Martin Durant", email = "mdurant@anaconda.com" }]
 keywords = ["file"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 ]
 
 [project.optional-dependencies]
@@ -104,7 +104,7 @@ test_full = [
     'numpy',
     'pandas <3.0.0',
     'panel',
-    'pyftpdlib',
+    'pyftpdlib[ssl]',
     'pytest',
     'python-snappy',
     'urllib3',
@@ -226,6 +226,7 @@ ignore = [
     "Q003",
     "COM812",
     "COM819",
+    "ASYNC109"
 ]
 
 [tool.pytest.ini_options]
