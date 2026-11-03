@@ -20,6 +20,10 @@ Enhancements
 
 Fixes
 
+- Check SFTP host keys against the system-wide known hosts files
+  (``/etc/ssh/ssh_known_hosts``) too, as OpenSSH does, instead of accepting
+  a host pinned there as unknown.
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
