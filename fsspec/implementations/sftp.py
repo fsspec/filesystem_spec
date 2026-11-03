@@ -110,6 +110,19 @@ class _AutoAddPolicy(paramiko.AutoAddPolicy):
         super().missing_host_key(client, hostname, key)
 
 
+_SSH_DIR = (
+    os.path.join(os.environ.get("PROGRAMDATA", r"C:\ProgramData"), "ssh")
+    if os.name == "nt"
+    else "/etc/ssh"
+)
+#: System-wide known hosts files, the default ``GlobalKnownHostsFile`` of
+#: OpenSSH. They are read in addition to the user's file.
+GLOBAL_KNOWN_HOSTS = (
+    os.path.join(_SSH_DIR, "ssh_known_hosts"),
+    os.path.join(_SSH_DIR, "ssh_known_hosts2"),
+)
+
+
 #: Short names for the missing host key policies built into paramiko, accepted
 #: as the ``host_key_policy`` argument of ``SFTPFileSystem``.
 HOST_KEY_POLICIES = {
@@ -164,8 +177,10 @@ class SFTPFileSystem(AbstractFileSystem):
         temppath: str
             Location on the server to put files, when within a transaction
         host_key_policy: str or paramiko.MissingHostKeyPolicy, optional
-            What to do with a host that is not in the known hosts file, which is
-            ``~/.ssh/known_hosts`` or ``known_hosts``. Passed to
+            What to do with a host that is not in the known hosts files, which
+            are ``~/.ssh/known_hosts`` or ``known_hosts``, and the system-wide
+            files in ``GLOBAL_KNOWN_HOSTS`` (``/etc/ssh/ssh_known_hosts`` and
+            ``/etc/ssh/ssh_known_hosts2``, as for OpenSSH). Passed to
             ``paramiko.SSHClient.set_missing_host_key_policy``. One of the
             strings
 
@@ -197,6 +212,7 @@ class SFTPFileSystem(AbstractFileSystem):
         known_hosts: str, optional
             Path of a ``known_hosts`` file that is used instead of
             ``~/.ssh/known_hosts``, like ``UserKnownHostsFile`` of OpenSSH.
+            The system-wide files are still read, as with OpenSSH.
             It is only written by the ``"auto_add"`` policy, with one line
             added at the end. It has to exist, unless the policy adds keys,
             which creates it.
@@ -257,6 +273,22 @@ class SFTPFileSystem(AbstractFileSystem):
                 self.host_key_policy, "persists", False
             ):
                 raise
+        # Like GlobalKnownHostsFile of OpenSSH, read whatever the user's file
+        # is. Read after it, so that its keys win for a host listed in both.
+        for path in GLOBAL_KNOWN_HOSTS:
+            try:
+                self.client.load_system_host_keys(path)
+            except OSError:
+                pass  # missing or not readable, which OpenSSH ignores too
+            except (paramiko.hostkeys.InvalidHostKey, UnicodeDecodeError) as exc:
+                # Not the user's file to fix, so do not refuse every connection.
+                # paramiko stops reading at such a line, e.g. @cert-authority.
+                logger.warning(
+                    "%s could not be read completely, so host keys from it "
+                    "may not be checked: %s",
+                    path,
+                    exc,
+                )
 
     @classmethod
     def _strip_protocol(cls, path):
