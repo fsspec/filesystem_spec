@@ -953,8 +953,6 @@ def test_mapping_getitems(m):
 
 
 def test_cached(m, tmpdir):
-    fn = f"{tmpdir}/ref.json"
-
     m.pipe({"a": b"A", "b": b"B"})
     m.pipe("ref.json", b"""{"a": ["a"], "b": ["b"]}""")
 
@@ -965,7 +963,8 @@ def test_cached(m, tmpdir):
         target_options={"cache_storage": str(tmpdir), "same_names": True},
     )
     assert fs.cat("a") == b"A"
-    assert os.path.exists(fn)
+    (cached_fn,) = [fn for fn in os.listdir(str(tmpdir)) if fn.startswith("ref_")]
+    assert os.path.exists(os.path.join(str(tmpdir), cached_fn))
 
     # truncate original file to show we are loading from the cached version
     m.pipe("ref.json", b"")

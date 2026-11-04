@@ -17,6 +17,13 @@ Enhancements
 
 Fixes
 
+- Stop the caching filesystems with ``same_names=True`` from returning one
+  file's contents for a different file that shares its basename: cached
+  files now keep their basename and extension with a short hash of the full
+  path added, so distinct paths never share a cached file (#735). Cached
+  copies stored under the old plain-basename names are ignored and fetched
+  again.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

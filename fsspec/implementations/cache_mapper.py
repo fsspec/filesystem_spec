@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import hashlib
+import posixpath
 
 from fsspec.implementations.local import make_path_posix
 
@@ -65,11 +66,28 @@ class HashCacheMapper(AbstractCacheMapper):
         return hashlib.sha256(path.encode()).hexdigest()
 
 
+class BasenameHashCacheMapper(AbstractCacheMapper):
+    """Cache mapper that uses the basename of the remote URL with a short
+    hash of the full URL added before the extension.
+
+    A given path always maps to the same cached basename, but different
+    paths with the same basename map to different cached files, so they
+    cannot overwrite each other's data. The cached file keeps a
+    recognisable name and its original extension.
+    """
+
+    def __call__(self, path: str) -> str:
+        basename = make_path_posix(path).rsplit("/", 1)[-1]
+        stem, ext = posixpath.splitext(basename)
+        digest = hashlib.sha256(path.encode()).hexdigest()[:16]
+        return f"{stem}_{digest}{ext}"
+
+
 def create_cache_mapper(same_names: bool) -> AbstractCacheMapper:
     """Factory method to create cache mapper for backward compatibility with
     ``CachingFileSystem`` constructor using ``same_names`` kwarg.
     """
     if same_names:
-        return BasenameCacheMapper()
+        return BasenameHashCacheMapper()
     else:
         return HashCacheMapper()
