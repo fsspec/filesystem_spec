@@ -122,6 +122,24 @@ def test_mapper():
     assert hash(BasenameCacheMapper(2)) == hash(mapper3)
 
 
+@pytest.mark.skipif(win, reason="POSIX filenames can contain undecodable bytes")
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache"])
+def test_cached_surrogateescape_filename(tmp_path, protocol):
+    source = tmp_path / os.fsdecode(b"record-\xff.txt")
+    source.write_bytes(b"cached data")
+    fs = fsspec.filesystem(
+        protocol,
+        target_protocol="file",
+        cache_storage=str(tmp_path / "cache"),
+        skip_instance_cache=True,
+    )
+    with fs.open(str(source), "rb") as f:
+        assert f.read() == b"cached data"
+    source.unlink()
+    with fs.open(str(source), "rb") as f:
+        assert f.read() == b"cached data"
+
+
 @pytest.mark.parametrize(
     "cache_mapper", [BasenameCacheMapper(), BasenameCacheMapper(1), HashCacheMapper()]
 )
