@@ -122,6 +122,54 @@ def test_mapper():
     assert hash(BasenameCacheMapper(2)) == hash(mapper3)
 
 
+def test_cache_metadata_name(tmpdir):
+    # With same_names=True a remote file named "cache" is stored under the
+    # same name as the metadata file and replaces it; the metadata file name
+    # can be configured so the two never meet.
+    source = os.path.join(tmpdir, "source")
+    os.mkdir(source)
+    afile = os.path.join(source, "afile")
+    open(afile, "w").write("test")
+    outside = os.path.join(tmpdir, "outside")
+    open(outside, "w").write("not the cached copy")
+    storage = os.path.join(tmpdir, "storage")
+    # a metadata document that points another path at a file outside storage
+    poison = os.path.join(source, "cache")
+    with open(poison, "w") as f:
+        json.dump(
+            {
+                make_path_posix(afile): {
+                    "original": afile,
+                    "fn": os.path.relpath(outside, storage),
+                    "blocks": True,
+                    "time": time.time(),
+                    "uid": "x",
+                }
+            },
+            f,
+        )
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=storage,
+        same_names=True,
+        cache_metadata_name="metadata.json",
+    )
+    with open(poison, "rb") as f:
+        assert fs.cat(poison) == f.read()
+    assert fs.cat(afile) == b"test"
+    with open(os.path.join(storage, "metadata.json")) as f:
+        assert make_path_posix(afile) in json.load(f)
+
+    # the option is part of the instance identity
+    fs2 = fsspec.filesystem(
+        "filecache", target_protocol="file", cache_storage=storage, same_names=True
+    )
+    assert fs2 != fs
+    assert fs2.cache_metadata_name == "cache"
+
+
 @pytest.mark.parametrize(
     "cache_mapper", [BasenameCacheMapper(), BasenameCacheMapper(1), HashCacheMapper()]
 )
