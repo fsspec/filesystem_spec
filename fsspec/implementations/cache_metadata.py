@@ -57,8 +57,14 @@ class CacheMetadata:
 
     def _save(self, metadata_to_save: Detail, fn: str) -> None:
         """Low-level function to save metadata to specific file"""
+        # Partial block sets are shared with live MMapCache instances. Serialize
+        # copies so persistence does not replace or mutate those sets.
+        cache = {k: v.copy() for k, v in metadata_to_save.items()}
+        for detail in cache.values():
+            if isinstance(detail.get("blocks"), set):
+                detail["blocks"] = list(detail["blocks"])
         with atomic_write(fn, mode="w") as f:
-            json.dump(metadata_to_save, f)
+            json.dump(cache, f)
 
     def _scan_locations(
         self, writable_only: bool = False
@@ -117,7 +123,8 @@ class CacheMetadata:
         responsible for deleting the expired files.
         """
         expired_files = []
-        for path, detail in self.cached_files[-1].copy().items():
+        cache = self.cached_files[-1].copy()
+        for path, detail in self.cached_files[-1].items():
             if time.time() - detail["time"] > expiry_time:
                 fn = detail.get("fn", "")
                 if not fn:
@@ -126,13 +133,15 @@ class CacheMetadata:
                     )
                 fn = os.path.join(self._storage[-1], fn)
                 expired_files.append(fn)
-                self.cached_files[-1].pop(path)
+                cache.pop(path)
 
-        if self.cached_files[-1]:
+        if cache:
             cache_path = os.path.join(self._storage[-1], "cache")
-            self._save(self.cached_files[-1], cache_path)
+            self._save(cache, cache_path)
 
-        writable_cache_empty = not self.cached_files[-1]
+        # Keep memory and disk consistent if writing the new metadata fails.
+        self.cached_files[-1] = cache
+        writable_cache_empty = not cache
         return expired_files, writable_cache_empty
 
     def load(self) -> None:
@@ -205,11 +214,7 @@ class CacheMetadata:
                         cached_files[k] = c
             else:
                 cached_files = cache
-            cache = {k: v.copy() for k, v in cached_files.items()}
-            for c in cache.values():
-                if isinstance(c["blocks"], set):
-                    c["blocks"] = list(c["blocks"])
-            self._save(cache, fn)
+            self._save(cached_files, fn)
             self.cached_files[-1] = cached_files
 
     def update_file(self, path: str, detail: Detail) -> None:
