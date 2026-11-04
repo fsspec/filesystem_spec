@@ -85,15 +85,30 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     coro = func(*args, **kwargs)
     result = [None]
     event = threading.Event()
-    asyncio.run_coroutine_threadsafe(_runner(event, coro, result, timeout), loop)
-    while True:
-        # this loops allows thread to get interrupted
-        if event.wait(1):
-            break
-        if timeout is not None:
-            timeout -= 1
-            if timeout < 0:
-                raise FSTimeoutError
+    future = asyncio.run_coroutine_threadsafe(
+        _runner(event, coro, result, timeout), loop
+    )
+    try:
+        while True:
+            # this loop allows the thread to get interrupted
+            if event.wait(1):
+                break
+            if timeout is not None:
+                timeout -= 1
+                if timeout < 0:
+                    raise FSTimeoutError
+    except (KeyboardInterrupt, SystemExit):
+        # Cancel only this call; the shared IO loop may have other work.
+        # Task creation queues the runner's first step. Defer cancellation
+        # one more loop turn so the runner takes ownership of coro first.
+        # A single call_soon_threadsafe(future.cancel) can cancel the Task
+        # before that first step when the loop has not started or is blocked.
+        try:
+            loop.call_soon_threadsafe(loop.call_soon, future.cancel)
+        except RuntimeError:
+            # A concurrently closed loop must not mask the original interrupt.
+            pass
+        raise
 
     return_result = result[0]
     # the traceback of a stored exception includes _runner's frame, which holds

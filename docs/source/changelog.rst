@@ -17,6 +17,10 @@ Enhancements
 
 Fixes
 
+- Cancel the submitted async call when ``sync()`` is interrupted, stopping
+  HTTP ``get_file`` transfers after ``KeyboardInterrupt`` or ``SystemExit``
+  in the calling thread (#1667).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
