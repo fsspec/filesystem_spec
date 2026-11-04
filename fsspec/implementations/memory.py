@@ -130,7 +130,11 @@ class MemoryFileSystem(AbstractFileSystem):
                     break
                 rel = parent[len(prefix) :]
                 if maxdepth is None or rel.count("/") + 1 <= maxdepth:
-                    dirs[parent] = {"name": parent, "size": 0, "type": "directory"}
+                    dirs[parent] = (
+                        {"name": parent, "size": 0, "type": "directory"}
+                        if detail
+                        else None
+                    )
                 idx = parent.rfind("/")
 
         # `store` may be shared by multiple MemoryFileSystem instances, so iterate a
@@ -144,12 +148,16 @@ class MemoryFileSystem(AbstractFileSystem):
                 add_ancestor_dirs(name)
             if maxdepth is not None and rel.count("/") + 1 > maxdepth:
                 continue
-            out[name] = {
-                "name": name,
-                "size": filelike.size,
-                "type": "file",
-                "created": filelike.created.timestamp(),
-            }
+            out[name] = (
+                {
+                    "name": name,
+                    "size": filelike.size,
+                    "type": "file",
+                    "created": filelike.created.timestamp(),
+                }
+                if detail
+                else None
+            )
 
         if withdirs:
             # Explicitly-created (possibly empty) directories live in pseudo_dirs.
@@ -160,7 +168,7 @@ class MemoryFileSystem(AbstractFileSystem):
             # Mirror the base find(): include the search root itself when it is
             # a directory (needed for posix glob compliance).
             if path != "" and self.isdir(path):
-                out[path] = self.info(path)
+                out[path] = self.info(path) if detail else None
 
         names = sorted(out)
         return {name: out[name] for name in names} if detail else names
