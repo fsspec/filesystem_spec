@@ -1574,6 +1574,18 @@ def test_serialize_no_password_nested():
     assert fs.to_dict(include_password=True)["fs"]["password"] == "admin"
 
 
+def test_serialize_no_password_in_options():
+    # chained URLs such as "simplecache::ftp://user:pass@host/file" put the
+    # credentials of the target into target_options
+    fs = DummyTestFS(3, target_options={"username": "user", "password": "admin"})
+
+    assert "admin" not in fs.to_json(include_password=False)
+    out = fs.to_dict(include_password=False)
+    assert out["target_options"] == {"username": "user"}
+    out = fs.to_dict(include_password=True)
+    assert out["target_options"]["password"] == "admin"
+
+
 def test_serialize_with_password():
     fs = DummyTestFS(1, password="admin")
 
