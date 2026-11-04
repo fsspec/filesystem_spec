@@ -6,6 +6,10 @@ Dev
 
 Enhancements
 
+- Add an opt-in ``lazy_size`` attribute to ``AbstractBufferedFile`` that defers
+  the ``info()`` lookup until the size is needed, so a whole-file ``read()``
+  costs a single ``cat_file`` call (#1392).
+
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
