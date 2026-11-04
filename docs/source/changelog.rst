@@ -17,6 +17,10 @@ Enhancements
 
 Fixes
 
+- Check SFTP host keys against the system-wide known hosts files
+  (``/etc/ssh/ssh_known_hosts``) too, as OpenSSH does, instead of accepting
+  a host pinned there as unknown.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
