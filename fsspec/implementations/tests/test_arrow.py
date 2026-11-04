@@ -1,3 +1,4 @@
+import errno
 import io
 import secrets
 
@@ -7,6 +8,21 @@ pyarrow_fs = pytest.importorskip("pyarrow.fs")
 FileSystem = pyarrow_fs.FileSystem
 
 from fsspec.implementations.arrow import ArrowFSWrapper, HadoopFileSystem  # noqa: E402
+
+
+@pytest.mark.parametrize("name", ["existing", "does not exist"])
+def test_makedirs_existing_directory(tmp_path, name):
+    fs = ArrowFSWrapper(pyarrow_fs.LocalFileSystem())
+    path = tmp_path / name
+    path.mkdir()
+
+    with pytest.raises(FileExistsError) as exc:
+        fs.makedirs(str(path), exist_ok=False)
+
+    assert exc.value.errno == errno.EEXIST
+    assert exc.value.filename == str(path)
+    fs.makedirs(str(path), exist_ok=True)
+    assert path.is_dir()
 
 
 @pytest.mark.parametrize("mode", ["rb", "wb"])
@@ -110,7 +126,7 @@ def test_object_store_parent_has_no_leading_slash(type_name):
 
     backend = ObjectStoreFileSystem(type_name)
     fs = ArrowFSWrapper(backend, skip_instance_cache=True)
-    fs.makedirs(fs._parent("bucket/path/file"))
+    fs.makedirs(fs._parent("bucket/path/file"), exist_ok=True)
 
     assert backend.created_path == "bucket/path"
     assert fs.root_marker == ""
