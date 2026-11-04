@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Quote the development installation extras to prevent shell glob expansion.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
