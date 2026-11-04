@@ -1,4 +1,5 @@
 import argparse
+import io
 import logging
 import os
 import stat
@@ -26,13 +27,13 @@ class FUSEr(Operations):
     def getattr(self, path, fh=None):
         logger.debug("getattr %s", path)
         if self._ready_file and path in ["/.fuse_ready", ".fuse_ready"]:
-            return {"type": "file", "st_size": 5}
-
-        path = "".join([self.root, path.lstrip("/")]).rstrip("/")
-        try:
-            info = self.fs.info(path)
-        except FileNotFoundError as exc:
-            raise FuseOSError(ENOENT) from exc
+            info = {"type": "file", "size": 5}
+        else:
+            path = "".join([self.root, path.lstrip("/")]).rstrip("/")
+            try:
+                info = self.fs.info(path)
+            except FileNotFoundError as exc:
+                raise FuseOSError(ENOENT) from exc
 
         data = {"st_uid": info.get("uid", 1000), "st_gid": info.get("gid", 1000)}
         perm = info.get("mode", 0o777)
@@ -70,10 +71,6 @@ class FUSEr(Operations):
 
     def read(self, path, size, offset, fh):
         logger.debug("read %s", (path, size, offset))
-        if self._ready_file and path in ["/.fuse_ready", ".fuse_ready"]:
-            # status indicator
-            return b"ready"
-
         f = self.cache[fh]
         f.seek(offset)
         out = f.read(size)
@@ -97,6 +94,11 @@ class FUSEr(Operations):
 
     def open(self, path, flags):
         logger.debug("open %s", (path, flags))
+        if self._ready_file and path in ["/.fuse_ready", ".fuse_ready"]:
+            self.cache[self.counter] = io.BytesIO(b"ready")
+            self.counter += 1
+            return self.counter - 1
+
         fn = "".join([self.root, path.lstrip("/")])
         if flags % 2 == 0:
             # read
