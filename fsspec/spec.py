@@ -2007,6 +2007,18 @@ class AbstractBufferedFile(io.IOBase):
 
     DEFAULT_BLOCK_SIZE = 5 * 2**20
     _details = None
+    _size = None
+    _cache = None
+    #: Defer the ``fs.info`` lookup of the file size when opening in "rb"
+    #: mode without an explicit ``size``. The size is fetched the first time
+    #: it is needed (``size``, ``seek(..., 2)``, ``read(n)``, ``readinto``),
+    #: and a ``read()`` of the whole file from position 0 is served by a
+    #: single ``fs.cat_file(path)`` call instead of ``info`` plus a ranged
+    #: fetch. This also means a missing file is reported on first use rather
+    #: than by ``open``. Backends set this on their file class once their
+    #: ``cat_file`` does not itself go through ``open`` and their fetches do
+    #: not depend on ``details`` (e.g., ETag or version pinning).
+    lazy_size = False
 
     def __init__(
         self,
@@ -2046,8 +2058,6 @@ class AbstractBufferedFile(io.IOBase):
         kwargs:
             Gets stored as self.kwargs
         """
-        from .core import caches
-
         self.path = path
         self.fs = fs
         self.mode = mode
@@ -2076,13 +2086,14 @@ class AbstractBufferedFile(io.IOBase):
         if mode not in {"ab", "rb", "wb", "xb"}:
             raise NotImplementedError("File mode not supported")
         if mode == "rb":
+            self._cache_type = cache_type
+            self._cache_options = cache_options
             if size is not None:
                 self.size = size
-            else:
+            elif not self.lazy_size:
                 self.size = self.details["size"]
-            self.cache = caches[cache_type](
-                self.blocksize, self._fetch_range, self.size, **cache_options
-            )
+            if size is not None or not self.lazy_size:
+                self._make_cache()
         else:
             self.buffer = io.BytesIO()
             self.offset = None
@@ -2098,6 +2109,42 @@ class AbstractBufferedFile(io.IOBase):
         if self.size is None:
             raise AttributeError("File size is unknown")
         return self.size
+
+    @property
+    def size(self):
+        """Size of the file in bytes, or None if the backend does not know it.
+
+        Only available in read mode. A ``lazy_size`` file takes it from
+        ``details`` (fetching them on first access) whenever it is not set.
+        """
+        if self._size is None:
+            if self.mode != "rb":
+                raise AttributeError("size is only available in read mode")
+            if self.lazy_size:
+                self._size = self.details["size"]
+        return self._size
+
+    @size.setter
+    def size(self, value):
+        self._size = value
+
+    @property
+    def cache(self):
+        """The read buffer; created on first access for ``lazy_size`` files."""
+        if self._cache is None and self.mode == "rb" and not self.closed:
+            self._make_cache()
+        return self._cache
+
+    @cache.setter
+    def cache(self, value):
+        self._cache = value
+
+    def _make_cache(self):
+        from .core import caches
+
+        self._cache = caches[self._cache_type](
+            self.blocksize, self._fetch_range, self.size, **self._cache_options
+        )
 
     @property
     def details(self):
@@ -2281,10 +2328,23 @@ class AbstractBufferedFile(io.IOBase):
         length = -1 if length is None else int(length)
         if self.mode != "rb":
             raise ValueError("File not in read mode")
-        if length < 0:
-            length = self.size - self.loc
         if self.closed:
             raise ValueError("I/O operation on closed file.")
+        if (
+            length < 0
+            and self.loc == 0
+            and self.lazy_size
+            and self._size is None
+            and self._details is None
+        ):
+            # Whole-file sequential read before anything needed the size:
+            # one fetch, without the info() round trip (GH#1392).
+            out = self.fs.cat_file(self.path)
+            self.size = len(out)
+            self.loc = len(out)
+            return out
+        if length < 0:
+            length = self.size - self.loc
         if length == 0:
             # don't even bother calling fetch
             return b""
@@ -2390,12 +2450,14 @@ class AbstractBufferedFile(io.IOBase):
             return
         try:
             if self.mode == "rb":
-                cache = getattr(self, "cache", None)
+                # use the private slot: a lazy file must not build (and size)
+                # its cache just to close it
+                cache = self._cache
                 if cache is not None:
                     close = getattr(cache, "close", None)
                     if callable(close):
                         close()
-                self.cache = None
+                self._cache = None
             else:
                 if not getattr(self, "forced", True):
                     self.flush(force=True)

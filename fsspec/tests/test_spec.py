@@ -1355,6 +1355,168 @@ def test_eq():
     assert result is False
 
 
+class LazySizeFile(AbstractBufferedFile):
+    lazy_size = True
+
+
+class CountingFS(AbstractFileSystem):
+    """In-memory read-only filesystem that records every info/cat_file call."""
+
+    cachable = False
+
+    def __init__(self, contents, file_class=LazySizeFile, **kwargs):
+        super().__init__(**kwargs)
+        self.contents = contents
+        self.file_class = file_class
+        self.calls = []
+
+    def info(self, path, **kwargs):
+        self.calls.append(("info", path))
+        if path not in self.contents:
+            raise FileNotFoundError(path)
+        return {"name": path, "size": len(self.contents[path]), "type": "file"}
+
+    def cat_file(self, path, start=None, end=None, **kwargs):
+        self.calls.append(("cat_file", path, start, end))
+        if path not in self.contents:
+            raise FileNotFoundError(path)
+        return self.contents[path][start:end]
+
+    def _open(self, path, mode="rb", block_size=None, **kwargs):
+        return self.file_class(self, path, mode, block_size, **kwargs)
+
+
+@pytest.fixture
+def counting_fs():
+    return CountingFS({"a": b"0123456789" * 10, "empty": b""})
+
+
+def test_lazy_size_whole_read_is_one_request(counting_fs):
+    # GH#1392: ``open(...).read()`` used to cost an info() call for the
+    # size and then a ranged fetch of the whole file
+    fs = counting_fs
+    with fs.open("a", "rb") as f:
+        assert f.read() == fs.contents["a"]
+        assert f.tell() == 100
+        assert f.size == 100
+        assert f.read() == b""
+    assert fs.calls == [("cat_file", "a", None, None)]
+
+    fs.calls.clear()
+    with fs.open("empty", "rb") as f:
+        assert f.read() == b""
+        assert f.size == 0
+    assert fs.calls == [("cat_file", "empty", None, None)]
+
+
+def test_lazy_size_read_all_then_seek_back(counting_fs):
+    fs = counting_fs
+    with fs.open("a", "rb", block_size=10) as f:
+        assert f.read(-1) == fs.contents["a"]
+        f.seek(0)
+        assert f.read(4) == b"0123"
+        assert f.read(-1) == fs.contents["a"][4:]
+    # the size learned from the whole read is reused: no info() at all
+    assert ("info", "a") not in fs.calls
+    assert fs.calls[0] == ("cat_file", "a", None, None)
+
+
+def test_lazy_size_partial_read_unchanged(counting_fs):
+    fs = counting_fs
+    with fs.open("a", "rb", block_size=10) as f:
+        assert f.read(5) == b"01234"
+        assert f.tell() == 5
+        assert f.read() == fs.contents["a"][5:]
+    assert fs.calls[0] == ("info", "a")
+    assert fs.calls[1][:3] == ("cat_file", "a", 0)
+    assert all(c[0] == "cat_file" for c in fs.calls[1:])
+
+
+def test_lazy_size_seek_end_and_tell_unchanged(counting_fs):
+    fs = counting_fs
+    with fs.open("a", "rb") as f:
+        assert f.tell() == 0
+        assert f.seek(0, 2) == 100
+        assert f.tell() == 100
+        assert f.read() == b""
+        assert f.seek(-10, 2) == 90
+        assert f.read() == b"0123456789"
+    assert fs.calls[0] == ("info", "a")
+    assert fs.calls[1:] == [("cat_file", "a", 90, 100)]
+
+
+def test_lazy_size_readinto_unchanged(counting_fs):
+    fs = counting_fs
+    out = bytearray(8)
+    with fs.open("a", "rb", block_size=10) as f:
+        assert f.readinto(out) == 8
+        assert bytes(out) == b"01234567"
+    assert fs.calls[0] == ("info", "a")
+    assert fs.calls[1][:3] == ("cat_file", "a", 0)
+
+
+def test_lazy_size_explicit_size_unchanged(counting_fs):
+    fs = counting_fs
+    with fs.open("a", "rb", size=100) as f:
+        assert f.size == 100
+        assert f.read() == fs.contents["a"]
+    # an explicit size still means a ranged fetch and no info()
+    assert fs.calls == [("cat_file", "a", 0, 100)]
+
+    fs.calls.clear()
+    with fs.open("a", "rb", size=20) as f:
+        assert f.read() == fs.contents["a"][:20]
+        assert f.read() == b""
+    assert fs.calls == [("cat_file", "a", 0, 20)]
+
+
+def test_lazy_size_info_first_then_read(counting_fs):
+    fs = counting_fs
+    with fs.open("a", "rb") as f:
+        assert f.info()["size"] == 100
+        assert f.read() == fs.contents["a"]
+    # once the details are known, the read uses them (one info, one fetch)
+    assert fs.calls == [("info", "a"), ("cat_file", "a", 0, 100)]
+
+
+def test_lazy_size_missing_file_reported_on_read(counting_fs):
+    fs = counting_fs
+    f = fs.open("missing", "rb")
+    with pytest.raises(FileNotFoundError):
+        f.read()
+    with pytest.raises(FileNotFoundError):
+        f.seek(0, 2)
+    f.close()
+
+
+def test_lazy_size_close_and_pickle(counting_fs):
+    fs = counting_fs
+    f = fs.open("a", "rb")
+    f.close()
+    assert f.closed
+    assert fs.calls == []
+    with pytest.raises(ValueError):
+        f.read()
+
+    f = fs.open("a", "rb")
+    f2 = pickle.loads(pickle.dumps(f))
+    # pickling needs the size; the copy is reopened with it, so it does not
+    # ask again (the unpickled filesystem is a new instance with its own log)
+    assert fs.calls == [("info", "a")]
+    assert f2.read() == fs.contents["a"]
+    assert f2.fs.calls == [("cat_file", "a", 0, 100)]
+
+
+def test_eager_size_default_unchanged():
+    # the default file class keeps the info() call at open time
+    fs = CountingFS({"a": b"x" * 100}, file_class=AbstractBufferedFile)
+    with fs.open("a", "rb") as f:
+        assert f.size == 100
+        assert fs.calls == [("info", "a")]
+        assert f.read() == b"x" * 100
+    assert fs.calls == [("info", "a"), ("cat_file", "a", 0, 100)]
+
+
 def test_pickle_multiple():
     a = DummyTestFS(1)
     b = DummyTestFS(2, bar=1)
