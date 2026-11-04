@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Consolidate overlapping known-parts cache ranges so reads do not duplicate
+  bytes or insert padding within covered data.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

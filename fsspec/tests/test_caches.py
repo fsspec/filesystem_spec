@@ -15,7 +15,7 @@ from fsspec.caching import (
 )
 from fsspec.implementations.cached import WholeFileCacheFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
-from fsspec.spec import AbstractBufferedFile
+from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 
 
 def test_cache_getitem(Cache_imp):
@@ -481,6 +481,35 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
         result = cache._fetch(start, end)
         expected = string.ascii_letters[start:end].encode()
         assert result == expected
+
+
+@pytest.mark.parametrize("strict", [True, False])
+@pytest.mark.parametrize(
+    "ranges",
+    [
+        [(0, 10), (5, 20)],
+        [(0, 15), (5, 10), (12, 20)],
+        [(0, 10), (0, 20)],
+    ],
+)
+def test_known_overlapping_parts(strict, ranges):
+    data = bytes(range(20))
+    parts = {(start, stop): data[start:stop] for start, stop in ranges}
+
+    with AbstractBufferedFile(
+        AbstractFileSystem(),
+        "preloaded.bin",
+        size=len(data),
+        cache_type="parts",
+        cache_options={"data": parts, "strict": strict},
+    ) as reader:
+        assert reader.read(8) == data[:8]
+        assert reader.read() == data[8:]
+        assert reader.tell() == len(data)
+        reader.seek(3)
+        buffer = bytearray(15)
+        assert reader.readinto(buffer) == len(buffer)
+        assert buffer == data[3:18]
 
 
 @pytest.mark.parametrize("strict", [True, False])
