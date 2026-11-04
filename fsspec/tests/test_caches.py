@@ -708,3 +708,51 @@ def test_adaptive_cache_fallback_without_loop():
 
     assert cache._fetch(0, 10) == data[0:10]
     assert cache._fetch(10, 17) == data[10:17]
+
+
+@pytest.mark.parametrize("size", [0, 3, 8])
+@pytest.mark.parametrize("warm", [False, True])
+def test_first_cache_eof_does_not_fetch(size, warm):
+    data = b"abcdefgh"[:size]
+    requests = []
+
+    def fetch(start, end):
+        requests.append((start, end))
+        return data[start:end]
+
+    cache = FirstChunkCache(4, fetch, size)
+    if warm and size:
+        assert cache._fetch(0, size) == data
+    before = requests.copy()
+    counts = (cache.hit_count, cache.miss_count, cache.total_requested_bytes)
+    for end in (None, size, size + 1, size + 10):
+        assert cache._fetch(size, end) == b""
+    assert requests == before
+    assert (cache.hit_count, cache.miss_count, cache.total_requested_bytes) == counts
+
+
+def test_first_cache_buffered_gzip_eof():
+    import gzip
+
+    payload = b"example user data\n" * 100
+    compressed = gzip.compress(payload)
+    fs = MemoryFileSystem()
+    fs.pipe("/first-cache-eof.gz", compressed)
+    with AbstractBufferedFile(
+        fs, "/first-cache-eof.gz", block_size=16, cache_type="first"
+    ) as f:
+        requests = []
+        fetch = f.cache.fetcher
+
+        def tracked_fetch(start, end):
+            requests.append((start, end))
+            return fetch(start, end)
+
+        f.cache.fetcher = tracked_fetch
+        with gzip.GzipFile(fileobj=f) as z:
+            assert z.read() == payload
+        assert all(start < end for start, end in requests)
+        before = requests.copy()
+        assert f.read(1) == b""
+        assert f.read(10) == b""
+        assert requests == before

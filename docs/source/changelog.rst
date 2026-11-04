@@ -17,6 +17,7 @@ Enhancements
 
 Fixes
 
+- Avoid empty backend range requests at EOF with the first-chunk cache.
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
