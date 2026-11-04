@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Reject DBFS append mode before it can overwrite existing file contents (#2429).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

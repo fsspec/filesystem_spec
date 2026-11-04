@@ -171,3 +171,17 @@ def test_exclusive_create_existing_file_stops_before_upload(fs, monkeypatch, dat
             file.write(data)
 
     assert post.call_count == 1
+
+
+@pytest.mark.parametrize("mode", ["a", "ab"])
+def test_append_is_rejected_before_upload(fs, monkeypatch, mode):
+    created = response()
+    created._content = b'{"handle": 1}'
+    post = Mock(return_value=created)
+    monkeypatch.setattr(fs.session, "post", post)
+
+    with pytest.raises(NotImplementedError, match="[Aa]ppend"):
+        with fs.open("/existing", mode) as file:
+            file.write("new data" if mode == "a" else b"new data")
+
+    post.assert_not_called()

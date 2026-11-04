@@ -435,8 +435,12 @@ class DatabricksFile(AbstractBufferedFile):
         """
         Create a new instance of the DatabricksFile.
 
-        The blocksize needs to be the default one.
+        The blocksize needs to be the default one. Append mode is not supported
+        by the DBFS API.
         """
+        if mode == "ab":
+            raise NotImplementedError("Append mode is not supported by the DBFS API")
+
         if block_size is None or block_size == "default":
             block_size = self.DEFAULT_BLOCK_SIZE
 
