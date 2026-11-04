@@ -181,3 +181,14 @@ def test_open_download_fallback(
     fs.http_fs.open.assert_called_once_with(
         "https://example.com/download", mode="rb", block_size=32, cache_options=None
     )
+
+
+@pytest.mark.parametrize("contents", [[], [{"name": "child.txt", "type": "file"}]])
+def test_open_directory(github_contents, monkeypatch, contents):
+    fs, _, _ = github_contents
+    response = Mock()
+    response.json.return_value = contents
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: response)
+
+    with pytest.raises(IsADirectoryError, match="data"):
+        fs.open("data", "rb")

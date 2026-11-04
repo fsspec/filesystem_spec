@@ -245,6 +245,8 @@ class GithubFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path)
         r.raise_for_status()
         content_json = r.json()
+        if isinstance(content_json, list):
+            raise IsADirectoryError(path)
 
         # Inline base64 content may be empty for a zero-byte file. Large files
         # report encoding="none" and need the download fallback below.
