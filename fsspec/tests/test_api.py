@@ -233,7 +233,8 @@ def test_chained_fs():
     with of as f:
         assert f.read() == b"test"
 
-    assert os.listdir(d2) == ["f1"]
+    (cached_fn,) = os.listdir(d2)
+    assert cached_fn.startswith("f1_")
 
 
 @pytest.mark.xfail(reason="see issue #334", strict=True)
@@ -332,7 +333,7 @@ def test_chained_fs_multi():
     with of[1] as f:
         assert f.read() == b"test2"
 
-    assert sorted(os.listdir(d2)) == ["f1", "f2"]
+    assert [fn.rsplit("_", 1)[0] for fn in sorted(os.listdir(d2))] == ["f1", "f2"]
 
     d2 = tempfile.mkdtemp()
 
@@ -345,7 +346,7 @@ def test_chained_fs_multi():
     with of[1] as f:
         assert f.read() == b"test2"
 
-    assert sorted(os.listdir(d2)) == ["f1", "f2"]
+    assert [fn.rsplit("_", 1)[0] for fn in sorted(os.listdir(d2))] == ["f1", "f2"]
 
 
 def test_chained_fo():
@@ -371,7 +372,7 @@ def test_chained_fo():
     )
     with of[0] as f:
         assert f.read() == b"test"
-    assert "afile" in os.listdir(d3)
+    assert any(fn.startswith("afile_") for fn in os.listdir(d3))
 
 
 def test_url_to_fs():

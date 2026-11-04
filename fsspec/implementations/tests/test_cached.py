@@ -16,6 +16,7 @@ from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.cache_mapper import (
     BasenameCacheMapper,
+    BasenameHashCacheMapper,
     HashCacheMapper,
     create_cache_mapper,
 )
@@ -54,10 +55,17 @@ def local_filecache():
 
 def test_mapper():
     mapper0 = create_cache_mapper(True)
-    assert mapper0("somefile") == "somefile"
-    assert mapper0("/somefile") == "somefile"
-    assert mapper0("/somedir/somefile") == "somefile"
-    assert mapper0("/otherdir/somefile") == "somefile"
+    assert isinstance(mapper0, BasenameHashCacheMapper)
+    # The basename is kept, with a short hash of the full path added, so
+    # that different paths with the same basename do not collide (#735)
+    assert mapper0("somefile") == "somefile_dd00b9487898b025"
+    assert mapper0("/somefile") == "somefile_884c07bc2efe65c6"
+    assert mapper0("/somedir/somefile") == "somefile_67a6956e5a5f9523"
+    assert mapper0("/otherdir/somefile") == "somefile_f043dee01ab9b752"
+    assert mapper0("/somedir/somefile") != mapper0("/otherdir/somefile")
+    # The extension stays at the end of the cached name
+    assert mapper0("/somedir/somefile.txt") == "somefile_a9862efff2a9f4e4.txt"
+    assert mapper0("/otherdir/somefile.txt") == "somefile_eb7a5a21a36707ad.txt"
 
     mapper1 = create_cache_mapper(False)
     assert (
@@ -161,7 +169,7 @@ def test_metadata(tmpdir, cache_mapper):
 
 def test_constructor_kwargs(tmpdir):
     fs = fsspec.filesystem("filecache", target_protocol="file", same_names=True)
-    assert isinstance(fs._mapper, BasenameCacheMapper)
+    assert isinstance(fs._mapper, BasenameHashCacheMapper)
 
     fs = fsspec.filesystem("filecache", target_protocol="file", same_names=False)
     assert isinstance(fs._mapper, HashCacheMapper)
@@ -178,6 +186,63 @@ def test_constructor_kwargs(tmpdir):
             cache_mapper=HashCacheMapper(),
             same_names=True,
         )
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache", "blockcache"])
+def test_same_names_same_basename_different_dirs(tmpdir, protocol):
+    # regression test for #735: with same_names=True, two different paths
+    # with the same basename must not be served from the same cached file
+    source = os.path.join(str(tmpdir), "source")
+    paths = {}
+    for dirname, data in [("dog", b"DOG"), ("cat", b"CAT")]:
+        os.makedirs(os.path.join(source, dirname))
+        paths[dirname] = os.path.join(source, dirname, "animal.txt")
+        with open(paths[dirname], "wb") as f:
+            f.write(data)
+    cache_storage = os.path.join(str(tmpdir), "cache")
+    fs = fsspec.filesystem(
+        protocol,
+        target_protocol="file",
+        cache_storage=cache_storage,
+        same_names=True,
+        cache_check=3600,
+    )
+
+    assert fs.cat(paths["dog"]) == b"DOG"
+    assert fs.cat(paths["cat"]) == b"CAT"
+    # further reads, in either order, keep returning each file's own data
+    assert fs.cat(paths["dog"]) == b"DOG"
+    assert fs.cat(paths["cat"]) == b"CAT"
+
+    # the two paths occupy two distinct cache files, each keeping the
+    # original basename and extension
+    cached = [fn for fn in os.listdir(cache_storage) if fn != "cache"]
+    assert len(cached) == 2
+    assert all(fn.startswith("animal_") and fn.endswith(".txt") for fn in cached)
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_same_names_second_read_hits_cache(tmpdir, protocol):
+    # The same path opened again is served from the cache: it still works
+    # after the file has disappeared from the target filesystem.
+    # (blockcache is not covered here: CachingFileSystem consults the
+    # target file on open, whatever mapper is in use.)
+    source = os.path.join(str(tmpdir), "source", "animal.txt")
+    os.makedirs(os.path.dirname(source))
+    with open(source, "wb") as f:
+        f.write(b"DOG")
+    fs = fsspec.filesystem(
+        protocol,
+        target_protocol="file",
+        cache_storage=os.path.join(str(tmpdir), "cache"),
+        same_names=True,
+        cache_check=3600,
+        expiry=3600,
+    )
+
+    assert fs.cat(source) == b"DOG"
+    os.remove(source)
+    assert fs.cat(source) == b"DOG"
 
 
 def test_whole_file_cache_ls_forwards_kwargs(tmp_path, m, mocker):
@@ -970,8 +1035,9 @@ def test_with_compression(impl, compression):
     ) as f:
         # stores original compressed file, uncompress on read
         assert f.read() == data
-        assert "data" in os.listdir(cachedir)
-        assert open(os.path.join(cachedir, "data"), "rb").read() != data
+        (cached_fn,) = [fn for fn in os.listdir(cachedir) if fn != "cache"]
+        assert cached_fn.startswith("data_")
+        assert open(os.path.join(cachedir, cached_fn), "rb").read() != data
 
     cachedir = tempfile.mkdtemp()
 
@@ -988,8 +1054,9 @@ def test_with_compression(impl, compression):
     ) as f:
         # stores uncompressed data
         assert f.read() == data
-        assert "data" in os.listdir(cachedir)
-        assert open(os.path.join(cachedir, "data"), "rb").read() == data
+        (cached_fn,) = [fn for fn in os.listdir(cachedir) if fn != "cache"]
+        assert cached_fn.startswith("data_")
+        assert open(os.path.join(cachedir, cached_fn), "rb").read() == data
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
@@ -1125,7 +1192,9 @@ def test_multi_cache(protocol):
         **{protocol: {"cache_storage": d2, "same_names": True}},
     )
     assert all(d2 in u for u in lurl)
-    assert all(os.path.basename(f) in ["file0", "file1"] for f in lurl)
+    assert all(
+        os.path.basename(f).rsplit("_", 1)[0] in ["file0", "file1"] for f in lurl
+    )
     assert all(open(u, "rb").read() == b"hello" for u in lurl)
 
     d2 = tempfile.mkdtemp()
@@ -1136,13 +1205,13 @@ def test_multi_cache(protocol):
     )
     with lurl as files:
         for f in files:
-            assert os.path.basename(f.name) in ["file0", "file1"]
+            assert os.path.basename(f.name).rsplit("_", 1)[0] in ["file0", "file1"]
             assert f.read() == b"hello"
     fs = fsspec.filesystem("memory")
     fs.store.clear()
     with lurl as files:
         for f in files:
-            assert os.path.basename(f.name) in ["file0", "file1"]
+            assert os.path.basename(f.name).rsplit("_", 1)[0] in ["file0", "file1"]
             assert f.read() == b"hello"
 
 

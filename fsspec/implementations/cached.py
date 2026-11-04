@@ -151,10 +151,13 @@ class CachingFileSystem(ChainedFileSystem):
         same_names: bool (optional)
             By default, target URLs are hashed using a ``HashCacheMapper`` so
             that files from different backends with the same basename do not
-            conflict. If this argument is ``true``, a ``BasenameCacheMapper``
-            is used instead. Other cache mapper options are available by using
-            the ``cache_mapper`` keyword argument. Only one of this and
-            ``cache_mapper`` should be specified.
+            conflict. If this argument is ``true``, a
+            ``BasenameHashCacheMapper`` is used instead: cached files keep
+            their original basename and extension, with a short hash of the
+            full URL added, so that different URLs with the same basename do
+            not overwrite each other. Other cache mapper options are
+            available by using the ``cache_mapper`` keyword argument. Only
+            one of this and ``cache_mapper`` should be specified.
         compression: str (optional)
             To decompress on download. Can be 'infer' (guess from the URL name),
             one of the entries in ``fsspec.compression.compr``, or None for no
