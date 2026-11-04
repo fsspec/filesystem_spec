@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Reject GitHub paths below files instead of listing the ancestor file or
+  reporting a nonexistent directory.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

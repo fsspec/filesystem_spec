@@ -164,6 +164,8 @@ class GithubFileSystem(AbstractFileSystem):
                     raise FileNotFoundError(path)
                 out = out[0]
                 if out["type"] == "file":
+                    if so_far != path.rstrip("/"):
+                        raise FileNotFoundError(path)
                     if detail:
                         return [out]
                     else:

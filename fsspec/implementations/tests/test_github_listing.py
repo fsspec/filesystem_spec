@@ -20,6 +20,23 @@ def github_tree(monkeypatch):
             },
             {"path": "data", "mode": "040000", "type": "tree", "sha": "data-tree"},
         ],
+        "other": [
+            {
+                "path": "README.md",
+                "mode": "040000",
+                "type": "tree",
+                "sha": "other-readme-tree",
+            },
+        ],
+        "other-readme-tree": [
+            {
+                "path": "child",
+                "mode": "100644",
+                "type": "blob",
+                "size": 1,
+                "sha": "child",
+            },
+        ],
         "data-tree": [
             {
                 "path": "notes.txt",
@@ -70,3 +87,48 @@ def test_ls_directory(github_tree):
 def test_ls_missing_file(github_tree, path):
     with pytest.raises(FileNotFoundError, match=path):
         github_tree.ls(path)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "README.md/child",
+        "data/notes.txt/child",
+        "README.md/child/grandchild",
+        "README.md//child",
+    ],
+)
+@pytest.mark.parametrize("protocol", ["", "github://", "github://example:repo@main/"])
+def test_path_below_file_is_missing(github_tree, path, protocol):
+    requested = protocol + path
+    for _ in range(2):
+        for detail in (False, True):
+            with pytest.raises(FileNotFoundError) as exc:
+                github_tree.ls(requested, detail=detail)
+            assert exc.value.args == (path,)
+
+        with pytest.raises(FileNotFoundError):
+            github_tree.info(requested)
+        assert not github_tree.exists(requested)
+        assert not github_tree.isdir(requested)
+        assert not github_tree.isfile(requested)
+
+
+@pytest.mark.parametrize("path", ["README.md/", "data/notes.txt/"])
+@pytest.mark.parametrize("protocol", ["", "github://", "github://example:repo@main/"])
+def test_ls_file_with_trailing_slash(github_tree, path, protocol):
+    requested = protocol + path
+    assert github_tree.ls(requested) == [path.rstrip("/")]
+    assert github_tree.ls(requested, detail=True) == [github_tree.info(requested)]
+
+
+def test_path_below_file_uses_requested_revision(github_tree):
+    path = "README.md/child"
+    for _ in range(2):
+        with pytest.raises(FileNotFoundError):
+            github_tree.ls(path)
+        assert github_tree.ls(path, sha="other") == [path]
+        info = github_tree.info(path, sha="other")
+        assert info["name"] == path
+        assert info["type"] == "file"
+        assert not github_tree.exists(path)
