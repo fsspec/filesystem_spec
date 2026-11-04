@@ -398,9 +398,6 @@ class SMBFileOpener:
         """Remove the temp file on failure."""
         smbclient.remove(self.temp, port=self.port)
 
-    def __fspath__(self):
-        return self.path
-
     def __iter__(self):
         return self.smbfile.__iter__()
 
