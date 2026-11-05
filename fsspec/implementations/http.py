@@ -301,7 +301,7 @@ class HTTPFileSystem(AsyncFileSystem):
             if l.startswith("http"):
                 if self.same_schema and l.startswith(url.rstrip("/") + "/"):
                     out.add(l)
-                elif l.replace("https", "http").startswith(
+                elif not self.same_schema and l.replace("https", "http").startswith(
                     url.replace("https", "http").rstrip("/") + "/"
                 ):
                     # allowed to cross http <-> https
