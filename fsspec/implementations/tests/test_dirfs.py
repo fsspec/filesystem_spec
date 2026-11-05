@@ -731,6 +731,48 @@ def test_du_granular(dirfs):
     dirfs.fs.du.assert_called_once_with(f"{PATH}/dir", *ARGS, total=False, **KWARGS)
 
 
+@pytest.mark.parametrize("total", [False, True])
+def test_du_positional_total(m, total):
+    m.pipe({"/root/one": b"a", "/root/two": b"bb"})
+    dirfs = DirFileSystem("/root", m)
+
+    expected = 3 if total else {"one": 1, "two": 2}
+    assert dirfs.du("", total) == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("total", [False, True])
+async def test_async_du_positional_total(m, total):
+    m.pipe({"/root/one": b"a", "/root/two": b"bb"})
+    fs = AsyncFileSystemWrapper(fs=m, asynchronous=True)
+    dirfs = DirFileSystem("/root", fs, asynchronous=True)
+
+    expected = 3 if total else {"one": 1, "two": 2}
+    assert await dirfs._du("", total) == expected
+
+
+@pytest.mark.parametrize("detail", [False, True])
+def test_find_positional_detail(m, detail):
+    m.pipe_file("/root/one", b"a")
+    dirfs = DirFileSystem("/root", m)
+
+    expected = {"one": {**m.info("/root/one"), "name": "one"}} if detail else ["one"]
+    assert dirfs.find("", None, False, detail) == expected
+    assert m.info("/root/one")["name"] == "/root/one"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("detail", [False, True])
+async def test_async_find_positional_detail(m, detail):
+    m.pipe_file("/root/one", b"a")
+    fs = AsyncFileSystemWrapper(fs=m, asynchronous=True)
+    dirfs = DirFileSystem("/root", fs, asynchronous=True)
+
+    expected = {"one": {**m.info("/root/one"), "name": "one"}} if detail else ["one"]
+    assert await dirfs._find("", None, False, detail) == expected
+    assert m.info("/root/one")["name"] == "/root/one"
+
+
 @pytest.mark.asyncio
 async def test_async_find(adirfs):
     adirfs.fs._find.return_value = [f"{PATH}/dir/one", f"{PATH}/dir/two"]
