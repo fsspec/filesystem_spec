@@ -655,9 +655,10 @@ class HTTPFileSystem(AbstractFileSystem):
             )
             + "$"
         )
-        pattern = re.sub("[*]{2}", "=PLACEHOLDER=", pattern)
-        pattern = re.sub("[*]", "[^/]*", pattern)
-        pattern = re.compile(pattern.replace("=PLACEHOLDER=", ".*"))
+        pattern = re.sub(
+            r"\*\*|\*", lambda match: ".*" if match[0] == "**" else "[^/]*", pattern
+        )
+        pattern = re.compile(pattern)
         out = {
             p: allpaths[p]
             for p in sorted(allpaths)
