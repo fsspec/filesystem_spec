@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from hashlib import sha256
 
 import pytest
 
@@ -1228,6 +1229,114 @@ def test_cached_append_binary(protocol):
         f.write(b"world")
     with fsspec.open(fn, "rb") as f:
         assert f.read() == b"helloworld"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+@pytest.mark.parametrize(
+    "layout", ["single_warm", "first_warm", "both_cold", "last_warm", "both_warm"]
+)
+def test_cached_append_cache_layers(tmp_path, protocol, mode, layout):
+    origin = tmp_path / "origin"
+    data = b"original-data"
+    origin.write_bytes(data)
+    first, last = tmp_path / "first", tmp_path / "last"
+    first.mkdir()
+    last.mkdir()
+    for cache, warm in (
+        (first, layout in {"single_warm", "first_warm", "both_warm"}),
+        (last, layout in {"last_warm", "both_warm"}),
+    ):
+        if warm:
+            if cache == last and layout == "both_warm":
+                origin.write_bytes(b"different-data")
+            seed = fsspec.filesystem(
+                protocol, target_protocol="file", cache_storage=str(cache)
+            )
+            with seed.open(str(origin), "rb") as f:
+                assert f.read() == origin.read_bytes()
+
+    storage = str(first) if layout == "single_warm" else [str(first), str(last)]
+    fs = fsspec.filesystem(protocol, target_protocol="file", cache_storage=storage)
+    before = {p.name: sha256(p.read_bytes()).hexdigest() for p in first.iterdir()}
+    with fs.open(str(origin), mode) as f:
+        assert f.tell() == len(data)
+        f.write(b"+appended")
+        if "+" in mode:
+            f.seek(0)
+            assert f.read() == data + b"+appended"
+    assert origin.read_bytes() == data + b"+appended"
+    if layout != "single_warm":
+        assert before == {
+            p.name: sha256(p.read_bytes()).hexdigest() for p in first.iterdir()
+        }
+    if protocol == "filecache" and layout != "single_warm":
+        if layout in {"first_warm", "both_warm"}:
+            selected = json.loads((first / "cache").read_text())[str(origin)]
+            promoted = json.loads((last / "cache").read_text())[str(origin)]
+            for key in ["original", "fn", "blocks", "uid"]:
+                assert promoted[key] == selected[key]
+            assert promoted["time"] >= selected["time"]
+        writable = fsspec.filesystem(
+            protocol,
+            target_protocol="file",
+            cache_storage=str(last),
+            skip_instance_cache=True,
+        )
+        with writable.open(str(origin), "rb") as f:
+            assert f.read() == data + b"+appended"
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("mode", ["wb", "w+b"])
+def test_cached_multicache_overwrite(tmp_path, protocol, mode):
+    origin = tmp_path / "origin"
+    origin.write_bytes(b"original-data")
+    first, last = tmp_path / "first", tmp_path / "last"
+    seed = fsspec.filesystem(protocol, target_protocol="file", cache_storage=str(first))
+    with seed.open(str(origin), "rb") as f:
+        assert f.read() == b"original-data"
+    before = {p.name: sha256(p.read_bytes()).hexdigest() for p in first.iterdir()}
+    fs = fsspec.filesystem(
+        protocol, target_protocol="file", cache_storage=[str(first), str(last)]
+    )
+    with fs.open(str(origin), mode) as f:
+        assert f.tell() == 0
+        f.write(b"replacement")
+    assert origin.read_bytes() == b"replacement"
+    assert before == {
+        p.name: sha256(p.read_bytes()).hexdigest() for p in first.iterdir()
+    }
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("warm_destination", [False, True])
+def test_cached_append_copy_failure(tmp_path, monkeypatch, protocol, warm_destination):
+    origin = tmp_path / "origin"
+    origin.write_bytes(b"original-data")
+    first, last = tmp_path / "first", tmp_path / "last"
+    for cache in [first, last] if warm_destination else [first]:
+        seed = fsspec.filesystem(
+            protocol, target_protocol="file", cache_storage=str(cache)
+        )
+        with seed.open(str(origin), "rb") as f:
+            assert f.read() == b"original-data"
+    fs = fsspec.filesystem(
+        protocol, target_protocol="file", cache_storage=[str(first), str(last)]
+    )
+    before = {p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()}
+
+    def fail_copy(src, dst):
+        pathlib.Path(dst).write_bytes(b"partial")
+        raise OSError("copy failed")
+
+    monkeypatch.setattr("fsspec.implementations.cached.copyfile", fail_copy)
+    with pytest.raises(OSError, match="copy failed"):
+        fs.open(str(origin), "ab")
+    assert origin.read_bytes() == b"original-data"
+    assert before == {
+        p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()
+    }
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])

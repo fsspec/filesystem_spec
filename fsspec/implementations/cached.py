@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, suppress
 from hashlib import sha256
-from shutil import rmtree
+from shutil import copyfile, rmtree
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from fsspec import filesystem
@@ -856,6 +856,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
         hash = self._mapper(path)
         fn = os.path.join(self.storage[-1], hash)
+        if "a" in mode and cached and cached[1] != fn:
+            with _tempfile(fn) as tmp:
+                copyfile(cached[1], tmp)
+            self._metadata.update_file(path, dict(detail, fn=hash))
+            self.save_cache()
         user_specified_kwargs = {
             k: v
             for k, v in kwargs.items()
@@ -1142,12 +1147,15 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                 elif "r" in mode:
                     raise FileNotFoundError(path)
 
-        fn = self._check_file(path)
+        cached = self._check_file(path)
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:
-            return open(fn, mode)
+            return open(cached, mode)
 
         fn = os.path.join(self.storage[-1], sha)
+        if "a" in mode and cached and cached != fn:
+            with _tempfile(fn) as tmp:
+                copyfile(cached, tmp)
         user_specified_kwargs = {
             k: v
             for k, v in kwargs.items()
