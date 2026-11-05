@@ -891,8 +891,11 @@ class ReferenceFileSystem(AsyncFileSystem):
         if self.isdir(rpath):
             return os.makedirs(lpath, exist_ok=True)
         data = await self._cat_file(rpath)
-        with open(lpath, "wb") as f:
-            f.write(data)
+        if isfilelike(lpath):
+            lpath.write(data)
+        else:
+            with open(lpath, "wb") as f:
+                f.write(data)
 
     def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, **kwargs):
         if self.isdir(rpath):
