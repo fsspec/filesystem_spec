@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from hashlib import sha256
 
 import pytest
@@ -1234,7 +1235,15 @@ def test_cached_append_binary(protocol):
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 @pytest.mark.parametrize("mode", ["ab", "a+b"])
 @pytest.mark.parametrize(
-    "layout", ["single_warm", "first_warm", "both_cold", "last_warm", "both_warm"]
+    "layout",
+    [
+        "single_warm",
+        "first_warm",
+        "both_cold",
+        "last_warm",
+        "both_warm",
+        "both_warm_same_size",
+    ],
 )
 def test_cached_append_cache_layers(tmp_path, protocol, mode, layout):
     origin = tmp_path / "origin"
@@ -1244,12 +1253,17 @@ def test_cached_append_cache_layers(tmp_path, protocol, mode, layout):
     first.mkdir()
     last.mkdir()
     for cache, warm in (
-        (first, layout in {"single_warm", "first_warm", "both_warm"}),
-        (last, layout in {"last_warm", "both_warm"}),
+        (
+            first,
+            layout in {"single_warm", "first_warm", "both_warm", "both_warm_same_size"},
+        ),
+        (last, layout in {"last_warm", "both_warm", "both_warm_same_size"}),
     ):
         if warm:
             if cache == last and layout == "both_warm":
                 origin.write_bytes(b"different-data")
+            elif cache == last and layout == "both_warm_same_size":
+                origin.write_bytes(b"different-dat")
             seed = fsspec.filesystem(
                 protocol, target_protocol="file", cache_storage=str(cache)
             )
@@ -1271,7 +1285,7 @@ def test_cached_append_cache_layers(tmp_path, protocol, mode, layout):
             p.name: sha256(p.read_bytes()).hexdigest() for p in first.iterdir()
         }
     if protocol == "filecache" and layout != "single_warm":
-        if layout in {"first_warm", "both_warm"}:
+        if layout in {"first_warm", "both_warm", "both_warm_same_size"}:
             selected = json.loads((first / "cache").read_text())[str(origin)]
             promoted = json.loads((last / "cache").read_text())[str(origin)]
             for key in ["original", "fn", "blocks", "uid"]:
@@ -1337,6 +1351,68 @@ def test_cached_append_copy_failure(tmp_path, monkeypatch, protocol, warm_destin
     assert before == {
         p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()
     }
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize("mode", ["ab", "a+b"])
+def test_cached_append_busy_different_destination(
+    tmp_path, monkeypatch, protocol, mode
+):
+    origin = tmp_path / "origin"
+    first, last = tmp_path / "first", tmp_path / "last"
+    for cache, data in [(first, b"first-prefix"), (last, b"older-prefix")]:
+        origin.write_bytes(data)
+        seed = fsspec.filesystem(
+            protocol, target_protocol="file", cache_storage=str(cache)
+        )
+        with seed.open(str(origin), "rb") as f:
+            assert f.read() == data
+    fs = fsspec.filesystem(
+        protocol, target_protocol="file", cache_storage=[str(first), str(last)]
+    )
+    destination = last / fs._mapper(str(origin))
+    assert destination.stat().st_mtime >= (first / destination.name).stat().st_mtime
+    before_origin = origin.read_bytes()
+    before = {p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()}
+    before_metadata = deepcopy(fs._metadata.cached_files)
+    after_external_write = {}
+    temporary_paths = []
+    uploads = []
+    real_replace, real_put = os.replace, fs.fs.put
+
+    def busy_replace(src, dst):
+        if pathlib.Path(dst) == destination:
+            assert pathlib.Path(src).read_bytes() == b"first-prefix"
+            # Model a concurrent writer using real bytes and filesystem times.
+            # This same-size, newer file is not the selected cache entry.
+            destination.write_bytes(b"other-prefix")
+            assert destination.stat().st_mtime >= os.path.getmtime(src)
+            temporary_paths.append(pathlib.Path(src))
+            after_external_write.update(before)
+            after_external_write[destination] = destination.read_bytes()
+            raise PermissionError("destination is busy")
+        return real_replace(src, dst)
+
+    def track_upload(*args, **kwargs):
+        uploads.append(args)
+        return real_put(*args, **kwargs)
+
+    monkeypatch.setattr(os, "replace", busy_replace)
+    monkeypatch.setattr(fs.fs, "put", track_upload)
+    with pytest.raises(PermissionError, match="destination is busy"):
+        with fs.open(str(origin), mode) as f:
+            f.write(b"+append")
+    assert uploads == []
+    assert origin.read_bytes() == before_origin
+    assert temporary_paths and all(not p.exists() for p in temporary_paths)
+    assert not list(last.glob("*.part"))
+    # Preserve the external writer's bytes, not the pre-interleaving target.
+    assert before[destination] == b"older-prefix"
+    assert after_external_write[destination] == b"other-prefix"
+    assert after_external_write == {
+        p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()
+    }
+    assert fs._metadata.cached_files == before_metadata
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
