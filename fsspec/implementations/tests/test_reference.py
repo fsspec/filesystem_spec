@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+from io import BytesIO
 
 import pytest
 
@@ -252,6 +253,19 @@ def test_put_get_single(tmpdir):
     assert open(d2, "rb").read() == b"1"
     fs.pipe({"hi": b"data"})
     assert fs.cat("hi") == b"data"
+
+
+@pytest.mark.asyncio
+async def test_async_get_file_filelike(tmp_path):
+    fs = ReferenceFileSystem({"a": b"data"}, asynchronous=True)
+    with BytesIO() as destination:
+        await fs._get_file("a", destination)
+        assert not destination.closed
+        assert destination.getvalue() == b"data"
+
+    path = tmp_path / "downloaded"
+    await fs._get_file("a", str(path))
+    assert path.read_bytes() == b"data"
 
 
 def test_defaults(server):

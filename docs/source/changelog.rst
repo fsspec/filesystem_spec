@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Accept caller-owned file-like destinations in asynchronous reference downloads.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
