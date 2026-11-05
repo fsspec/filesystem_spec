@@ -51,6 +51,43 @@ def test_list(server, sync):
     assert out == [server.address + "/index/realfile"]
 
 
+@pytest.mark.parametrize("operation", ["info", "open", "open_with_size"])
+@pytest.mark.parametrize("header_source", ["constructor", "call", "override"])
+@pytest.mark.parametrize("metadata_method", ["head", "get"])
+def test_info_request_options_override(
+    server, sync, reset_faults, operation, header_source, metadata_method
+):
+    headers = {"give_length": "true", "use_206": "true"}
+    if metadata_method == "head":
+        headers["head_ok"] = "true"
+    original = headers.copy()
+    defaults = {"headers": headers} if header_source == "constructor" else {}
+    if header_source == "override":
+        defaults["headers"] = {"give_path": "true"}
+    kwargs = {} if header_source == "constructor" else {"headers": headers}
+    fs = fsspec.filesystem("http", skip_instance_cache=True, **defaults)
+    original_defaults = fs.kwargs.copy()
+    try:
+        if operation == "info":
+            assert fs.info(server.realfile, **kwargs)["size"] == len(data)
+        else:
+            size = {"size": len(data)} if operation == "open_with_size" else {}
+            with fs.open(server.realfile, block_size=16, **size, **kwargs) as f:
+                assert f.read() == data
+        path = "/index/realfile"
+        probes = operation != "open_with_size"
+        assert HTTPTestHandler.head_counts.get(path, 0) == int(
+            probes and metadata_method == "head"
+        )
+        assert HTTPTestHandler.get_counts.get(path, 0) == int(
+            operation != "info"
+        ) + int(probes and metadata_method == "get")
+        assert headers == original
+        assert fs.kwargs == original_defaults
+    finally:
+        fs.session.close()
+
+
 def test_list_pathological_listing(server, sync, reset_files):
     # a long whitespace run inside an anchor used to make the link regex
     # backtrack cubically, so listing this page took about a minute
