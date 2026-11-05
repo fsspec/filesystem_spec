@@ -541,6 +541,7 @@ class CachingFileSystem(ChainedFileSystem):
             "to_json",
             "to_dict",
             "cache_size",
+            "cache_files",
             "pipe_file",
             "pipe",
             "start_transaction",
@@ -632,6 +633,55 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
     protocol = "filecache"
     local_file = True
+
+    def cache_files(self, paths):
+        """Ensure whole files are cached and return their local paths.
+
+        This is a synchronous prefetch operation: all downloads finish before
+        returning. Paths are literal filenames, with no glob expansion. Order
+        and duplicates are preserved. A single string returns a single string.
+        The returned paths can be opened by native readers, including cuFile.
+        Cache expiry and source checks follow this filesystem's usual policy.
+        """
+        single = isinstance(paths, (str, os.PathLike))
+        paths = [paths] if single else list(paths)
+        local = {}
+        download = []
+        result = []
+        for path in paths:
+            path = self._strip_protocol(os.fspath(path))
+            if path not in local:
+                if self.compression:
+                    with self._open(path, "rb") as file:
+                        local[path] = file.name
+                else:
+                    detail = self._check_file(path)
+                    if isinstance(detail, tuple):
+                        metadata, fn = detail
+                        if metadata["blocks"] is not True:
+                            raise ValueError(
+                                f"Attempt to prefetch partially cached file {path}"
+                            )
+                    elif detail:
+                        fn = detail  # simplecache
+                    else:
+                        fn = os.path.join(self.storage[-1], self._mapper(path))
+                        download.append(path)
+                    local[path] = fn
+            result.append(local[path])
+        if download:
+            self._mkcache()
+            self._cache_size = None
+            # Publish files atomically, and mark metadata valid only once all
+            # downloads succeed. Failed refreshes must not bless old data.
+            for path in download:
+                with _tempfile(local[path]) as tmp:
+                    self.fs.get_file(path, tmp, callback=self.callback)
+            if not isinstance(self, SimpleCacheFileSystem):
+                for path in download:
+                    self._make_local_details(path)
+                self.save_cache()
+        return result[0] if single else result
 
     def open_many(self, open_files, **kwargs):
         paths = [of.path for of in open_files]

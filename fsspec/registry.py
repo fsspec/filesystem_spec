@@ -96,6 +96,7 @@ known_implementations = {
         "err": "Please install boxfs to access BoxFileSystem",
     },
     "cached": {"class": "fsspec.implementations.cached.CachingFileSystem"},
+    "cuda": {"class": "fsspec.implementations.cuda.CUDAFileSystem"},
     "dask": {
         "class": "fsspec.implementations.dask.DaskWorkerFileSystem",
         "err": "Install dask distributed to access worker file system",
@@ -265,6 +266,11 @@ def get_filesystem_class(protocol):
         protocol = default
 
     if protocol not in registry:
+        if protocol.startswith("cuda+"):
+            from fsspec.implementations.cuda import cuda_filesystem_class
+
+            register_implementation(protocol, cuda_filesystem_class(protocol))
+            return registry[protocol]
         if protocol not in known_implementations:
             raise ValueError(f"Protocol not known: {protocol}")
         bit = known_implementations[protocol]
