@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Preserve relative paths and detailed results in ``DirFileSystem.du`` and
+  ``find`` when options are passed positionally.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
