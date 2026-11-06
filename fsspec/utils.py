@@ -402,7 +402,7 @@ def other_paths(
         The input file tree
     path2: str or list of str
         Root to construct the new list in. If this is already a list of str, we just
-        assert it has the right number of elements.
+        verify that it has the same number of elements as paths.
     exists: bool (optional)
         For a str destination, it is already exists (and is a dir), files should
         end up inside.
@@ -413,6 +413,11 @@ def other_paths(
     Returns
     -------
     list of str
+
+    Raises
+    ------
+    ValueError
+        If the source and destination lists have different lengths.
     """
 
     if isinstance(path2, str):
@@ -429,7 +434,8 @@ def other_paths(
             else:
                 path2 = [p.replace(cp, path2, 1) for p in paths]
     else:
-        assert len(paths) == len(path2)
+        if len(paths) != len(path2):
+            raise ValueError("Source and destination lists must have the same length")
     return path2
 
 
