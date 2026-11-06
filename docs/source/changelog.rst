@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Measure directory listing cache expiry with a monotonic clock so system clock
+  changes do not invalidate listings early or keep stale listings alive (#2330).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

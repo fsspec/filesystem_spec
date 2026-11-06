@@ -1,5 +1,6 @@
 import pickle
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -60,6 +61,55 @@ def test_dircache_expired_entry(operation):
     else:
         assert list(dc) == []
         assert len(dc) == 0
+
+
+@pytest.mark.parametrize("operation", ["get", "contains", "iter"])
+@pytest.mark.parametrize(
+    "elapsed, wall_jump, present",
+    [(1, 1000, True), (6, -1000, False), (5, 1000, True), (5.01, -1000, False)],
+    ids=["wall-clock-forward", "wall-clock-backward", "at-expiry", "after-expiry"],
+)
+def test_dircache_expiry_uses_elapsed_time(
+    monkeypatch, operation, elapsed, wall_jump, present
+):
+    clock = {"wall": 10000, "elapsed": 100}
+    monkeypatch.setattr(
+        "fsspec.dircache.time",
+        SimpleNamespace(time=lambda: clock["wall"], monotonic=lambda: clock["elapsed"]),
+    )
+    dc = DirCache(listings_expiry_time=5)
+    dc["a"] = 100
+
+    clock["wall"] += wall_jump
+    clock["elapsed"] += elapsed
+
+    if operation == "get":
+        if present:
+            assert dc["a"] == 100
+        else:
+            with pytest.raises(KeyError):
+                dc["a"]
+    elif operation == "contains":
+        assert ("a" in dc) is present
+    else:
+        assert list(dc) == (["a"] if present else [])
+
+
+def test_dircache_overwrite_refreshes_expiry(monkeypatch):
+    now = 100
+    monkeypatch.setattr(
+        "fsspec.dircache.time",
+        SimpleNamespace(time=lambda: 10000, monotonic=lambda: now),
+    )
+    dc = DirCache(listings_expiry_time=5)
+    dc["a"] = 100
+    now += 4
+    dc["a"] = 200
+
+    now += 5
+    assert dc["a"] == 200
+    now += 0.01
+    assert "a" not in dc
 
 
 def test_dircache_missing_key_not_in_cache_with_expiry():
