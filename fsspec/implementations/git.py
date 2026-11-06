@@ -119,5 +119,7 @@ class GitFileSystem(AbstractFileSystem):
         ref=None,
         **kwargs,
     ):
+        if mode != "rb":
+            raise NotImplementedError("GitFileSystem is read-only")
         obj = self._path_to_object(path, ref or self.ref)
         return MemoryFile(data=obj.data)

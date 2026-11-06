@@ -184,3 +184,10 @@ def test_special_objects_are_not_directories(repo):
     for path in ("link/child", "submodule/file1"):
         with pytest.raises(FileNotFoundError):
             fs.open(path)
+
+
+@pytest.mark.parametrize("mode", ["wb", "ab", "xb", "r+b", "w"])
+def test_reject_write_modes(repo, mode):
+    fs = fsspec.filesystem("git", path=repo[0], ref="abranch")
+    with pytest.raises(NotImplementedError, match="read-only"):
+        fs.open("inner/file1", mode)
