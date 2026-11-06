@@ -58,6 +58,86 @@ def test_getitems_errors(tmpdir):
         m.getitems(["afile", "bfile"])
 
 
+def test_getitems_omitted_keys():
+    from fsspec.implementations.reference import ReferenceFileSystem
+
+    # ReferenceFileSystem cat() omits keys with None/nan targets
+    fs = ReferenceFileSystem(
+        {
+            "a": b"data_a",
+            "b": [None, 0, 0],
+            "c": b"data_c",
+            "d": [None, 0, 0],
+            "prefix/sub1": b"val1",
+            "prefix/sub_missing": [None, 0, 0],
+            "prefix/sub2": b"val2",
+        }
+    )
+    m = fs.get_mapper("")
+
+    # Empty request
+    assert m.getitems([], on_error="omit") == {}
+    assert m.getitems([], on_error="return") == {}
+    assert m.getitems([], on_error="raise") == {}
+
+    # Standard present + omitted
+    assert m.getitems(["a", "b"], on_error="omit") == {"a": b"data_a"}
+    out = m.getitems(["a", "b"], on_error="return")
+    assert out["a"] == b"data_a"
+    assert isinstance(out["b"], KeyError)
+    with pytest.raises(KeyError):
+        m.getitems(["a", "b"], on_error="raise")
+
+    # All-omitted list returns empty dict
+    assert m.getitems(["b", "d"], on_error="omit") == {}
+    out_all_omitted = m.getitems(["b", "d"], on_error="return")
+    assert list(out_all_omitted.keys()) == ["b", "d"]
+    assert isinstance(out_all_omitted["b"], KeyError)
+    assert isinstance(out_all_omitted["d"], KeyError)
+
+    # Reversed / custom request order preserved in output
+    res_ordered = m.getitems(["c", "b", "a"], on_error="omit")
+    assert res_ordered == {"c": b"data_c", "a": b"data_a"}
+    assert list(res_ordered.keys()) == ["c", "a"]
+
+    res_ordered_ret = m.getitems(["c", "b", "a"], on_error="return")
+    assert list(res_ordered_ret.keys()) == ["c", "b", "a"]
+    assert res_ordered_ret["c"] == b"data_c"
+    assert isinstance(res_ordered_ret["b"], KeyError)
+    assert res_ordered_ret["a"] == b"data_a"
+
+    # Root prefix handling
+    m_prefix = fs.get_mapper("prefix")
+    res_prefix_omit = m_prefix.getitems(
+        ["sub2", "sub_missing", "sub1"], on_error="omit"
+    )
+    assert res_prefix_omit == {"sub2": b"val2", "sub1": b"val1"}
+    assert list(res_prefix_omit.keys()) == ["sub2", "sub1"]
+
+    res_prefix_ret = m_prefix.getitems(
+        ["sub2", "sub_missing", "sub1"], on_error="return"
+    )
+    assert list(res_prefix_ret.keys()) == ["sub2", "sub_missing", "sub1"]
+    assert res_prefix_ret["sub2"] == b"val2"
+    assert isinstance(res_prefix_ret["sub_missing"], KeyError)
+    assert res_prefix_ret["sub1"] == b"val1"
+
+    # Also test generic filesystem whose cat() omits absent keys
+    class CustomCatFS(fsspec.AbstractFileSystem):
+        def cat(self, paths, on_error="return", **kwargs):
+            return {p: b"content" for p in paths if p == "present"}
+
+    m_custom = CustomCatFS().get_mapper("")
+    assert m_custom.getitems(["present", "missing"], on_error="omit") == {
+        "present": b"content"
+    }
+    out_custom = m_custom.getitems(["present", "missing"], on_error="return")
+    assert out_custom["present"] == b"content"
+    assert isinstance(out_custom["missing"], KeyError)
+    with pytest.raises(KeyError):
+        m_custom.getitems(["present", "missing"], on_error="raise")
+
+
 def test_ops():
     MemoryFileSystem.store.clear()
     m = fsspec.get_mapper("memory://")
