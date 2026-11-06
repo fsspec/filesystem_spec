@@ -118,11 +118,12 @@ class FSMap(MutableMapping):
             k: (KeyError() if isinstance(v, self.missing_exceptions) else v)
             for k, v in out.items()
         }
-        return {
-            key: out[k2] if on_error == "raise" else out.get(k2, KeyError(k2))
-            for key, k2 in zip(keys, keys2)
-            if on_error == "return" or not isinstance(out[k2], BaseException)
-        }
+        res = {}
+        for key, k2 in zip(keys, keys2):
+            val = out[k2] if on_error == "raise" else out.get(k2, KeyError(k2))
+            if on_error == "return" or not isinstance(val, BaseException):
+                res[key] = val
+        return res
 
     def setitems(self, values_dict):
         """Set the values of multiple items in the store
