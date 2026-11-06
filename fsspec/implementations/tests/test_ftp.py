@@ -426,3 +426,50 @@ def test_mlsd2_skips_short_lines():
     )
     out = _mlsd2(ftp, "/data")
     assert [name for name, _ in out] == ["keep.txt"]
+
+
+@pytest.mark.parametrize("cache_type", ["none", "all", "readahead", "bytes", "mmap"])
+def test_open_cache_type(ftp_writable, cache_type, monkeypatch):
+    from fsspec.caching import caches
+
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    expected = fs.cat_file("/out")
+    calls = []
+    retrbinary = fs.ftp.retrbinary
+
+    def record(*args, **kwargs):
+        calls.append(kwargs.get("rest"))
+        return retrbinary(*args, **kwargs)
+
+    monkeypatch.setattr(fs.ftp, "retrbinary", record)
+    with fs.open("/out", cache_type=cache_type, block_size=10) as f:
+        assert type(f.cache) is caches[cache_type]
+        assert len(calls) == (1 if cache_type == "all" else 0)
+        assert f.read(5) == expected[:5]
+        f.seek(0)
+        assert f.read(5) == expected[:5]
+        if cache_type == "all":
+            assert len(calls) == 1
+        elif cache_type == "none":
+            assert len(calls) == 2
+
+
+def test_open_cache_default(ftp_writable):
+    from fsspec.caching import ReadAheadCache
+
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/out") as f:
+        assert type(f.cache) is ReadAheadCache
+
+
+def test_open_cache_options(ftp_writable):
+    from fsspec.caching import BytesCache
+
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw)
+    with fs.open("/out", cache_type="bytes", cache_options={"trim": False}) as f:
+        assert type(f.cache) is BytesCache
+        assert f.cache.trim is False
+        assert f.read(5) == b"hello"
