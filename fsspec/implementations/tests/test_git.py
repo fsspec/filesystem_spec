@@ -191,3 +191,10 @@ def test_reject_write_modes(repo, mode):
     fs = fsspec.filesystem("git", path=repo[0], ref="abranch")
     with pytest.raises(NotImplementedError, match="read-only"):
         fs.open("inner/file1", mode)
+
+
+@pytest.mark.parametrize("path", ["", "inner"])
+def test_open_directory(repo, path):
+    fs = fsspec.filesystem("git", path=repo[0], ref="abranch")
+    with pytest.raises(IsADirectoryError):
+        fs.open(path)
