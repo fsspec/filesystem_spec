@@ -5,7 +5,6 @@ import urllib
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
-from typing_extensions import override
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
@@ -59,7 +58,6 @@ class DatabricksFileSystem(AbstractFileSystem):
 
         super().__init__(**kwargs)
 
-    @override
     def _ls_from_cache(self, path) -> list[dict[str, str | int]] | None:
         """Check cache for listing
 
@@ -145,8 +143,8 @@ class DatabricksFileSystem(AbstractFileSystem):
                 )
                 raise FileExistsError(f"Path {path} already exists")
             except DatabricksException as e:
-                if e.error_code == "RESOURCE_DOES_NOT_EXIST":
-                    pass
+                if e.error_code != "RESOURCE_DOES_NOT_EXIST":
+                    raise
 
         try:
             self._send_to_api(method="post", endpoint="mkdirs", json={"path": path})
@@ -460,7 +458,7 @@ class DatabricksFile(AbstractBufferedFile):
 
     def _initiate_upload(self):
         """Internal function to start a file upload"""
-        self.handle = self.fs._create_handle(self.path)
+        self.handle = self.fs._create_handle(self.path, overwrite="x" not in self.mode)
 
     def _upload_chunk(self, final=False):
         """Internal function to add a chunk of data to a started upload"""

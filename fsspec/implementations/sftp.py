@@ -276,7 +276,7 @@ class SFTPFileSystem(AbstractFileSystem):
             raise FileExistsError(f"File exists: {path}")
 
         if create_parents:
-            self.makedirs(path)
+            self.makedirs(path, mode=mode)
         else:
             self.ftp.mkdir(path, mode)
 
@@ -336,12 +336,8 @@ class SFTPFileSystem(AbstractFileSystem):
             "type": t,
             "uid": stat.st_uid,
             "gid": stat.st_gid,
-            "time": datetime.datetime.fromtimestamp(
-                stat.st_atime, tz=datetime.timezone.utc
-            ),
-            "mtime": datetime.datetime.fromtimestamp(
-                stat.st_mtime, tz=datetime.timezone.utc
-            ),
+            "time": datetime.datetime.fromtimestamp(stat.st_atime, tz=datetime.UTC),
+            "mtime": datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC),
         }
         if parent_path:
             out["name"] = "/".join([parent_path.rstrip("/"), stat.filename])
@@ -378,14 +374,18 @@ class SFTPFileSystem(AbstractFileSystem):
         if kwargs.get("autocommit", True) is False:
             # writes to temporary file, move on commit
             path2 = "/".join([self.temppath, str(uuid.uuid4())])
-            f = self.ftp.open(path2, mode, bufsize=block_size if block_size else -1)
+            f = self.ftp.open(
+                path2, mode, bufsize=block_size if block_size is not None else -1
+            )
             f.temppath = path2
             f.targetpath = path
             f.fs = self
             f.commit = types.MethodType(commit_a_file, f)
             f.discard = types.MethodType(discard_a_file, f)
         else:
-            f = self.ftp.open(path, mode, bufsize=block_size if block_size else -1)
+            f = self.ftp.open(
+                path, mode, bufsize=block_size if block_size is not None else -1
+            )
         return f
 
     def _rm(self, path):

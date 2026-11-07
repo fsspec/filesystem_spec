@@ -1,5 +1,6 @@
 import base64
 import io
+import re
 from urllib.parse import unquote_to_bytes
 
 from fsspec import AbstractFileSystem
@@ -40,7 +41,7 @@ class DataFileSystem(AbstractFileSystem):
     def cat_file(self, path, start=None, end=None, **kwargs):
         # Strip the fragment before decoding so an encoded %23 remains data.
         pref, data = path.split("#", 1)[0].split(",", 1)
-        if pref.endswith(";base64"):
+        if re.search(r"; *base64$", pref.rstrip(" \t\n\r\f"), re.IGNORECASE | re.ASCII):
             return base64.b64decode(unquote_to_bytes(data))[start:end]
         return unquote_to_bytes(data)[start:end]
 

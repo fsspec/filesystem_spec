@@ -91,6 +91,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
     def close(self):
         """Commits any write changes to the file. Done on ``del`` too."""
         self.zip.close()
+        if isinstance(self.of, fsspec.core.OpenFile):
+            self.of.close()
 
     def _get_dirs(self):
         if self.dir_cache is None or self.mode in set("wa"):

@@ -802,6 +802,36 @@ def test_cat_missing(m, fo):
     assert list(out) == ["c"]
 
 
+@pytest.mark.parametrize(
+    "reference", [["memory://missing"], ["memory://missing", 1, 3]]
+)
+@pytest.mark.parametrize("path", ["missing", ["missing"]])
+def test_cat_omit_unreachable(m, reference, path):
+    fs = fsspec.filesystem("reference", fo={"missing": reference})
+
+    assert fs.cat(path, on_error="omit") == {}
+
+
+def test_cat_omit_unreachable_mixed(m):
+    m.pipe("data", b"0123456789")
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "inline": b"inline data",
+            "whole": ["memory://data"],
+            "range": ["memory://data", 1, 3],
+            "missing_whole": ["memory://missing"],
+            "missing_range": ["memory://missing", 1, 3],
+        },
+    )
+
+    assert fs.cat([*fs.references, "unknown"], on_error="omit") == {
+        "inline": b"inline data",
+        "whole": b"0123456789",
+        "range": b"123",
+    }
+
+
 def test_df_single(m):
     pd = pytest.importorskip("pandas")
     pytest.importorskip("fastparquet")
