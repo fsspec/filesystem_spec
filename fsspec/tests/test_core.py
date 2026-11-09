@@ -36,6 +36,60 @@ def tempzip(data=None):
             pass
 
 
+@pytest.mark.parametrize("prefix", ["", "file://", "local://"])
+def test_double_colon_in_local_path(tmp_path, prefix):
+    path = tmp_path / "entry::part.txt"
+    fs, resolved = fsspec.core.url_to_fs(prefix + path.as_posix())
+
+    assert fs.protocol == ("file", "local")
+    assert resolved == path.as_posix()
+    assert fsspec.open(prefix + path.as_posix()).path == path.as_posix()
+
+
+@pytest.mark.parametrize("prefix", ["simplecache::", "simplecache::file://"])
+def test_double_colon_in_cached_local_path(tmp_path, prefix):
+    path = tmp_path / "entry::part.txt"
+    of = fsspec.open(prefix + path.as_posix())
+
+    assert of.path == path.as_posix()
+    assert of.fs.fs.protocol == ("file", "local")
+
+
+def test_double_colon_in_explicit_relative_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _, resolved = fsspec.core.url_to_fs("./entry::part.txt")
+
+    assert resolved == (tmp_path / "entry::part.txt").as_posix()
+
+
+def test_double_colon_in_bare_name_remains_ambiguous():
+    with pytest.raises(ValueError, match="Protocol not known: entry"):
+        fsspec.core.url_to_fs("entry::part.txt")
+
+
+@pytest.mark.parametrize("prefix", ["", "file://"])
+def test_double_colon_in_local_path_with_explicit_protocol(tmp_path, prefix):
+    path = tmp_path / "entry::part.txt"
+    fs, resolved = fsspec.core.url_to_fs(prefix + path.as_posix(), protocol="file")
+
+    assert fs.protocol == ("file", "local")
+    assert resolved == path.as_posix()
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Only this read test creates a filename with colons, which Windows rejects",
+)
+@pytest.mark.parametrize("prefix", ["", "file://", "simplecache::file://"])
+def test_open_local_double_colon_file(tmp_path, prefix):
+    (tmp_path / "entry").write_bytes(b"wrong file")
+    path = tmp_path / "entry::part.txt"
+    path.write_bytes(b"requested file")
+
+    with fsspec.open(prefix + path.as_posix(), "rb") as file:
+        assert file.read() == b"requested file"
+
+
 @pytest.mark.parametrize(
     "path, name_function, num, out",
     [
