@@ -4,6 +4,7 @@ import io
 import logging
 import posixpath
 import re
+from contextlib import ExitStack
 from glob import has_magic
 from pathlib import Path
 
@@ -56,10 +57,6 @@ class OpenFile:
         How to handle encoding errors if opened in text mode.
     newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
-    autoopen: bool
-        If True, calls open() immediately. Mostly used by pickle
-    pos: int
-        If given and autoopen is True, seek to this location immediately
     """
 
     def __init__(
@@ -116,17 +113,21 @@ class OpenFile:
 
         self.fobjects = [f]
 
-        if self.compression is not None:
-            compress = compr[self.compression]
-            f = compress(f, mode=mode[0])
-            self.fobjects.append(f)
+        try:
+            if self.compression is not None:
+                compress = compr[self.compression]
+                f = compress(f, mode=mode[0])
+                self.fobjects.append(f)
 
-        if "b" not in self.mode:
-            # assume, for example, that 'r' is equivalent to 'rt' as in builtin
-            f = PickleableTextIOWrapper(
-                f, encoding=self.encoding, errors=self.errors, newline=self.newline
-            )
-            self.fobjects.append(f)
+            if "b" not in self.mode:
+                # assume, for example, that 'r' is equivalent to 'rt' as in builtin
+                f = PickleableTextIOWrapper(
+                    f, encoding=self.encoding, errors=self.errors, newline=self.newline
+                )
+                self.fobjects.append(f)
+        except BaseException:
+            self.close()
+            raise
 
         return self.fobjects[-1]
 
@@ -148,10 +149,18 @@ class OpenFile:
 
     def close(self):
         """Close all encapsulated file objects"""
-        for f in reversed(self.fobjects):
-            if "r" not in self.mode and not f.closed:
-                f.flush()
-            f.close()
+
+        def close_one(f):
+            try:
+                if "r" not in self.mode and not f.closed:
+                    f.flush()
+            finally:
+                f.close()
+
+        # Unwind in reverse order, attempting every close even if one fails.
+        with ExitStack() as stack:
+            for f in self.fobjects:
+                stack.callback(close_one, f)
         self.fobjects.clear()
 
 
@@ -187,16 +196,23 @@ class OpenFiles(list):
                 fs = fs.fs
             else:
                 break
-        return [s.__enter__() for s in self]
+        with ExitStack() as stack:
+            files = [stack.enter_context(s) for s in self]
+            # All files opened: transfer cleanup to OpenFiles.__exit__ so they
+            # stay open after this temporary entry-failure guard exits.
+            stack.pop_all()
+            return files
 
     def __exit__(self, *args):
         fs = self.fs
-        [s.__exit__(*args) for s in self]
-        if "r" in self.mode:
-            # open_many() returns files without populating the OpenFile objects.
-            for f in self.files:
-                f.close()
-        else:
+        with ExitStack() as stack:
+            if "r" in self.mode:
+                # open_many() returns files without populating the OpenFile objects.
+                for f in reversed(self.files):
+                    stack.callback(f.close)
+            for s in reversed(self):
+                stack.callback(s.close)
+        if "r" not in self.mode:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload

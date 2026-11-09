@@ -51,29 +51,20 @@ def test_cat_async(server):
     assert fs.cat(server.realfile) == data
 
 
-def test_cp_one(server, tmpdir):
+@pytest.mark.parametrize(
+    "method,as_list",
+    [("copy", True), ("copy", False), ("cp", True), ("cp_file", False)],
+)
+def test_cp_one(server, tmpdir, method, as_list):
     fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     local = fsspec.filesystem("file")
     fn = f"file://{tmpdir}/afile"
-
     fs = fsspec.filesystem("generic", default_method="current")
 
-    fs.copy([server.realfile], [fn])
-    assert local.cat(fn) == data
-    fs.rm(fn)
-    assert not fs.exists(fn)
-
-    fs.copy(server.realfile, fn)
-    assert local.cat(fn) == data
-    fs.rm(fn)
-    assert not fs.exists(fn)
-
-    fs.cp([server.realfile], [fn])
-    assert local.cat(fn) == data
-    fs.rm(fn)
-    assert not fs.exists(fn)
-
-    fs.cp_file(server.realfile, fn)
+    source, destination = (
+        ([server.realfile], [fn]) if as_list else (server.realfile, fn)
+    )
+    getattr(fs, method)(source, destination)
     assert local.cat(fn) == data
     fs.rm(fn)
     assert not fs.exists(fn)
@@ -201,6 +192,33 @@ def test_rsync_rejects_names_escaping_destination(tmp_path, m):
         rsync("memory://src", f"file://{dest}")
     assert not (tmp_path / "escaped").exists()
     assert not (dest / "ok").exists()
+
+
+@pytest.mark.parametrize("relative", ["ordinary.txt", "nested/memory:///src/data"])
+def test_rsync_preserves_source_url_in_relative_name(m, relative):
+    source = f"memory:///src/{relative}"
+    destination = f"memory:///dst/{relative}"
+    m.pipe_file(source, b"payload")
+
+    copied = rsync("memory:///src", "memory:///dst")
+
+    assert copied == {source: destination}
+    assert m.cat(destination) == b"payload"
+    assert m.find("/dst") == [destination.removeprefix("memory://")]
+
+
+@pytest.mark.parametrize("relative", ["ordinary.txt", "nested/memory:///dst/data"])
+def test_rsync_delete_missing_preserves_destination_url_in_relative_name(m, relative):
+    source = f"memory:///src/{relative}"
+    destination = f"memory:///dst/{relative}"
+    m.pipe(
+        {source: b"payload", destination: b"payload", "memory:///dst/obsolete": b"old"}
+    )
+
+    assert rsync("memory:///src", "memory:///dst", delete_missing=True) == {}
+
+    assert m.cat(destination) == b"payload"
+    assert not m.exists("/dst/obsolete")
 
 
 def test_rsync(tmpdir, m):

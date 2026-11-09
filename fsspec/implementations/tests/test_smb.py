@@ -264,3 +264,10 @@ def test_session_registration_retries_network_value_error(session_registration):
     )
     assert register.call_count == 2
     sleep.assert_called_once_with(1)
+
+
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+def test_open_not_pathlike(smb_params):
+    fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
+    with fsmb.open("/home/someuser.txt", "wb") as f:
+        assert not isinstance(f, os.PathLike)

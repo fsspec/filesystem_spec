@@ -269,13 +269,13 @@ class SMBFileSystem(AbstractFileSystem):
         """Return the created timestamp of a file as a datetime.datetime"""
         wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath, port=self._port)
-        return datetime.datetime.fromtimestamp(stats.st_ctime, tz=datetime.timezone.utc)
+        return datetime.datetime.fromtimestamp(stats.st_ctime, tz=datetime.UTC)
 
     def modified(self, path):
         """Return the modified timestamp of a file as a datetime.datetime"""
         wpath = _as_unc_path(self.host, path)
         stats = smbclient.stat(wpath, port=self._port)
-        return datetime.datetime.fromtimestamp(stats.st_mtime, tz=datetime.timezone.utc)
+        return datetime.datetime.fromtimestamp(stats.st_mtime, tz=datetime.UTC)
 
     def ls(self, path, detail=True, **kwargs):
         unc = _as_unc_path(self.host, path)
@@ -398,9 +398,6 @@ class SMBFileOpener:
     def discard(self):
         """Remove the temp file on failure."""
         smbclient.remove(self.temp, port=self.port)
-
-    def __fspath__(self):
-        return self.path
 
     def __iter__(self):
         return self.smbfile.__iter__()

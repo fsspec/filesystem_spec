@@ -15,6 +15,29 @@ from fsspec.fuse import main, run
 from fsspec.implementations.memory import MemoryFileSystem
 
 
+@pytest.mark.parametrize(
+    "flags, foreground", [([], False), (["-f"], True), (["--foreground"], True)]
+)
+def test_cli_foreground(flags, foreground, tmp_path, mocker):
+    mount = mocker.patch("fsspec.fuse.run")
+
+    main(["memory://", "/source", str(tmp_path), *flags])
+
+    mount.assert_called_once()
+    assert isinstance(mount.call_args.args[0], MemoryFileSystem)
+    assert mount.call_args.args[1:] == ("/source", str(tmp_path))
+    assert mount.call_args.kwargs["foreground"] is foreground
+
+
+def test_run_defaults_to_foreground(tmp_path, mocker):
+    mount = mocker.patch("fsspec.fuse.FUSE")
+
+    run(MemoryFileSystem(), "/source", str(tmp_path))
+
+    mount.assert_called_once()
+    assert mount.call_args.kwargs["foreground"] is True
+
+
 def host_fuse(mountdir):
     fs = MemoryFileSystem()
     fs.touch("/mounted/testfile")
@@ -76,7 +99,7 @@ def test_basic(tmpdir, capfd):
 
 
 def host_mount_local(source_dir, mount_dir, debug_log):
-    main(["local", source_dir, mount_dir, "-l", debug_log, "--ready-file"])
+    main(["local", source_dir, mount_dir, "-f", "-l", debug_log, "--ready-file"])
 
 
 @pytest.fixture()
