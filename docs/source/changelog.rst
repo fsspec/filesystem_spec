@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Include modification times in memory filesystem metadata so file caches
+  detect same-size in-place writes when ``check_files=True``.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
