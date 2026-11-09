@@ -99,6 +99,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     "size": filelike.size,
                     "type": "file",
                     "created": filelike.created.timestamp(),
+                    "modified": filelike.modified.timestamp(),
                 }
             }
 
@@ -149,6 +150,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "size": filelike.size,
                 "type": "file",
                 "created": filelike.created.timestamp(),
+                "modified": filelike.modified.timestamp(),
             }
 
         if withdirs:
@@ -177,6 +179,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     "size": self.store[path].size,
                     "type": "file",
                     "created": self.store[path].created.timestamp(),
+                    "modified": self.store[path].modified.timestamp(),
                 }
             ]
         paths = set()
@@ -192,6 +195,7 @@ class MemoryFileSystem(AbstractFileSystem):
                             "size": self.store[p2].size,
                             "type": "file",
                             "created": self.store[p2].created.timestamp(),
+                            "modified": self.store[p2].modified.timestamp(),
                         }
                     )
                 elif len(p2) > len(starter):
@@ -291,6 +295,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "size": filelike.size,
                 "type": "file",
                 "created": filelike.created.timestamp(),
+                "modified": filelike.modified.timestamp(),
             }
         else:
             raise FileNotFoundError(path)

@@ -25,6 +25,7 @@ from fsspec.implementations.memory import MemoryFileSystem
 def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
     m.pipe_file("file", b"abc")
     created = m.created("file")
+    original_key = m.ukey("file")
     modified = datetime(2100, 1, 1, tzinfo=UTC)
 
     class Clock:
@@ -40,6 +41,27 @@ def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
     assert m.cat_file("file") == expected
     assert m.modified("file") == modified
     assert m.created("file") == created
+    assert m.ukey("file") != original_key
+
+
+def test_filecache_invalidates_after_same_size_write(m, tmp_path, monkeypatch):
+    m.pipe_file("file", b"old")
+    cached = filesystem(
+        "filecache", fs=m, cache_storage=str(tmp_path), check_files=True, expiry_time=0
+    )
+    assert cached.cat_file("file") == b"old"
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            return datetime(2100, 1, 1, tzinfo=tz)
+
+    monkeypatch.setattr("fsspec.implementations.memory.datetime", Clock)
+    with m.open("file", "r+b") as f:
+        f.write(b"new")
+
+    assert m.cat_file("file") == b"new"
+    assert cached.cat_file("file") == b"new"
 
 
 def test_modified_after_partial_writelines(m):
@@ -250,12 +272,15 @@ def test_ls(m):
     assert len(m.ls("/dir/afile")) == 1
 
 
-def test_info_created_matches_ls(m):
+def test_info_timestamps_match_listings(m):
     m.pipe_file("/dir/afile", b"data")
 
     info = m.info("/dir/afile")
     assert info["created"] == m.created("/dir/afile").timestamp()
+    assert info["modified"] == m.modified("/dir/afile").timestamp()
     assert info == m.ls("/dir/afile")[0]
+    assert info == m.ls("/dir")[0]
+    assert info == m.find("/dir/afile", detail=True)["/dir/afile"]
     assert info == m.find("/dir", detail=True)["/dir/afile"]
 
 
@@ -936,6 +961,10 @@ def test_find_snapshots_store_before_iterating(m):
         @property
         def created(self):
             return self._real.created
+
+        @property
+        def modified(self):
+            return self._real.modified
 
         @property
         def size(self):
