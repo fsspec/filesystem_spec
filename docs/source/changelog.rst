@@ -1,5 +1,4 @@
 Changelog
-=========
 
 Dev
 ---
@@ -38,6 +37,7 @@ Fixes
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
+- Copy virtual directories separately during recursive copies and moves (#2447).
 
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
