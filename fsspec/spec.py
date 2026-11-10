@@ -1031,6 +1031,9 @@ class AbstractFileSystem(metaclass=_Cached):
                 try:
                     out[path] = self.cat_file(path, **kwargs)
                 except Exception as e:
+                    if recursive and self.isdir(path):
+                        # expand_path also lists the directories themselves
+                        continue
                     if on_error == "raise":
                         raise
                     if on_error == "return":

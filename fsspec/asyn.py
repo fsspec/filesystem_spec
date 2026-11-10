@@ -644,6 +644,13 @@ class AsyncFileSystem(AbstractFileSystem):
         out = await _run_coros_in_chunks(
             coros, batch_size=batch_size, nofiles=True, return_exceptions=True
         )
+        if recursive:
+            # expand_path also lists the directories themselves
+            failed = [i for i, v in enumerate(out) if is_exception(v)]
+            isdir = await asyncio.gather(*[self._isdir(paths[i]) for i in failed])
+            dirs = {i for i, d in zip(failed, isdir) if d}
+            paths = [p for i, p in enumerate(paths) if i not in dirs]
+            out = [v for i, v in enumerate(out) if i not in dirs]
         if on_error == "raise":
             ex = next(filter(is_exception, out), False)
             if ex:
@@ -652,7 +659,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 finally:
                     del ex, out
         if (
-            len(paths) > 1
+            len(paths) != 1
             or isinstance(path, list)
             or paths[0] != self._strip_protocol(path)
         ):
