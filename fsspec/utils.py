@@ -631,6 +631,21 @@ def range_response_window(
                     "Open with block_size=0 for a streaming file interface."
                 )
             return out[:end] if lo == 0 else out[len(out) + lo : end]
+        if (
+            lo > 0
+            and len(out) > 0
+            and content_range_start != lo
+            and (end is None or (window is not None and end > lo + len(out)))
+        ):
+            # The request runs to or past the end of the body, so the body
+            # may be the whole file rather than the range that was asked
+            # for, and without a Content-Range header confirming where it
+            # starts, the two cannot be told apart.
+            raise ValueError(
+                "The HTTP server doesn't appear to support range requests. "
+                "Only reading this file from the beginning is supported. "
+                "Open with block_size=0 for a streaming file interface."
+            )
     return out
 
 
