@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Copy virtual directories separately during recursive copies and moves (#2447).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

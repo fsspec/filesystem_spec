@@ -580,7 +580,14 @@ class AsyncFileSystem(AbstractFileSystem):
             )
 
         batch_size = batch_size or self.batch_size
-        coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths1, paths2)]
+
+        async def copy_path(p1, p2):
+            if recursive and await self._isdir(p1):
+                await self._makedirs(p2, exist_ok=True)
+            else:
+                await self._cp_file(p1, p2, **kwargs)
+
+        coros = [copy_path(p1, p2) for p1, p2 in zip(paths1, paths2)]
         result = await _run_coros_in_chunks(
             coros, batch_size=batch_size, return_exceptions=True, nofiles=True
         )

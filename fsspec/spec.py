@@ -1303,7 +1303,10 @@ class AbstractFileSystem(metaclass=_Cached):
 
         for p1, p2 in zip(paths1, paths2):
             try:
-                self.cp_file(p1, p2, **kwargs)
+                if recursive and self.isdir(p1):
+                    self.makedirs(p2, exist_ok=True)
+                else:
+                    self.cp_file(p1, p2, **kwargs)
             except FileNotFoundError:
                 if on_error == "raise":
                     raise
