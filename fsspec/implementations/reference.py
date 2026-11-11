@@ -885,7 +885,13 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def pipe_file(self, path, value, **_):
         """Temporarily add binary data or reference as a file"""
+        cached = bool(self.dircache)
+        replace = cached and (
+            isinstance(self.references, LazyReferenceMapper) or path in self.references
+        )
         self.references[path] = value
+        if cached:
+            self._add_to_dircache(path, value, replace=replace)
 
     async def _get_file(self, rpath, lpath, **kwargs):
         if self.isdir(rpath):
@@ -1154,33 +1160,41 @@ class ReferenceFileSystem(AsyncFileSystem):
 
     def _dircache_from_items(self):
         self.dircache = {"": []}
-        it = self.references.items()
-        for path, part in it:
-            if isinstance(part, (bytes, str)) or hasattr(part, "to_bytes"):
-                size = len(_inline_data(part))
-            elif len(part) == 1:
-                size = None
-            else:
-                _, _, size = part
-            par = path.rsplit("/", 1)[0] if "/" in path else ""
-            par0 = par
-            subdirs = [par0]
-            while par0 and par0 not in self.dircache:
-                # collect parent directories
-                par0 = self._parent(par0)
-                subdirs.append(par0)
+        for path, part in self.references.items():
+            self._add_to_dircache(path, part)
 
-            subdirs.reverse()
-            for parent, child in zip(subdirs, subdirs[1:]):
-                # register newly discovered directories
-                assert child not in self.dircache
-                assert parent in self.dircache
-                self.dircache[parent].append(
-                    {"name": child, "type": "directory", "size": 0}
-                )
-                self.dircache[child] = []
+    def _add_to_dircache(self, path, part, replace=False):
+        if isinstance(part, (bytes, str)) or hasattr(part, "to_bytes"):
+            size = len(_inline_data(part))
+        elif len(part) == 1:
+            size = None
+        else:
+            _, _, size = part
+        par = path.rsplit("/", 1)[0] if "/" in path else ""
+        par0 = par
+        subdirs = [par0]
+        while par0 and par0 not in self.dircache:
+            # collect parent directories
+            par0 = self._parent(par0)
+            subdirs.append(par0)
 
-            self.dircache[par].append({"name": path, "type": "file", "size": size})
+        subdirs.reverse()
+        for parent, child in zip(subdirs, subdirs[1:]):
+            # register newly discovered directories
+            assert child not in self.dircache
+            assert parent in self.dircache
+            self.dircache[parent].append(
+                {"name": child, "type": "directory", "size": 0}
+            )
+            self.dircache[child] = []
+
+        entries = self.dircache[par]
+        if replace:
+            for entry in entries:
+                if entry["name"] == path and entry["type"] == "file":
+                    entry["size"] = size
+                    return
+        entries.append({"name": path, "type": "file", "size": size})
 
     def _open(self, path, mode="rb", block_size=None, cache_options=None, **kwargs):
         part_or_url, start0, end0 = self._cat_common(path)
