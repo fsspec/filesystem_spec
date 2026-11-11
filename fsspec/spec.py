@@ -1303,7 +1303,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         for p1, p2 in zip(paths1, paths2):
             try:
-                if recursive and self.isdir(p1):
+                if recursive and self.info(p1)["type"] == "directory":
                     self.makedirs(p2, exist_ok=True)
                 else:
                     self.cp_file(p1, p2, **kwargs)
