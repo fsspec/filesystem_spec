@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Decompress synchronous ``simplecache.cat_ranges`` downloads before caching,
+  preserving transfer callbacks and cleaning staged files if decoding fails.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

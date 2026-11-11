@@ -35,7 +35,7 @@ logger = logging.getLogger("fsspec.cached")
 
 
 @contextmanager
-def _tempfile(lpath):
+def _tempfile(lpath, *, allow_concurrent_copy=True):
     # download to a temporary file, renamed into place once complete, so that
     # a partial download is never visible under its final cache name (#639)
     tmp = os.path.join(os.path.dirname(lpath), f"{secrets.token_hex(8)}.part")
@@ -51,7 +51,8 @@ def _tempfile(lpath):
             # windows: destination open elsewhere. A same-size file written
             # since we started is a concurrent copy of the same download.
             if not (
-                os.path.isfile(lpath)
+                allow_concurrent_copy
+                and os.path.isfile(lpath)
                 and os.path.getsize(lpath) == os.path.getsize(tmp)
                 and os.path.getmtime(lpath) >= start
             ):
@@ -61,13 +62,38 @@ def _tempfile(lpath):
             os.remove(tmp)
 
 
-def _atomic_get(fs, rpaths, lpaths, callback=DEFAULT_CALLBACK):
+def _atomic_get(fs, rpaths, lpaths, callback=DEFAULT_CALLBACK, compression=None):
     with ExitStack() as stack:
-        fs.get(
-            rpaths,
-            [stack.enter_context(_tempfile(fn)) for fn in lpaths],
-            callback=callback,
-        )
+        temp_paths = [stack.enter_context(_tempfile(fn)) for fn in lpaths]
+        fs.get(rpaths, temp_paths, callback=callback)
+        if compression:
+            # Keep the backend's download callbacks, and publish no cache
+            # entry until every download and decompression has succeeded.
+            for rpath, tmp in zip(rpaths, temp_paths):
+                comp = (
+                    infer_compression(rpath) if compression == "infer" else compression
+                )
+                if comp is None:
+                    continue
+                # Encoded and decoded files are not interchangeable, even
+                # when their sizes and timestamps happen to match.
+                with (
+                    _tempfile(tmp, allow_concurrent_copy=False) as decoded_path,
+                    ExitStack() as streams,
+                ):
+                    source = streams.enter_context(open(tmp, "rb"))
+                    target = streams.enter_context(open(decoded_path, "wb"))
+                    decoded = compr[comp](source, mode="rb")
+                    close = getattr(decoded, "close", None)
+                    if callable(close):
+                        streams.callback(close)
+                    while True:
+                        data = decoded.read(5 * 2**20)
+                        if data is None:
+                            raise TypeError("Compression decoder returned None")
+                        if not data:
+                            break
+                        target.write(data)
 
 
 class WriteCachedTransaction(Transaction):
@@ -1092,7 +1118,13 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         logger.debug("cat ranges %s", paths)
         lpaths, rpaths, download = self._local_paths_for_ranges(paths)
         if download:
-            _atomic_get(self.fs, rpaths, download, callback=self.callback)
+            _atomic_get(
+                self.fs,
+                rpaths,
+                download,
+                callback=self.callback,
+                compression=self.compression,
+            )
         return LocalFileSystem().cat_ranges(
             lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )

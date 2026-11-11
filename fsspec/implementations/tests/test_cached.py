@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 import json
 import os
 import pathlib
@@ -2111,3 +2112,328 @@ def test_callback_reports_download_async(tmp_path, protocol):
         assert callback.sizes == []
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "codec,suffix", [("gzip", "gz"), ("bz2", "bz2"), ("xz", "xz"), ("zip", "zip")]
+)
+@pytest.mark.parametrize("infer", [False, True])
+@pytest.mark.parametrize("warm", [False, True])
+def test_simplecache_compressed_ranges_representation(
+    tmp_path, m, codec, suffix, infer, warm
+):
+    if codec not in compr:
+        pytest.skip(f"{codec} is unavailable")
+    path = f"/compressed-ranges/data.{suffix}"
+    data = b"0123456789abcdefghijklmnopqrstuvwxyz"
+    with m.open(path, "wb") as raw:
+        with compr[codec](raw, mode="wb") as compressed:
+            compressed.write(data)
+    options = {
+        "fs": m,
+        "cache_storage": str(tmp_path),
+        "compression": "infer" if infer else codec,
+        "skip_instance_cache": True,
+    }
+    fs = fsspec.filesystem("simplecache", **options)
+    if warm:
+        with fs.open(path, "rb") as f:
+            assert f.read() == data
+
+    assert fs.cat_ranges(
+        [path] * 4, [0, 5, -5, 2], [2, 8, None, None], on_error="raise"
+    ) == [data[:2], data[5:8], data[-5:], data[2:]]
+    assert pathlib.Path(fs._check_file(path)).read_bytes() == data
+    assert len(list(tmp_path.iterdir())) == 1
+
+    # A fresh instance must open the range-filled cache without the source.
+    m.rm(path)
+    reloaded = fsspec.filesystem("simplecache", **options)
+    for cached_fs in (fs, reloaded):
+        with cached_fs.open(path, "rb") as f:
+            assert f.read() == data
+        assert cached_fs.cat_ranges([path], 3, 9) == [data[3:9]]
+
+
+@pytest.mark.parametrize("compression", [None, "infer"])
+def test_simplecache_compressed_ranges_raw_control(tmp_path, m, compression):
+    path = "/compressed-ranges/data.unknown"
+    encoded = gzip.compress(b"do not infer a codec without a known suffix")
+    m.pipe(path, encoded)
+    options = {
+        "fs": m,
+        "cache_storage": str(tmp_path),
+        "compression": compression,
+        "skip_instance_cache": True,
+    }
+    fs = fsspec.filesystem("simplecache", **options)
+    assert fs.cat_ranges([path, path], [0, -5], [8, None]) == [
+        encoded[:8],
+        encoded[-5:],
+    ]
+    m.rm(path)
+    with fsspec.filesystem("simplecache", **options).open(path, "rb") as f:
+        assert f.read() == encoded
+    assert len(list(tmp_path.iterdir())) == 1
+
+
+@pytest.mark.parametrize("on_error", ["return", "raise"])
+def test_simplecache_compressed_ranges_decode_failure(tmp_path, m, on_error):
+    warm, first, bad = [
+        f"/compressed-ranges/{name}.gz" for name in ("warm", "first", "bad")
+    ]
+    data = b"decoded contents"
+    m.pipe({warm: gzip.compress(data), first: gzip.compress(data), bad: b"not gzip"})
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=m,
+        compression="gzip",
+        cache_storage=str(tmp_path),
+        skip_instance_cache=True,
+    )
+    with fs.open(warm, "rb") as f:
+        assert f.read() == data
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    m.rm(warm)
+
+    # The first cold source decodes before the later member fails. Neither
+    # cold cache name may be published, and the existing warm entry survives.
+    with pytest.raises((OSError, EOFError)):
+        fs.cat_ranges([warm, first, bad], 0, None, on_error=on_error)
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
+    assert not fs._check_file(first)
+    assert not fs._check_file(bad)
+    with fs.open(warm, "rb") as f:
+        assert f.read() == data
+
+    m.pipe(bad, gzip.compress(data))
+    assert fs.cat_ranges([warm, first, bad], 0, None) == [data] * 3
+    assert len(list(tmp_path.iterdir())) == 3
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_simplecache_compressed_ranges_inner_permission_error(tmp_path, m, monkeypatch):
+    data = b"equal-size encoded and decoded representations"
+    encoded = bytes(value ^ 0x5A for value in data)
+
+    class Decoder:
+        # A registered streaming decoder need not implement a context manager.
+        def __init__(self, source, mode):
+            assert mode == "rb"
+            self.source = source
+
+        def read(self, size):
+            return bytes(value ^ 0x5A for value in self.source.read(size))
+
+    monkeypatch.setitem(compr, "test-equal-size", Decoder)
+    path = "/compressed-ranges/equal-size.bin"
+    m.pipe(path, encoded)
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=m,
+        compression="test-equal-size",
+        cache_storage=str(tmp_path),
+        skip_instance_cache=True,
+    )
+    replace = os.replace
+    getmtime = os.path.getmtime
+    attempts = []
+
+    def coarse_mtime(path):
+        return 1234567890.0 if str(path).endswith(".part") else getmtime(path)
+
+    def deny_inner_replace(source, destination):
+        if str(destination).endswith(".part"):
+            attempts.append(
+                (
+                    pathlib.Path(source).read_bytes(),
+                    pathlib.Path(destination).read_bytes(),
+                )
+            )
+            raise PermissionError("inner decoded replacement denied")
+        return replace(source, destination)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os.path, "getmtime", coarse_mtime)
+        patch.setattr(os, "replace", deny_inner_replace)
+        with pytest.raises(PermissionError, match="inner decoded replacement denied"):
+            fs.cat_ranges([path], 0, None, on_error="raise")
+    assert attempts == [(data, encoded)]
+    assert len(data) == len(encoded)
+    assert list(tmp_path.iterdir()) == []
+    assert not fs._check_file(path)
+
+    assert fs.cat_ranges([path], 0, None, on_error="raise") == [data]
+    assert pathlib.Path(fs._check_file(path)).read_bytes() == data
+    assert len(list(tmp_path.iterdir())) == 1
+
+
+@pytest.mark.parametrize("compression", [None, "gzip"])
+def test_simplecache_compressed_ranges_outer_concurrent_copy(
+    tmp_path, m, monkeypatch, compression
+):
+    data = b"complete concurrent cache copy"
+    encoded = gzip.compress(data)
+    expected = encoded if compression is None else data
+    path = "/compressed-ranges/concurrent.gz"
+    m.pipe(path, encoded)
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=m,
+        compression=compression,
+        cache_storage=str(tmp_path),
+        skip_instance_cache=True,
+    )
+    replace = os.replace
+    attempts = []
+
+    def concurrent_copy(source, destination):
+        if not str(destination).endswith(".part"):
+            copied = pathlib.Path(source).read_bytes()
+            pathlib.Path(destination).write_bytes(copied)
+            attempts.append(copied)
+            raise PermissionError("a concurrent complete destination is busy")
+        return replace(source, destination)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os.path, "getmtime", lambda path: 1234567890.0)
+        patch.setattr(os, "replace", concurrent_copy)
+        assert fs.cat_ranges([path], 0, None, on_error="raise") == [expected]
+    assert attempts == [expected]
+    assert pathlib.Path(fs._check_file(path)).read_bytes() == expected
+    assert len(list(tmp_path.iterdir())) == 1
+    assert not list(tmp_path.glob("*.part"))
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_simplecache_compressed_ranges_callbacks(tmp_path, m, monkeypatch, legacy):
+    class RangeCallback(_CountingCallback):
+        def __init__(self):
+            super().__init__()
+            self.children = []
+
+        def child(self, source, destination):
+            child = _CountingCallback()
+            self.children.append((source, destination, child))
+            return child
+
+        def branch(self, source, destination, kwargs):
+            kwargs["callback"] = self.child(source, destination)
+
+        def branched(self, source, destination, **kwargs):
+            if legacy:
+                return super().branched(source, destination, **kwargs)
+            return self.child(source, destination)
+
+    paths = ["/compressed-ranges/one.gz", "/compressed-ranges/two.gz"]
+    data = [b"first decoded contents", b"second decoded contents"]
+    encoded = [gzip.compress(value) for value in data]
+    m.pipe(dict(zip(paths, encoded)))
+    callback = RangeCallback()
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=m,
+        compression="gzip",
+        cache_storage=str(tmp_path),
+        callback=callback,
+        skip_instance_cache=True,
+    )
+    get = m.get
+    calls = []
+
+    def record_get(rpaths, lpaths, **kwargs):
+        calls.append((rpaths, lpaths, kwargs))
+        return get(rpaths, lpaths, **kwargs)
+
+    monkeypatch.setattr(m, "get", record_get)
+    arguments = ([paths[0], paths[0], paths[1]], [0, 2, 1], [2, 5, 4])
+    expected = [data[0][:2], data[0][2:5], data[1][1:4]]
+    assert fs.cat_ranges(*arguments, on_error="raise") == expected
+    assert len(calls) == 1
+    assert calls[0][0] == paths
+    assert calls[0][2] == {"callback": callback}
+    assert calls[0][2]["callback"] is callback
+    assert [destination for _, destination, _ in callback.children] == calls[0][1]
+    assert callback.sizes == [2]
+    assert callback.updates == [1, 1]
+    assert [source for source, _, _ in callback.children] == paths
+    for (_, destination, child), value in zip(callback.children, encoded):
+        assert destination.endswith(".part")
+        assert child.sizes == [len(value)]
+        assert sum(child.updates) == len(value)
+
+    calls.clear()
+    callback.sizes.clear()
+    callback.updates.clear()
+    callback.children.clear()
+    assert fs.cat_ranges(*arguments, on_error="raise") == expected
+    assert calls == []
+    assert callback.sizes == []
+    assert callback.updates == []
+    assert callback.children == []
+
+
+@pytest.mark.parametrize("operation", ["open", "cat_ranges"])
+@pytest.mark.parametrize("after_block", [False, True])
+def test_simplecache_compressed_ranges_none_read(
+    tmp_path, m, monkeypatch, operation, after_block
+):
+    decoders = []
+
+    class Decoder:
+        def __init__(self, source, mode):
+            assert mode == "rb"
+            self.encoded = source.read()
+            self.reads = 0
+            self.none_returns = 0
+            self.eof = False
+            if self.encoded == b"good":
+                blocks = [b"earlier decoded contents", b""]
+            else:
+                assert self.encoded == b"bad"
+                blocks = ([b"partial decoded contents"] if after_block else []) + [
+                    None,
+                    b"remainder if retried",
+                    b"",
+                ]
+            self.blocks = iter(blocks)
+            decoders.append(self)
+
+        def read(self, size):
+            self.reads += 1
+            block = next(self.blocks, b"")
+            if block is None:
+                self.none_returns += 1
+            elif block == b"":
+                self.eof = True
+            return block
+
+    monkeypatch.setitem(compr, "test-none-read", Decoder)
+    good, bad = "/compressed-ranges/good.bin", "/compressed-ranges/bad.bin"
+    m.pipe({good: b"good", bad: b"bad"})
+    fs = fsspec.filesystem(
+        "simplecache",
+        fs=m,
+        compression="test-none-read",
+        cache_storage=str(tmp_path),
+        skip_instance_cache=True,
+    )
+    paths = [good, bad] if operation == "cat_ranges" else [bad]
+    with pytest.raises(TypeError):
+        if operation == "cat_ranges":
+            fs.cat_ranges(paths, 0, None, on_error="raise")
+        else:
+            with fs.open(bad, "rb") as f:
+                f.read()
+
+    assert [decoder.encoded for decoder in decoders] == [m.cat_file(p) for p in paths]
+    if operation == "cat_ranges":
+        # An earlier cold member completed decoding, but remains unpublished.
+        assert decoders[0].eof
+    decoder = decoders[-1]
+    assert decoder.none_returns == 1
+    assert decoder.reads == (2 if after_block else 1)
+    assert not decoder.eof
+    assert all(not fs._check_file(path) for path in paths)
+    assert list(tmp_path.iterdir()) == []
+    assert not list(tmp_path.glob("*.part"))
