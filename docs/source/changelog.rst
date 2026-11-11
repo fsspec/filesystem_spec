@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Allow listing cache items and values with bounded LRU caching (#2419).
+
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
 
