@@ -580,7 +580,11 @@ class AsyncFileSystem(AbstractFileSystem):
             )
 
         batch_size = batch_size or self.batch_size
-        coros = [self._cp_file(p1, p2, **kwargs) for p1, p2 in zip(paths1, paths2)]
+
+        coros = [
+            self._copy_path(p1, p2, recursive=recursive, **kwargs)
+            for p1, p2 in zip(paths1, paths2)
+        ]
         result = await _run_coros_in_chunks(
             coros, batch_size=batch_size, return_exceptions=True, nofiles=True
         )
@@ -592,6 +596,12 @@ class AsyncFileSystem(AbstractFileSystem):
                 raise ex
             finally:
                 del ex, result
+
+    async def _copy_path(self, path1, path2, recursive=False, **kwargs):
+        if recursive and (await self._info(path1))["type"] == "directory":
+            await self._makedirs(path2, exist_ok=True)
+        else:
+            await self._cp_file(path1, path2, **kwargs)
 
     async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
         raise NotImplementedError
