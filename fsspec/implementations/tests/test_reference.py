@@ -136,6 +136,72 @@ def test_ls(server):
     }
 
 
+@pytest.mark.parametrize("detail", [False, True])
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("dataset", ["dataset/file", "dataset/file-extra", "dataset/sub/file"]),
+        ("dataset/", ["dataset/file", "dataset/file-extra", "dataset/sub/file"]),
+        (
+            "reference://dataset",
+            ["dataset/file", "dataset/file-extra", "dataset/sub/file"],
+        ),
+        ("dataset/file", ["dataset/file"]),
+        ("dataset/fi", []),
+        ("data", []),
+        (
+            "",
+            [
+                "dataset-other/file",
+                "dataset/file",
+                "dataset/file-extra",
+                "dataset/sub/file",
+            ],
+        ),
+        (
+            "reference://",
+            [
+                "dataset-other/file",
+                "dataset/file",
+                "dataset/file-extra",
+                "dataset/sub/file",
+            ],
+        ),
+    ],
+)
+def test_find_path_boundaries(path, expected, detail):
+    # 2026-10-09: File and directory lookups exclude names sharing only a prefix.
+    refs = {
+        "dataset/file": b"one",
+        "dataset/file-extra": b"second",
+        "dataset/sub/file": b"third",
+        "dataset-other/file": b"unrelated",
+    }
+    fs = fsspec.filesystem("reference", fo=refs)
+    if detail:
+        expected = {
+            name: {"name": name, "size": len(refs[name]), "type": "file"}
+            for name in expected
+        }
+    assert fs.find(path, detail=detail) == expected
+
+
+def test_mapper_keys_keep_root_boundary():
+    # 2026-10-09: A sibling dataset must not produce phantom mapping keys.
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "dataset/file": b"one",
+            "dataset/sub/file": b"two",
+            "dataset-other/file": b"unrelated",
+        },
+    )
+    mapper = fs.get_mapper("dataset")
+    assert sorted(mapper) == ["file", "sub/file"]
+    assert len(mapper) == 2
+    assert dict(mapper) == {"file": b"one", "sub/file": b"two"}
+
+
 def test_nested_dirs_ls():
     # issue #1430
     refs = {"a": "A", "B/C/b": "B", "B/C/d": "d", "B/_": "_"}
