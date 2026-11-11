@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Allow listing cache items and values with bounded LRU caching (#2419).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
