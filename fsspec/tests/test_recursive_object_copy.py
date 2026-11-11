@@ -75,3 +75,74 @@ def test_recursive_copy_empty_directory(object_store):
     store.makedirs("/src/empty")
     fs.copy("/src", "/dst", recursive=True, on_error="raise")
     assert store.isdir("/dst/empty")
+
+
+class MarkerAwareMemoryFS(ObjectStoreMemoryFS):
+    """Simulate a backend where a directory marker is also a file."""
+
+    def isdir(self, path):
+        if path.rstrip("/") == "/src/marker":
+            return True
+        return super().isdir(path)
+
+    def isfile(self, path):
+        if path.rstrip("/") == "/src/marker":
+            return True
+        return super().isfile(path)
+
+    def cp_file(self, path1, path2, **kwargs):
+        if path1.rstrip("/") == "/src/marker":
+            return MemoryFileSystem.cp_file(self, path1, path2, **kwargs)
+        return super().cp_file(path1, path2, **kwargs)
+
+
+def test_recursive_copy_preserves_directory_marker():
+    fs = MarkerAwareMemoryFS(skip_instance_cache=True)
+    fs.store.clear()
+    fs.pseudo_dirs[:] = [""]
+
+    try:
+        fs.pipe("/src/data.txt", b"data")
+        fs.pipe("/src/marker/", b"marker-content")
+
+        fs.copy("/src", "/dst", recursive=True, on_error="raise")
+
+        assert fs.cat("/dst/data.txt") == b"data"
+        assert fs.cat("/dst/marker") == b"marker-content"
+    finally:
+        fs.store.clear()
+        fs.pseudo_dirs[:] = [""]
+
+
+class AsyncMarkerAwareFS(AsyncObjectStoreFS):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.store = MarkerAwareMemoryFS(skip_instance_cache=True)
+
+    async def _info(self, path, **kwargs):
+        if path.rstrip("/") == "/src/marker":
+            return {
+                "name": "/src/marker",
+                "size": len(self.store.cat("/src/marker")),
+                "type": "file",
+            }
+        return await super()._info(path, **kwargs)
+
+
+def test_async_recursive_copy_preserves_directory_marker():
+    fs = AsyncMarkerAwareFS(skip_instance_cache=True)
+    store = fs.store
+    store.store.clear()
+    store.pseudo_dirs[:] = [""]
+
+    try:
+        store.pipe("/src/data.txt", b"data")
+        store.pipe("/src/marker/", b"marker-content")
+
+        fs.copy("/src", "/dst", recursive=True, on_error="raise")
+
+        assert store.cat("/dst/data.txt") == b"data"
+        assert store.cat("/dst/marker") == b"marker-content"
+    finally:
+        store.store.clear()
+        store.pseudo_dirs[:] = [""]
