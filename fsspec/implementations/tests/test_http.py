@@ -467,6 +467,26 @@ def test_read_none(server, block_size, position):
         assert f.read(None) == b""
 
 
+@pytest.mark.parametrize("filesystem_default", [False, True])
+def test_reopen_with_known_parts(encoded_range_server, filesystem_default):
+    content = encoded_range_server.content
+    parts = {(0, 5): content[:5], (5, 10): content[5:10]}
+    expected = parts.copy()
+    options = {"cache_type": "parts", "cache_options": {"data": parts, "strict": True}}
+    h = fsspec.filesystem(
+        "http",
+        **(options if filesystem_default else {}),
+    )
+    for _ in range(2):
+        with h.open(
+            encoded_range_server.url, **({} if filesystem_default else options)
+        ) as f:
+            assert f.read(5) == content[:5]
+            f.seek(8)
+            assert f.read(2) == content[8:10]
+    assert parts == expected
+
+
 def test_file_pickle(server):
     import pickle
 
