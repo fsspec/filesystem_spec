@@ -729,7 +729,7 @@ class KnownPartsOfAFile(BaseCache):
         How big this file is
     data: dict
         A dictionary mapping explicit `(start, stop)` file-offset tuples
-        with known bytes.
+        with known bytes. The input dictionary is not modified.
     strict: bool, default True
         Whether to fetch reads that go beyond a known byte-range boundary.
         If `False`, any read that ends outside a known part will be zero
@@ -755,15 +755,15 @@ class KnownPartsOfAFile(BaseCache):
         if data:
             old_offsets = sorted(data.keys())
             offsets = [old_offsets[0]]
-            blocks = [data.pop(old_offsets[0])]
+            blocks = [data[old_offsets[0]]]
             for start, stop in old_offsets[1:]:
                 start0, stop0 = offsets[-1]
                 if start == stop0:
                     offsets[-1] = (start0, stop)
-                    blocks[-1] += data.pop((start, stop))
+                    blocks[-1] += data[(start, stop)]
                 else:
                     offsets.append((start, stop))
-                    blocks.append(data.pop((start, stop)))
+                    blocks.append(data[(start, stop)])
 
             self.data = dict(zip(offsets, blocks))
         else:
