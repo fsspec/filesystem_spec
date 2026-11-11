@@ -108,7 +108,7 @@ class DirCache(MutableMapping):
             return
 
         if self.listings_expiry_time is None:
-            yield from self._cache
+            yield from list(self._cache) if self.max_paths else self._cache
             return
 
         now = time.time()
