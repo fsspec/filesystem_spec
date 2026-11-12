@@ -19,7 +19,6 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
-          # - "3.15"
         FREETHREADING:
           - false
         #include:
@@ -53,6 +52,30 @@ jobs:
           pip install "fsspec[test_full]"
           pip install --no-deps -e .
           pytest -v
+
+  python315_core:
+    name: 3.15-core-pytest
+    runs-on: ubuntu-24.04
+    env:
+      CIRUN: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.15"
+      - name: Install core test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Run core tests
+        run: >-
+          python -m pytest -v
+          fsspec/tests/test_core.py
+          fsspec/tests/test_spec.py
+          fsspec/tests/test_dircache.py
+          fsspec/implementations/tests/test_memory.py
 
   win:
     name: pytest-win
