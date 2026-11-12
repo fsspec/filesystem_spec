@@ -82,3 +82,26 @@ def test_notebook_contents(jupyter):
     with fs.open("nb.ipynb", "rb") as f:
         assert f.read() == nb
     assert fs.info("nb.ipynb")["type"] == "file"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["hash#name", "query?name", "percent%23name", "space name", "unicode-\u00e9"],
+)
+def test_reserved_path_characters(jupyter, name):
+    url, root = jupyter
+    fs = fsspec.filesystem("jupyter", url=url, skip_instance_cache=True)
+    folder = f"{name}/nested"
+    fs.mkdir(folder)
+    path = f"{folder}/file.txt"
+    fs.pipe_file(path, b"contents")
+    assert os.path.isfile(os.path.join(root, path))
+    assert fs.cat_file(path) == b"contents"
+    assert fs.cat_file(path, start=1, end=4) == b"ont"
+    assert fs.ls(folder, detail=False) == [path]
+    moved = f"{folder}/moved.txt"
+    fs.mv(path, moved)
+    assert not os.path.exists(os.path.join(root, path))
+    assert fs.cat_file(moved) == b"contents"
+    fs.rm(moved)
+    assert not os.path.exists(os.path.join(root, moved))
