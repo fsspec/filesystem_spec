@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, suppress
 from hashlib import sha256
-from shutil import rmtree
+from shutil import copyfile, rmtree
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from fsspec import filesystem
@@ -35,7 +35,7 @@ logger = logging.getLogger("fsspec.cached")
 
 
 @contextmanager
-def _tempfile(lpath):
+def _tempfile(lpath, *, allow_concurrent=True):
     # download to a temporary file, renamed into place once complete, so that
     # a partial download is never visible under its final cache name (#639)
     tmp = os.path.join(os.path.dirname(lpath), f"{secrets.token_hex(8)}.part")
@@ -50,7 +50,9 @@ def _tempfile(lpath):
         except PermissionError:
             # windows: destination open elsewhere. A same-size file written
             # since we started is a concurrent copy of the same download.
-            if not (
+            # Cache promotion may copy different bytes from another tier, so
+            # it must replace the destination rather than reuse this fallback.
+            if not allow_concurrent or not (
                 os.path.isfile(lpath)
                 and os.path.getsize(lpath) == os.path.getsize(tmp)
                 and os.path.getmtime(lpath) >= start
@@ -856,6 +858,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
 
         hash = self._mapper(path)
         fn = os.path.join(self.storage[-1], hash)
+        if "a" in mode and cached and cached[1] != fn:
+            with _tempfile(fn, allow_concurrent=False) as tmp:
+                copyfile(cached[1], tmp)
+            self._metadata.update_file(path, dict(detail, fn=hash))
+            self.save_cache()
         user_specified_kwargs = {
             k: v
             for k, v in kwargs.items()
@@ -1142,12 +1149,15 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                 elif "r" in mode:
                     raise FileNotFoundError(path)
 
-        fn = self._check_file(path)
+        cached = self._check_file(path)
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:
-            return open(fn, mode)
+            return open(cached, mode)
 
         fn = os.path.join(self.storage[-1], sha)
+        if "a" in mode and cached and cached != fn:
+            with _tempfile(fn, allow_concurrent=False) as tmp:
+                copyfile(cached, tmp)
         user_specified_kwargs = {
             k: v
             for k, v in kwargs.items()

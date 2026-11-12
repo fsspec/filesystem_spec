@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Preserve the selected cached file when appending through ``filecache`` or
+  ``simplecache`` with multiple cache directories.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
