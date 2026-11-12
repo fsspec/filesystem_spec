@@ -217,6 +217,8 @@ is called, so that subsequent listing of the given paths will force a refresh. I
 addition, some methods like ``ls`` have a ``refresh`` parameter to force fetching
 the listing again.
 
+.. _url-chaining:
+
 URL chaining
 ------------
 
@@ -240,6 +242,19 @@ are keyed by the protocol names included in the URL. Here is the equivalent to t
 .. code-block:: python
 
    of = fsspec.open('dask::s3://bucket/key', s3={'anon': True})
+
+Options without a protocol key are passed to the outermost filesystem. For example,
+when reading a ZIP file on S3, put the S3 connection options under ``s3`` so they
+reach the S3 filesystem rather than the ZIP filesystem:
+
+.. code-block:: python
+
+   of = fsspec.open('zip://data.csv::s3://bucket/archive.zip',
+                    s3={'profile': 'my-profile'})
+
+When another library accepts a ``storage_options`` dictionary and forwards it to
+``fsspec``, use the same protocol keys inside that dictionary, for example
+``storage_options={'s3': {'profile': 'my-profile'}}``.
 
 A couple of more complicated cases:
 
