@@ -1286,8 +1286,9 @@ def test_cached_append_cache_layers(tmp_path, protocol, mode, layout):
         }
     if protocol == "filecache" and layout != "single_warm":
         if layout in {"first_warm", "both_warm", "both_warm_same_size"}:
-            selected = json.loads((first / "cache").read_text())[str(origin)]
-            promoted = json.loads((last / "cache").read_text())[str(origin)]
+            path = fs.fs._strip_protocol(str(origin))
+            selected = json.loads((first / "cache").read_text())[path]
+            promoted = json.loads((last / "cache").read_text())[path]
             for key in ["original", "fn", "blocks", "uid"]:
                 assert promoted[key] == selected[key]
             assert promoted["time"] >= selected["time"]
@@ -1370,7 +1371,7 @@ def test_cached_append_busy_different_destination(
     fs = fsspec.filesystem(
         protocol, target_protocol="file", cache_storage=[str(first), str(last)]
     )
-    destination = last / fs._mapper(str(origin))
+    destination = last / fs._mapper(fs.fs._strip_protocol(str(origin)))
     assert destination.stat().st_mtime >= (first / destination.name).stat().st_mtime
     before_origin = origin.read_bytes()
     before = {p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()}
@@ -1413,6 +1414,75 @@ def test_cached_append_busy_different_destination(
         p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()
     }
     assert fs._metadata.cached_files == before_metadata
+
+
+@pytest.mark.skipif(
+    os.name != "nt", reason="requires native Windows file sharing semantics"
+)
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+def test_append_promotion_refuses_real_locked_destination(
+    tmp_path, monkeypatch, protocol
+):
+    origin = tmp_path / "origin"
+    first, last = tmp_path / "first", tmp_path / "last"
+    first_data, other_data = b"first-prefix", b"other-prefix"
+    assert len(first_data) == len(other_data) == 12
+    for cache, data in [(first, first_data), (last, other_data)]:
+        origin.write_bytes(data)
+        seed = fsspec.filesystem(
+            protocol, target_protocol="file", cache_storage=str(cache)
+        )
+        with seed.open(str(origin), "rb") as reader:
+            assert reader.read() == data
+    fs = fsspec.filesystem(
+        protocol, target_protocol="file", cache_storage=[str(first), str(last)]
+    )
+    path = fs.fs._strip_protocol(str(origin))
+    selected = first / fs._mapper(path)
+    destination = last / fs._mapper(path)
+    assert selected != destination
+    with fs.open(str(origin), "rb") as reader:
+        assert pathlib.Path(reader.name) == selected
+        assert reader.read() == first_data
+    assert destination.read_bytes() == other_data
+    assert origin.read_bytes() == other_data
+
+    # Satisfy the old same-size, newer-destination concurrent-download fallback.
+    future = time.time() + 3600
+    os.utime(destination, (future, future))
+    destination_mtime = destination.stat().st_mtime
+    assert destination_mtime > time.time()
+    before_origin = origin.read_bytes()
+    before = {p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()}
+    before_metadata = deepcopy(fs._metadata.cached_files)
+    uploads = []
+    real_put = fs.fs.put
+
+    def track_upload(*args, **kwargs):
+        uploads.append(args)
+        return real_put(*args, **kwargs)
+
+    monkeypatch.setattr(fs.fs, "put", track_upload)
+    with destination.open("rb") as reader:
+        handle = None
+        try:
+            with pytest.raises(PermissionError):
+                handle = fs.open(str(origin), "ab")
+        finally:
+            if handle is not None:
+                # A returned LocalTempFile must close without uploading on failure.
+                handle.autocommit = False
+                handle.close()
+        assert reader.read() == other_data
+    assert uploads == []
+    assert origin.read_bytes() == before_origin
+    assert destination.read_bytes() == other_data
+    assert destination.stat().st_mtime == destination_mtime
+    assert before == {
+        p: p.read_bytes() for cache in [first, last] for p in cache.iterdir()
+    }
+    assert fs._metadata.cached_files == before_metadata
+    assert not list(last.glob("*.part"))
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
