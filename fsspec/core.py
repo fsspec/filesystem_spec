@@ -289,6 +289,10 @@ def open_files(
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
+        For chained URLs, pass each filesystem's options in a dictionary keyed
+        by its protocol name, e.g. ``s3={"profile": "my-profile"}``. Options
+        without a protocol key are passed to the outermost filesystem.
+        See :ref:`url-chaining`.
 
     Examples
     --------
@@ -414,6 +418,10 @@ def url_to_fs(url, **kwargs):
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
+        For chained URLs, pass each filesystem's options in a dictionary keyed
+        by its protocol name, e.g. ``s3={"profile": "my-profile"}``. Options
+        without a protocol key are passed to the outermost filesystem.
+        See :ref:`url-chaining`.
 
     Returns
     -------
@@ -499,6 +507,10 @@ def open(
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
+        For chained URLs, pass each filesystem's options in a dictionary keyed
+        by its protocol name, e.g. ``s3={"profile": "my-profile"}``. Options
+        without a protocol key are passed to the outermost filesystem.
+        See :ref:`url-chaining`.
 
     Examples
     --------

@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Document protocol-keyed storage options for chained URLs in the opening APIs
+  (#1573).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
