@@ -2111,3 +2111,59 @@ def test_callback_reports_download_async(tmp_path, protocol):
         assert callback.sizes == []
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("uploaded", [0, 1])
+@pytest.mark.parametrize("cleanup_error", [False, True])
+@pytest.mark.parametrize("error_type", [OSError, KeyboardInterrupt])
+def test_write_transaction_failed_upload_ends_transaction(
+    tmp_path, m, monkeypatch, uploaded, cleanup_error, error_type
+):
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    original_put = m.put
+    error = error_type("controlled upload failure")
+
+    def failed_put(lpaths, rpaths, **kwargs):
+        if uploaded:
+            original_put(lpaths[:uploaded], rpaths[:uploaded], **kwargs)
+        raise error
+
+    if cleanup_error:
+        original_discard = LocalTempFile.discard
+        discards = []
+
+        def failed_discard(file):
+            discards.append(file.path)
+            if len(discards) == 1:
+                raise OSError("controlled discard failure")
+            original_discard(file)
+
+        monkeypatch.setattr(LocalTempFile, "discard", failed_discard)
+
+    monkeypatch.setattr(m, "put", failed_put)
+    with pytest.raises(error_type) as raised:
+        with fs.transaction as transaction:
+            fs.pipe("/first", b"first")
+            fs.pipe("/second", b"second")
+    assert raised.value is error
+    assert not fs._intrans
+    assert fs._transaction is None
+    assert transaction.fs is None
+    assert not transaction.files
+    # Cached filesystem instances must also be usable through a later lookup.
+    assert fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path)) is fs
+    assert not list(tmp_path.iterdir())
+    if cleanup_error:
+        assert set(discards) == {"/first", "/second"}
+    # Bulk transfers are not atomic: do not delete already-uploaded remote files.
+    assert m.exists("/first") == bool(uploaded)
+    assert not m.exists("/second")
+    if uploaded:
+        assert m.cat("/first") == b"first"
+
+    monkeypatch.setattr(m, "put", original_put)
+    fs.pipe("/after-failure", b"visible")
+    assert m.cat("/after-failure") == b"visible"
+    with fs.transaction:
+        fs.pipe("/next-transaction", b"committed")
+    assert m.cat("/next-transaction") == b"committed"

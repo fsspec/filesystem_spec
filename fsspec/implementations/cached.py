@@ -76,8 +76,18 @@ class WriteCachedTransaction(Transaction):
             return super().complete(commit=False)
         rpaths = [f.path for f in self.files]
         lpaths = [f.fn for f in self.files]
-        if commit:
+        try:
             self.fs.put(lpaths, rpaths)
+        except BaseException:
+            # A failed bulk upload may have published some remote files, but the
+            # remaining local writes must not keep this filesystem in a dead
+            # transaction. The base cleanup discards staged files and always
+            # resets transaction state, including when a discard fails.
+            try:
+                super().complete(commit=False)
+            except Exception:
+                logger.debug("Discarding failed cached transaction", exc_info=True)
+            raise
         self.files.clear()
         self.fs._intrans = False
         self.fs._transaction = None
