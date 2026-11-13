@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Reject writes through read-only memory file handles (#2193).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
