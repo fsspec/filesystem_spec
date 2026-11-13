@@ -9,6 +9,8 @@ Enhancements
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
+- Avoid traversing excluded deep ancestors in shallow memory filesystem searches.
+
 - Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
   operations that fill the cache on a miss, so ``filecache``/``simplecache``
   opens can report download progress (#1623)
@@ -16,6 +18,21 @@ Enhancements
 Fixes
 
 - Reject writes through read-only memory file handles (#2193).
+
+- Honor the per-file ``cache_type`` option when opening FTP files.
+
+- Close internally opened TAR archive files and compression wrappers on explicit
+  filesystem close, without closing caller-provided streams.
+
+- Verify the server certificate and host name for FTPFileSystem`` TLS
+
+- Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
+
+- Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+
+- Use the documentation extra when setting up a local documentation build.
+
+- Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
 
 - Point contributor setup instructions to the current CI environment files (#626).
 
@@ -102,7 +119,7 @@ Fixes
 
 - Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
 
-- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
@@ -213,6 +230,8 @@ Fixes
 - Resolve negative FTP read offsets relative to the end of the file.
 
 - Return an empty list from buffered-file ``readlines()`` at end of file
+
+- Preserve delimiter lookahead when reading lines from forward-only HTTP streams (#2349).
 
 - Normalize protocol prefixes and leading slashes before listing archive paths.
 
