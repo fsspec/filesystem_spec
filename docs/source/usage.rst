@@ -125,6 +125,17 @@ or write mode (create names). Critically, the file on the backend system is not 
             if "KENYA" in line:
                 break
 
+In read mode, ``*``, ``?`` and ``[...]`` in the URL are treated as glob characters. HTTP(S) URLs are
+the exception: ``?`` starts the query string there, so it is not treated as a glob character. If a
+path legitimately contains glob characters, pass it as a one-element list with ``expand=False`` so
+that it is used as is:
+
+.. code-block:: python
+
+    ofs = fsspec.open_files(["s3://bucket/report[2024].csv"], expand=False)
+
+:func:`fsspec.open` does this already, as it only expands glob characters when ``expand=True``.
+
 Compressed files
 ----------------
 

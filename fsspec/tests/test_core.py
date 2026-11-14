@@ -94,6 +94,33 @@ def test_expand_fs_token_paths(mode):
     assert len(get_fs_token_paths("path", mode, num=2, expand=True)[-1]) == 2
 
 
+@pytest.mark.parametrize("pattern", ["apath*", "apath?", "apath[12]"])
+def test_get_fs_token_paths_single_string_read_mode_globs(pattern):
+    d = str(tempfile.mkdtemp())
+    for f in ["apath1", "apath2"]:
+        open(os.path.join(d, f), "w").write("test")
+
+    _, _, paths = get_fs_token_paths(os.path.join(d, pattern), mode="rb")
+
+    assert sorted(os.path.basename(p) for p in paths) == ["apath1", "apath2"]
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        ("https://host/file?download=1", "https://host/file?download=1"),
+        (
+            "simplecache::https://host/file?download=1",
+            "https://host/file?download=1",
+        ),
+    ],
+)
+def test_get_fs_token_paths_read_mode_http_url_not_globbed(url, expected):
+    pytest.importorskip("aiohttp")
+    _, _, paths = get_fs_token_paths(url, mode="rb")
+    assert paths == [expected]
+
+
 def test_get_fs_token_paths_protocol_mismatch():
     with pytest.raises(ValueError, match=r"from \['memory://a', 'file:///b'\]$"):
         get_fs_token_paths(["memory://a", "file:///b"])

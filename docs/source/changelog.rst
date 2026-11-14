@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Expand ``?`` and ``[...]`` glob characters, not only ``*``, when a single path
+  is opened in read mode; in HTTP(S) URLs ``?`` is still not a glob character (#957).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
