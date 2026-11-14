@@ -268,6 +268,12 @@ class GenericFileSystem(AsyncFileSystem):
         if isinstance(urls, str):
             urls = [urls]
         fs = _resolve_fs(urls[0], self.method, storage_options=self.st_opts)
+        # Validate the entire batch before removing anything, as in _copy.
+        if any(
+            _resolve_fs(u, self.method, storage_options=self.st_opts) is not fs
+            for u in urls
+        ):
+            raise ValueError("Multiple backends are not supported")
         if fs.async_impl:
             await fs._rm(urls, **kwargs)
         else:

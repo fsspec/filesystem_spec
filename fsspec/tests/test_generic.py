@@ -139,6 +139,55 @@ def test_copy_homogeneous_batches(m, tmp_path, local):
         assert m.cat_file("b") == b"b"
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("recursive", [False, True])
+def test_rm_mixed_protocols(m, tmp_path, reverse, recursive):
+    m.pipe_file("target", b"memory target")
+    local_target = tmp_path / "target"
+    local_target.write_bytes(b"local target")
+    # An unrelated memory object named after the local URL: without the
+    # check below, the whole batch goes to the first backend and this
+    # object is deleted instead of the local file.
+    m.pipe_file(local_target.as_uri(), b"unrelated memory object")
+    fsspec.filesystem("file")
+    fs = fsspec.filesystem("generic", default_method="current")
+    urls = ["memory://target", local_target.as_uri()]
+    if reverse:
+        urls.reverse()
+
+    with pytest.raises(ValueError, match="Multiple backends"):
+        fs.rm(urls, recursive=recursive)
+
+    assert local_target.exists()
+    assert m.exists("target")
+    assert m.exists(local_target.as_uri())
+
+
+@pytest.mark.parametrize("local", [False, True])
+def test_rm_homogeneous_batches(m, tmp_path, local):
+    if local:
+        targets = [tmp_path / "a", tmp_path / "b"]
+        for target in targets:
+            target.write_bytes(b"x")
+        urls = [target.as_uri() for target in targets]
+        # Different protocol aliases still resolve to the same backend.
+        urls[1] = urls[1].replace("file://", "local://", 1)
+        fsspec.filesystem("file")
+    else:
+        m.pipe({"target-a": b"a", "target-b": b"b"})
+        urls = ["memory://target-a", "memory://target-b"]
+    fs = fsspec.filesystem("generic", default_method="current")
+
+    fs.rm(urls)
+
+    if local:
+        assert not (tmp_path / "a").exists()
+        assert not (tmp_path / "b").exists()
+    else:
+        assert not m.exists("target-a")
+        assert not m.exists("target-b")
+
+
 @pytest.mark.parametrize("method", ["copy", "cp_file"])
 def test_copy_preserves_tempdir(method, m, tmp_path):
     tempdir = tmp_path / "staging"
