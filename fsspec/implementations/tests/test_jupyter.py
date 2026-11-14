@@ -2,6 +2,7 @@ import os
 import shlex
 import subprocess
 import time
+from unittest.mock import Mock
 
 import pytest
 
@@ -82,3 +83,74 @@ def test_notebook_contents(jupyter):
     with fs.open("nb.ipynb", "rb") as f:
         assert f.read() == nb
     assert fs.info("nb.ipynb")["type"] == "file"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["hash#name", "query?name", "percent%23name", "space name", "unicode-\u00e9"],
+)
+def test_reserved_path_characters(jupyter, name):
+    url, root = jupyter
+    fs = fsspec.filesystem("jupyter", url=url, skip_instance_cache=True)
+    folder = f"{name}/nested"
+    fs.mkdir(folder)
+    path = f"{folder}/file.txt"
+    fs.pipe_file(path, b"contents")
+    assert os.path.isfile(os.path.join(root, path))
+    assert fs.cat_file(path) == b"contents"
+    assert fs.cat_file(path, start=1, end=4) == b"ont"
+    assert fs.ls(folder, detail=False) == [path]
+    moved = f"{folder}/moved.txt"
+    fs.mv(path, moved)
+    assert not os.path.exists(os.path.join(root, path))
+    assert fs.cat_file(moved) == b"contents"
+    fs.rm(moved)
+    assert not os.path.exists(os.path.join(root, moved))
+
+
+@pytest.mark.parametrize("protocol", ["jupyter", "jlab"])
+def test_move_protocol_paths(protocol):
+    fs = fsspec.filesystem(
+        "jupyter", url="http://localhost:8888", skip_instance_cache=True
+    )
+    fs.session = Mock()
+    fs.mv(f"{protocol}://folder/a#b", f"{protocol}://folder/c%d")
+    fs.session.patch.assert_called_once_with(
+        "http://localhost:8888/api/contents/folder/a%23b", json={"path": "folder/c%d"}
+    )
+
+
+@pytest.mark.parametrize("protocol", ["jupyter", "jlab"])
+def test_move_protocol_same_path(protocol):
+    fs = fsspec.filesystem(
+        "jupyter", url="http://localhost:8888", skip_instance_cache=True
+    )
+    fs.session = Mock()
+    fs.mv(f"{protocol}://folder/a#b", "folder/a#b")
+    fs.session.patch.assert_not_called()
+
+
+def test_move_bare_paths():
+    fs = fsspec.filesystem(
+        "jupyter", url="http://localhost:8888", skip_instance_cache=True
+    )
+    fs.session = Mock()
+    fs.mv("folder/a#b", "folder/c%d")
+    fs.session.patch.assert_called_once_with(
+        "http://localhost:8888/api/contents/folder/a%23b", json={"path": "folder/c%d"}
+    )
+
+
+@pytest.mark.parametrize("protocol", ["jupyter", "jlab"])
+def test_move_protocol_paths_on_server(jupyter, protocol):
+    url, root = jupyter
+    fs = fsspec.filesystem("jupyter", url=url, skip_instance_cache=True)
+    fs.mkdir("folder")
+    source = "folder/a#b"
+    target = "folder/c%d"
+    fs.pipe_file(source, b"contents")
+    fs.mv(f"{protocol}://{source}", f"{protocol}://{target}")
+    assert not os.path.exists(os.path.join(root, source))
+    assert fs.cat_file(target) == b"contents"
+    fs.mv(f"{protocol}://{target}", target)
+    assert fs.cat_file(target) == b"contents"
