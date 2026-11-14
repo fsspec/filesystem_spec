@@ -371,7 +371,12 @@ class SFTPFileSystem(AbstractFileSystem):
             bytes, if None use default from paramiko.
         """
         logger.debug("Opening file %s", path)
-        if kwargs.get("autocommit", True) is False:
+        if kwargs.get("autocommit", True) is False and mode not in {
+            "r",
+            "rb",
+            "rt",
+            "br",
+        }:
             # writes to temporary file, move on commit
             path2 = "/".join([self.temppath, str(uuid.uuid4())])
             f = self.ftp.open(
