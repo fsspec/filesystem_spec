@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Read committed FTP files at their original paths inside transactions (#2463).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
