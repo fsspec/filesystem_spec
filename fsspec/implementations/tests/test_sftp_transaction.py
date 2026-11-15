@@ -141,7 +141,7 @@ def sftp_files(tmp_path_factory):
 def test_read_committed_file(sftp_files, mode, buffering, in_transaction, options):
     fs, root, events = sftp_files
     content = "transaction input \N{SNOWMAN}\n"
-    (root / "input").write_text(content, encoding="utf-8")
+    (root / "input").write_bytes(content.encode("utf-8"))
     before = fs.info("/input")
     events.clear()
     reader = None
