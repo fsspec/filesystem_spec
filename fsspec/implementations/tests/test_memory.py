@@ -432,6 +432,19 @@ def test_mv_same_paths(m):
     assert m.exists("src/file.txt")
 
 
+@pytest.mark.parametrize("same_source", ["/batch/a", "memory:///batch/a"])
+def test_mv_batch_keeps_unchanged_source(m, same_source):
+    m.pipe({"/batch/a": b"alpha", "/batch/b": b"beta"})
+
+    m.mv([same_source, "/batch/b"], ["/batch/a", "/batch/c"])
+
+    assert m.cat(["/batch/a", "/batch/c"]) == {
+        "/batch/a": b"alpha",
+        "/batch/c": b"beta",
+    }
+    assert not m.exists("/batch/b")
+
+
 def test_mv_recursive_propagates_cp_file_errors(m, monkeypatch):
     m.mkdir("src")
     m.touch("src/file.txt")
