@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Avoid empty backend range requests at EOF with the first-chunk cache.
+
 - Forward per-call reference ``cat_file`` options to the target filesystem.
 
 - Honor the per-file ``cache_type`` option when opening FTP files.
