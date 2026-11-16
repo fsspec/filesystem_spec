@@ -189,6 +189,8 @@ Fixes
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
 
+- Keep the leading delimiter in ``read_block(..., split_before=True)`` when reading to the end of the file with ``length=None``.
+
 - Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
