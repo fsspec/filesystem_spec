@@ -6,7 +6,15 @@ import time
 import pytest
 
 import fsspec.utils
-from fsspec.tests.conftest import data, requests, reset_files, server, win  # noqa: F401
+from fsspec.tests.conftest import (  # noqa: F401
+    HTTPTestHandler,
+    data,
+    requests,
+    reset_faults,
+    reset_files,
+    server,
+    win,
+)
 
 
 @pytest.fixture()
@@ -43,10 +51,71 @@ def test_list(server, sync):
     assert out == [server.address + "/index/realfile"]
 
 
+def test_list_pathological_listing(server, sync, reset_files):
+    # a long whitespace run inside an anchor used to make the link regex
+    # backtrack cubically, so listing this page took about a minute
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    body = b"<a" + b" " * 1500 + b'x><a href="/slow/file">file</a>'
+    HTTPTestHandler.dynamic_files["/slow"] = body
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+    start = time.monotonic()
+    out = h.ls(server.address + "/slow", detail=False)
+    assert time.monotonic() - start < 10
+    assert out == [server.address + "/slow/file"]
+
+
 def test_list_invalid_args(server, sync):
     with pytest.raises(TypeError):
         h = fsspec.filesystem("http", use_foobar=True)
         h.glob(server.address + "/index/*")
+
+
+@pytest.mark.parametrize("retry_without_slash", [False, True])
+def test_list_request_options(server, sync, monkeypatch, retry_without_slash):
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    received = []
+    original_handler = HTTPTestHandler.do_GET
+
+    def respond(handler):
+        if handler.path not in ("/options", "/options/"):
+            return original_handler(handler)
+        received.append((handler.path, handler.headers.get("X-Listing")))
+        body = (
+            b"" if handler.path.endswith("/") else b'<a href="/options/file">file</a>'
+        )
+        handler._respond(data=body)
+
+    monkeypatch.setattr(HTTPTestHandler, "do_GET", respond)
+    h = fsspec.filesystem(
+        "http", headers={"X-Listing": "default"}, timeout=3, skip_instance_cache=True
+    )
+    timeouts = []
+    original_get = h.session.get
+
+    def get(*args, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        return original_get(*args, **kwargs)
+
+    monkeypatch.setattr(h.session, "get", get)
+    suffix = "/" if retry_without_slash else ""
+    url = server.address + "/options" + suffix
+    paths = ["/options/", "/options"] if retry_without_slash else ["/options"]
+    try:
+        assert h.ls(url, detail=False, headers={"X-Listing": "call"}, timeout=1) == [
+            server.address + "/options/file"
+        ]
+        assert received == [(path, "call") for path in paths]
+        assert timeouts == [1] * len(paths)
+        received.clear()
+        timeouts.clear()
+        assert h.ls(url, detail=False) == [server.address + "/options/file"]
+        assert received == [(path, "default") for path in paths]
+        assert timeouts == [3] * len(paths)
+        assert h.kwargs == {"headers": {"X-Listing": "default"}, "timeout": 3}
+    finally:
+        h.session.close()
 
 
 def test_list_cache(server, sync):
@@ -213,7 +282,8 @@ def test_exists_strict(server, sync):
     assert e.value.response.status_code == 401
 
 
-def test_read(server, sync):
+@pytest.mark.parametrize("length", [None, -1])
+def test_read(server, sync, length):
     h = fsspec.filesystem("http")
     out = server.address + "/index/realfile"
     # with h.open(out, "rb") as f:
@@ -222,8 +292,19 @@ def test_read(server, sync):
     #    assert f.read() == data
     with h.open(out, "rb") as f:
         o1 = f.read(100)
-        o2 = f.read()
+        o2 = f.read(length)
         assert o1 + o2 == data
+
+
+@pytest.mark.parametrize("block_size", [0, 32, 2**20])
+@pytest.mark.parametrize("position", [0, 10])
+def test_read_none(server, sync, block_size, position):
+    h = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    with h.open(server.realfile, block_size=block_size) as f:
+        assert f.read(position) == data[:position]
+        assert f.read(None) == data[position:]
+        assert f.tell() == len(data)
+        assert f.read(None) == b""
 
 
 def test_methods(server, sync):
@@ -307,6 +388,55 @@ def test_content_length_zero(server, sync):
         assert f.read() == data
 
 
+@pytest.mark.parametrize("head_ok", [False, True])
+@pytest.mark.parametrize("chunked", [False, True])
+def test_content_encoded_response_is_streamed(server, sync, head_ok, chunked):
+    headers = {"give_length": "true", "gzip_encoding": "true"}
+    if head_ok:
+        headers["head_ok"] = "true"
+    h = fsspec.filesystem("http", headers=headers, block_size=512)
+    try:
+        with h.open(server.realfile, "rb") as f:
+            if chunked:
+                chunks = []
+                while chunk := f.read(17):
+                    chunks.append(chunk)
+                actual = b"".join(chunks)
+            else:
+                actual = f.read()
+            assert actual == data
+    finally:
+        h.session.close()
+
+
+@pytest.mark.parametrize("lowercase", [False, True])
+@pytest.mark.parametrize("encoding", ["", "identity", "gzip"])
+def test_file_info_content_encoding_preserves_checksums(lowercase, encoding):
+    from fsspec.implementations.http_sync import _file_info
+
+    headers = {"Content-Length": "5", "Content-Encoding": encoding}
+    if lowercase:
+        headers = {k.lower(): v for k, v in headers.items()}
+    headers["ETag"] = "checksum"
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+    class Session:
+        def head(self, *args, **kwargs):
+            response = Response()
+            response.headers = headers
+            return response
+
+    info = _file_info("https://example.com/data", Session())
+    assert info["ETag"] == "checksum"
+    if encoding == "gzip":
+        assert "size" not in info
+    else:
+        assert info["size"] == 5
+
+
 def test_download(server, tmpdir, sync):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     url = server.address + "/index/realfile"
@@ -356,6 +486,38 @@ def test_cat_file_range(server, sync):
     assert h.cat(urla, end=-10) == data[:-10]
 
 
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"ignore_range": "true", "give_length": "true"},
+        {"ignore_range": "true", "give_range": "true"},
+    ],
+)
+def test_cat_file_range_when_server_ignores_range(server, headers, sync):
+    """The body of a server that ignores ``Range`` is the whole file, not the
+    window that was asked for, so the window is read out of it instead."""
+    h = fsspec.filesystem("http", headers=headers)
+    urla = server.address + "/index/realfile"
+    assert h.cat_file(urla, start=0, end=10) == data[:10]
+    assert h.cat_file(urla, end=10) == data[:10]
+    assert h.cat_file(urla, start=-10) == data[-10:]
+
+    # a window that starts inside the file cannot be told apart from a response
+    # that served more of the range than was asked for
+    with pytest.raises(ValueError):
+        h.cat_file(urla, start=1, end=10)
+
+
+@pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
+def test_cat_file_empty_range_does_not_make_request(
+    server, sync, reset_faults, start, end
+):
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+
+    assert h.cat_file(server.realfile, start=start, end=end) == b""
+    assert HTTPTestHandler.get_counts.get("/index/realfile", 0) == 0
+
+
 def test_mcat_cache(server, sync):
     urla = server.address + "/index/realfile"
     urlb = server.address + "/index/otherfile"
@@ -399,6 +561,55 @@ def test_put_file(server, tmp_path, method, reset_files, sync):
 
     fs.put_file(io.BytesIO(b"yyy"), server.address + "/hey_3", method=method)
     assert fs.cat(server.address + "/hey_3") == b"yyy"
+
+
+@pytest.mark.parametrize("caller_owned", [False, True])
+@pytest.mark.parametrize("callback_fails", [False, True])
+def test_get_file_closes_only_owned_output(
+    server, sync, tmp_path, monkeypatch, caller_owned, callback_fails
+):
+    from fsspec.callbacks import Callback
+    from fsspec.implementations import http_sync
+
+    destination = tmp_path / "download"
+    opened = []
+    builtin_open = open
+
+    def track_open(path, mode):
+        stream = builtin_open(path, mode)
+        opened.append(stream)
+        return stream
+
+    def progress(size, value):
+        if callback_fails and value:
+            raise RuntimeError("progress callback failed")
+
+    monkeypatch.setattr(http_sync, "open", track_open, raising=False)
+    output = io.BytesIO() if caller_owned else destination
+    callback = Callback(hooks={"progress": progress})
+    fs = fsspec.filesystem("http")
+    try:
+        if callback_fails:
+            # Keep the traceback alive: GC is not error-path resource cleanup.
+            with pytest.raises(RuntimeError, match="progress callback failed") as exc:
+                fs.get_file(server.realfile, output, chunk_size=5, callback=callback)
+            assert exc.value.__traceback__ is not None
+        else:
+            fs.get_file(server.realfile, output, chunk_size=5, callback=callback)
+
+        if caller_owned:
+            assert opened == []
+            assert not output.closed
+            assert output.getvalue() == (data[:5] if callback_fails else data)
+        else:
+            assert len(opened) == 1
+            assert opened[0].closed
+            assert destination.read_bytes() == (data[:5] if callback_fails else data)
+    finally:
+        for stream in opened:
+            stream.close()
+        if caller_owned:
+            output.close()
 
 
 def test_encoded(server, sync):

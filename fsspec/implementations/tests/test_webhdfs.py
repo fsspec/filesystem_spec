@@ -293,3 +293,56 @@ def test_created_time(hdfs_cluster):
     created_file_date: datetime = fs.created(file_path)
     assert created_file_date > created_dir_date
     assert created_file_date < datetime.now()
+
+
+@pytest.mark.parametrize("mode", [0o755, "755"], ids=["int", "str"])
+def test_chmod_sends_octal_permission(monkeypatch, mode):
+    fs = WebHDFS("localhost", skip_instance_cache=True)
+    sent = {}
+
+    def request(method, url, params, **kwargs):
+        sent.update(params)
+        response = requests.Response()
+        response.status_code = 200
+        return response
+
+    monkeypatch.setattr(fs.session, "request", request)
+    fs.chmod("/user/testuser/file", mode)
+    assert sent["permission"] == "755"
+
+
+def test_rename_response_checked(monkeypatch):
+    """WebHDFS must not report success when HDFS refuses a rename."""
+    from unittest.mock import Mock
+
+    fs = object.__new__(WebHDFS)
+    response = Mock()
+    response.json.return_value = {"boolean": False}
+    call = Mock(return_value=response)
+    monkeypatch.setattr(fs, "_call", call)
+
+    with pytest.raises(OSError, match="failed to rename"):
+        fs.mv("/source", "/existing")
+    call.assert_called_once_with(
+        "RENAME", method="put", path="/source", destination="/existing"
+    )
+
+    response.json.return_value = {"boolean": True}
+    fs.mv("/source", "/target")
+
+
+def test_ls_file_keeps_its_name(monkeypatch):
+    """LISTSTATUS on a file lists the file itself with an empty pathSuffix."""
+    from unittest.mock import Mock
+
+    fs = object.__new__(WebHDFS)
+    response = Mock()
+    response.json.return_value = {
+        "FileStatuses": {
+            "FileStatus": [{"pathSuffix": "", "type": "FILE", "length": 3}]
+        }
+    }
+    monkeypatch.setattr(fs, "_call", Mock(return_value=response))
+
+    assert fs.ls("/user/data.csv") == ["/user/data.csv"]
+    assert fs.ls("/user/data.csv", detail=True)[0]["name"] == "/user/data.csv"
