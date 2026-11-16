@@ -826,3 +826,20 @@ def test_dot_and_slash_prefixed_members(prefix):
     assert fs.cat_file("zip:///./directory/file") == b"nested"
     assert fs.cat_file("plain") == b"plain"
     assert fs.cat_file(".hidden") == b"hidden"
+
+
+def test_create_rejects_alias_of_prefixed_existing_member():
+    data = BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("./directory/./weights.bin", b"original")
+    data.seek(0)
+    fs = ZipFileSystem(data, mode="a")
+    try:
+        with pytest.raises(FileExistsError):
+            fs.pipe_file("directory/weights.bin", b"replacement", mode="create")
+    finally:
+        fs.close()
+    data.seek(0)
+    with zipfile.ZipFile(data) as archive:
+        assert archive.namelist() == ["./directory/./weights.bin"]
+        assert archive.read("./directory/./weights.bin") == b"original"
