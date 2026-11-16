@@ -1,7 +1,7 @@
 import pytest
 
 import fsspec
-from fsspec.generic import rsync
+from fsspec.generic import GenericFileSystem, rsync
 from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.registry import _registry, register_implementation
 from fsspec.tests.conftest import data, server  # noqa: F401
@@ -186,6 +186,24 @@ def test_rm_homogeneous_batches(m, tmp_path, local):
     else:
         assert not m.exists("target-a")
         assert not m.exists("target-b")
+
+
+@pytest.mark.parametrize("as_list", [False, True])
+def test_rm_uncached_single_target(as_list):
+    backend = MemoryFileSystem()
+    path = "/uncached-rm-single"
+    backend.pipe_file(path, b"payload")
+    fs = GenericFileSystem(
+        default_method="options",
+        storage_options={"memory": {"skip_instance_cache": True}},
+    )
+    url = "memory://" + path
+    try:
+        fs.rm([url] if as_list else url)
+        assert not backend.exists(path)
+    finally:
+        if backend.exists(path):
+            backend.rm(path)
 
 
 @pytest.mark.parametrize("method", ["copy", "cp_file"])
