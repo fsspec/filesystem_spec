@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Limit HTTP directory probes to 64 KiB without truncating explicit directory
+  listings or caching partial results (#1766).
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
