@@ -17,6 +17,8 @@ Enhancements
 
 Fixes
 
+- Quote the development installation extras to prevent shell glob expansion.
+
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
