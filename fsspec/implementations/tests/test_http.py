@@ -423,6 +423,87 @@ def test_isdir(server):
     assert not h.isdir(server.address + "doesnotevenexist")
 
 
+@pytest.mark.parametrize(
+    "headers", [{}, {"give_mimetype": "true"}, {"give_length": "true"}]
+)
+@pytest.mark.parametrize("operation", ["get", "isdir", "isdir_with_slash"])
+def test_directory_probe_reads_are_bounded(
+    server, reset_files, monkeypatch, tmp_path, headers, operation
+):
+    body = b"x" * (2 * 1024 * 1024)
+    HTTPTestHandler.dynamic_files["/large-file"] = body
+    reads = {}
+    original_read = aiohttp.StreamReader.read
+
+    async def read(stream, n=-1):
+        chunk = await original_read(stream, n)
+        reads[stream] = reads.get(stream, 0) + len(chunk)
+        return chunk
+
+    monkeypatch.setattr(aiohttp.StreamReader, "read", read)
+    h = fsspec.filesystem("http", headers=headers)
+    url = server.address + "/large-file"
+    if operation == "get":
+        destination = tmp_path / "download"
+        h.get(url, destination)
+        assert destination.read_bytes() == body
+        # One bounded directory probe, followed by the complete file download.
+        assert sorted(reads.values()) == [64 * 1024, len(body)]
+    else:
+        with_slash = operation == "isdir_with_slash"
+        assert not h.isdir(url + ("/" if with_slash else ""))
+        # The retry without a trailing slash must also be bounded.
+        assert list(reads.values()) == [64 * 1024] * (2 if with_slash else 1)
+
+
+@pytest.mark.parametrize("use_listings_cache", [False, True])
+def test_isdir_preserves_complete_listing(server, reset_files, use_listings_cache):
+    HTTPTestHandler.dynamic_files["/large-directory"] = (
+        b'<a href="first">first</a>' + b" " * (128 * 1024) + b'<a href="last">last</a>'
+    )
+    url = server.address + "/large-directory"
+    h = fsspec.filesystem("http", use_listings_cache=use_listings_cache)
+    assert h.isdir(url)
+    assert h.ls(url, detail=False) == [url + "/first", url + "/last"]
+
+
+def test_isdir_uses_cached_listing(server, reset_files, monkeypatch):
+    HTTPTestHandler.dynamic_files["/late-link"] = (
+        b" " * (128 * 1024) + b'<a href="file">file</a>'
+    )
+    url = server.address + "/late-link"
+    h = fsspec.filesystem("http", use_listings_cache=True)
+    assert h.ls(url, detail=False) == [url + "/file"]
+
+    def respond(handler):
+        handler._respond(404)
+
+    monkeypatch.setattr(HTTPTestHandler, "do_GET", respond)
+    assert h.isdir(url)
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16", "unknown"])
+def test_isdir_short_reads(server, monkeypatch, encoding):
+    body = '<a href="file">file</a>'.encode(
+        encoding if encoding != "unknown" else "utf-8"
+    )
+
+    def respond(handler):
+        handler._respond(
+            headers={"Content-Type": f"text/html; charset={encoding}"}, data=body
+        )
+
+    original_read = aiohttp.StreamReader.read
+
+    async def read(stream, n=-1):
+        return await original_read(stream, min(n, 7) if n > 0 else n)
+
+    monkeypatch.setattr(HTTPTestHandler, "do_GET", respond)
+    monkeypatch.setattr(aiohttp.StreamReader, "read", read)
+    h = fsspec.filesystem("http", simple_links=False)
+    assert h.isdir(server.address + "/directory")
+
+
 def test_policy_arg(server):
     h = fsspec.filesystem("http", size_policy="get")
     out = h.glob(server.address + "/index/*")

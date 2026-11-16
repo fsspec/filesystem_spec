@@ -43,6 +43,7 @@ _RETRYABLE_EXCEPTIONS = (
     asyncio.TimeoutError,
 )
 _RETRY_MAX_WAIT = 60.0
+_ISDIR_MAX_BYTES = 64 * 1024
 
 
 def _is_retryable(exc, statuses=_RETRYABLE_STATUSES, exceptions=None):
@@ -122,6 +123,10 @@ class HTTPFileSystem(AsyncFileSystem):
     match on the result. If simple_link=True, anything of the form
     "http(s)://server.com/stuff?thing=other"; otherwise only links within
     HTML href tags will be used.
+
+    ``isdir()`` looks for links in only the first 64 KiB of a response, unless
+    a complete listing is already cached. Links beyond this prefix are not
+    considered when detecting directories; ``ls()`` still reads the full page.
 
     URLs are passed unfiltered to aiohttp, so all addresses are accessible. Where URLs are
     supplied by a user, the calling application may wish to filter to prevent scanning.
@@ -264,7 +269,7 @@ class HTTPFileSystem(AsyncFileSystem):
             return par
         return ""
 
-    async def _ls_real(self, url, detail=True, **kwargs):
+    async def _ls_real(self, url, detail=True, max_bytes=None, **kwargs):
         # ignoring URL-encoded arguments
         kw = self.kwargs.copy()
         kw.update(kwargs)
@@ -280,7 +285,17 @@ class HTTPFileSystem(AsyncFileSystem):
 
             if mimetype in ("text/html", None):
                 try:
-                    text = await r.text(errors="ignore")
+                    if max_bytes is None:
+                        text = await r.text(errors="ignore")
+                    else:
+                        try:
+                            content = await r.content.readexactly(max_bytes)
+                        except asyncio.IncompleteReadError as exc:
+                            content = exc.partial
+                        try:
+                            text = content.decode(r.charset or "utf-8", errors="ignore")
+                        except LookupError:
+                            text = content.decode("utf-8", errors="ignore")
                     if self.simple_links:
                         links = ex2.findall(text) + [u[2] for u in ex.findall(text)]
                     else:
@@ -311,7 +326,9 @@ class HTTPFileSystem(AsyncFileSystem):
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
         if not out and url.endswith("/"):
-            out = await self._ls_real(url.rstrip("/"), detail=False, **kwargs)
+            out = await self._ls_real(
+                url.rstrip("/"), detail=False, max_bytes=max_bytes, **kwargs
+            )
         if detail:
             return [
                 {
@@ -670,7 +687,10 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _isdir(self, path):
         # override, since all URLs are (also) files
         try:
-            return bool(await self._ls(path))
+            if self.use_listings_cache and path in self.dircache:
+                return bool(self.dircache[path])
+            # A probe must neither read an entire file nor cache a partial listing.
+            return bool(await self._ls_real(path, max_bytes=_ISDIR_MAX_BYTES))
         except (FileNotFoundError, ValueError):
             return False
 
