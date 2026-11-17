@@ -76,6 +76,7 @@ async def _strip_headers_on_cross_origin_redirect(
         if header.lower() not in _REDIRECT_SAFE_HEADERS:
             params.headers.popall(header, None)
 
+
 _RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
 # dropped or reset connections, truncated bodies, timeouts
 _RETRYABLE_EXCEPTIONS = (

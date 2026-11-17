@@ -753,7 +753,9 @@ def test_info(server):
 
 
 def test_custom_headers_not_forwarded_across_origins(server):
-    fs = fsspec.filesystem("http", headers={"X-Api-Key": "secret"})
+    fs = fsspec.filesystem(
+        "http", headers={"X-Api-Key": "secret", "Accept-Language": "en"}
+    )
 
     same_origin_headers = json.loads(
         fs.cat_file(server.address + "/cross-origin-target")
@@ -761,10 +763,10 @@ def test_custom_headers_not_forwarded_across_origins(server):
     assert same_origin_headers["x-api-key"] == "secret"
 
     redirected_headers = json.loads(
-        fs.cat_file(server.address + "/redirect-cross-origin", start=0, end=1)
+        fs.cat_file(server.address + "/redirect-cross-origin")
     )
     assert "x-api-key" not in redirected_headers
-    assert redirected_headers["range"] == "bytes=0-0"
+    assert redirected_headers["accept-language"] == "en"
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT"])
