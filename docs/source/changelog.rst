@@ -19,6 +19,9 @@ Fixes
 
 - Preserve preloaded file parts when opening another file with the same cache options.
 
+- Delegate synchronous file opens in ``AsyncFileSystemWrapper`` to the wrapped
+  backend so writes are persisted (#2470).
+
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.

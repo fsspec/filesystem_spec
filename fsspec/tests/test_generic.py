@@ -1,7 +1,7 @@
 import pytest
 
 import fsspec
-from fsspec.generic import rsync
+from fsspec.generic import GenericFileSystem, rsync
 from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.registry import _registry, register_implementation
 from fsspec.tests.conftest import data, server  # noqa: F401
@@ -137,6 +137,73 @@ def test_copy_homogeneous_batches(m, tmp_path, local):
     else:
         assert m.cat_file("a") == b"a"
         assert m.cat_file("b") == b"b"
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("recursive", [False, True])
+def test_rm_mixed_protocols(m, tmp_path, reverse, recursive):
+    m.pipe_file("target", b"memory target")
+    local_target = tmp_path / "target"
+    local_target.write_bytes(b"local target")
+    # An unrelated memory object named after the local URL: without the
+    # check below, the whole batch goes to the first backend and this
+    # object is deleted instead of the local file.
+    m.pipe_file(local_target.as_uri(), b"unrelated memory object")
+    fsspec.filesystem("file")
+    fs = fsspec.filesystem("generic", default_method="current")
+    urls = ["memory://target", local_target.as_uri()]
+    if reverse:
+        urls.reverse()
+
+    with pytest.raises(ValueError, match="Multiple backends"):
+        fs.rm(urls, recursive=recursive)
+
+    assert local_target.exists()
+    assert m.exists("target")
+    assert m.exists(local_target.as_uri())
+
+
+@pytest.mark.parametrize("local", [False, True])
+def test_rm_homogeneous_batches(m, tmp_path, local):
+    if local:
+        targets = [tmp_path / "a", tmp_path / "b"]
+        for target in targets:
+            target.write_bytes(b"x")
+        urls = [target.as_uri() for target in targets]
+        # Different protocol aliases still resolve to the same backend.
+        urls[1] = urls[1].replace("file://", "local://", 1)
+        fsspec.filesystem("file")
+    else:
+        m.pipe({"target-a": b"a", "target-b": b"b"})
+        urls = ["memory://target-a", "memory://target-b"]
+    fs = fsspec.filesystem("generic", default_method="current")
+
+    fs.rm(urls)
+
+    if local:
+        assert not (tmp_path / "a").exists()
+        assert not (tmp_path / "b").exists()
+    else:
+        assert not m.exists("target-a")
+        assert not m.exists("target-b")
+
+
+@pytest.mark.parametrize("as_list", [False, True])
+def test_rm_uncached_single_target(as_list):
+    backend = MemoryFileSystem()
+    path = "/uncached-rm-single"
+    backend.pipe_file(path, b"payload")
+    fs = GenericFileSystem(
+        default_method="options",
+        storage_options={"memory": {"skip_instance_cache": True}},
+    )
+    url = "memory://" + path
+    try:
+        fs.rm([url] if as_list else url)
+        assert not backend.exists(path)
+    finally:
+        if backend.exists(path):
+            backend.rm(path)
 
 
 @pytest.mark.parametrize("method", ["copy", "cp_file"])
