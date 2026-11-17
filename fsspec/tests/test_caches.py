@@ -84,7 +84,11 @@ def test_block_cache_final_range(cache_cls, size):
     cache = cache_cls(4, fetch, len(data))
     try:
         assert cache._fetch(0, None) == data
-        expected = [(start, min(start + 4, size)) for start in range(0, size, 4)]
+        if cache_cls is BlockCache:
+            # a run of missing blocks is fetched in one request
+            expected = [(0, size)]
+        else:
+            expected = [(start, min(start + 4, size)) for start in range(0, size, 4)]
         assert requests == expected
         assert cache.total_requested_bytes == size
         assert cache._fetch(size - 1, size) == data[-1:]
