@@ -20,6 +20,12 @@ Fixes
 - Keep failed whole-file cache refreshes eligible for retry instead of marking
   stale contents as current.
 
+- Escape reserved URL characters in Jupyter filesystem paths so filenames
+  containing ``#``, ``?`` or percent escapes are read and changed literally.
+
+- Delegate synchronous file opens in ``AsyncFileSystemWrapper`` to the wrapped
+  backend so writes are persisted (#2470).
+
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
