@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Escape reserved URL characters in Jupyter filesystem paths so filenames
+  containing ``#``, ``?`` or percent escapes are read and changed literally.
+
 - Delegate synchronous file opens in ``AsyncFileSystemWrapper`` to the wrapped
   backend so writes are persisted (#2470).
 
