@@ -139,6 +139,21 @@ def test_remove_reserved_path_characters(github_contents, cached, path):
     assert not urlsplit(calls[-1].url).fragment
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["../other/contents/secret.txt", "../../other/contents/secret.txt", "data/../.."],
+)
+def test_path_cannot_leave_repo(github_contents, path):
+    fs, files, calls = github_contents
+    files[path] = b"secret"
+    sent = len(calls)
+    with pytest.raises(FileNotFoundError):
+        fs.cat_file(path)
+    with pytest.raises(FileNotFoundError):
+        fs.rm_file(path)
+    assert len(calls) == sent
+
+
 @pytest.mark.parametrize("content", [b"", b"file contents", b"\x00\xff\x80"])
 def test_open_inline_file_without_http(github_contents, content):
     fs, files, calls = github_contents

@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Reject ``..`` path segments in GithubFileSystem so they cannot reach another
+  repository through the contents API.
+
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
 

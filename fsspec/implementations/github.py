@@ -19,6 +19,16 @@ def _github_names(url, timeout, **kwargs):
     return names
 
 
+def _quote_path(path):
+    # requests resolves ".." segments in the URL path before sending, so a
+    # path like "../../other/contents/x" would address another repository's
+    # contents API instead of a file in this one. Git trees cannot contain a
+    # ".." entry, so such a path never names a file here.
+    if ".." in path.split("/"):
+        raise FileNotFoundError(path)
+    return quote(path)
+
+
 class GithubFileSystem(AbstractFileSystem):
     """Interface to files in github
 
@@ -235,7 +245,7 @@ class GithubFileSystem(AbstractFileSystem):
         url = self.content_url.format(
             org=self.org,
             repo=self.repo,
-            path=quote(path),
+            path=_quote_path(path),
             sha=quote(sha or self.root, safe=""),
         )
 
@@ -307,7 +317,7 @@ class GithubFileSystem(AbstractFileSystem):
             url = self.content_url.format(
                 org=self.org,
                 repo=self.repo,
-                path=quote(path.lstrip("/")),
+                path=_quote_path(path.lstrip("/")),
                 sha=quote(self.root, safe=""),
             )
             r = requests.get(url, timeout=self.timeout, **self.kw)
@@ -320,7 +330,7 @@ class GithubFileSystem(AbstractFileSystem):
         delete_url = self.content_url.format(
             org=self.org,
             repo=self.repo,
-            path=quote(path),
+            path=_quote_path(path),
             sha=quote(self.root, safe=""),
         )
         branch = self.root
