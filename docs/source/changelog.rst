@@ -1,5 +1,5 @@
 Changelog
-=========
+==
 
 Dev
 ---
@@ -16,6 +16,9 @@ Enhancements
   opens can report download progress (#1623)
 
 Fixes
+
+- Decompress synchronous ``simplecache.cat_ranges`` downloads before caching,
+  preserving transfer callbacks and cleaning staged files if decoding fails.
 
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
