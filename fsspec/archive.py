@@ -22,6 +22,10 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
     def ukey(self, path):
         return tokenize(path, self.fo, self.protocol)
 
+    def _not_a_file(self, path):
+        """The error for opening ``path``, which is not a file member."""
+        return IsADirectoryError(path) if self.isdir(path) else FileNotFoundError(path)
+
     def _all_dirnames(self, paths):
         """Returns *all* directory names for each path in paths, including intermediate
         ones.

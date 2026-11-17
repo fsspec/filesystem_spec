@@ -4,6 +4,7 @@ import io
 import logging
 import posixpath
 import re
+from contextlib import ExitStack
 from glob import has_magic
 from pathlib import Path
 
@@ -56,10 +57,6 @@ class OpenFile:
         How to handle encoding errors if opened in text mode.
     newline: None or str
         Passed to TextIOWrapper in text mode, how to handle line endings.
-    autoopen: bool
-        If True, calls open() immediately. Mostly used by pickle
-    pos: int
-        If given and autoopen is True, seek to this location immediately
     """
 
     def __init__(
@@ -106,27 +103,31 @@ class OpenFile:
         except FileNotFoundError as e:
             if has_magic(self.path):
                 raise FileNotFoundError(
-                    "%s not found. The URL contains glob characters: you maybe needed\n"
+                    f"{self.path} not found. "
+                    "The URL contains glob characters: you maybe needed\n"
                     "to pass expand=True in fsspec.open() or the storage_options of \n"
                     "your library. You can also set the config value 'open_expand'\n"
-                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True.",
-                    self.path,
+                    "before import, or fsspec.core.DEFAULT_EXPAND at runtime, to True."
                 ) from e
             raise
 
         self.fobjects = [f]
 
-        if self.compression is not None:
-            compress = compr[self.compression]
-            f = compress(f, mode=mode[0])
-            self.fobjects.append(f)
+        try:
+            if self.compression is not None:
+                compress = compr[self.compression]
+                f = compress(f, mode=mode[0])
+                self.fobjects.append(f)
 
-        if "b" not in self.mode:
-            # assume, for example, that 'r' is equivalent to 'rt' as in builtin
-            f = PickleableTextIOWrapper(
-                f, encoding=self.encoding, errors=self.errors, newline=self.newline
-            )
-            self.fobjects.append(f)
+            if "b" not in self.mode:
+                # assume, for example, that 'r' is equivalent to 'rt' as in builtin
+                f = PickleableTextIOWrapper(
+                    f, encoding=self.encoding, errors=self.errors, newline=self.newline
+                )
+                self.fobjects.append(f)
+        except BaseException:
+            self.close()
+            raise
 
         return self.fobjects[-1]
 
@@ -148,10 +149,18 @@ class OpenFile:
 
     def close(self):
         """Close all encapsulated file objects"""
-        for f in reversed(self.fobjects):
-            if "r" not in self.mode and not f.closed:
-                f.flush()
-            f.close()
+
+        def close_one(f):
+            try:
+                if "r" not in self.mode and not f.closed:
+                    f.flush()
+            finally:
+                f.close()
+
+        # Unwind in reverse order, attempting every close even if one fails.
+        with ExitStack() as stack:
+            for f in self.fobjects:
+                stack.callback(close_one, f)
         self.fobjects.clear()
 
 
@@ -187,16 +196,23 @@ class OpenFiles(list):
                 fs = fs.fs
             else:
                 break
-        return [s.__enter__() for s in self]
+        with ExitStack() as stack:
+            files = [stack.enter_context(s) for s in self]
+            # All files opened: transfer cleanup to OpenFiles.__exit__ so they
+            # stay open after this temporary entry-failure guard exits.
+            stack.pop_all()
+            return files
 
     def __exit__(self, *args):
         fs = self.fs
-        [s.__exit__(*args) for s in self]
-        if "r" in self.mode:
-            # open_many() returns files without populating the OpenFile objects.
-            for f in self.files:
-                f.close()
-        else:
+        with ExitStack() as stack:
+            if "r" in self.mode:
+                # open_many() returns files without populating the OpenFile objects.
+                for f in reversed(self.files):
+                    stack.callback(f.close)
+            for s in reversed(self):
+                stack.callback(s.close)
+        if "r" not in self.mode:
             while True:
                 if hasattr(fs, "open_many"):
                     # check for concurrent cache upload
@@ -361,7 +377,7 @@ def _un_chain(path, kwargs):
         protocol = kwargs.pop("protocol", None) or split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
         extra_kwargs = cls._get_kwargs_from_urls(bit)
-        kws = kwargs.pop(protocol, {})
+        kws = kwargs.pop(protocol, {}).copy()
 
         if bit is bits[0]:
             kws.update(kwargs)
@@ -450,7 +466,7 @@ def open(
     newline=None,
     expand=None,
     **kwargs,
-):
+) -> OpenFile:
     """Given a path or paths, return one ``OpenFile`` object.
 
     Parameters
@@ -691,7 +707,7 @@ def get_fs_token_paths(
             _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
         ]
         if len({pc[1] for pc in pchains}) > 1:
-            raise ValueError("Protocol mismatch getting fs from %s", urlpath)
+            raise ValueError(f"Protocol mismatch getting fs from {urlpath}")
         paths = [pc[0] for pc in pchains]
     else:
         paths = fs._strip_protocol(paths)

@@ -370,8 +370,9 @@ config files, providing environment variables, or editing the contents of
 the dictionary ``fsspec.config.conf``.
 
 Files are stored in the directory pointed to by ``FSSPEC_CONFIG_DIR``,
-``"~/.config/fsspec/`` by default. All \*.ini and \*.json files will be
-loaded and parsed from their respective formats and fed into the config dict
+``~/.config/fsspec/`` by default. Set ``FSSPEC_CONFIG_DIR`` before importing
+``fsspec`` to read configuration from a different directory. All \*.ini and
+\*.json files will be loaded as UTF-8, parsed from their respective formats and fed into the config dict
 at import time. For example, if there is a file "~/.config/fsspec/conf.json"
 containing
 
@@ -398,11 +399,21 @@ a given file system implementation. INI files only support string values.
 
 Alternatively, you can provide overrides with environment variables of the style
 ``FSSPEC_{protocol}=<json_dict_value>`` and
-``FSSPEC_{protocol}_{kwargname}=<string_value>``.
+``FSSPEC_{protocol}_{kwargname}=<value>``. Values are parsed as JSON when
+possible; otherwise they remain strings. For example, in a POSIX shell:
+
+.. code-block:: sh
+
+    export FSSPEC_FILE='{"auto_mkdir": true}'
+    export FSSPEC_FILE_AUTO_MKDIR=false
+
+The per-option variable overrides the protocol dictionary, so this sets
+``auto_mkdir`` to the boolean ``False``, not the string ``"false"``. Set these
+variables before importing ``fsspec`` too.
 
 Configuration is determined in the following order, with later items winning:
 
-#. ini and json files in the config directory (``FSSPEC_CONFIG_DIRECTORY`` or ``$HOME/.config/fsspec/``), sorted
+#. ini and json files in the config directory (``FSSPEC_CONFIG_DIR`` or ``$HOME/.config/fsspec/``), sorted
    lexically by filename
 #. ``FSSPEC_{protocol}`` environment variables
 #. ``FSSPEC_{protocol}_{kwargname}`` environment variables

@@ -776,6 +776,160 @@ def test_instance_cache_concurrency():
     assert all(r is results[0] for r in results)
 
 
+def test_instance_created_once_concurrently():
+    import concurrent.futures
+    import time
+
+    inits = []
+
+    class SleepyFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.1)
+            super().__init__(*args, **kwargs)
+
+    SleepyFS.clear_instance_cache()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(SleepyFS) for _ in range(10)]
+        results = [f.result() for f in futures]
+
+    # the threads wait for the instance instead of creating their own
+    assert len(inits) == 1
+    assert all(r is results[0] for r in results)
+    assert not SleepyFS._token_locks
+
+
+def test_instance_creation_error_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class FailingOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise RuntimeError("failed to create the instance")
+            super().__init__(*args, **kwargs)
+
+    FailingOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return FailingOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # the threads waiting for the instance fail like the one creating it, instead
+    # of retrying one after another (the last one failing after n attempts)
+    assert len(inits) == 1
+    assert all(isinstance(f.exception(), RuntimeError) for f in futures)
+    assert not FailingOnceFS._token_locks
+
+    # the error is not cached, a later call tries again
+    fs = FailingOnceFS()
+    assert len(inits) == 2
+    assert fs is FailingOnceFS()
+    assert not FailingOnceFS._token_locks
+
+
+def test_instance_creation_interrupted_concurrently():
+    import concurrent.futures
+    import threading
+    import time
+
+    n = 10
+    inits = []
+
+    class Interrupted(BaseException):
+        pass
+
+    class InterruptedOnceFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            time.sleep(0.3)
+            if len(inits) == 1:
+                raise Interrupted
+            super().__init__(*args, **kwargs)
+
+    InterruptedOnceFS.clear_instance_cache()
+    barrier = threading.Barrier(n)
+
+    def create():
+        barrier.wait()
+        return InterruptedOnceFS()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(create) for _ in range(n)]
+        concurrent.futures.wait(futures)
+
+    # an interruption (e.g. KeyboardInterrupt) only concerns the interrupted
+    # thread, one of the waiting threads creates the instance instead
+    errors = [f.exception() for f in futures if f.exception() is not None]
+    results = [f.result() for f in futures if f.exception() is None]
+    assert len(errors) == 1
+    assert isinstance(errors[0], Interrupted)
+    assert len(inits) == 2
+    assert len(results) == n - 1
+    assert all(r is results[0] for r in results)
+    assert not InterruptedOnceFS._token_locks
+
+
+def test_instance_created_reentrantly():
+    import threading
+
+    inits = []
+
+    class ReentrantFS(DummyTestFS):
+        async_impl = True
+
+        def __init__(self, *args, **kwargs):
+            inits.append(None)
+            if len(inits) == 1:
+                # same token, same thread, while its instance is being created
+                ReentrantFS()
+            super().__init__(*args, **kwargs)
+
+    ReentrantFS.clear_instance_cache()
+
+    results = []
+    # run in a thread so that a deadlock fails the test instead of hanging it
+    t = threading.Thread(target=lambda: results.append(ReentrantFS()), daemon=True)
+    t.start()
+    t.join(timeout=5)
+
+    assert not t.is_alive(), "deadlock when creating the instance reentrantly"
+    assert len(inits) == 2
+    assert results[0] is ReentrantFS()
+    assert not ReentrantFS._token_locks
+
+
+def test_token_locks_cleared_on_pid_change():
+    class PidFS(DummyTestFS):
+        pass
+
+    PidFS._token_locks["stale"] = object()
+    PidFS._pid = -1  # pretend the process has changed, e.g. forked
+
+    PidFS()
+
+    assert PidFS._pid == os.getpid()
+    assert not PidFS._token_locks
+
+
 def test_uncached_instantiation_concurrency():
     import concurrent.futures
     import time
@@ -901,6 +1055,96 @@ def test_fork_deadlock():
     assert result is True
 
 
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+def test_buffered_file_len(m, content):
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        assert stream.full_name == m.unstrip_protocol("data")
+        assert stream.info() == m.info("data")
+        assert stream == stream and stream != object()
+        assert stream == AbstractBufferedFile(m, "data")
+        assert stream.seekable()
+        stream.flush()
+        assert stream.len == len(content)
+        stream.read(3)
+        assert stream.len == len(content)
+        stream.seek(0)
+        assert stream.len == len(content)
+        stream.seek(0, 2)
+        assert stream.len == len(content)
+        with pytest.raises(TypeError):
+            len(stream)
+
+
+def test_tree(m):
+    m.pipe(
+        {
+            "/root/a/file": b"x",
+            "/root/a/sub/data": b"xx",
+            "/root/b/sub/data": b"x",
+            "/root/z": b"x" * 1024,
+        }
+    )
+    m.makedirs("/root/empty")
+    assert m.tree(
+        "/root", recursion_limit=3, max_display=None, display_size=True
+    ).splitlines() == [
+        "/root",
+        "├── a (1 file, 1 subfolder)",
+        "│   ├── sub (1 file)",
+        "│   │   └── data (2B)",
+        "│   └── file (1B)",
+        "├── b (1 subfolder)",
+        "│   └── sub (1 file)",
+        "│       └── data (1B)",
+        "├── empty (empty folder)",
+        "└── z (1.00 kb)",
+    ]
+    assert m.tree("/root", recursion_limit=0) == "/root"
+    assert m.tree("/root", max_display=0) == "/root\n└── 4 more item(s) not displayed."
+    assert m.tree("/root", recursion_limit=1, indent_size=2) == (
+        "/root\n├ a\n├ b\n├ empty\n└ z"
+    )
+
+
+@pytest.mark.parametrize("mode", ["wb", "ab", "xb"])
+def test_buffered_file_len_without_size(m, mode):
+    with AbstractBufferedFile(m, "data", mode=mode) as stream:
+        assert not hasattr(stream, "size")
+        assert not hasattr(stream, "len")
+
+
+def test_buffered_file_len_unknown_size(m):
+    m.pipe_file("data", b"content")
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.size = None
+        with pytest.raises(AttributeError, match="File size is unknown"):
+            _ = stream.len
+        assert not hasattr(stream, "len")
+        stream.size = 7
+        assert stream.len == 7
+
+
+@pytest.mark.parametrize("content", [b"", b"hello\nworld"])
+@pytest.mark.parametrize("position", [0, 3, 11])
+def test_buffered_file_multipart_encoder(m, content, position):
+    MultipartEncoder = pytest.importorskip("requests_toolbelt").MultipartEncoder
+    position = min(position, len(content))
+    m.pipe_file("data", content)
+    with AbstractBufferedFile(m, "data") as stream:
+        stream.seek(position)
+        encoder = MultipartEncoder(
+            fields={"file": ("data", stream)}, boundary="fsspec-boundary"
+        )
+        expected = MultipartEncoder(
+            fields={"file": ("data", io.BytesIO(content[position:]))},
+            boundary="fsspec-boundary",
+        ).to_string()
+        assert encoder.len == len(expected)
+        assert encoder.read(13) + encoder.read() == expected
+        assert stream.tell() == len(content)
+
+
 @pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
 @pytest.mark.parametrize(
     "content",
@@ -922,6 +1166,8 @@ def test_buffered_readlines(m, cache_type, content):
     ):
         assert stream.readlines() == expected.readlines()
         assert stream.readlines() == []
+        stream.seek(0)
+        assert list(stream) == io.BytesIO(content).readlines()
 
         stream.seek(0)
         expected.seek(0)
@@ -932,6 +1178,76 @@ def test_buffered_readlines(m, cache_type, content):
 
     with pytest.raises(ValueError, match="closed file"):
         stream.readlines()
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("blocks", [None, 1, 2, 3, 8])
+@pytest.mark.parametrize(
+    "content, delimiter, expected",
+    [
+        (b"a\r\nb\r\ntail", b"\r\n", [b"a\r\n", b"b\r\n", b"tail"]),
+        (b"a||||b||||tail", b"||||", [b"a||||", b"b||||", b"tail"]),
+        (b"xxababaYYababaZ", b"ababa", [b"xxababa", b"YYababa", b"Z"]),
+        (b"\r\n\r\n", b"\r\n", [b"\r\n", b"\r\n"]),
+        (b"abc\r", b"\r\n", [b"abc\r"]),
+        (b"", b"\r\n", []),
+        (b"a\nb\ntail", b"\n", [b"a\n", b"b\n", b"tail"]),
+    ],
+)
+def test_buffered_readuntil_delimiters(
+    m, cache_type, blocks, content, delimiter, expected
+):
+    m.pipe_file("delimiters", b"skip" + content)
+    with AbstractBufferedFile(
+        m, "delimiters", cache_type=cache_type, block_size=2
+    ) as stream:
+        position = stream.seek(4)
+        for part in expected:
+            assert stream.readuntil(delimiter, blocks=blocks) == part
+            position += len(part)
+            assert stream.tell() == position
+        assert stream.readuntil(delimiter, blocks=blocks) == b""
+        assert stream.tell() == position
+
+
+@pytest.mark.parametrize("cache_type", ["none", "bytes", "readahead"])
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+@pytest.mark.parametrize("position", [0, 13])
+@pytest.mark.parametrize(
+    "buffer_kind", ["bytes", "readonly-view", "readonly-numpy", "empty-readonly"]
+)
+def test_buffered_readinto_readonly(m, cache_type, method, position, buffer_kind):
+    content = bytes(range(64))
+    m.pipe_file("buffer", content)
+    if buffer_kind == "bytes":
+        target = b"readonly"
+    elif buffer_kind == "readonly-view":
+        target = memoryview(b"readonly")
+    elif buffer_kind == "readonly-numpy":
+        target = np.zeros((2, 4), dtype="uint32")
+        target.flags.writeable = False
+    else:
+        target = b""
+
+    with AbstractBufferedFile(
+        m, "buffer", cache_type=cache_type, block_size=8
+    ) as stream:
+        stream.seek(position)
+        with pytest.raises(TypeError):
+            getattr(stream, method)(target)
+        assert stream.tell() == position
+        writable = bytearray(8)
+        assert getattr(stream, method)(writable) == len(writable)
+        assert writable == content[position : position + len(writable)]
+
+
+@pytest.mark.parametrize("method", ["readinto", "readinto1"])
+def test_buffered_readinto_readonly_closed(m, method):
+    m.pipe_file("buffer", b"content")
+    stream = AbstractBufferedFile(m, "buffer")
+    stream.close()
+    with pytest.raises(ValueError, match="closed file"):
+        getattr(stream, method)(b"readonly")
 
 
 def test_cache_not_pickled(server):
@@ -1071,6 +1387,36 @@ def test_json():
 
     assert DummyTestFS.from_json(outa) is a
     assert DummyTestFS.from_json(outb) is b
+
+
+@pytest.mark.parametrize("serializer", ["dict", "json"])
+@pytest.mark.parametrize(
+    "value", [None, [None], {"key": None}, {"key": [1, None, {"nested": None}]}]
+)
+def test_serialize_none(serializer, value):
+    fs = DummyTestFS(value, bar=value)
+    out = getattr(fs, f"to_{serializer}")()
+    expected = {
+        "cls": "fsspec.tests.test_spec:DummyTestFS",
+        "protocol": "mock",
+        "args": [value],
+        "bar": value,
+    }
+
+    assert (json.loads(out) if serializer == "json" else out) == expected
+    assert getattr(DummyTestFS, f"from_{serializer}")(out) is fs
+    assert fs.storage_args == (value,)
+    assert fs.storage_options == {"bar": value}
+
+
+def test_serialize_http_none():
+    fs = HTTPFileSystem(block_size=None, cache_options=None)
+    out = fs.to_dict()
+
+    assert out["block_size"] is None
+    assert out["cache_options"] is None
+    assert json.loads(fs.to_json()) == out
+    assert HTTPFileSystem.from_dict(out) is fs
 
 
 def test_json_path_attr():
@@ -1218,6 +1564,14 @@ def test_serialize_no_password():
 
     assert "password" not in fs.to_json(include_password=False)
     assert "password" not in fs.to_dict(include_password=False)
+
+
+def test_serialize_no_password_nested():
+    fs = DummyTestFS(2, fs=DummyTestFS(1, password="admin"))
+
+    assert "password" not in fs.to_json(include_password=False)
+    assert "password" not in fs.to_dict(include_password=False)["fs"]
+    assert fs.to_dict(include_password=True)["fs"]["password"] == "admin"
 
 
 def test_serialize_with_password():
@@ -1371,6 +1725,35 @@ class DummyOpenFS(DummyTestFS):
         return stream
 
 
+@pytest.mark.parametrize("target_exists", [False, True])
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+def test_get_top_level_directory(tmp_path, monkeypatch, target_exists, trailing_slash):
+    monkeypatch.chdir(tmp_path)
+    source = Path("src")
+    (source / "nested").mkdir(parents=True)
+    files = {"file": b"top-level", "nested/other": b"nested"}
+    contents = [
+        {"name": "src", "type": "directory", "size": 0},
+        {"name": "src/nested", "type": "directory", "size": 0},
+    ]
+    for name, payload in files.items():
+        (source / name).write_bytes(payload)
+        contents.append({"name": "src/" + name, "type": "file", "size": len(payload)})
+    fs = DummyOpenFS(fs_content=contents)
+    target = tmp_path / "target"
+    if target_exists:
+        target.mkdir()
+
+    fs.get("src" + trailing_slash, str(target), recursive=True)
+
+    prefix = "src/" if target_exists and not trailing_slash else ""
+    assert {
+        path.relative_to(target).as_posix(): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    } == {prefix + name: payload for name, payload in files.items()}
+
+
 class BasicCallback(fsspec.Callback):
     def __init__(self, **kwargs):
         self.events = []
@@ -1433,29 +1816,20 @@ def test_dummy_callbacks_file(tmpdir):
     assert destination.read_text("utf-8") == "x" * 100
 
 
-def test_get_file_to_supplied_outfile(tmpdir):
-    fs = DummyOpenFS()
-    source = tmpdir / "source.txt"
-    source.write_text("data", "utf-8")
-    outfile = io.BytesIO()
-
-    fs.get_file(source, outfile=outfile)
-
-    assert not outfile.closed
-    assert outfile.getvalue() == b"data"
-
-
-def test_get_file_explicit_outfile_takes_precedence(tmpdir):
+@pytest.mark.parametrize("supply_lpath", [False, True])
+def test_get_file_to_supplied_outfile(tmpdir, supply_lpath):
     fs = DummyOpenFS()
     source = tmpdir / "source.txt"
     source.write_text("data", "utf-8")
     lpath = io.BytesIO()
     outfile = io.BytesIO()
+    args = (lpath,) if supply_lpath else ()
 
-    fs.get_file(source, lpath, outfile=outfile)
+    fs.get_file(source, *args, outfile=outfile)
 
-    assert lpath.getvalue() == b""
+    assert not outfile.closed
     assert outfile.getvalue() == b"data"
+    assert lpath.getvalue() == b""
 
 
 def test_dummy_callbacks_files(tmpdir):
@@ -1650,17 +2024,10 @@ def test_cat_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     assert len(file_contents) == 2
 
 
-def test_get_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
+@pytest.mark.parametrize("method", ["get", "copy"])
+def test_transfer_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir, method):
     dest = tmpdir / "dest"
-    tmpfs.get(tmpdir / "*", str(dest), limit=2)
-
-    assert len(dest.listdir()) == 2
-
-
-def test_copy_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
-    dest = tmpdir / "dest"
-    tmpfs.copy(tmpdir / "*", str(dest), limit=2)
-
+    getattr(tmpfs, method)(tmpdir / "*", str(dest), limit=2)
     assert len(dest.listdir()) == 2
 
 
@@ -1669,38 +2036,26 @@ def test_expand_path_wildcard_path_passthrough_kwargs_to_ls(tmpfs, tmpdir):
     assert len(expanded_paths) == 2
 
 
-def test_expand_path_special_characters():
-    fs_contents = (
-        {"name": "bucket", "type": "directory"},
-        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
-        {"name": "bucket/file?.txt", "type": "file", "size": 100},
-        {"name": "bucket/normal.txt", "type": "file", "size": 100},
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        (
+            "bucket",
+            ["bucket", "bucket/file[1].txt", "bucket/file?.txt", "bucket/normal.txt"],
+        ),
+        ("bucket/file*.txt", ["bucket/file[1].txt", "bucket/file?.txt"]),
+    ],
+)
+def test_expand_path_special_characters(path, expected):
+    fs = DummyTestFS(
+        fs_content=(
+            {"name": "bucket", "type": "directory"},
+            {"name": "bucket/file[1].txt", "type": "file", "size": 100},
+            {"name": "bucket/file?.txt", "type": "file", "size": 100},
+            {"name": "bucket/normal.txt", "type": "file", "size": 100},
+        )
     )
-    fs = DummyTestFS(fs_content=fs_contents)
-    paths = fs.expand_path("bucket", recursive=True)
-    expected = [
-        "bucket",
-        "bucket/file[1].txt",
-        "bucket/file?.txt",
-        "bucket/normal.txt",
-    ]
-    assert sorted(paths) == sorted(expected)
-
-
-def test_expand_path_with_magic_input():
-    fs_contents = (
-        {"name": "bucket", "type": "directory"},
-        {"name": "bucket/file[1].txt", "type": "file", "size": 100},
-        {"name": "bucket/file?.txt", "type": "file", "size": 100},
-        {"name": "bucket/normal.txt", "type": "file", "size": 100},
-    )
-    fs = DummyTestFS(fs_content=fs_contents)
-    paths = fs.expand_path("bucket/file*.txt", recursive=True)
-    expected = [
-        "bucket/file[1].txt",
-        "bucket/file?.txt",
-    ]
-    assert sorted(paths) == sorted(expected)
+    assert sorted(fs.expand_path(path, recursive=True)) == sorted(expected)
 
 
 def test_cat_ranges_forwards_kwargs():
@@ -1719,3 +2074,49 @@ def test_cat_ranges_forwards_kwargs():
     fs.cat_ranges(["a", "b"], [0, 0], [1, 1], block_size=42)
 
     assert received == [{"block_size": 42}, {"block_size": 42}]
+
+
+class UnreadableSubdirFS(AbstractFileSystem):
+    """A tree in which the ``locked`` subdirectory cannot be listed."""
+
+    protocol = "unreadablesub"
+    cachable = False
+
+    tree = {
+        "": ["top"],
+        "top": ["top/readable", "top/locked"],
+        "top/readable": [],
+    }
+
+    def ls(self, path, detail=True, **kwargs):
+        path = self._strip_protocol(path).rstrip("/")
+        if path == "top/locked":
+            raise PermissionError("no access to top/locked")
+        entries = [
+            {"name": name, "type": "directory", "size": 0} for name in self.tree[path]
+        ]
+        return entries if detail else [entry["name"] for entry in entries]
+
+
+def test_walk_on_error_reaches_subdirectories():
+    # on_error is documented to apply to any path whose listing fails, not only
+    # to the one handed to walk(), so the recursive call has to forward it.
+    fs = UnreadableSubdirFS()
+
+    # the default, "omit", keeps skipping the unreadable directory
+    assert list(fs.walk("")) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+
+    with pytest.raises(PermissionError, match="no access to top/locked"):
+        list(fs.walk("", on_error="raise"))
+
+    handled = []
+    assert list(fs.walk("", on_error=handled.append)) == [
+        ("", ["top"], []),
+        ("top", ["readable", "locked"], []),
+        ("top/readable", [], []),
+    ]
+    assert [str(exc) for exc in handled] == ["no access to top/locked"]

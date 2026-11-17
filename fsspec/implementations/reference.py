@@ -46,6 +46,36 @@ def _first(d):
     return next(iter(d.values()))
 
 
+def _inline_data(part):
+    """The bytes an inline (in-memory) reference delivers to a reader.
+
+    A ``base64:`` prefix marks base64-encoded content; other text is encoded
+    as UTF-8. ``info`` and ``ls`` measure the result of this rather than the
+    stored form, so that a size always matches what ``cat`` returns.
+    """
+    if isinstance(part, (str, bytes)):
+        return _decode_inline(part)
+    if hasattr(part, "to_bytes"):
+        part = part.to_bytes()
+    return _decode_inline(part)
+
+
+@lru_cache(maxsize=1024)
+def _decode_inline(part):
+    """Decode a stored inline part once and stash the result.
+
+    The same inline value is decoded for ``cat`` and again for the length
+    check in ``info``/``ls``; caching avoids repeating the work for every
+    listing. Inline references are small and few, so a bounded cache is
+    enough.
+    """
+    if isinstance(part, str):
+        part = part.encode()
+    if part.startswith(b"base64:"):
+        return base64.b64decode(part[7:])
+    return part
+
+
 def _prot_in_references(path, references):
     ref = references.get(path)
     if isinstance(ref, (list, tuple)) and isinstance(ref[0], str):
@@ -800,9 +830,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             part = part.to_bytes()
         if isinstance(part, bytes):
             logger.debug(f"Reference: {path}, type bytes")
-            if part.startswith(b"base64:"):
-                part = base64.b64decode(part[7:])
-            return part, None, None
+            return _inline_data(part), None, None
 
         if len(part) == 1:
             logger.debug(f"Reference: {path}, whole file => {part}")
@@ -840,7 +868,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         protocol, _ = split_protocol(part_or_url)
         try:
             return await self.fss[protocol]._cat_file(
-                part_or_url, start=start0, end=end0
+                part_or_url, start=start0, end=end0, **kwargs
             )
         except Exception as e:
             raise ReferenceNotReachable(path, part_or_url) from e
@@ -851,7 +879,9 @@ class ReferenceFileSystem(AsyncFileSystem):
             return part_or_url[start:end]
         protocol, _ = split_protocol(part_or_url)
         try:
-            return self.fss[protocol].cat_file(part_or_url, start=start0, end=end0)
+            return self.fss[protocol].cat_file(
+                part_or_url, start=start0, end=end0, **kwargs
+            )
         except Exception as e:
             raise ReferenceNotReachable(path, part_or_url) from e
 
@@ -878,11 +908,11 @@ class ReferenceFileSystem(AsyncFileSystem):
                 f.write(data)
         callback.absolute_update(len(data))
 
-    def get(self, rpath, lpath, recursive=False, **kwargs):
+    def get(self, rpath, lpath, recursive=False, maxdepth=None, **kwargs):
         if recursive:
             # trigger directory build
             self.ls("")
-        rpath = self.expand_path(rpath, recursive=recursive)
+        rpath = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
         fs = fsspec.filesystem("file", auto_mkdir=True)
         targets = other_paths(rpath, lpath)
         if isinstance(lpath, str):
@@ -991,6 +1021,8 @@ class ReferenceFileSystem(AsyncFileSystem):
                     raise new_ex
                 elif on_error != "omit":
                     out[k] = new_ex
+                else:
+                    del out[k]
 
         if len(out) == 1 and isinstance(path, str) and "*" not in path:
             return _first(out)
@@ -1127,7 +1159,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         it = self.references.items()
         for path, part in it:
             if isinstance(part, (bytes, str)) or hasattr(part, "to_bytes"):
-                size = len(part)
+                size = len(_inline_data(part))
             elif len(part) == 1:
                 size = None
             else:
@@ -1236,8 +1268,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         out = self.references.get(path)
         if out is not None:
             if isinstance(out, (str, bytes)):
-                # decode base64 here
-                return {"name": path, "type": "file", "size": len(out)}
+                return {"name": path, "type": "file", "size": len(_inline_data(out))}
             elif len(out) > 1:
                 return {"name": path, "type": "file", "size": out[2]}
             else:

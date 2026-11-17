@@ -1,5 +1,6 @@
 import asyncio
 import asyncio.events
+import atexit
 import concurrent.futures
 import functools
 import inspect
@@ -67,6 +68,12 @@ def sync(loop, func, *args, timeout=None, **kwargs):
     # and we will wait for it
     if loop is None or loop.is_closed():
         raise RuntimeError("Loop is not running")
+    if iothread[0] is not None and (
+        loop is globals()["loop"][0]
+        or (getattr(loop, "_thread_id", 0) or 0) == iothread[0].ident
+    ):
+        if not iothread[0].is_alive():
+            raise RuntimeError("fsspec IO thread has already stopped.")
     try:
         loop0 = asyncio.events.get_running_loop()
         if loop0 is loop:
@@ -89,13 +96,21 @@ def sync(loop, func, *args, timeout=None, **kwargs):
                 raise FSTimeoutError
 
     return_result = result[0]
-    if isinstance(return_result, asyncio.TimeoutError):
-        # suppress asyncio.TimeoutError, raise FSTimeoutError
-        raise FSTimeoutError from return_result
-    elif isinstance(return_result, BaseException):
-        raise return_result
-    else:
-        return return_result
+    # the traceback of a stored exception includes _runner's frame, which holds
+    # ``result``: empty it so that frame does not refer back to the exception
+    result[0] = None
+    try:
+        if isinstance(return_result, asyncio.TimeoutError):
+            # suppress asyncio.TimeoutError, raise FSTimeoutError
+            raise FSTimeoutError from return_result
+        elif isinstance(return_result, BaseException):
+            raise return_result
+        else:
+            return return_result
+    finally:
+        # the traceback also includes this frame, so don't keep the exception
+        # in a local either: that would be a reference cycle
+        del return_result
 
 
 _deferred_close_tasks = set()
@@ -243,6 +258,47 @@ def get_loop():
     return loop[0]
 
 
+# How long to wait for the IO thread at exit before warning that it is stuck
+_STOP_IO_LOOP_WARN_SECONDS = 1
+
+
+def _stop_io_loop():
+    """Stop the fsspec IO loop, if one was started, and wait for its thread.
+
+    The IO thread is a daemon, so nothing else stops it before interpreter
+    shutdown. It must not outlive ``Py_Finalize``: a callback firing on it
+    afterwards (for example a uvloop timer) re-enters the finalized interpreter
+    and crashes the process (#2241). atexit hooks run before finalization,
+    while the thread can still take the GIL to process the stop.
+
+    The stop takes effect once the running callback returns, so the wait only
+    lasts if a callback blocks the loop. That case is logged, then waited out:
+    letting the thread survive finalization would reintroduce the crash.
+    """
+    if loop[0] is None or iothread[0] is None or not iothread[0].is_alive():
+        return
+    try:
+        loop[0].call_soon_threadsafe(loop[0].stop)
+    except RuntimeError:
+        # the loop was closed by its user
+        return
+    iothread[0].join(timeout=_STOP_IO_LOOP_WARN_SECONDS)
+    if iothread[0].is_alive():
+        logging.getLogger("fsspec.asyn").warning(
+            "fsspec IO loop is still running %ss after interpreter exit began; "
+            "a callback is blocking it. Waiting for it to finish.",
+            _STOP_IO_LOOP_WARN_SECONDS,
+        )
+        iothread[0].join()
+
+
+# Registered at import, so it runs after any atexit hook registered later
+# that may still use the loop. A forked child inherits this registration;
+# the fork guard below clears ``loop``/``iothread`` there, so in the child it
+# only stops a loop the child started itself, never the parent's thread.
+atexit.register(_stop_io_loop)
+
+
 def reset_after_fork():
     reset_lock()
 
@@ -380,7 +436,12 @@ async def _run_coros_in_chunks(
                 task.cancel()
             if pending:
                 await asyncio.gather(*pending, return_exceptions=True)
-            raise first_exc
+            try:
+                raise first_exc
+            finally:
+                # the traceback includes this frame, so it must not refer back
+                # to the exception: directly or through the finished task
+                del first_exc, task
 
     return results
 
@@ -527,7 +588,10 @@ class AsyncFileSystem(AbstractFileSystem):
         for ex in filter(is_exception, result):
             if on_error == "ignore" and isinstance(ex, FileNotFoundError):
                 continue
-            raise ex
+            try:
+                raise ex
+            finally:
+                del ex, result
 
     async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
         raise NotImplementedError
@@ -583,7 +647,10 @@ class AsyncFileSystem(AbstractFileSystem):
         if on_error == "raise":
             ex = next(filter(is_exception, out), False)
             if ex:
-                raise ex
+                try:
+                    raise ex
+                finally:
+                    del ex, out
         if (
             len(paths) > 1
             or isinstance(path, list)
@@ -643,7 +710,10 @@ class AsyncFileSystem(AbstractFileSystem):
         if on_error != "return":
             ex = next(filter(is_exception, out), None)
             if ex is not None:
-                raise ex
+                try:
+                    raise ex
+                finally:
+                    del ex, out
         return out
 
     async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):
@@ -792,7 +862,9 @@ class AsyncFileSystem(AbstractFileSystem):
                 # lpath is a list the caller named every destination itself.
                 check_contained(lpath, lpaths)
 
-        [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
+        for lp in lpaths:
+            if parent := os.path.dirname(lp):
+                os.makedirs(parent, exist_ok=True)
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []
@@ -897,6 +969,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 maxdepth=maxdepth,
                 detail=detail,
                 topdown=topdown,
+                on_error=on_error,
                 **kwargs,
             ):
                 yield _
