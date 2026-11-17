@@ -161,7 +161,7 @@ try:
     else:
         from backports import zstd
 
-    register_compression("zstd", zstd.ZstdFile, "zst")
+    register_compression("zstd", zstd.ZstdFile, ["zst", "zstd"])
 except ImportError:
     try:
         import zstandard as zstd
@@ -174,7 +174,7 @@ except ImportError:
                 cctx = zstd.ZstdCompressor(level=10)
                 return cctx.stream_writer(infile)
 
-        register_compression("zstd", zstandard_file, "zst")
+        register_compression("zstd", zstandard_file, ["zst", "zstd"])
     except ImportError:
         pass
     pass

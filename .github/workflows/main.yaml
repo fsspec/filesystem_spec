@@ -15,16 +15,16 @@ jobs:
       fail-fast: false
       matrix:
         PY:
-          - "3.10"
           - "3.11"
           - "3.12"
           - "3.13"
           - "3.14"
+          # - "3.15"
         FREETHREADING:
           - false
-        include:
-          - PY: "3.14"
-            FREETHREADING: true
+        #include:
+        #  - PY: "3.14"
+        #    FREETHREADING: true
 
     env:
       CIRUN: true
@@ -48,7 +48,10 @@ jobs:
       - name: Run Tests
         shell: bash -l {0}
         run: |
-          pip install -e .[test_full]
+          # Install test_full deps from PyPI first so s3fs's strict fsspec pin
+          # doesn't fail on new release tags, then overwrite with local fsspec.
+          pip install "fsspec[test_full]"
+          pip install --no-deps -e .
           pytest -v
 
   win:
@@ -82,7 +85,7 @@ jobs:
       - uses: actions/checkout@main
       - uses: actions/setup-python@main
         with:
-          python-version: "3.11"
+          python-version: "3.14"
       - uses: pre-commit/action@main
 
   downstream:

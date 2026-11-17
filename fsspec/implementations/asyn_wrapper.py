@@ -71,6 +71,10 @@ class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
         else:
             self.sync_fs = fsspec.filesystem(target_protocol, **target_options)
         self.protocol = self.sync_fs.protocol
+        # paths must be normalized the way the wrapped filesystem does it
+        self.root_marker = self.sync_fs.root_marker
+        self._strip_protocol = self.sync_fs._strip_protocol
+        self._parent = self.sync_fs._parent
         self.semaphore = semaphore
         self._wrap_all_sync_methods()
 
@@ -92,7 +96,14 @@ class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
                 continue
 
             method = getattr(self.sync_fs, method_name)
-            if callable(method) and not inspect.iscoroutinefunction(method):
+            # generators such as ``walk`` cannot become coroutines: the async API
+            # expects async generators, which AsyncFileSystem already builds on
+            # top of the wrapped methods (``_walk`` uses ``_ls``)
+            if (
+                callable(method)
+                and not inspect.iscoroutinefunction(method)
+                and not inspect.isgeneratorfunction(method)
+            ):
                 async_method = async_wrapper(method, obj=self, semaphore=self.semaphore)
                 setattr(self, f"_{method_name}", async_method)
 

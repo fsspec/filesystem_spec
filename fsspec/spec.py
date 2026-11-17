@@ -43,10 +43,17 @@ if FORK_AVAILABLE:
     def _reset_instances_lock():
         for cls in _registered_classes:
             cls._instantiation_lock = threading.RLock()
+            cls._token_locks = {}
             cls._cache.clear()
             cls._pid = os.getpid()
 
     os.register_at_fork(after_in_child=_reset_instances_lock)
+
+
+class _TokenLock:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.error = None  # set if creating the instance failed
 
 
 class _Cached(type):
@@ -79,6 +86,8 @@ class _Cached(type):
             cls._cache = {}
         cls._pid = os.getpid()
         cls._instantiation_lock = threading.RLock()
+        # locks of the tokens whose instance is being created, see __call__
+        cls._token_locks = {}
 
         if FORK_AVAILABLE:
             _registered_classes.add(cls)
@@ -111,6 +120,7 @@ class _Cached(type):
             with cls._instantiation_lock:
                 if pid != cls._pid:
                     cls._cache.clear()
+                    cls._token_locks.clear()
                     cls._pid = pid
 
         if not skip and cls.cachable:
@@ -124,7 +134,39 @@ class _Cached(type):
                 inst = cls._check_instance_cache(token)
                 if inst is not None:
                     return inst
+                # Only one thread creates the instance for a given token, the others
+                # wait for it instead of creating (and discarding) their own, since
+                # creating an instance can be expensive (e.g. looking up credentials).
+                # Instances for different tokens are still created concurrently.
+                # This is under _instantiation_lock, so all threads get the same lock.
+                token_lock = cls._token_locks.setdefault(token, _TokenLock())
 
+            with token_lock.lock:
+                if token_lock.error is not None:
+                    # Fail like the thread we waited for instead of retrying: with
+                    # the same arguments it most likely fails the same way, and the
+                    # last waiter would fail only after all the others retried.
+                    raise token_lock.error
+                inst = cls._check_instance_cache(token)
+                if inst is not None:
+                    return inst
+                try:
+                    return cls.__create_instance(
+                        token, args, kwargs, strip_tokenize_options, cache=True
+                    )
+                except Exception as e:
+                    token_lock.error = e
+                    raise
+                finally:
+                    # removed even on failure, so that later calls try again
+                    with cls._instantiation_lock:
+                        cls._token_locks.pop(token, None)
+
+        return cls.__create_instance(
+            token, args, kwargs, strip_tokenize_options, cache=False
+        )
+
+    def __create_instance(cls, token, args, kwargs, strip_tokenize_options, cache):
         obj = super().__call__(*args, **kwargs, **strip_tokenize_options)
         # Setting _fs_token here causes some static linters to complain.
         obj._fs_token_ = token
@@ -135,7 +177,7 @@ class _Cached(type):
 
             mirror_sync_methods(obj)
 
-        if cls.cachable and not skip:
+        if cache:
             with cls._instantiation_lock:
                 # another thread may have created the instance while we were calling
                 # super().__call__(), so we check again.
@@ -527,6 +569,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 maxdepth=maxdepth,
                 detail=detail,
                 topdown=topdown,
+                on_error=on_error,
                 **kwargs,
             )
 
@@ -856,15 +899,39 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         # explicitly set buffering off?
         with self.open(path, "rb", **kwargs) as f:
+            # A negative start or end counts back from the file length. Only
+            # fsspec's own file classes expose `.size`; a plain file (e.g. from
+            # the caching filesystems) does not, so measure with a seek instead.
+            needs_size = (start is not None and start < 0) or (
+                end is not None and end < 0
+            )
+            size = None
+            seeked_for_size = False
+            if needs_size:
+                size = getattr(f, "size", None)
+                if size is None:
+                    size = f.seek(0, 2)
+                    seeked_for_size = True
             if start is not None:
                 if start >= 0:
                     f.seek(start)
                 else:
-                    f.seek(max(0, f.size + start))
+                    f.seek(max(0, size + start))
+            elif seeked_for_size:
+                # measuring the size above moved the cursor to the end; with no
+                # start given, put it back so the read begins at the start. When
+                # .size was used instead, or nothing was measured, the cursor
+                # is untouched, as before, so a plain full read still works
+                # on non-seekable files.
+                f.seek(0)
             if end is not None:
                 if end < 0:
-                    end = f.size + end
-                return f.read(end - f.tell())
+                    # a negative end counts back from the end, as the start
+                    # does, and clamps at the start of the file
+                    end = max(0, size + end)
+                # a range that ends at or before where it starts is empty; a
+                # negative length would instead mean "read to the end"
+                return f.read(max(0, end - f.tell()))
             return f.read()
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
@@ -1036,6 +1103,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 trailing_sep,
             )
 
+            rpath = stringify_path(rpath)
             source_is_str = isinstance(rpath, str)
             rpaths = self.expand_path(
                 rpath, recursive=recursive, maxdepth=maxdepth, **kwargs
@@ -1047,7 +1115,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 if not rpaths:
                     return
 
-            if isinstance(lpath, str):
+            if isinstance(lpath, (str, os.PathLike)):
                 lpath = make_path_posix(lpath)
 
             source_is_file = len(rpaths) == 1
@@ -1142,6 +1210,7 @@ class AbstractFileSystem(metaclass=_Cached):
                 trailing_sep,
             )
 
+            lpath = stringify_path(lpath)
             source_is_str = isinstance(lpath, str)
             if source_is_str:
                 lpath = make_path_posix(lpath)
@@ -1233,6 +1302,7 @@ class AbstractFileSystem(metaclass=_Cached):
         else:
             from .implementations.local import trailing_sep
 
+            path1 = stringify_path(path1)
             source_is_str = isinstance(path1, str)
             paths1 = self.expand_path(
                 path1, recursive=recursive, maxdepth=maxdepth, **kwargs
@@ -1336,11 +1406,35 @@ class AbstractFileSystem(metaclass=_Cached):
         if path1 == path2:
             logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
+            if isinstance(path1, list) and isinstance(path2, list):
+                # Omit no-op pairs from both the copy and the source cleanup.
+                moves = [
+                    (source, target)
+                    for source, target in zip(path1, path2, strict=True)
+                    if self._strip_protocol(source) != self._strip_protocol(target)
+                ]
+                if not moves:
+                    return
+                sources, targets = zip(*moves)
+                path1, path2 = list(sources), list(targets)
+            if recursive and maxdepth is not None:
+                # copy only reaches maxdepth, so only remove what it copied
+                paths = self.expand_path(path1, recursive=True, maxdepth=maxdepth)
+                dirs = [p for p in paths if self.isdir(p)]
+                files = [p for p in paths if p not in dirs]
             # explicitly raise exception to prevent data corruption
             self.copy(
                 path1, path2, recursive=recursive, maxdepth=maxdepth, on_error="raise"
             )
-            self.rm(path1, recursive=recursive)
+            if recursive and maxdepth is not None:
+                if files:
+                    self.rm(files)
+                # a directory still holding files deeper than maxdepth is kept
+                for p in reversed(dirs):
+                    if self.exists(p) and not self.ls(p, detail=False):
+                        self.rmdir(p)
+            else:
+                self.rm(path1, recursive=recursive)
 
     def rm_file(self, path):
         """Delete a file"""
@@ -1534,11 +1628,16 @@ class AbstractFileSystem(metaclass=_Cached):
         :func:`fsspec.utils.read_block`
         """
         with self.open(fn, "rb") as f:
-            size = f.size
+            # Only fsspec's own file classes expose `.size`; a plain file (e.g.
+            # from the caching filesystems) does not, so fall back to a seek.
+            size = getattr(f, "size", None)
+            if size is None:
+                size = f.seek(0, 2)
+                f.seek(0)
             if length is None:
                 length = size
             if size is not None and offset + length > size:
-                length = size - offset
+                length = max(0, size - offset)
             return read_block(f, offset, length, delimiter)
 
     def to_json(self, *, include_password: bool = True) -> str:
@@ -1623,7 +1722,11 @@ class AbstractFileSystem(metaclass=_Cached):
         """
         from .json import FilesystemJSONEncoder
 
-        json_encoder = FilesystemJSONEncoder()
+        json_encoder = type(
+            "_FilesystemJSONEncoder",
+            (FilesystemJSONEncoder,),
+            {"include_password": include_password},
+        )()
 
         cls = type(self)
         proto = self.protocol
@@ -2040,6 +2143,16 @@ class AbstractBufferedFile(io.IOBase):
             self.location = None
 
     @property
+    def len(self):
+        """Total size in bytes, independent of the current file position.
+
+        Raises AttributeError when the backend has not provided a known size.
+        """
+        if self.size is None:
+            raise AttributeError("File size is unknown")
+        return self.size
+
+    @property
     def details(self):
         if self._details is None:
             self._details = self.fs.info(self.path)
@@ -2246,6 +2359,9 @@ class AbstractBufferedFile(io.IOBase):
         https://docs.python.org/3/library/io.html#io.RawIOBase.readinto
         """
         out = memoryview(b).cast("B")
+        if out.readonly:
+            self.read(0)
+            raise TypeError("readinto() argument must be read-write bytes-like object")
         data = self.read(out.nbytes)
         out[: len(data)] = data
         return len(data)
@@ -2265,17 +2381,22 @@ class AbstractBufferedFile(io.IOBase):
             mean a new read on every call.
         """
         out = []
+        tail = b""
+        overlap = max(len(char) - 1, 0)
         while True:
             start = self.tell()
             part = self.read(blocks or self.blocksize)
             if len(part) == 0:
                 break
-            found = part.find(char)
+            data = tail + part
+            found = data.find(char)
             if found > -1:
-                out.append(part[: found + len(char)])
-                self.seek(start + found + len(char))
+                consumed = found + len(char) - len(tail)
+                out.append(part[:consumed])
+                self.seek(start + consumed)
                 break
             out.append(part)
+            tail = data[-overlap:] if overlap else b""
         return b"".join(out)
 
     def readline(self):
@@ -2298,6 +2419,8 @@ class AbstractBufferedFile(io.IOBase):
     def readlines(self):
         """Return all data, split by the newline character, including the newline character"""
         data = self.read()
+        if not data:
+            return []
         lines = data.split(b"\n")
         out = [l + b"\n" for l in lines[:-1]]
         if data.endswith(b"\n"):

@@ -310,6 +310,14 @@ should not mix block- and file-caches in the same directory. "simplecache" is th
 except without the options for cache expiry and to check the original source - it can be used where the
 target can be considered static, and particularly where a large number of target files are expected
 (because no metadata is written to disc). Only "simplecache" is guaranteed thread/process-safe.
+Cached files can still be removed by age using their local modification times, for example
+``fs.clear_expired_cache(expiry_time=7 * 24 * 60 * 60)``. This only changes the writable cache
+location when multiple cache directories are configured.
+
+With "filecache" and "simplecache", each file is downloaded to a temporary ``*.part`` file in the
+cache directory and renamed into place once complete, so a partial download is never visible. The
+temporary file is removed if the download fails, but not if the process is killed mid-download;
+leftover ``*.part`` files are ignored by the cache and safe to delete.
 
 Remote Write Caching
 --------------------
@@ -362,8 +370,9 @@ config files, providing environment variables, or editing the contents of
 the dictionary ``fsspec.config.conf``.
 
 Files are stored in the directory pointed to by ``FSSPEC_CONFIG_DIR``,
-``"~/.config/fsspec/`` by default. All \*.ini and \*.json files will be
-loaded and parsed from their respective formats and fed into the config dict
+``~/.config/fsspec/`` by default. Set ``FSSPEC_CONFIG_DIR`` before importing
+``fsspec`` to read configuration from a different directory. All \*.ini and
+\*.json files will be loaded as UTF-8, parsed from their respective formats and fed into the config dict
 at import time. For example, if there is a file "~/.config/fsspec/conf.json"
 containing
 
@@ -390,11 +399,21 @@ a given file system implementation. INI files only support string values.
 
 Alternatively, you can provide overrides with environment variables of the style
 ``FSSPEC_{protocol}=<json_dict_value>`` and
-``FSSPEC_{protocol}_{kwargname}=<string_value>``.
+``FSSPEC_{protocol}_{kwargname}=<value>``. Values are parsed as JSON when
+possible; otherwise they remain strings. For example, in a POSIX shell:
+
+.. code-block:: sh
+
+    export FSSPEC_FILE='{"auto_mkdir": true}'
+    export FSSPEC_FILE_AUTO_MKDIR=false
+
+The per-option variable overrides the protocol dictionary, so this sets
+``auto_mkdir`` to the boolean ``False``, not the string ``"false"``. Set these
+variables before importing ``fsspec`` too.
 
 Configuration is determined in the following order, with later items winning:
 
-#. ini and json files in the config directory (``FSSPEC_CONFIG_DIRECTORY`` or ``$HOME/.config/fsspec/``), sorted
+#. ini and json files in the config directory (``FSSPEC_CONFIG_DIR`` or ``$HOME/.config/fsspec/``), sorted
    lexically by filename
 #. ``FSSPEC_{protocol}`` environment variables
 #. ``FSSPEC_{protocol}_{kwargname}`` environment variables

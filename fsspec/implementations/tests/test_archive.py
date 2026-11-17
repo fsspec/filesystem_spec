@@ -294,6 +294,28 @@ class TestAnyArchive:
             with pytest.raises(FileNotFoundError):
                 fs.ls("deeply/i-do-not-exist")
 
+    def test_open_directory_or_missing(self, scenario: ArchiveTestScenario):
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            for path in ("deeply", "deeply/nested"):
+                with pytest.raises(IsADirectoryError):
+                    fs.open(path)
+            with pytest.raises(FileNotFoundError):
+                fs.open("i-do-not-exist")
+            with pytest.raises(FileNotFoundError):
+                fs.cat_file("deeply/i-do-not-exist")
+
+    @pytest.mark.parametrize("detail", [False, True])
+    @pytest.mark.parametrize("prefix", ["/", "protocol://", "protocol:///"])
+    def test_ls_normalizes_path(self, scenario, detail, prefix):
+        prefix = prefix.replace("protocol", scenario.protocol)
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+            for path in ("", "deeply", "deeply/nested", "deeply/nested/path"):
+                assert fs.ls(prefix + path, detail=detail) == fs.ls(path, detail=detail)
+            with pytest.raises(FileNotFoundError):
+                fs.ls(prefix + "missing", detail=detail)
+
     def test_find(self, scenario: ArchiveTestScenario):
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
@@ -393,6 +415,17 @@ class TestAnyArchive:
         with scenario.provider(archive_data) as archive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             assert fs.open("a").read() == b""
+
+    def test_leading_slash(self, scenario: ArchiveTestScenario):
+        # Paths are relative to the archive root, so a leading "/" is ignored.
+        with scenario.provider(archive_data) as archive:
+            fs = fsspec.filesystem(scenario.protocol, fo=archive)
+
+            assert fs.cat("/b") == archive_data["b"]
+            with fs.open("/deeply/nested/path") as f:
+                assert f.read() == archive_data["deeply/nested/path"]
+            assert fs.info("/b")["name"] == "b"
+            assert fs.isfile("/b")
 
     def test_get_does_not_write_above_destination(
         self, scenario: ArchiveTestScenario, tmp_path

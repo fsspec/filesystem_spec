@@ -26,7 +26,7 @@ class FilesystemJSONEncoder(json.JSONEncoder):
         :func:`json.dumps` and :func:`json.dump`, without actually calling
         said functions.
         """
-        if isinstance(obj, (str, int, float, bool)):
+        if obj is None or isinstance(obj, (str, int, float, bool)):
             return obj
         if isinstance(obj, Mapping):
             return {k: self.make_serializable(v) for k, v in obj.items()}
