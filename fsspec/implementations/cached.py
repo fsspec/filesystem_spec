@@ -433,6 +433,13 @@ class CachingFileSystem(ChainedFileSystem):
             size=size,
             **kwargs,
         )
+        if not (hasattr(f, "blocksize") and hasattr(f, "_fetch_range")):
+            f.close()
+            raise TypeError(
+                f"{type(self).__name__} needs files with block-wise reads, such as"
+                f" AbstractBufferedFile, but {type(self.fs).__name__} opened a"
+                f" {type(f).__name__}; use simplecache or filecache instead"
+            )
 
         # set size if not already set
         if size is None:

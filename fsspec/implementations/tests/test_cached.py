@@ -336,6 +336,17 @@ def test_workflow(ftp_writable, impl):
         )  # new value, because we overwrote the cached location
 
 
+@pytest.mark.parametrize("impl", ["blockcache", "cached"])
+def test_blockcache_rejects_unbuffered_target(tmp_path, impl):
+    target = fsspec.filesystem("memory")
+    target.pipe("/blockcache-target", b"data")
+    fs = fsspec.filesystem(
+        impl, fs=target, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    with pytest.raises(TypeError, match="AbstractBufferedFile.*MemoryFile"):
+        fs.cat_file("/blockcache-target")
+
+
 @pytest.mark.parametrize("impl", ["simplecache", "blockcache", "cached"])
 def test_glob(ftp_writable, impl):
     host, port, user, pw = ftp_writable
