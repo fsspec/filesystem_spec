@@ -1901,7 +1901,7 @@ def test_failed_filecache_batch_preparation_is_retried(tmp_path, monkeypatch):
     ukey = fs.fs.ukey
 
     def failed_lookup(path):
-        if path == paths[1]:
+        if path == fs.fs._strip_protocol(paths[1]):
             raise OSError("metadata lookup failed")
         return ukey(path)
 
