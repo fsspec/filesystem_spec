@@ -17,6 +17,10 @@ Enhancements
 
 Fixes
 
+- Cancel the submitted async call when ``sync()`` is interrupted, stopping
+  HTTP ``get_file`` transfers after ``KeyboardInterrupt`` or ``SystemExit``
+  in the calling thread (#1667).
+
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
