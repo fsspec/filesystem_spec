@@ -2093,7 +2093,7 @@ def test_mv_into_own_subdirectory_is_refused(m):
 
 
 class UnreadableSubdirFS(AbstractFileSystem):
-    """A tree in which the locked subdirectory cannot be listed."""
+    """A tree in which the ``locked`` subdirectory cannot be listed."""
 
     protocol = "unreadablesub"
     cachable = False
@@ -2119,7 +2119,7 @@ def test_walk_on_error_reaches_subdirectories():
     # to the one handed to walk(), so the recursive call has to forward it.
     fs = UnreadableSubdirFS()
 
-    # The default, omit, keeps skipping the unreadable directory.
+    # the default, "omit", keeps skipping the unreadable directory
     assert list(fs.walk("")) == [
         ("", ["top"], []),
         ("top", ["readable", "locked"], []),
