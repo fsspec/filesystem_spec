@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Keep failed whole-file cache refreshes eligible for retry instead of marking
+  stale contents as current.
+
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.

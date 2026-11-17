@@ -1856,6 +1856,63 @@ def test_failed_download_cleans_up_tempfiles(tmp_path, monkeypatch):
     assert fs.cat_file("/afile") == b"0123456789"
 
 
+@pytest.mark.parametrize("method", ["cat", "cat_file"])
+def test_failed_filecache_refresh_is_retried(tmp_path, monkeypatch, method):
+    source = tmp_path / "source"
+    source.write_bytes(b"old contents")
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=str(tmp_path / "cache"),
+        check_files=True,
+        skip_instance_cache=True,
+    )
+    read = getattr(fs, method)
+    assert read(str(source)) == b"old contents"
+    source.write_bytes(b"updated source contents")
+
+    def failed_download(rpath, lpath, **kwargs):
+        pathlib.Path(lpath).write_bytes(b"partial")
+        raise OSError("download failed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(fs.fs, "get_file", failed_download)
+        with pytest.raises(OSError, match="download failed"):
+            read(str(source))
+
+    assert read(str(source)) == b"updated source contents"
+
+
+def test_failed_filecache_batch_preparation_is_retried(tmp_path, monkeypatch):
+    sources = [tmp_path / name for name in ("a", "b")]
+    for source in sources:
+        source.write_bytes(b"old contents")
+    paths = [str(source) for source in sources]
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=str(tmp_path / "cache"),
+        check_files=True,
+        skip_instance_cache=True,
+    )
+    fs.cat(paths)
+    for source in sources:
+        source.write_bytes(b"updated source contents")
+    ukey = fs.fs.ukey
+
+    def failed_lookup(path):
+        if path == paths[1]:
+            raise OSError("metadata lookup failed")
+        return ukey(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(fs.fs, "ukey", failed_lookup)
+        with pytest.raises(OSError, match="metadata lookup failed"):
+            fs.cat(paths)
+
+    assert fs.cat_file(paths[0]) == b"updated source contents"
+
+
 def test_tempfile_busy_destination(tmp_path, monkeypatch):
     # windows: os.replace onto a busy destination raises; only a same-size file
     # written since the download started is a redundant concurrent copy
