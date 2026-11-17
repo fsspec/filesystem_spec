@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import logging
 import math
 import os
 import re
 import sys
 import tempfile
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import partial
 from hashlib import md5
 from importlib.metadata import version
 from typing import IO, TYPE_CHECKING, Any, TypeVar
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 if TYPE_CHECKING:
     import pathlib
@@ -24,6 +25,14 @@ if TYPE_CHECKING:
 DEFAULT_BLOCK_SIZE = 5 * 2**20
 
 T = TypeVar("T")
+
+
+def _unquote_userinfo(value: str) -> str:
+    # Percent-decode userinfo; keep the raw value on any decode error (all-or-nothing).
+    try:
+        return unquote(value, errors="strict")
+    except UnicodeDecodeError:
+        return value
 
 
 def infer_storage_options(
@@ -94,7 +103,13 @@ def infer_storage_options(
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        options["host"] = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
+        host = parsed_path.netloc.rsplit("@", 1)[-1]
+        if host.startswith("[") and "]" in host:
+            # An IPv6 literal carries colons of its own, so only a colon after
+            # the closing bracket separates the port.
+            options["host"] = host[: host.index("]") + 1]
+        else:
+            options["host"] = host.rsplit(":", 1)[0]
 
         if protocol in ("s3", "s3a", "gcs", "gs"):
             options["path"] = options["host"] + options["path"]
@@ -103,9 +118,9 @@ def infer_storage_options(
         if parsed_path.port:
             options["port"] = parsed_path.port
         if parsed_path.username:
-            options["username"] = parsed_path.username
+            options["username"] = _unquote_userinfo(parsed_path.username)
         if parsed_path.password:
-            options["password"] = parsed_path.password
+            options["password"] = _unquote_userinfo(parsed_path.password)
 
     if parsed_path.query:
         options["url_query"] = parsed_path.query
@@ -169,10 +184,9 @@ def build_name_function(max_int: float) -> Callable[[int], str]:
     >>> build_name_function(0)(0)
     '0'
     """
-    # handle corner cases max_int is 0 or exact power of 10
-    max_int += 1e-8
-
-    pad_length = int(math.ceil(math.log10(max_int)))
+    if max_int < 0:
+        raise ValueError("max_int must be non-negative")
+    pad_length = len(str(int(max_int)))
 
     def name_function(i: int) -> str:
         return str(i).zfill(pad_length)
@@ -244,7 +258,7 @@ def read_block(
         Open file
     offset: int
         Byte offset to start read
-    length: int
+    length: int or None
         Number of bytes to read, read through end of file if None
     delimiter: bytes (optional)
         Ensure reading starts and stops at delimiter bytestring
@@ -276,6 +290,8 @@ def read_block(
         f.seek(offset)
         found_start_delim = seek_delimiter(f, delimiter, 2**16)
         if length is None:
+            if found_start_delim and split_before:
+                f.seek(f.tell() - len(delimiter))
             return f.read()
         start = f.tell()
         length -= start - offset
@@ -297,10 +313,7 @@ def read_block(
 
     f.seek(offset)
 
-    # TODO: allow length to be None and read to the end of the file?
-    assert length is not None
-    b = f.read(length)
-    return b
+    return f.read(length)
 
 
 def tokenize(*args: Any, **kwargs: Any) -> str:
@@ -412,7 +425,7 @@ def other_paths(
         else:
             cp = common_prefix(paths)
             if exists:
-                cp = cp.rsplit("/", 1)[0]
+                cp = cp.rpartition("/")[0]
             if not cp and all(not s.startswith("/") for s in paths):
                 path2 = ["/".join([path2, p]) for p in paths]
             else:
@@ -472,9 +485,12 @@ def get_file_extension(url: str) -> str:
     url = stringify_path(url)
     # Only consider the final path component: a "." in a parent directory name
     # (e.g. "/path/to.dir/file") is not the file's extension.
-    ext_parts = url.rsplit("/", 1)[-1].rsplit(".", 1)
-    if len(ext_parts) > 1:
-        return ext_parts[-1]
+    name = url.rsplit("/", 1)[-1]
+    # A leading dot marks a hidden file rather than an extension, so ".bashrc"
+    # has none, while ".hidden.txt" still has "txt".
+    stem, dot, extension = name.lstrip(".").rpartition(".")
+    if stem and dot:
+        return extension
     return ""
 
 
@@ -563,6 +579,61 @@ def mirror_from(
 @contextlib.contextmanager
 def nullcontext(obj: T) -> Iterator[T]:
     yield obj
+
+
+def parse_content_range_header(
+    headers: Mapping[str, str],
+) -> tuple[int | None, int | None, int | None]:
+    """Return ``(start, end, total)`` from a ``Content-Range`` header."""
+    m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", headers.get("Content-Range", ""))
+    if not m:
+        return None, None, None
+    if m[1] == "*":
+        start = end = None
+    else:
+        start, end = [int(x) for x in m[1].split("-")]
+    return start, end, None if m[2] == "*" else int(m[2])
+
+
+def response_is_requested_range(
+    status: int, headers: Mapping[str, str], start: int | None, end: int | None
+) -> bool:
+    """Whether the response is the requested range, not the whole file."""
+    if status == 206:
+        return True
+    if start is not None and parse_content_range_header(headers)[0] == start:
+        return True
+    if start is None or start < 0 or end is None:
+        return False
+    return int(headers.get("Content-Length", end + 1)) <= end - start
+
+
+def range_response_window(
+    out: bytes,
+    status: int,
+    headers: Mapping[str, str],
+    start: int | None,
+    end: int | None,
+) -> bytes:
+    """The requested window of a response body that may be the whole file."""
+    lo = 0 if start is None else start
+    if lo < 0 and (end is None or end >= len(out)):
+        # a suffix range asks for the tail of either response
+        return out[lo:]
+    if status != 206:
+        window = end - lo if end is not None and (lo >= 0) == (end >= 0) else None
+        content_range_start = parse_content_range_header(headers)[0]
+        if lo >= 0 and content_range_start is not None and content_range_start != lo:
+            window = 0
+        if window is not None and len(out) > window:
+            if lo > 0:
+                raise ValueError(
+                    "The HTTP server doesn't appear to support range requests. "
+                    "Only reading this file from the beginning is supported. "
+                    "Open with block_size=0 for a streaming file interface."
+                )
+            return out[:end] if lo == 0 else out[len(out) + lo : end]
+    return out
 
 
 def merge_offset_ranges(
@@ -818,3 +889,38 @@ def glob_translate(pat):
             results.append(any_sep)
     res = "".join(results)
     return rf"(?s:{res})\Z"
+
+
+try:
+    PyBytes_FromStringAndSize = ctypes.pythonapi.PyBytes_FromStringAndSize
+    PyBytes_FromStringAndSize.argtypes = (ctypes.c_void_p, ctypes.c_ssize_t)
+    PyBytes_FromStringAndSize.restype = ctypes.py_object
+
+    PyBytes_AsString = ctypes.pythonapi.PyBytes_AsString
+    PyBytes_AsString.argtypes = (ctypes.py_object,)
+    PyBytes_AsString.restype = ctypes.c_void_p
+    HAS_CPYTHON_API = True
+except Exception:
+    PyBytes_FromStringAndSize = None
+    PyBytes_AsString = None
+    HAS_CPYTHON_API = False
+
+
+# Please refer to following discussion to understand why this is required at this point
+# Discussion = https://github.com/fsspec/gcsfs/pull/795#discussion_r3032749881
+def _fast_slice(src_bytes: bytes, offset: int, read_size: int) -> bytes:
+    if read_size == 0:
+        return b""
+    if offset < 0 or offset + read_size > len(src_bytes):
+        raise ValueError("Slice indices out of bounds")
+
+    if HAS_CPYTHON_API:
+        dest_bytes = PyBytes_FromStringAndSize(None, read_size)
+        src_ptr = PyBytes_AsString(src_bytes)
+        dest_ptr = PyBytes_AsString(dest_bytes)
+        # Releases the GIL
+        ctypes.memmove(dest_ptr, src_ptr + offset, read_size)
+        return dest_bytes
+    else:
+        # Standard fallback for PyPy/non-CPython
+        return src_bytes[offset : offset + read_size]

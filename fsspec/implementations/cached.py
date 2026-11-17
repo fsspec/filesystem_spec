@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import os
+import secrets
 import tempfile
 import time
 import weakref
 from collections.abc import Callable
+from contextlib import ExitStack, contextmanager, suppress
+from hashlib import sha256
 from shutil import rmtree
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from fsspec import filesystem
+from fsspec.asyn import _run_coros_in_chunks
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
@@ -19,7 +24,7 @@ from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cache_metadata import CacheMetadata
 from fsspec.implementations.chained import ChainedFileSystem
 from fsspec.implementations.local import LocalFileSystem
-from fsspec.spec import AbstractBufferedFile
+from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
 from fsspec.transaction import Transaction
 from fsspec.utils import infer_compression
 
@@ -29,8 +34,46 @@ if TYPE_CHECKING:
 logger = logging.getLogger("fsspec.cached")
 
 
+@contextmanager
+def _tempfile(lpath):
+    # download to a temporary file, renamed into place once complete, so that
+    # a partial download is never visible under its final cache name (#639)
+    tmp = os.path.join(os.path.dirname(lpath), f"{secrets.token_hex(8)}.part")
+    try:
+        # stamp the start from the filesystem's clock: windows mtimes can lag time.time()
+        open(tmp, "wb").close()
+        start = os.path.getmtime(tmp)
+        os.remove(tmp)
+        yield tmp
+        try:
+            os.replace(tmp, lpath)
+        except PermissionError:
+            # windows: destination open elsewhere. A same-size file written
+            # since we started is a concurrent copy of the same download.
+            if not (
+                os.path.isfile(lpath)
+                and os.path.getsize(lpath) == os.path.getsize(tmp)
+                and os.path.getmtime(lpath) >= start
+            ):
+                raise
+    finally:
+        with suppress(OSError):
+            os.remove(tmp)
+
+
+def _atomic_get(fs, rpaths, lpaths, callback=DEFAULT_CALLBACK):
+    with ExitStack() as stack:
+        fs.get(
+            rpaths,
+            [stack.enter_context(_tempfile(fn)) for fn in lpaths],
+            callback=callback,
+        )
+
+
 class WriteCachedTransaction(Transaction):
     def complete(self, commit=True):
+        if not commit:
+            return super().complete(commit=False)
         rpaths = [f.path for f in self.files]
         lpaths = [f.fn for f in self.files]
         if commit:
@@ -57,8 +100,7 @@ class CachingFileSystem(ChainedFileSystem):
     - the block-size must be the same for each access of a given file, unless
       all blocks of the file have already been read
     - caching can only be applied to file-systems which produce files
-      derived from fsspec.spec.AbstractBufferedFile ; LocalFileSystem is also
-      allowed, for testing
+      derived from fsspec.spec.AbstractBufferedFile.
     """
 
     protocol: ClassVar[str | tuple[str, ...]] = ("blockcache", "cached")
@@ -77,6 +119,8 @@ class CachingFileSystem(ChainedFileSystem):
         compression=None,
         cache_mapper: AbstractCacheMapper | None = None,
         cache_storage_mode=None,
+        cache_metadata_name="cache",
+        callback=DEFAULT_CALLBACK,
         **kwargs,
     ):
         """
@@ -126,6 +170,18 @@ class CachingFileSystem(ChainedFileSystem):
             behaviour. Pass an octal mode such as ``0o700`` to keep the cache
             directory, and so the cached data files within it, readable by the
             owner only.
+        cache_metadata_name: str (optional)
+            Name of the file holding the cache metadata inside each cache
+            storage directory, "cache" by default. With ``same_names=True``
+            a remote file called "cache" would be stored under that same name
+            and replace the metadata, so choose a different name here if the
+            target has such a file.
+        callback: fsspec.callbacks.Callback (optional)
+            Receives the progress of the downloads made into the cache on a
+            cache miss, i.e. the ``get`` operations on the target filesystem
+            when ``filecache`` or ``simplecache`` first open, ``cat`` or
+            ``cat_ranges`` a file. The block-wise ``blockcache`` fetches
+            ranges on demand and does not use it.
         """
         super().__init__(**kwargs)
         if fs is None and target_protocol is None:
@@ -146,6 +202,7 @@ class CachingFileSystem(ChainedFileSystem):
             else:
                 storage = cache_storage
         self.cache_storage_mode = cache_storage_mode
+        self.cache_metadata_name = cache_metadata_name
         self._makedirs(storage[-1])
         self.storage = storage
         self.kwargs = target_options or {}
@@ -153,6 +210,7 @@ class CachingFileSystem(ChainedFileSystem):
         self.check_files = check_files
         self.expiry = expiry_time
         self.compression = compression
+        self.callback = callback
 
         # Size of cache in bytes. If None then the size is unknown and will be
         # recalculated the next time cache_size() is called. On writes to the
@@ -176,7 +234,7 @@ class CachingFileSystem(ChainedFileSystem):
             if isinstance(target_protocol, str)
             else (fs.protocol if isinstance(fs.protocol, str) else fs.protocol[0])
         )
-        self._metadata = CacheMetadata(self.storage)
+        self._metadata = CacheMetadata(self.storage, self.cache_metadata_name)
         self.load_cache()
         self.fs = fs if fs is not None else filesystem(target_protocol, **self.kwargs)
 
@@ -267,7 +325,11 @@ class CachingFileSystem(ChainedFileSystem):
             file caching instantiation.
         """
 
-        if not expiry_time:
+        if expiry_time is None:
+            if not self.expiry:
+                # "Set to falsy to prevent expiry" (see __init__): nothing
+                # ever goes stale, so there is nothing to clear.
+                return
             expiry_time = self.expiry
 
         self._check_cache()
@@ -450,12 +512,16 @@ class CachingFileSystem(ChainedFileSystem):
             "__getattribute__",
             "__reduce__",
             "_make_local_details",
+            "_ukey_async",
+            "_check_file_async",
+            "_download_async",
             "open",
             "cat",
             "cat_file",
             "_cat_file",
             "cat_ranges",
             "_cat_ranges",
+            "_local_paths_for_ranges",
             "get",
             "read_block",
             "tail",
@@ -540,6 +606,7 @@ class CachingFileSystem(ChainedFileSystem):
             and self.check_files == other.check_files
             and self.expiry == other.expiry
             and self.compression == other.compression
+            and self.cache_metadata_name == other.cache_metadata_name
             and self._mapper == other._mapper
             and self.target_protocol == other.target_protocol
         )
@@ -553,6 +620,7 @@ class CachingFileSystem(ChainedFileSystem):
             ^ hash(self.check_files)
             ^ hash(self.expiry)
             ^ hash(self.compression)
+            ^ hash(self.cache_metadata_name)
             ^ hash(self._mapper)
             ^ hash(self.target_protocol)
         )
@@ -602,7 +670,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         downfn = [fn for fn, d in zip(downfn0, details) if not d]
         if downpath:
             # skip if all files are already cached and up to date
-            self.fs.get(downpath, downfn)
+            _atomic_get(self.fs, downpath, downfn, callback=self.callback)
 
             # update metadata - only happens when downloads are successful
             newdetail = [
@@ -639,7 +707,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 pass
         self._cache_size = None
 
-    def _make_local_details(self, path):
+    def _make_local_details(self, path, uid=None):
         hash = self._mapper(path)
         fn = os.path.join(self.storage[-1], hash)
         detail = {
@@ -647,11 +715,41 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             "fn": hash,
             "blocks": True,
             "time": time.time(),
-            "uid": self.fs.ukey(path),
+            "uid": self.fs.ukey(path) if uid is None else uid,
         }
         self._metadata.update_file(path, detail)
         logger.debug("Copying %s to local cache", path)
         return fn
+
+    async def _ukey_async(self, path):
+        # the default ukey calls sync info(), which fails in a running loop;
+        # an override may too (s3fs's does), so run it off the loop
+        if type(self.fs).ukey is AbstractFileSystem.ukey:
+            return sha256(str(await self.fs._info(path)).encode()).hexdigest()
+        return await asyncio.to_thread(self.fs.ukey, path)
+
+    async def _check_file_async(self, path):
+        # _check_file, with the async-safe ukey for check_files
+        self._check_cache()
+        detail = self._metadata.check_file(path, None)
+        if not detail:
+            return False
+        detail, fn = detail
+        if self.check_files and detail["uid"] != await self._ukey_async(path):
+            return False
+        if self.expiry and time.time() - detail["time"] > self.expiry:
+            return False
+        if detail["blocks"] is not True:
+            return False  # a partial blockcache entry sharing this directory
+        return fn
+
+    async def _download_async(self, path, fn, **kwargs):
+        kwargs.setdefault("callback", self.callback)
+        with _tempfile(fn) as tmp:
+            await self.fs._get_file(path, tmp, **kwargs)
+        if not self.compression:
+            # a compressed download is left unrecorded, for open() to redo
+            self._make_local_details(path, uid=await self._ukey_async(path))
 
     def cat(
         self,
@@ -672,9 +770,13 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             try:
                 detail = self._check_file(p)
                 if not detail:
-                    fn = self._make_local_details(p)
-                    getpaths.append(p)
-                    storepaths.append(fn)
+                    if self.compression:
+                        self._get_cached_file_before_open(p)
+                        fn = os.path.join(self.storage[-1], self._mapper(p))
+                    else:
+                        fn = self._make_local_details(p)
+                        getpaths.append(p)
+                        storepaths.append(fn)
                 else:
                     detail, fn = detail if isinstance(detail, tuple) else (None, detail)
                 fns.append(fn)
@@ -686,7 +788,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 paths.remove(p)
 
         if getpaths:
-            self.fs.get(getpaths, storepaths)
+            _atomic_get(self.fs, getpaths, storepaths, callback=self.callback)
             self.save_cache()
 
         callback.set_size(len(paths))
@@ -703,7 +805,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         # call target filesystems open
         self._mkcache()
         if self.compression:
-            with self.fs._open(path, mode="rb", **kwargs) as f, open(fn, "wb") as f2:
+            with (
+                _tempfile(fn) as tmp,
+                self.fs._open(path, mode="rb", **kwargs) as f,
+                open(tmp, "wb") as f2,
+            ):
                 if isinstance(f, AbstractBufferedFile):
                     # want no type of caching if just downloading whole thing
                     f.cache = BaseCache(0, f.cache.fetcher, f.size)
@@ -719,28 +825,33 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                     data = f.read(block)
                     f2.write(data)
         else:
-            self.fs.get_file(path, fn)
+            with _tempfile(fn) as tmp:
+                self.fs.get_file(path, tmp, callback=self.callback)
         self.save_cache()
+        return self._metadata.cached_files[-1][path].copy(), fn
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
         # For read (or append), (try) download from remote
         if "r" in mode or "a" in mode:
-            if not self._check_file(path):
+            cached = self._check_file(path)
+            if not cached:
                 if self.fs.exists(path):
-                    self._get_cached_file_before_open(path, **kwargs)
+                    cached = self._get_cached_file_before_open(path, **kwargs)
                 elif "r" in mode:
                     raise FileNotFoundError(path)
 
-            detail, fn = self._check_file(path)
-            _, blocks = detail["fn"], detail["blocks"]
-            if blocks is True:
-                logger.debug("Opening local copy of %s", path)
-            else:
-                raise ValueError(
-                    f"Attempt to open partially cached file {path}"
-                    f" as a wholly cached file"
-                )
+            # Use this open's selected file, even if it expired during download.
+            if cached:
+                detail, fn = cached
+                _, blocks = detail["fn"], detail["blocks"]
+                if blocks is True:
+                    logger.debug("Opening local copy of %s", path)
+                else:
+                    raise ValueError(
+                        f"Attempt to open partially cached file {path}"
+                        f" as a wholly cached file"
+                    )
 
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:
@@ -767,11 +878,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         logger.debug("async cat_file %s", path)
         path = self._strip_protocol(path)
         sha = self._mapper(path)
-        fn = self._check_file(path)
+        fn = await self._check_file_async(path)
 
         if not fn:
             fn = os.path.join(self.storage[-1], sha)
-            await self.fs._get_file(path, fn, **kwargs)
+            await self._download_async(path, fn, **kwargs)
+            self.save_cache()
 
         with open(fn, "rb") as f:  # noqa ASYNC230
             if start:
@@ -779,29 +891,65 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             size = -1 if end is None else end - f.tell()
             return f.read(size)
 
+    def _local_paths_for_ranges(self, paths):
+        """Cache file for each of paths, and which remote files to download
+
+        A path given more than once is downloaded once, and every occurrence
+        reads from the same cache file.
+        """
+        lpaths = []
+        local = {}
+        download = []
+        rpaths = []
+        for p in paths:
+            if p not in local:
+                detail = self._check_file(p)
+                if not detail:
+                    fn = os.path.join(self.storage[-1], self._mapper(p))
+                    download.append(fn)
+                    rpaths.append(p)
+                else:
+                    # filecache returns (detail, fn), simplecache just fn
+                    fn = detail[1] if isinstance(detail, tuple) else detail
+                local[p] = fn
+            lpaths.append(local[p])
+        return lpaths, rpaths, download
+
     async def _cat_ranges(
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
         logger.debug("async cat ranges %s", paths)
+        # _local_paths_for_ranges, but the validity check is a coroutine here
+        paths = [self._strip_protocol(p) for p in paths]
         lpaths = []
-        rset = set()
-        download = []
-        rpaths = []
+        local = {}
+        need = {}
         for p in paths:
-            fn = self._check_file(p)
-            if fn is None and p not in rset:
-                sha = self._mapper(p)
-                fn = os.path.join(self.storage[-1], sha)
-                download.append(fn)
-                rset.add(p)
-                rpaths.append(p)
-            lpaths.append(fn)
-        if download:
-            await self.fs._get(rpaths, download, on_error=on_error)
+            if p not in local:
+                local[p] = await self._check_file_async(p) or need.setdefault(
+                    p, os.path.join(self.storage[-1], self._mapper(p))
+                )
+            lpaths.append(local[p])
+        errors = {}
+        if need:
+            # not self.fs._get: each download needs its own temp file
+            results = await _run_coros_in_chunks(
+                [self._download_async(p, fn, **kwargs) for p, fn in need.items()],
+                batch_size=self.fs.batch_size,
+                return_exceptions=True,
+            )
+            errors = {p: e for p, e in zip(need, results) if isinstance(e, Exception)}
+            self.save_cache()
+            if errors and on_error == "raise":
+                raise next(iter(errors.values()))
 
-        return LocalFileSystem().cat_ranges(
+        out = LocalFileSystem().cat_ranges(
             lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
+        if on_error == "return":
+            # report the download error, not the missing local copy
+            out = [errors.get(p, o) for p, o in zip(paths, out)]
+        return out
 
 
 class SimpleCacheFileSystem(WholeFileCacheFileSystem):
@@ -846,6 +994,47 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def load_cache(self):
         pass
+
+    def clear_expired_cache(self, expiry_time=None):
+        """Remove cached files older than ``expiry_time`` seconds.
+
+        SimpleCache does not store metadata, so cached file modification times
+        are used instead. Only the last (writable) cache location is changed.
+
+        Parameters
+        ----------
+        expiry_time: int or float
+            Maximum age of a cached file in seconds. This must be supplied
+            explicitly because SimpleCache has no configured expiry time.
+        """
+        if expiry_time is None:
+            raise ValueError("expiry_time must be provided for simplecache")
+        if expiry_time < 0:
+            raise ValueError("expiry_time must be non-negative")
+
+        self._mkcache()
+        cutoff = time.time() - expiry_time
+        with os.scandir(self.storage[-1]) as entries:
+            for entry in entries:
+                try:
+                    if (
+                        entry.is_file(follow_symlinks=False)
+                        and entry.stat(follow_symlinks=False).st_mtime < cutoff
+                    ):
+                        os.remove(entry.path)
+                except FileNotFoundError:
+                    # Another process may be using the same simple cache.
+                    pass
+        self._cache_size = None
+
+    async def _check_file_async(self, path):
+        return self._check_file(path)  # existence-based, no remote I/O
+
+    async def _download_async(self, path, fn, **kwargs):
+        # no metadata to record (and no ukey lookup needed)
+        kwargs.setdefault("callback", self.callback)
+        with _tempfile(fn) as tmp:
+            await self.fs._get_file(path, tmp, **kwargs)
 
     def pipe_file(self, path, value=None, **kwargs):
         if self._intrans:
@@ -911,13 +1100,11 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         self, paths, starts, ends, max_gap=None, on_error="return", **kwargs
     ):
         logger.debug("cat ranges %s", paths)
-        lpaths = [self._check_file(p) for p in paths]
-        rpaths = [p for l, p in zip(lpaths, paths) if l is False]
-        lpaths = [l for l, p in zip(lpaths, paths) if l is False]
-        self.fs.get(rpaths, lpaths)
-        paths = [self._check_file(p) for p in paths]
+        lpaths, rpaths, download = self._local_paths_for_ranges(paths)
+        if download:
+            _atomic_get(self.fs, rpaths, download, callback=self.callback)
         return LocalFileSystem().cat_ranges(
-            paths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
+            lpaths, starts, ends, max_gap=max_gap, on_error=on_error, **kwargs
         )
 
     def _get_cached_file_before_open(self, path, **kwargs):
@@ -929,7 +1116,11 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         self._cache_size = None
 
         if self.compression:
-            with self.fs._open(path, mode="rb", **kwargs) as f, open(fn, "wb") as f2:
+            with (
+                _tempfile(fn) as tmp,
+                self.fs._open(path, mode="rb", **kwargs) as f,
+                open(tmp, "wb") as f2,
+            ):
                 if isinstance(f, AbstractBufferedFile):
                     # want no type of caching if just downloading whole thing
                     f.cache = BaseCache(0, f.cache.fetcher, f.size)
@@ -945,7 +1136,8 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
                     data = f.read(block)
                     f2.write(data)
         else:
-            self.fs.get_file(path, fn)
+            with _tempfile(fn) as tmp:
+                self.fs.get_file(path, tmp, callback=self.callback)
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
@@ -1021,7 +1213,9 @@ class LocalTempFile:
 
     def discard(self):
         self.fh.close()
-        os.remove(self.fn)
+        # Repeated writes in one transaction can share a cache filename.
+        with suppress(FileNotFoundError):
+            os.remove(self.fn)
 
     def commit(self):
         # calling put() with list arguments avoids path expansion and additional operations

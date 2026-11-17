@@ -92,15 +92,16 @@ def test_lz4_compression(tmpdir):
         assert infile.read() == tdat
 
 
-def test_zstd_compression(tmpdir):
-    """Infer zstd compression for .zst files if zstandard is available."""
+@pytest.mark.parametrize("extension", ["zst", "zstd"])
+def test_zstd_compression(tmpdir, extension):
+    """Infer zstd compression for both extensions if a backend is available."""
     tmp_path = pathlib.Path(str(tmpdir))
 
     try:
         if sys.version_info >= (3, 14):
             from compression import zstd
         else:
-            zstd = pytest.importorskip("backports.zstd")
+            from backports import zstd
     except ImportError:
         zstd = pytest.importorskip("zstandard")
 
@@ -108,27 +109,29 @@ def test_zstd_compression(tmpdir):
 
     tdat = "foobar" * 100
 
+    assert infer_compression(f"out.{extension}") == "zstd"
+
     with fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="wt", compression="infer"
+        str(tmp_path / f"out.{extension}"), mode="wt", compression="infer"
     ) as outfile:
         outfile.write(tdat)
 
-    compressed = (tmp_path / "out.zst").open("rb").read()
+    compressed = (tmp_path / f"out.{extension}").open("rb").read()
     assert zstd.ZstdDecompressor().decompress(compressed, len(tdat)).decode() == tdat
 
     with fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="rt", compression="infer"
+        str(tmp_path / f"out.{extension}"), mode="rt", compression="infer"
     ) as infile:
         assert infile.read() == tdat
 
     with fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="rt", compression="zstd"
+        str(tmp_path / f"out.{extension}"), mode="rt", compression="zstd"
     ) as infile:
         assert infile.read() == tdat
 
     # fails in https://github.com/fsspec/filesystem_spec/issues/725
     infile = fsspec.core.open(
-        str(tmp_path / "out.zst"), mode="rb", compression="infer"
+        str(tmp_path / f"out.{extension}"), mode="rb", compression="infer"
     ).open()
 
     infile.close()

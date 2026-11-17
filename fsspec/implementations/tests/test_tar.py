@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 import shutil
 import tarfile
@@ -79,6 +80,135 @@ def test_compressions(recipe):
 
         # Verify content of a sample file.
         assert fs.cat("b") == b"hello"
+
+
+@pytest.fixture(
+    params=["", "gz", "bz2", "xz"], ids=["tar", "tar-gz", "tar-bz2", "tar-xz"]
+)
+def tar_for_close(tmp_path, request):
+    compression = request.param
+    path = tmp_path / ("archive.tar" + (f".{compression}" if compression else ""))
+    with tarfile.open(path, mode=f"w:{compression}") as archive:
+        info = tarfile.TarInfo("member")
+        info.size = 4
+        archive.addfile(info, BytesIO(b"data"))
+    return str(path)
+
+
+def test_close_owned_archive(tar_for_close):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    try:
+        assert fs.cat("member") == b"data"
+        for _ in range(2):
+            fs.close()
+            # Keep the filesystem alive: cleanup must not depend on disposal.
+            assert fs.tar.closed
+            assert raw.closed
+            assert fs.fo.closed
+            with pytest.raises(ValueError):
+                raw.fileno()
+    finally:
+        fs.fo.close()
+        fs.of.close()
+
+
+def test_dispose_owned_archive(tar_for_close):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    archive = fs.fo
+    try:
+        del fs
+        gc.collect()
+        assert raw.closed
+        assert archive.closed
+    finally:
+        archive.close()
+        raw.close()
+
+
+@pytest.mark.parametrize(
+    "open_archive", [open, fsspec.open], ids=["file", "openfile-context"]
+)
+def test_close_preserves_borrowed_archive(tar_for_close, open_archive):
+    with open_archive(tar_for_close, "rb") as raw:
+        fs = TarFileSystem(raw)
+        assert fs.cat("member") == b"data"
+        fs.close()
+        fs.close()
+        assert not raw.closed
+        raw.seek(0)
+        assert raw.read(1)
+        del fs
+        gc.collect()
+        assert not raw.closed
+        raw.seek(0)
+        assert raw.read(1)
+    assert raw.closed
+
+
+def test_close_preserves_openfile_stream(tar_for_close):
+    owner = fsspec.open(tar_for_close, "rb")
+    raw = owner.open()
+    try:
+        fs = TarFileSystem(raw)
+        assert fs.cat("member") == b"data"
+        fs.close()
+        fs.close()
+        del fs
+        gc.collect()
+        assert not raw.closed
+        raw.seek(0)
+        assert raw.read(1)
+    finally:
+        owner.close()
+    assert raw.closed
+
+
+def test_close_owned_archive_after_tar_close_error(tar_for_close, monkeypatch):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    close_tar = fs.tar.close
+
+    def fail_close():
+        close_tar()
+        raise RuntimeError("tar close failed")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(fs.tar, "close", fail_close)
+            with pytest.raises(RuntimeError, match="tar close failed"):
+                fs.close()
+            assert raw.closed
+            assert fs.fo.closed
+        fs.close()
+    finally:
+        fs.fo.close()
+        fs.of.close()
+
+
+@pytest.mark.parametrize("tar_for_close", ["gz", "bz2", "xz"], indirect=True)
+def test_close_owned_archive_after_compression_close_error(tar_for_close, monkeypatch):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    close_compression = fs.fo.close
+
+    def fail_close():
+        close_compression()
+        raise RuntimeError("compression close failed")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(fs.fo, "close", fail_close)
+            with pytest.raises(RuntimeError, match="compression close failed"):
+                fs.close()
+            assert fs.tar.closed
+            assert raw.closed
+            assert fs.fo.closed
+        fs.close()
+    finally:
+        fs.fo.close()
+        fs.of.close()
 
 
 @pytest.mark.parametrize(
@@ -326,3 +456,136 @@ def test_reading_missing_member_raises_file_not_found(tar_with_one_member, read)
 def test_cat_file_negative_offsets(tar_with_one_member, start, end, expected):
     fs = TarFileSystem(str(tar_with_one_member))
     assert fs.cat_file("present.txt", start=start, end=end) == expected
+
+
+def test_links_report_target_size(tmp_path: Path):
+    path = tmp_path / "links.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("d/f")
+        info.size = 5
+        tar.addfile(info, BytesIO(b"hello"))
+        for name, kind, target in [
+            ("d/sym", tarfile.SYMTYPE, "f"),
+            ("hard", tarfile.LNKTYPE, "d/f"),
+            ("dangling", tarfile.SYMTYPE, "missing"),
+        ]:
+            info = tarfile.TarInfo(name)
+            info.type = kind
+            info.linkname = target
+            tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    for name in ["d/sym", "hard"]:
+        assert fs.size(name) == 5
+        assert fs.cat_file(name, start=-2) == b"lo"
+        assert fs.read_block(name, 1, 3) == b"ell"
+    assert fs.size("dangling") == 0
+
+
+@pytest.mark.parametrize("prefix", ["./", "././"])
+@pytest.mark.parametrize("explicit_directories", [False, True])
+def test_dot_path_components(tmp_path, prefix, explicit_directories):
+    path = tmp_path / "dots.tar"
+    members = [
+        (prefix + "dir/./nested.txt", "dir/nested.txt", b"nested"),
+        (prefix + ".hidden", ".hidden", b"hidden"),
+        ("plain.txt", "plain.txt", b"plain"),
+    ]
+    with tarfile.open(path, "w") as tar:
+        if explicit_directories:
+            for name in [prefix, prefix + "dir/./"]:
+                info = tarfile.TarInfo(name)
+                info.type = tarfile.DIRTYPE
+                tar.addfile(info)
+        for name, _, data in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    assert fs.ls("", detail=False) == [".hidden", "dir", "plain.txt"]
+    assert fs.ls(prefix, detail=False) == fs.ls("", detail=False)
+    assert fs.find("") == [".hidden", "dir/nested.txt", "plain.txt"]
+    assert fs.glob("./dir/*.txt") == ["dir/nested.txt"]
+    for directory in ["dir", prefix + "dir/./", "tar://./dir"]:
+        assert fs.isdir(directory)
+        assert fs.info(directory)["name"] == "dir"
+        assert fs.ls(directory, detail=False) == ["dir/nested.txt"]
+        assert [entry["name"] for entry in fs.ls(directory)] == ["dir/nested.txt"]
+    for raw_name, name, data in members:
+        assert fs.info(name)["name"] == name
+        assert fs.info(raw_name)["name"] == name
+        assert fs.cat(name) == data
+        with fs.open(raw_name, "rb") as f:
+            assert f.read() == data
+
+
+def test_dot_root_directory(tmp_path):
+    path = tmp_path / "root.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("./")
+        info.type = tarfile.DIRTYPE
+        tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    assert fs.info(".")["type"] == "directory"
+    assert fs.info("")["type"] == "directory"
+    assert fs.ls(".") == []
+    assert fs.ls("", detail=False) == []
+    assert fs.find("") == []
+
+
+def test_dot_normalization_preserves_parent_components(tmp_path):
+    path = tmp_path / "parents.tar"
+    members = {"../file.txt": b"parent", "dir/../file.txt": b"literal"}
+    with tarfile.open(path, "w") as tar:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    for name, data in members.items():
+        assert fs.info(name)["name"] == name
+        assert fs.cat_file("./" + name) == data
+    assert not fs.exists("file.txt")
+
+
+@pytest.mark.parametrize(
+    "names", [["./file.txt", "file.txt"], ["file.txt", "./file.txt"]]
+)
+def test_dot_normalization_duplicate_members(tmp_path, names):
+    path = tmp_path / "duplicates.tar"
+    with tarfile.open(path, "w") as tar:
+        for name, data in zip(names, [b"first", b"last"]):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    assert fs.ls("", detail=False) == ["file.txt"]
+    assert fs.size("file.txt") == len(b"last")
+    assert fs.cat("file.txt") == b"last"
+    assert fs.cat("./file.txt") == b"last"
+
+
+def test_dot_normalization_preserves_links(tmp_path):
+    path = tmp_path / "dot-links.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("./dir/target")
+        info.size = 5
+        tar.addfile(info, BytesIO(b"hello"))
+        for name, kind, target in [
+            ("./dir/sym", tarfile.SYMTYPE, "target"),
+            ("./hard", tarfile.LNKTYPE, "./dir/target"),
+        ]:
+            info = tarfile.TarInfo(name)
+            info.type = kind
+            info.linkname = target
+            tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    for name in ["dir/target", "dir/sym", "hard"]:
+        assert fs.size(name) == 5
+        assert fs.cat(name) == b"hello"
+        assert fs.cat_file(name, start=-2) == b"lo"

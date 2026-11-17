@@ -1,12 +1,17 @@
+import os
 import tarfile
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 
+import fsspec
 from fsspec.asyn import AsyncFileSystem
+from fsspec.core import OpenFile, OpenFiles
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.tar import TarFileSystem
 from fsspec.spec import AbstractFileSystem
 
@@ -68,6 +73,41 @@ def dirfs(make_dirfs, fs):
 @pytest.fixture
 def adirfs(make_dirfs, asyncfs):
     return make_dirfs(asyncfs, asynchronous=True)
+
+
+@pytest.mark.parametrize("backend", ["memory", "local", "dir", "async_wrapper"])
+def test_async_impl_matches_backend(backend, tmp_path):
+    from fsspec.implementations.memory import MemoryFileSystem
+
+    fs = MemoryFileSystem(skip_instance_cache=True)
+    if backend == "local":
+        fs = LocalFileSystem()
+        root = str(tmp_path)
+    else:
+        root = "/async_impl_test"
+        if backend == "dir":
+            fs = DirFileSystem("/", fs, skip_instance_cache=True)
+        elif backend == "async_wrapper":
+            fs = AsyncFileSystemWrapper(fs=fs, asynchronous=False)
+
+    dirfs = DirFileSystem(root, fs, skip_instance_cache=True)
+    assert dirfs.async_impl is (backend == "async_wrapper")
+    assert dirfs.async_impl == fs.async_impl
+    dirfs.pipe_file("file", b"data")
+    assert dirfs.cat_file("file") == b"data"
+
+
+@pytest.mark.asyncio
+async def test_async_impl_matches_async_backend():
+    from fsspec.implementations.memory import MemoryFileSystem
+
+    fs = AsyncFileSystemWrapper(
+        fs=MemoryFileSystem(skip_instance_cache=True), asynchronous=True
+    )
+    dirfs = DirFileSystem("/async_impl_test", fs, asynchronous=True)
+    assert dirfs.async_impl is True
+    await dirfs._pipe_file("async_file", b"data")
+    assert await dirfs._cat_file("async_file") == b"data"
 
 
 def test_dirfs(fs, asyncfs):
@@ -132,6 +172,31 @@ def test_join_keeps_dotdot_for_non_local(fs, path):
     # legitimate path part and must not be rejected.
     dirfs = DirFileSystem("root", fs)
     assert dirfs._join(path) == f"root/{path}"
+
+
+def test_join_preserves_trailing_slash(tmp_path):
+    # a trailing slash requests "copy the contents" in bulk operations
+    # (docs/source/copying.rst), so it must survive the join
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+    assert dirfs._join("foo/") == f"{dirfs.path}/foo/"
+
+
+def test_get_directory_contents_to_existing_directory(tmp_path):
+    # https://github.com/fsspec/filesystem_spec/issues/1851: without the
+    # trailing slash preserved, the second get() nests a fresh copy inside
+    # the existing target instead of copying the contents (copying.rst 1e)
+    source = tmp_path / "source"
+    (source / "dir").mkdir(parents=True)
+    (source / "dir" / "file.txt").write_text("data")
+    target = tmp_path / "target"
+    target.mkdir()
+
+    dirfs = DirFileSystem(str(source), LocalFileSystem())
+    for _ in range(2):
+        dirfs.get("dir/", str(target / "dir"), recursive=True)
+
+    assert (target / "dir" / "file.txt").is_file()
+    assert not (target / "dir" / "dir").exists()
 
 
 def test_sep(mocker, dirfs):
@@ -507,6 +572,88 @@ def test_walk(dirfs):
     dirfs.fs.walk.assert_called_once_with(f"{PATH}/root", *ARGS, **KWARGS)
 
 
+def test_walk_detail(dirfs):
+    dir_info = {"name": f"{PATH}/root/foo", "type": "directory"}
+    file_info = {"name": f"{PATH}/root/baz", "type": "file"}
+    dirfs.fs.walk.return_value = iter(
+        [
+            (
+                f"{PATH}/root",
+                {"foo": dir_info},
+                {"baz": file_info},
+            )
+        ]
+    )
+
+    assert list(dirfs.walk("root", detail=True)) == [
+        (
+            "root",
+            {"foo": {"name": "root/foo", "type": "directory"}},
+            {"baz": {"name": "root/baz", "type": "file"}},
+        )
+    ]
+    assert dir_info["name"] == f"{PATH}/root/foo"
+    assert file_info["name"] == f"{PATH}/root/baz"
+
+
+@pytest.mark.parametrize("detail", [False, True])
+def test_walk_prune(m, detail):
+    m.pipe({"/root/keep/data.csv": b"data", "/root/skip/data.csv": b"skip"})
+    dirfs = DirFileSystem("/root", m)
+
+    visited = []
+    for root, dirs, files in dirfs.walk("", detail=detail):
+        if "skip" in dirs:
+            if detail:
+                del dirs["skip"]
+            else:
+                dirs.remove("skip")
+        visited.append(root)
+
+    assert visited == ["", "keep"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("detail", [False, True])
+async def test_async_walk_prune(m, detail):
+    m.pipe({"/root/keep/data.csv": b"data", "/root/skip/data.csv": b"skip"})
+    fs = AsyncFileSystemWrapper(fs=m, asynchronous=True)
+    dirfs = DirFileSystem("/root", fs, asynchronous=True)
+
+    visited = []
+    async for root, dirs, files in dirfs._walk("", detail=detail):
+        if "skip" in dirs:
+            if detail:
+                del dirs["skip"]
+            else:
+                dirs.remove("skip")
+        visited.append(root)
+
+    assert visited == ["", "keep"]
+
+
+@pytest.mark.asyncio
+async def test_async_walk_detail(adirfs, mocker):
+    async def _walk(path, *args, **kwargs):
+        yield (
+            f"{PATH}/root",
+            {"foo": {"name": f"{PATH}/root/foo", "type": "directory"}},
+            {"baz": {"name": f"{PATH}/root/baz", "type": "file"}},
+        )
+
+    adirfs.fs._walk = mocker.MagicMock()
+    adirfs.fs._walk.side_effect = _walk
+
+    actual = [entry async for entry in adirfs._walk("root", detail=True)]
+    assert actual == [
+        (
+            "root",
+            {"foo": {"name": "root/foo", "type": "directory"}},
+            {"baz": {"name": "root/baz", "type": "file"}},
+        )
+    ]
+
+
 @pytest.mark.asyncio
 async def test_async_glob(adirfs):
     adirfs.fs._glob.return_value = [f"{PATH}/one", f"{PATH}/two"]
@@ -817,3 +964,152 @@ async def test_async_detail_without_name(adirfs, method):
         "file": {"name": "file"}
     }
     assert wrapped.return_value == {f"{PATH}/file": {}}
+
+
+@pytest.mark.parametrize("depth", [1, 2])
+def test_local_file_passthrough(tmp_path, depth, monkeypatch):
+    path = tmp_path / "data"
+    path.write_bytes(b"data")
+    fs = LocalFileSystem()
+    for _ in range(depth):
+        fs = DirFileSystem(str(tmp_path) if _ == 0 else ".", fs=fs)
+    assert fs.local_file is True
+    monkeypatch.setattr(
+        fsspec.core,
+        "open_files",
+        lambda *a, **kw: OpenFiles([OpenFile(fs, "data")], fs=fs),
+    )
+    assert os.path.normpath(fsspec.open_local("data")) == str(path)
+    assert path.read_bytes() == b"data"
+
+
+@pytest.mark.parametrize("depth", [1, 2])
+def test_local_file_missing_flag(depth, monkeypatch):
+    fs = MemoryFileSystem()
+    for _ in range(depth):
+        fs = DirFileSystem("/root" if _ == 0 else ".", fs=fs)
+    assert fs.local_file is False
+    monkeypatch.setattr(
+        fsspec.core,
+        "open_files",
+        lambda *a, **kw: OpenFiles([OpenFile(fs, "data")], fs=fs),
+    )
+    with pytest.raises(ValueError, match="attribute local_file=True"):
+        fsspec.open_local("data")
+
+
+def test_local_file_explicit_false():
+    class NonLocalFileSystem(LocalFileSystem):
+        local_file = False
+
+    fs = DirFileSystem("/root", fs=NonLocalFileSystem())
+    assert fs.local_file is False
+
+
+class CustomPathLike:
+    def __init__(self, path):
+        self.path = path
+
+    def __fspath__(self):
+        return self.path
+
+
+@pytest.fixture(params=["local", "memory"])
+def pathlike_dirfs(request, tmp_path, m):
+    fs = LocalFileSystem() if request.param == "local" else m
+    return DirFileSystem(str(tmp_path), fs)
+
+
+@pytest.mark.parametrize("path_type", [Path, CustomPathLike])
+@pytest.mark.parametrize(
+    "method, args, expected",
+    [
+        ("cat_file", (), b"data"),
+        ("read_text", (), "data"),
+        ("pipe_file", (b"updated",), None),
+        ("write_text", ("updated",), None),
+        ("info", (), None),
+        ("copy", ("copy",), None),
+        ("cp_file", ("copy",), None),
+        ("rm", (), None),
+        ("rm_file", (), None),
+        ("delete", (), None),
+    ],
+)
+def test_pathlike_operations(pathlike_dirfs, path_type, method, args, expected):
+    fs = pathlike_dirfs
+    fs.pipe_file("file", b"data")
+    if method in {"copy", "cp_file"}:
+        args = (path_type(args[0]),)
+    result = getattr(fs, method)(path_type("file"), *args)
+    if expected is not None:
+        assert result == expected
+    elif method == "info":
+        assert result["name"] == "file"
+        assert result["size"] == 4
+    elif method in {"pipe_file", "write_text"}:
+        assert fs.cat_file("file") == b"updated"
+    elif method in {"copy", "cp_file"}:
+        assert fs.cat_file("copy") == b"data"
+    else:
+        assert not fs.exists("file")
+
+
+@pytest.mark.parametrize("path_type", [Path, CustomPathLike])
+@pytest.mark.parametrize("container", [list, tuple])
+def test_pathlike_collections(pathlike_dirfs, path_type, container):
+    fs = pathlike_dirfs
+    fs.pipe({path_type("a"): b"a", path_type("b"): b"b"})
+    paths = container([path_type("a"), path_type("b")])
+    assert fs.cat(paths) == {"a": b"a", "b": b"b"}
+    fs.rm(paths)
+    assert not fs.exists("a")
+    assert not fs.exists("b")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path_type", [Path, CustomPathLike])
+async def test_async_pathlike_operations(pathlike_dirfs, path_type):
+    fs = DirFileSystem(
+        pathlike_dirfs.path,
+        AsyncFileSystemWrapper(fs=pathlike_dirfs.fs, asynchronous=True),
+        asynchronous=True,
+    )
+    path = path_type("file")
+    target = path_type("copy")
+    await fs._pipe_file(path, b"data")
+    assert await fs._cat_file(path) == b"data"
+    assert (await fs._info(path))["name"] == "file"
+    await fs._cp_file(path, target)
+    assert await fs._cat_file(target) == b"data"
+    await fs._rm_file(target)
+    await fs._pipe({target: b"copy"})
+    assert await fs._cat([path, target]) == {"file": b"data", "copy": b"copy"}
+    await fs._rm((path, target))
+    assert not await fs._exists(path)
+    assert not await fs._exists(target)
+
+
+@pytest.mark.parametrize("path_type", [str, Path, CustomPathLike])
+def test_pathlike_join_semantics(pathlike_dirfs, path_type):
+    fs = pathlike_dirfs
+    assert fs._join(path_type("file")) == fs._join("file")
+    path = path_type("foo/../file")
+    assert fs._join(path) == fs._join(os.fspath(path))
+    if isinstance(fs.fs, LocalFileSystem):
+        with pytest.raises(ValueError, match="escapes"):
+            fs._join(path_type(".."))
+    else:
+        path = path_type("../file")
+        assert fs._join(path) == fs._join(os.fspath(path))
+
+
+@pytest.mark.parametrize("path", ["", "dir://file", "file/", "dir://file/"])
+def test_custom_pathlike_join_spelling(pathlike_dirfs, path):
+    fs = pathlike_dirfs
+    assert fs._join(CustomPathLike(path)) == fs._join(path)
+
+
+def test_join_bytes_still_unsupported(pathlike_dirfs):
+    with pytest.raises(TypeError):
+        pathlike_dirfs._join(b"file")

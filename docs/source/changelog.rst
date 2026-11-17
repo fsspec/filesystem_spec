@@ -6,26 +6,409 @@ Dev
 
 Enhancements
 
-- Allow instance-local memory stores with ``global_store=False`` while
-  preserving normal instance caching and the default shared store (#1904)
+- List TAR archive descendants from the existing directory cache without
+  rescanning the full archive for each directory.
+
+- Avoid traversing excluded deep ancestors in shallow memory filesystem searches.
+
+- Accept a ``callback=`` on the caching filesystems and pass it to the ``get``
+  operations that fill the cache on a miss, so ``filecache``/``simplecache``
+  opens can report download progress (#1623)
+
 - Add ``MountFileSystem`` (protocol ``mount``), which presents several
   filesystems as a single tree, each mounted at its own directory (#1994)
 
 Fixes
 
+- Avoid empty backend range requests at EOF with the first-chunk cache.
+
+- Forward per-call reference ``cat_file`` options to the target filesystem.
+
+- Honor the per-file ``cache_type`` option when opening FTP files.
+
+- Close internally opened TAR archive files and compression wrappers on explicit
+  filesystem close, without closing caller-provided streams.
+
+- Verify the server certificate and host name for FTPFileSystem`` TLS
+
+- Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
+
+- Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
+
+- Use the documentation extra when setting up a local documentation build.
+
+- Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
+
+- Point contributor setup instructions to the current CI environment files (#626).
+
+- Drop the ``autoopen`` and ``pos`` parameters from the ``OpenFile`` docstring;
+  ``OpenFile`` does not take them since #1029.
+
+- Recognize ASCII case and permitted spaces in data URL base64 markers.
+
+- Accept bare relative filenames in lists of local destinations for async ``get``.
+
+- Reject Git paths below files and preserve complete file names in Git metadata.
+
+- Honor exclusive creation mode in DBFS file opens instead of overwriting an
+  existing file.
+
+- Honor ``create_parents=False`` in ``MemoryFileSystem.mkdir`` when the parent
+  directory does not exist.
+
+- Leave out the passwords of nested FSs when serializing with ``include_password=False``.
+
+- Raise an error when WebHDFS refuses a rename instead of reporting success (#2327).
+
+- Treat ``read(None)`` as a read to EOF in HTTP file implementations (#2345).
+
+- Close local transactional write handles before deleting their temporary files
+  during rollback, avoiding Windows sharing errors and leaked handles.
+
+- Omit unreachable references from ``ReferenceFileSystem.cat`` results when
+  ``on_error="omit"``.
+
+- Reject reads on closed asynchronous HTTP streams without reopening a request.
+
+- Preserve explicit directory permissions when SFTP ``mkdir`` creates parents.
+
+- Only send ``ia://`` credentials over https when the download URL is https.
+
+- Honor ``block_size=0`` for direct and transactional SFTP file opens.
+
+- Make FUSE CLI ``-f`` match its documented default (#1586).
+
+- Preserve source and destination URL text within relative names during ``generic.rsync``.
+
+- Accept equivalent binary update mode orderings in ``MemoryFileSystem.open``.
+
+- Request a protected data channel again when ``FTPFileSystem`` reconnects
+  with ``tls=True``
+
+- Decompress cache downloads made by ``cat`` so
+  subsequent cached reads use the same contents as ``open``.
+
+- Retain the selected local file when a ``filecache`` entry expires during open.
+
+- Fix the syntax and add a memory filesystem to the quick-start example (#2337).
+
+- Preserve directory pruning in ``DirFileSystem.walk(detail=True)``
+
+- Finalize zip-fs file contexts on explicit close (#2311).
+
+- Close sync HTTP download files on success or failure, without closing caller-owned streams.
+
+- Expose known buffered-file sizes through a ``len`` property for multipart encoders.
+
+- Propagate backend removal errors from ``FSMap``
+
+- Check known_hosts in ``SFTPFileSystem`` (#2308; issue #2119)
+
+- Warn with the fingerprint when ``SFTPFileSystem`` accepts an unknown host
+  key, and add the key to ``known_hosts`` if it is given (#2308)
+
+- Require ``paramiko>=3.4`` for the ``sftp`` and ``ssh`` extras (#2308)
+- Handle explicit ``create`` and ``overwrite`` modes in ZIP ``pipe``
+
+- Bound block-cache fetch ranges by the file size, including background reads.
+
+- Drain pending adaptive prefetch tasks on close after the producer reaches EOF.
+
+- Exclude URL fragments when decoding data URLs.
+
+- Return empty results for HTTP reads ending at offset zero without sending an invalid range request.
+
+- Correct the configuration directory variable and explain JSON parsing of environment overrides (#2324)
+
+- Update contributor linting and formatting instructions for Ruff and pre-commit (#2325)
+
+- Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
+
+- Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
+
+- Add ``cache_metadata_name=`` to the caching filesystems so the metadata file can
+  be given a name that a remote file stored with ``same_names=True`` cannot replace
+
+- Return the current position for accepted no-op seeks on HTTP streams (#2306)
+
+- Complete DBFS partial-delete retries without re-raising a recovered error.
+
+- Keep the HTTP link regex linear
+
+- Preserve single-source copy semantics for Paths in sync batch ops
+
+- Reject unsupported HTTP ``pipe_file`` modes defensively before writing,
+  since PUT behavior depends on the server (#2294).
+
+- Reject ``generic.rsync`` source names whose ".." segments would place
+  copies outside the destination
+
+- Avoid reference cycles when a synchronous call into an async filesystem
+  fails, so its frames and the data they hold are freed straight away instead
+  of waiting for the garbage collector (#2295)
+
+- Reject read-only buffers in buffered-file ``readinto()`` before consuming file data (#2260)
+
+- Honor ``maxdepth`` when copying recursively with ``ReferenceFileSystem.get``. (#2269)
+
+- Support ``length=None`` in ``utils.read_block`` without a delimiter (#2262)
+
+- Reject memory fs copies whose destination conflicts with an existing
+  file or directory (#2268)
+
+- Preserve ``None`` values when serializing filesystem arguments (#2264)
+
+- Correct file name padding for large integer maxima so lexical order matches numeric order (#2263)
+
+- Preserve caller-owned protocol options when merging per-call overrides (#2279)
+
+- Return an empty block instead of passing a negative read length in read_block (#2261)
+
+- Preserve per-call request options in HTTP directory listings (#2258)
+
+- Refetch memory-mapped cache blocks when a missing backing file is recreated (#2257)
+
+- Normalize single-dot and empty path components in libarchive member names and lookups.
+
+- Read the last libarchive member consistently when duplicate names include empty files.
+
+- Preserve caller-provided temporary directories during cross-filesystem copies.
+
+- Raise ``FileExistsError`` when ``MemoryFileSystem.makedirs`` targets an existing file, even with ``exist_ok=True`` (#2266).
+
+- Close memory-mapped cache resources when the owning buffered file is closed.
+
+- Use the correct POST method in the Pyodide HTTP session shim.
+
+- Decode URL-escaped base64 payloads in data URLs and distinguish the encoding flag from MIME metadata.
+
+- Read empty GitHub files without requiring the HTTP extra or a second download.
+
+- Accept PathLike local destinations in synchronous ``get`` (#896).
+
+- Reject seeks that change position on async streaming HTTP files.
+
+- Follow GitHub API pagination when listing tags, branches and repositories.
+
+- Strip SFTP and SSH URL prefixes before recursively creating directories.
+
+- Keep the leading delimiter in ``read_block(..., split_before=True)`` when reading to the end of the file with ``length=None``.
+
+- Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
+
+- Strip the protocol from the path in ``LocalFileSystem.lexists``.
+
+- Preserve Windows drive letters when parsing Git filesystem URLs (#1125).
+
+- Return a list of paths when listing a single file with ``GithubFileSystem``.
+
+- Recognize multi-byte delimiters spanning read blocks in buffered-file ``readuntil()``.
+
+- Stop the fsspec IO loop and join its thread at interpreter exit, so a callback firing on it after ``Py_Finalize`` (e.g. a uvloop timer)
+  cannot crash the process (#2241).
+
+- Avoid deadlocks in ``sync()`` when the default IO thread has stopped (#1723).
+
+- Percent-encode GitHub branch and tag names in API URLs so refs containing ``#``, ``&`` or ``%`` select the intended revision.
+
+- Keep files deeper than ``maxdepth`` in a recursive ``LocalFileSystem.rm`` instead of deleting the whole tree.
+
+- Keep directories that still hold files deeper than ``maxdepth`` in a recursive ``MemoryFileSystem.rm`` instead of raising ``OSError``.
+
+- Read ini and json config files as UTF-8 instead of the locale encoding.
+
+- Infer Zstandard compression for ``.zstd`` as well as ``.zst`` (#1589).
+
+- Keep files deeper than ``maxdepth`` in the source of a recursive ``mv`` instead of deleting them uncopied.
+
+- Accept local filesystem URLs in ``get_file`` when copying to a file-like object.
+
+- Accept full FTP URLs in direct ``cat_file`` and ``get_file`` calls.
+
+- Strip the protocol from the path in ``LocalFileSystem.chmod``.
+
+- Forward the wrapped filesystem's ``local_file`` flag through ``DirFileSystem`` (#1110).
+
+- Report ``DirFileSystem.async_impl`` from the wrapped filesystem instance.
+
+- Request identity encoding for buffered HTTP range reads by default, while
+  preserving explicitly configured request and session encodings (#1748).
+
+- Avoid treating content-encoded transfer lengths as decoded file sizes in
+  the synchronous HTTP filesystem.
+
+- Resolve negative FTP read offsets relative to the end of the file.
+
+- Return an empty list from buffered-file ``readlines()`` at end of file
+
+- Preserve delimiter lookahead when reading lines from forward-only HTTP streams (#2349).
+
+- Normalize protocol prefixes and leading slashes before listing archive paths.
+
+- Update memory file modification times after writes and truncation.
+
+- Preserve binary bytes in percent-encoded data URLs without base64 encoding.
+
+- Keep failed memory-mapped cache reads retriable without discarding completed ranges.
+
+- Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
+
+- Make async loop lock initialization thread-safe (#1783)
+
+- Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
+  and allowing deferred local transaction writes to commit to missing parents (#1041).
+
+
+2026.9.0
+--------
+
+Enhancements
+
+- ``ia://`` filesystem for files in Internet Archive items: an
+  ``HTTPFileSystem`` reading from ``archive.org/download`` with credentials from
+  ``ia configure``'s ``ia.ini``
+- Allow instance-local memory stores with ``global_store=False`` while
+  preserving normal instance caching and the default shared store (#2137;
+  issue #1904)
+
+- Add an adaptive readahead cache (#2093)
+
+- Implement ``created`` and ``modified`` for ``SFTPFileSystem`` (#2104)
+
+- Allow filesystem implementations to assign ``protocol`` per instance (#2117)
+
+- Delegate ``sizes`` and ``cat_ranges`` from ``DirFileSystem`` to the wrapped
+  filesystem (#2142)
+
+- Delegate ``invalidate_cache``, ``ukey`` and ``checksum`` from
+  ``DirFileSystem`` to the wrapped filesystem (#2144)
+
+- Support negative offsets in ``TarFileSystem.cat_file`` (#2146)
+
+- Mirror ``readinto`` from the PyArrow stream onto ``ArrowFile`` (#2111)
+
+- Allow ``simplecache`` files to be removed by age using their modification
+  times (#2118)
+
+- HTTP: retry transient failures (408/425/429/5xx, dropped connections,
+  timeouts, truncated range bodies, a 416 inside the file) of ``cat_file``,
+  ``HTTPFile`` block reads and the size lookup behind ``open``, controlled
+  by the new ``retries``,
+  ``retry_wait``, ``retry_statuses`` and ``retry_exceptions`` options
+  (#2124)
+
+Fixes
+
+- Compute ``HadoopFileSystem.fsid`` from its configured host and port instead of
+  accessing attributes no longer exposed by PyArrow (issue #1870)
+
+- Normalize dot path components in ``TarFileSystem`` listings and lookups,
+  while preserving original archive names for reading (issue #1568)
+
+- Make ``merge_offset_ranges`` ``O(n log n)`` and keep merged blocks within
+  ``max_block``, replacing the quadratic nested-range filter added in #1982
+  (#2091)
+
+- Fix transactions with compressed files (#2070)
+
 - Make ``MemoryFileSystem.rm`` raise ``FileNotFoundError`` for a path that does
   not exist, as ``rm_file`` and the other filesystems do, so deleting a missing
-  key from a memory-backed mapper raises ``KeyError``
+  key from a memory-backed mapper raises ``KeyError`` (#2140)
 
-- Create missing ZIP archives in append mode without truncating existing archives
+- Create missing ZIP archives in append mode without truncating existing
+  archives (#2139)
 
-- Allow filesystem implementations to assign ``protocol`` per instance
+- Close cached readers when exiting an ``open_files`` context (#2131)
 
 - Avoid mutating live ``BlockCache`` and ``BackgroundBlockCache`` instances
   when pickling (#2102)
 
 - End the transaction even when a commit or discard raises, so the filesystem
   is not left in transaction mode and deferred temporary files are cleaned up
+  (#2108)
+
+- Honor a caller-owned output file in ``get_file`` (#2066)
+
+- Preserve existing files when checking ``FSMap`` write access (#2122)
+
+- Normalize ZIP paths in ``pipe_file`` and ``find`` (#2123)
+
+- Reject ``get`` destinations that resolve above the target (#2103)
+
+- Pass ``maxdepth`` through in ``AsyncFileSystem._rm`` (#2106)
+
+- Do not let ``isfile`` swallow ``BaseException`` (#2125)
+
+- Keep reference filesystem ``get`` destinations inside the target (#2129)
+
+- Return relative names from ``DirFileSystem.glob`` and ``find`` (#2127)
+
+- Raise ``FileNotFoundError`` for missing ZIP and TAR members (#2141)
+
+- Stop collapsing three-character drive-relative paths to the drive root
+  (#2143)
+
+- Use ``/`` as the only glob separator on every platform (#2112)
+
+- Distinguish omitted and ``None`` defaults in ``FSMap.pop`` (#2136)
+
+- Forward an Arrow file's ``flush`` and ``closed`` state to its stream (#2134)
+
+- Keep reference filesystem ``cat_file`` offsets inside the referenced part
+  (#2147)
+
+- Raise ``FileNotFoundError`` from archive ``ls`` for a missing path (#2145)
+
+- Download uncached files in ``simplecache.cat_ranges`` (#2154)
+
+- Fix ``tail`` on ``simplecache`` and ``filecache`` (#2155)
+
+- Get whole-file reference sizes asynchronously in
+  ``ReferenceFileSystem._info`` (#2156)
+
+- Report the target size for links in ``TarFileSystem`` (#2157)
+
+- Keep the async generator returned by ``AsyncFileSystemWrapper._walk``
+  (#2158)
+
+- Join the default output filename with ``/`` in ``_expand_paths`` (#2162)
+
+- Make names relative in ``DirFileSystem.walk(detail=True)`` (#2160)
+
+- Ignore a leading slash in ``TarFileSystem`` paths (#2148)
+
+- Fix ``cat_ranges`` on whole-file caches (#2163)
+
+- Normalize paths in ``AsyncFileSystemWrapper`` like the wrapped filesystem
+  (#2159)
+
+- The SFTP host key policy is configurable with the new ``host_key_policy``
+  argument of ``SFTPFileSystem``, which accepts ``"auto_add"`` (default,
+  unchanged behaviour), ``"warning"`` or ``"reject"``, or any
+  ``paramiko.MissingHostKeyPolicy`` (#2126; issue #2119)
+
+Other
+
+- Use trusted publishing for releases and trigger the release workflow on tags
+  (#2060)
+
+- Remove the stale async wrapper documentation warning (#2098)
+
+- Add Zarr to the ``test_downstream`` extra so the Xarray/Zarr test runs again
+  (#2109)
+
+- Clarify that ``rm`` handles directories (#2096)
+
+- Fix grammar in ``features.rst`` (#2153)
+
+- Patch ``HAS_CPYTHON_API`` where ``_fast_slice`` reads it in tests (#2164)
+
+- Percent-decode the username and password parsed from URLs in
+  ``infer_storage_options`` so that backends (ftp, sftp, smb, ...) receive
+  the real credentials rather than their URL-encoded form; a password whose
+  bare ``%`` produces bytes that are not valid UTF-8 (for example
+  ``pass%ab``) is left untouched so that pre-existing URLs with unescaped
+  ``%`` continue to work (#1871)
 
 2026.7.0
 --------
@@ -38,7 +421,6 @@ Enhancements
 
 Fixes
 
-- Make ``merge_offset_ranges`` `O(n log n)` and keep merged blocks within ``max_block``, replacing the quadratic nested-range filter added in #1982 (#2091)
 - Fix incorrect glob docstring for '[!]' (#2084)
 - Propagate storage_options to all backends resolved by GenericFileSystem (#2083)
 - Handle end=None in FirstChunkCache._fetch like the other caches (#2082)
@@ -68,7 +450,6 @@ Other
 
 Fixes
 
-- LocalFS: remove directory symlinks without requiring recursive mode (#1299)
 - FTP: preserve filenames containing whitespace in _mlsd2 (#2043)
 - Prevent attribute error for 'forced' before flushing cache (#2042)
 - Reflect async _walk correctly (#2040)

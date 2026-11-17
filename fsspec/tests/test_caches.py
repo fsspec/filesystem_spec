@@ -6,6 +6,7 @@ import pytest
 from fsspec.caching import (
     BackgroundBlockCache,
     BlockCache,
+    BytesCache,
     FirstChunkCache,
     MMapCache,
     ReadAheadCache,
@@ -13,6 +14,8 @@ from fsspec.caching import (
     register_cache,
 )
 from fsspec.implementations.cached import WholeFileCacheFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
+from fsspec.spec import AbstractBufferedFile
 
 
 def test_cache_getitem(Cache_imp):
@@ -67,6 +70,30 @@ def test_block_cache_lru():
     assert cache.total_requested_bytes == block_size * cache.miss_count
 
 
+@pytest.mark.parametrize("cache_cls", [BlockCache, BackgroundBlockCache])
+@pytest.mark.parametrize("size", [1, 6, 8])
+def test_block_cache_final_range(cache_cls, size):
+    data = b"abcdefgh"[:size]
+    requests = []
+
+    def fetch(start, end):
+        assert 0 <= start < end <= len(data)
+        requests.append((start, end))
+        return data[start:end]
+
+    cache = cache_cls(4, fetch, len(data))
+    try:
+        assert cache._fetch(0, None) == data
+        expected = [(start, min(start + 4, size)) for start in range(0, size, 4)]
+        assert requests == expected
+        assert cache.total_requested_bytes == size
+        assert cache._fetch(size - 1, size) == data[-1:]
+        assert requests == expected
+    finally:
+        if isinstance(cache, BackgroundBlockCache):
+            cache.close()
+
+
 def test_block_cache_lru_no_redundant_reads():
     block_size = 4
     maxblocks = 2
@@ -75,6 +102,35 @@ def test_block_cache_lru_no_redundant_reads():
     )
     cache._fetch(0, block_size * (maxblocks + 1))
     assert cache.cache_info().misses == 3
+
+
+def test_background_block_cache_no_redundant_reads():
+    block_size = 4
+    maxblocks = 2
+    cache = BackgroundBlockCache(
+        block_size, letters_fetcher, len(string.ascii_letters), maxblocks=maxblocks
+    )
+    try:
+        # More blocks than the LRU holds: each block is fetched once, not again
+        # after being evicted while the earlier ones were prefetched.
+        data = cache._fetch(0, block_size * (maxblocks + 1))
+        assert data == string.ascii_letters[: block_size * (maxblocks + 1)].encode()
+        assert cache.cache_info().misses == maxblocks + 1
+    finally:
+        cache.close()
+
+
+def test_background_block_cache_read_ending_on_block_boundary():
+    block_size = 4
+    cache = BackgroundBlockCache(block_size, letters_fetcher, len(string.ascii_letters))
+    try:
+        # Only block 0 is needed; block 1 is left to the background prefetch.
+        assert cache._fetch(0, block_size) == b"abcd"
+        assert cache.cache_info().misses == 1
+        assert cache._fetch(block_size, 2 * block_size) == b"efgh"
+        assert cache._fetch(2, 2 * block_size) == b"cdefgh"
+    finally:
+        cache.close()
 
 
 def test_first_cache():
@@ -152,6 +208,33 @@ def test_readahead_cache():
     assert cache.total_requested_bytes == total_requested_bytes
 
 
+def test_bytes_cache_range_ending_at_cache_end():
+    """
+    A range that stops exactly where the cached data stops is already held in
+    full, so it must be served without going back to the fetcher.
+    """
+    block_size = 5
+    calls = []
+
+    def counting_fetcher(start, end):
+        calls.append((start, end))
+        return letters_fetcher(start, end)
+
+    cache = BytesCache(block_size, counting_fetcher, len(string.ascii_letters))
+
+    assert cache._fetch(0, 5) == letters_fetcher(0, 5)
+    assert cache.miss_count == 1
+    assert cache.hit_count == 0
+    # the read ahead leaves the cache holding [0, 10)
+    assert calls == [(0, 10)]
+
+    # ends exactly at the end of the cached range: every byte is already here
+    assert cache._fetch(5, 10) == letters_fetcher(5, 10)
+    assert cache.hit_count == 1
+    assert cache.miss_count == 1
+    assert calls == [(0, 10)]
+
+
 def _fetcher(start, end):
     return b"0" * (end - start)
 
@@ -203,7 +286,7 @@ def test_cache_pickleable(Cache_imp):
     assert unpickled._fetch(0, 10) == b"0" * 10
 
 
-def test_first_cache():
+def test_first_cache_without_fetcher():
     c = FirstChunkCache(5, letters_fetcher, 52)
     assert c.cache is None
     assert c._fetch(12, 15) == letters_fetcher(12, 15)
@@ -212,6 +295,47 @@ def test_first_cache():
     assert c.cache == letters_fetcher(0, 5)
     c.fetcher = None
     assert c._fetch(1, 4) == letters_fetcher(1, 4)
+
+
+@pytest.mark.parametrize("payload", [b"payload", b""], ids=["nonempty", "empty"])
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("close_mode", ["explicit", "context", "exception"])
+def test_mmap_closes_with_file(payload, persistent, close_mode, tmp_path):
+    fs = MemoryFileSystem()
+    path = "/mmap-close-" + tmp_path.name
+    fs.pipe_file(path, payload)
+    stream = AbstractBufferedFile(
+        fs,
+        path,
+        mode="rb",
+        block_size=4,
+        cache_type="mmap",
+        cache_options={"location": str(tmp_path / "mapped") if persistent else None},
+    )
+    mapping = stream.cache.cache
+    try:
+        if close_mode == "explicit":
+            assert stream.read() == payload
+            stream.close()
+        elif close_mode == "context":
+            with stream:
+                assert stream.read() == payload
+        else:
+            with pytest.raises(RuntimeError, match="stop"):
+                with stream:
+                    assert stream.read() == payload
+                    raise RuntimeError("stop")
+        assert stream.closed
+        assert stream.cache is None
+        if payload:
+            assert mapping.closed
+            if persistent:
+                assert (tmp_path / "mapped").read_bytes() == payload
+        stream.close()
+    finally:
+        stream.close()
+        if payload:
+            mapping.close()
 
 
 def test_mmap_cache(mocker):
@@ -235,6 +359,116 @@ def test_mmap_cache(mocker):
     assert fetcher.call_count == 5
 
 
+@pytest.mark.parametrize("remove_location", [False, True])
+def test_mmap_cache_pickle_named_location(tmp_path, remove_location):
+    location = tmp_path / "cached"
+    cache = MMapCache(5, letters_fetcher, 52, location=str(location))
+    assert cache._fetch(6, 8) == letters_fetcher(6, 8)
+    payload = pickle.dumps(cache)
+    requested = cache.total_requested_bytes
+    cache.cache.close()
+    if remove_location:
+        location.unlink()
+
+    restored = pickle.loads(payload)
+    try:
+        assert restored._fetch(6, 8) == letters_fetcher(6, 8)
+        assert restored.total_requested_bytes == requested + (
+            5 if remove_location else 0
+        )
+    finally:
+        restored.cache.close()
+
+
+def test_mmap_cache_new_named_location_clears_shared_blocks(tmp_path):
+    blocks = {1}
+    cache = MMapCache(5, letters_fetcher, 52, str(tmp_path / "cached"), blocks)
+    try:
+        assert cache.blocks is blocks
+        assert blocks == set()
+        assert cache._fetch(6, 8) == letters_fetcher(6, 8)
+        assert blocks == {1}
+    finally:
+        cache.cache.close()
+
+
+def test_mmap_cache_http_reader_recreates_location(server, tmp_path):
+    import fsspec
+
+    location = tmp_path / "cached"
+    fs = fsspec.filesystem(
+        "http", headers={"head_ok": "true", "head_give_length": "true"}
+    )
+    with fs.open(
+        server.realfile,
+        block_size=5,
+        cache_type="mmap",
+        cache_options={"location": str(location)},
+    ) as reader:
+        expected = reader.read(2)
+        blocks = reader.cache.blocks
+        reader.cache.cache.close()
+    location.unlink()
+
+    with fs.open(
+        server.realfile,
+        block_size=5,
+        cache_type="mmap",
+        cache_options={"location": str(location), "blocks": blocks},
+    ) as reader:
+        try:
+            assert reader.read(2) == expected
+        finally:
+            reader.cache.cache.close()
+
+
+@pytest.mark.parametrize("use_multi_fetcher", [False, True])
+@pytest.mark.parametrize("failed_start", [0, 8])
+@pytest.mark.parametrize("short_read", [False, True])
+def test_mmap_cache_retries_failed_ranges(use_multi_fetcher, failed_start, short_read):
+    data = b"abcdefghijkl"
+    calls = []
+    failed = False
+
+    def fetcher(start, end):
+        nonlocal failed
+        calls.append((start, end))
+        if start == failed_start and not failed:
+            failed = True
+            if short_read:
+                return b""
+            raise OSError("temporary read failure")
+        return data[start:end]
+
+    def multi_fetcher(ranges):
+        for start, end in ranges:
+            yield fetcher(start, end)
+
+    cache = MMapCache(
+        4,
+        fetcher,
+        len(data),
+        multi_fetcher=multi_fetcher if use_multi_fetcher else None,
+    )
+    try:
+        # A cached middle block splits the next read into two missing ranges.
+        assert cache._fetch(4, 7) == data[4:7]
+        with pytest.raises(IndexError if short_read else OSError):
+            cache._fetch(0, 11)
+
+        assert cache.blocks == ({1} if failed_start == 0 else {0, 1})
+        calls.clear()
+        assert cache._fetch(0, 11) == data[:11]
+        assert calls == ([(0, 4), (8, 12)] if failed_start == 0 else [(8, 12)])
+        assert cache.blocks == {0, 1, 2}
+
+        calls.clear()
+        assert cache._fetch(0, 11) == data[:11]
+        assert calls == []
+    finally:
+        cache.cache.close()
+
+
 @pytest.mark.parametrize(
     "size_requests",
     [[(0, 30), (0, 35), (51, 52)], [(0, 1), (1, 11), (1, 52)], [(0, 52), (11, 15)]],
@@ -247,6 +481,21 @@ def test_cache_basic(Cache_imp, blocksize, size_requests):
         result = cache._fetch(start, end)
         expected = string.ascii_letters[start:end].encode()
         assert result == expected
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_known_read_starting_outside_a_part(strict):
+    parts = {(0, 10): b"0" * 10, (40, 50): b"3" * 10}
+    c = caches["parts"](None, None, 100, parts, strict=strict)
+
+    # a read that starts in the gap has no first byte to return, in either mode
+    with pytest.raises(ValueError):
+        c._fetch(20, 30)
+    with pytest.raises(ValueError):
+        c._fetch(35, 45)
+
+    # a read that starts inside a part is unaffected
+    assert c._fetch(5, 10) == b"0" * 5
 
 
 @pytest.mark.parametrize("strict", [True, False])
@@ -280,6 +529,37 @@ def test_known(strict, sort):
         assert c._fetch(25, 35) == b"2" * 5 + b"\x00" * 5
         assert c._fetch(25, 45) == b"2" * 5 + b"\x00" * 10 + b"3" * 5
     assert c.miss_count
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_known_parts_read_beginning_outside_a_part(strict):
+    """
+    A read that begins outside every known byte range cannot be served: there
+    are no bytes to return and, per the ``strict`` docstring, such a read is
+    not zero padded either, so it must raise instead of quietly handing back
+    bytes from the wrong offsets.
+    """
+    parts = {
+        (10, 20): b"1" * 10,
+        (20, 30): b"2" * 10,
+    }
+    c = caches["parts"](None, None, 100, parts, strict=strict)
+    assert c.data == {(10, 30): b"1" * 10 + b"2" * 10}  # got consolidated
+
+    # these used to be answered with bytes taken from the wrong offsets
+    for start, stop in [(5, 15), (5, 25), (9, 11)]:
+        hits = c.hit_count
+        with pytest.raises(ValueError):
+            c._fetch(start, stop)
+        assert c.hit_count == hits, "a read that cannot be served is not a hit"
+
+    # a read reaching past the end of the known data still fails
+    with pytest.raises(ValueError):
+        c._fetch(5, 100)
+
+    # reads that do begin inside a part are unaffected
+    assert c._fetch(12, 18) == b"1" * 6
+    assert c._fetch(25, 30) == b"2" * 5
 
 
 def test_background(server, monkeypatch):
@@ -361,3 +641,118 @@ def test_cache_kwargs(mocker):
     # It is a random location that cannot be predicted.
     # The important thing is the 'overwrite' kwarg
     fs.fs.put.assert_called_with(fs.fs.put.call_args[0][0], ["/test"], overwrite=True)
+
+
+def test_adaptive_cache_with_async_fetcher():
+    data = string.ascii_letters.encode()
+
+    cache = caches["adaptive"](
+        8,
+        letters_fetcher,
+        len(data),
+        # Keep this below the default prefetch minimum so behavior is deterministic
+        # and bounded for unit testing.
+        concurrency=2,
+        max_prefetch_size=64,
+    )
+    try:
+        assert cache._fetch(0, 0) == b""
+        assert cache._fetch(0, 5) == data[0:5]
+        assert cache._fetch(5, 12) == data[5:12]
+        assert cache._fetch(12, 20) == data[12:20]
+    finally:
+        cache.close()
+
+
+def test_adaptive_cache_registered():
+    assert "adaptive" in caches
+
+
+def test_adaptive_cache_fallback_when_prefetcher_init_fails(monkeypatch):
+    import fsspec.prefetcher as prefetcher_mod
+
+    class FailingPrefetcher:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("prefetch init failed")
+
+    monkeypatch.setattr(prefetcher_mod, "BackgroundPrefetcher", FailingPrefetcher)
+
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
+
+    # On prefetch setup failure, adaptive must still serve reads through readahead.
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]
+    assert cache._prefetcher is None
+
+
+def test_adaptive_cache_selected_in_open_flow():
+    from fsspec.spec import AbstractBufferedFile
+
+    data = string.ascii_letters.encode()
+
+    class TestFile(AbstractBufferedFile):
+        DEFAULT_BLOCK_SIZE = 8
+
+        def _fetch_range(self, start, end):
+            return data[start:end]
+
+    with TestFile(None, "afile", mode="rb", cache_type="adaptive", size=len(data)) as f:
+        assert f.cache.name == "adaptive"
+        assert f.read(12) == data[:12]
+
+
+def test_adaptive_cache_fallback_without_loop():
+    data = string.ascii_letters.encode()
+    cache = caches["adaptive"](8, letters_fetcher, len(data))
+
+    assert cache._fetch(0, 10) == data[0:10]
+    assert cache._fetch(10, 17) == data[10:17]
+
+
+@pytest.mark.parametrize("size", [0, 3, 8])
+@pytest.mark.parametrize("warm", [False, True])
+def test_first_cache_eof_does_not_fetch(size, warm):
+    data = b"abcdefgh"[:size]
+    requests = []
+
+    def fetch(start, end):
+        requests.append((start, end))
+        return data[start:end]
+
+    cache = FirstChunkCache(4, fetch, size)
+    if warm and size:
+        assert cache._fetch(0, size) == data
+    before = requests.copy()
+    counts = (cache.hit_count, cache.miss_count, cache.total_requested_bytes)
+    for end in (None, size, size + 1, size + 10):
+        assert cache._fetch(size, end) == b""
+    assert requests == before
+    assert (cache.hit_count, cache.miss_count, cache.total_requested_bytes) == counts
+
+
+def test_first_cache_buffered_gzip_eof():
+    import gzip
+
+    payload = b"example user data\n" * 100
+    compressed = gzip.compress(payload)
+    fs = MemoryFileSystem()
+    fs.pipe("/first-cache-eof.gz", compressed)
+    with AbstractBufferedFile(
+        fs, "/first-cache-eof.gz", block_size=16, cache_type="first"
+    ) as f:
+        requests = []
+        fetch = f.cache.fetcher
+
+        def tracked_fetch(start, end):
+            requests.append((start, end))
+            return fetch(start, end)
+
+        f.cache.fetcher = tracked_fetch
+        with gzip.GzipFile(fileobj=f) as z:
+            assert z.read() == payload
+        assert all(start < end for start, end in requests)
+        before = requests.copy()
+        assert f.read(1) == b""
+        assert f.read(10) == b""
+        assert requests == before

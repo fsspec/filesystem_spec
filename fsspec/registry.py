@@ -161,6 +161,10 @@ known_implementations = {
         "class": "fsspec.implementations.http.HTTPFileSystem",
         "err": 'HTTPFileSystem requires "requests" and "aiohttp" to be installed',
     },
+    "ia": {
+        "class": "fsspec.implementations.ia.InternetArchiveFileSystem",
+        "err": 'InternetArchiveFileSystem requires "requests" and "aiohttp" to be installed',
+    },
     "jlab": {
         "class": "fsspec.implementations.jupyter.JupyterFileSystem",
         "err": "Jupyter FS requires requests to be installed",
@@ -232,7 +236,7 @@ known_implementations = {
     "wandb": {"class": "wandbfs.WandbFS", "err": "Install wandbfs to access wandb"},
     "webdav": {
         "class": "webdav4.fsspec.WebdavFileSystem",
-        "err": "Install webdav4 to access WebDAV",
+        "err": "Install webdav4 or webdav-rfc4918 to access WebDAV",
     },
     "webhdfs": {
         "class": "fsspec.implementations.webhdfs.WebHDFS",

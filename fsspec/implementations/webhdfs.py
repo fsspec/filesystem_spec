@@ -291,7 +291,9 @@ class WebHDFS(AbstractFileSystem):
         infos = out.json()["FileStatuses"]["FileStatus"]
         for info in infos:
             self._process_info(info)
-            info["name"] = path.rstrip("/") + "/" + info["pathSuffix"]
+            # LISTSTATUS on a file returns that file with an empty pathSuffix
+            suffix = info["pathSuffix"]
+            info["name"] = path.rstrip("/") + "/" + suffix if suffix else path
         if detail:
             return sorted(infos, key=lambda i: i["name"])
         else:
@@ -356,6 +358,8 @@ class WebHDFS(AbstractFileSystem):
             posix epresentation or permission, give as oct string, e.g, '777'
             or 0o777
         """
+        if isinstance(mod, int):
+            mod = format(mod, "o")
         self._call("SETPERMISSION", method="put", path=path, permission=mod)
 
     def chown(self, path, owner=None, group=None):
@@ -390,7 +394,9 @@ class WebHDFS(AbstractFileSystem):
         self.mkdir(path)
 
     def mv(self, path1, path2, **kwargs):
-        self._call("RENAME", method="put", path=path1, destination=path2)
+        response = self._call("RENAME", method="put", path=path1, destination=path2)
+        if response.json()["boolean"] is not True:
+            raise OSError(f"WebHDFS failed to rename {path1!r} to {path2!r}")
 
     def rm(self, path, recursive=False, **kwargs):
         self._call(

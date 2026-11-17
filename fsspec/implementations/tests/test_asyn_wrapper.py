@@ -245,3 +245,29 @@ def test_get_does_not_write_above_destination(tmp_path):
         pass
 
     assert not outside.exists(), f"async copy wrote {outside}, above {dest}"
+
+
+def test_paths_normalized_like_wrapped_fs():
+    fs = fsspec.filesystem("memory")
+    fs.pipe({"/norm/a": b"a", "/norm/sub/b": b"b"})
+    async_fs = AsyncFileSystemWrapper(fs, asynchronous=False)
+
+    assert async_fs._strip_protocol("memory://norm/a") == "/norm/a"
+    assert async_fs._parent("memory://norm/a") == "/norm"
+
+    dirfs = fsspec.filesystem("dir", path="memory://norm", fs=async_fs)
+    assert dirfs.ls("", detail=False) == ["a", "sub"]
+    assert dirfs.find("") == ["a", "sub/b"]
+
+
+@pytest.mark.asyncio
+async def test_walk():
+    fs = fsspec.filesystem("memory")
+    fs.pipe({"/walk/a": b"a", "/walk/sub/b": b"b"})
+    async_fs = AsyncFileSystemWrapper(fs, asynchronous=True)
+
+    walked = [item async for item in async_fs._walk("/walk")]
+    assert walked == list(fs.walk("/walk"))
+
+    walked = [item async for item in async_fs._walk("/walk", maxdepth=1)]
+    assert walked == [("/walk", ["sub"], ["a"])]

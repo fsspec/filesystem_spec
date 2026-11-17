@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 
@@ -158,6 +159,40 @@ def test_info(server):
     assert fs.size("b") == 5
     assert fs.size("c/d") == 6
     assert fs.info("e")["size"] == len(data)
+
+
+def test_size_of_whole_file_reference(m):
+    m.pipe("/data/0", data)
+    refs = {"a": ["memory://data/0"], "b": ("memory://data/0",), "c": b"data"}
+    fs = fsspec.filesystem("reference", fo=refs, fs=m)
+    assert fs.size("a") == len(data)
+    assert fs.size("b") == len(data)
+    assert fs.sizes(["a", "c"]) == [len(data), 4]
+    assert fs.du("") == 2 * len(data) + 4
+
+
+def test_size_of_inline_data_is_the_decoded_length():
+    # an inline reference is stored in an encoded form ("base64:" or text),
+    # so its size is the length cat() returns, not the length of the encoding
+    binary = b"\x00\xff not utf-8 decodable"
+    refs = {
+        "a": "base64:" + base64.b64encode(binary).decode(),
+        "b": b"base64:" + base64.b64encode(binary),
+        "c": binary,
+        "d": "héllo",
+    }
+    fs = fsspec.filesystem("reference", fo=refs)
+    assert fs.cat("a") == binary
+    assert fs.size("a") == len(binary)
+    assert fs.sizes(["a", "b", "c"]) == 3 * [len(binary)]
+    assert fs.size("d") == len("héllo".encode())
+    assert {e["name"]: e["size"] for e in fs.ls("", detail=True)} == {
+        "a": len(binary),
+        "b": len(binary),
+        "c": len(binary),
+        "d": len("héllo".encode()),
+    }
+    assert fs.du("") == 3 * len(binary) + len("héllo".encode())
 
 
 def test_mutable(server, m):
@@ -442,6 +477,64 @@ def test_get_sync(tmpdir):
     assert (tmpdir / "c" / "d").read_binary() == b"123456"
 
 
+@pytest.mark.parametrize(
+    ("maxdepth", "expected"),
+    [
+        (1, {"shallow.txt": b"shallow"}),
+        (2, {"shallow.txt": b"shallow", "deep/file.txt": b"deep"}),
+        (
+            None,
+            {
+                "shallow.txt": b"shallow",
+                "deep/file.txt": b"deep",
+                "deep/nested/file.txt": b"nested",
+            },
+        ),
+    ],
+)
+def test_get_respects_maxdepth(tmp_path, maxdepth, expected):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": b"deep",
+        "dir/deep/nested/file.txt": b"nested",
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=maxdepth)
+
+    actual = {
+        path.relative_to(dest).as_posix(): path.read_bytes()
+        for path in dest.rglob("*")
+        if path.is_file()
+    }
+    assert actual == expected
+
+
+def test_get_maxdepth_skips_deeper_remote_references(tmp_path):
+    refs = {
+        "dir/shallow.txt": b"shallow",
+        "dir/deep/file.txt": ("memory://maxdepth-regression-missing", 0, 4),
+    }
+    fs = ReferenceFileSystem(fo=refs, skip_instance_cache=True)
+    dest = tmp_path / "dest"
+
+    fs.get("dir", str(dest), recursive=True, maxdepth=1)
+
+    assert (dest / "shallow.txt").read_bytes() == b"shallow"
+    assert not (dest / "deep" / "file.txt").exists()
+
+
+@pytest.mark.parametrize("maxdepth", [0, -1])
+def test_get_rejects_invalid_maxdepth(tmp_path, maxdepth):
+    fs = ReferenceFileSystem(
+        fo={"dir/shallow.txt": b"shallow"}, skip_instance_cache=True
+    )
+
+    with pytest.raises(ValueError, match="maxdepth must be at least 1"):
+        fs.get("dir", str(tmp_path / "dest"), recursive=True, maxdepth=maxdepth)
+
+
 def test_get_does_not_write_above_destination(tmp_path):
     # Reference keys come from the spec, so a key holding ".." must not
     # place the copy above the destination the caller asked for.
@@ -619,6 +712,41 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", end=-100) == other[4:10][:-100]
 
 
+@pytest.mark.parametrize("offset", [None, 2])
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_cat_file_forwards_options(m, mocker, offset, asynchronous):
+    content = b"0123456789"
+    m.pipe_file("target", content)
+    url = "memory://target"
+    reference = [url] if offset is None else [url, offset, 5]
+    fs = ReferenceFileSystem(
+        {"ref": reference}, fs=m, asynchronous=asynchronous, skip_instance_cache=True
+    )
+    method = "_cat_file" if asynchronous else "cat_file"
+    spy = mocker.spy(fs.fss["memory"], method)
+    options = {"headers": {"X-Test": "read-options"}}
+
+    if asynchronous:
+        result = await fs._cat_file("ref", start=1, end=3, **options)
+    else:
+        result = fs.cat_file("ref", start=1, end=3, **options)
+
+    start = (offset or 0) + 1
+    assert result == content[start : start + 2]
+    spy.assert_called_once_with(url, start=start, end=start + 2, **options)
+
+
+def test_cat_file_http_headers(server):
+    http = fsspec.filesystem("http", skip_instance_cache=True)
+    fs = ReferenceFileSystem({"ref": [server.realfile]}, fs=http)
+    try:
+        result = fs.cat_file("ref", headers={"give_path": "true"})
+        assert json.loads(result) == {"path": "/index/realfile"}
+    finally:
+        http.close_session(http.loop, http._session)
+
+
 @pytest.mark.asyncio
 async def test_async_cat_file_ranges():
     fsspec.get_filesystem_class("http").clear_instance_cache()
@@ -707,6 +835,36 @@ def test_cat_missing(m, fo):
 
     out = mapper.getitems(["c", "d"], on_error="omit")
     assert list(out) == ["c"]
+
+
+@pytest.mark.parametrize(
+    "reference", [["memory://missing"], ["memory://missing", 1, 3]]
+)
+@pytest.mark.parametrize("path", ["missing", ["missing"]])
+def test_cat_omit_unreachable(m, reference, path):
+    fs = fsspec.filesystem("reference", fo={"missing": reference})
+
+    assert fs.cat(path, on_error="omit") == {}
+
+
+def test_cat_omit_unreachable_mixed(m):
+    m.pipe("data", b"0123456789")
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "inline": b"inline data",
+            "whole": ["memory://data"],
+            "range": ["memory://data", 1, 3],
+            "missing_whole": ["memory://missing"],
+            "missing_range": ["memory://missing", 1, 3],
+        },
+    )
+
+    assert fs.cat([*fs.references, "unknown"], on_error="omit") == {
+        "inline": b"inline data",
+        "whole": b"0123456789",
+        "range": b"123",
+    }
 
 
 def test_df_single(m):
