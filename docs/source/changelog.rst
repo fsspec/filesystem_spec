@@ -17,6 +17,10 @@ Enhancements
 
 Fixes
 
+- Avoid empty backend range requests at EOF with the first-chunk cache.
+
+- Forward per-call reference ``cat_file`` options to the target filesystem.
+
 - Read committed SFTP files at their original paths within transactions.
 
 - Honor the per-file ``cache_type`` option when opening FTP files.
@@ -121,6 +125,9 @@ Fixes
 
 - Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 
+- Add ``cache_metadata_name=`` to the caching filesystems so the metadata file can
+  be given a name that a remote file stored with ``same_names=True`` cannot replace
+
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
 - Complete DBFS partial-delete retries without re-raising a recovered error.
@@ -183,6 +190,8 @@ Fixes
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
+
+- Keep the leading delimiter in ``read_block(..., split_before=True)`` when reading to the end of the file with ``length=None``.
 
 - Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
