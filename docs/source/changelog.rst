@@ -17,6 +17,9 @@ Enhancements
 
 Fixes
 
+- Defer local append writes until transaction commit and preserve the original
+  file when the transaction is discarded.
+
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.

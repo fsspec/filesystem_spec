@@ -398,13 +398,14 @@ class LocalFileOpener(io.IOBase):
         self.fs = fs
         self.f = None
         self.autocommit = autocommit
+        self._original_mode = None
         self.compression = get_compression(path, compression)
         self.blocksize = io.DEFAULT_BUFFER_SIZE
         self._open()
 
     def _open(self):
         if self.f is None or self.f.closed:
-            if self.autocommit or "w" not in self.mode:
+            if self.autocommit or ("w" not in self.mode and "a" not in self.mode):
                 self.f = open(self.path, mode=self.mode)
                 if self.compression:
                     compress = compr[self.compression]
@@ -414,7 +415,14 @@ class LocalFileOpener(io.IOBase):
                 i, name = tempfile.mkstemp()
                 os.close(i)  # we want normal open and normal buffered file
                 self.temp = name
-                self.f = open(name, mode=self.mode)
+                try:
+                    if "a" in self.mode and os.path.exists(self.path):
+                        shutil.copy2(self.path, name)
+                        self._original_mode = stat.S_IMODE(os.stat(name).st_mode)
+                    self.f = open(name, mode=self.mode)
+                except BaseException:
+                    os.remove(name)
+                    raise
             if "r" in self.mode:
                 self.size = self.f.seek(0, 2)
                 self.f.seek(0)
@@ -467,8 +475,10 @@ class LocalFileOpener(io.IOBase):
         else:
             # If PermissionError is not raised, permissions can be set.
             try:
-                mask = 0o666
-                os.chmod(self.path, mask & ~get_umask(mask))
+                mask = self._original_mode
+                if mask is None:
+                    mask = 0o666 & ~get_umask(0o666)
+                os.chmod(self.path, mask)
             except RuntimeError:
                 pass
 
