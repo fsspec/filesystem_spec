@@ -14,6 +14,8 @@ from fsspec.caching import (
     register_cache,
 )
 from fsspec.implementations.cached import WholeFileCacheFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
+from fsspec.spec import AbstractBufferedFile
 
 
 def test_cache_getitem(Cache_imp):
@@ -66,6 +68,30 @@ def test_block_cache_lru():
     assert cache.hit_count == 5
     assert cache.miss_count == 3
     assert cache.total_requested_bytes == block_size * cache.miss_count
+
+
+@pytest.mark.parametrize("cache_cls", [BlockCache, BackgroundBlockCache])
+@pytest.mark.parametrize("size", [1, 6, 8])
+def test_block_cache_final_range(cache_cls, size):
+    data = b"abcdefgh"[:size]
+    requests = []
+
+    def fetch(start, end):
+        assert 0 <= start < end <= len(data)
+        requests.append((start, end))
+        return data[start:end]
+
+    cache = cache_cls(4, fetch, len(data))
+    try:
+        assert cache._fetch(0, None) == data
+        expected = [(start, min(start + 4, size)) for start in range(0, size, 4)]
+        assert requests == expected
+        assert cache.total_requested_bytes == size
+        assert cache._fetch(size - 1, size) == data[-1:]
+        assert requests == expected
+    finally:
+        if isinstance(cache, BackgroundBlockCache):
+            cache.close()
 
 
 def test_block_cache_lru_no_redundant_reads():
@@ -269,6 +295,47 @@ def test_first_cache_without_fetcher():
     assert c.cache == letters_fetcher(0, 5)
     c.fetcher = None
     assert c._fetch(1, 4) == letters_fetcher(1, 4)
+
+
+@pytest.mark.parametrize("payload", [b"payload", b""], ids=["nonempty", "empty"])
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("close_mode", ["explicit", "context", "exception"])
+def test_mmap_closes_with_file(payload, persistent, close_mode, tmp_path):
+    fs = MemoryFileSystem()
+    path = "/mmap-close-" + tmp_path.name
+    fs.pipe_file(path, payload)
+    stream = AbstractBufferedFile(
+        fs,
+        path,
+        mode="rb",
+        block_size=4,
+        cache_type="mmap",
+        cache_options={"location": str(tmp_path / "mapped") if persistent else None},
+    )
+    mapping = stream.cache.cache
+    try:
+        if close_mode == "explicit":
+            assert stream.read() == payload
+            stream.close()
+        elif close_mode == "context":
+            with stream:
+                assert stream.read() == payload
+        else:
+            with pytest.raises(RuntimeError, match="stop"):
+                with stream:
+                    assert stream.read() == payload
+                    raise RuntimeError("stop")
+        assert stream.closed
+        assert stream.cache is None
+        if payload:
+            assert mapping.closed
+            if persistent:
+                assert (tmp_path / "mapped").read_bytes() == payload
+        stream.close()
+    finally:
+        stream.close()
+        if payload:
+            mapping.close()
 
 
 def test_mmap_cache(mocker):
@@ -641,3 +708,51 @@ def test_adaptive_cache_fallback_without_loop():
 
     assert cache._fetch(0, 10) == data[0:10]
     assert cache._fetch(10, 17) == data[10:17]
+
+
+@pytest.mark.parametrize("size", [0, 3, 8])
+@pytest.mark.parametrize("warm", [False, True])
+def test_first_cache_eof_does_not_fetch(size, warm):
+    data = b"abcdefgh"[:size]
+    requests = []
+
+    def fetch(start, end):
+        requests.append((start, end))
+        return data[start:end]
+
+    cache = FirstChunkCache(4, fetch, size)
+    if warm and size:
+        assert cache._fetch(0, size) == data
+    before = requests.copy()
+    counts = (cache.hit_count, cache.miss_count, cache.total_requested_bytes)
+    for end in (None, size, size + 1, size + 10):
+        assert cache._fetch(size, end) == b""
+    assert requests == before
+    assert (cache.hit_count, cache.miss_count, cache.total_requested_bytes) == counts
+
+
+def test_first_cache_buffered_gzip_eof():
+    import gzip
+
+    payload = b"example user data\n" * 100
+    compressed = gzip.compress(payload)
+    fs = MemoryFileSystem()
+    fs.pipe("/first-cache-eof.gz", compressed)
+    with AbstractBufferedFile(
+        fs, "/first-cache-eof.gz", block_size=16, cache_type="first"
+    ) as f:
+        requests = []
+        fetch = f.cache.fetcher
+
+        def tracked_fetch(start, end):
+            requests.append((start, end))
+            return fetch(start, end)
+
+        f.cache.fetcher = tracked_fetch
+        with gzip.GzipFile(fileobj=f) as z:
+            assert z.read() == payload
+        assert all(start < end for start, end in requests)
+        before = requests.copy()
+        assert f.read(1) == b""
+        assert f.read(10) == b""
+        assert requests == before
