@@ -8,7 +8,7 @@ import pickle
 import posixpath
 import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
@@ -1238,6 +1238,47 @@ def test_copy_errors(tmpdir):
             make_path_posix(os.path.join(dest2, "afile1")),
             make_path_posix(os.path.join(dest2, "afile2")),
         ]
+
+
+@pytest.mark.parametrize("mode", ["a", "ab"])
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_transaction_append(tmp_path, mode, existing, rollback):
+    path = tmp_path / "append.txt"
+    original = b"original" if existing else b""
+    if existing:
+        path.write_bytes(original)
+        path.chmod(0o600)
+    fs = LocalFileSystem()
+
+    with pytest.raises(RuntimeError, match="abort") if rollback else nullcontext():
+        with fs.transaction as transaction:
+            with fs.open(path, mode) as f:
+                f.write(b" appended" if "b" in mode else " appended")
+            temp = transaction.files[-1].temp
+            assert path.exists() == existing
+            if existing:
+                assert path.read_bytes() == original
+            if rollback:
+                raise RuntimeError("abort")
+
+    assert path.exists() == (existing or not rollback)
+    if path.exists():
+        assert path.read_bytes() == original + (b"" if rollback else b" appended")
+        if existing and not WIN:
+            assert path.stat().st_mode & 0o777 == 0o600
+    assert not Path(temp).exists()
+
+
+def test_transaction_append_open_failure_cleans_temp(tmp_path, monkeypatch):
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(staging))
+    fs = LocalFileSystem()
+    with pytest.raises((IsADirectoryError, PermissionError)):
+        with fs.transaction:
+            fs.open(tmp_path, "ab")
+    assert list(staging.iterdir()) == []
 
 
 def test_transaction(tmpdir):
