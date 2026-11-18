@@ -678,7 +678,11 @@ def test_cat_file_range(server):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     urla = server.realfile
     assert h.cat(urla, start=1, end=10) == data[1:10]
-    assert h.cat(urla, start=1) == data[1:]
+
+    # an open-ended window that starts inside the file cannot be told apart
+    # from the whole file when the response carries no Content-Range
+    with pytest.raises(ValueError):
+        h.cat(urla, start=1)
 
     assert h.cat(urla, start=-10) == data[-10:]
     assert h.cat(urla, start=-10, end=-2) == data[-10:-2]
@@ -706,6 +710,15 @@ def test_cat_file_range_when_server_ignores_range(server, headers):
     # that served more of the range than was asked for
     with pytest.raises(ValueError):
         h.cat_file(urla, start=1, end=10)
+
+    # the same holds for an open-ended window and for a window that runs past
+    # the end of the file: the body may be the whole file, and nothing in the
+    # response says where it starts
+    with pytest.raises(ValueError):
+        h.cat_file(urla, start=1)
+
+    with pytest.raises(ValueError):
+        h.cat_file(urla, start=1, end=len(data) + 100)
 
 
 @pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (-1, -1)])
