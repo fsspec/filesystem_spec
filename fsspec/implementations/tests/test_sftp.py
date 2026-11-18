@@ -382,6 +382,55 @@ def test_makedirs_with_url(fake_client, tmp_path, protocol):
         fs.makedirs(url)
 
 
+@pytest.mark.parametrize("detail", [False, True])
+@pytest.mark.parametrize("path", ["", ".", "/", "parent", "parent/", "/parent/"])
+def test_ls_preserves_parent_path(fake_client, tmp_path, path, detail):
+    (tmp_path / "afile").write_bytes(b"content")
+    (tmp_path / "subdir").mkdir()
+    entries = [
+        paramiko.SFTPAttributes.from_stat((tmp_path / name).stat(), name)
+        for name in ["subdir", "afile"]
+    ]
+
+    class FakeSFTP:
+        def listdir_iter(self, requested_path):
+            assert requested_path == path
+            return iter(entries)
+
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = FakeSFTP()
+    result = fs.ls(path, detail=detail)
+    prefix = path.rstrip("/") + "/" if path else ""
+    if detail:
+        assert [item["name"] for item in result] == [
+            prefix + "subdir",
+            prefix + "afile",
+        ]
+        assert [item["type"] for item in result] == ["directory", "file"]
+        assert result[1]["size"] == len(b"content")
+    else:
+        assert result == [prefix + "afile", prefix + "subdir"]
+
+
+def test_info_without_stat_filename(fake_client, tmp_path):
+    path = tmp_path / "afile"
+    path.write_bytes(b"content")
+    attributes = paramiko.SFTPAttributes.from_stat(path.stat())
+    assert not hasattr(attributes, "filename")
+
+    class FakeSFTP:
+        def stat(self, requested_path):
+            assert requested_path == "afile"
+            return attributes
+
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = FakeSFTP()
+    result = fs.info("afile")
+    assert result["name"] == "afile"
+    assert result["size"] == len(b"content")
+    assert result["type"] == "file"
+
+
 @pytest.mark.parametrize("create_parents", [True, False])
 @pytest.mark.parametrize("mode", [0o700, 0o750, None])
 def test_mkdir_permissions(fake_client, tmp_path, create_parents, mode):
