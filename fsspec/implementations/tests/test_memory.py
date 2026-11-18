@@ -185,6 +185,23 @@ def test_text_read_handle_rejects_writes(m):
     assert m.cat_file("file") == b"abc"
 
 
+def test_closed_read_handle_does_not_make_writes_copy(m):
+    # built here, so that only the filesystem holds these bytes
+    m.pipe_file("file", bytes(range(10)))
+    with m.open("file", "rb") as f:
+        assert f.read(2) == b"\x00\x01"
+    buffer = id(m.store["/file"].getvalue())
+
+    with m.open("file", "r+b") as writer:
+        writer.write(b"XY")
+
+    # the closed reader is still referenced here; had it kept its share of
+    # the bytes, CPython would have copied the file before writing to it
+    assert f.closed
+    assert id(m.store["/file"].getvalue()) == buffer
+    assert m.cat_file("file") == b"XY" + bytes(range(2, 10))
+
+
 def test_read_handle_buffer_is_read_only(m):
     m.pipe_file("file", b"0123456789")
 

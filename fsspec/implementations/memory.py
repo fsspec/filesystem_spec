@@ -518,5 +518,11 @@ class _ReadOnlyMemoryFile(MemoryFile):
         # write through it would be lost without an error
         return memoryview(self.getvalue())
 
+    def close(self):
+        # unlike a stored file, nothing else uses this handle, so closing it
+        # can release its share of the bytes; otherwise the next write to the
+        # stored file would have to copy them first
+        BytesIO.close(self)
+
     def commit(self):
         pass
