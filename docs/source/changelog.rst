@@ -17,6 +17,11 @@ Enhancements
 
 Fixes
 
+- Handle a single PathLike source in the asynchronous methods like its string
+  form, as the synchronous methods do: ``get`` and ``put`` keep the directory
+  tree instead of flattening it, and ``copy``, ``mv``, ``rm``, ``cat`` and
+  ``expand_path`` no longer raise ``TypeError``.
+
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
 
