@@ -2170,3 +2170,28 @@ def test_callback_reports_download_async(tmp_path, protocol):
         assert callback.sizes == []
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("impl", ["blockcache", "cached"])
+@pytest.mark.parametrize("missing", ["blocksize", "_fetch_range"])
+def test_rejected_blockcache_handle_is_closed(tmp_path, monkeypatch, impl, missing):
+    import io
+
+    target = fsspec.filesystem("memory")
+    target.pipe("/unsupported", b"data")
+    handle = io.BytesIO(b"data")
+    handle.size = 4
+    if missing != "blocksize":
+        handle.blocksize = 4
+    if missing != "_fetch_range":
+        handle._fetch_range = lambda start, end: b"data"[start:end]
+    monkeypatch.setattr(target, "_open", lambda *args, **kwargs: handle)
+    fs = fsspec.filesystem(
+        impl, fs=target, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    try:
+        with pytest.raises(TypeError, match="simplecache or filecache"):
+            fs.cat_file("/unsupported")
+        assert handle.closed
+    finally:
+        handle.close()
