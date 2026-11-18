@@ -17,10 +17,10 @@ Enhancements
 
 Fixes
 
-- Handle a single PathLike source in the asynchronous methods like its string
-  form, as the synchronous methods do: ``get`` and ``put`` keep the directory
-  tree instead of flattening it, and ``copy``, ``mv``, ``rm``, ``cat`` and
-  ``expand_path`` no longer raise ``TypeError``.
+- Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
+
+- Handle a single Path in the asynchronous methods like its string
+  form, as the synchronous methods do
 
 - Report the root of an archive without members as a directory in ``info``,
   ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
