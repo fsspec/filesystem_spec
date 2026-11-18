@@ -167,16 +167,17 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
-        if path in self.store:
+        filelike = self.store.get(path)
+        if filelike is not None:
             # there is a key with this exact name
             if not detail:
                 return [path]
             return [
                 {
                     "name": path,
-                    "size": self.store[path].size,
+                    "size": filelike.size,
                     "type": "file",
-                    "created": self.store[path].created.timestamp(),
+                    "created": filelike.created.timestamp(),
                 }
             ]
         paths = set()
@@ -186,12 +187,15 @@ class MemoryFileSystem(AbstractFileSystem):
             if p2.startswith(starter):
                 if "/" not in p2[len(starter) :]:
                     # exact child
+                    filelike = self.store.get(p2)
+                    if filelike is None:
+                        continue  # removed since the keys were snapshotted
                     out.append(
                         {
                             "name": p2,
-                            "size": self.store[p2].size,
+                            "size": filelike.size,
                             "type": "file",
-                            "created": self.store[p2].created.timestamp(),
+                            "created": filelike.created.timestamp(),
                         }
                     )
                 elif len(p2) > len(starter):
