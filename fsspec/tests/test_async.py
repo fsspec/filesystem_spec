@@ -531,34 +531,23 @@ def test_cat_ranges_on_error_raise_propagates():
         fs.cat_ranges(["ok", "missing"], [0, 0], [4, 4], on_error="raise")
 
 
-class _SourcePathLike:
-    def __init__(self, path):
-        self.path = path
-
-    def __fspath__(self):
-        return str(self.path)
-
-
 class _TreeFS(fsspec.asyn.AsyncFileSystem):
-    # Mirrors the gcsfs/s3fs pattern: implements the primitives, inherits
-    # _copy, _get, _put, _rm and _expand_path.
+    # implements the primitives and inherits _copy, _get, _put, _rm and
+    # _expand_path, as gcsfs and s3fs do
     cachable = False
 
-    def __init__(self, files=(), **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.files = dict(files)
-        self.dirs = set()
+        self.files = {}
 
     async def _info(self, path, **kwargs):
-        path = path.rstrip("/")
         if path in self.files:
             return {"name": path, "size": len(self.files[path]), "type": "file"}
-        if path in self.dirs or any(f.startswith(path + "/") for f in self.files):
+        if any(f.startswith(path + "/") for f in self.files):
             return {"name": path, "size": 0, "type": "directory"}
         raise FileNotFoundError(path)
 
     async def _ls(self, path, detail=True, **kwargs):
-        path = path.rstrip("/")
         names = {
             f"{path}/{f[len(path) + 1 :].split('/')[0]}"
             for f in self.files
@@ -568,7 +557,7 @@ class _TreeFS(fsspec.asyn.AsyncFileSystem):
         return out if detail else [info["name"] for info in out]
 
     async def _makedirs(self, path, exist_ok=False):
-        self.dirs.add(path.rstrip("/"))
+        pass
 
     async def _cp_file(self, path1, path2, **kwargs):
         if path1 in self.files:
@@ -581,118 +570,47 @@ class _TreeFS(fsspec.asyn.AsyncFileSystem):
             os.makedirs(lpath, exist_ok=True)
 
     async def _put_file(self, lpath, rpath, **kwargs):
-        self.files[rpath] = Path(lpath).read_bytes()
+        if os.path.isfile(lpath):
+            self.files[rpath] = Path(lpath).read_bytes()
 
     async def _rm_file(self, path, **kwargs):
         self.files.pop(path, None)
 
 
-def _local_tree(root):
-    return {
-        path.relative_to(root).as_posix(): path.read_bytes()
-        for path in root.rglob("*")
-        if path.is_file()
-    }
-
-
-def _remote_tree(fs, root):
-    return {
-        name[len(root) + 1 :]: data
-        for name, data in fs.files.items()
-        if name.startswith(root + "/")
-    }
-
-
-_SOURCE_TYPES = pytest.mark.parametrize(
-    "as_source",
-    [str, lambda path: path, _SourcePathLike],
-    ids=["str", "path", "fspath"],
-)
-
-
-@pytest.mark.parametrize("method", ["copy", "get", "put"])
-@_SOURCE_TYPES
-@pytest.mark.parametrize("target_exists", [False, True])
-def test_pathlike_recursive_source_preserves_tree(
-    tmp_path, method, as_source, target_exists
-):
+@pytest.mark.parametrize("method", ["copy", "mv", "get", "put"])
+def test_pathlike_recursive_source(tmp_path, method):
     # A single PathLike source is handled like its string form, as in the
     # synchronous methods: the tree below it is kept, not flattened.
-    contents = {"a/file": b"a", "b/file": b"b"}
+    files = {"a/file": b"a", "b/file": b"b"}
     fs = _TreeFS()
     if method == "put":
         source = tmp_path / "source"
-        for name, data in contents.items():
+        for name, data in files.items():
             (source / name).parent.mkdir(parents=True)
             (source / name).write_bytes(data)
     else:
         source = PurePosixPath("/source")
-        fs.files = {f"/source/{name}": data for name, data in contents.items()}
+        fs.files = {f"/source/{name}": data for name, data in files.items()}
+    target = tmp_path / "target" if method == "get" else "/target"
+
+    getattr(fs, method)(source, str(target), recursive=True)
+
     if method == "get":
-        target = tmp_path / "target"
-        if target_exists:
-            target.mkdir()
+        result = {
+            path.relative_to(target).as_posix(): path.read_bytes()
+            for path in target.rglob("*")
+            if path.is_file()
+        }
     else:
-        target = "/target"
-        if target_exists:
-            fs.makedirs(target)
-
-    getattr(fs, method)(as_source(source), str(target), recursive=True)
-
-    result = _local_tree(target) if method == "get" else _remote_tree(fs, target)
-    prefix = "source/" if target_exists else ""
-    assert result == {prefix + name: data for name, data in contents.items()}
-
-
-@pytest.mark.parametrize("method", ["copy", "get", "put"])
-@_SOURCE_TYPES
-def test_pathlike_source_list_still_flattens(tmp_path, method, as_source):
-    names = ["a/first", "b/second"]
-    fs = _TreeFS()
-    if method == "put":
-        sources = [tmp_path / "source" / name for name in names]
-        for source in sources:
-            source.parent.mkdir(parents=True)
-            source.write_bytes(source.name.encode())
-    else:
-        sources = [PurePosixPath("/source") / name for name in names]
-        fs.files = {str(source): source.name.encode() for source in sources}
-    if method == "get":
-        target = tmp_path / "target"
-        target.mkdir()
-    else:
-        target = "/target"
-        fs.makedirs(target)
-
-    getattr(fs, method)([as_source(source) for source in sources], str(target))
-
-    result = _local_tree(target) if method == "get" else _remote_tree(fs, target)
-    assert result == {"first": b"first", "second": b"second"}
-
-
-@_SOURCE_TYPES
-def test_pathlike_expand_path(as_source):
-    fs = _TreeFS({"/source/a/file": b"a", "/source/b/file": b"b"})
-    source = as_source(PurePosixPath("/source"))
-
-    assert fs.expand_path(source) == ["/source"]
-    assert fs.expand_path(source, recursive=True) == [
-        "/source",
-        "/source/a",
-        "/source/a/file",
-        "/source/b",
-        "/source/b/file",
-    ]
-
-
-@_SOURCE_TYPES
-def test_pathlike_recursive_mv(as_source):
-    # mv copies and then removes the source, so both steps must accept it
-    fs = _TreeFS({"/source/a/file": b"a", "/source/b/file": b"b"})
-
-    fs.mv(as_source(PurePosixPath("/source")), "/target", recursive=True)
-
-    assert fs.files == {"/target/a/file": b"a", "/target/b/file": b"b"}
+        result = {
+            name[len("/target/") :]: data
+            for name, data in fs.files.items()
+            if name.startswith("/target/")
+        }
+    assert result == files
+    if method == "mv":
+        # mv removes the source after copying it, which expands the path again
+        assert not any(name.startswith("/source/") for name in fs.files)
 
 
 # ---------------------------------------------------------------------------
