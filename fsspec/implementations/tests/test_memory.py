@@ -1,3 +1,4 @@
+import io
 import os
 import pickle
 from contextlib import nullcontext
@@ -154,6 +155,54 @@ def test_reading_does_not_copy_the_file(m):
         # until one of them is written to, so identity shows nothing was copied
         assert f.getvalue() is stored
         assert m.store["/file"].getvalue() is stored
+
+
+@pytest.mark.parametrize(
+    "method, args",
+    [("write", (b"XY",)), ("writelines", ([b"X", b"Y"],)), ("truncate", (1,))],
+)
+def test_read_handle_rejects_writes(m, method, args):
+    m.pipe_file("file", b"abc")
+    modified = m.modified("file")
+
+    with m.open("file", "rb") as f:
+        assert not f.writable()
+        with pytest.raises(io.UnsupportedOperation):
+            getattr(f, method)(*args)
+        assert f.read() == b"abc"
+
+    assert m.cat_file("file") == b"abc"
+    assert m.modified("file") == modified
+
+
+def test_text_read_handle_rejects_writes(m):
+    m.pipe_file("file", b"abc")
+
+    with m.open("file", "r") as f:
+        with pytest.raises(io.UnsupportedOperation):
+            f.write("x")
+
+    assert m.cat_file("file") == b"abc"
+
+
+def test_committing_a_read_handle_leaves_the_store_alone(m):
+    m.pipe_file("file", b"abc")
+    stored = m.store["/file"]
+
+    m.open("file", "rb").commit()
+
+    assert m.store["/file"] is stored
+    with m.open("file", "r+b") as f:
+        f.write(b"XY")
+    assert m.cat_file("file") == b"XYc"
+
+
+def test_read_handle_with_compression(m):
+    with m.open("file.gz", "wb", compression="gzip") as f:
+        f.write(b"abc")
+
+    with m.open("file.gz", "rb", compression="gzip") as f:
+        assert f.read() == b"abc"
 
 
 def test_independent_stores(m):
