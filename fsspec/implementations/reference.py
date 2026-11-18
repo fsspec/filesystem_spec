@@ -1095,8 +1095,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             if "{{" in v:
                 import jinja2.sandbox
 
-                self.templates[k] = (
-                    lambda temp=v, **kwargs: jinja2.sandbox.SandboxedEnvironment()
+                self.templates[k] = lambda temp=v, **kwargs: (
+                    jinja2.sandbox.SandboxedEnvironment()
                     .from_string(temp)
                     .render(**kwargs)
                 )
