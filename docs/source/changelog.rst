@@ -6,6 +6,9 @@ Dev
 
 Enhancements
 
+- Strip the protocol from ``LocalFileSystem`` paths without building every
+  prefix on each call, so ``ls`` and other local path operations are faster.
+
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
