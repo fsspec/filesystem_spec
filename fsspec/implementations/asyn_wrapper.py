@@ -78,6 +78,9 @@ class AsyncFileSystemWrapper(AsyncFileSystem, ChainedFileSystem):
         self.semaphore = semaphore
         self._wrap_all_sync_methods()
 
+    def _open(self, *args, **kwargs):
+        return self.sync_fs._open(*args, **kwargs)
+
     @property
     def fsid(self):
         return f"async_{self.sync_fs.fsid}"
