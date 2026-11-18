@@ -513,5 +513,10 @@ class _ReadOnlyMemoryFile(MemoryFile):
     def truncate(self, size=None):
         raise UnsupportedOperation("not writable")
 
+    def getbuffer(self):
+        # BytesIO.getbuffer() is a writable view over a private copy, so a
+        # write through it would be lost without an error
+        return memoryview(self.getvalue())
+
     def commit(self):
         pass

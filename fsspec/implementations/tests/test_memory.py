@@ -185,6 +185,20 @@ def test_text_read_handle_rejects_writes(m):
     assert m.cat_file("file") == b"abc"
 
 
+def test_read_handle_buffer_is_read_only(m):
+    m.pipe_file("file", b"0123456789")
+
+    with m.open("file", "rb") as f:
+        view = f.getbuffer()
+        assert view.readonly
+        with pytest.raises(TypeError):
+            view[:2] = b"XY"
+        assert bytes(view[2:4]) == b"23"
+        assert f.read() == b"0123456789"
+
+    assert m.cat_file("file") == b"0123456789"
+
+
 def test_committing_a_read_handle_leaves_the_store_alone(m):
     m.pipe_file("file", b"abc")
     stored = m.store["/file"]
