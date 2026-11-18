@@ -22,6 +22,10 @@ Fixes
   tree instead of flattening it, and ``copy``, ``mv``, ``rm``, ``cat`` and
   ``expand_path`` no longer raise ``TypeError``.
 
+- Report the root of an archive without members as a directory in ``info``,
+  ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
+  an archive with members.
+
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
 
