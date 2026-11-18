@@ -72,6 +72,90 @@ def test_modified_unchanged_without_write(m):
     assert m.modified("file") == original
 
 
+@pytest.mark.parametrize("global_store", [False, True])
+def test_read_handles_have_independent_positions(m, global_store):
+    fs = filesystem("memory", global_store=global_store, skip_instance_cache=True)
+    fs.pipe_file("file", b"0123456789")
+
+    first = fs.open("file", "rb")
+    first.seek(-4, 2)
+    second = fs.open("file", "rb")
+
+    assert first.tell() == 6
+    assert second.read(2) == b"01"
+    buffer = bytearray(2)
+    assert first.readinto(buffer) == 2
+    assert bytes(buffer) == b"67"
+
+
+def test_opening_a_reader_leaves_an_update_handle_in_place(m):
+    m.pipe_file("file", b"0123456789")
+
+    with m.open("file", "r+b") as writer:
+        writer.seek(4)
+        with m.open("file", "rb") as reader:
+            assert reader.read(2) == b"01"
+        assert writer.tell() == 4
+        writer.write(b"XY")
+
+    assert m.cat_file("file") == b"0123XY6789"
+
+
+@pytest.mark.parametrize(
+    "mode, data, expected",
+    [("r+b", b"XY", b"XYc"), ("ab", b"def", b"abcdef"), ("wb", b"new", b"new")],
+)
+def test_read_handle_is_a_snapshot(m, mode, data, expected):
+    m.pipe_file("file", b"abc")
+
+    before = m.open("file", "rb")
+    with m.open("file", mode) as writer:
+        writer.write(data)
+    after = m.open("file", "rb")
+
+    assert before.read() == b"abc"
+    assert after.read() == expected
+
+
+def test_read_handle_of_an_empty_file(m):
+    m.touch("file")
+
+    with m.open("file", "rb") as f:
+        assert f.read() == b""
+        assert f.size == 0
+
+
+def test_read_handle_reports_stored_metadata(m, monkeypatch):
+    m.pipe_file("file", b"abc")
+    created, modified = m.created("file"), m.modified("file")
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            return datetime(2100, 1, 1, tzinfo=UTC)
+
+    monkeypatch.setattr("fsspec.implementations.memory.datetime", Clock)
+    with m.open("file", "rb") as f:
+        assert f.read() == b"abc"
+        assert (f.size, f.created, f.modified) == (3, created, modified)
+
+    assert m.modified("file") == modified
+
+
+def test_reading_does_not_copy_the_file(m):
+    m.pipe_file("file", b"0123456789")
+    stored = m.store["/file"].getvalue()
+
+    with m.open("file", "rb") as f:
+        assert f.size == 10
+        assert m.info("file")["size"] == 10
+        assert m.cat_file("file", 2, 4) == b"23"
+        # CPython keeps one bytes object behind the store and its readers
+        # until one of them is written to, so identity shows nothing was copied
+        assert f.getvalue() is stored
+        assert m.store["/file"].getvalue() is stored
+
+
 def test_independent_stores(m):
     first = filesystem("memory", global_store=False, skip_instance_cache=True)
     second = filesystem("memory", global_store=False, skip_instance_cache=True)

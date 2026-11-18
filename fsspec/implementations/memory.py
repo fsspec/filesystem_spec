@@ -321,6 +321,13 @@ class MemoryFileSystem(AbstractFileSystem):
         if mode in ["rb", "ab", "r+b", "a+b"]:
             if path in self.store:
                 f = self.store[path]
+                if mode == "rb":
+                    # every reader gets its own handle on the same bytes, so
+                    # it has its own position and leaves the stored file alone
+                    reader = MemoryFile(self, path, f.getvalue())
+                    reader.created = f.created
+                    reader.modified = f.modified
+                    return reader
                 if self._intrans and "a" in mode:
                     # append to a copy so the store is unchanged until commit
                     f = MemoryFile(self, path, f.getvalue())
@@ -381,7 +388,8 @@ class MemoryFileSystem(AbstractFileSystem):
         logger.debug("cat: %s", path)
         path = self._strip_protocol(path)
         try:
-            return bytes(self.store[path].getbuffer()[start:end])
+            # not getbuffer(), which copies a buffer that a reader shares
+            return self.store[path].getvalue()[start:end]
         except KeyError as e:
             raise FileNotFoundError(path) from e
 
@@ -457,7 +465,8 @@ class MemoryFile(BytesIO):
 
     @property
     def size(self):
-        return self.getbuffer().nbytes
+        # not getbuffer(), which copies a buffer that a reader shares
+        return len(self.getvalue())
 
     def write(self, data):
         written = super().write(data)
