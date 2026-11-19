@@ -54,7 +54,7 @@ async def _runner(event, coro, result, timeout=None):
         coro = asyncio.wait_for(coro, timeout=timeout)
     try:
         result[0] = await coro
-    except Exception as ex:
+    except (Exception, asyncio.CancelledError) as ex:
         result[0] = ex
     finally:
         event.set()
