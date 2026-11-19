@@ -134,6 +134,8 @@ class TarFileSystem(AbstractArchiveFileSystem):
             # TODO: tarfile already implements compression with modes like "'r:gz'",
             #  but then would seek to offset in the file work?
             fo = compr[compression](fo)
+            if hasattr(self, "of"):
+                self.of.fobjects.append(fo)
 
         self._fo_ref = fo
         self.fo = fo  # the whole instance is a context
@@ -204,12 +206,13 @@ class TarFileSystem(AbstractArchiveFileSystem):
         return out
 
     def close(self):
-        """Commits any write changes to the file. Done on ``del`` too."""
-        self.tar.close()
+        """Close the archive and any internally opened file objects."""
+        try:
+            if hasattr(self, "tar"):
+                self.tar.close()
+        finally:
+            if hasattr(self, "of"):
+                self.of.close()
 
     def __del__(self):
-        if hasattr(self, "tar"):
-            self.close()
-            del self.tar
-        if hasattr(self, "of") and hasattr(self.of, "__exit__"):
-            self.of.__exit__(None, None, None)
+        self.close()

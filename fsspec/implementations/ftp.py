@@ -335,6 +335,7 @@ class FTPFileSystem(AbstractFileSystem):
         block_size=None,
         cache_options=None,
         autocommit=True,
+        cache_type="readahead",
         **kwargs,
     ):
         path = self._strip_protocol(path)
@@ -346,6 +347,7 @@ class FTPFileSystem(AbstractFileSystem):
             block_size=block_size,
             tempdir=self.tempdir,
             autocommit=autocommit,
+            cache_type=cache_type,
             cache_options=cache_options,
         )
 
