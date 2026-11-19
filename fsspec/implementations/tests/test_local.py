@@ -1132,6 +1132,23 @@ def test_strip_protocol_windows_remote_shares(uri, stripped, cwd):
     assert LocalFileSystem._strip_protocol(uri) == stripped
 
 
+@pytest.mark.parametrize("protocol", ["other", ("file", "other"), ["file", "other"]])
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("other:///path", "{current_drive}/path"),
+        ("other:/path", "{current_drive}/path"),
+        ("otherpath", "{cwd}/otherpath"),
+        ("/path", "{current_drive}/path"),
+    ],
+)
+def test_strip_protocol_custom_protocols(protocol, uri, expected, cwd, current_drive):
+    fs_cls = type("CustomFileSystem", (LocalFileSystem,), {"protocol": protocol})
+    expected = expected.format(cwd=cwd, current_drive=current_drive)
+
+    assert fs_cls._strip_protocol(uri) == expected
+
+
 def test_mkdir_twice_faile(tmpdir):
     fn = os.path.join(tmpdir, "test")
     fs = fsspec.filesystem("file")
