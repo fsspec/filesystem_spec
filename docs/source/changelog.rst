@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Keep failed whole-file cache refreshes eligible for retry instead of marking
+  stale contents as current.
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string

@@ -61,6 +61,24 @@ def _tempfile(lpath):
             os.remove(tmp)
 
 
+_MISSING = object()
+
+
+@contextmanager
+def _restore_metadata_on_error(fs, previous):
+    """Restore cache entries if preparing or downloading their replacements fails."""
+    try:
+        yield
+    except BaseException:
+        cache = fs._metadata.cached_files[-1]
+        for path, detail in previous.items():
+            if detail is _MISSING:
+                cache.pop(path, None)
+            else:
+                cache[path] = detail
+        raise
+
+
 def _atomic_get(fs, rpaths, lpaths, callback=DEFAULT_CALLBACK):
     with ExitStack() as stack:
         fs.get(
@@ -774,32 +792,39 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         )
         getpaths = []
         storepaths = []
+        previous = {}
         fns = []
         out = {}
-        for p in paths.copy():
-            try:
-                detail = self._check_file(p)
-                if not detail:
-                    if self.compression:
-                        self._get_cached_file_before_open(p)
-                        fn = os.path.join(self.storage[-1], self._mapper(p))
+        with _restore_metadata_on_error(self, previous):
+            for p in paths.copy():
+                try:
+                    detail = self._check_file(p)
+                    if not detail:
+                        if self.compression:
+                            self._get_cached_file_before_open(p)
+                            fn = os.path.join(self.storage[-1], self._mapper(p))
+                        else:
+                            previous[p] = self._metadata.cached_files[-1].get(
+                                p, _MISSING
+                            )
+                            fn = self._make_local_details(p)
+                            getpaths.append(p)
+                            storepaths.append(fn)
                     else:
-                        fn = self._make_local_details(p)
-                        getpaths.append(p)
-                        storepaths.append(fn)
-                else:
-                    detail, fn = detail if isinstance(detail, tuple) else (None, detail)
-                fns.append(fn)
-            except Exception as e:
-                if on_error == "raise":
-                    raise
-                if on_error == "return":
-                    out[p] = e
-                paths.remove(p)
+                        detail, fn = (
+                            detail if isinstance(detail, tuple) else (None, detail)
+                        )
+                    fns.append(fn)
+                except Exception as e:
+                    if on_error == "raise":
+                        raise
+                    if on_error == "return":
+                        out[p] = e
+                    paths.remove(p)
 
-        if getpaths:
-            _atomic_get(self.fs, getpaths, storepaths, callback=self.callback)
-            self.save_cache()
+            if getpaths:
+                _atomic_get(self.fs, getpaths, storepaths, callback=self.callback)
+                self.save_cache()
 
         callback.set_size(len(paths))
         for p, fn in zip(paths, fns):
@@ -811,32 +836,34 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         return out
 
     def _get_cached_file_before_open(self, path, **kwargs):
-        fn = self._make_local_details(path)
-        # call target filesystems open
-        self._mkcache()
-        if self.compression:
-            with (
-                _tempfile(fn) as tmp,
-                self.fs._open(path, mode="rb", **kwargs) as f,
-                open(tmp, "wb") as f2,
-            ):
-                if isinstance(f, AbstractBufferedFile):
-                    # want no type of caching if just downloading whole thing
-                    f.cache = BaseCache(0, f.cache.fetcher, f.size)
-                comp = (
-                    infer_compression(path)
-                    if self.compression == "infer"
-                    else self.compression
-                )
-                f = compr[comp](f, mode="rb")
-                data = True
-                while data:
-                    block = getattr(f, "blocksize", 5 * 2**20)
-                    data = f.read(block)
-                    f2.write(data)
-        else:
-            with _tempfile(fn) as tmp:
-                self.fs.get_file(path, tmp, callback=self.callback)
+        previous = {path: self._metadata.cached_files[-1].get(path, _MISSING)}
+        with _restore_metadata_on_error(self, previous):
+            fn = self._make_local_details(path)
+            # call target filesystems open
+            self._mkcache()
+            if self.compression:
+                with (
+                    _tempfile(fn) as tmp,
+                    self.fs._open(path, mode="rb", **kwargs) as f,
+                    open(tmp, "wb") as f2,
+                ):
+                    if isinstance(f, AbstractBufferedFile):
+                        # want no type of caching if just downloading whole thing
+                        f.cache = BaseCache(0, f.cache.fetcher, f.size)
+                    comp = (
+                        infer_compression(path)
+                        if self.compression == "infer"
+                        else self.compression
+                    )
+                    f = compr[comp](f, mode="rb")
+                    data = True
+                    while data:
+                        block = getattr(f, "blocksize", 5 * 2**20)
+                        data = f.read(block)
+                        f2.write(data)
+            else:
+                with _tempfile(fn) as tmp:
+                    self.fs.get_file(path, tmp, callback=self.callback)
         self.save_cache()
         return self._metadata.cached_files[-1][path].copy(), fn
 
