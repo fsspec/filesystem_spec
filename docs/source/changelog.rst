@@ -22,6 +22,9 @@ Fixes
 
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
+- Do not send ``HTTPFileSystem`` ``client_kwargs`` basic auth to another origin
+  after a redirect.
+
 - Handle a single Path in the asynchronous methods like its string
   form, as the synchronous methods do
 

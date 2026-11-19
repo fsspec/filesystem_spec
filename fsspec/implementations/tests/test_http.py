@@ -769,6 +769,21 @@ def test_custom_headers_not_forwarded_across_origins(server):
     assert redirected_headers["accept-language"] == "en"
 
 
+def test_client_auth_not_forwarded_across_origins(server):
+    auth = aiohttp.BasicAuth("user", "pass")
+    fs = fsspec.filesystem("http", client_kwargs={"auth": auth})
+
+    same_origin_headers = json.loads(
+        fs.cat_file(server.address + "/cross-origin-target")
+    )
+    assert same_origin_headers["authorization"] == auth.encode()
+
+    redirected_headers = json.loads(
+        fs.cat_file(server.address + "/redirect-cross-origin")
+    )
+    assert "authorization" not in redirected_headers
+
+
 @pytest.mark.parametrize("method", ["POST", "PUT"])
 def test_put_file(server, tmp_path, method, reset_files):
     src_file = tmp_path / "file_1"
