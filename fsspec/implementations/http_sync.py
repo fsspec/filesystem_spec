@@ -373,7 +373,12 @@ class HTTPFileSystem(AbstractFileSystem):
 
         ranged = start is not None or end is not None
         if ranged:
-            if start == end or (start is None and end == 0):
+            if start == end or end == 0:
+                return b""
+            if end is not None and (end < 0 or (start is not None and start < 0)):
+                # Leave suffix-only reads to the server without a size request.
+                start, end, _ = slice(start, end).indices(self.info(url)["size"])
+            if start is not None and end is not None and start >= end:
                 return b""
             headers = kw.pop("headers", {}).copy()
 
