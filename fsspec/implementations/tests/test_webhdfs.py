@@ -329,3 +329,20 @@ def test_rename_response_checked(monkeypatch):
 
     response.json.return_value = {"boolean": True}
     fs.mv("/source", "/target")
+
+
+def test_ls_file_keeps_its_name(monkeypatch):
+    """LISTSTATUS on a file lists the file itself with an empty pathSuffix."""
+    from unittest.mock import Mock
+
+    fs = object.__new__(WebHDFS)
+    response = Mock()
+    response.json.return_value = {
+        "FileStatuses": {
+            "FileStatus": [{"pathSuffix": "", "type": "FILE", "length": 3}]
+        }
+    }
+    monkeypatch.setattr(fs, "_call", Mock(return_value=response))
+
+    assert fs.ls("/user/data.csv") == ["/user/data.csv"]
+    assert fs.ls("/user/data.csv", detail=True)[0]["name"] == "/user/data.csv"
