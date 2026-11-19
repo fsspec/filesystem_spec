@@ -1,6 +1,7 @@
 import base64
 import io
 import re
+from urllib.parse import quote
 
 import requests
 
@@ -40,7 +41,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
-        r = self.session.get(f"{self.url}/{path}")
+        r = self.session.get(f"{self.url}/{quote(path)}")
         if r.status_code == 404:
             raise FileNotFoundError(path)
         r.raise_for_status()
@@ -63,7 +64,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         path = self._strip_protocol(path)
         # Ask for the raw file; by default notebooks come back as parsed JSON
         r = self.session.get(
-            f"{self.url}/{path}", params={"type": "file", "format": "base64"}
+            f"{self.url}/{quote(path)}", params={"type": "file", "format": "base64"}
         )
         if r.status_code == 404:
             raise FileNotFoundError(path)
@@ -86,7 +87,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "format": "base64",
             "type": "file",
         }
-        self.session.put(f"{self.url}/{path}", json=json)
+        self.session.put(f"{self.url}/{quote(path)}", json=json)
 
     def mkdir(self, path, create_parents=True, **kwargs):
         path = self._strip_protocol(path)
@@ -99,16 +100,18 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
             "content": None,
             "type": "directory",
         }
-        self.session.put(f"{self.url}/{path}", json=json)
+        self.session.put(f"{self.url}/{quote(path)}", json=json)
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         if path1 == path2:
             return
-        self.session.patch(f"{self.url}/{path1}", json={"path": path2})
+        self.session.patch(f"{self.url}/{quote(path1)}", json={"path": path2})
 
     def _rm(self, path):
         path = self._strip_protocol(path)
-        self.session.delete(f"{self.url}/{path}")
+        self.session.delete(f"{self.url}/{quote(path)}")
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
