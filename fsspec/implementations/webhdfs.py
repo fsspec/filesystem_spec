@@ -291,7 +291,9 @@ class WebHDFS(AbstractFileSystem):
         infos = out.json()["FileStatuses"]["FileStatus"]
         for info in infos:
             self._process_info(info)
-            info["name"] = path.rstrip("/") + "/" + info["pathSuffix"]
+            # LISTSTATUS on a file returns that file with an empty pathSuffix
+            suffix = info["pathSuffix"]
+            info["name"] = path.rstrip("/") + "/" + suffix if suffix else path
         if detail:
             return sorted(infos, key=lambda i: i["name"])
         else:

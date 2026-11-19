@@ -6,6 +6,9 @@ Dev
 
 Enhancements
 
+- Strip the protocol from ``LocalFileSystem`` paths without building every
+  prefix on each call, so ``ls`` and other local path operations are faster.
+
 - Add an opt-in ``lazy_size`` attribute to ``AbstractBufferedFile`` that defers
   the ``info()`` lookup until the size is needed, so a whole-file ``read()``
   costs a single ``cat_file`` call (#1392).
@@ -20,6 +23,25 @@ Enhancements
   opens can report download progress (#1623)
 
 Fixes
+
+- Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
+
+- Handle a single Path in the asynchronous methods like its string
+  form, as the synchronous methods do
+
+- Report the root of an archive without members as a directory in ``info``,
+  ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
+  an archive with members.
+
+- Escape reserved URL characters in Jupyter filesystem paths so filenames
+  containing ``#``, ``?`` or percent escapes are read and changed literally.
+
+- Delegate synchronous file opens in ``AsyncFileSystemWrapper`` to the wrapped
+  backend so writes are persisted (#2470).
+
+- Avoid empty backend range requests at EOF with the first-chunk cache.
+
+- Forward per-call reference ``cat_file`` options to the target filesystem.
 
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
@@ -123,6 +145,9 @@ Fixes
 
 - Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 
+- Add ``cache_metadata_name=`` to the caching filesystems so the metadata file can
+  be given a name that a remote file stored with ``same_names=True`` cannot replace
+
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
 - Complete DBFS partial-delete retries without re-raising a recovered error.
@@ -185,6 +210,8 @@ Fixes
 - Follow GitHub API pagination when listing tags, branches and repositories.
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
+
+- Keep the leading delimiter in ``read_block(..., split_before=True)`` when reading to the end of the file with ``length=None``.
 
 - Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
