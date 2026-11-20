@@ -247,7 +247,11 @@ def _get_parquet_byte_ranges(
             starts = [_[1] for _ in large_footer]
             ends = [file_sizes[i] - footer_sample_size for i, _ in large_footer]
             data = fs.cat_ranges(path0, starts, ends)
-            for i, (path, start, block) in enumerate(zip(path0, starts, data)):
+            # ``large_footer`` holds positions in ``paths``, while ``data``
+            # only has one block per re-sampled file. Keep the original
+            # position so a large footer in a later file does not overwrite
+            # an earlier file's sample.
+            for (i, start), block in zip(large_footer, data):
                 footer_samples[i] = block + footer_samples[i]
                 footer_starts[i] = start
         result = {

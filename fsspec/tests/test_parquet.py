@@ -239,6 +239,28 @@ def test_multiple(tmpdir):
     assert expect.equals(result)
 
 
+@pytest.mark.filterwarnings("ignore:.*Not enough data.*")
+@PYARROW_MARK
+def test_multiple_large_footer_not_first(tmpdir):
+    # A later file whose footer is larger than the sample must not overwrite
+    # the sample of an earlier file (fsspec#2459).
+    pa = pytest.importorskip("pyarrow")
+    small = pa.table({f"c{i}": list(range(1_000)) for i in range(20)})
+    large = pa.table({f"c{i}": list(range(20_000)) for i in range(20)})
+    paths = [
+        os.path.join(str(tmpdir), "part-0.parquet"),
+        os.path.join(str(tmpdir), "part-1.parquet"),
+    ]
+    pq.write_table(small, paths[0])
+    pq.write_table(large, paths[1], row_group_size=200)
+
+    files = open_parquet_files(
+        paths, columns=["c0"], engine="pyarrow", footer_sample_size=50_000
+    )
+
+    assert [pq.read_table(f, columns=["c0"]).num_rows for f in files] == [1_000, 20_000]
+
+
 @pytest.mark.parametrize("n", [1_000, 1_000_000])
 def test_nested(n, tmpdir, engine):
     path = os.path.join(str(tmpdir), "test.parquet")
