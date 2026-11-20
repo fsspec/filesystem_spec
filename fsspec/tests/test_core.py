@@ -1,3 +1,4 @@
+import gzip
 import os
 import pickle
 import tempfile
@@ -697,3 +698,22 @@ def test_repeated_argument():
             anon=False,
             account_name="OTHER",
         )
+
+
+@pytest.mark.parametrize("pattern", ["part?.txt.gz", "part[12].txt.gz"])
+def test_open_files_globs_read_compressed_text(tmp_path, pattern):
+    for name, text in [("part2.txt.gz", "second"), ("part1.txt.gz", "first")]:
+        (tmp_path / name).write_bytes(gzip.compress(text.encode()))
+    (tmp_path / "part3.txt.gz").mkdir()
+    with open_files(str(tmp_path / pattern), mode="rt", compression="infer") as files:
+        assert [f.read() for f in files] == ["first", "second"]
+
+
+def test_open_files_literal_brackets_with_expansion_disabled(tmp_path):
+    literal = tmp_path / "part[12].txt.gz"
+    literal.write_bytes(gzip.compress(b"literal"))
+    (tmp_path / "part1.txt.gz").write_bytes(gzip.compress(b"expanded"))
+    with open_files(
+        [str(literal)], mode="rt", compression="infer", expand=False
+    ) as files:
+        assert [f.read() for f in files] == ["literal"]
