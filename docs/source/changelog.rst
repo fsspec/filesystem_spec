@@ -20,6 +20,8 @@ Enhancements
 
 Fixes
 
+- Raise an error when WebHDFS refuses a delete instead of reporting success.
+
 - Honor ``exist_ok=False`` in Arrow-backed ``makedirs`` operations (#2415).
 - Accept caller-owned file-like destinations in asynchronous reference downloads.
 - Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.

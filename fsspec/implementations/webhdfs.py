@@ -399,12 +399,14 @@ class WebHDFS(AbstractFileSystem):
             raise OSError(f"WebHDFS failed to rename {path1!r} to {path2!r}")
 
     def rm(self, path, recursive=False, **kwargs):
-        self._call(
+        response = self._call(
             "DELETE",
             method="delete",
             path=path,
             recursive="true" if recursive else "false",
         )
+        if response.json()["boolean"] is not True:
+            raise FileNotFoundError(f"WebHDFS failed to delete {path!r}")
 
     def rm_file(self, path, **kwargs):
         self.rm(path)

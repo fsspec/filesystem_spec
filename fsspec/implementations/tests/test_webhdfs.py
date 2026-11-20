@@ -331,6 +331,30 @@ def test_rename_response_checked(monkeypatch):
     fs.mv("/source", "/target")
 
 
+def test_delete_response_checked(monkeypatch):
+    """WebHDFS must not report success when HDFS refuses a delete."""
+    from unittest.mock import Mock
+
+    fs = object.__new__(WebHDFS)
+    response = Mock()
+    response.json.return_value = {"boolean": False}
+    call = Mock(return_value=response)
+    monkeypatch.setattr(fs, "_call", call)
+
+    with pytest.raises(FileNotFoundError, match="failed to delete"):
+        fs.rm("/missing")
+    call.assert_called_once_with(
+        "DELETE", method="delete", path="/missing", recursive="false"
+    )
+
+    with pytest.raises(FileNotFoundError, match="failed to delete"):
+        fs.rm_file("/missing")
+
+    response.json.return_value = {"boolean": True}
+    fs.rm("/dir", recursive=True)
+    assert call.call_args.kwargs["recursive"] == "true"
+
+
 def test_ls_file_keeps_its_name(monkeypatch):
     """LISTSTATUS on a file lists the file itself with an empty pathSuffix."""
     from unittest.mock import Mock
