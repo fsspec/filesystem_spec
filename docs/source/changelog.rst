@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Preserve existing FTP file contents in append mode, and reject unsupported
+  transactional append before modifying the target.
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
