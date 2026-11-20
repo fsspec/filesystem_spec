@@ -2,6 +2,7 @@ import tempfile
 
 import pytest
 
+import fsspec
 from fsspec.implementations.arrow import ArrowFSWrapper
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
@@ -24,13 +25,21 @@ READ_ONLY_FILESYSTEMS = []
 
 @pytest.fixture(scope="function")
 def fs(request):
-    pyarrow_fs = pytest.importorskip("pyarrow.fs")
-    FileSystem = pyarrow_fs.FileSystem
     if request.param == "arrow":
+        pyarrow_fs = pytest.importorskip("pyarrow.fs")
+        FileSystem = pyarrow_fs.FileSystem
         fs = ArrowFSWrapper(FileSystem.from_uri("file:///")[0])
         return fs
     cls = FILESYSTEMS[request.param]
     return cls()
+
+
+@pytest.fixture(scope="function")
+def fscls(request):
+    try:
+        return fsspec.get_filesystem_class(request.param)
+    except ImportError:
+        pytest.skip(f"filesystem {request.param} not installed")
 
 
 @pytest.fixture(scope="function")
