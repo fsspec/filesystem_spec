@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Raise ``FileExistsError`` from ``ReferenceFileSystem.pipe_file`` with
+  ``mode="create"`` when the key already exists, instead of overwriting it (#2470)
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
