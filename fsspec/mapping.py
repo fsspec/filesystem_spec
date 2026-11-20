@@ -7,6 +7,7 @@ from collections.abc import MutableMapping
 from functools import cached_property
 
 from fsspec.core import url_to_fs
+from fsspec.utils import _escapes_root
 
 logger = logging.getLogger("fsspec.mapping")
 _MISSING = object()
@@ -41,7 +42,11 @@ class FSMap(MutableMapping):
     """
 
     def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
+        # imported here so that "import fsspec" does not load the implementations
+        from .implementations.dirfs import _resolves_dotdot
+
         self.fs = fs
+        self._guard_dotdot = _resolves_dotdot(fs)
         self.root = fs._strip_protocol(root)
         self._root_key_to_str = fs._strip_protocol(posixpath.join(root, "x"))[:-1]
         if missing_exceptions is None:
@@ -151,22 +156,12 @@ class FSMap(MutableMapping):
             if isinstance(key, list):
                 key = tuple(key)
             key = str(key)
-        if self._resolves_dotdot:
+        if self._guard_dotdot and _escapes_root(key):
             # same rule as DirFileSystem._join, so keys match mapper.dirfs
-            from .implementations.dirfs import _escapes_root
-
-            if _escapes_root(key):
-                raise ValueError(
-                    f"key {key!r} escapes the {self.root!r} root of the mapping"
-                )
+            raise ValueError(
+                f"key {key!r} escapes the {self.root!r} root of the mapping"
+            )
         return f"{self._root_key_to_str}{key}".rstrip("/")
-
-    @cached_property
-    def _resolves_dotdot(self):
-        """Whether ".." in keys would navigate above the root (local trees)"""
-        from .implementations.dirfs import _resolves_dotdot
-
-        return _resolves_dotdot(self.fs)
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
