@@ -311,7 +311,13 @@ class SMBFileSystem(AbstractFileSystem):
         if "w" in mode and autocommit is False:
             temp = _as_temp_path(self.host, path, self.temppath)
             return SMBFileOpener(
-                wpath, temp, mode, port=self._port, block_size=bls, **kwargs
+                wpath,
+                temp,
+                mode,
+                port=self._port,
+                block_size=bls,
+                share_access=share_access,
+                **kwargs,
             )
         return smbclient.open_file(
             wpath,

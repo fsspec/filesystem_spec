@@ -39,6 +39,9 @@ Fixes
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
 
+- Pass ``share_access`` to SMB files opened with ``autocommit=False`` or
+  inside a transaction.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
