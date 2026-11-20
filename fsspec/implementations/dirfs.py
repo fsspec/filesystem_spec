@@ -1,3 +1,5 @@
+import os
+
 from .. import filesystem
 from ..asyn import AsyncFileSystem
 from ..utils import stringify_path
@@ -78,8 +80,11 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
             path = self._strip_protocol(path)
             # ".." only navigates above the root on filesystems that resolve it
             # against a real directory tree; on object stores it is a literal
-            # path part, so only guard the local case here.
-            if isinstance(self.fs, LocalFileSystem) and _escapes_root(path):
+            # path part, so only guard the local case here. LocalFileSystem
+            # also treats os.sep as a separator ("\\" on Windows).
+            if isinstance(self.fs, LocalFileSystem) and _escapes_root(
+                path.replace(os.sep, "/")
+            ):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )

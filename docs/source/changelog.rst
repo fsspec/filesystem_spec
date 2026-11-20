@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Reject ``DirFileSystem`` paths that climb above the root with ``os.sep``
+  separators (``..\secret`` on Windows) when wrapping ``LocalFileSystem``.
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string

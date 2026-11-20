@@ -160,6 +160,15 @@ def test_join_rejects_escape_local(tmp_path, path):
         dirfs._join(path)
 
 
+@pytest.mark.parametrize("path", ["../", "../secret", "foo/../../secret"])
+def test_join_rejects_escape_local_os_sep(tmp_path, path):
+    # LocalFileSystem also splits on os.sep, so on Windows "..\secret"
+    # (e.g. str(Path("..") / "secret")) must be rejected as well
+    dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
+    with pytest.raises(ValueError, match="escapes"):
+        dirfs._join(path.replace("/", os.sep))
+
+
 @pytest.mark.parametrize("path", ["foo", "foo/bar", "foo/../bar"])
 def test_join_allows_internal_local(tmp_path, path):
     dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())
