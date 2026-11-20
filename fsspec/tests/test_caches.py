@@ -26,6 +26,21 @@ def test_cache_getitem(Cache_imp):
     assert cacher._fetch(0, None) == string.ascii_letters.encode()
 
 
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize(
+    "parts",
+    [{}, {(0, 10): b"0123456789"}, {(5, 10): b"56789", (0, 5): b"01234"}],
+)
+def test_known_parts_preserve_input(parts, strict):
+    parts = parts.copy()
+    expected = parts.copy()
+    cache = caches["parts"](None, None, 10, parts, strict=strict)
+    assert parts == expected
+    assert cache.data is not parts
+    if parts:
+        assert cache._fetch(0, 10) == b"0123456789"
+
+
 def test_block_cache_lru():
     # BlockCache is a cache that stores blocks of data and uses LRU to evict
     block_size = 4
