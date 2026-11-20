@@ -885,8 +885,10 @@ class ReferenceFileSystem(AsyncFileSystem):
         except Exception as e:
             raise ReferenceNotReachable(path, part_or_url) from e
 
-    def pipe_file(self, path, value, **_):
+    def pipe_file(self, path, value, mode="overwrite", **_):
         """Temporarily add binary data or reference as a file"""
+        if mode == "create" and self.exists(path):
+            raise FileExistsError(path)
         self.references[path] = value
 
     async def _get_file(self, rpath, lpath, **kwargs):

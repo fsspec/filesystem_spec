@@ -1197,3 +1197,17 @@ def test_no_default_jinja_execution():
 
     with pytest.raises(ZeroDivisionError):
         fsspec.filesystem("reference", fo=manifest, simple_templates=False)
+
+
+def test_pipe_file_mode_create():
+    # https://github.com/fsspec/filesystem_spec/issues/2470
+    fs = fsspec.filesystem("reference", fo={"a": b"old"}, skip_instance_cache=True)
+
+    with pytest.raises(FileExistsError):
+        fs.pipe_file("a", b"new", mode="create")
+    assert fs.cat("a") == b"old"
+
+    fs.pipe_file("b", b"data", mode="create")
+    assert fs.cat("b") == b"data"
+    fs.pipe_file("a", b"new")
+    assert fs.cat("a") == b"new"
