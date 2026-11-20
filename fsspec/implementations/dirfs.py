@@ -20,11 +20,12 @@ def _escapes_root(path):
     return False
 
 
-def _innermost_fs(fs):
-    """The filesystem that finally resolves paths, below any pass-through wrappers.
+def _resolves_dotdot(fs):
+    """Whether ".." in paths handed to ``fs`` navigates a real directory tree.
 
-    These wrappers hand paths on unchanged, so whether ".." navigates the tree
-    is decided by the filesystem at the bottom of the chain.
+    Only the local filesystem resolves ".." against a directory tree; on object
+    stores it is a literal path part. Pass-through wrappers hand paths on
+    unchanged, so the filesystem at the bottom of the chain decides.
     """
     while True:
         if isinstance(fs, AsyncFileSystemWrapper):
@@ -32,7 +33,7 @@ def _innermost_fs(fs):
         elif isinstance(fs, (DirFileSystem, CachingFileSystem)):
             fs = fs.fs
         else:
-            return fs
+            return isinstance(fs, LocalFileSystem)
 
 
 class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
@@ -93,13 +94,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
             # join even though _strip_protocol removes it
             suffix = "/" if path.endswith("/") else ""
             path = self._strip_protocol(path)
-            # ".." only navigates above the root on filesystems that resolve it
-            # against a real directory tree; on object stores it is a literal
-            # path part, so only guard the local case here. Look through
-            # wrappers, which pass ".." on to the filesystem underneath.
-            if isinstance(_innermost_fs(self.fs), LocalFileSystem) and _escapes_root(
-                path
-            ):
+            if _resolves_dotdot(self.fs) and _escapes_root(path):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )
