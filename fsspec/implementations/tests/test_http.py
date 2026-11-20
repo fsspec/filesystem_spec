@@ -667,6 +667,31 @@ def test_content_encoding_gzip(server):
         assert f.read() == data
 
 
+@pytest.mark.parametrize("encoding", ["", "gzip"])
+def test_file_info_content_range_with_encoding(encoding):
+    from fsspec.implementations.http import _file_info
+
+    class Response:
+        headers = {"Content-Range": "bytes 0-4/5", "Content-Encoding": encoding}
+        url = "https://example.com/data"
+
+        def raise_for_status(self):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+    class Session:
+        async def head(self, *args, **kwargs):
+            return Response()
+
+    info = asyncio.run(_file_info("https://example.com/data", Session()))
+    assert info.get("size") == (None if encoding else 5)
+
+
 def test_download(server, tmpdir):
     h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
     url = server.realfile
