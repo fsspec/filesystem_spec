@@ -18,6 +18,9 @@ Enhancements
   operations that fill the cache on a miss, so ``filecache``/``simplecache``
   opens can report download progress (#1623)
 
+- Add ``MountFileSystem`` (protocol ``mount``), which presents several
+  filesystems as a single tree, each mounted at its own directory (#1994)
+
 Fixes
 
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
