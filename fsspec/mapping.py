@@ -151,7 +151,22 @@ class FSMap(MutableMapping):
             if isinstance(key, list):
                 key = tuple(key)
             key = str(key)
+        if self._resolves_dotdot:
+            # same rule as DirFileSystem._join, so keys match mapper.dirfs
+            from .implementations.dirfs import _escapes_root
+
+            if _escapes_root(key):
+                raise ValueError(
+                    f"key {key!r} escapes the {self.root!r} root of the mapping"
+                )
         return f"{self._root_key_to_str}{key}".rstrip("/")
+
+    @cached_property
+    def _resolves_dotdot(self):
+        """Whether ".." in keys would navigate above the root (local trees)"""
+        from .implementations.dirfs import _resolves_dotdot
+
+        return _resolves_dotdot(self.fs)
 
     def _str_to_key(self, s):
         """Strip path of to leave key name"""
