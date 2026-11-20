@@ -1,7 +1,10 @@
 import io
 import json
 import os
+import sys
 import time
+from types import SimpleNamespace
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -43,6 +46,101 @@ def test_session_shim_request_method(monkeypatch, method):
     options = {"headers": {"X-Test": "value"}, "timeout": 10}
     assert getattr(session, method)(url, **options) is response
     assert calls == [(method.upper(), url, options)]
+
+
+@pytest.fixture
+def js_session_shim(monkeypatch):
+    """Check the conversion protocol without requiring Pyodide in native CI."""
+    request = Mock()
+    blob = Mock()
+    object_type = SimpleNamespace(fromEntries=object())
+    to_js = Mock(side_effect=lambda value, **kwargs: value)
+    ffi = SimpleNamespace(to_js=to_js)
+    monkeypatch.setitem(
+        sys.modules,
+        "js",
+        SimpleNamespace(
+            Blob=blob, Object=object_type, XMLHttpRequest=Mock(new=lambda: request)
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "pyodide", SimpleNamespace(ffi=ffi))
+    monkeypatch.setitem(sys.modules, "pyodide.ffi", ffi)
+    return request, blob, object_type, to_js
+
+
+@pytest.mark.parametrize("value", [{"a": 1}, {}, [], False, 0, ""])
+def test_session_shim_json_body(js_session_shim, value):
+    from fsspec.implementations.http_sync import RequestsSessionShim
+
+    request, blob, object_type, to_js = js_session_shim
+    RequestsSessionShim().post("https://example.com/data", json=value)
+
+    parts = [json.dumps(value)]
+    options = {"type": "application/json"}
+    assert to_js.call_args_list == [
+        call(parts),
+        call(options, dict_converter=object_type.fromEntries),
+    ]
+    blob.new.assert_called_once_with(parts, options)
+    request.send.assert_called_once_with(blob.new.return_value)
+
+
+@pytest.mark.parametrize("value", [b"hello", io.BytesIO(b"hello"), "hello"])
+def test_session_shim_data_body(js_session_shim, value):
+    from fsspec.implementations.http_sync import RequestsSessionShim
+
+    request, blob, object_type, to_js = js_session_shim
+    RequestsSessionShim().post("https://example.com/data", data=value)
+
+    parts = [b"hello" if isinstance(value, io.IOBase) else value]
+    options = {"type": "application/octet-stream"}
+    assert to_js.call_args_list == [
+        call(parts),
+        call(options, dict_converter=object_type.fromEntries),
+    ]
+    blob.new.assert_called_once_with(parts, options)
+    request.send.assert_called_once_with(blob.new.return_value)
+
+
+@pytest.mark.parametrize("value", [{"a": 1}, {}, False, 0])
+def test_session_shim_rejects_data_and_json(js_session_shim, value):
+    from fsspec.implementations.http_sync import RequestsSessionShim
+
+    request, blob, _, to_js = js_session_shim
+    with pytest.raises(ValueError, match="Use json= or data=, not both"):
+        RequestsSessionShim().post(
+            "https://example.com/data", data=b"hello", json=value
+        )
+    request.send.assert_not_called()
+    blob.new.assert_not_called()
+    to_js.assert_not_called()
+
+
+@pytest.mark.parametrize("chunks", [(), (b"he", b"llo")])
+def test_session_shim_iterator_body(js_session_shim, chunks):
+    from fsspec.implementations.http_sync import RequestsSessionShim
+
+    request, blob, object_type, to_js = js_session_shim
+    RequestsSessionShim().post("https://example.com/data", data=iter(chunks))
+
+    parts = list(chunks)
+    options = {"type": "application/octet-stream"}
+    assert to_js.call_args_list == [
+        call(parts),
+        call(options, dict_converter=object_type.fromEntries),
+    ]
+    blob.new.assert_called_once_with(parts, options)
+    request.send.assert_called_once_with(blob.new.return_value)
+
+
+def test_session_shim_without_body(js_session_shim):
+    from fsspec.implementations.http_sync import RequestsSessionShim
+
+    request, blob, _, to_js = js_session_shim
+    RequestsSessionShim().post("https://example.com/data")
+    request.send.assert_called_once_with(None)
+    blob.new.assert_not_called()
+    to_js.assert_not_called()
 
 
 def test_list(server, sync):
