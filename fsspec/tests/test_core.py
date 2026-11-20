@@ -1,3 +1,4 @@
+import gzip
 import os
 import pickle
 import tempfile
@@ -92,6 +93,33 @@ def test_expand_error():
 @pytest.mark.parametrize("mode", ["w", "w+", "x", "x+"])
 def test_expand_fs_token_paths(mode):
     assert len(get_fs_token_paths("path", mode, num=2, expand=True)[-1]) == 2
+
+
+@pytest.mark.parametrize("pattern", ["apath*", "apath?", "apath[12]"])
+def test_get_fs_token_paths_single_string_read_mode_globs(pattern):
+    d = str(tempfile.mkdtemp())
+    for f in ["apath1", "apath2"]:
+        open(os.path.join(d, f), "w").write("test")
+
+    _, _, paths = get_fs_token_paths(os.path.join(d, pattern), mode="rb")
+
+    assert sorted(os.path.basename(p) for p in paths) == ["apath1", "apath2"]
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        ("https://host/file?download=1", "https://host/file?download=1"),
+        (
+            "simplecache::https://host/file?download=1",
+            "https://host/file?download=1",
+        ),
+    ],
+)
+def test_get_fs_token_paths_read_mode_http_url_not_globbed(url, expected):
+    pytest.importorskip("aiohttp")
+    _, _, paths = get_fs_token_paths(url, mode="rb")
+    assert paths == [expected]
 
 
 def test_get_fs_token_paths_protocol_mismatch():
@@ -670,3 +698,22 @@ def test_repeated_argument():
             anon=False,
             account_name="OTHER",
         )
+
+
+@pytest.mark.parametrize("pattern", ["part?.txt.gz", "part[12].txt.gz"])
+def test_open_files_globs_read_compressed_text(tmp_path, pattern):
+    for name, text in [("part2.txt.gz", "second"), ("part1.txt.gz", "first")]:
+        (tmp_path / name).write_bytes(gzip.compress(text.encode()))
+    (tmp_path / "part3.txt.gz").mkdir()
+    with open_files(str(tmp_path / pattern), mode="rt", compression="infer") as files:
+        assert [f.read() for f in files] == ["first", "second"]
+
+
+def test_open_files_literal_brackets_with_expansion_disabled(tmp_path):
+    literal = tmp_path / "part[12].txt.gz"
+    literal.write_bytes(gzip.compress(b"literal"))
+    (tmp_path / "part1.txt.gz").write_bytes(gzip.compress(b"expanded"))
+    with open_files(
+        [str(literal)], mode="rt", compression="infer", expand=False
+    ) as files:
+        assert [f.read() for f in files] == ["literal"]
