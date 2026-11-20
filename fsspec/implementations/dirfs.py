@@ -1,6 +1,8 @@
 from .. import filesystem
 from ..asyn import AsyncFileSystem
 from ..utils import stringify_path
+from .asyn_wrapper import AsyncFileSystemWrapper
+from .cached import CachingFileSystem
 from .chained import ChainedFileSystem
 from .local import LocalFileSystem
 
@@ -16,6 +18,21 @@ def _escapes_root(path):
         elif part and part != ".":
             depth += 1
     return False
+
+
+def _innermost_fs(fs):
+    """The filesystem that finally resolves paths, below any pass-through wrappers.
+
+    These wrappers hand paths on unchanged, so whether ".." navigates the tree
+    is decided by the filesystem at the bottom of the chain.
+    """
+    while True:
+        if isinstance(fs, AsyncFileSystemWrapper):
+            fs = fs.sync_fs
+        elif isinstance(fs, (DirFileSystem, CachingFileSystem)):
+            fs = fs.fs
+        else:
+            return fs
 
 
 class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
@@ -78,8 +95,11 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
             path = self._strip_protocol(path)
             # ".." only navigates above the root on filesystems that resolve it
             # against a real directory tree; on object stores it is a literal
-            # path part, so only guard the local case here.
-            if isinstance(self.fs, LocalFileSystem) and _escapes_root(path):
+            # path part, so only guard the local case here. Look through
+            # wrappers, which pass ".." on to the filesystem underneath.
+            if isinstance(_innermost_fs(self.fs), LocalFileSystem) and _escapes_root(
+                path
+            ):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )
