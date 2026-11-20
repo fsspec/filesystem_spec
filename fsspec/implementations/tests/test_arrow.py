@@ -478,3 +478,17 @@ def test_seekable_false_prevents_size_method(fs, remote_dir):
         assert f.size is None
         # Verify we can still read the data
         assert f.read() == data
+
+
+def test_rm_list(fs, remote_dir):
+    fs.touch(remote_dir + "/a.txt")
+    fs.touch(remote_dir + "/b.txt")
+    fs.mkdir(remote_dir + "/dir")
+    fs.touch(remote_dir + "/dir/c.txt")
+    fs.rm(
+        [remote_dir + "/a.txt", remote_dir + "/b.txt", remote_dir + "/dir"],
+        recursive=True,
+    )
+    assert not fs.exists(remote_dir + "/a.txt")
+    assert not fs.exists(remote_dir + "/b.txt")
+    assert not fs.exists(remote_dir + "/dir")
