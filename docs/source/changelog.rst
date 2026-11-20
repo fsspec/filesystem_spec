@@ -20,6 +20,8 @@ Enhancements
 
 Fixes
 
+- Allow listing cache items and values with bounded LRU caching (#2419).
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
