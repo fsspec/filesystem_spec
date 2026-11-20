@@ -39,6 +39,9 @@ Fixes
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
 
+- Skip directories when ``cat`` is called with ``recursive=True`` instead of
+  failing on them.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit

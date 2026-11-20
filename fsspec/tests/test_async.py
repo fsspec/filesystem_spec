@@ -504,6 +504,22 @@ def test_rm_honours_maxdepth():
     assert "/root/d1/d2/c.txt" not in fs.removed_paths
 
 
+class _CatTreeFS(_MaxDepthFS):
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        if path not in self.files:
+            raise IsADirectoryError(path)
+        return path.encode()[start:end]
+
+
+def test_cat_recursive_skips_directories():
+    tree = ["/root/a.txt", "/root/d1/b.txt", "/root/d1/d2/c.txt"]
+    fs = _CatTreeFS(tree, skip_instance_cache=True)
+    assert fs.cat("/root", recursive=True) == {p: p.encode() for p in tree}
+    assert fs.cat("/root/d1/d2", recursive=True) == {
+        "/root/d1/d2/c.txt": b"/root/d1/d2/c.txt"
+    }
+
+
 class _CatRangesFS(fsspec.asyn.AsyncFileSystem):
     # Mirrors the gcsfs/s3fs pattern: overrides _cat_file, inherits _cat_ranges.
     cachable = False

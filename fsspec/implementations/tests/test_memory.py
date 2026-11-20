@@ -1042,3 +1042,9 @@ def test_open_implicit_directory_raises(m, mode):
         m.open("/dir", mode)
     assert m.isdir("/dir")
     assert m.cat("/dir/file") == b"data"
+
+
+def test_cat_recursive_skips_directories(m):
+    m.makedirs("/a/b/empty")
+    m.pipe({"/a/x": b"x", "/a/b/y": b"y"})
+    assert m.cat("/a", recursive=True) == {"/a/x": b"x", "/a/b/y": b"y"}
