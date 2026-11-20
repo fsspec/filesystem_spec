@@ -25,6 +25,10 @@ Fixes
 - Handle a single Path in the asynchronous methods like its string
   form, as the synchronous methods do
 
+- Give each ``rb`` reader of a ``MemoryFileSystem`` file its own read-only
+  handle, so readers of one path no longer share a position and can no longer
+  change the stored file.
+
 - Report the root of an archive without members as a directory in ``info``,
   ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
   an archive with members.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from errno import ENOTEMPTY
-from io import BytesIO
+from io import BytesIO, UnsupportedOperation
 from pathlib import PurePath, PureWindowsPath
 from typing import Any
 
@@ -321,6 +321,13 @@ class MemoryFileSystem(AbstractFileSystem):
         if mode in ["rb", "ab", "r+b", "a+b"]:
             if path in self.store:
                 f = self.store[path]
+                if mode == "rb":
+                    # every reader gets its own handle on the same bytes, so
+                    # it has its own position and leaves the stored file alone
+                    reader = _ReadOnlyMemoryFile(self, path, f.getvalue())
+                    reader.created = f.created
+                    reader.modified = f.modified
+                    return reader
                 if self._intrans and "a" in mode:
                     # append to a copy so the store is unchanged until commit
                     f = MemoryFile(self, path, f.getvalue())
@@ -381,7 +388,8 @@ class MemoryFileSystem(AbstractFileSystem):
         logger.debug("cat: %s", path)
         path = self._strip_protocol(path)
         try:
-            return bytes(self.store[path].getbuffer()[start:end])
+            # not getbuffer(), which copies a buffer that a reader shares
+            return self.store[path].getvalue()[start:end]
         except KeyError as e:
             raise FileNotFoundError(path) from e
 
@@ -440,7 +448,8 @@ class MemoryFileSystem(AbstractFileSystem):
 class MemoryFile(BytesIO):
     """A BytesIO which can't close and works as a context manager
 
-    Can initialise with data. Each path should only be active once at any moment.
+    Can initialise with data. A path should have only one writer active at any
+    moment; each reader opened with ``rb`` gets its own read-only snapshot.
 
     No need to provide fs, path if auto-committing (default)
     """
@@ -457,7 +466,8 @@ class MemoryFile(BytesIO):
 
     @property
     def size(self):
-        return self.getbuffer().nbytes
+        # not getbuffer(), which copies a buffer that a reader shares
+        return len(self.getvalue())
 
     def write(self, data):
         written = super().write(data)
@@ -486,3 +496,33 @@ class MemoryFile(BytesIO):
     def commit(self):
         self.fs.store[self.path] = self
         self.modified = datetime.now(tz=UTC)
+
+
+class _ReadOnlyMemoryFile(MemoryFile):
+    """The handle for a file opened with "rb": a snapshot that cannot be written."""
+
+    def writable(self):
+        return False
+
+    def write(self, data):
+        raise UnsupportedOperation("not writable")
+
+    def writelines(self, lines):
+        raise UnsupportedOperation("not writable")
+
+    def truncate(self, size=None):
+        raise UnsupportedOperation("not writable")
+
+    def getbuffer(self):
+        # BytesIO.getbuffer() is a writable view over a private copy, so a
+        # write through it would be lost without an error
+        return memoryview(self.getvalue())
+
+    def close(self):
+        # unlike a stored file, nothing else uses this handle, so closing it
+        # can release its share of the bytes; otherwise the next write to the
+        # stored file would have to copy them first
+        BytesIO.close(self)
+
+    def commit(self):
+        pass
