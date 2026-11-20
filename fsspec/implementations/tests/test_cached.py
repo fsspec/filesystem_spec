@@ -336,6 +336,17 @@ def test_workflow(ftp_writable, impl):
         )  # new value, because we overwrote the cached location
 
 
+@pytest.mark.parametrize("impl", ["blockcache", "cached"])
+def test_blockcache_rejects_unbuffered_target(tmp_path, impl):
+    target = fsspec.filesystem("memory")
+    target.pipe("/blockcache-target", b"data")
+    fs = fsspec.filesystem(
+        impl, fs=target, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    with pytest.raises(TypeError, match="AbstractBufferedFile.*MemoryFile"):
+        fs.cat_file("/blockcache-target")
+
+
 @pytest.mark.parametrize("impl", ["simplecache", "blockcache", "cached"])
 def test_glob(ftp_writable, impl):
     host, port, user, pw = ftp_writable
@@ -2159,6 +2170,31 @@ def test_callback_reports_download_async(tmp_path, protocol):
         assert callback.sizes == []
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("impl", ["blockcache", "cached"])
+@pytest.mark.parametrize("missing", ["blocksize", "_fetch_range"])
+def test_rejected_blockcache_handle_is_closed(tmp_path, monkeypatch, impl, missing):
+    import io
+
+    target = fsspec.filesystem("memory")
+    target.pipe("/unsupported", b"data")
+    handle = io.BytesIO(b"data")
+    handle.size = 4
+    if missing != "blocksize":
+        handle.blocksize = 4
+    if missing != "_fetch_range":
+        handle._fetch_range = lambda start, end: b"data"[start:end]
+    monkeypatch.setattr(target, "_open", lambda *args, **kwargs: handle)
+    fs = fsspec.filesystem(
+        impl, fs=target, cache_storage=str(tmp_path), skip_instance_cache=True
+    )
+    try:
+        with pytest.raises(TypeError, match="simplecache or filecache"):
+            fs.cat_file("/unsupported")
+        assert handle.closed
+    finally:
+        handle.close()
 
 
 @pytest.mark.parametrize("uploaded", [0, 1])
