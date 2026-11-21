@@ -222,6 +222,9 @@ class SFTPFileSystem(AbstractFileSystem):
 
     def _connect(self):
         logger.debug("Connecting to SFTP server %s", self.host)
+        client = getattr(self, "client", None)
+        if client is not None:
+            client.close()
         self.client = paramiko.SSHClient()
         # Without the known hosts, every host is unknown to paramiko: the
         # policy accepts whatever key it is shown and a changed key goes unnoticed.
