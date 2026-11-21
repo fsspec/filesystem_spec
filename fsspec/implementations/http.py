@@ -100,7 +100,7 @@ async def _strip_headers_on_cross_origin_redirect(
             params.headers.popall(header, None)
 
 
-def _normalize_basic_auth(options: dict, *, preserve_dict: bool = False) -> None:
+def _normalize_basic_auth(options: dict) -> None:
     """Convert ``BasicAuth`` in ``options["auth"]`` into an ``Authorization`` header."""
     auth = options.get("auth")
     if not isinstance(auth, aiohttp.BasicAuth):
@@ -114,10 +114,7 @@ def _normalize_basic_auth(options: dict, *, preserve_dict: bool = False) -> None
         )
     options.pop("auth")
     headers["Authorization"] = auth.encode()
-    if preserve_dict and len(headers) == len(dict(headers)):
-        options["headers"] = dict(headers)
-    else:
-        options["headers"] = headers
+    options["headers"] = headers
 
 
 def _hoist_unscoped_cookies(
@@ -407,9 +404,6 @@ class HTTPFileSystem(AsyncFileSystem):
         request_options.pop("listings_expiry_time", None)
         request_options.pop("max_paths", None)
         request_options.pop("skip_instance_cache", None)
-        _normalize_basic_auth(request_options, preserve_dict=True)
-        if self.client_kwargs:
-            _normalize_basic_auth(dict(self.client_kwargs))
         self.kwargs = request_options
 
     @property
