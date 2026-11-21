@@ -188,11 +188,15 @@ class FSMap(MutableMapping):
         self.fs.mkdirs(self.fs._parent(key), exist_ok=True)
         self.fs.pipe_file(key, maybe_convert(value))
 
+    def _paths(self):
+        # Directory markers cannot round-trip through _key_to_str.
+        return (path for path in self.fs.find(self.root) if not path.endswith("/"))
+
     def __iter__(self):
-        return (self._str_to_key(x) for x in self.fs.find(self.root))
+        return (self._str_to_key(path) for path in self._paths())
 
     def __len__(self):
-        return len(self.fs.find(self.root))
+        return sum(1 for _ in self._paths())
 
     def __delitem__(self, key):
         """Remove key"""
