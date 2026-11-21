@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 import yarl
+from multidict import CIMultiDict
 
 from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import DEFAULT_CALLBACK
@@ -299,6 +300,16 @@ class HTTPFileSystem(AsyncFileSystem):
             trace_configs = list(client_kwargs.get("trace_configs") or ())
             trace_configs.append(trace_config)
             client_kwargs["trace_configs"] = trace_configs
+            auth = client_kwargs.get("auth")
+            if isinstance(auth, aiohttp.BasicAuth):
+                # aiohttp adds a session's auth to every request, including
+                # the one following a redirect to another origin, but drops a
+                # default Authorization header there
+                headers = CIMultiDict(client_kwargs.get("headers") or {})
+                if aiohttp.hdrs.AUTHORIZATION not in headers:
+                    headers[aiohttp.hdrs.AUTHORIZATION] = auth.encode()
+                    client_kwargs["headers"] = headers
+                    del client_kwargs["auth"]
             self._session = await self.get_client(loop=self.loop, **client_kwargs)
             if not self.asynchronous:
                 weakref.finalize(self, self.close_session, self.loop, self._session)
