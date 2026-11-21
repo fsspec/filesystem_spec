@@ -20,6 +20,8 @@ Enhancements
 
 Fixes
 
+- Reject writes through read-only memory file handles (#2193).
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
