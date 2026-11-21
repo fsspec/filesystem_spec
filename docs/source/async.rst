@@ -8,8 +8,11 @@ allows for concurrent calls within bulk operations such as ``cat`` (fetch
 the contents of many files at once) even from normal code, and for the direct
 use of fsspec in async code without blocking.
 Async implementations derive from the class ``fsspec.asyn.AsyncFileSystem``.
-The class attribute ``async_impl`` can be used to test whether an
-implementation is async of not.
+The ``async_impl`` attribute indicates whether an implementation supports
+asynchronous operations. For an ``AsyncFileSystem`` instance, the
+``asynchronous`` attribute records whether it was initialized with
+``asynchronous=True`` for use within an async context. An async-capable
+implementation can also be used through the synchronous API described below.
 
 ``AsyncFileSystem`` contains ``async def`` coroutine versions of the methods of
 ``AbstractFileSystem``. By convention, these methods are prefixed with "_"
@@ -18,7 +21,7 @@ when you know what you are doing. In most cases, the code is identical or
 slightly modified by replacing sync calls with ``await`` calls to async
 functions.
 
-The only async implementation built into ``fsspec`` is ``HTTPFileSystem``.
+``HTTPFileSystem`` is a built-in asynchronous implementation.
 
 Synchronous API
 ---------------

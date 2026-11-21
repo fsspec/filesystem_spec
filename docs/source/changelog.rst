@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Clarify ``async_impl`` capability and the ``asynchronous`` instance context
+  in the async documentation (#1709).
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
