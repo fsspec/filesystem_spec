@@ -4,11 +4,14 @@ import logging
 import random
 import re
 import weakref
+from collections.abc import Mapping
 from copy import copy
+from http.cookies import Morsel, SimpleCookie
 from urllib.parse import urlparse
 
 import aiohttp
 import yarl
+from multidict import CIMultiDict
 
 from fsspec.asyn import AbstractAsyncStreamedFile, AsyncFileSystem, sync, sync_wrapper
 from fsspec.callbacks import DEFAULT_CALLBACK
@@ -34,22 +37,34 @@ from ..caching import AllBytes
 ex = re.compile(r"""<(a|A)\s[^<>]*?(?<=\s)(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
-_REDIRECT_SAFE_HEADERS = {
-    "accept",
-    "accept-encoding",
-    "accept-language",
-    "cache-control",
-    "content-encoding",
-    "content-language",
-    "content-type",
-    "if-match",
-    "if-modified-since",
-    "if-none-match",
-    "if-range",
-    "if-unmodified-since",
-    "range",
-    "user-agent",
-}
+_REDIRECT_SAFE_HEADERS = frozenset(
+    {
+        "accept",
+        "accept-encoding",
+        "accept-language",
+        "cache-control",
+        "content-encoding",
+        "content-language",
+        "content-length",
+        "content-type",
+        "if-match",
+        "if-modified-since",
+        "if-none-match",
+        "if-range",
+        "if-unmodified-since",
+        "range",
+        "user-agent",
+    }
+)
+
+
+def _url_origin(url: yarl.URL) -> tuple[str, str | None, int | None]:
+    """Return normalized ``(scheme, host, port)`` origin tuple for ``url``."""
+    return (
+        url.scheme.lower(),
+        url.host.lower() if url.host is not None else None,
+        url.port,
+    )
 
 
 async def _strip_headers_on_cross_origin_redirect(
@@ -57,7 +72,7 @@ async def _strip_headers_on_cross_origin_redirect(
     context: object,
     params: aiohttp.TraceRequestRedirectParams,
 ) -> None:
-    """Do not forward custom request headers to a different origin.
+    """Do not forward non-safe request headers to a different origin.
 
     This callback follows the ``TraceConfig.on_request_redirect`` signature
     documented at https://docs.aiohttp.org/en/stable/tracing_reference.html.
@@ -68,13 +83,128 @@ async def _strip_headers_on_cross_origin_redirect(
     if not location:
         return
 
-    redirect_url = params.url.join(yarl.URL(location))
-    if params.url.origin() == redirect_url.origin():
+    requote = getattr(session, "_requote_redirect_url", True)
+    try:
+        target = yarl.URL(location, encoded=not requote)
+    except ValueError:
+        return
+
+    if target.scheme and target.scheme.lower() not in ("http", "https"):
+        return
+    redirect_url = target if target.scheme else params.url.join(target)
+    if not redirect_url.host or _url_origin(params.url) == _url_origin(redirect_url):
         return
 
     for header in tuple(params.headers):
         if header.lower() not in _REDIRECT_SAFE_HEADERS:
             params.headers.popall(header, None)
+
+
+def _normalize_basic_auth(options: dict, *, preserve_dict: bool = False) -> None:
+    """Convert ``BasicAuth`` in ``options["auth"]`` into an ``Authorization`` header."""
+    auth = options.get("auth")
+    if not isinstance(auth, aiohttp.BasicAuth):
+        return
+
+    headers = CIMultiDict(options.get("headers") or ())
+    if "Authorization" in headers:
+        raise ValueError(
+            "Cannot combine AUTHORIZATION header with AUTH argument or "
+            "credentials encoded in URL"
+        )
+    options.pop("auth")
+    headers["Authorization"] = auth.encode()
+    if preserve_dict and len(headers) == len(dict(headers)):
+        options["headers"] = dict(headers)
+    else:
+        options["headers"] = headers
+
+
+def _hoist_unscoped_cookies(
+    cookies: object, headers: CIMultiDict[str]
+) -> list[tuple[str, object]]:
+    """Encode unscoped cookies into ``headers["Cookie"]``; return domain-scoped ones."""
+    items = cookies.items() if isinstance(cookies, Mapping) else cookies
+    unscoped = SimpleCookie()
+    scoped: list[tuple[str, object]] = []
+    for name, value in items:
+        if isinstance(value, Morsel) and value["domain"]:
+            scoped.append((name, value))
+        elif isinstance(value, Morsel):
+            unscoped[name] = value.value
+            unscoped[name].set(name, value.value, value.coded_value)
+        else:
+            unscoped[name] = value
+
+    if unscoped:
+        encoded = unscoped.output(header="", sep=";").strip()
+        headers["Cookie"] = "; ".join((*headers.popall("Cookie", ()), encoded))
+    return scoped
+
+
+def _make_base_url_origin_guard(base_url: object, raw_headers: object):
+    """Build an ``on_request_start`` hook scoping session headers to ``base_url``."""
+    try:
+        parsed = base_url if isinstance(base_url, yarl.URL) else yarl.URL(base_url)
+    except ValueError:
+        return None
+    if not (parsed.absolute and parsed.host):
+        return None
+
+    scoped: dict[str, list[str]] = {}
+    for key, val in CIMultiDict(raw_headers).items():
+        if (k := key.lower()) not in _REDIRECT_SAFE_HEADERS:
+            scoped.setdefault(k, []).append(val)
+    if not scoped:
+        return None
+
+    base_origin = _url_origin(parsed)
+
+    async def _guard(
+        session: aiohttp.ClientSession,
+        context: object,
+        params: aiohttp.TraceRequestStartParams,
+    ) -> None:
+        if _url_origin(params.url) == base_origin:
+            return
+        for key, session_vals in scoped.items():
+            to_remove = list(session_vals)
+            for val in params.headers.popall(key, ()):
+                if val in to_remove:
+                    to_remove.remove(val)
+                else:
+                    params.headers.add(key, val)
+
+    return _guard
+
+
+def _prepare_session_kwargs(client_kwargs: Mapping) -> dict:
+    """Return a copy of ``client_kwargs`` with origin-scoped credential protections."""
+    prepared = dict(client_kwargs)
+    _normalize_basic_auth(prepared)
+
+    cookies = prepared.get("cookies")
+    if cookies and not isinstance(prepared.get("cookie_jar"), aiohttp.DummyCookieJar):
+        headers = CIMultiDict(prepared.get("headers") or ())
+        scoped = _hoist_unscoped_cookies(cookies, headers)
+        if scoped:
+            prepared["cookies"] = scoped
+        else:
+            prepared.pop("cookies")
+        if headers:
+            prepared["headers"] = headers
+
+    trace_config = aiohttp.TraceConfig()
+    trace_config.on_request_redirect.append(_strip_headers_on_cross_origin_redirect)
+    if (
+        (base_url := prepared.get("base_url")) is not None
+        and prepared.get("headers")
+        and (guard := _make_base_url_origin_guard(base_url, prepared["headers"]))
+    ):
+        trace_config.on_request_start.append(guard)
+
+    prepared["trace_configs"] = [*(prepared.get("trace_configs") or ()), trace_config]
+    return prepared
 
 
 _RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
@@ -168,8 +298,12 @@ class HTTPFileSystem(AsyncFileSystem):
     URLs are passed unfiltered to aiohttp, so all addresses are accessible. Where URLs are
     supplied by a user, the calling application may wish to filter to prevent scanning.
 
-    On cross-origin redirects, custom request headers are removed to avoid
-    forwarding credentials such as API keys to another host.
+    On cross-origin redirects (when scheme, host, or port changes), ``auth``,
+    unscoped session ``cookies``, and non-safe custom request headers are
+    stripped to avoid forwarding credentials such as BasicAuth passwords,
+    session cookies, or API keys to another origin. When ``base_url`` is set
+    in ``client_kwargs``, session-level credentials and non-safe headers are
+    also scoped to ``base_url``'s origin.
     """
 
     protocol = ("http", "https")
@@ -212,11 +346,17 @@ class HTTPFileSystem(AsyncFileSystem):
         client_kwargs: dict
             Passed to aiohttp.ClientSession, see
             https://docs.aiohttp.org/en/stable/client_reference.html
-            For example, ``{'auth': aiohttp.BasicAuth('user', 'pass')}``
+            For example, ``{'auth': aiohttp.BasicAuth('user', 'pass')}``.
+            ``BasicAuth`` and unscoped ``cookies`` supplied here are scoped to
+            the request origin (or ``base_url`` origin, if set) and stripped on
+            cross-origin redirects.
         get_client: Callable[..., aiohttp.ClientSession]
             A callable, which takes keyword arguments and constructs
             an aiohttp.ClientSession. Its state will be managed by
-            the HTTPFileSystem class.
+            the HTTPFileSystem class. Pass credentials via ``client_kwargs`` or
+            ``storage_options`` rather than embedding session defaults directly
+            inside a custom ``get_client`` so cross-origin redirect stripping
+            can apply to them.
         retries: int
             How many times a transient failure of a read (see below)
             is retried in ``cat_file``, ``HTTPFile`` block reads and the
@@ -267,6 +407,9 @@ class HTTPFileSystem(AsyncFileSystem):
         request_options.pop("listings_expiry_time", None)
         request_options.pop("max_paths", None)
         request_options.pop("skip_instance_cache", None)
+        _normalize_basic_auth(request_options, preserve_dict=True)
+        if self.client_kwargs:
+            _normalize_basic_auth(dict(self.client_kwargs))
         self.kwargs = request_options
 
     @property
@@ -291,14 +434,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def set_session(self):
         if self._session is None:
-            client_kwargs = self.client_kwargs.copy()
-            trace_config = aiohttp.TraceConfig()
-            trace_config.on_request_redirect.append(
-                _strip_headers_on_cross_origin_redirect
-            )
-            trace_configs = list(client_kwargs.get("trace_configs") or ())
-            trace_configs.append(trace_config)
-            client_kwargs["trace_configs"] = trace_configs
+            client_kwargs = _prepare_session_kwargs(self.client_kwargs)
             self._session = await self.get_client(loop=self.loop, **client_kwargs)
             if not self.asynchronous:
                 weakref.finalize(self, self.close_session, self.loop, self._session)
@@ -751,13 +887,15 @@ class HTTPFileSystem(AsyncFileSystem):
                 "rejected defensively"
             )
         url = self._strip_protocol(path)
-        headers = kwargs.pop("headers", {})
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        headers = CIMultiDict(kw.pop("headers", {}) or ())
         headers["Content-Length"] = str(len(value))
 
         session = await self.set_session()
 
         async with session.put(
-            self.encode_url(url), data=value, headers=headers, **kwargs
+            self.encode_url(url), data=value, headers=headers, **kw
         ) as r:
             r.raise_for_status()
 
