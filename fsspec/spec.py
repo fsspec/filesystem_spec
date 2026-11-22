@@ -211,6 +211,11 @@ class AbstractFileSystem(metaclass=_Cached):
     root_marker = ""  # For some FSs, may require leading '/' or other character
     transaction_type = Transaction
 
+    #: Whether the backend advertises read-only storage. Not an access-control option.
+    read_only = False
+    #: Whether contents and metadata are fixed for the same path and configuration.
+    immutable = False
+
     #: Extra *class attributes* that should be considered when hashing.
     _extra_tokenize_attributes = ()
     #: *storage options* that should not be considered when hashing.
