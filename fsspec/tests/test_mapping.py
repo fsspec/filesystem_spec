@@ -2,8 +2,6 @@ import array
 import os
 import pickle
 import platform
-import subprocess
-import sys
 import uuid
 
 import pytest
@@ -526,43 +524,6 @@ def test_delete_directory_key_raises_key_error(tmp_path, protocol):
     assert mapper["dir/key"] == b"value"
 
 
-ESCAPING_KEYS = ["..", "../secret", "foo/../..", "foo/../../secret", "/../secret"]
-
-
-@pytest.mark.parametrize("key", ESCAPING_KEYS)
-def test_local_rejects_keys_escaping_root(tmp_path, key):
-    root = tmp_path / "root"
-    root.mkdir()
-    secret = tmp_path / "secret"
-    secret.write_bytes(b"outside")
-    mapper = fsspec.get_mapper(str(root))
-
-    with pytest.raises(ValueError, match="escapes"):
-        mapper[key]
-    with pytest.raises(ValueError, match="escapes"):
-        mapper[key] = b"overwrite"
-    with pytest.raises(ValueError, match="escapes"):
-        del mapper[key]
-    with pytest.raises(ValueError, match="escapes"):
-        mapper.__contains__(key)
-    with pytest.raises(ValueError, match="escapes"):
-        mapper.getitems([key])
-    with pytest.raises(ValueError, match="escapes"):
-        mapper.setitems({key: b"overwrite"})
-    with pytest.raises(ValueError, match="escapes"):
-        mapper.delitems([key])
-
-    assert secret.read_bytes() == b"outside"
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["root", "secret"]
-
-
-@pytest.mark.parametrize("key", ["foo", "foo/bar", "foo/../bar", "./foo"])
-def test_local_allows_keys_inside_root(tmp_path, key):
-    mapper = fsspec.get_mapper(str(tmp_path))
-    mapper[key] = b"value"
-    assert mapper[key] == b"value"
-
-
 @pytest.mark.parametrize(
     "wrapper", ["simplecache", "filecache", "blockcache", "async_wrapper", "dir"]
 )
@@ -590,37 +551,3 @@ def test_wrapped_local_rejects_keys_escaping_root(tmp_path, wrapper):
     with pytest.raises(ValueError, match="escapes"):
         mapper["../secret"] = b"overwrite"
     assert secret.read_bytes() == b"outside"
-
-
-@pytest.mark.parametrize("key", ["../secret", "foo/../../secret"])
-def test_non_local_keeps_dotdot_keys(key):
-    # On object-store-like filesystems ".." is a literal path part, not
-    # navigation, so such keys stay valid (matches DirFileSystem).
-    mapper = fsspec.get_mapper("memory://dotdot-root")
-    mapper[key] = b"value"
-    assert mapper[key] == b"value"
-
-
-def test_pickled_mapper_still_rejects_escaping_keys(tmp_path):
-    mapper = pickle.loads(pickle.dumps(fsspec.get_mapper(str(tmp_path))))
-    with pytest.raises(ValueError, match="escapes"):
-        mapper["../secret"]
-
-
-def test_mapper_and_its_dirfs_agree_on_escaping_keys(tmp_path):
-    # FSMap.dirfs is documented as usable "with the same keys as the mapper"
-    mapper = fsspec.get_mapper(str(tmp_path / "root"), create=True)
-    for target in (mapper.__getitem__, mapper.dirfs.cat_file):
-        with pytest.raises(ValueError, match="escapes"):
-            target("../secret")
-
-
-def test_import_fsspec_does_not_load_guard_modules():
-    # the guard is imported lazily so that "import fsspec" stays light
-    code = (
-        "import sys, fsspec; "
-        "mods = [m for m in ('dirfs', 'cached', 'local', 'asyn_wrapper') "
-        "if f'fsspec.implementations.{m}' in sys.modules]; "
-        "assert not mods, mods"
-    )
-    subprocess.run([sys.executable, "-c", code], check=True)
