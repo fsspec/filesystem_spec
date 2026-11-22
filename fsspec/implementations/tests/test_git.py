@@ -184,3 +184,32 @@ def test_special_objects_are_not_directories(repo):
     for path in ("link/child", "submodule/file1"):
         with pytest.raises(FileNotFoundError):
             fs.open(path)
+
+
+def test_read_only_capability(repo):
+    path, sha = repo
+    branch_fs = fsspec.filesystem("git", path=path, ref="master")
+    commit_fs = fsspec.filesystem("git", path=path, ref=sha)
+    for fs in (branch_fs, commit_fs):
+        assert fs.read_only is True
+        assert fs.immutable is False
+
+    assert branch_fs.cat_file("file1") == b"data00"
+    assert commit_fs.cat_file("file1") == b"data0"
+
+    git_repo = pygit2.Repository(path)
+    parent = git_repo.revparse_single("master")
+    builder = git_repo.TreeBuilder(parent.tree)
+    builder.insert("file1", git_repo.create_blob(b"updated"), pygit2.GIT_FILEMODE_BLOB)
+    signature = pygit2.Signature("Test", "test@example.com")
+    git_repo.create_commit(
+        "refs/heads/master",
+        signature,
+        signature,
+        "update master",
+        builder.write(),
+        [parent.id],
+    )
+
+    assert branch_fs.cat_file("file1") == b"updated"
+    assert commit_fs.cat_file("file1") == b"data0"
