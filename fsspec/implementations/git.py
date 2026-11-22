@@ -15,6 +15,7 @@ class GitFileSystem(AbstractFileSystem):
 
     root_marker = ""
     cachable = True
+    read_only = True
 
     def __init__(self, path=None, fo=None, ref=None, **kwargs):
         """

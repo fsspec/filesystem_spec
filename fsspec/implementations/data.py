@@ -20,6 +20,8 @@ class DataFileSystem(AbstractFileSystem):
     """
 
     protocol = "data"
+    read_only = True
+    immutable = True
 
     def __init__(self, **kwargs):
         """No parameters for this filesystem"""
