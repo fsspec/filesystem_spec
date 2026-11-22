@@ -53,6 +53,26 @@ cleanup also runs if processing raises an exception.
     finally:
         f.close()
 
+Filesystem capabilities
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Backends can advertise two boolean attributes on a filesystem instance:
+
+* ``read_only``: the backend does not support changing its stored data.
+* ``immutable``: contents and metadata for the same path and configuration
+  cannot change. This does not apply when selecting a different URL or
+  overriding the storage view, such as by passing a different ``ref=``.
+
+Both default to ``False``, meaning the corresponding guarantee is not advertised.
+This does not prove that a backend is writable or that its data will change.
+These attributes describe capabilities; they are not options for restricting
+access and do not intercept I/O operations.
+
+``DataFileSystem`` advertises both guarantees because each data URL contains
+its own content. ``GitFileSystem`` advertises ``read_only`` but leaves
+``immutable`` at the conservative default, including for commit-like references;
+its existing reference resolution is unchanged.
+
 Implementing a backend
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -68,6 +88,9 @@ some implementations may be read-only, in which case things like ``pipe``,
 ``put``, ``touch``, ``rm``, etc., can be left as not-implemented
 (or you might implement them and raise PermissionError, OSError 30 or some
 read-only exception).
+
+Implementations can override ``read_only`` and ``immutable`` with class
+attributes or instance properties when the corresponding guarantees hold.
 
 We may eventually refactor ``AbstractFileSystem`` to split the default implementation,
 the set of methods that you might implement in a new backend, and the
