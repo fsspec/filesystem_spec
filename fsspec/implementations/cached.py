@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import ntpath
 import os
 import secrets
 import tempfile
 import time
+import unicodedata
 import weakref
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, suppress
@@ -68,6 +70,34 @@ def _atomic_get(fs, rpaths, lpaths, callback=DEFAULT_CALLBACK):
             [stack.enter_context(_tempfile(fn)) for fn in lpaths],
             callback=callback,
         )
+
+
+def _resolve_cache_parts(base: str, rel: str) -> tuple[str, ...]:
+    if os.name == "nt":
+        joined = ntpath.realpath(
+            ntpath.join(ntpath.abspath(os.path.realpath(base)), rel)
+        )
+        drive, tail = ntpath.splitdrive(joined)
+        return (
+            drive.casefold(),
+            *[
+                s
+                for p in tail.split("\\")
+                if p and p != "." and (s := p.split(":", 1)[0].rstrip(". ").casefold())
+            ],
+        )
+    resolved = os.path.realpath(os.path.join(base, rel))
+    return ("/", *[p for p in resolved.split("/") if p])
+
+
+def _fold_part(part: str) -> str:
+    return unicodedata.normalize("NFD", part).casefold()
+
+
+def _parts_parent_dir(parts: tuple[str, ...], end: int) -> str:
+    if os.name == "nt":
+        return ntpath.join(parts[0] + "\\", *parts[1:end])
+    return "/" + "/".join(parts[1:end])
 
 
 class WriteCachedTransaction(Transaction):
@@ -182,10 +212,11 @@ class CachingFileSystem(ChainedFileSystem):
             owner only.
         cache_metadata_name: str (optional)
             Name of the file holding the cache metadata inside each cache
-            storage directory, "cache" by default. With ``same_names=True``
-            a remote file called "cache" would be stored under that same name
-            and replace the metadata, so choose a different name here if the
-            target has such a file.
+            storage directory, "cache" by default. Mapped cache filenames that
+            collide with ``cache_metadata_name`` on the cache storage
+            filesystem are rejected with ``ValueError``, so choose a different
+            name here if ``same_names=True`` or a custom ``cache_mapper`` can
+            produce that name.
         callback: fsspec.callbacks.Callback (optional)
             Receives the progress of the downloads made into the cache on a
             cache miss, i.e. the ``get`` operations on the target filesystem
@@ -226,6 +257,7 @@ class CachingFileSystem(ChainedFileSystem):
         # recalculated the next time cache_size() is called. On writes to the
         # cache this is reset to None.
         self._cache_size = None
+        self._alias_cache: dict[tuple[str, str, str], bool] = {}
 
         if same_names is not None and cache_mapper is not None:
             raise ValueError(
@@ -413,7 +445,7 @@ class CachingFileSystem(ChainedFileSystem):
             # TODO: action where partial file exists in read-only cache
             logger.debug("Opening partially cached copy of %s", path)
         else:
-            hash = self._mapper(path)
+            hash = self._map_path(path)
             fn = os.path.join(self.storage[-1], hash)
             blocks = set()
             detail = {
@@ -486,10 +518,81 @@ class CachingFileSystem(ChainedFileSystem):
     def _parent(self, path):
         return self.fs._parent(path)
 
+    def _parts_alias(self, parent_dir: str, a: str, b: str) -> bool:
+        pathmod = ntpath if os.name == "nt" else os.path
+        pa = pathmod.join(parent_dir, a)
+        pb = pathmod.join(parent_dir, b)
+        try:
+            a_exists = os.path.lexists(pa)
+            b_exists = os.path.lexists(pb)
+            if a_exists or b_exists:
+                return a_exists and b_exists and os.path.samefile(pa, pb)
+        except OSError:
+            return True
+        probe_dir = parent_dir
+        while not os.path.isdir(probe_dir):
+            next_dir = pathmod.dirname(probe_dir)
+            if next_dir == probe_dir:
+                break
+            probe_dir = next_dir
+        key = (probe_dir, a, b)
+        if key not in self._alias_cache:
+            token = secrets.token_hex(6)
+            p1 = pathmod.join(probe_dir, f".fsspec_case_{token}_{a}")
+            p2 = pathmod.join(probe_dir, f".fsspec_case_{token}_{b}")
+            try:
+                with open(p1, "xb"):
+                    pass
+                self._alias_cache[key] = os.path.lexists(p2) and os.path.samefile(
+                    p1, p2
+                )
+            except OSError:
+                self._alias_cache[key] = True
+            finally:
+                with suppress(OSError):
+                    os.remove(p1)
+        return self._alias_cache[key]
+
+    def _map_path(self, path: str) -> str:
+        mapped = self._mapper(path)
+        storage_parts = _resolve_cache_parts(self.storage[-1], "")
+        target_parts = _resolve_cache_parts(self.storage[-1], mapped)
+        collides = not mapped or (
+            len(target_parts) <= len(storage_parts)
+            and storage_parts[: len(target_parts)] == target_parts
+        )
+        if not collides:
+            for storage in self.storage:
+                meta_parts = _resolve_cache_parts(storage, self.cache_metadata_name)
+                prefix_len = min(len(target_parts), len(meta_parts))
+                if target_parts[:prefix_len] == meta_parts[:prefix_len]:
+                    collides = True
+                    break
+                if [_fold_part(p) for p in target_parts[:prefix_len]] == [
+                    _fold_part(p) for p in meta_parts[:prefix_len]
+                ] and all(
+                    self._parts_alias(
+                        _parts_parent_dir(meta_parts, i),
+                        target_parts[i],
+                        meta_parts[i],
+                    )
+                    for i in range(1, prefix_len)
+                    if target_parts[i] != meta_parts[i]
+                ):
+                    collides = True
+                    break
+        if collides:
+            raise ValueError(
+                f"Cached filename {mapped!r} for {path!r} collides with "
+                f"cache_metadata_name={self.cache_metadata_name!r}; choose a "
+                f"different cache_metadata_name or cache_mapper"
+            )
+        return mapped
+
     def hash_name(self, path: str, *args: Any) -> str:
         # Kept for backward compatibility with downstream libraries.
         # Ignores extra arguments, previously same_name boolean.
-        return self._mapper(path)
+        return self._map_path(path)
 
     def close_and_update(self, f, close):
         """Called when a file is closing, so store the set of blocks"""
@@ -522,6 +625,8 @@ class CachingFileSystem(ChainedFileSystem):
             "__getattribute__",
             "__reduce__",
             "_make_local_details",
+            "_parts_alias",
+            "_map_path",
             "_ukey_async",
             "_check_file_async",
             "_download_async",
@@ -658,15 +763,18 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         if "r" in open_files.mode:
             self._mkcache()
         else:
+            fns = [
+                os.path.join(self.storage[-1], self._map_path(path)) for path in paths
+            ]
             return [
                 LocalTempFile(
                     self.fs,
                     path,
                     mode=open_files.mode,
-                    fn=os.path.join(self.storage[-1], self._mapper(path)),
+                    fn=fn,
                     **kwargs,
                 )
-                for path in paths
+                for path, fn in zip(paths, fns)
             ]
 
         if self.compression:
@@ -674,7 +782,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         details = [self._check_file(sp) for sp in paths]
         downpath = [p for p, d in zip(paths, details) if not d]
         downfn0 = [
-            os.path.join(self.storage[-1], self._mapper(p))
+            os.path.join(self.storage[-1], self._map_path(p))
             for p, d in zip(paths, details)
         ]  # keep these path names for opening later
         downfn = [fn for fn, d in zip(downfn0, details) if not d]
@@ -686,7 +794,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             newdetail = [
                 {
                     "original": path,
-                    "fn": self._mapper(path),
+                    "fn": self._map_path(path),
                     "blocks": True,
                     "time": time.time(),
                     "uid": self.fs.ukey(path),
@@ -718,7 +826,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         self._cache_size = None
 
     def _make_local_details(self, path, uid=None):
-        hash = self._mapper(path)
+        hash = self._map_path(path)
         fn = os.path.join(self.storage[-1], hash)
         detail = {
             "original": path,
@@ -772,6 +880,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         paths = self.expand_path(
             path, recursive=recursive, maxdepth=kwargs.get("maxdepth")
         )
+        orig_paths_len = len(paths)
         getpaths = []
         storepaths = []
         fns = []
@@ -782,7 +891,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 if not detail:
                     if self.compression:
                         self._get_cached_file_before_open(p)
-                        fn = os.path.join(self.storage[-1], self._mapper(p))
+                        fn = os.path.join(self.storage[-1], self._map_path(p))
                     else:
                         fn = self._make_local_details(p)
                         getpaths.append(p)
@@ -806,7 +915,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             with open(fn, "rb") as f:
                 out[p] = f.read()
             callback.relative_update(1)
-        if isinstance(path, str) and len(paths) == 1 and recursive is False:
+        if (
+            isinstance(path, str)
+            and orig_paths_len == 1
+            and len(paths) == 1
+            and recursive is False
+        ):
             out = out[paths[0]]
         return out
 
@@ -874,7 +988,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             f.original = detail.get("original")
             return f
 
-        hash = self._mapper(path)
+        hash = self._map_path(path)
         fn = os.path.join(self.storage[-1], hash)
         user_specified_kwargs = {
             k: v
@@ -887,7 +1001,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     async def _cat_file(self, path, start=None, end=None, **kwargs):
         logger.debug("async cat_file %s", path)
         path = self._strip_protocol(path)
-        sha = self._mapper(path)
+        sha = self._map_path(path)
         fn = await self._check_file_async(path)
 
         if not fn:
@@ -915,7 +1029,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             if p not in local:
                 detail = self._check_file(p)
                 if not detail:
-                    fn = os.path.join(self.storage[-1], self._mapper(p))
+                    fn = os.path.join(self.storage[-1], self._map_path(p))
                     download.append(fn)
                     rpaths.append(p)
                 else:
@@ -934,13 +1048,24 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         lpaths = []
         local = {}
         need = {}
+        errors = {}
         for p in paths:
             if p not in local:
-                local[p] = await self._check_file_async(p) or need.setdefault(
-                    p, os.path.join(self.storage[-1], self._mapper(p))
-                )
+                cached = await self._check_file_async(p)
+                if cached:
+                    local[p] = cached
+                else:
+                    try:
+                        fn = os.path.join(self.storage[-1], self._map_path(p))
+                    except Exception as e:
+                        if on_error != "return":
+                            raise
+                        errors[p] = e
+                        local[p] = None
+                    else:
+                        need[p] = fn
+                        local[p] = fn
             lpaths.append(local[p])
-        errors = {}
         if need:
             # not self.fs._get: each download needs its own temp file
             results = await _run_coros_in_chunks(
@@ -948,9 +1073,11 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                 batch_size=self.fs.batch_size,
                 return_exceptions=True,
             )
-            errors = {p: e for p, e in zip(need, results) if isinstance(e, Exception)}
+            errors.update(
+                {p: e for p, e in zip(need, results) if isinstance(e, Exception)}
+            )
             self.save_cache()
-            if errors and on_error == "raise":
+            if errors and on_error != "return":
                 raise next(iter(errors.values()))
 
         out = LocalFileSystem().cat_ranges(
@@ -991,9 +1118,12 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             if not os.path.exists(storage):
                 self._makedirs(storage)
 
+    def _map_path(self, path: str) -> str:
+        return self._mapper(path)
+
     def _check_file(self, path):
         self._check_cache()
-        sha = self._mapper(path)
+        sha = self._map_path(path)
         for storage in self.storage:
             fn = os.path.join(storage, sha)
             if os.path.exists(fn):
@@ -1118,7 +1248,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
         )
 
     def _get_cached_file_before_open(self, path, **kwargs):
-        sha = self._mapper(path)
+        sha = self._map_path(path)
         fn = os.path.join(self.storage[-1], sha)
         logger.debug("Copying %s to local cache", path)
 
@@ -1151,7 +1281,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def _open(self, path, mode="rb", **kwargs):
         path = self._strip_protocol(path)
-        sha = self._mapper(path)
+        sha = self._map_path(path)
 
         # For read (or append), (try) download from remote
         if "r" in mode or "a" in mode:
