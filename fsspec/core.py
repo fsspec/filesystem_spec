@@ -719,12 +719,22 @@ def get_fs_token_paths(
     else:
         if ("w" in mode or "x" in mode) and expand:
             paths = _expand_paths(paths, name_function, num)
-        elif "*" in paths:
+        elif _has_read_glob(paths):
             paths = [f for f in sorted(fs.glob(paths)) if not fs.isdir(f)]
         else:
             paths = [paths]
 
     return fs, fs._fs_token, paths
+
+
+def _has_read_glob(path):
+    """Whether a single read-mode path should be expanded with glob"""
+    # Checked on the stripped path rather than the filesystem class so that
+    # chained URLs such as "simplecache::https://..." are covered too.
+    if path.startswith(("http://", "https://")):
+        # as in HTTPFileSystem's own glob: "?" starts the query string
+        return "*" in path or "[" in path
+    return has_magic(path)
 
 
 def _expand_paths(path, name_function, num):
