@@ -29,6 +29,9 @@ Fixes
   ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
   an archive with members.
 
+- Document protocol-keyed storage options for chained URLs in the opening APIs
+  (#1573).
+
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
 
