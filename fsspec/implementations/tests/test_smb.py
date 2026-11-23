@@ -184,6 +184,22 @@ def test_parent_pathlike():
     assert fsmb._parent(PurePosixPath("/share/dir/file.txt")) == "/share/dir"
 
 
+@pytest.mark.parametrize("autocommit", [True, False])
+def test_open_share_access(monkeypatch, autocommit):
+    import smbclient
+
+    calls = []
+    monkeypatch.setattr(
+        smbclient, "open_file", lambda *args, **kwargs: calls.append(kwargs)
+    )
+    fsmb = fsspec.get_filesystem_class("smb")(
+        host="example", share_access="r", register_session_retries=-1
+    )
+    fsmb.open("/share/file.txt", "wb", autocommit=autocommit)
+    fsmb.open("/share/file.txt", "wb", autocommit=autocommit, share_access="w")
+    assert [kw.get("share_access") for kw in calls] == ["r", "w"]
+
+
 @pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_open_not_pathlike(smb_params):
     fsmb = fsspec.get_filesystem_class("smb")(**smb_params)
