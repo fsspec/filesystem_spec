@@ -795,3 +795,51 @@ def test_pipe_create_preserves_existing_archive_member():
         with zipfile.ZipFile(buffer) as archive:
             assert archive.read("member") == b"original"
             assert archive.namelist() == ["member"]
+
+
+@pytest.mark.parametrize("prefix", ["./", "././", "/", "//./"])
+def test_dot_and_slash_prefixed_members(prefix):
+    data = BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr(prefix, b"")
+        archive.writestr(prefix + "directory/", b"")
+        archive.writestr(prefix + "file", b"prefixed")
+        archive.writestr(prefix + "directory/./file", b"nested")
+        archive.writestr("plain", b"plain")
+        archive.writestr(".hidden", b"hidden")
+    data.seek(0)
+    fs = fsspec.filesystem("zip", fo=data)
+
+    assert fs.ls("", detail=False) == [".hidden", "directory", "file", "plain"]
+    assert fs.find("") == [".hidden", "directory/file", "file", "plain"]
+    assert fs.find("", withdirs=True) == [
+        ".hidden",
+        "directory",
+        "directory/file",
+        "file",
+        "plain",
+    ]
+    assert fs.ls("zip://./directory/", detail=False) == ["directory/file"]
+    assert fs.isdir("directory")
+    assert fs.info("file")["size"] == len(b"prefixed")
+    assert fs.cat_file("file") == fs.cat_file(prefix + "file") == b"prefixed"
+    assert fs.cat_file("zip:///./directory/file") == b"nested"
+    assert fs.cat_file("plain") == b"plain"
+    assert fs.cat_file(".hidden") == b"hidden"
+
+
+def test_create_rejects_alias_of_prefixed_existing_member():
+    data = BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("./directory/./weights.bin", b"original")
+    data.seek(0)
+    fs = ZipFileSystem(data, mode="a")
+    try:
+        with pytest.raises(FileExistsError):
+            fs.pipe_file("directory/weights.bin", b"replacement", mode="create")
+    finally:
+        fs.close()
+    data.seek(0)
+    with zipfile.ZipFile(data) as archive:
+        assert archive.namelist() == ["./directory/./weights.bin"]
+        assert archive.read("./directory/./weights.bin") == b"original"

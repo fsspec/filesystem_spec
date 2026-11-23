@@ -6,6 +6,9 @@ Dev
 
 Enhancements
 
+- Strip the protocol from ``LocalFileSystem`` paths without building every
+  prefix on each call, so ``ls`` and other local path operations are faster.
+
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
@@ -16,6 +19,21 @@ Enhancements
   opens can report download progress (#1623)
 
 Fixes
+
+- Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
+
+- Handle a single Path in the asynchronous methods like its string
+  form, as the synchronous methods do
+
+- Report the root of an archive without members as a directory in ``info``,
+  ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
+  an archive with members.
+
+- Escape reserved URL characters in Jupyter filesystem paths so filenames
+  containing ``#``, ``?`` or percent escapes are read and changed literally.
+
+- Delegate synchronous file opens in ``AsyncFileSystemWrapper`` to the wrapped
+  backend so writes are persisted (#2470).
 
 - Cancel the submitted async call when ``sync()`` is interrupted, stopping
   HTTP ``get_file`` transfers after ``KeyboardInterrupt`` or ``SystemExit``

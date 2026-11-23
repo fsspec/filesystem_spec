@@ -19,7 +19,13 @@ from .callbacks import DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
 from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
-from .utils import check_contained, glob_translate, is_exception, other_paths
+from .utils import (
+    check_contained,
+    glob_translate,
+    is_exception,
+    other_paths,
+    stringify_path,
+)
 
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
@@ -566,6 +572,7 @@ class AsyncFileSystem(AbstractFileSystem):
             paths1 = path1
             paths2 = path2
         else:
+            path1 = stringify_path(path1)
             source_is_str = isinstance(path1, str)
             paths1 = await self._expand_path(
                 path1, maxdepth=maxdepth, recursive=recursive
@@ -763,6 +770,7 @@ class AsyncFileSystem(AbstractFileSystem):
             rpaths = rpath
             lpaths = lpath
         else:
+            lpath = stringify_path(lpath)
             source_is_str = isinstance(lpath, str)
             if source_is_str:
                 lpath = make_path_posix(lpath)
@@ -840,6 +848,7 @@ class AsyncFileSystem(AbstractFileSystem):
             rpaths = rpath
             lpaths = lpath
         else:
+            rpath = stringify_path(rpath)
             source_is_str = isinstance(rpath, str)
             # First check for rpath trailing slash as _strip_protocol removes it.
             source_not_trailing_sep = source_is_str and not trailing_sep(rpath)
@@ -1116,7 +1125,7 @@ class AsyncFileSystem(AbstractFileSystem):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
-        if isinstance(path, str):
+        if isinstance(path, (str, os.PathLike)):
             out = await self._expand_path([path], recursive, maxdepth)
         else:
             out = set()

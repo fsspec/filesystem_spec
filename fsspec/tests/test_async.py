@@ -10,6 +10,7 @@ import threading
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 
 import pytest
@@ -738,6 +739,88 @@ def test_cat_ranges_on_error_raise_propagates():
     fs = _CatRangesFS()
     with pytest.raises(FileNotFoundError):
         fs.cat_ranges(["ok", "missing"], [0, 0], [4, 4], on_error="raise")
+
+
+class _TreeFS(fsspec.asyn.AsyncFileSystem):
+    # implements the primitives and inherits _copy, _get, _put, _rm and
+    # _expand_path, as gcsfs and s3fs do
+    cachable = False
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.files = {}
+
+    async def _info(self, path, **kwargs):
+        if path in self.files:
+            return {"name": path, "size": len(self.files[path]), "type": "file"}
+        if any(f.startswith(path + "/") for f in self.files):
+            return {"name": path, "size": 0, "type": "directory"}
+        raise FileNotFoundError(path)
+
+    async def _ls(self, path, detail=True, **kwargs):
+        names = {
+            f"{path}/{f[len(path) + 1 :].split('/')[0]}"
+            for f in self.files
+            if f.startswith(path + "/")
+        }
+        out = [await self._info(name) for name in sorted(names)]
+        return out if detail else [info["name"] for info in out]
+
+    async def _makedirs(self, path, exist_ok=False):
+        pass
+
+    async def _cp_file(self, path1, path2, **kwargs):
+        if path1 in self.files:
+            self.files[path2] = self.files[path1]
+
+    async def _get_file(self, rpath, lpath, **kwargs):
+        if rpath in self.files:
+            Path(lpath).write_bytes(self.files[rpath])
+        else:
+            os.makedirs(lpath, exist_ok=True)
+
+    async def _put_file(self, lpath, rpath, **kwargs):
+        if os.path.isfile(lpath):
+            self.files[rpath] = Path(lpath).read_bytes()
+
+    async def _rm_file(self, path, **kwargs):
+        self.files.pop(path, None)
+
+
+@pytest.mark.parametrize("method", ["copy", "mv", "get", "put"])
+def test_pathlike_recursive_source(tmp_path, method):
+    # A single PathLike source is handled like its string form, as in the
+    # synchronous methods: the tree below it is kept, not flattened.
+    files = {"a/file": b"a", "b/file": b"b"}
+    fs = _TreeFS()
+    if method == "put":
+        source = tmp_path / "source"
+        for name, data in files.items():
+            (source / name).parent.mkdir(parents=True)
+            (source / name).write_bytes(data)
+    else:
+        source = PurePosixPath("/source")
+        fs.files = {f"/source/{name}": data for name, data in files.items()}
+    target = tmp_path / "target" if method == "get" else "/target"
+
+    getattr(fs, method)(source, str(target), recursive=True)
+
+    if method == "get":
+        result = {
+            path.relative_to(target).as_posix(): path.read_bytes()
+            for path in target.rglob("*")
+            if path.is_file()
+        }
+    else:
+        result = {
+            name[len("/target/") :]: data
+            for name, data in fs.files.items()
+            if name.startswith("/target/")
+        }
+    assert result == files
+    if method == "mv":
+        # mv removes the source after copying it, which expands the path again
+        assert not any(name.startswith("/source/") for name in fs.files)
 
 
 # ---------------------------------------------------------------------------
