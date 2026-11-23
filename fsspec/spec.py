@@ -357,9 +357,20 @@ class AbstractFileSystem(metaclass=_Cached):
         self.transaction.complete()
         self._transaction = None
         # The invalid cache must be cleared after the transaction is completed.
-        for path in self._invalidated_caches_in_transaction:
-            self.invalidate_cache(path)
+        # complete() leaves _intrans False, which turns invalidate_cache() into
+        # a no-op for implementations that only evict while a transaction is
+        # active. Snapshot the queued paths, then briefly restore the flag so
+        # each replayed call genuinely invalidates instead of being deferred
+        # again, and finally drop the queue.
+        paths_to_invalidate = list(self._invalidated_caches_in_transaction)
         self._invalidated_caches_in_transaction.clear()
+        self._intrans = True
+        try:
+            for path in paths_to_invalidate:
+                self.invalidate_cache(path)
+        finally:
+            self._intrans = False
+            self._invalidated_caches_in_transaction.clear()
 
     def invalidate_cache(self, path=None):
         """
