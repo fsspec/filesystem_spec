@@ -20,6 +20,10 @@ Enhancements
 
 Fixes
 
+- Serialize FTP operations sharing a control connection, including complete data
+  transfers and recovery, and reject reentrant filesystem operations from
+  download callbacks. Independent filesystem instances retain independent locks.
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
