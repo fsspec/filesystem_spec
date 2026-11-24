@@ -1122,3 +1122,28 @@ def test_custom_pathlike_join_spelling(pathlike_dirfs, path):
 def test_join_bytes_still_unsupported(pathlike_dirfs):
     with pytest.raises(TypeError):
         pathlike_dirfs._join(b"file")
+
+
+@pytest.mark.parametrize("operation", ["cat_file", "pipe_file"])
+@pytest.mark.parametrize(
+    "path", [Path("..") / "outside.txt", "child/../../outside.txt"]
+)
+def test_public_io_rejects_escape_local(tmp_path, operation, path):
+    # the guard has to hold on the public API, not just _join, and with the
+    # os.sep spelling a WindowsPath produces
+    root = tmp_path / "root"
+    (root / "child").mkdir(parents=True)
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"original")
+    dirfs = DirFileSystem(str(root), LocalFileSystem())
+    if isinstance(path, str):
+        path = path.replace("/", os.sep)
+    with pytest.raises(ValueError, match="escapes"):
+        if operation == "cat_file":
+            dirfs.cat_file(path)
+        else:
+            dirfs.pipe_file(path, b"replacement")
+    assert outside.read_bytes() == b"original"
+    # a ".." that stays inside the root is still fine
+    dirfs.pipe_file(os.sep.join(["child", "..", "inside.txt"]), b"allowed")
+    assert dirfs.cat_file("inside.txt") == b"allowed"
