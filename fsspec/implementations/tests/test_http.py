@@ -784,6 +784,22 @@ def test_client_auth_not_forwarded_across_origins(server):
     assert "authorization" not in redirected_headers
 
 
+def test_client_auth_yields_to_call_credentials(server):
+    fs = fsspec.filesystem("http", client_kwargs={"auth": aiohttp.BasicAuth("u", "pw")})
+    other = aiohttp.BasicAuth("other", "secret")
+
+    call_headers = json.loads(
+        fs.cat_file(server.address + "/cross-origin-target", auth=other)
+    )
+    assert call_headers["authorization"] == other.encode()
+
+    url = server.address.replace(
+        "http://", f"http://{other.login}:{other.password}@", 1
+    )
+    url_headers = json.loads(fs.cat_file(url + "/cross-origin-target"))
+    assert url_headers["authorization"] == other.encode()
+
+
 @pytest.mark.parametrize("method", ["POST", "PUT"])
 def test_put_file(server, tmp_path, method, reset_files):
     src_file = tmp_path / "file_1"
