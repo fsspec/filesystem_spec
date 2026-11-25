@@ -339,8 +339,12 @@ class SFTPFileSystem(AbstractFileSystem):
             "time": datetime.datetime.fromtimestamp(stat.st_atime, tz=datetime.UTC),
             "mtime": datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC),
         }
-        if parent_path:
-            out["name"] = "/".join([parent_path.rstrip("/"), stat.filename])
+        if parent_path is not None:
+            out["name"] = (
+                "/".join([parent_path.rstrip("/"), stat.filename])
+                if parent_path
+                else stat.filename
+            )
         return out
 
     def ls(self, path, detail=False):
