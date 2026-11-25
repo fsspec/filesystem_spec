@@ -39,6 +39,9 @@ Fixes
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
 
+- Leave out passwords in nested options such as ``target_options`` when
+  serializing with ``include_password=False``.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
