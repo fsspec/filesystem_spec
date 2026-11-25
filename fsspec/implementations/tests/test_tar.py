@@ -482,6 +482,23 @@ def test_links_report_target_size(tmp_path: Path):
     assert fs.size("dangling") == 0
 
 
+@pytest.mark.parametrize("kind", [tarfile.SYMTYPE, tarfile.LNKTYPE])
+def test_open_dangling_link_raises_file_not_found(tmp_path, kind):
+    path = tmp_path / "dangling-link.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("link")
+        info.type = kind
+        info.linkname = "missing"
+        tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    try:
+        with pytest.raises(FileNotFoundError, match="link"), fs.open("link"):
+            pass
+    finally:
+        fs.close()
+
+
 @pytest.mark.parametrize("prefix", ["./", "././"])
 @pytest.mark.parametrize("explicit_directories", [False, True])
 def test_dot_path_components(tmp_path, prefix, explicit_directories):

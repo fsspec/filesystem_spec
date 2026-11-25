@@ -467,6 +467,26 @@ def test_read_none(server, block_size, position):
         assert f.read(None) == b""
 
 
+@pytest.mark.parametrize("filesystem_default", [False, True])
+def test_reopen_with_known_parts(encoded_range_server, filesystem_default):
+    content = encoded_range_server.content
+    parts = {(0, 5): content[:5], (5, 10): content[5:10]}
+    expected = parts.copy()
+    options = {"cache_type": "parts", "cache_options": {"data": parts, "strict": True}}
+    h = fsspec.filesystem(
+        "http",
+        **(options if filesystem_default else {}),
+    )
+    for _ in range(2):
+        with h.open(
+            encoded_range_server.url, **({} if filesystem_default else options)
+        ) as f:
+            assert f.read(5) == content[:5]
+            f.seek(8)
+            assert f.read(2) == content[8:10]
+    assert parts == expected
+
+
 def test_file_pickle(server):
     import pickle
 
@@ -750,6 +770,23 @@ def test_info(server):
     fs = fsspec.filesystem("http", headers={"redirect": "true"})
     info = fs.info(server.address + "/redirectme")
     assert info["url"] == server.realfile
+
+
+def test_custom_headers_not_forwarded_across_origins(server):
+    fs = fsspec.filesystem(
+        "http", headers={"X-Api-Key": "secret", "Accept-Language": "en"}
+    )
+
+    same_origin_headers = json.loads(
+        fs.cat_file(server.address + "/cross-origin-target")
+    )
+    assert same_origin_headers["x-api-key"] == "secret"
+
+    redirected_headers = json.loads(
+        fs.cat_file(server.address + "/redirect-cross-origin")
+    )
+    assert "x-api-key" not in redirected_headers
+    assert redirected_headers["accept-language"] == "en"
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT"])

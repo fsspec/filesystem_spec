@@ -478,14 +478,14 @@ class DatabricksFile(AbstractBufferedFile):
 
     def _fetch_range(self, start, end):
         """Internal function to download a block of data"""
-        return_buffer = b""
+        chunks = []
         length = end - start
         for chunk_start, chunk_end in self._to_sized_blocks(length, start):
-            return_buffer += self.fs._get_data(
-                path=self.path, start=chunk_start, end=chunk_end
+            chunks.append(
+                self.fs._get_data(path=self.path, start=chunk_start, end=chunk_end)
             )
 
-        return return_buffer
+        return b"".join(chunks)
 
     def _to_sized_blocks(self, length, start=0):
         """Helper function to split a range from 0 to total_length into blocksizes"""
