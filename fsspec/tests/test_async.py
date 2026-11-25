@@ -814,3 +814,27 @@ def test_failed_call_is_freed_without_gc():
     finally:
         if was_enabled:
             gc.enable()
+
+
+@pytest.mark.parametrize("on_error", ["raise", "return", "omit"])
+def test_recursive_cat_keeps_file_errors(monkeypatch, on_error):
+    tree = ["/root/ok.txt", "/root/sub/denied.txt"]
+    fs = _CatTreeFS(tree, skip_instance_cache=True)
+    original = fs._cat_file
+    error = PermissionError("file access denied")
+
+    async def read(path, **kwargs):
+        if path == tree[1]:
+            raise error
+        return await original(path, **kwargs)
+
+    monkeypatch.setattr(fs, "_cat_file", read)
+    if on_error == "raise":
+        with pytest.raises(PermissionError, match="file access denied"):
+            fs.cat("/root", recursive=True, on_error=on_error)
+    else:
+        result = fs.cat("/root", recursive=True, on_error=on_error)
+        expected = {tree[0]: tree[0].encode()}
+        if on_error == "return":
+            expected[tree[1]] = error
+        assert result == expected
