@@ -141,6 +141,28 @@ class MMapCache(BaseCache):
         self.multi_fetcher = multi_fetcher
         self.cache = self._makefile()
 
+    def _open_location(self, flags: int, mode: str):
+        import errno
+        import stat
+
+        assert self.location is not None
+        if os.path.islink(self.location):
+            raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), self.location)
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        binary = getattr(os, "O_BINARY", 0)
+        raw_fd = os.open(self.location, flags | nofollow | binary, 0o666)
+        try:
+            if not stat.S_ISREG(os.fstat(raw_fd).st_mode):
+                raise OSError(
+                    errno.EINVAL,
+                    "Cache location must be a regular file",
+                    self.location,
+                )
+            return os.fdopen(raw_fd, mode)
+        except BaseException:
+            os.close(raw_fd)
+            raise
+
     def _makefile(self) -> mmap.mmap | bytearray:
         import mmap
         import tempfile
@@ -148,20 +170,30 @@ class MMapCache(BaseCache):
         if self.size == 0:
             return bytearray()
 
-        # posix version
-        if self.location is None or not os.path.exists(self.location):
+        if self.location is None:
             self.blocks.clear()
-            if self.location is None:
-                fd = tempfile.TemporaryFile()
-            else:
-                fd = open(self.location, "wb+")
-            fd.seek(self.size - 1)
-            fd.write(b"1")
-            fd.flush()
-        else:
-            fd = open(self.location, "r+b")
+            with tempfile.TemporaryFile() as fd:
+                fd.seek(self.size - 1)
+                fd.write(b"1")
+                fd.flush()
+                return mmap.mmap(fd.fileno(), self.size)
 
-        return mmap.mmap(fd.fileno(), self.size)
+        try:
+            fd_ctx = self._open_location(os.O_RDWR, "r+b")
+        except FileNotFoundError:
+            self.blocks.clear()
+            try:
+                fd_ctx = self._open_location(os.O_RDWR | os.O_CREAT | os.O_EXCL, "wb+")
+            except FileExistsError:
+                fd_ctx = self._open_location(os.O_RDWR, "r+b")
+            else:
+                with fd_ctx as fd:
+                    fd.seek(self.size - 1)
+                    fd.write(b"1")
+                    fd.flush()
+                    return mmap.mmap(fd.fileno(), self.size)
+        with fd_ctx as fd:
+            return mmap.mmap(fd.fileno(), self.size)
 
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         logger.debug(f"MMap cache fetching {start}-{end}")

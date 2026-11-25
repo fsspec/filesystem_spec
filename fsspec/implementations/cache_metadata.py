@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import errno
+import ntpath
 import os
 import time
 from typing import TYPE_CHECKING
@@ -19,6 +21,18 @@ if TYPE_CHECKING:
     from .cached import CachingFileSystem
 
     Detail: TypeAlias = dict[str, Any]
+
+
+def _is_within(parent: str, child: str) -> bool:
+    parent_norm = os.path.normcase(parent)
+    child_norm = os.path.normcase(child)
+    try:
+        return (
+            child_norm != parent_norm
+            and os.path.normcase(os.path.commonpath([parent, child])) == parent_norm
+        )
+    except ValueError:
+        return False
 
 
 class CacheMetadata:
@@ -51,8 +65,14 @@ class CacheMetadata:
 
     def _load(self, fn: str) -> Detail:
         """Low-level function to load metadata from specific file"""
+        if os.path.islink(fn):
+            raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), fn)
         with open(fn, "r") as f:
             loaded = json.load(f)
+        if not isinstance(loaded, dict) or not all(
+            isinstance(c, dict) for c in loaded.values()
+        ):
+            raise ValueError(f"Invalid cache metadata format in {fn!r}")
         for c in loaded.values():
             if isinstance(c.get("blocks"), list):
                 c["blocks"] = set(c["blocks"])
@@ -85,19 +105,70 @@ class CacheMetadata:
                 continue
             yield os.path.join(storage, self._metadata_name), storage, writable
 
-    def check_file(
-        self, path: str, cfs: CachingFileSystem | None
-    ) -> Literal[False] | tuple[Detail, str]:
-        """If path is in cache return its details, otherwise return ``False``.
+    def _resolve_cached_file(self, base: str, fn: Any) -> str | None:
+        """Resolve ``fn`` within ``base`` if it is a contained single filename."""
+        if (
+            not isinstance(fn, str)
+            or not fn
+            or "\x00" in fn
+            or fn in {".", ".."}
+            or "/" in fn
+            or "\\" in fn
+            or os.path.isabs(fn)
+            or os.path.basename(fn) != fn
+            or os.path.splitdrive(fn)[0] != ""
+            or ntpath.splitdrive(fn)[0] != ""
+            or os.path.normcase(fn) == os.path.normcase(self._metadata_name)
+        ):
+            return None
+        if os.name == "nt" and (
+            ":" in fn
+            or fn.rstrip(". ") != fn
+            or fn.rstrip(". ").casefold() == self._metadata_name.rstrip(". ").casefold()
+        ):
+            return None
 
-        If the optional CachingFileSystem is specified then it is used to
-        perform extra checks to reject possible matches, such as if they are
-        too old.
-        """
-        for (fn, base, _), cache in zip(self._scan_locations(), self.cached_files):
+        base_abs = os.path.abspath(base)
+        candidate = os.path.join(base, fn)
+        candidate_abs = os.path.abspath(candidate)
+        metadata_path = os.path.join(base, self._metadata_name)
+        metadata_abs = os.path.abspath(metadata_path)
+        if (
+            os.path.normcase(candidate_abs) == os.path.normcase(metadata_abs)
+            or not _is_within(base_abs, candidate_abs)
+            or os.path.islink(candidate)
+        ):
+            return None
+        if os.path.lexists(candidate):
+            if not os.path.isfile(candidate):
+                return None
+            if os.path.lexists(metadata_path) and (
+                os.path.islink(metadata_path)
+                or os.path.samefile(candidate, metadata_path)
+            ):
+                return None
+            base_real = os.path.realpath(base)
+            candidate_real = os.path.realpath(candidate)
+            metadata_real = os.path.realpath(metadata_path)
+            if os.path.normcase(candidate_real) == os.path.normcase(
+                metadata_real
+            ) or not _is_within(base_real, candidate_real):
+                return None
+
+        return candidate
+
+    def _check_file_with_writable(
+        self, path: str, cfs: CachingFileSystem | None
+    ) -> Literal[False] | tuple[Detail, str, bool]:
+        for (_, base, writable), cache in zip(
+            self._scan_locations(), self.cached_files
+        ):
             if path not in cache:
                 continue
             detail = cache[path].copy()
+            resolved_fn = self._resolve_cached_file(base, detail.get("fn"))
+            if resolved_fn is None:
+                continue
 
             if cfs is not None:
                 if cfs.check_files and detail["uid"] != cfs.fs.ukey(path):
@@ -107,10 +178,32 @@ class CacheMetadata:
                     # Cached file has expired
                     continue
 
-            fn = os.path.join(base, detail["fn"])
-            if os.path.exists(fn):
-                return detail, fn
+            if os.path.isfile(resolved_fn):
+                return detail, resolved_fn, writable
         return False
+
+    def check_file(
+        self, path: str, cfs: CachingFileSystem | None
+    ) -> Literal[False] | tuple[Detail, str]:
+        """If path is in cache return its details, otherwise return ``False``.
+
+        If the optional CachingFileSystem is specified then it is used to
+        perform extra checks to reject possible matches, such as if they are
+        too old.
+        """
+        result = self._check_file_with_writable(path, cfs)
+        if not result:
+            return False
+        detail, fn, _ = result
+        return detail, fn
+
+    @staticmethod
+    def _prepare_for_save(cached_files: Detail) -> Detail:
+        cache = {k: v.copy() for k, v in cached_files.items()}
+        for c in cache.values():
+            if isinstance(c.get("blocks"), set):
+                c["blocks"] = list(c["blocks"])
+        return cache
 
     def clear_expired(self, expiry_time: int) -> tuple[list[str], bool]:
         """Remove expired metadata from the cache.
@@ -120,6 +213,8 @@ class CacheMetadata:
         responsible for deleting the expired files.
         """
         expired_files = []
+        removed_any = False
+        writable_storage = self._storage[-1]
         for path, detail in self.cached_files[-1].copy().items():
             if time.time() - detail["time"] > expiry_time:
                 fn = detail.get("fn", "")
@@ -127,13 +222,15 @@ class CacheMetadata:
                     raise RuntimeError(
                         f"Cache metadata does not contain 'fn' for {path}"
                     )
-                fn = os.path.join(self._storage[-1], fn)
-                expired_files.append(fn)
+                resolved_fn = self._resolve_cached_file(writable_storage, fn)
+                if resolved_fn is not None:
+                    expired_files.append(resolved_fn)
                 self.cached_files[-1].pop(path)
+                removed_any = True
 
-        if self.cached_files[-1]:
-            cache_path = os.path.join(self._storage[-1], self._metadata_name)
-            self._save(self.cached_files[-1], cache_path)
+        cache_path = os.path.join(writable_storage, self._metadata_name)
+        if self.cached_files[-1] or (removed_any and os.path.exists(cache_path)):
+            self._save(self._prepare_for_save(self.cached_files[-1]), cache_path)
 
         writable_cache_empty = not self.cached_files[-1]
         return expired_files, writable_cache_empty
@@ -142,7 +239,7 @@ class CacheMetadata:
         """Load all metadata from disk and store in ``self.cached_files``"""
         cached_files = []
         for fn, _, _ in self._scan_locations():
-            if os.path.exists(fn):
+            if os.path.lexists(fn):
                 # TODO: consolidate blocks here
                 cached_files.append(self._load(fn))
             else:
@@ -166,54 +263,85 @@ class CacheMetadata:
         otherwise return ``None``.  Caller is responsible for deleting the
         cached file.
         """
-        details = self.check_file(path, None)
+        details = self._check_file_with_writable(path, None)
         if not details:
+            if (
+                path in self.cached_files[-1]
+                and self._resolve_cached_file(
+                    self._storage[-1], self.cached_files[-1][path].get("fn")
+                )
+                is None
+            ):
+                self.cached_files[-1].pop(path, None)
+                metadata_path = os.path.join(self._storage[-1], self._metadata_name)
+                if os.path.lexists(metadata_path):
+                    self._save_writable(deleted_path=path)
             return None
-        _, fn = details
-        if fn.startswith(self._storage[-1]):
+        _, fn, writable = details
+        if writable:
             self.cached_files[-1].pop(path)
-            self.save()
+            self._save_writable(deleted_path=path)
         else:
             raise PermissionError(
                 "Can only delete cached file in last, writable cache location"
             )
         return fn
 
-    def save(self) -> None:
-        """Save metadata to disk"""
-        for (fn, _, writable), cache in zip(self._scan_locations(), self.cached_files):
+    def _save_writable(self, deleted_path: str | None = None) -> None:
+        for (fn, base, writable), cache in zip(
+            self._scan_locations(), self.cached_files
+        ):
             if not writable:
                 continue
 
-            if os.path.exists(fn):
-                cached_files = self._load(fn)
-                for k, c in cached_files.items():
-                    if k in cache:
-                        if c["blocks"] is True or cache[k]["blocks"] is True:
-                            c["blocks"] = True
+            if os.path.lexists(fn):
+                loaded_files = self._load(fn)
+                if deleted_path is not None:
+                    loaded_files.pop(deleted_path, None)
+                cached_files: Detail = {
+                    k: c
+                    for k, c in loaded_files.items()
+                    if self._resolve_cached_file(base, c.get("fn")) is not None
+                }
+                for k, entry in cache.items():
+                    if self._resolve_cached_file(base, entry.get("fn")) is None:
+                        continue
+                    c = cached_files.get(k)
+                    if (
+                        c is not None
+                        and c.get("fn") == entry.get("fn")
+                        and c.get("uid") == entry.get("uid")
+                        and (
+                            c.get("blocks") is True or isinstance(c.get("blocks"), set)
+                        )
+                    ):
+                        merged = entry.copy()
+                        if c["blocks"] is True or entry["blocks"] is True:
+                            merged["blocks"] = True
                         else:
                             # self.cached_files[*][*]["blocks"] must continue to
                             # point to the same set object so that updates
                             # performed by MMapCache are propagated back to
                             # self.cached_files.
-                            blocks = cache[k]["blocks"]
+                            blocks = entry["blocks"]
                             blocks.update(c["blocks"])
-                            c["blocks"] = blocks
-                        c["time"] = max(c["time"], cache[k]["time"])
-                        c["uid"] = cache[k]["uid"]
-
-                # Files can be added to cache after it was written once
-                for k, c in cache.items():
-                    if k not in cached_files:
-                        cached_files[k] = c
+                            merged["blocks"] = blocks
+                        merged["time"] = max(c.get("time", 0), entry["time"])
+                        cached_files[k] = merged
+                    else:
+                        cached_files[k] = entry
             else:
-                cached_files = cache
-            cache = {k: v.copy() for k, v in cached_files.items()}
-            for c in cache.values():
-                if isinstance(c["blocks"], set):
-                    c["blocks"] = list(c["blocks"])
-            self._save(cache, fn)
+                cached_files = {
+                    k: entry
+                    for k, entry in cache.items()
+                    if self._resolve_cached_file(base, entry.get("fn")) is not None
+                }
+            self._save(self._prepare_for_save(cached_files), fn)
             self.cached_files[-1] = cached_files
+
+    def save(self) -> None:
+        """Save metadata to disk"""
+        self._save_writable()
 
     def update_file(self, path: str, detail: Detail) -> None:
         """Update metadata for specific file in memory, do not save"""
