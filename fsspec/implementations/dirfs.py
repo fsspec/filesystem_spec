@@ -1,20 +1,26 @@
 from .. import filesystem
 from ..asyn import AsyncFileSystem
+from ..utils import _escapes_root, stringify_path
+from .asyn_wrapper import AsyncFileSystemWrapper
+from .cached import CachingFileSystem
 from .chained import ChainedFileSystem
 from .local import LocalFileSystem
 
 
-def _escapes_root(path):
-    """Whether a relative path would resolve above its root via ".." segments."""
-    depth = 0
-    for part in path.split("/"):
-        if part == "..":
-            depth -= 1
-            if depth < 0:
-                return True
-        elif part and part != ".":
-            depth += 1
-    return False
+def _resolves_dotdot(fs):
+    """Whether ".." in paths handed to ``fs`` navigates a real directory tree.
+
+    Only the local filesystem resolves ".." against a directory tree; on object
+    stores it is a literal path part. Pass-through wrappers hand paths on
+    unchanged, so the filesystem at the bottom of the chain decides.
+    """
+    while True:
+        if isinstance(fs, AsyncFileSystemWrapper):
+            fs = fs.sync_fs
+        elif isinstance(fs, (DirFileSystem, CachingFileSystem)):
+            fs = fs.fs
+        else:
+            return isinstance(fs, LocalFileSystem)
 
 
 class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
@@ -62,8 +68,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         self.path = fs._strip_protocol(path)
         self.fs = fs
         self.async_impl = fs.async_impl
+        self._guard_dotdot = _resolves_dotdot(fs)
 
     def _join(self, path):
+        path = stringify_path(path)
         if isinstance(path, str):
             if not self.path:
                 return path
@@ -74,10 +82,7 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
             # join even though _strip_protocol removes it
             suffix = "/" if path.endswith("/") else ""
             path = self._strip_protocol(path)
-            # ".." only navigates above the root on filesystems that resolve it
-            # against a real directory tree; on object stores it is a literal
-            # path part, so only guard the local case here.
-            if isinstance(self.fs, LocalFileSystem) and _escapes_root(path):
+            if self._guard_dotdot and _escapes_root(path):
                 raise ValueError(
                     f"path {path!r} escapes the {self.path!r} root of the filesystem"
                 )
@@ -355,10 +360,10 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         # still carry the full name in the wrapped filesystem
         if not isinstance(entries, dict):
             return entries
-        return {
-            name: {**info, "name": self._relpath(info["name"])}
-            for name, info in entries.items()
-        }
+        # Keep the mapping so callers can prune the wrapped walk in place.
+        for name, info in entries.items():
+            entries[name] = {**info, "name": self._relpath(info["name"])}
+        return entries
 
     async def _walk(self, path, *args, **kwargs):
         async for root, dirs, files in self.fs._walk(self._join(path), *args, **kwargs):

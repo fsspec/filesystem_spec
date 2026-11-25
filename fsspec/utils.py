@@ -8,7 +8,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import partial
 from hashlib import md5
 from importlib.metadata import version
@@ -290,6 +290,8 @@ def read_block(
         f.seek(offset)
         found_start_delim = seek_delimiter(f, delimiter, 2**16)
         if length is None:
+            if found_start_delim and split_before:
+                f.seek(f.tell() - len(delimiter))
             return f.read()
         start = f.tell()
         length -= start - offset
@@ -463,6 +465,23 @@ def check_contained(root: str, paths: list[str]) -> None:
             )
 
 
+def _escapes_root(path: str) -> bool:
+    """Whether a relative path would resolve above its root via ".." segments.
+
+    Only meaningful where ".." navigates a real directory tree; see
+    ``fsspec.implementations.dirfs._resolves_dotdot``.
+    """
+    depth = 0
+    for part in path.split("/"):
+        if part == "..":
+            depth -= 1
+            if depth < 0:
+                return True
+        elif part and part != ".":
+            depth += 1
+    return False
+
+
 def is_exception(obj: Any) -> bool:
     return isinstance(obj, BaseException)
 
@@ -577,6 +596,61 @@ def mirror_from(
 @contextlib.contextmanager
 def nullcontext(obj: T) -> Iterator[T]:
     yield obj
+
+
+def parse_content_range_header(
+    headers: Mapping[str, str],
+) -> tuple[int | None, int | None, int | None]:
+    """Return ``(start, end, total)`` from a ``Content-Range`` header."""
+    m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", headers.get("Content-Range", ""))
+    if not m:
+        return None, None, None
+    if m[1] == "*":
+        start = end = None
+    else:
+        start, end = [int(x) for x in m[1].split("-")]
+    return start, end, None if m[2] == "*" else int(m[2])
+
+
+def response_is_requested_range(
+    status: int, headers: Mapping[str, str], start: int | None, end: int | None
+) -> bool:
+    """Whether the response is the requested range, not the whole file."""
+    if status == 206:
+        return True
+    if start is not None and parse_content_range_header(headers)[0] == start:
+        return True
+    if start is None or start < 0 or end is None:
+        return False
+    return int(headers.get("Content-Length", end + 1)) <= end - start
+
+
+def range_response_window(
+    out: bytes,
+    status: int,
+    headers: Mapping[str, str],
+    start: int | None,
+    end: int | None,
+) -> bytes:
+    """The requested window of a response body that may be the whole file."""
+    lo = 0 if start is None else start
+    if lo < 0 and (end is None or end >= len(out)):
+        # a suffix range asks for the tail of either response
+        return out[lo:]
+    if status != 206:
+        window = end - lo if end is not None and (lo >= 0) == (end >= 0) else None
+        content_range_start = parse_content_range_header(headers)[0]
+        if lo >= 0 and content_range_start is not None and content_range_start != lo:
+            window = 0
+        if window is not None and len(out) > window:
+            if lo > 0:
+                raise ValueError(
+                    "The HTTP server doesn't appear to support range requests. "
+                    "Only reading this file from the beginning is supported. "
+                    "Open with block_size=0 for a streaming file interface."
+                )
+            return out[:end] if lo == 0 else out[len(out) + lo : end]
+    return out
 
 
 def merge_offset_ranges(

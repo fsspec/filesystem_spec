@@ -429,8 +429,8 @@ class FirstChunkCache(BaseCache):
 
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         start = start or 0
-        if start > self.size:
-            logger.debug("FirstChunkCache: requested start > file size")
+        if start >= self.size:
+            logger.debug("FirstChunkCache: requested start >= file size")
             return b""
 
         if end is None:
@@ -537,7 +537,9 @@ class BlockCache(BaseCache):
             )
 
         start = block_number * self.blocksize
-        end = start + self.blocksize
+        if start >= self.size:
+            return b""
+        end = min(start + self.blocksize, self.size)
         self.total_requested_bytes += end - start
         self.miss_count += 1
         logger.info("BlockCache fetching block %d", block_number)
@@ -727,7 +729,7 @@ class KnownPartsOfAFile(BaseCache):
         How big this file is
     data: dict
         A dictionary mapping explicit `(start, stop)` file-offset tuples
-        with known bytes.
+        with known bytes. The input dictionary is not modified.
     strict: bool, default True
         Whether to fetch reads that go beyond a known byte-range boundary.
         If `False`, any read that ends outside a known part will be zero
@@ -753,15 +755,15 @@ class KnownPartsOfAFile(BaseCache):
         if data:
             old_offsets = sorted(data.keys())
             offsets = [old_offsets[0]]
-            blocks = [data.pop(old_offsets[0])]
+            blocks = [data[old_offsets[0]]]
             for start, stop in old_offsets[1:]:
                 start0, stop0 = offsets[-1]
                 if start == stop0:
                     offsets[-1] = (start0, stop)
-                    blocks[-1] += data.pop((start, stop))
+                    blocks[-1] += data[(start, stop)]
                 else:
                     offsets.append((start, stop))
-                    blocks.append(data.pop((start, stop)))
+                    blocks.append(data[(start, stop)])
 
             self.data = dict(zip(offsets, blocks))
         else:
@@ -1036,7 +1038,10 @@ class BackgroundBlockCache(BaseCache):
         with self._fetch_future_lock:
             if (
                 self._fetch_future is None
-                and end_block_plus_1 <= self.nblocks
+                # blocks are numbered 0..nblocks-1, so block nblocks is not part
+                # of this file: prefetching it stores an empty entry that both
+                # occupies an LRU slot and counts as a miss
+                and end_block_plus_1 < self.nblocks
                 and not self._fetch_block_cached.is_key_cached(end_block_plus_1)
             ):
                 self._fetch_future_block_number = end_block_plus_1
@@ -1062,7 +1067,9 @@ class BackgroundBlockCache(BaseCache):
             )
 
         start = block_number * self.blocksize
-        end = start + self.blocksize
+        if start >= self.size:
+            return b""
+        end = min(start + self.blocksize, self.size)
         logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
         self.total_requested_bytes += end - start
         self.miss_count += 1

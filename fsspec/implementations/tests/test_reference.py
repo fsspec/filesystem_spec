@@ -712,6 +712,41 @@ def test_cat_file_ranges(m):
     assert fs.cat_file("d", end=-100) == other[4:10][:-100]
 
 
+@pytest.mark.parametrize("offset", [None, 2])
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_cat_file_forwards_options(m, mocker, offset, asynchronous):
+    content = b"0123456789"
+    m.pipe_file("target", content)
+    url = "memory://target"
+    reference = [url] if offset is None else [url, offset, 5]
+    fs = ReferenceFileSystem(
+        {"ref": reference}, fs=m, asynchronous=asynchronous, skip_instance_cache=True
+    )
+    method = "_cat_file" if asynchronous else "cat_file"
+    spy = mocker.spy(fs.fss["memory"], method)
+    options = {"headers": {"X-Test": "read-options"}}
+
+    if asynchronous:
+        result = await fs._cat_file("ref", start=1, end=3, **options)
+    else:
+        result = fs.cat_file("ref", start=1, end=3, **options)
+
+    start = (offset or 0) + 1
+    assert result == content[start : start + 2]
+    spy.assert_called_once_with(url, start=start, end=start + 2, **options)
+
+
+def test_cat_file_http_headers(server):
+    http = fsspec.filesystem("http", skip_instance_cache=True)
+    fs = ReferenceFileSystem({"ref": [server.realfile]}, fs=http)
+    try:
+        result = fs.cat_file("ref", headers={"give_path": "true"})
+        assert json.loads(result) == {"path": "/index/realfile"}
+    finally:
+        http.close_session(http.loop, http._session)
+
+
 @pytest.mark.asyncio
 async def test_async_cat_file_ranges():
     fsspec.get_filesystem_class("http").clear_instance_cache()
@@ -800,6 +835,36 @@ def test_cat_missing(m, fo):
 
     out = mapper.getitems(["c", "d"], on_error="omit")
     assert list(out) == ["c"]
+
+
+@pytest.mark.parametrize(
+    "reference", [["memory://missing"], ["memory://missing", 1, 3]]
+)
+@pytest.mark.parametrize("path", ["missing", ["missing"]])
+def test_cat_omit_unreachable(m, reference, path):
+    fs = fsspec.filesystem("reference", fo={"missing": reference})
+
+    assert fs.cat(path, on_error="omit") == {}
+
+
+def test_cat_omit_unreachable_mixed(m):
+    m.pipe("data", b"0123456789")
+    fs = fsspec.filesystem(
+        "reference",
+        fo={
+            "inline": b"inline data",
+            "whole": ["memory://data"],
+            "range": ["memory://data", 1, 3],
+            "missing_whole": ["memory://missing"],
+            "missing_range": ["memory://missing", 1, 3],
+        },
+    )
+
+    assert fs.cat([*fs.references, "unknown"], on_error="omit") == {
+        "inline": b"inline data",
+        "whole": b"0123456789",
+        "range": b"123",
+    }
 
 
 def test_df_single(m):

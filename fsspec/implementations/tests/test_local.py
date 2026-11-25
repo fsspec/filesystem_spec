@@ -552,6 +552,16 @@ def test_commit_discard(tmpdir):
         assert not fs.exists(tmpdir + "/bfile")
 
 
+def test_discard_closes_file(tmp_path):
+    stream = LocalFileOpener(tmp_path / "output", "wb", autocommit=False)
+    try:
+        stream.discard()
+        assert stream.closed
+    finally:
+        stream.close()
+        Path(stream.temp).unlink(missing_ok=True)
+
+
 def test_transaction_with_compression(tmpdir):
     path = str(tmpdir / "afile.gz")
     fs = LocalFileSystem()
@@ -1138,6 +1148,23 @@ def test_strip_protocol_windows_remote_shares(uri, stripped, cwd):
     stripped = stripped.format(cwd=cwd)
 
     assert LocalFileSystem._strip_protocol(uri) == stripped
+
+
+@pytest.mark.parametrize("protocol", ["other", ("file", "other"), ["file", "other"]])
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("other:///path", "{current_drive}/path"),
+        ("other:/path", "{current_drive}/path"),
+        ("otherpath", "{cwd}/otherpath"),
+        ("/path", "{current_drive}/path"),
+    ],
+)
+def test_strip_protocol_custom_protocols(protocol, uri, expected, cwd, current_drive):
+    fs_cls = type("CustomFileSystem", (LocalFileSystem,), {"protocol": protocol})
+    expected = expected.format(cwd=cwd, current_drive=current_drive)
+
+    assert fs_cls._strip_protocol(uri) == expected
 
 
 def test_mkdir_twice_faile(tmpdir):

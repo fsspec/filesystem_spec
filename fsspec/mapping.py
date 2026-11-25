@@ -7,6 +7,7 @@ from collections.abc import MutableMapping
 from functools import cached_property
 
 from fsspec.core import url_to_fs
+from fsspec.utils import _escapes_root
 
 logger = logging.getLogger("fsspec.mapping")
 _MISSING = object()
@@ -41,7 +42,11 @@ class FSMap(MutableMapping):
     """
 
     def __init__(self, root, fs, check=False, create=False, missing_exceptions=None):
+        # imported here so that "import fsspec" does not load the implementations
+        from .implementations.dirfs import _resolves_dotdot
+
         self.fs = fs
+        self._guard_dotdot = _resolves_dotdot(fs)
         self.root = fs._strip_protocol(root)
         self._root_key_to_str = fs._strip_protocol(posixpath.join(root, "x"))[:-1]
         if missing_exceptions is None:
@@ -78,9 +83,13 @@ class FSMap(MutableMapping):
         logger.info("Clear mapping at %s", self.root)
         try:
             self.fs.rm(self.root, True)
+        except self.missing_exceptions:
+            return
+        try:
             self.fs.mkdir(self.root)
-        except:  # noqa: E722
-            pass
+        except FileExistsError:
+            if not self.fs.isdir(self.root):
+                raise
 
     def getitems(self, keys, on_error="raise"):
         """Fetch multiple items from the store
@@ -128,6 +137,8 @@ class FSMap(MutableMapping):
         values_dict: dict(str, bytes)
         """
         values = {self._key_to_str(k): maybe_convert(v) for k, v in values_dict.items()}
+        for parent in dict.fromkeys(self.fs._parent(k) for k in values):
+            self.fs.mkdirs(parent, exist_ok=True)
         self.fs.pipe(values)
 
     def delitems(self, keys):
@@ -145,6 +156,11 @@ class FSMap(MutableMapping):
             if isinstance(key, list):
                 key = tuple(key)
             key = str(key)
+        if self._guard_dotdot and _escapes_root(key):
+            # same rule as DirFileSystem._join, so keys match mapper.dirfs
+            raise ValueError(
+                f"key {key!r} escapes the {self.root!r} root of the mapping"
+            )
         return f"{self._root_key_to_str}{key}".rstrip("/")
 
     def _str_to_key(self, s):
@@ -190,10 +206,20 @@ class FSMap(MutableMapping):
 
     def __delitem__(self, key):
         """Remove key"""
+        path = self._key_to_str(key)
         try:
-            self.fs.rm(self._key_to_str(key))
+            self.fs.rm(path)
+        except self.missing_exceptions as exc:
+            raise KeyError(key) from exc
         except Exception as exc:
-            raise KeyError from exc
+            try:
+                is_directory = self.fs.info(path)["type"] == "directory"
+            except Exception:
+                # Keep the removal error if classifying the path also fails.
+                is_directory = False
+            if is_directory:
+                raise KeyError(key) from exc
+            raise
 
     def __contains__(self, key):
         """Does key exist in mapping?"""

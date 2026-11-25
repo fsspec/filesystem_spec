@@ -240,13 +240,11 @@ class LocalFileSystem(AbstractFileSystem):
 
     def created(self, path):
         info = self.info(path=path)
-        return datetime.datetime.fromtimestamp(
-            info["created"], tz=datetime.timezone.utc
-        )
+        return datetime.datetime.fromtimestamp(info["created"], tz=datetime.UTC)
 
     def modified(self, path):
         info = self.info(path=path)
-        return datetime.datetime.fromtimestamp(info["mtime"], tz=datetime.timezone.utc)
+        return datetime.datetime.fromtimestamp(info["mtime"], tz=datetime.UTC)
 
     @classmethod
     def _parent(cls, path):
@@ -268,11 +266,15 @@ class LocalFileSystem(AbstractFileSystem):
     def _strip_protocol(cls, path):
         path = stringify_path(path)
         protos = (cls.protocol,) if isinstance(cls.protocol, str) else cls.protocol
-        prefixes = (protocol + sep for protocol in protos for sep in ("://", ":"))
-        for prefix in prefixes:
-            if path.startswith(prefix):
-                path = path.removeprefix(prefix)
-                break
+        for protocol in protos:
+            if path.startswith(protocol):
+                rest = path[len(protocol) :]
+                if rest.startswith("://"):
+                    path = rest[3:]
+                    break
+                if rest.startswith(":"):
+                    path = rest[1:]
+                    break
 
         path = make_path_posix(path)
         if os.sep != "/":
@@ -486,6 +488,8 @@ class LocalFileOpener(io.IOBase):
     def discard(self):
         if self.autocommit:
             raise RuntimeError("Cannot discard if set to autocommit")
+        if not self.f.closed:
+            self.f.close()
         os.remove(self.temp)
 
     def readable(self) -> bool:

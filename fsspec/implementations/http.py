@@ -19,6 +19,8 @@ from fsspec.utils import (
     glob_translate,
     isfilelike,
     nullcontext,
+    range_response_window,
+    response_is_requested_range,
     tokenize,
 )
 
@@ -32,6 +34,48 @@ from ..caching import AllBytes
 ex = re.compile(r"""<(a|A)\s[^<>]*?(?<=\s)(href|HREF)=["'](?P<url>[^"']+)""")
 ex2 = re.compile(r"""(?P<url>http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 logger = logging.getLogger("fsspec.http")
+_REDIRECT_SAFE_HEADERS = {
+    "accept",
+    "accept-encoding",
+    "accept-language",
+    "cache-control",
+    "content-encoding",
+    "content-language",
+    "content-type",
+    "if-match",
+    "if-modified-since",
+    "if-none-match",
+    "if-range",
+    "if-unmodified-since",
+    "range",
+    "user-agent",
+}
+
+
+async def _strip_headers_on_cross_origin_redirect(
+    session: aiohttp.ClientSession,
+    context: object,
+    params: aiohttp.TraceRequestRedirectParams,
+) -> None:
+    """Do not forward custom request headers to a different origin.
+
+    This callback follows the ``TraceConfig.on_request_redirect`` signature
+    documented at https://docs.aiohttp.org/en/stable/tracing_reference.html.
+    """
+    location = params.response.headers.get("Location") or params.response.headers.get(
+        "URI"
+    )
+    if not location:
+        return
+
+    redirect_url = params.url.join(yarl.URL(location))
+    if params.url.origin() == redirect_url.origin():
+        return
+
+    for header in tuple(params.headers):
+        if header.lower() not in _REDIRECT_SAFE_HEADERS:
+            params.headers.popall(header, None)
+
 
 _RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
 # dropped or reset connections, truncated bodies, timeouts
@@ -123,6 +167,9 @@ class HTTPFileSystem(AsyncFileSystem):
 
     URLs are passed unfiltered to aiohttp, so all addresses are accessible. Where URLs are
     supplied by a user, the calling application may wish to filter to prevent scanning.
+
+    On cross-origin redirects, custom request headers are removed to avoid
+    forwarding credentials such as API keys to another host.
     """
 
     protocol = ("http", "https")
@@ -244,7 +291,15 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def set_session(self):
         if self._session is None:
-            self._session = await self.get_client(loop=self.loop, **self.client_kwargs)
+            client_kwargs = self.client_kwargs.copy()
+            trace_config = aiohttp.TraceConfig()
+            trace_config.on_request_redirect.append(
+                _strip_headers_on_cross_origin_redirect
+            )
+            trace_configs = list(client_kwargs.get("trace_configs") or ())
+            trace_configs.append(trace_config)
+            client_kwargs["trace_configs"] = trace_configs
+            self._session = await self.get_client(loop=self.loop, **client_kwargs)
             if not self.asynchronous:
                 weakref.finalize(self, self.close_session, self.loop, self._session)
         return self._session
@@ -347,8 +402,9 @@ class HTTPFileSystem(AsyncFileSystem):
         kw.update(kwargs)
         logger.debug(url)
 
-        if start is not None or end is not None:
-            if start == end:
+        ranged = start is not None or end is not None
+        if ranged:
+            if start == end or (start is None and end == 0):
                 return b""
             headers = kw.pop("headers", {}).copy()
 
@@ -360,7 +416,13 @@ class HTTPFileSystem(AsyncFileSystem):
             async with session.get(self.encode_url(url), **kw) as r:
                 out = await r.read()
                 self._raise_not_found_for_status(r, url)
-            return out
+                # a server that ignores the Range header replies with the whole
+                # file, which is not the window the caller asked for
+                return (
+                    range_response_window(out, r.status, r.headers, start, end)
+                    if ranged
+                    else out
+                )
 
         return await _with_retries(_once, self, url)
 
@@ -761,11 +823,12 @@ class HTTPFile(AbstractBufferedFile):
 
         Parameters
         ----------
-        length: int
-            Read up to this many bytes. If negative, read all content to end of
+        length: int or None
+            Read up to this many bytes. If negative or None, read all content to end of
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
+        length = -1 if length is None else length
         if (
             (length < 0 and self.loc == 0)  # explicit read all
             # but not when the size is known and fits into a block anyways
@@ -797,20 +860,6 @@ class HTTPFile(AbstractBufferedFile):
                 self.size = len(out)
 
     _fetch_all = sync_wrapper(async_fetch_all)
-
-    def _parse_content_range(self, headers):
-        """Parse the Content-Range header"""
-        s = headers.get("Content-Range", "")
-        m = re.match(r"bytes (\d+-\d+|\*)/(\d+|\*)", s)
-        if not m:
-            return None, None, None
-
-        if m[1] == "*":
-            start = end = None
-        else:
-            start, end = [int(x) for x in m[1].split("-")]
-        total = None if m[2] == "*" else int(m[2])
-        return start, end, total
 
     async def async_fetch_range(self, start, end):
         """Download a block of data
@@ -857,10 +906,8 @@ class HTTPFile(AbstractBufferedFile):
                 # suitable Content-Range header or a Content-Length no more
                 # than the requested range also mean we have got the desired
                 # range.
-                response_is_range = (
-                    r.status == 206
-                    or self._parse_content_range(r.headers)[0] == start
-                    or int(r.headers.get("Content-Length", end + 1)) <= end - start
+                response_is_range = response_is_requested_range(
+                    r.status, r.headers, start, end
                 )
 
                 if response_is_range:
@@ -931,26 +978,57 @@ class HTTPStreamFile(AbstractBufferedFile):
 
         self.r = sync(self.loop, cor)
         self.loop = fs.loop
+        self.leftover = b""
+        self._last_read = b""
 
     def seek(self, loc, whence=0):
-        if loc == 0 and whence == 1:
+        """Allow delimiter lookahead to rewind at most one block."""
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        if whence == 1:
+            loc += self.loc
+        elif whence != 0:
+            raise ValueError("Cannot seek streaming HTTP file")
+        if loc == self.loc:
             return self.loc
-        if loc == self.loc and whence == 0:
+        rewind = self.loc - loc
+        if 0 < rewind <= len(self._last_read):
+            self.leftover = self._last_read[-rewind:] + self.leftover
+            self._last_read = self._last_read[:-rewind]
+            self.loc = loc
             return self.loc
         raise ValueError("Cannot seek streaming HTTP file")
 
     async def _read(self, num=-1):
-        out = await self.r.content.read(num)
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
+        if num < 0:
+            out = self.leftover + await self.r.content.read(num)
+            self.leftover = b""
+        elif len(self.leftover) >= num:
+            out, self.leftover = self.leftover[:num], self.leftover[num:]
+        else:
+            out = self.leftover + await self.r.content.read(num - len(self.leftover))
+            self.leftover = b""
+        if num:
+            # Retain at most one block, even after a large bounded read.
+            self._last_read = out[-self.blocksize :] if num > 0 else b""
         self.loc += len(out)
         return out
 
     read = sync_wrapper(_read)
+
+    def readuntil(self, char=b"\n", blocks=None):
+        # The unused delimiter lookahead must fit in the rewind buffer.
+        return super().readuntil(char, min(blocks or self.blocksize, self.blocksize))
 
     async def _close(self):
         self.r.close()
 
     def close(self):
         asyncio.run_coroutine_threadsafe(self._close(), self.loop)
+        self.leftover = self._last_read = b""
         super().close()
 
 
@@ -979,6 +1057,9 @@ class AsyncStreamFile(AbstractAsyncStreamedFile):
         return False
 
     async def read(self, num=-1):
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        num = -1 if num is None else num
         if self.r is None:
             r = await self.session.get(
                 self.fs.encode_url(self.url), **self.kwargs
