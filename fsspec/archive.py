@@ -55,6 +55,31 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
         self._get_dirs()
+        if not path.startswith("/"):
+            # Archive readers replace dir_cache when rebuilding their member
+            # metadata (including ZIP writes). Reuse an index only while that
+            # exact snapshot remains current.
+            if getattr(self, "_listing_source", None) is not self.dir_cache:
+                listings = {"": {}}
+                for name, info in self.dir_cache.items():
+                    name = name.rstrip("/")
+                    parent = name.rpartition("/")[0]
+                    listings.setdefault(parent, {})[name] = info
+                    top = name.split("/", 1)[0]
+                    listings[""].setdefault(
+                        top, {"name": top, "size": 0, "type": "directory"}
+                    )
+                self._listings_by_parent = listings
+                self._listing_source = self.dir_cache
+            paths = self._listings_by_parent.get(path.rstrip("/"), {})
+            if not paths and path.strip("/"):
+                info = self.info(path)
+                if info["type"] != "directory":
+                    paths = {info["name"]: info}
+            if detail:
+                return sorted(paths.values(), key=operator.itemgetter("name"))
+            return sorted(paths)
+
         paths = {}
         for p, f in self.dir_cache.items():
             p = p.rstrip("/")
