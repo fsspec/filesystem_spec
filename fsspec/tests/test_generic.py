@@ -366,12 +366,26 @@ def test_rsync_update_cond(m, kwargs, copied_existing):
     }
 
 
-def test_rsync_rejects_unknown_update_cond(m):
-    m.pipe({"/src/afile": b"new", "/dst/afile": b"old"})
+@pytest.mark.parametrize("delete_missing", [False, True])
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"/src/afile": b"new", "/dst/afile": b"old"},  # a file in both trees
+        {"/src/new": b"new", "/dst/keep": b"old"},  # no file in both trees
+    ],
+)
+def test_rsync_rejects_unknown_update_cond(m, files, delete_missing):
+    m.pipe(files)
 
     with pytest.raises(ValueError, match="Unknown update_cond 'sometimes'"):
-        rsync("memory:///src", "memory:///dst", update_cond="sometimes")
-    assert m.cat("/dst/afile") == b"old"
+        rsync(
+            "memory:///src",
+            "memory:///dst",
+            update_cond="sometimes",
+            delete_missing=delete_missing,
+        )
+    # nothing was copied or deleted
+    assert m.cat(m.find("/")) == files
 
 
 class _OptionsRequiredFS(MemoryFileSystem):
