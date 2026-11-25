@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Close an existing SFTP client before reconnecting so its SSH transport and
+  channels are released (#1682).
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string

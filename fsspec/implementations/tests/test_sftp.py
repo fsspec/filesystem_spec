@@ -623,6 +623,52 @@ def test_known_host_with_matching_key_is_accepted(sshd, home):
     assert fs.ftp is not None
 
 
+@pytest.mark.parametrize("disconnect", [False, True])
+def test_reconnect_closes_previous_client(sshd, home, disconnect):
+    port, host_key = sshd
+    _write_known_hosts(home / ".ssh" / "known_hosts", port, host_key)
+    fs = _connect(port, host_key_policy="reject")
+    previous_client = fs.client
+    previous_transport = previous_client.get_transport()
+    previous_channel = fs.ftp.get_channel()
+    if disconnect:
+        previous_client.close()
+
+    try:
+        fs._connect()
+
+        assert not previous_transport.is_active()
+        assert previous_channel.closed
+        assert fs.client is not previous_client
+        assert fs.client.get_transport().is_active()
+        assert fs.ftp.normalize(".") == "/"
+    finally:
+        previous_client.close()
+        fs.client.close()
+
+
+def test_failed_reconnect_closes_previous_client(sshd, home):
+    port, host_key = sshd
+    _write_known_hosts(home / ".ssh" / "known_hosts", port, host_key)
+    fs = _connect(port, host_key_policy="reject")
+    previous_client = fs.client
+    previous_transport = previous_client.get_transport()
+    try:
+        with socket.socket() as unavailable:
+            unavailable.bind(("127.0.0.1", 0))
+            fs.ssh_kwargs["port"] = unavailable.getsockname()[1]
+            with pytest.raises(paramiko.ssh_exception.NoValidConnectionsError):
+                fs._connect()
+
+        assert not previous_transport.is_active()
+        fs.ssh_kwargs["port"] = port
+        fs._connect()
+        assert fs.ftp.normalize(".") == "/"
+    finally:
+        previous_client.close()
+        fs.client.close()
+
+
 def test_unknown_host_is_rejected(sshd, home):
     port, _ = sshd
 
