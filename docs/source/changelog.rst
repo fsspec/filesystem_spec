@@ -21,6 +21,7 @@ Enhancements
 Fixes
 
 - Allow listing cache items and values with bounded LRU caching (#2419).
+- Read committed FTP files at their original paths inside transactions (#2463).
 
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
@@ -31,6 +32,8 @@ Fixes
   ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
   an archive with members.
 
+- Raise ``IsADirectoryError`` when opening an explicit ZIP directory entry.
+
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
 
@@ -40,6 +43,9 @@ Fixes
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
+
+- Leave out passwords in nested options such as ``target_options`` when
+  serializing with ``include_password=False``.
 
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
@@ -274,6 +280,8 @@ Fixes
 
 - Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
   and allowing deferred local transaction writes to commit to missing parents (#1041).
+
+- Preserve preloaded file parts when opening another file with the same cache options.
 
 
 2026.9.0

@@ -267,3 +267,29 @@ def test_nested_arrow_nodict(tmpdir):
     with open_parquet_file(path, columns=["nested"], engine="pyarrow") as fh:
         col = pd.read_parquet(fh, engine="pyarrow", columns=["nested.a"])
     assert (col["a"] == data).all()
+
+
+@pytest.mark.filterwarnings("ignore:.*Not enough data.*")
+@PYARROW_MARK
+def test_multiple_resample_footer_of_later_file(tmpdir):
+    # Only the second file has a footer larger than the sample, so it must be
+    # re-sampled without disturbing the first one
+    pa = pytest.importorskip("pyarrow")
+    small = os.path.join(str(tmpdir), "small.parquet")
+    large = os.path.join(str(tmpdir), "large.parquet")
+    pq.write_table(pa.table({"x": range(10), "y": range(10)}), small)
+    pq.write_table(
+        pa.table({"x": range(1000), "y": range(1000)}), large, row_group_size=10
+    )
+    footer_sample_size = pq.ParquetFile(small).metadata.serialized_size + 100
+    assert pq.ParquetFile(large).metadata.serialized_size > footer_sample_size
+
+    ofs = open_parquet_files(
+        [small, large],
+        engine="pyarrow",
+        columns=["x"],
+        footer_sample_size=footer_sample_size,
+    )
+    for path, f in zip([small, large], ofs):
+        expect = pq.read_table(path, columns=["x"])
+        assert pq.read_table(f, columns=["x"]).equals(expect)

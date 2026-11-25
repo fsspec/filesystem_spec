@@ -157,6 +157,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if "r" in mode:
             self._get_dirs()
             member = self._members.get(path, path)
+            if isinstance(member, zipfile.ZipInfo) and member.is_dir():
+                raise IsADirectoryError(path)
         try:
             out = self.zip.open(member, mode.strip("b"), force_zip64=self.force_zip_64)
         except KeyError as exc:
