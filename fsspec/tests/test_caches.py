@@ -756,3 +756,55 @@ def test_first_cache_buffered_gzip_eof():
         assert f.read(1) == b""
         assert f.read(10) == b""
         assert requests == before
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_known_parts_many_contiguous_blocks(reverse):
+    content = bytes(range(256)) * 16
+    items = [((i, i + 16), content[i : i + 16]) for i in range(0, len(content), 16)]
+    parts = dict(reversed(items) if reverse else items)
+    cache = caches["parts"](None, None, len(content), parts)
+    assert parts == {}  # Existing constructor ownership behavior.
+    assert cache.data == {(0, len(content)): content}
+    assert cache.size == len(content)
+    assert cache.nblocks == 1
+    assert cache._fetch(7, len(content) - 9) == content[7:-9]
+    assert cache.hit_count == 1
+    assert cache.miss_count == 0
+
+
+@pytest.mark.parametrize("tail", [0, 7])
+def test_known_parts_buffered_fragmented_read(tail):
+    count, width, gap = 64, 16, 3
+    size = count * (width + gap) - gap
+    expected = bytearray(size + tail)
+    parts = {}
+    for i in range(count):
+        start = i * (width + gap)
+        block = bytes([i + 1]) * width
+        parts[start, start + width] = block
+        expected[start : start + width] = block
+    with AbstractBufferedFile(
+        None,
+        "fragmented",
+        mode="rb",
+        size=size + tail,
+        cache_type="parts",
+        cache_options={"data": parts, "strict": False},
+    ) as file:
+        file.seek(5)
+        assert file.read() == bytes(expected[5:])
+        assert file.cache.nblocks == count
+        assert file.cache.hit_count == count
+        assert file.cache.miss_count == count - 1 + bool(tail)
+        assert file.cache.total_requested_bytes == size + tail - 5
+
+
+def test_known_parts_fragmented_strict_read():
+    parts = {(i * 20, i * 20 + 16): b"x" * 16 for i in range(64)}
+    cache = caches["parts"](None, None, 1280, parts, strict=True)
+    with pytest.raises(ValueError):
+        cache._fetch(5, 1000)
+    assert cache.hit_count == 1
+    assert cache.miss_count == 1
+    assert cache._fetch(20, 36) == b"x" * 16
