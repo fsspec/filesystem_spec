@@ -290,6 +290,8 @@ def read_block(
         f.seek(offset)
         found_start_delim = seek_delimiter(f, delimiter, 2**16)
         if length is None:
+            if found_start_delim and split_before:
+                f.seek(f.tell() - len(delimiter))
             return f.read()
         start = f.tell()
         length -= start - offset
@@ -461,6 +463,23 @@ def check_contained(root: str, paths: list[str]) -> None:
                 f"path {path!r} would be copied to {path_abs!r}, which is "
                 f"outside the destination {root!r}"
             )
+
+
+def _escapes_root(path: str) -> bool:
+    """Whether a relative path would resolve above its root via ".." segments.
+
+    Only meaningful where ".." navigates a real directory tree; see
+    ``fsspec.implementations.dirfs._resolves_dotdot``.
+    """
+    depth = 0
+    for part in path.split("/"):
+        if part == "..":
+            depth -= 1
+            if depth < 0:
+                return True
+        elif part and part != ".":
+            depth += 1
+    return False
 
 
 def is_exception(obj: Any) -> bool:

@@ -122,6 +122,54 @@ def test_mapper():
     assert hash(BasenameCacheMapper(2)) == hash(mapper3)
 
 
+def test_cache_metadata_name(tmpdir):
+    # With same_names=True a remote file named "cache" is stored under the
+    # same name as the metadata file and replaces it; the metadata file name
+    # can be configured so the two never meet.
+    source = os.path.join(tmpdir, "source")
+    os.mkdir(source)
+    afile = os.path.join(source, "afile")
+    open(afile, "w").write("test")
+    outside = os.path.join(tmpdir, "outside")
+    open(outside, "w").write("not the cached copy")
+    storage = os.path.join(tmpdir, "storage")
+    # a metadata document that points another path at a file outside storage
+    poison = os.path.join(source, "cache")
+    with open(poison, "w") as f:
+        json.dump(
+            {
+                make_path_posix(afile): {
+                    "original": afile,
+                    "fn": os.path.relpath(outside, storage),
+                    "blocks": True,
+                    "time": time.time(),
+                    "uid": "x",
+                }
+            },
+            f,
+        )
+
+    fs = fsspec.filesystem(
+        "filecache",
+        target_protocol="file",
+        cache_storage=storage,
+        same_names=True,
+        cache_metadata_name="metadata.json",
+    )
+    with open(poison, "rb") as f:
+        assert fs.cat(poison) == f.read()
+    assert fs.cat(afile) == b"test"
+    with open(os.path.join(storage, "metadata.json")) as f:
+        assert make_path_posix(afile) in json.load(f)
+
+    # the option is part of the instance identity
+    fs2 = fsspec.filesystem(
+        "filecache", target_protocol="file", cache_storage=storage, same_names=True
+    )
+    assert fs2 != fs
+    assert fs2.cache_metadata_name == "cache"
+
+
 @pytest.mark.parametrize(
     "cache_mapper", [BasenameCacheMapper(), BasenameCacheMapper(1), HashCacheMapper()]
 )
@@ -2111,3 +2159,59 @@ def test_callback_reports_download_async(tmp_path, protocol):
         assert callback.sizes == []
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("uploaded", [0, 1])
+@pytest.mark.parametrize("cleanup_error", [False, True])
+@pytest.mark.parametrize("error_type", [OSError, KeyboardInterrupt])
+def test_write_transaction_failed_upload_ends_transaction(
+    tmp_path, m, monkeypatch, uploaded, cleanup_error, error_type
+):
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    original_put = m.put
+    error = error_type("controlled upload failure")
+
+    def failed_put(lpaths, rpaths, **kwargs):
+        if uploaded:
+            original_put(lpaths[:uploaded], rpaths[:uploaded], **kwargs)
+        raise error
+
+    if cleanup_error:
+        original_discard = LocalTempFile.discard
+        discards = []
+
+        def failed_discard(file):
+            discards.append(file.path)
+            if len(discards) == 1:
+                raise OSError("controlled discard failure")
+            original_discard(file)
+
+        monkeypatch.setattr(LocalTempFile, "discard", failed_discard)
+
+    monkeypatch.setattr(m, "put", failed_put)
+    with pytest.raises(error_type) as raised:
+        with fs.transaction as transaction:
+            fs.pipe("/first", b"first")
+            fs.pipe("/second", b"second")
+    assert raised.value is error
+    assert not fs._intrans
+    assert fs._transaction is None
+    assert transaction.fs is None
+    assert not transaction.files
+    # Cached filesystem instances must also be usable through a later lookup.
+    assert fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path)) is fs
+    assert not list(tmp_path.iterdir())
+    if cleanup_error:
+        assert set(discards) == {"/first", "/second"}
+    # Bulk transfers are not atomic: do not delete already-uploaded remote files.
+    assert m.exists("/first") == bool(uploaded)
+    assert not m.exists("/second")
+    if uploaded:
+        assert m.cat("/first") == b"first"
+
+    monkeypatch.setattr(m, "put", original_put)
+    fs.pipe("/after-failure", b"visible")
+    assert m.cat("/after-failure") == b"visible"
+    with fs.transaction:
+        fs.pipe("/next-transaction", b"committed")
+    assert m.cat("/next-transaction") == b"committed"
