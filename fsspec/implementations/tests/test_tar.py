@@ -589,3 +589,48 @@ def test_dot_normalization_preserves_links(tmp_path):
         assert fs.size(name) == 5
         assert fs.cat(name) == b"hello"
         assert fs.cat_file(name, start=-2) == b"lo"
+
+
+@pytest.mark.parametrize("kind", [tarfile.SYMTYPE, tarfile.LNKTYPE])
+def test_dangling_links_raise_file_not_found(tmp_path, kind):
+    path = tmp_path / "dangling.tar"
+    with tarfile.open(path, "w") as archive:
+        member = tarfile.TarInfo("dangling")
+        member.type = kind
+        member.linkname = "missing-target"
+        archive.addfile(member)
+    fs = TarFileSystem(str(path))
+    try:
+        with pytest.raises(FileNotFoundError, match="dangling") as error:
+            fs.cat_file("dangling")
+        assert isinstance(error.value.__cause__, KeyError)
+        returned = fs.cat(["dangling"], on_error="return")
+        assert isinstance(returned["dangling"], FileNotFoundError)
+    finally:
+        fs.close()
+
+
+@pytest.mark.parametrize("kind", [tarfile.FIFOTYPE, tarfile.CHRTYPE, tarfile.BLKTYPE])
+@pytest.mark.parametrize("linked", [False, True])
+def test_special_members_raise_clear_error(tmp_path, kind, linked):
+    path = tmp_path / "special.tar"
+    with tarfile.open(path, "w") as archive:
+        member = tarfile.TarInfo("special")
+        member.type = kind
+        archive.addfile(member)
+        if linked:
+            link = tarfile.TarInfo("link")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "special"
+            archive.addfile(link)
+        regular = tarfile.TarInfo("regular")
+        regular.size = 4
+        archive.addfile(regular, BytesIO(b"data"))
+    fs = TarFileSystem(str(path))
+    try:
+        with pytest.raises(ValueError, match="Can only handle regular files"):
+            fs.cat_file("link" if linked else "special")
+        # A failed open must not prevent subsequent reads from the archive.
+        assert fs.cat_file("regular") == b"data"
+    finally:
+        fs.close()
