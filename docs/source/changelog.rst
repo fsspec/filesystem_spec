@@ -20,6 +20,8 @@ Enhancements
 
 Fixes
 
+- Read committed FTP files at their original paths inside transactions (#2463).
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string

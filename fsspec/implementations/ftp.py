@@ -375,7 +375,7 @@ class FTPFile(AbstractBufferedFile):
             cache_options=cache_options,
             **kwargs,
         )
-        if not autocommit:
+        if not autocommit and mode != "rb":
             self.target = self.path
             self.path = "/".join([kwargs["tempdir"], str(uuid.uuid4())])
 
