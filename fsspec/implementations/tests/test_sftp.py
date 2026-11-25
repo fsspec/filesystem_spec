@@ -337,10 +337,10 @@ class _FakeSSHClient:
         self.policy = None
         self.host = None
         self.connect_kwargs = None
-        self.system_host_keys_file = None
+        self.system_host_keys_files = []
 
     def load_system_host_keys(self, filename):
-        self.system_host_keys_file = filename
+        self.system_host_keys_files.append(filename)
 
     def set_missing_host_key_policy(self, policy):
         self.policy = policy
@@ -498,7 +498,10 @@ def test_host_key_policy_wrong_type(fake_client):
 def test_known_hosts_are_loaded(fake_client):
     fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
 
-    assert fs.client.system_host_keys_file == os.path.expanduser("~/.ssh/known_hosts")
+    assert fs.client.system_host_keys_files == [
+        os.path.expanduser("~/.ssh/known_hosts"),
+        *fsspec.implementations.sftp.GLOBAL_KNOWN_HOSTS,
+    ]
 
 
 def test_known_hosts_file(fake_client):
@@ -510,7 +513,10 @@ def test_known_hosts_file(fake_client):
         skip_instance_cache=True,
     )
 
-    assert fs.client.system_host_keys_file == "/some/known_hosts"
+    assert fs.client.system_host_keys_files == [
+        "/some/known_hosts",
+        *fsspec.implementations.sftp.GLOBAL_KNOWN_HOSTS,
+    ]
     assert "known_hosts" not in fs.client.connect_kwargs
 
 
@@ -596,9 +602,10 @@ def _connect(port, **kwargs):
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    """A home directory with an empty ``.ssh``."""
+    """A home directory with an empty ``.ssh``, and no system-wide files."""
     for name in ("HOME", "USERPROFILE"):
         monkeypatch.setenv(name, str(tmp_path))
+    monkeypatch.setattr("fsspec.implementations.sftp.GLOBAL_KNOWN_HOSTS", ())
     (tmp_path / ".ssh").mkdir()
     return tmp_path
 
@@ -960,6 +967,71 @@ def test_known_hosts_file_does_not_add_the_default(sshd, home):
         _connect(port, known_hosts=str(known_hosts), host_key_policy="reject")
 
     assert _sees_no_authentication()
+
+
+@pytest.fixture
+def global_known_hosts(home, monkeypatch):
+    """A file read in place of ``/etc/ssh/ssh_known_hosts``."""
+    path = home / "ssh_known_hosts"
+    monkeypatch.setattr("fsspec.implementations.sftp.GLOBAL_KNOWN_HOSTS", (str(path),))
+    return path
+
+
+@pytest.mark.parametrize("policy", [None, "reject"])
+def test_global_known_host_with_changed_key_is_refused(
+    sshd, global_known_hosts, policy
+):
+    """Like GlobalKnownHostsFile: a key pinned system-wide is checked."""
+    port, _ = sshd
+    _write_known_hosts(global_known_hosts, port, paramiko.RSAKey.generate(2048))
+
+    kwargs = {} if policy is None else {"host_key_policy": policy}
+    with pytest.raises(paramiko.BadHostKeyException):
+        _connect(port, **kwargs)
+
+    assert _sees_no_authentication()
+
+
+@pytest.mark.parametrize("user_file", [False, True])
+def test_global_known_host_with_matching_key_is_accepted(
+    sshd, home, global_known_hosts, user_file
+):
+    port, host_key = sshd
+    _write_known_hosts(global_known_hosts, port, host_key)
+    kwargs = {}
+    if user_file:
+        (home / "extra_known_hosts").write_text("")
+        kwargs["known_hosts"] = str(home / "extra_known_hosts")
+
+    fs = _connect(port, host_key_policy="reject", **kwargs)
+
+    assert fs.ftp is not None
+
+
+def test_user_known_hosts_win_over_global(sshd, home, global_known_hosts):
+    port, host_key = sshd
+    _write_known_hosts(global_known_hosts, port, paramiko.RSAKey.generate(2048))
+    _write_known_hosts(home / ".ssh" / "known_hosts", port, host_key)
+
+    fs = _connect(port, host_key_policy="reject")
+
+    assert fs.ftp is not None
+
+
+@paramiko_stops_at_marker
+def test_global_known_hosts_paramiko_cannot_read_do_not_refuse(
+    sshd, global_known_hosts, caplog
+):
+    """The system-wide file is not the user's to fix: warn, then go on."""
+    port, host_key = sshd
+    line = f"{host_key.get_name()} {host_key.get_base64()}"
+    global_known_hosts.write_text(f"@cert-authority *.example.com {line}\n")
+
+    with caplog.at_level(logging.WARNING, logger="fsspec.sftp"):
+        fs = _connect(port)
+
+    assert fs.ftp is not None
+    assert "could not be read completely" in caplog.text
 
 
 def _append_many(path, count, key_bytes):
