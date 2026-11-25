@@ -280,6 +280,8 @@ Fixes
 - Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
   and allowing deferred local transaction writes to commit to missing parents (#1041).
 
+- Preserve preloaded file parts when opening another file with the same cache options.
+
 
 2026.9.0
 --------
