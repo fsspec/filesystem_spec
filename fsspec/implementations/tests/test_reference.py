@@ -179,20 +179,20 @@ def test_size_of_inline_data_is_the_decoded_length():
         "a": "base64:" + base64.b64encode(binary).decode(),
         "b": b"base64:" + base64.b64encode(binary),
         "c": binary,
-        "d": "h茅llo",
+        "d": "héllo",
     }
     fs = fsspec.filesystem("reference", fo=refs)
     assert fs.cat("a") == binary
     assert fs.size("a") == len(binary)
     assert fs.sizes(["a", "b", "c"]) == 3 * [len(binary)]
-    assert fs.size("d") == len("h茅llo".encode())
+    assert fs.size("d") == len("héllo".encode())
     assert {e["name"]: e["size"] for e in fs.ls("", detail=True)} == {
         "a": len(binary),
         "b": len(binary),
         "c": len(binary),
-        "d": len("h茅llo".encode()),
+        "d": len("héllo".encode()),
     }
-    assert fs.du("") == 3 * len(binary) + len("h茅llo".encode())
+    assert fs.du("") == 3 * len(binary) + len("héllo".encode())
 
 
 def test_mutable(server, m):
@@ -1275,3 +1275,22 @@ def test_find_details_does_not_scan_unrelated_parent():
     assert fs.find("data", detail=True) == {
         "data/a": {"name": "data/a", "type": "file", "size": 1}
     }
+
+
+@pytest.mark.parametrize("warm", [False, True])
+def test_find_details_trailing_slash_reference(warm):
+    fs = ReferenceFileSystem({"a/b": b"a", "d/": b"d"})
+    if warm:
+        fs.ls("")
+    assert fs.find("", detail=True) == {
+        "a/b": {"name": "a/b", "type": "file", "size": 1},
+        "d/": {"name": "d/", "type": "file", "size": 1},
+    }
+
+
+def test_find_details_stale_parent_preserves_missing_file_error():
+    fs = ReferenceFileSystem({"data/a": b"a"})
+    fs.ls("")
+    fs.pipe_file("data/b", b"b")
+    with pytest.raises(FileNotFoundError, match="data/b"):
+        fs.find("", detail=True)

@@ -1266,9 +1266,11 @@ class ReferenceFileSystem(AsyncFileSystem):
             details = {
                 entry["name"]: entry
                 for parent in parents
-                for entry in self.dircache[parent]
+                for entry in self.dircache.get(parent, ())
             }
-            return {k: details[k] for k in r}
+            return {
+                k: details[k] if k in details else self._ls_from_cache(k)[0] for k in r
+            }
         else:
             return r
 
