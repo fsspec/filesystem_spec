@@ -28,6 +28,22 @@ def test_mapping_prefix(tmpdir):
     assert m == m2 == m3
 
 
+def test_mapping_ignores_directory_markers():
+    refs = {
+        "root/": b"",
+        "root/sub/": b"",
+        "root/sub/data": b"payload",
+        "root/empty": b"",
+    }
+    fs = fsspec.filesystem("reference", fo=refs)
+    mapper = fs.get_mapper("root")
+
+    assert set(fs.find("root")) == set(refs)
+    assert set(mapper) == {"sub/data", "empty"}
+    assert len(mapper) == 2
+    assert dict(mapper) == {"sub/data": b"payload", "empty": b""}
+
+
 @pytest.mark.parametrize("protocol", ["file", "memory"])
 @pytest.mark.parametrize("key", ["a", "a/nested"])
 def test_check_preserves_contents(tmp_path, protocol, key):

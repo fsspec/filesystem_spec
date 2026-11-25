@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Exclude paths ending in a slash from ``FSMap`` keys so directory markers
+  do not interrupt copies from object stores (#1554).
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
