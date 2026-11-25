@@ -146,3 +146,331 @@ def test_async_recursive_copy_preserves_directory_marker():
     finally:
         store.store.clear()
         store.pseudo_dirs[:] = [""]
+
+
+def test_explicit_recursive_copy_avoids_metadata_lookup():
+    from unittest.mock import Mock
+
+    from fsspec.spec import AbstractFileSystem
+
+    fs = AbstractFileSystem(skip_instance_cache=True)
+    fs.info = Mock(side_effect=AssertionError("Unexpected metadata lookup"))
+    fs.cp_file = Mock()
+
+    fs.copy(
+        ["bucket/source/file"],
+        ["bucket/target/file"],
+        recursive=True,
+        on_error="raise",
+    )
+
+    fs.info.assert_not_called()
+    fs.cp_file.assert_called_once_with("bucket/source/file", "bucket/target/file")
+
+
+def test_explicit_recursive_copy_preserves_slash_object():
+    from unittest.mock import Mock
+
+    from fsspec.spec import AbstractFileSystem
+
+    fs = AbstractFileSystem(skip_instance_cache=True)
+    fs.info = Mock(return_value={"type": "directory"})
+    fs.cp_file = Mock()
+    fs.makedirs = Mock()
+
+    fs.copy(
+        ["bucket/source/marker/"],
+        ["bucket/target/marker/"],
+        recursive=True,
+        on_error="raise",
+    )
+
+    fs.cp_file.assert_called_once_with("bucket/source/marker/", "bucket/target/marker/")
+    fs.makedirs.assert_not_called()
+
+
+@pytest.mark.parametrize("payload", [b"", b"marker-content"])
+@pytest.mark.parametrize("maxdepth", [None, 2])
+def test_recursive_copy_flat_store_marker(payload, maxdepth):
+    from unittest.mock import Mock
+
+    from fsspec.spec import AbstractFileSystem
+
+    fs = AbstractFileSystem(skip_instance_cache=True)
+
+    objects = {
+        "bucket/src/marker/": payload,
+        "bucket/src/data": b"data",
+    }
+
+    entries = {
+        "bucket/src": {
+            "name": "bucket/src",
+            "type": "directory",
+            "size": 0,
+        },
+        **{
+            name: {
+                "name": name,
+                "type": "file",
+                "size": len(data),
+            }
+            for name, data in objects.items()
+        },
+    }
+
+    fs.find = Mock(
+        side_effect=lambda path, detail=False, **kwargs: (
+            entries if detail else sorted(entries)
+        )
+    )
+
+    def info(path, **kwargs):
+        if path in ("bucket/src", "bucket/src/marker/"):
+            return {"name": path.rstrip("/"), "type": "directory"}
+        if path in entries:
+            return entries[path]
+        raise FileNotFoundError(path)
+
+    def cp_file(source, target, **kwargs):
+        objects[target] = objects[source]
+
+    fs.info = Mock(side_effect=info)
+    fs.cp_file = Mock(side_effect=cp_file)
+    fs.makedirs = Mock()
+
+    fs.copy(
+        "bucket/src",
+        "bucket/dst",
+        recursive=True,
+        maxdepth=maxdepth,
+        on_error="raise",
+    )
+
+    assert objects["bucket/dst/marker/"] == payload
+    assert objects["bucket/dst/data"] == b"data"
+    if maxdepth is None:
+        fs.makedirs.assert_called_once_with("bucket/dst", exist_ok=True)
+    else:
+        fs.makedirs.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [b"", b"marker-content"])
+@pytest.mark.parametrize("maxdepth", [None, 2])
+async def test_async_flat_store_marker(payload, maxdepth):
+    from unittest.mock import AsyncMock
+
+    fs = AsyncFileSystem(
+        asynchronous=True,
+        skip_instance_cache=True,
+    )
+
+    objects = {
+        "bucket/src/marker/": payload,
+        "bucket/src/data": b"data",
+    }
+
+    entries = {
+        "bucket/src": {"type": "directory"},
+        "bucket/src/marker/": {"type": "file"},
+        "bucket/src/data": {"type": "file"},
+    }
+
+    async def copy_file(source, target, **kwargs):
+        objects[target] = objects[source]
+
+    fs._find = AsyncMock(return_value=entries)
+    fs._isdir = AsyncMock(return_value=False)
+    fs._info = AsyncMock(side_effect=AssertionError("Unexpected metadata lookup"))
+    fs._cp_file = AsyncMock(side_effect=copy_file)
+    fs._makedirs = AsyncMock()
+
+    await fs._copy(
+        "bucket/src",
+        "bucket/dst",
+        recursive=True,
+        maxdepth=maxdepth,
+        on_error="raise",
+    )
+
+    assert objects["bucket/dst/marker/"] == payload
+    assert objects["bucket/dst/data"] == b"data"
+    fs._info.assert_not_awaited()
+    if maxdepth is None:
+        fs._makedirs.assert_awaited_once_with("bucket/dst", exist_ok=True)
+    else:
+        fs._makedirs.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_async_explicit_copy_avoids_metadata_lookup():
+    from unittest.mock import AsyncMock
+
+    fs = AsyncFileSystem(
+        asynchronous=True,
+        skip_instance_cache=True,
+    )
+
+    fs._info = AsyncMock(side_effect=AssertionError("Unexpected metadata lookup"))
+    fs._cp_file = AsyncMock()
+    fs._makedirs = AsyncMock()
+
+    await fs._copy(
+        ["bucket/src/marker/"],
+        ["bucket/dst/marker/"],
+        recursive=True,
+        on_error="raise",
+    )
+
+    fs._info.assert_not_awaited()
+    fs._makedirs.assert_not_awaited()
+    fs._cp_file.assert_awaited_once_with("bucket/src/marker/", "bucket/dst/marker/")
+
+
+def test_recursive_copy_glob(object_store):
+    fs, store = object_store
+    store.pipe(
+        {
+            "/src/sub/a": b"a",
+            "/src/sub/b": b"b",
+        }
+    )
+
+    fs.copy(
+        "/src/*",
+        "/dst",
+        recursive=True,
+        on_error="raise",
+    )
+
+    assert store.cat("/dst/a") == b"a"
+    assert store.cat("/dst/b") == b"b"
+
+
+def test_recursive_copy_invalid_maxdepth(object_store):
+    fs, store = object_store
+    store.pipe("/src/a", b"a")
+
+    with pytest.raises(ValueError, match="maxdepth"):
+        fs.copy("/src", "/dst", recursive=True, maxdepth=0)
+
+
+@pytest.mark.parametrize("maxdepth", [None, 2])
+@pytest.mark.parametrize("fail_copy", [False, True])
+def test_flat_store_marker_move(maxdepth, fail_copy):
+    from unittest.mock import Mock
+
+    from fsspec.spec import AbstractFileSystem
+
+    fs = AbstractFileSystem(skip_instance_cache=True)
+
+    source = "bucket/src/marker/"
+    target = "bucket/dst/marker/"
+    payload = b"marker-content"
+
+    objects = {source: payload}
+
+    entries = {
+        "bucket/src": {"type": "directory"},
+        source: {"type": "file", "size": len(payload)},
+    }
+
+    fs.find = Mock(
+        side_effect=lambda path, detail=False, **kwargs: (
+            entries if detail else sorted(entries)
+        )
+    )
+
+    fs.isdir = Mock(side_effect=lambda path: path in ("bucket/src", source))
+    fs.makedirs = Mock()
+    fs.exists = Mock(return_value=False)
+
+    def copy_file(src, dst, **kwargs):
+        if fail_copy:
+            raise FileNotFoundError(src)
+        objects[dst] = objects[src]
+
+    def remove(paths, recursive=False, **kwargs):
+        if isinstance(paths, str):
+            paths = [p for p in objects if p.startswith(paths.rstrip("/") + "/")]
+        for path in paths:
+            objects.pop(path, None)
+
+    fs.cp_file = Mock(side_effect=copy_file)
+    fs.rm = Mock(side_effect=remove)
+
+    if fail_copy:
+        with pytest.raises(FileNotFoundError):
+            fs.mv(
+                "bucket/src",
+                "bucket/dst",
+                recursive=True,
+                maxdepth=maxdepth,
+            )
+
+        assert objects[source] == payload
+        assert target not in objects
+        fs.rm.assert_not_called()
+    else:
+        fs.mv(
+            "bucket/src",
+            "bucket/dst",
+            recursive=True,
+            maxdepth=maxdepth,
+        )
+
+        assert objects[target] == payload
+        assert source not in objects
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("asynchronous", [False, True])
+async def test_single_marker_destination(existing, asynchronous):
+    from unittest.mock import AsyncMock, Mock
+
+    from fsspec.spec import AbstractFileSystem
+
+    source = "bucket/src/marker/"
+    destination = "bucket/dst"
+    expected = "bucket/dst/src/marker/" if existing else "bucket/dst/marker/"
+
+    entries = {
+        "bucket/src": {"type": "directory"},
+        source: {"type": "file", "size": 14},
+    }
+
+    if asynchronous:
+        fs = AsyncFileSystem(
+            asynchronous=True,
+            skip_instance_cache=True,
+        )
+        fs._find = AsyncMock(return_value=entries)
+        fs._isdir = AsyncMock(return_value=existing)
+        fs._cp_file = AsyncMock()
+
+        await fs._copy(
+            "bucket/src",
+            destination,
+            recursive=True,
+            maxdepth=2,
+            on_error="raise",
+        )
+
+        fs._cp_file.assert_awaited_once_with(source, expected)
+    else:
+        fs = AbstractFileSystem(skip_instance_cache=True)
+        fs.find = Mock(return_value=entries)
+        fs.isdir = Mock(return_value=existing)
+        fs.cp_file = Mock()
+
+        fs.copy(
+            "bucket/src",
+            destination,
+            recursive=True,
+            maxdepth=2,
+            on_error="raise",
+        )
+
+        fs.cp_file.assert_called_once_with(source, expected)

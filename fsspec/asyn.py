@@ -551,7 +551,9 @@ class AsyncFileSystem(AbstractFileSystem):
         elif on_error is None:
             on_error = "raise"
 
-        if isinstance(path1, list) and isinstance(path2, list):
+        entries = {}
+        explicit_paths = isinstance(path1, list) and isinstance(path2, list)
+        if explicit_paths:
             # No need to expand paths when both source and destination
             # are provided as lists
             paths1 = path1
@@ -559,13 +561,24 @@ class AsyncFileSystem(AbstractFileSystem):
         else:
             path1 = stringify_path(path1)
             source_is_str = isinstance(path1, str)
-            paths1 = await self._expand_path(
-                path1, maxdepth=maxdepth, recursive=recursive
-            )
+            if recursive and type(self)._expand_path is AsyncFileSystem._expand_path:
+                paths1 = await self._expand_path(
+                    path1, maxdepth=maxdepth, recursive=True, _entries=entries
+                )
+            else:
+                paths1 = await self._expand_path(
+                    path1, maxdepth=maxdepth, recursive=recursive
+                )
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
                 paths1 = [
-                    p for p in paths1 if not (trailing_sep(p) or await self._isdir(p))
+                    p
+                    for p in paths1
+                    if (
+                        entries[p]["type"] != "directory"
+                        if p in entries and "type" in entries[p]
+                        else not (trailing_sep(p) or await self._isdir(p))
+                    )
                 ]
                 if not paths1:
                     return
@@ -586,10 +599,36 @@ class AsyncFileSystem(AbstractFileSystem):
                 flatten=not source_is_str,
             )
 
+            # Preserve the relative name of a lone slash-suffixed object
+            # when a depth-limited recursive copy filters out directories.
+            if (
+                recursive
+                and maxdepth is not None
+                and source_is_str
+                and isinstance(path2, str)
+                and not has_magic(path1)
+                and len(paths1) == 1
+                and trailing_sep(paths1[0])
+                and entries.get(paths1[0], {}).get("type") == "file"
+            ):
+                root = self._strip_protocol(path1).rstrip("/")
+                prefix = root + "/"
+                if paths1[0].startswith(prefix):
+                    relative = paths1[0][len(prefix) :]
+                    destination = path2.rstrip("/")
+                    if exists:
+                        destination += "/" + root.rsplit("/", 1)[-1]
+                    paths2 = [destination + "/" + relative]
+
         batch_size = batch_size or self.batch_size
 
         coros = [
-            self._copy_path(p1, p2, recursive=recursive, **kwargs)
+            self._copy_path(
+                p1,
+                p2,
+                is_directory=entries.get(p1, {}).get("type") == "directory",
+                **kwargs,
+            )
             for p1, p2 in zip(paths1, paths2)
         ]
         result = await _run_coros_in_chunks(
@@ -604,8 +643,8 @@ class AsyncFileSystem(AbstractFileSystem):
             finally:
                 del ex, result
 
-    async def _copy_path(self, path1, path2, recursive=False, **kwargs):
-        if recursive and (await self._info(path1))["type"] == "directory":
+    async def _copy_path(self, path1, path2, is_directory=False, **kwargs):
+        if is_directory:
             await self._makedirs(path2, exist_ok=True)
         else:
             await self._cp_file(path1, path2, **kwargs)
@@ -1115,19 +1154,35 @@ class AsyncFileSystem(AbstractFileSystem):
             return {name: out[name] for name in names}
 
     async def _expand_path(
-        self, path, recursive=False, maxdepth=None, assume_literal=False
+        self,
+        path,
+        recursive=False,
+        maxdepth=None,
+        assume_literal=False,
+        *,
+        _entries=None,
     ):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
         if isinstance(path, (str, os.PathLike)):
-            out = await self._expand_path([path], recursive, maxdepth)
+            out = await self._expand_path(
+                [path],
+                recursive,
+                maxdepth,
+                **({"_entries": _entries} if _entries is not None else {}),
+            )
         else:
             out = set()
             path = [self._strip_protocol(p) for p in path]
             for p in path:  # can gather here
                 if not assume_literal and has_magic(p):
-                    bit = set(await self._glob(p, maxdepth=maxdepth))
+                    if _entries is None:
+                        bit = set(await self._glob(p, maxdepth=maxdepth))
+                    else:
+                        found = await self._glob(p, maxdepth=maxdepth, detail=True)
+                        _entries.update(found)
+                        bit = set(found)
                     out |= bit
                     if recursive:
                         # glob call above expanded one depth so if maxdepth is defined
@@ -1141,11 +1196,24 @@ class AsyncFileSystem(AbstractFileSystem):
                                 recursive=recursive,
                                 maxdepth=maxdepth - 1 if maxdepth is not None else None,
                                 assume_literal=True,
+                                **(
+                                    {"_entries": _entries}
+                                    if _entries is not None
+                                    else {}
+                                ),
                             )
                         )
                     continue
                 elif recursive:
-                    rec = set(await self._find(p, maxdepth=maxdepth, withdirs=True))
+                    if _entries is None:
+                        rec = set(await self._find(p, maxdepth=maxdepth, withdirs=True))
+                    else:
+                        found = await self._find(
+                            p, maxdepth=maxdepth, withdirs=True, detail=True
+                        )
+                        for name, info in found.items():
+                            _entries.setdefault(name, info)
+                        rec = set(found)
                     out |= rec
                 if p not in out and (recursive is False or (await self._exists(p))):
                     # should only check once, for the root
