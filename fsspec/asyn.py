@@ -20,6 +20,8 @@ from .exceptions import FSTimeoutError
 from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
 from .utils import (
+    _plan_range_requests,
+    _unmerge_range_results,
     check_contained,
     glob_translate,
     is_exception,
@@ -690,14 +692,18 @@ class AsyncFileSystem(AbstractFileSystem):
         starts, ends: int or list
             Bytes limits of the read. If using a single int, the same value will be
             used to read all the specified files.
+        max_gap: int or None
+            Opt in to merging bounded non-negative integer ranges for each
+            string path, with at most this many gap bytes. Zero merges adjacent
+            and overlapping ranges. Results retain input order and duplicates;
+            special bounds are fetched independently. Merged requests have no
+            size limit and may read extra gap bytes. A merged fetch failure is
+            returned for each original range it covers. None disables merging.
         on_error: "return" or "raise"
             If "return" (default), any per-range exception is placed in the output
             list at the corresponding position. Otherwise the first such exception
             is raised. Matches ``AbstractFileSystem.cat_ranges``.
         """
-        if max_gap is not None:
-            # use utils.merge_offset_ranges
-            raise NotImplementedError
         if not isinstance(paths, list):
             raise TypeError
         if not isinstance(starts, Iterable):
@@ -706,6 +712,19 @@ class AsyncFileSystem(AbstractFileSystem):
             ends = [ends] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
+        if max_gap is not None:
+            merged_paths, merged_starts, merged_ends, mapping = _plan_range_requests(
+                paths, starts, ends, max_gap
+            )
+            results = await self._cat_ranges(
+                merged_paths,
+                merged_starts,
+                merged_ends,
+                batch_size=batch_size,
+                on_error="return",
+                **kwargs,
+            )
+            return _unmerge_range_results(results, mapping, on_error)
         coros = [
             self._cat_file(p, start=s, end=e, **kwargs)
             for p, s, e in zip(paths, starts, ends)

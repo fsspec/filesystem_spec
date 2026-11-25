@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import tempfile
+from bisect import bisect_right
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import partial
 from hashlib import md5
@@ -762,6 +763,54 @@ def merge_offset_ranges(
             new_ends[-1] = end
 
     return new_paths, new_starts, new_ends
+
+
+def _plan_range_requests(paths, starts, ends, max_gap):
+    """Coalesce bounded ranges and map each original request to a result slice."""
+    if not isinstance(max_gap, int) or max_gap < 0:
+        raise ValueError("max_gap must be a non-negative integer or None")
+    eligible = [
+        isinstance(p, str) and isinstance(s, int) and isinstance(e, int) and 0 <= s <= e
+        for p, s, e in zip(paths, starts, ends)
+    ]
+    bounded = [
+        (p, s, e) for p, s, e, merge in zip(paths, starts, ends, eligible) if merge
+    ]
+    p, s, e = zip(*bounded) if bounded else ([], [], [])
+    merged_paths, merged_starts, merged_ends = merge_offset_ranges(
+        list(p), list(s), list(e), max_gap=max_gap
+    )
+    by_path = {}
+    for i, (p, s) in enumerate(zip(merged_paths, merged_starts)):
+        offsets, indices = by_path.setdefault(p, ([], []))
+        offsets.append(s)
+        indices.append(i)
+    mapping = []
+    for p, s, e, merge in zip(paths, starts, ends, eligible):
+        if merge:
+            offsets, indices = by_path[p]
+            i = indices[bisect_right(offsets, s) - 1]
+            mapping.append((i, s - merged_starts[i], e - merged_starts[i]))
+        else:
+            # Suffix/open-ended/reversed ranges retain backend-specific semantics.
+            mapping.append((len(merged_paths), None, None))
+            merged_paths.append(p)
+            merged_starts.append(s)
+            merged_ends.append(e)
+    return merged_paths, merged_starts, merged_ends, mapping
+
+
+def _unmerge_range_results(results, mapping, on_error):
+    out = []
+    for i, start, end in mapping:
+        result = results[i]
+        if isinstance(result, Exception):
+            if on_error != "return":
+                raise result
+            out.append(result)
+        else:
+            out.append(result[start:end])
+    return out
 
 
 def file_size(filelike: IO[bytes]) -> int:
