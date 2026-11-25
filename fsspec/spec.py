@@ -1266,7 +1266,9 @@ class AbstractFileSystem(metaclass=_Cached):
         elif on_error is None:
             on_error = "raise"
 
-        if isinstance(path1, list) and isinstance(path2, list):
+        entries = {}
+        explicit_paths = isinstance(path1, list) and isinstance(path2, list)
+        if explicit_paths:
             # No need to expand paths when both source and destination
             # are provided as lists
             paths1 = path1
@@ -1276,12 +1278,25 @@ class AbstractFileSystem(metaclass=_Cached):
 
             path1 = stringify_path(path1)
             source_is_str = isinstance(path1, str)
-            paths1 = self.expand_path(
-                path1, recursive=recursive, maxdepth=maxdepth, **kwargs
-            )
+            if recursive and type(self).expand_path is AbstractFileSystem.expand_path:
+                paths1 = self.expand_path(
+                    path1, recursive=True, maxdepth=maxdepth, _entries=entries, **kwargs
+                )
+            else:
+                paths1 = self.expand_path(
+                    path1, recursive=recursive, maxdepth=maxdepth, **kwargs
+                )
             if source_is_str and (not recursive or maxdepth is not None):
                 # Non-recursive glob does not copy directories
-                paths1 = [p for p in paths1 if not (trailing_sep(p) or self.isdir(p))]
+                paths1 = [
+                    p
+                    for p in paths1
+                    if (
+                        entries[p]["type"] != "directory"
+                        if p in entries and "type" in entries[p]
+                        else not (trailing_sep(p) or self.isdir(p))
+                    )
+                ]
                 if not paths1:
                     return
 
@@ -1301,15 +1316,50 @@ class AbstractFileSystem(metaclass=_Cached):
                 flatten=not source_is_str,
             )
 
+            # Preserve the relative name of a lone slash-suffixed object
+            # when a depth-limited recursive copy filters out directories.
+            if (
+                recursive
+                and maxdepth is not None
+                and source_is_str
+                and isinstance(path2, str)
+                and not has_magic(path1)
+                and len(paths1) == 1
+                and trailing_sep(paths1[0])
+                and entries.get(paths1[0], {}).get("type") == "file"
+            ):
+                root = self._strip_protocol(path1).rstrip("/")
+                prefix = root + "/"
+                if paths1[0].startswith(prefix):
+                    relative = paths1[0][len(prefix) :]
+                    destination = path2.rstrip("/")
+                    if exists:
+                        destination += "/" + root.rsplit("/", 1)[-1]
+                    paths2 = [destination + "/" + relative]
+
         for p1, p2 in zip(paths1, paths2):
             try:
-                self.cp_file(p1, p2, **kwargs)
+                if (
+                    recursive
+                    and not explicit_paths
+                    and entries.get(p1, {}).get("type") == "directory"
+                ):
+                    self.makedirs(p2, exist_ok=True)
+                else:
+                    self.cp_file(p1, p2, **kwargs)
             except FileNotFoundError:
                 if on_error == "raise":
                     raise
 
     def expand_path(
-        self, path, recursive=False, maxdepth=None, assume_literal=False, **kwargs
+        self,
+        path,
+        recursive=False,
+        maxdepth=None,
+        assume_literal=False,
+        *,
+        _entries=None,
+        **kwargs,
     ):
         """Turn one or more globs or directories into a list of all matching paths
         to files or directories.
@@ -1321,13 +1371,24 @@ class AbstractFileSystem(metaclass=_Cached):
             raise ValueError("maxdepth must be at least 1")
 
         if isinstance(path, (str, os.PathLike)):
-            out = self.expand_path([path], recursive, maxdepth, **kwargs)
+            out = self.expand_path(
+                [path],
+                recursive,
+                maxdepth,
+                **({"_entries": _entries} if _entries is not None else {}),
+                **kwargs,
+            )
         else:
             out = set()
             path = [self._strip_protocol(p) for p in path]
             for p in path:
                 if not assume_literal and has_magic(p):
-                    bit = set(self.glob(p, maxdepth=maxdepth, **kwargs))
+                    if _entries is None:
+                        bit = set(self.glob(p, maxdepth=maxdepth, **kwargs))
+                    else:
+                        found = self.glob(p, maxdepth=maxdepth, detail=True, **kwargs)
+                        _entries.update(found)
+                        bit = set(found)
                     out |= bit
                     if recursive:
                         # glob call above expanded one depth so if maxdepth is defined
@@ -1341,16 +1402,33 @@ class AbstractFileSystem(metaclass=_Cached):
                                 recursive=recursive,
                                 maxdepth=maxdepth - 1 if maxdepth is not None else None,
                                 assume_literal=True,
+                                **(
+                                    {"_entries": _entries}
+                                    if _entries is not None
+                                    else {}
+                                ),
                                 **kwargs,
                             )
                         )
                     continue
                 elif recursive:
-                    rec = set(
-                        self.find(
-                            p, maxdepth=maxdepth, withdirs=True, detail=False, **kwargs
+                    if _entries is None:
+                        rec = set(
+                            self.find(
+                                p,
+                                maxdepth=maxdepth,
+                                withdirs=True,
+                                detail=False,
+                                **kwargs,
+                            )
                         )
-                    )
+                    else:
+                        found = self.find(
+                            p, maxdepth=maxdepth, withdirs=True, detail=True, **kwargs
+                        )
+                        for name, info in found.items():
+                            _entries.setdefault(name, info)
+                        rec = set(found)
                     out |= rec
                 if p not in out and (recursive is False or self.exists(p)):
                     # should only check once, for the root
@@ -1377,8 +1455,25 @@ class AbstractFileSystem(metaclass=_Cached):
                 path1, path2 = list(sources), list(targets)
             if recursive and maxdepth is not None:
                 # copy only reaches maxdepth, so only remove what it copied
-                paths = self.expand_path(path1, recursive=True, maxdepth=maxdepth)
-                dirs = [p for p in paths if self.isdir(p)]
+                entries = {}
+                if type(self).expand_path is AbstractFileSystem.expand_path:
+                    paths = self.expand_path(
+                        path1,
+                        recursive=True,
+                        maxdepth=maxdepth,
+                        _entries=entries,
+                    )
+                else:
+                    paths = self.expand_path(path1, recursive=True, maxdepth=maxdepth)
+                dirs = [
+                    p
+                    for p in paths
+                    if (
+                        entries[p]["type"] == "directory"
+                        if p in entries and "type" in entries[p]
+                        else self.isdir(p)
+                    )
+                ]
                 files = [p for p in paths if p not in dirs]
             # explicitly raise exception to prevent data corruption
             self.copy(
