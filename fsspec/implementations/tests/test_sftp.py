@@ -382,6 +382,30 @@ def test_makedirs_with_url(fake_client, tmp_path, protocol):
         fs.makedirs(url)
 
 
+@pytest.mark.parametrize("protocol", ["sftp", "ssh"])
+def test_put_file_with_url(fake_client, tmp_path, protocol):
+    class LocalSFTP:
+        def stat(self, path):
+            return (remote / path.lstrip("/")).stat()
+
+        def mkdir(self, path, mode=0o777):
+            (remote / path.lstrip("/")).mkdir(mode=mode)
+
+        def put(self, lpath, rpath):
+            (remote / rpath.lstrip("/")).write_bytes(Path(lpath).read_bytes())
+
+    remote = tmp_path / "remote"
+    remote.mkdir()
+    source = tmp_path / "source"
+    source.write_bytes(b"uploaded content")
+    fs = fsspec.filesystem("sftp", host="host", skip_instance_cache=True)
+    fs.ftp = LocalSFTP()
+
+    fs.put_file(source, f"{protocol}://host/parent/target")
+
+    assert (remote / "parent/target").read_bytes() == b"uploaded content"
+
+
 @pytest.mark.parametrize("create_parents", [True, False])
 @pytest.mark.parametrize("mode", [0o700, 0o750, None])
 def test_mkdir_permissions(fake_client, tmp_path, create_parents, mode):
