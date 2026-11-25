@@ -160,6 +160,69 @@ def test_join_rejects_escape_local(tmp_path, path):
         dirfs._join(path)
 
 
+def _wrap_local(wrapper, tmp_path):
+    from fsspec.implementations.cached import (
+        CachingFileSystem,
+        SimpleCacheFileSystem,
+        WholeFileCacheFileSystem,
+    )
+
+    local = LocalFileSystem()
+    cache = str(tmp_path / "cache")
+    return {
+        "async_wrapper": lambda: AsyncFileSystemWrapper(local, asynchronous=False),
+        "dir": lambda: DirFileSystem("/", local),
+        "blockcache": lambda: CachingFileSystem(fs=local, cache_storage=cache),
+        "filecache": lambda: WholeFileCacheFileSystem(fs=local, cache_storage=cache),
+        "simplecache": lambda: SimpleCacheFileSystem(fs=local, cache_storage=cache),
+        "nested": lambda: AsyncFileSystemWrapper(
+            DirFileSystem("/", local), asynchronous=False
+        ),
+    }[wrapper]()
+
+
+WRAPPERS = ["async_wrapper", "dir", "blockcache", "filecache", "simplecache", "nested"]
+
+
+@pytest.mark.parametrize("wrapper", WRAPPERS)
+def test_join_rejects_escape_wrapped_local(tmp_path, wrapper):
+    # wrappers pass ".." through to the local filesystem, which resolves it
+    # against the real directory tree, so the root must still be enforced
+    root = tmp_path / "root"
+    root.mkdir()
+    (tmp_path / "secret").write_bytes(b"secret")
+    dirfs = DirFileSystem(str(root), _wrap_local(wrapper, tmp_path))
+    with pytest.raises(ValueError, match="escapes"):
+        dirfs.cat_file("../secret")
+    assert dirfs._join("foo/../bar") == f"{dirfs.path}/foo/../bar"
+
+
+@pytest.mark.asyncio
+async def test_join_rejects_escape_async_wrapped_local(tmp_path):
+    fs = AsyncFileSystemWrapper(LocalFileSystem(), asynchronous=True)
+    dirfs = DirFileSystem(str(tmp_path), fs, asynchronous=True)
+    with pytest.raises(ValueError, match="escapes"):
+        await dirfs._cat_file("../secret")
+
+
+def test_join_rejects_escape_of_outer_root_over_inner_dirfs(tmp_path):
+    # the outer root must hold even though the inner root is wider
+    (tmp_path / "outer").mkdir()
+    (tmp_path / "secret").write_bytes(b"secret")
+    inner = DirFileSystem(str(tmp_path), LocalFileSystem())
+    outer = DirFileSystem("outer", inner)
+    with pytest.raises(ValueError, match="escapes"):
+        outer.cat_file("../secret")
+
+
+@pytest.mark.parametrize("path", ["../secret", ".."])
+def test_join_keeps_dotdot_for_wrapped_non_local(m, path):
+    # ".." stays a literal path part when the innermost filesystem is not local
+    wrapped = AsyncFileSystemWrapper(DirFileSystem("/", m), asynchronous=False)
+    dirfs = DirFileSystem("root", wrapped)
+    assert dirfs._join(path) == f"root/{path}"
+
+
 @pytest.mark.parametrize("path", ["foo", "foo/bar", "foo/../bar"])
 def test_join_allows_internal_local(tmp_path, path):
     dirfs = DirFileSystem(str(tmp_path), LocalFileSystem())

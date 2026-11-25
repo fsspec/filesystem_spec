@@ -266,11 +266,15 @@ class LocalFileSystem(AbstractFileSystem):
     def _strip_protocol(cls, path):
         path = stringify_path(path)
         protos = (cls.protocol,) if isinstance(cls.protocol, str) else cls.protocol
-        prefixes = (protocol + sep for protocol in protos for sep in ("://", ":"))
-        for prefix in prefixes:
-            if path.startswith(prefix):
-                path = path.removeprefix(prefix)
-                break
+        for protocol in protos:
+            if path.startswith(protocol):
+                rest = path[len(protocol) :]
+                if rest.startswith("://"):
+                    path = rest[3:]
+                    break
+                if rest.startswith(":"):
+                    path = rest[1:]
+                    break
 
         path = make_path_posix(path)
         if os.sep != "/":
