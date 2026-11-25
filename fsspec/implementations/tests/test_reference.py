@@ -1197,3 +1197,108 @@ def test_no_default_jinja_execution():
 
     with pytest.raises(ZeroDivisionError):
         fsspec.filesystem("reference", fo=manifest, simple_templates=False)
+
+
+@pytest.mark.parametrize("max_gap,max_block", [(0, None), (2, 16), (20, 32), (-1, 8)])
+def test_cat_indexed_ranges_matches_source(m, max_gap, max_block):
+    import random
+
+    rng = random.Random(42)
+    content = bytes(range(256)) * 2
+    refs = {"inline": b"inline"}
+    expected = {"inline": b"inline"}
+    for file_id in range(3):
+        url = f"memory://indexed-{file_id}"
+        m.pipe_file(url, content)
+        # Include overlapping chains, nested ranges, empty and adjacent ranges.
+        spans = [(0, 20), (10, 20), (20, 20), (12, 2), (40, 0), (40, 5)]
+        spans += [(rng.randrange(300), rng.randrange(70)) for _ in range(100)]
+        for i, (start, length) in enumerate(spans):
+            key = f"{file_id}/{i}"
+            refs[key] = [url, start, length]
+            expected[key] = content[start : start + length]
+    paths = list(refs)
+    rng.shuffle(paths)
+    fs = ReferenceFileSystem(refs, fs=m, max_gap=max_gap, max_block=max_block)
+    assert fs.cat(paths) == expected
+
+
+def test_cat_indexed_whole_file_and_ranges(m):
+    m.pipe_file("indexed-whole", b"0123456789")
+    fs = ReferenceFileSystem(
+        {
+            "whole1": ["memory://indexed-whole"],
+            "whole2": ["memory://indexed-whole"],
+            "slice": ["memory://indexed-whole", 2, 4],
+            "empty": ["memory://indexed-whole", 5, 0],
+        },
+        fs=m,
+    )
+    assert fs.cat(list(reversed(fs.references))) == {
+        "whole1": b"0123456789",
+        "whole2": b"0123456789",
+        "slice": b"2345",
+        "empty": b"",
+    }
+
+
+def test_cat_overlapping_ranges_preserves_last_match_error(m, monkeypatch):
+    # max_block forces two overlapping fetched ranges; the last covering
+    # range must win, including when its fetch failed.
+    fs = ReferenceFileSystem(
+        {
+            "first": ["memory://overlap", 0, 20],
+            "second": ["memory://overlap", 10, 20],
+            "nested": ["memory://overlap", 12, 2],
+        },
+        fs=m,
+        max_block=20,
+    )
+    error = OSError("second range failed")
+
+    def fetch(paths, starts, ends):
+        assert starts == [0, 10]
+        assert ends == [20, 30]
+        return [b"a" * 20, error]
+
+    monkeypatch.setattr(fs.fss["memory"], "cat_ranges", fetch)
+    result = fs.cat(list(fs.references), on_error="return")
+    assert result["first"] == b"a" * 20
+    for key in ("second", "nested"):
+        assert isinstance(result[key], ReferenceNotReachable)
+        assert result[key].__cause__ is error
+    assert fs.cat(list(fs.references), on_error="omit") == {"first": b"a" * 20}
+    with pytest.raises(ReferenceNotReachable):
+        fs.cat(list(fs.references))
+
+
+def test_cat_does_not_scan_all_ranges_per_reference(m, monkeypatch):
+    from fsspec.implementations import reference
+
+    comparisons = 0
+
+    class CountedStart(int):
+        def __le__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return super().__le__(other)
+
+        def __gt__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return super().__gt__(other)
+
+    original_merge = reference.merge_offset_ranges
+
+    def counted_merge(*args, **kwargs):
+        paths, starts, ends = original_merge(*args, **kwargs)
+        return paths, [CountedStart(s) for s in starts], ends
+
+    monkeypatch.setattr(reference, "merge_offset_ranges", counted_merge)
+    count = 2048
+    m.pipe_file("many-ranges", b"ab" * count)
+    refs = {str(i): ["memory://many-ranges", 2 * i, 1] for i in range(count)}
+    fs = ReferenceFileSystem(refs, fs=m, max_gap=0)
+    assert fs.cat(list(reversed(refs))) == dict.fromkeys(refs, b"a")
+    # Allow ample overhead for logarithmic lookup, without a wall-clock limit.
+    assert comparisons < 32 * count
