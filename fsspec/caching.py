@@ -10,8 +10,6 @@ import threading
 from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from itertools import groupby
-from operator import itemgetter
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
@@ -173,40 +171,32 @@ class MMapCache(BaseCache):
             return b""
         start_block = start // self.blocksize
         end_block = end // self.blocksize
-        block_range = range(start_block, end_block + 1)
-        # Determine which blocks need to be fetched. This sequence is sorted by construction.
-        need = (i for i in block_range if i not in self.blocks)
-        # Count the number of blocks already cached
-        self.hit_count += sum(1 for i in block_range if i in self.blocks)
-
         ranges = []
         block_groups = []
+        first_missing = None
+        misses = 0
 
-        # Consolidate needed blocks.
-        # Algorithm adapted from Python 2.x itertools documentation.
-        # We are grouping an enumerated sequence of blocks. By comparing when the difference
-        # between an ascending range (provided by enumerate) and the needed block numbers
-        # we can detect when the block number skips values. The key computes this difference.
-        # Whenever the difference changes, we know that we have previously cached block(s),
-        # and a new group is started. In other words, this algorithm neatly groups
-        # runs of consecutive block numbers so they can be fetched together.
-        for _, _blocks in groupby(enumerate(need), key=lambda x: x[0] - x[1]):
-            # Extract the blocks from the enumerated sequence
-            _blocks = tuple(map(itemgetter(1), _blocks))
-            # Compute start of first block
-            sstart = _blocks[0] * self.blocksize
-            # Compute the end of the last block. Last block may not be full size.
-            send = min(_blocks[-1] * self.blocksize + self.blocksize, self.size)
-
-            # Fetch bytes (could be multiple consecutive blocks)
+        # The extra iteration closes a missing run at the end of the request.
+        for block in range(start_block, end_block + 2):
+            if block <= end_block and block not in self.blocks:
+                if first_missing is None:
+                    first_missing = block
+                continue
+            if first_missing is None:
+                continue
+            sstart = first_missing * self.blocksize
+            send = min(block * self.blocksize, self.size)
             self.total_requested_bytes += send - sstart
             logger.debug(
-                f"MMap get blocks {_blocks[0]}-{_blocks[-1]} ({sstart}-{send})"
+                f"MMap get blocks {first_missing}-{block - 1} ({sstart}-{send})"
             )
             ranges.append((sstart, send))
-            block_groups.append(_blocks)
-            # Update cache statistics with number of blocks we had to cache
-            self.miss_count += len(_blocks)
+            block_groups.append(range(first_missing, block))
+            misses += block - first_missing
+            first_missing = None
+
+        self.miss_count += misses
+        self.hit_count += max(0, end_block - start_block + 1) - misses
 
         if not ranges:
             return self.cache[start:end]
