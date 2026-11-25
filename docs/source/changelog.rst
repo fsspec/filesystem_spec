@@ -44,6 +44,8 @@ Fixes
 - Close internally opened TAR archive files and compression wrappers on explicit
   filesystem close, without closing caller-provided streams.
 
+- Raise ``FileNotFoundError`` when opening a dangling link in a TAR archive.
+
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
 - Close the owning OpenFile and use exception-safe cleanup in developer examples (#2338).
