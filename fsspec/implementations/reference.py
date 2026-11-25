@@ -1260,7 +1260,15 @@ class ReferenceFileSystem(AsyncFileSystem):
         if detail:
             if not self.dircache:
                 self._dircache_from_items()
-            return {k: self._ls_from_cache(k)[0] for k in r}
+            # Scan each parent listing once, rather than once for every file
+            # it contains. Keep the cached records (including resolved sizes).
+            parents = {self._parent(k) for k in r}
+            details = {
+                entry["name"]: entry
+                for parent in parents
+                for entry in self.dircache[parent]
+            }
+            return {k: details[k] for k in r}
         else:
             return r
 
