@@ -751,21 +751,22 @@ class KnownPartsOfAFile(BaseCache):
         super().__init__(blocksize, fetcher, size)
         self.strict = strict
 
-        # simple consolidation of contiguous blocks
+        # Consolidate contiguous blocks, joining each run once to avoid
+        # repeatedly copying the growing prefix.
         if data:
             old_offsets = sorted(data.keys())
             offsets = [old_offsets[0]]
-            blocks = [data.pop(old_offsets[0])]
+            blocks = [[data.pop(old_offsets[0])]]
             for start, stop in old_offsets[1:]:
                 start0, stop0 = offsets[-1]
                 if start == stop0:
                     offsets[-1] = (start0, stop)
-                    blocks[-1] += data.pop((start, stop))
+                    blocks[-1].append(data.pop((start, stop)))
                 else:
                     offsets.append((start, stop))
-                    blocks.append(data.pop((start, stop)))
+                    blocks.append([data.pop((start, stop))])
 
-            self.data = dict(zip(offsets, blocks))
+            self.data = dict(zip(offsets, (b"".join(parts) for parts in blocks)))
         else:
             self.data = {}
 
@@ -792,7 +793,8 @@ class KnownPartsOfAFile(BaseCache):
         if stop is None:
             stop = self.size
         self.total_requested_bytes += stop - start
-        out = b""
+        # Accumulate fragments without copying the bytes already collected.
+        out = []
         started = False
         loc_old = 0
         for loc0, loc1 in sorted(self.data):
@@ -808,28 +810,28 @@ class KnownPartsOfAFile(BaseCache):
                 self.miss_count += 1
                 if self.strict:
                     raise ValueError
-                out += b"\x00" * (loc0 - loc_old)
+                out.append(b"\x00" * (loc0 - loc_old))
             if loc0 <= start < loc1:
                 # found the start
                 self.hit_count += 1
                 off = start - loc0
-                out = self.data[(loc0, loc1)][off : off + stop - start]
+                out = [self.data[(loc0, loc1)][off : off + stop - start]]
                 started = True
             elif start < loc0 and stop > loc1:
                 # the whole block
                 self.hit_count += 1
-                out += self.data[(loc0, loc1)]
+                out.append(self.data[(loc0, loc1)])
             elif started and loc0 <= stop <= loc1:
                 # end block. The start of the request must have been found in
                 # an earlier part, else these bytes come from the wrong offsets
                 self.hit_count += 1
-                out = out + self.data[(loc0, loc1)][: stop - loc0]
-                return out
+                out.append(self.data[(loc0, loc1)][: stop - loc0])
+                return b"".join(out)
             loc_old = loc1
         self.miss_count += 1
         if started and not self.strict:
-            out = out + b"\x00" * (stop - loc_old)
-            return out
+            out.append(b"\x00" * (stop - loc_old))
+            return b"".join(out)
         raise ValueError
 
 
