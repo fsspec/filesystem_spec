@@ -148,6 +148,33 @@ def test_background_block_cache_read_ending_on_block_boundary():
         cache.close()
 
 
+def test_background_block_cache_recovers_from_failed_prefetch():
+    block_size = 4
+    data = string.ascii_letters.encode()
+    failures = []
+
+    def fetcher(start, end):
+        if start == block_size and not failures:
+            # only the first fetch of block 1, done in the background, fails
+            failures.append(start)
+            raise OSError("transient error")
+        return data[start:end]
+
+    cache = BackgroundBlockCache(block_size, fetcher, len(data))
+    try:
+        assert cache._fetch(0, block_size) == data[:block_size]
+        # wait for the background prefetch of block 1 to fail
+        cache._background.future.exception()
+        assert failures == [block_size]
+        # the failed prefetch does not break reads of other blocks...
+        assert cache._fetch(2 * block_size, 3 * block_size) == data[8:12]
+        assert cache._fetch(2 * block_size, 3 * block_size) == data[8:12]
+        # ...and block 1 is fetched again when it is read
+        assert cache._fetch(block_size, 2 * block_size) == data[4:8]
+    finally:
+        cache.close()
+
+
 def test_first_cache():
     """
     FirstChunkCache is a cache that only caches the first chunk of data
@@ -625,7 +652,7 @@ def test_background_shutdown_on_close():
     cache = f.cache
     assert isinstance(cache, BackgroundBlockCache)
     cache_ref = weakref.ref(cache)
-    executor = cache._thread_executor
+    executor = cache._background.executor
     del cache
 
     f.close()

@@ -893,6 +893,65 @@ class UpdatableLRU(Generic[P, T]):
             )
 
 
+class _BackgroundFetch:
+    """The worker thread of a BackgroundBlockCache, and the block it is fetching
+
+    At most one block is fetched in the background at a time.
+    """
+
+    def __init__(self) -> None:
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.block_number: int | None = None
+        self.future: Future[bytes] | None = None
+        self.lock = threading.Lock()
+        self.closed = False
+
+    def take(
+        self, start_block_number: int, end_block_number: int
+    ) -> tuple[int, Future[bytes]] | None:
+        """Hand over the background fetch, if it is done or if a read of the
+        blocks ``start_block_number`` to ``end_block_number`` needs its block
+
+        The caller then owns the returned ``(block_number, future)`` pair.
+        """
+        with self.lock:
+            if self.future is None:
+                return None
+            assert self.block_number is not None
+            is_needed = start_block_number <= self.block_number <= end_block_number
+            if not (is_needed or self.future.done()):
+                return None
+            taken = self.block_number, self.future
+            self.block_number = None
+            self.future = None
+            return taken
+
+    def start(self, block_number: int, fetch_block: Callable[..., bytes], *args):
+        """Fetch ``block_number`` in the background, unless a fetch is running"""
+        with self.lock:
+            if self.future is None:
+                self.block_number = block_number
+                self.future = self.executor.submit(fetch_block, block_number, *args)
+
+    def close(self) -> bool:
+        """Cancel the pending fetch and shut down the worker thread
+
+        Returns False if this was already closed.
+        """
+        with self.lock:
+            if self.closed:
+                return False
+            self.closed = True
+            future = self.future
+            self.future = None
+            self.block_number = None
+
+        if future is not None:
+            future.cancel()
+        self.executor.shutdown(wait=True, cancel_futures=True)
+        return True
+
+
 class BackgroundBlockCache(BaseCache):
     """
     Cache holding memory as a set of blocks with pre-loading of
@@ -928,12 +987,7 @@ class BackgroundBlockCache(BaseCache):
         self.nblocks = math.ceil(size / blocksize)
         self.maxblocks = maxblocks
         self._fetch_block_cached = UpdatableLRU(self._fetch_block, maxblocks)
-
-        self._thread_executor = ThreadPoolExecutor(max_workers=1)
-        self._fetch_future_block_number: int | None = None
-        self._fetch_future: Future[bytes] | None = None
-        self._fetch_future_lock = threading.Lock()
-        self._closed = False
+        self._background = _BackgroundFetch()
 
     def cache_info(self) -> UpdatableLRU.CacheInfo:
         """
@@ -948,38 +1002,20 @@ class BackgroundBlockCache(BaseCache):
 
     def close(self) -> None:
         """Cancel pending work and shut down the background worker."""
-        with self._fetch_future_lock:
-            if self._closed:
-                return
-            self._closed = True
-            future = self._fetch_future
-            self._fetch_future = None
-            self._fetch_future_block_number = None
-
-        if future is not None:
-            future.cancel()
-        self._thread_executor.shutdown(wait=True, cancel_futures=True)
-
-        # UpdatableLRU stores a bound method and otherwise forms a reference cycle.
-        del self._fetch_block_cached
+        if self._background.close():
+            # UpdatableLRU stores a bound method and otherwise forms a reference cycle.
+            del self._fetch_block_cached
 
     def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         del state["_fetch_block_cached"]
-        del state["_thread_executor"]
-        del state["_fetch_future_block_number"]
-        del state["_fetch_future"]
-        del state["_fetch_future_lock"]
+        del state["_background"]
         return state
 
     def __setstate__(self, state) -> None:
         self.__dict__.update(state)
         self._fetch_block_cached = UpdatableLRU(self._fetch_block, state["maxblocks"])
-        self._thread_executor = ThreadPoolExecutor(max_workers=1)
-        self._fetch_future_block_number = None
-        self._fetch_future = None
-        self._fetch_future_lock = threading.Lock()
-        self._closed = False
+        self._background = _BackgroundFetch()
 
     def _fetch(self, start: int | None, end: int | None) -> bytes:
         if start is None:
@@ -993,58 +1029,32 @@ class BackgroundBlockCache(BaseCache):
         start_block_number = start // self.blocksize
         end_block_number = (end - 1) // self.blocksize
 
-        fetch_future_block_number = None
-        fetch_future = None
-        with self._fetch_future_lock:
-            # Background thread is running. Check we we can or must join it.
-            if self._fetch_future is not None:
-                assert self._fetch_future_block_number is not None
-                if self._fetch_future.done():
-                    logger.info("BlockCache joined background fetch without waiting.")
-                    self._fetch_block_cached.add_key(
-                        self._fetch_future.result(), self._fetch_future_block_number
-                    )
-                    # Cleanup the fetch variables. Done with fetching the block.
-                    self._fetch_future_block_number = None
-                    self._fetch_future = None
-                else:
-                    # Must join if we need the block for the current fetch
-                    must_join = bool(
-                        start_block_number
-                        <= self._fetch_future_block_number
-                        <= end_block_number
-                    )
-                    if must_join:
-                        # Copy to the local variables to release lock
-                        # before waiting for result
-                        fetch_future_block_number = self._fetch_future_block_number
-                        fetch_future = self._fetch_future
-
-                        # Cleanup the fetch variables. Have a local copy.
-                        self._fetch_future_block_number = None
-                        self._fetch_future = None
-
-        # Need to wait for the future for the current read
-        if fetch_future is not None:
-            logger.info("BlockCache waiting for background fetch.")
-            # Wait until result and put it in cache
-            self._fetch_block_cached.add_key(
-                fetch_future.result(), fetch_future_block_number
-            )
+        # Join the background fetch if it is done, or if this read needs its block
+        taken = self._background.take(start_block_number, end_block_number)
+        if taken is not None:
+            block_number, future = taken
+            if future.done():
+                logger.info("BlockCache joined background fetch without waiting.")
+            else:
+                logger.info("BlockCache waiting for background fetch.")
+            try:
+                self._fetch_block_cached.add_key(future.result(), block_number)
+            except Exception:
+                # Leave the block out of the cache: a read that needs it
+                # fetches it again, and raises if that fails too.
+                logger.debug(
+                    "BlockCache background fetch of block %d failed",
+                    block_number,
+                    exc_info=True,
+                )
 
         # fetch next block in the background if nothing is running in the background,
         # the block is within file and it is not already cached
-        end_block_plus_1 = end_block_number + 1
-        with self._fetch_future_lock:
-            if (
-                self._fetch_future is None
-                and end_block_plus_1 <= self.nblocks
-                and not self._fetch_block_cached.is_key_cached(end_block_plus_1)
-            ):
-                self._fetch_future_block_number = end_block_plus_1
-                self._fetch_future = self._thread_executor.submit(
-                    self._fetch_block, end_block_plus_1, "async"
-                )
+        next_block_number = end_block_number + 1
+        if next_block_number <= self.nblocks and not (
+            self._fetch_block_cached.is_key_cached(next_block_number)
+        ):
+            self._background.start(next_block_number, self._fetch_block, "async")
 
         return self._read_cache(
             start,
