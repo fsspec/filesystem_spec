@@ -504,6 +504,22 @@ def test_rm_honours_maxdepth():
     assert "/root/d1/d2/c.txt" not in fs.removed_paths
 
 
+class _CatTreeFS(_MaxDepthFS):
+    async def _cat_file(self, path, start=None, end=None, **kwargs):
+        if path not in self.files:
+            raise IsADirectoryError(path)
+        return path.encode()[start:end]
+
+
+def test_cat_recursive_skips_directories():
+    tree = ["/root/a.txt", "/root/d1/b.txt", "/root/d1/d2/c.txt"]
+    fs = _CatTreeFS(tree, skip_instance_cache=True)
+    assert fs.cat("/root", recursive=True) == {p: p.encode() for p in tree}
+    assert fs.cat("/root/d1/d2", recursive=True) == {
+        "/root/d1/d2/c.txt": b"/root/d1/d2/c.txt"
+    }
+
+
 class _CatRangesFS(fsspec.asyn.AsyncFileSystem):
     # Mirrors the gcsfs/s3fs pattern: overrides _cat_file, inherits _cat_ranges.
     cachable = False
@@ -881,3 +897,27 @@ def test_failed_call_is_freed_without_gc():
     finally:
         if was_enabled:
             gc.enable()
+
+
+@pytest.mark.parametrize("on_error", ["raise", "return", "omit"])
+def test_recursive_cat_keeps_file_errors(monkeypatch, on_error):
+    tree = ["/root/ok.txt", "/root/sub/denied.txt"]
+    fs = _CatTreeFS(tree, skip_instance_cache=True)
+    original = fs._cat_file
+    error = PermissionError("file access denied")
+
+    async def read(path, **kwargs):
+        if path == tree[1]:
+            raise error
+        return await original(path, **kwargs)
+
+    monkeypatch.setattr(fs, "_cat_file", read)
+    if on_error == "raise":
+        with pytest.raises(PermissionError, match="file access denied"):
+            fs.cat("/root", recursive=True, on_error=on_error)
+    else:
+        result = fs.cat("/root", recursive=True, on_error=on_error)
+        expected = {tree[0]: tree[0].encode()}
+        if on_error == "return":
+            expected[tree[1]] = error
+        assert result == expected

@@ -175,6 +175,17 @@ def test_cats():
         assert out == {b"a,b\n1,2\n"[1:-1], b"a,b\n3,4\n"[1:-1]}
 
 
+def test_cat_recursive_skips_directories(tmpdir):
+    fs = LocalFileSystem()
+    root = make_path_posix(str(tmpdir))
+    fs.makedirs(f"{root}/a/b/empty")
+    fs.pipe({f"{root}/a/x": b"x", f"{root}/a/b/y": b"y"})
+    assert fs.cat(f"{root}/a", recursive=True) == {
+        f"{root}/a/x": b"x",
+        f"{root}/a/b/y": b"y",
+    }
+
+
 def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
     _, _, paths = get_fs_token_paths("prefix-*.csv", mode="wb", num=2)
