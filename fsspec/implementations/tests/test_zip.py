@@ -703,6 +703,23 @@ def test_mapper_default_for_missing_member(zip_with_one_member):
         mapper["missing.txt"]
 
 
+@pytest.mark.parametrize("member", ["directory/", "./directory/"])
+def test_reading_explicit_directory_raises_is_a_directory(member):
+    with BytesIO() as data:
+        with zipfile.ZipFile(data, "w") as archive:
+            archive.writestr(member, b"")
+            archive.writestr("empty.txt", b"")
+
+        fs = ZipFileSystem(data)
+        try:
+            with pytest.raises(IsADirectoryError), fs.open("directory"):
+                pass
+            assert fs.get_mapper().get("directory", b"fallback") == b"fallback"
+            assert fs.cat_file("empty.txt") == b""
+        finally:
+            fs.close()
+
+
 @pytest.mark.parametrize("method", ["pipe_file", "pipe"])
 @pytest.mark.parametrize("mode", ["create", "overwrite"])
 @pytest.mark.parametrize("existing", [False, True])

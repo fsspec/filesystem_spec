@@ -31,6 +31,8 @@ Fixes
   ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
   an archive with members.
 
+- Raise ``IsADirectoryError`` when opening an explicit ZIP directory entry.
+
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
 
