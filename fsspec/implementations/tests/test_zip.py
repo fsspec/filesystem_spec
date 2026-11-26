@@ -607,6 +607,29 @@ def test_find_with_and_without_slash_should_return_same_result(zip_file):
     assert zip_file_system.find("/dir2/") == zip_file_system.find("/dir2")
 
 
+def test_find_prefix_respects_component_boundaries_and_separator_aliases():
+    files = {
+        "part/train/a.jsonl": b"a",
+        "part/train/deeper/b.jsonl": b"b",
+        "part/training/c.jsonl": b"c",
+        "part/../keep.jsonl": b"d",
+    }
+    with tempzip(files) as z:
+        fs = ZipFileSystem(z)
+        try:
+            assert fs.find("part\\train\\", maxdepth=1) == ["part/train/a.jsonl"]
+            result = fs.find("zip:///part//./train", detail=True, withdirs=True)
+            assert set(result) == {
+                "part/train",
+                "part/train/a.jsonl",
+                "part/train/deeper",
+                "part/train/deeper/b.jsonl",
+            }
+            assert fs.find("part/..") == ["part/../keep.jsonl"]
+        finally:
+            fs.close()
+
+
 @pytest.mark.parametrize("prefix", ["/", "zip://", "zip:///"])
 def test_find_should_return_file_if_exact_match(zip_file, prefix):
     zip_file_system = ZipFileSystem(zip_file)
@@ -703,6 +726,23 @@ def test_mapper_default_for_missing_member(zip_with_one_member):
         mapper["missing.txt"]
 
 
+@pytest.mark.parametrize("member", ["directory/", "./directory/"])
+def test_reading_explicit_directory_raises_is_a_directory(member):
+    with BytesIO() as data:
+        with zipfile.ZipFile(data, "w") as archive:
+            archive.writestr(member, b"")
+            archive.writestr("empty.txt", b"")
+
+        fs = ZipFileSystem(data)
+        try:
+            with pytest.raises(IsADirectoryError), fs.open("directory"):
+                pass
+            assert fs.get_mapper().get("directory", b"fallback") == b"fallback"
+            assert fs.cat_file("empty.txt") == b""
+        finally:
+            fs.close()
+
+
 @pytest.mark.parametrize("method", ["pipe_file", "pipe"])
 @pytest.mark.parametrize("mode", ["create", "overwrite"])
 @pytest.mark.parametrize("existing", [False, True])
@@ -795,3 +835,51 @@ def test_pipe_create_preserves_existing_archive_member():
         with zipfile.ZipFile(buffer) as archive:
             assert archive.read("member") == b"original"
             assert archive.namelist() == ["member"]
+
+
+@pytest.mark.parametrize("prefix", ["./", "././", "/", "//./"])
+def test_dot_and_slash_prefixed_members(prefix):
+    data = BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr(prefix, b"")
+        archive.writestr(prefix + "directory/", b"")
+        archive.writestr(prefix + "file", b"prefixed")
+        archive.writestr(prefix + "directory/./file", b"nested")
+        archive.writestr("plain", b"plain")
+        archive.writestr(".hidden", b"hidden")
+    data.seek(0)
+    fs = fsspec.filesystem("zip", fo=data)
+
+    assert fs.ls("", detail=False) == [".hidden", "directory", "file", "plain"]
+    assert fs.find("") == [".hidden", "directory/file", "file", "plain"]
+    assert fs.find("", withdirs=True) == [
+        ".hidden",
+        "directory",
+        "directory/file",
+        "file",
+        "plain",
+    ]
+    assert fs.ls("zip://./directory/", detail=False) == ["directory/file"]
+    assert fs.isdir("directory")
+    assert fs.info("file")["size"] == len(b"prefixed")
+    assert fs.cat_file("file") == fs.cat_file(prefix + "file") == b"prefixed"
+    assert fs.cat_file("zip:///./directory/file") == b"nested"
+    assert fs.cat_file("plain") == b"plain"
+    assert fs.cat_file(".hidden") == b"hidden"
+
+
+def test_create_rejects_alias_of_prefixed_existing_member():
+    data = BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("./directory/./weights.bin", b"original")
+    data.seek(0)
+    fs = ZipFileSystem(data, mode="a")
+    try:
+        with pytest.raises(FileExistsError):
+            fs.pipe_file("directory/weights.bin", b"replacement", mode="create")
+    finally:
+        fs.close()
+    data.seek(0)
+    with zipfile.ZipFile(data) as archive:
+        assert archive.namelist() == ["./directory/./weights.bin"]
+        assert archive.read("./directory/./weights.bin") == b"original"

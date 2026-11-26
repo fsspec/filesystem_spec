@@ -522,3 +522,32 @@ def test_delete_directory_key_raises_key_error(tmp_path, protocol):
         del mapper["dir"]
 
     assert mapper["dir/key"] == b"value"
+
+
+@pytest.mark.parametrize(
+    "wrapper", ["simplecache", "filecache", "blockcache", "async_wrapper", "dir"]
+)
+def test_wrapped_local_rejects_keys_escaping_root(tmp_path, wrapper):
+    # wrappers pass ".." through to the local filesystem underneath, which
+    # resolves it against the real directory tree
+    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+    from fsspec.implementations.dirfs import DirFileSystem
+
+    root = tmp_path / "root"
+    root.mkdir()
+    secret = tmp_path / "secret"
+    secret.write_bytes(b"outside")
+    if wrapper == "async_wrapper":
+        fs = AsyncFileSystemWrapper(LocalFileSystem(), asynchronous=False)
+        mapper = fsspec.FSMap(str(root), fs)
+    elif wrapper == "dir":
+        mapper = fsspec.FSMap("root", DirFileSystem(str(tmp_path), LocalFileSystem()))
+    else:
+        options = {wrapper: {"cache_storage": str(tmp_path / "cache")}}
+        mapper = fsspec.get_mapper(f"{wrapper}::{root.as_posix()}", **options)
+
+    with pytest.raises(ValueError, match="escapes"):
+        mapper["../secret"]
+    with pytest.raises(ValueError, match="escapes"):
+        mapper["../secret"] = b"overwrite"
+    assert secret.read_bytes() == b"outside"
