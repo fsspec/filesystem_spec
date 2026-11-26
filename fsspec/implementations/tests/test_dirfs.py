@@ -837,6 +837,30 @@ def test_find_detail(dirfs):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("method", ["find", "du"])
+async def test_positional_listing_options(tmp_path, asynchronous, method):
+    (tmp_path / "payload").write_bytes(b"data")
+    local = LocalFileSystem()
+    backend = (
+        AsyncFileSystemWrapper(fs=local, asynchronous=True) if asynchronous else local
+    )
+    fs = DirFileSystem(str(tmp_path), backend, asynchronous=asynchronous)
+    args = (None, False, True) if method == "find" else (False,)
+    if asynchronous:
+        result = await getattr(fs, f"_{method}")("", *args)
+    else:
+        result = getattr(fs, method)("", *args)
+
+    if method == "find":
+        assert list(result) == ["payload"]
+        assert result["payload"]["name"] == "payload"
+        assert result["payload"]["size"] == 4
+    else:
+        assert result == {"payload": 4}
+
+
+@pytest.mark.asyncio
 async def test_async_expand_path(adirfs):
     adirfs.fs._expand_path.return_value = [f"{PATH}/file"]
     assert await adirfs._expand_path("*", *ARGS, **KWARGS) == ["file"]
