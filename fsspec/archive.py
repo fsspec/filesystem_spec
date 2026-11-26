@@ -26,6 +26,20 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
         """The error for opening ``path``, which is not a file member."""
         return IsADirectoryError(path) if self.isdir(path) else FileNotFoundError(path)
 
+    @staticmethod
+    def _normalize_path(path):
+        path = path.strip("/")
+        if (
+            "//" not in path
+            and "/./" not in path
+            and not path.startswith("./")
+            and not path.endswith("/.")
+            and path != "."
+        ):
+            return path
+        # Keep '..' because it can be part of a literal archive member name.
+        return "/".join(part for part in path.split("/") if part not in ("", "."))
+
     def _all_dirnames(self, paths):
         """Returns *all* directory names for each path in paths, including intermediate
         ones.
@@ -39,6 +53,21 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
 
         dirnames = {self._parent(path) for path in paths} - {self.root_marker}
         return dirnames | self._all_dirnames(dirnames)
+
+    def _all_dirnames_from_normalized(self, paths):
+        """Collect parents of relative ZIP and TAR member keys."""
+        dirnames = set()
+        protocol_prefix = self.protocol + "::"
+        for path in paths:
+            # A literal protocol prefix is still special to _parent, even
+            # after member normalization removes redundant slashes.
+            if path.startswith(protocol_prefix):
+                return self._all_dirnames(paths)
+            parent = path.rpartition("/")[0]
+            while parent and parent not in dirnames:
+                dirnames.add(parent)
+                parent = parent.rpartition("/")[0]
+        return dirnames
 
     def info(self, path, **kwargs):
         self._get_dirs()
