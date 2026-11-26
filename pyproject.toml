@@ -169,6 +169,7 @@ select = [
     "PIE810",
     # "PT", enable in later PR
     "PYI",
+    "RET",
     "RUF006",
     "RUF015",
     "RUF024",
