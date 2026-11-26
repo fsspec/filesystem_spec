@@ -26,10 +26,15 @@ class FilesystemJSONEncoder(json.JSONEncoder):
         :func:`json.dumps` and :func:`json.dump`, without actually calling
         said functions.
         """
-        if isinstance(obj, (str, int, float, bool)):
+        if obj is None or isinstance(obj, (str, int, float, bool)):
             return obj
         if isinstance(obj, Mapping):
-            return {k: self.make_serializable(v) for k, v in obj.items()}
+            # also drops the password in nested options such as target_options
+            return {
+                k: self.make_serializable(v)
+                for k, v in obj.items()
+                if self.include_password or k != "password"
+            }
         if isinstance(obj, Sequence):
             return [self.make_serializable(v) for v in obj]
 

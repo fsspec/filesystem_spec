@@ -19,7 +19,13 @@ from .callbacks import DEFAULT_CALLBACK
 from .exceptions import FSTimeoutError
 from .implementations.local import LocalFileSystem, make_path_posix, trailing_sep
 from .spec import AbstractBufferedFile, AbstractFileSystem
-from .utils import check_contained, glob_translate, is_exception, other_paths
+from .utils import (
+    check_contained,
+    glob_translate,
+    is_exception,
+    other_paths,
+    stringify_path,
+)
 
 private = re.compile("_[^_]")
 iothread = [None]  # dedicated fsspec IO thread
@@ -96,13 +102,21 @@ def sync(loop, func, *args, timeout=None, **kwargs):
                 raise FSTimeoutError
 
     return_result = result[0]
-    if isinstance(return_result, asyncio.TimeoutError):
-        # suppress asyncio.TimeoutError, raise FSTimeoutError
-        raise FSTimeoutError from return_result
-    elif isinstance(return_result, BaseException):
-        raise return_result
-    else:
-        return return_result
+    # the traceback of a stored exception includes _runner's frame, which holds
+    # ``result``: empty it so that frame does not refer back to the exception
+    result[0] = None
+    try:
+        if isinstance(return_result, asyncio.TimeoutError):
+            # suppress asyncio.TimeoutError, raise FSTimeoutError
+            raise FSTimeoutError from return_result
+        elif isinstance(return_result, BaseException):
+            raise return_result
+        else:
+            return return_result
+    finally:
+        # the traceback also includes this frame, so don't keep the exception
+        # in a local either: that would be a reference cycle
+        del return_result
 
 
 _deferred_close_tasks = set()
@@ -428,7 +442,12 @@ async def _run_coros_in_chunks(
                 task.cancel()
             if pending:
                 await asyncio.gather(*pending, return_exceptions=True)
-            raise first_exc
+            try:
+                raise first_exc
+            finally:
+                # the traceback includes this frame, so it must not refer back
+                # to the exception: directly or through the finished task
+                del first_exc, task
 
     return results
 
@@ -538,6 +557,7 @@ class AsyncFileSystem(AbstractFileSystem):
             paths1 = path1
             paths2 = path2
         else:
+            path1 = stringify_path(path1)
             source_is_str = isinstance(path1, str)
             paths1 = await self._expand_path(
                 path1, maxdepth=maxdepth, recursive=recursive
@@ -575,7 +595,10 @@ class AsyncFileSystem(AbstractFileSystem):
         for ex in filter(is_exception, result):
             if on_error == "ignore" and isinstance(ex, FileNotFoundError):
                 continue
-            raise ex
+            try:
+                raise ex
+            finally:
+                del ex, result
 
     async def _pipe_file(self, path, value, mode="overwrite", **kwargs):
         raise NotImplementedError
@@ -631,7 +654,10 @@ class AsyncFileSystem(AbstractFileSystem):
         if on_error == "raise":
             ex = next(filter(is_exception, out), False)
             if ex:
-                raise ex
+                try:
+                    raise ex
+                finally:
+                    del ex, out
         if (
             len(paths) > 1
             or isinstance(path, list)
@@ -691,7 +717,10 @@ class AsyncFileSystem(AbstractFileSystem):
         if on_error != "return":
             ex = next(filter(is_exception, out), None)
             if ex is not None:
-                raise ex
+                try:
+                    raise ex
+                finally:
+                    del ex, out
         return out
 
     async def _put_file(self, lpath, rpath, mode="overwrite", **kwargs):
@@ -726,6 +755,7 @@ class AsyncFileSystem(AbstractFileSystem):
             rpaths = rpath
             lpaths = lpath
         else:
+            lpath = stringify_path(lpath)
             source_is_str = isinstance(lpath, str)
             if source_is_str:
                 lpath = make_path_posix(lpath)
@@ -803,6 +833,7 @@ class AsyncFileSystem(AbstractFileSystem):
             rpaths = rpath
             lpaths = lpath
         else:
+            rpath = stringify_path(rpath)
             source_is_str = isinstance(rpath, str)
             # First check for rpath trailing slash as _strip_protocol removes it.
             source_not_trailing_sep = source_is_str and not trailing_sep(rpath)
@@ -840,7 +871,9 @@ class AsyncFileSystem(AbstractFileSystem):
                 # lpath is a list the caller named every destination itself.
                 check_contained(lpath, lpaths)
 
-        [os.makedirs(os.path.dirname(lp), exist_ok=True) for lp in lpaths]
+        for lp in lpaths:
+            if parent := os.path.dirname(lp):
+                os.makedirs(parent, exist_ok=True)
         batch_size = kwargs.pop("batch_size", self.batch_size)
 
         coros = []
@@ -1077,7 +1110,7 @@ class AsyncFileSystem(AbstractFileSystem):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
-        if isinstance(path, str):
+        if isinstance(path, (str, os.PathLike)):
             out = await self._expand_path([path], recursive, maxdepth)
         else:
             out = set()

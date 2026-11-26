@@ -15,6 +15,7 @@ import pytest
 
 import fsspec
 from fsspec.implementations.ia import (
+    DOWNLOAD_URL,
     InternetArchiveFileSystem,
     ia_config_path,
     in_domain,
@@ -295,6 +296,19 @@ def test_authorization_does_not_leave_the_domain(ia_server):
     assert first_hop.get("Authorization") == "LOW k:s"
     data_hop = next(h for p, h in ia_server.hits if p.startswith("/items/"))
     assert "Authorization" not in data_hop
+
+
+def test_authorization_is_not_sent_over_plain_http(ia_server, monkeypatch):
+    """With an https download URL, an http hop inside ``auth_domain`` gets no
+    Authorization header: the keys would cross the network in clear text."""
+    ia_server.files["/items/public/file"] = data
+    monkeypatch.setattr(InternetArchiveFileSystem, "download_url", DOWNLOAD_URL)
+    node = f"http://localhost:{ia_server.node_port}"
+
+    fs = InternetArchiveFileSystem(access_key="k", secret_key="s")
+    assert fs.cat(f"{node}/items/public/file") == data
+    assert ia_server.hits
+    assert not any("Authorization" in h for _, h in ia_server.hits)
 
 
 @pytest.mark.skipif(not os.environ.get("IA_NETWORK_TESTS"), reason="needs archive.org")
