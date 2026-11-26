@@ -137,7 +137,7 @@ version-file = "fsspec/_version.py"
 exclude = ["**/tests/*", "!**/tests/abstract/"]
 
 [tool.ruff]
-exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version"]
+exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version.py"]
 line-length = 88
 
 [tool.ruff.lint]
