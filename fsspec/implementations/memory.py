@@ -411,7 +411,7 @@ class MemoryFileSystem(AbstractFileSystem):
         return path in self.store
 
     def rm(self, path, recursive=False, maxdepth=None):
-        if isinstance(path, str):
+        if isinstance(path, (str, PurePath)):
             path = self._strip_protocol(path)
         else:
             path = [self._strip_protocol(p) for p in path]

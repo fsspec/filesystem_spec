@@ -20,6 +20,7 @@ Enhancements
 
 Fixes
 
+- Accept pathlib paths in ``MemoryFileSystem.rm``.
 - Raise ``IsADirectoryError`` when opening a GitHub directory.
 - Keep the mode of an existing local file when a transaction commit replaces it,
   instead of resetting it to the umask default
