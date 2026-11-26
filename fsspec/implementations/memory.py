@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import UTC, datetime
 from errno import ENOTEMPTY
 from io import BytesIO
@@ -164,6 +165,43 @@ class MemoryFileSystem(AbstractFileSystem):
 
         names = sorted(out)
         return {name: out[name] for name in names} if detail else names
+
+    def walk(self, path, maxdepth=None, topdown=True, on_error="omit", **kwargs):
+        if _can_index_walk(self):
+            yield from _MemoryWalk(self).walk(
+                path, maxdepth=maxdepth, topdown=topdown, on_error=on_error, **kwargs
+            )
+            return
+        # Keep custom methods on the public recursive path without a wrapper
+        # around super().walk() at every level of a deep tree.
+        result = _walk_directory(self, path, maxdepth, on_error, kwargs)
+        if result is None:
+            return
+        path, full_dirs, dirs, files, detail = result
+        if topdown:
+            # Yield before recursion if walking top down
+            yield path, dirs, files
+
+        if maxdepth is not None:
+            maxdepth -= 1
+            if maxdepth < 1:
+                if not topdown:
+                    yield path, dirs, files
+                return
+
+        for d in dirs:
+            yield from self.walk(
+                full_dirs[d],
+                maxdepth=maxdepth,
+                detail=detail,
+                topdown=topdown,
+                on_error=on_error,
+                **kwargs,
+            )
+
+        if not topdown:
+            # Yield after recursion if walking bottom up
+            yield path, dirs, files
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
@@ -437,6 +475,194 @@ class MemoryFileSystem(AbstractFileSystem):
                 self.rmdir(p)
 
 
+# Capture originals once: comparing to MemoryFileSystem.ls/walk at call time
+# would mistake class-level monkeypatches for the standard implementations.
+_memory_ls = MemoryFileSystem.ls
+_memory_walk = MemoryFileSystem.walk
+_memory_strip = MemoryFileSystem.__dict__["_strip_protocol"]
+_memory_instance_dict = AbstractFileSystem.__dict__["__dict__"]
+MemoryFileSystem.walk.__doc__ = AbstractFileSystem.walk.__doc__
+
+
+def _standard_container_reads(container, builtin):
+    """Allow mutation hooks only when reads still use builtin semantics."""
+    cls = type(container)
+    if cls is builtin:
+        return True
+    return (
+        type(cls) is type
+        and issubclass(cls, builtin)
+        and all(
+            next(base.__dict__[name] for base in cls.__mro__ if name in base.__dict__)
+            is getattr(builtin, name)
+            for name in (
+                "__iter__",
+                "__len__",
+                "__contains__",
+                "__getitem__",
+                "__getattribute__",
+            )
+        )
+        and not any("__missing__" in base.__dict__ for base in cls.__mro__)
+    )
+
+
+def _can_index_walk(fs):
+    if type(fs) is not MemoryFileSystem:
+        return False
+    # Inspect class namespaces without resolving filesystem attributes. Even a
+    # descriptor returning an ordinary container must be left to the original
+    # ls() call, inside its validation and error-handling boundary.
+    namespaces = [
+        type.__getattribute__(base, "__dict__")
+        for base in type.__getattribute__(MemoryFileSystem, "__mro__")
+    ]
+    if (
+        next(ns["__getattribute__"] for ns in namespaces if "__getattribute__" in ns)
+        is not object.__getattribute__
+        or any("__getattr__" in ns for ns in namespaces)
+        or next((ns["__dict__"] for ns in namespaces if "__dict__" in ns), None)
+        is not _memory_instance_dict
+    ):
+        return False
+    for name, builtin in (("store", dict), ("pseudo_dirs", list)):
+        value = next((ns[name] for ns in namespaces if name in ns), None)
+        if not _standard_container_reads(value, builtin) or any(
+            "__get__" in type.__getattribute__(base, "__dict__")
+            for base in type.__getattribute__(type(value), "__mro__")
+        ):
+            return False
+    attrs = fs.__dict__
+    return (
+        type(attrs) is dict
+        and namespaces[0].get("ls") is _memory_ls
+        and namespaces[0].get("walk") is _memory_walk
+        and namespaces[0].get("_strip_protocol") is _memory_strip
+        and "ls" not in attrs
+        and "walk" not in attrs
+        and "_strip_protocol" not in attrs
+        and _standard_container_reads(fs.store, dict)
+        and _standard_container_reads(fs.pseudo_dirs, list)
+    )
+
+
+class _MemoryWalk:
+    """A name index owned by one traversal, never by the filesystem.
+
+    Each indexed listing still compares all ordered paths (O(n_entries)). This
+    avoids repeating the Python prefix scans, but is not a linear-time walk.
+    Metadata is read only when its parent is listed, just as in ls().
+    """
+
+    def __init__(self, fs):
+        self.fs = fs
+        self.root = None
+        self.indexable_root = True
+        self.listings = 0
+        self.keys = self.pdirs = None
+        self.entries = {}
+
+    def walk(self, path, maxdepth=None, topdown=True, on_error="omit", **kwargs):
+        fs = self.fs
+        if not _can_index_walk(fs):
+            yield from fs.walk(
+                path, maxdepth=maxdepth, topdown=topdown, on_error=on_error, **kwargs
+            )
+            return
+        # Share directory partitioning with the public fallback, but recurse in
+        # this generator so a deep walk still uses one frame per directory.
+        result = _walk_directory(fs, path, maxdepth, on_error, kwargs, ls=self.ls)
+        if result is None:
+            return
+        path, full_dirs, dirs, files, detail = result
+
+        if topdown:
+            # Yield before recursion if walking top down
+            yield path, dirs, files
+
+        if maxdepth is not None:
+            maxdepth -= 1
+            if maxdepth < 1:
+                if not topdown:
+                    yield path, dirs, files
+                return
+
+        for d in dirs:
+            yield from self.walk(
+                full_dirs[d],
+                maxdepth=maxdepth,
+                detail=detail,
+                topdown=topdown,
+                on_error=on_error,
+                **kwargs,
+            )
+
+        if not topdown:
+            # Yield after recursion if walking bottom up
+            yield path, dirs, files
+
+    def ls(self, path, detail=True, **kwargs):
+        fs = self.fs
+        self.listings += 1
+        # Small walks, the first yield, shallow queries and strong pruning should
+        # not pay for constructing an index of the whole subtree.
+        if self.root is None:
+            self.root = path
+            # walk() preserves its own stripped path as the yielded label, but
+            # ls() strips it again. A non-idempotent root (e.g. two protocols)
+            # need not name the subtree that the label suggests.
+            self.indexable_root = fs._strip_protocol(path) == path
+        if (
+            self.listings <= 32
+            or not self.indexable_root
+            or not _can_index_walk(fs)
+            or path in fs.store
+        ):
+            return fs.ls(path, detail=detail, **kwargs)
+
+        keys, pdirs = tuple(fs.store), tuple(fs.pseudo_dirs)
+        if keys != self.keys or pdirs != self.pdirs:
+            self._rebuild(keys, pdirs)
+
+        out = []
+        for name, kind in self.entries.get(path, ()):
+            info = {"name": name, "size": 0, "type": kind}
+            if kind == "file":
+                filelike = fs.store[name]
+                info["size"] = filelike.size
+                info["created"] = filelike.created.timestamp()
+            out.append(info)
+        if not out and path not in pdirs:
+            raise FileNotFoundError(path)
+        return out if detail else sorted(info["name"] for info in out)
+
+    def _rebuild(self, keys, pdirs):
+        entries = defaultdict(list)
+        seen = defaultdict(set)
+        prefix = self.root + "/"
+
+        def add(name, leaf_type):
+            if not name.startswith(prefix):
+                return
+            parts = name[len(prefix) :].split("/")
+            parent = self.root
+            for i, part in enumerate(parts):
+                child = parent + "/" + part
+                kind = leaf_type if i == len(parts) - 1 else "directory"
+                if kind == "file" or child not in seen[parent]:
+                    entries[parent].append((child, kind))
+                    if kind == "directory":
+                        seen[parent].add(child)
+                parent = child
+
+        # Preserve ls()'s order: store entries first, then explicit directories.
+        for name in keys:
+            add(name, "file")
+        for name in pdirs:
+            add(name, "directory")
+        self.keys, self.pdirs, self.entries = keys, pdirs, entries
+
+
 class MemoryFile(BytesIO):
     """A BytesIO which can't close and works as a context manager
 
@@ -486,3 +712,44 @@ class MemoryFile(BytesIO):
     def commit(self):
         self.fs.store[self.path] = self
         self.modified = datetime.now(tz=UTC)
+
+
+def _walk_directory(fs, path, maxdepth, on_error, kwargs, ls=None):
+    """List and partition one directory, following AbstractFileSystem.walk."""
+    if maxdepth is not None and maxdepth < 1:
+        raise ValueError("maxdepth must be at least 1")
+
+    path = fs._strip_protocol(path)
+    full_dirs = {}
+    dirs = {}
+    files = {}
+
+    detail = kwargs.pop("detail", False)
+    try:
+        listing = (fs.ls if ls is None else ls)(path, detail=True, **kwargs)
+    except (FileNotFoundError, OSError) as e:
+        if on_error == "raise":
+            raise
+        if callable(on_error):
+            on_error(e)
+        return
+
+    for info in listing:
+        # each info name must be at least [path]/part , but here
+        # we check also for names like [path]/part/
+        pathname = info["name"].rstrip("/")
+        name = pathname.rsplit("/", 1)[-1]
+        if info["type"] == "directory" and pathname != path:
+            # do not include "self" path
+            full_dirs[name] = pathname
+            dirs[name] = info
+        elif pathname == path:
+            # file-like with same name as give path
+            files[""] = info
+        else:
+            files[name] = info
+
+    if not detail:
+        dirs = list(dirs)
+        files = list(files)
+    return path, full_dirs, dirs, files, detail
