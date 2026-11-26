@@ -20,6 +20,7 @@ Enhancements
 
 Fixes
 
+- Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
 - Raise ``IsADirectoryError`` when opening a GitHub directory.
 - Keep the mode of an existing local file when a transaction commit replaces it,
   instead of resetting it to the umask default
