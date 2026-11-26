@@ -22,6 +22,7 @@ from fsspec.utils import (
     range_response_window,
     response_is_requested_range,
     tokenize,
+    url_is_under,
 )
 
 from ..caching import AllBytes
@@ -363,6 +364,9 @@ class HTTPFileSystem(AsyncFileSystem):
                 if l not in ["..", "../"]:
                     # Ignore FTP-like "parent"
                     out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
+        # Dot segments are resolved when the request URL is built, so a link
+        # spelled below the listed page can still address a path above it.
+        out = {u for u in out if url_is_under(u, url)}
         if not out and url.endswith("/"):
             out = await self._ls_real(url.rstrip("/"), detail=False, **kwargs)
         if detail:

@@ -197,6 +197,29 @@ def test_list_pathological_listing(server, reset_files):
     assert out == [server.address + "/slow/file"]
 
 
+@pytest.mark.parametrize(
+    "href",
+    [
+        "../index/realfile",
+        "./../index/realfile",
+        "%2e%2e/index/realfile",
+        "{base}/escape/../index/realfile",
+    ],
+)
+def test_list_link_cannot_leave_the_page(server, reset_files, href):
+    # dot segments are applied when the request URL is built, so a link that
+    # reads as sitting below the listed page can address a path above it
+    from fsspec.tests.conftest import HTTPTestHandler
+
+    link = href.format(base=server.address).encode()
+    HTTPTestHandler.dynamic_files["/escape"] = (
+        b'<a href="' + link + b'">up</a><a href="down">down</a>'
+    )
+    h = fsspec.filesystem("http", skip_instance_cache=True)
+    out = h.ls(server.address + "/escape", detail=False)
+    assert out == [server.address + "/escape/down"]
+
+
 def test_list_invalid_args(server):
     with pytest.raises(TypeError):
         h = fsspec.filesystem("http", use_foobar=True)

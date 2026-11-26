@@ -482,6 +482,37 @@ def _escapes_root(path: str) -> bool:
     return False
 
 
+def _resolve_dot_segments(path: str) -> str:
+    """A URL path with its "." and ".." segments applied, as RFC 3986 does."""
+    # %2e is decoded before the segments are resolved, so it forms them too.
+    segments: list[str] = []
+    for segment in re.sub("%2e", ".", path, flags=re.IGNORECASE).split("/"):
+        if segment == ".":
+            continue
+        if segment == "..":
+            if len(segments) > 1:
+                segments.pop()
+            continue
+        segments.append(segment)
+    return "/".join(segments)
+
+
+def url_is_under(url: str, root: str) -> bool:
+    """Whether ``url`` addresses something below the directory ``root``.
+
+    Both paths are compared with their "." and ".." segments resolved, since
+    that is the path an HTTP client puts on the wire (and the one a server
+    resolves the request target to), so a prefix test on the unresolved
+    spelling does not describe what will be fetched. The scheme is not
+    compared: an ``https`` root contains an ``http`` URL on the same host.
+    """
+    url_parts, root_parts = urlsplit(url), urlsplit(root)
+    if url_parts.netloc != root_parts.netloc:
+        return False
+    prefix = _resolve_dot_segments(root_parts.path).rstrip("/") + "/"
+    return _resolve_dot_segments(url_parts.path).startswith(prefix)
+
+
 def is_exception(obj: Any) -> bool:
     return isinstance(obj, BaseException)
 

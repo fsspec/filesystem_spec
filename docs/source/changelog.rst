@@ -30,6 +30,10 @@ Fixes
 
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
+- Drop HTTP directory-listing links whose dot segments resolve above the
+  listed page, so a listing cannot point ``ls``/``glob``/``cat`` at paths
+  outside the URL that was listed.
+
 - Handle a single Path in the asynchronous methods like its string
   form, as the synchronous methods do
 
