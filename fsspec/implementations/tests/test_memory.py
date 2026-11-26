@@ -3,6 +3,7 @@ import pickle
 from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from threading import Event, Thread
 
 import pytest
 
@@ -257,6 +258,51 @@ def test_info_created_matches_ls(m):
     assert info["created"] == m.created("/dir/afile").timestamp()
     assert info == m.ls("/dir/afile")[0]
     assert info == m.find("/dir", detail=True)["/dir/afile"]
+
+
+@pytest.mark.parametrize(
+    "listing, removed, expected",
+    [
+        ("/data", "/data/b", {"/data/a": 1}),
+        ("/data/a", "/data/a", {"/data/a": 1}),
+    ],
+)
+def test_ls_survives_deletion_during_listing(m, listing, removed, expected):
+    m.pipe_file("/data/a", b"a")
+    m.pipe_file("/data/b", b"bbb")
+    ready = Event()
+    deleted = Event()
+
+    class PauseOnSize:
+        def __init__(self, real):
+            self.real = real
+            self.created = real.created
+
+        @property
+        def size(self):
+            ready.set()
+            assert deleted.wait(timeout=5)
+            return self.real.size
+
+    m.store["/data/a"] = PauseOnSize(m.store["/data/a"])
+    other = MemoryFileSystem(skip_instance_cache=True)
+
+    def delete_file():
+        if ready.wait(timeout=5):
+            other.rm_file(removed)
+            deleted.set()
+
+    thread = Thread(target=delete_file)
+    thread.start()
+    try:
+        entries = m.ls(listing, detail=True)
+    finally:
+        ready.set()
+        thread.join(timeout=5)
+
+    assert not thread.is_alive()
+    assert removed not in m.store
+    assert {entry["name"]: entry["size"] for entry in entries} == expected
 
 
 def test_directories(m):
