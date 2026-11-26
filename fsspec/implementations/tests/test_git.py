@@ -81,7 +81,7 @@ def _check_FileNotFoundError(f, *args, **kwargs):
 
 
 def test_file_existence_checks(repo):
-    d, sha = repo
+    d, _sha = repo
 
     fs, _ = fsspec.url_to_fs(f"git://{d}:abranch@")
 
@@ -109,7 +109,7 @@ def test_file_existence_checks(repo):
 
 
 def test_url(repo):
-    d, sha = repo
+    d, _sha = repo
     fs, _, paths = fsspec.core.get_fs_token_paths(f"git://file1::file://{d}")
     assert make_path_posix(d) in make_path_posix(fs.repo.path)
     assert paths == ["file1"]

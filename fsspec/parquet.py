@@ -24,16 +24,16 @@ class AlreadyBufferedFile(AbstractBufferedFile):
 
 def open_parquet_files(
     path: list[str],
-    fs: None | fsspec.AbstractFileSystem = None,
+    fs: fsspec.AbstractFileSystem | None = None,
     metadata=None,
-    columns: None | list[str] = None,
-    row_groups: None | list[int] = None,
-    storage_options: None | dict = None,
+    columns: list[str] | None = None,
+    row_groups: list[int] | None = None,
+    storage_options: dict | None = None,
     engine: str = "auto",
     max_gap: int = 64_000,
     max_block: int = 256_000_000,
     footer_sample_size: int = 1_000_000,
-    filters: None | list[list[list[str]]] = None,
+    filters: list[list[list[str]]] | None = None,
     **kwargs,
 ):
     """

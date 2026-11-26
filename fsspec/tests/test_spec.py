@@ -7,6 +7,7 @@ import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -2110,7 +2111,7 @@ class UnreadableSubdirFS(AbstractFileSystem):
     protocol = "unreadablesub"
     cachable = False
 
-    tree = {
+    tree: ClassVar[dict[str, str]] = {
         "": ["top"],
         "top": ["top/readable", "top/locked"],
         "top/readable": [],
