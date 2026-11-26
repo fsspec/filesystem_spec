@@ -180,7 +180,7 @@ class Callback:
         -------
 
         """
-        return None
+        pass
 
     def no_op(self, *_, **__):
         pass

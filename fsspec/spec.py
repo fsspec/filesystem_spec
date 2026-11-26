@@ -1060,7 +1060,7 @@ class AbstractFileSystem(metaclass=_Cached):
             outfile = lpath
         elif outfile is None and self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
-            return None
+            return
 
         if outfile is None:
             fs = LocalFileSystem(auto_mkdir=True)
@@ -1162,7 +1162,7 @@ class AbstractFileSystem(metaclass=_Cached):
             raise FileExistsError
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
-            return None
+            return
 
         with open(lpath, "rb") as f1:
             size = f1.seek(0, 2)
