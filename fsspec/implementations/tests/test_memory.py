@@ -991,6 +991,28 @@ def test_rm_missing_path_raises(m):
         m.rm("/missing")
 
 
+@pytest.mark.parametrize(
+    "path", [PurePosixPath("/data/file.txt"), PureWindowsPath("C:/data/file.txt")]
+)
+def test_rm_accepts_a_path_object(m, path):
+    with m.open(path, "wb") as file:
+        file.write(b"data")
+
+    m.rm(path)
+
+    with pytest.raises(FileNotFoundError):
+        m.open(path, "rb")
+
+
+def test_rm_accepts_a_directory_path_object(m):
+    path = PurePosixPath("/data")
+    m.pipe_file(path / "file.txt", b"data")
+
+    m.rm(path, recursive=True)
+
+    assert not m.exists(path)
+
+
 def test_rm_list_with_missing_path_raises(m):
     m.pipe("/present", b"data")
     with pytest.raises(FileNotFoundError):
