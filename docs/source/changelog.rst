@@ -40,6 +40,7 @@ Enhancements
 - ``ia://`` filesystem for files in Internet Archive items: an
   ``HTTPFileSystem`` reading from ``archive.org/download`` with credentials from
   ``ia configure``'s ``ia.ini``
+
 - Allow instance-local memory stores with ``global_store=False`` while
   preserving normal instance caching and the default shared store (#2137;
   issue #1904)
