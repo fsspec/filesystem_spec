@@ -75,6 +75,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             compresslevel=compresslevel,
         )
         self.dir_cache = None
+        self._members = None
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -99,10 +100,8 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if isinstance(self.of, fsspec.core.OpenFile):
             self.of.close()
 
-    def _get_dirs(self):
-        if self.dir_cache is None or self.mode in set("wa"):
-            # when writing, dir_cache is always in the ZipFile's attributes,
-            # not read from the file.
+    def _get_members(self):
+        if self._members is None or self.mode != "r":
             # Members such as "./dir/file" or "/file" are listed and opened by
             # their normalized name; an explicit "./" entry is the root itself.
             members = {}
@@ -111,6 +110,11 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 if name:
                     members[name] = z
             self._members = members
+        return self._members
+
+    def _get_dirs(self):
+        if self.dir_cache is None or self.mode in set("wa"):
+            members = self._get_members()
             self.dir_cache = {
                 dirname: {"name": dirname, "size": 0, "type": "directory"}
                 for dirname in self._all_dirnames(members)
@@ -154,9 +158,22 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if "r" in self.mode and "w" in mode:
             raise OSError("ZipFS can only be open for reading or writing, not both")
         member = path
+        direct_read = False
         if "r" in mode:
-            self._get_dirs()
-            member = self._members.get(path, path)
+            # A known read-only member needs no directory catalog. Keep
+            # the normal info lookup for subclasses and protocol aliases.
+            direct_read = (
+                type(self) is ZipFileSystem
+                and self.mode == "r"
+                and self.dir_cache is None
+                and not path.startswith(self.protocol + "::")
+            )
+            if direct_read:
+                members = self._get_members()
+            else:
+                self._get_dirs()
+                members = self._members
+            member = members.get(path, path)
             if isinstance(member, zipfile.ZipInfo) and member.is_dir():
                 raise IsADirectoryError(path)
         try:
@@ -166,9 +183,13 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             # including FSMap's missing_exceptions, expect FileNotFoundError.
             raise self._not_a_file(path) from exc
         if "r" in mode:
-            info = self.info(path)
-            out.size = info["size"]
-            out.name = info["name"]
+            if direct_read and isinstance(member, zipfile.ZipInfo):
+                out.size = member.file_size
+                out.name = path
+            else:
+                info = self.info(path)
+                out.size = info["size"]
+                out.name = info["name"]
         return out
 
     def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):

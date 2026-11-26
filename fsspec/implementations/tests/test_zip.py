@@ -2,6 +2,7 @@ import collections.abc
 import io
 import os.path
 import zipfile
+from contextlib import closing
 from io import BytesIO
 from pathlib import Path
 from shutil import make_archive
@@ -25,6 +26,26 @@ def test_info():
             # Probe some specific fields of Zip archives.
             assert "CRC" in lhs
             assert "compress_size" in lhs
+
+
+def test_read_before_directory_catalog():
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("folder/item", b"first")
+        archive.writestr("./folder//item", b"replacement")
+    buffer.seek(0)
+    with closing(ZipFileSystem(buffer)) as fs:
+        with fs.open("folder/item", "rb") as file:
+            assert file.name == "folder/item"
+            assert file.size == len(b"replacement")
+            assert file.read() == b"replacement"
+        assert fs.cat_file("folder/item", start=-5) == b"ement"
+        assert fs.dir_cache is None
+        info = fs.info("folder/item")
+        assert info["filename"] == "./folder//item"
+        assert info["size"] == len(b"replacement")
+        assert fs.ls("folder", detail=False) == ["folder/item"]
+        assert fs.cat_file("folder/item") == b"replacement"
 
 
 def test_fsspec_get_mapper():
