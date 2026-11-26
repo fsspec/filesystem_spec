@@ -352,21 +352,29 @@ def _un_chain(path, kwargs):
     # Avoid a circular import
     from fsspec.implementations.chained import ChainedFileSystem
 
+    bits = [path]
     if "::" in path:
         x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
         known_protocols = set(available_protocols())
+        parts = path.split("::")
         bits = []
-
-        # split on '::', then ensure each bit has a protocol
-        for p in path.split("::"):
+        for index, p in enumerate(parts):
+            protocol = split_protocol(p)[0]
+            # A local path is the target of the chain. Preserve any further
+            # separators as part of its filename, including behind wrappers.
+            local_path = kwargs.get("protocol") in (None, "file", "local") and (
+                protocol in ("file", "local")
+                or (protocol is None and p not in known_protocols and x.match(p))
+            )
+            if local_path:
+                bits.append("::".join(parts[index:]))
+                break
             if p in known_protocols:
                 bits.append(p + "://")
             elif "://" in p or x.match(p):
                 bits.append(p)
             else:
                 bits.append(p + "://")
-    else:
-        bits = [path]
 
     # [[url, protocol, kwargs], ...]
     out = []

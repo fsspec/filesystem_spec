@@ -241,6 +241,10 @@ are keyed by the protocol names included in the URL. Here is the equivalent to t
 
    of = fsspec.open('dask::s3://bucket/key', s3={'anon': True})
 
+To open a local filename containing ``"::"``, use an absolute path, a
+``file://`` URL, or an explicit relative path such as ``./entry::part.txt``.
+This makes it clear that the colons belong to the filename.
+
 A couple of more complicated cases:
 
 .. code-block:: python
