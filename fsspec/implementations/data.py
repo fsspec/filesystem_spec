@@ -10,6 +10,8 @@ from fsspec.utils import stringify_path
 class DataFileSystem(AbstractFileSystem):
     """A handy decoder for data-URLs
 
+    Data URLs embed their contents in the URL and cannot be opened for writing.
+
     Example
     -------
     >>> with fsspec.open("data:,Hello%2C%20World%21") as f:
@@ -61,7 +63,7 @@ class DataFileSystem(AbstractFileSystem):
         cache_options=None,
         **kwargs,
     ):
-        if "r" not in mode:
+        if "r" not in mode or "+" in mode:
             raise ValueError("Read only filesystem")
         return io.BytesIO(self.cat_file(path))
 
