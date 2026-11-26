@@ -20,6 +20,7 @@ Enhancements
 
 Fixes
 
+- Honor ``exist_ok=False`` in Arrow-backed ``makedirs`` operations (#2415).
 - Accept caller-owned file-like destinations in asynchronous reference downloads.
 - Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
 - Raise ``IsADirectoryError`` when opening a GitHub directory.
