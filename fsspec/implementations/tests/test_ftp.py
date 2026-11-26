@@ -8,6 +8,7 @@ import pytest
 
 import fsspec
 from fsspec import open_files
+from fsspec.callbacks import Callback
 from fsspec.conftest import _ftp_server
 from fsspec.implementations.ftp import FTPFileSystem, ImplicitFTPTLS, _mlsd2
 
@@ -278,6 +279,24 @@ def test_get_file_with_protocol(ftp_writable, tmp_path, file_like):
     target = io.BytesIO() if file_like else tmp_path / "download"
     fs.get_file(f"ftp://{host}:{port}/url-file", target)
     assert (target.getvalue() if file_like else target.read_bytes()) == data
+
+
+@pytest.mark.parametrize("data", [b"", b"0123456789"])
+def test_get_file_callback(ftp_writable, data):
+    host, port, user, pw = ftp_writable
+    fs = FTPFileSystem(host, port, user, pw, block_size=4)
+    fs.pipe("/download", data)
+    target = io.BytesIO()
+    progress = []
+    callback = Callback(hooks={"record": lambda size, value: progress.append(value)})
+
+    fs.get_file("/download", target, callback=callback)
+
+    assert target.getvalue() == data
+    assert callback.size == len(data)
+    assert progress[0] == 0
+    assert progress[-1] == len(data)
+    assert all(0 < end - start <= 4 for start, end in zip(progress, progress[1:]))
 
 
 @pytest.mark.parametrize("start", [-3, -10, -100, 0, 3, None])

@@ -27,6 +27,7 @@ Fixes
 - Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
 - Allow listing cache items and values with bounded LRU caching (#2419).
 - Read committed FTP files at their original paths inside transactions (#2463).
+- Report download progress to callbacks passed to ``FTPFileSystem.get_file``.
 
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 

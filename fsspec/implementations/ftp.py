@@ -5,6 +5,7 @@ import warnings
 from ftplib import FTP, FTP_TLS, Error, error_perm
 from typing import Any
 
+from ..callbacks import Callback
 from ..spec import AbstractBufferedFile, AbstractFileSystem
 from ..utils import infer_storage_options, isfilelike
 
@@ -225,27 +226,34 @@ class FTPFileSystem(AbstractFileSystem):
             raise FileNotFoundError(path) from exc
         return out
 
-    def get_file(self, rpath, lpath, **kwargs):
+    def get_file(self, rpath, lpath, callback=None, **kwargs):
         rpath = self._strip_protocol(rpath)
-        if self.isdir(rpath):
+        try:
+            details = self.info(rpath)
+        except OSError:
+            details = {}
+        if details.get("type") == "directory":
             if not os.path.exists(lpath):
                 os.mkdir(lpath)
             return
-        if isfilelike(lpath):
-            outfile = lpath
-        else:
-            outfile = open(lpath, "wb")
+        callback = Callback.as_callback(callback)
+        callback.set_size(details.get("size"))
+        close_outfile = not isfilelike(lpath)
+        outfile = open(lpath, "wb") if close_outfile else lpath
 
-        def cb(x):
-            outfile.write(x)
+        def write_chunk(data):
+            written = outfile.write(data)
+            callback.relative_update(len(data) if written is None else written)
 
-        self.ftp.retrbinary(
-            f"RETR {rpath}",
-            blocksize=self.blocksize,
-            callback=cb,
-        )
-        if not isfilelike(lpath):
-            outfile.close()
+        try:
+            self.ftp.retrbinary(
+                f"RETR {rpath}",
+                blocksize=self.blocksize,
+                callback=write_chunk,
+            )
+        finally:
+            if close_outfile:
+                outfile.close()
 
     def cat_file(self, path, start=None, end=None, **kwargs):
         path = self._strip_protocol(path)
