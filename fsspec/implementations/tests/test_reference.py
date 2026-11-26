@@ -1211,3 +1211,100 @@ def test_no_default_jinja_execution():
 
     with pytest.raises(ZeroDivisionError):
         fsspec.filesystem("reference", fo=manifest, simple_templates=False)
+
+
+@pytest.mark.parametrize("warm", [False, True])
+@pytest.mark.parametrize("path", ["", "data", "data/a", "missing"])
+def test_find_details_multiple_parents(warm, path):
+    fs = ReferenceFileSystem(
+        {
+            "root": b"root",
+            "data/b": ["memory://remote", 3, 7],
+            "data/a": b"base64:YWJj",
+            "data/nested/c": b"c",
+            "other/d": ["memory://whole"],
+        }
+    )
+    if warm:
+        fs.ls("")
+    expected = {
+        "root": {"name": "root", "type": "file", "size": 4},
+        "data/b": {"name": "data/b", "type": "file", "size": 7},
+        "data/a": {"name": "data/a", "type": "file", "size": 3},
+        "data/nested/c": {"name": "data/nested/c", "type": "file", "size": 1},
+        "other/d": {"name": "other/d", "type": "file", "size": None},
+    }
+    expected = {key: expected[key] for key in sorted(expected) if key.startswith(path)}
+    result = fs.find(path, detail=True)
+    assert result == expected
+    assert list(result) == list(expected)
+    assert fs.find(path) == list(expected)
+
+
+def test_find_details_uses_cached_records_and_rebuilds(m):
+    fs = ReferenceFileSystem({"data/a": b"a", "other/b": b"b"}, fs=m)
+    entry = fs.ls("data")[0]
+    entry["custom_metadata"] = "cached"
+    assert fs.find("data", detail=True)["data/a"] is entry
+    fs.pipe_file("data/c", b"ccc")
+    fs.dircache.clear()
+    assert fs.find("data", detail=True) == {
+        "data/a": {"name": "data/a", "type": "file", "size": 1},
+        "data/c": {"name": "data/c", "type": "file", "size": 3},
+    }
+    fs.rm_file("data/a")
+    fs.dircache.clear()
+    assert list(fs.find("data", detail=True)) == ["data/c"]
+
+
+def test_find_details_scans_each_selected_parent_once():
+    count = 2048
+    fs = ReferenceFileSystem({f"data/{i:04}": b"x" for i in range(count)})
+    fs.ls("")
+    visited = 0
+
+    class CountedListing(list):
+        def __iter__(self):
+            nonlocal visited
+            for entry in super().__iter__():
+                visited += 1
+                yield entry
+
+    fs.dircache["data"] = CountedListing(fs.dircache["data"])
+    result = fs.find("data", detail=True)
+    assert len(result) == count
+    assert all(info["size"] == 1 and info["type"] == "file" for info in result.values())
+    assert visited <= 2 * count
+
+
+def test_find_details_does_not_scan_unrelated_parent():
+    fs = ReferenceFileSystem({"data/a": b"a", "other/b": b"b"})
+    fs.ls("")
+
+    class UnrelatedListing(list):
+        def __iter__(self):
+            raise AssertionError("unrelated directory scanned")
+
+    fs.dircache["other"] = UnrelatedListing(fs.dircache["other"])
+    assert fs.find("data", detail=True) == {
+        "data/a": {"name": "data/a", "type": "file", "size": 1}
+    }
+
+
+@pytest.mark.parametrize("warm", [False, True])
+def test_find_details_trailing_slash_reference(warm):
+    fs = ReferenceFileSystem({"a/b": b"a", "d/": b"d"})
+    if warm:
+        fs.ls("")
+    assert fs.find("", detail=True) == {
+        "a/b": {"name": "a/b", "type": "file", "size": 1},
+        "d/": {"name": "d/", "type": "file", "size": 1},
+    }
+
+
+def test_find_details_stale_parent_preserves_missing_file_error():
+    fs = ReferenceFileSystem({"data/a": b"a"})
+    fs.ls("")
+    fs.pipe_file("data/b", b"b")
+    with pytest.raises(FileNotFoundError, match="data/b"):
+        fs.find("", detail=True)
