@@ -47,6 +47,8 @@ Fixes
 
 - Avoid empty backend range requests at EOF with the first-chunk cache.
 
+- Reject incomplete block cache entries in whole-file cache bulk reads.
+
 - Forward per-call reference ``cat_file`` options to the target filesystem.
 
 - Leave out passwords in nested options such as ``target_options`` when
