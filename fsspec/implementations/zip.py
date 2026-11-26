@@ -79,7 +79,12 @@ class ZipFileSystem(AbstractArchiveFileSystem):
     @classmethod
     def _strip_protocol(cls, path):
         # zip file paths are always relative to the archive root
-        return super()._strip_protocol(path).lstrip("/")
+        return cls._normalize_path(super()._strip_protocol(path))
+
+    @staticmethod
+    def _normalize_path(path):
+        # Do not resolve '..': it can be part of a literal archive member name.
+        return "/".join(part for part in path.split("/") if part not in ("", "."))
 
     def __del__(self):
         if hasattr(self, "zip"):
@@ -98,25 +103,28 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if self.dir_cache is None or self.mode in set("wa"):
             # when writing, dir_cache is always in the ZipFile's attributes,
             # not read from the file.
-            files = self.zip.infolist()
+            # Members such as "./dir/file" or "/file" are listed and opened by
+            # their normalized name; an explicit "./" entry is the root itself.
+            members = {}
+            for z in self.zip.infolist():
+                name = self._normalize_path(z.filename)
+                if name:
+                    members[name] = z
+            self._members = members
             self.dir_cache = {
-                dirname.rstrip("/"): {
-                    "name": dirname.rstrip("/"),
-                    "size": 0,
-                    "type": "directory",
-                }
-                for dirname in self._all_dirnames(self.zip.namelist())
+                dirname: {"name": dirname, "size": 0, "type": "directory"}
+                for dirname in self._all_dirnames(members)
             }
-            for z in files:
+            for name, z in members.items():
                 f = {s: getattr(z, s, None) for s in zipfile.ZipInfo.__slots__}
                 f.update(
                     {
-                        "name": z.filename.rstrip("/"),
+                        "name": name,
                         "size": z.file_size,
                         "type": ("directory" if z.is_dir() else "file"),
                     }
                 )
-                self.dir_cache[f["name"]] = f
+                self.dir_cache[name] = f
 
     def pipe_file(self, path, value, mode="overwrite", **kwargs):
         # override upstream, because we know the exact file size in this case
@@ -145,8 +153,14 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             raise FileNotFoundError(path)
         if "r" in self.mode and "w" in mode:
             raise OSError("ZipFS can only be open for reading or writing, not both")
+        member = path
+        if "r" in mode:
+            self._get_dirs()
+            member = self._members.get(path, path)
+            if isinstance(member, zipfile.ZipInfo) and member.is_dir():
+                raise IsADirectoryError(path)
         try:
-            out = self.zip.open(path, mode.strip("b"), force_zip64=self.force_zip_64)
+            out = self.zip.open(member, mode.strip("b"), force_zip64=self.force_zip_64)
         except KeyError as exc:
             # zipfile reports a missing member as KeyError; fsspec callers,
             # including FSMap's missing_exceptions, expect FileNotFoundError.

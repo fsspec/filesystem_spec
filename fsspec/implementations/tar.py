@@ -200,7 +200,11 @@ class TarFileSystem(AbstractArchiveFileSystem):
         details, _, orig_name = member
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
-        out = self.tar.extractfile(orig_name)
+        try:
+            out = self.tar.extractfile(orig_name)
+        except KeyError as exc:
+            # tarfile reports a missing link target as KeyError.
+            raise FileNotFoundError(path) from exc
         # cat_file needs the size to resolve negative offsets, as zip provides.
         out.size = details["size"]
         return out

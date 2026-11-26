@@ -6,6 +6,9 @@ Dev
 
 Enhancements
 
+- Strip the protocol from ``LocalFileSystem`` paths without building every
+  prefix on each call, so ``ls`` and other local path operations are faster.
+
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
@@ -18,11 +21,45 @@ Enhancements
 Fixes
 
 - Accept caller-owned file-like destinations in asynchronous reference downloads.
+- Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
+- Raise ``IsADirectoryError`` when opening a GitHub directory.
+- Keep the mode of an existing local file when a transaction commit replaces it,
+  instead of resetting it to the umask default
+
+- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Allow listing cache items and values with bounded LRU caching (#2419).
+- Read committed FTP files at their original paths inside transactions (#2463).
+
+- Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
+
+- Handle a single Path in the asynchronous methods like its string
+  form, as the synchronous methods do
+
+- Report the root of an archive without members as a directory in ``info``,
+  ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
+  an archive with members.
+
+- Raise ``IsADirectoryError`` when opening an explicit ZIP directory entry.
+
+- Escape reserved URL characters in Jupyter filesystem paths so filenames
+  containing ``#``, ``?`` or percent escapes are read and changed literally.
+
+- Delegate synchronous file opens in ``AsyncFileSystemWrapper`` to the wrapped
+  backend so writes are persisted (#2470).
+
+- Avoid empty backend range requests at EOF with the first-chunk cache.
+
+- Forward per-call reference ``cat_file`` options to the target filesystem.
+
+- Leave out passwords in nested options such as ``target_options`` when
+  serializing with ``include_password=False``.
 
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
   filesystem close, without closing caller-provided streams.
+
+- Raise ``FileNotFoundError`` when opening a dangling link in a TAR archive.
 
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
@@ -93,6 +130,8 @@ Fixes
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
+- Honor ``same_scheme=True`` when listing HTTP directories in both HTTP backends.
+
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 
 - Propagate backend removal errors from ``FSMap``
@@ -120,6 +159,9 @@ Fixes
 - Accept string-valued path-like objects in ``DirFileSystem`` delegated operations.
 
 - Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
+
+- Add ``cache_metadata_name=`` to the caching filesystems so the metadata file can
+  be given a name that a remote file stored with ``same_names=True`` cannot replace
 
 - Return the current position for accepted no-op seeks on HTTP streams (#2306)
 
@@ -184,6 +226,8 @@ Fixes
 
 - Strip SFTP and SSH URL prefixes before recursively creating directories.
 
+- Keep the leading delimiter in ``read_block(..., split_before=True)`` when reading to the end of the file with ``length=None``.
+
 - Return ``created`` as a timestamp in ``MemoryFileSystem.info``, as ``ls`` and ``find`` already do.
 
 - Strip the protocol from the path in ``LocalFileSystem.lexists``.
@@ -247,6 +291,8 @@ Fixes
 
 - Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
   and allowing deferred local transaction writes to commit to missing parents (#1041).
+
+- Preserve preloaded file parts when opening another file with the same cache options.
 
 
 2026.9.0

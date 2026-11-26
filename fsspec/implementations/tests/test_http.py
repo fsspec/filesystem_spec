@@ -183,6 +183,39 @@ def test_list(server):
     assert out == [server.realfile]
 
 
+@pytest.mark.parametrize("same_scheme", [True, False])
+@pytest.mark.parametrize("simple_links", [True, False])
+@pytest.mark.parametrize("detail", [True, False])
+def test_list_same_scheme(
+    server, reset_files, reset_faults, same_scheme, simple_links, detail
+):
+    url = server.address + "/same-scheme"
+    same = url + "/same.txt"
+    other = url.replace("http://", "https://", 1) + "/other.txt"
+    links = [same, other, "/same-scheme/absolute.txt", "relative.txt"]
+    links.append("http://example.invalid/same-scheme/unrelated.txt")
+    HTTPTestHandler.dynamic_files["/same-scheme"] = "".join(
+        f'<a href="{link}">file</a>' for link in links
+    ).encode()
+    h = fsspec.filesystem(
+        "http",
+        same_scheme=same_scheme,
+        simple_links=simple_links,
+        skip_instance_cache=True,
+    )
+    try:
+        result = h.ls(url, detail=detail)
+        expected = [same, url + "/absolute.txt", url + "/relative.txt"]
+        if not same_scheme:
+            expected.append(other)
+        names = [entry["name"] for entry in result] if detail else result
+        assert sorted(names) == sorted(expected)
+        assert HTTPTestHandler.get_counts["/same-scheme"] == 1
+    finally:
+        if h._session is not None:
+            h.close_session(h.loop, h._session)
+
+
 def test_list_pathological_listing(server, reset_files):
     # a long whitespace run inside an anchor used to make the link regex
     # backtrack cubically, so listing this page took about a minute
@@ -465,6 +498,26 @@ def test_read_none(server, block_size, position):
         assert f.read(None) == data[position:]
         assert f.tell() == len(data)
         assert f.read(None) == b""
+
+
+@pytest.mark.parametrize("filesystem_default", [False, True])
+def test_reopen_with_known_parts(encoded_range_server, filesystem_default):
+    content = encoded_range_server.content
+    parts = {(0, 5): content[:5], (5, 10): content[5:10]}
+    expected = parts.copy()
+    options = {"cache_type": "parts", "cache_options": {"data": parts, "strict": True}}
+    h = fsspec.filesystem(
+        "http",
+        **(options if filesystem_default else {}),
+    )
+    for _ in range(2):
+        with h.open(
+            encoded_range_server.url, **({} if filesystem_default else options)
+        ) as f:
+            assert f.read(5) == content[:5]
+            f.seek(8)
+            assert f.read(2) == content[8:10]
+    assert parts == expected
 
 
 def test_file_pickle(server):
@@ -750,6 +803,23 @@ def test_info(server):
     fs = fsspec.filesystem("http", headers={"redirect": "true"})
     info = fs.info(server.address + "/redirectme")
     assert info["url"] == server.realfile
+
+
+def test_custom_headers_not_forwarded_across_origins(server):
+    fs = fsspec.filesystem(
+        "http", headers={"X-Api-Key": "secret", "Accept-Language": "en"}
+    )
+
+    same_origin_headers = json.loads(
+        fs.cat_file(server.address + "/cross-origin-target")
+    )
+    assert same_origin_headers["x-api-key"] == "secret"
+
+    redirected_headers = json.loads(
+        fs.cat_file(server.address + "/redirect-cross-origin")
+    )
+    assert "x-api-key" not in redirected_headers
+    assert redirected_headers["accept-language"] == "en"
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT"])
