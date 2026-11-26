@@ -179,6 +179,7 @@ select = [
     "UP",
 ]
 ignore = [
+    "ASYNC109",
     # Loop control variable `loop` not used within loop body
     "B007",
     # Star-arg unpacking after a keyword argument is strongly discouraged
@@ -218,15 +219,16 @@ ignore = [
     "E111",
     "E114",
     "E117",
+    "D203",
     "D206",
     "D300",
     "Q000",
     "Q001",
     "Q002",
     "Q003",
+    "Q004",
     "COM812",
     "COM819",
-    "ASYNC109"
 ]
 
 [tool.pytest.ini_options]
