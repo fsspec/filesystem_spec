@@ -110,3 +110,23 @@ def test_dircache_pickle_roundtrip():
     assert dc2.use_listings_cache is True
     assert dc2.listings_expiry_time == 10
     assert dc2.max_paths == 5
+
+
+@pytest.mark.parametrize("max_paths", [None, 0, 1, 2, 3])
+@pytest.mark.parametrize("listings_expiry_time", [None, 60])
+@pytest.mark.parametrize("view", ["items", "values"])
+def test_dircache_views_after_reads(max_paths, listings_expiry_time, view):
+    dc = DirCache(max_paths=max_paths, listings_expiry_time=listings_expiry_time)
+    entries = {"a": 1, "b": 2, "c": 3}
+    for key, value in entries.items():
+        dc[key] = value
+
+    # Start with a non-default LRU order when the cache is bounded.
+    dc[next(iter(dc))]
+    keys = list(dc)
+    expected = [(key, entries[key]) for key in keys]
+    if view == "values":
+        expected = [value for _, value in expected]
+
+    assert list(getattr(dc, view)()) == expected
+    assert list(dc) == keys

@@ -1361,7 +1361,16 @@ class AbstractFileSystem(metaclass=_Cached):
 
     def mv(self, path1, path2, recursive=False, maxdepth=None, **kwargs):
         """Move file(s) from one location to another"""
-        if path1 == path2:
+        same = path1 == path2
+        if isinstance(path1, str) and isinstance(path2, str):
+            # Compare what the paths refer to, not how they are spelled: a copy
+            # onto the source followed by removing the source loses the data.
+            src = self._strip_protocol(path1).rstrip("/")
+            dst = self._strip_protocol(path2).rstrip("/")
+            if dst.startswith(src + "/"):
+                raise ValueError(f"Cannot move {path1!r} into itself, to {path2!r}")
+            same = src == dst
+        if same:
             logger.debug("%s mv: The paths are the same, so no files were moved.", self)
         else:
             if isinstance(path1, list) and isinstance(path2, list):

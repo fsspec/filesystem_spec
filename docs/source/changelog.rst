@@ -6,6 +6,9 @@ Dev
 
 Enhancements
 
+- Strip the protocol from ``LocalFileSystem`` paths without building every
+  prefix on each call, so ``ls`` and other local path operations are faster.
+
 - List TAR archive descendants from the existing directory cache without
   rescanning the full archive for each directory.
 
@@ -20,6 +23,16 @@ Fixes
 - Keep failed whole-file cache refreshes eligible for retry instead of marking
   stale contents as current.
 
+- Accept caller-owned file-like destinations in asynchronous reference downloads.
+- Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
+- Raise ``IsADirectoryError`` when opening a GitHub directory.
+- Keep the mode of an existing local file when a transaction commit replaces it,
+  instead of resetting it to the umask default
+
+- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Allow listing cache items and values with bounded LRU caching (#2419).
+- Read committed FTP files at their original paths inside transactions (#2463).
+
 - Remove custom request headers on cross-origin HTTP redirects to avoid forwarding credentials to another host (#2206).
 
 - Handle a single Path in the asynchronous methods like its string
@@ -28,6 +41,8 @@ Fixes
 - Report the root of an archive without members as a directory in ``info``,
   ``exists`` and ``isdir`` for the ZIP, TAR and libarchive filesystems, as for
   an archive with members.
+
+- Raise ``IsADirectoryError`` when opening an explicit ZIP directory entry.
 
 - Escape reserved URL characters in Jupyter filesystem paths so filenames
   containing ``#``, ``?`` or percent escapes are read and changed literally.
@@ -39,10 +54,15 @@ Fixes
 
 - Forward per-call reference ``cat_file`` options to the target filesystem.
 
+- Leave out passwords in nested options such as ``target_options`` when
+  serializing with ``include_password=False``.
+
 - Honor the per-file ``cache_type`` option when opening FTP files.
 
 - Close internally opened TAR archive files and compression wrappers on explicit
   filesystem close, without closing caller-provided streams.
+
+- Raise ``FileNotFoundError`` when opening a dangling link in a TAR archive.
 
 - Verify the server certificate and host name for FTPFileSystem`` TLS
 
@@ -64,6 +84,8 @@ Fixes
 - Accept bare relative filenames in lists of local destinations for async ``get``.
 
 - Reject Git paths below files and preserve complete file names in Git metadata.
+
+- Avoid ``KeyError`` if files are deleted during memory filesystem listings.
 
 - Honor exclusive creation mode in DBFS file opens instead of overwriting an
   existing file.
@@ -112,6 +134,8 @@ Fixes
 - Finalize zip-fs file contexts on explicit close (#2311).
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
+
+- Honor ``same_scheme=True`` when listing HTTP directories in both HTTP backends.
 
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
 
@@ -272,6 +296,8 @@ Fixes
 
 - Create parent directories before ``FSMap.setitems`` writes, matching ``__setitem__``
   and allowing deferred local transaction writes to commit to missing parents (#1041).
+
+- Preserve preloaded file parts when opening another file with the same cache options.
 
 
 2026.9.0

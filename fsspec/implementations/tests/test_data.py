@@ -139,3 +139,27 @@ def test_base64_marker_case_and_spaces(marker):
     assert fs.info(path)["size"] == 5
     with fsspec.open(uri, "rb") as stream:
         assert stream.read() == b"Hello"
+
+
+@pytest.mark.parametrize("mode", ["r+", "r+b", "rb+", "w", "wb", "ab", "xb"])
+def test_data_url_rejects_write_modes(mode):
+    with pytest.raises(ValueError, match="Read only filesystem"):
+        with fsspec.open("data:,hello", mode):
+            pass
+
+
+@pytest.mark.parametrize(
+    "mode, expected",
+    [
+        ("r", "hello"),
+        ("rt", "hello"),
+        ("tr", "hello"),
+        ("rb", b"hello"),
+        ("br", b"hello"),
+    ],
+)
+def test_data_url_accepts_read_modes(mode, expected):
+    with fsspec.open("data:,hello", mode) as stream:
+        assert stream.read() == expected
+        stream.seek(0)
+        assert stream.read() == expected
