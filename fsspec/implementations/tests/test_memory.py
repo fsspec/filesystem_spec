@@ -960,12 +960,26 @@ def test_find_snapshots_store_before_iterating(m):
     real = m.store["/data/file0.txt"]
     m.store["/data/file0.txt"] = MutatesStoreOnRead(real, m.store)
 
-    out = m.find("/data")
+    out = m.find("/data", detail=True)
 
     # The snapshot is taken before the concurrent write, so the new path is not
     # part of this result; the point is that find() completes instead of raising.
     assert "/data/file4.txt" in out
     assert len(out) == 5
+    assert "/data/concurrent.txt" in m.store
+
+
+def test_find_file_names_do_not_read_metadata(m):
+    m.pipe_file("/data/first.jsonl", b"first")
+    m.pipe_file("/data/directory/second.jsonl", b"second")
+
+    # Only keys are needed, so a discovery pass can ignore entry values.
+    m.store["/data/first.jsonl"] = object()
+    assert m.find("/data", maxdepth=1) == ["/data/first.jsonl"]
+    assert list(iter(m.get_mapper("/data"))) == [
+        "directory/second.jsonl",
+        "first.jsonl",
+    ]
 
 
 def test_find_does_not_scan_per_directory(m):
