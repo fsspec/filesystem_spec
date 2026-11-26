@@ -20,6 +20,9 @@ Enhancements
 
 Fixes
 
+- Keep failed whole-file cache refreshes eligible for retry instead of marking
+  stale contents as current.
+
 - Accept caller-owned file-like destinations in asynchronous reference downloads.
 - Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
 - Raise ``IsADirectoryError`` when opening a GitHub directory.
