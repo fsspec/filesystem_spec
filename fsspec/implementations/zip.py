@@ -175,15 +175,17 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         if maxdepth is not None and maxdepth < 1:
             raise ValueError("maxdepth must be at least 1")
 
-        def to_parts(_path: str):
-            return list(filter(None, _path.replace("\\", "/").split("/")))
+        def find_path(_path: str):
+            # Preserve the separator aliases used by find without changing
+            # the original cache keys returned to callers.
+            return "/".join(filter(None, _path.replace("\\", "/").split("/")))
 
         if not isinstance(path, str):
             path = str(path)
 
         path = self._strip_protocol(path)
-        path_parts = to_parts(path)
-        path_depth = len(path_parts)
+        normalized = find_path(path)
+        prefix = normalized + "/"
 
         self._get_dirs()
 
@@ -195,11 +197,11 @@ class ZipFileSystem(AbstractArchiveFileSystem):
             return result if detail else [path]
 
         for file_path, file_info in self.dir_cache.items():
-            if len(file_parts := to_parts(file_path)) < path_depth or any(
-                a != b for a, b in zip(path_parts, file_parts)
-            ):
-                # skip parent folders and mismatching paths
-                continue
+            if normalized:
+                # Ordinary cache keys are already normalized by _get_dirs().
+                candidate = find_path(file_path) if "\\" in file_path else file_path
+                if candidate != normalized and not candidate.startswith(prefix):
+                    continue
 
             if file_info["type"] == "directory":
                 if withdirs and file_path not in result:
@@ -210,6 +212,7 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 result[file_path] = file_info if detail else None
 
         if maxdepth:
+            path_depth = normalized.count("/") + bool(normalized)
             result = {
                 k: v for k, v in result.items() if k.count("/") < maxdepth + path_depth
             }

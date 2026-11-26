@@ -607,6 +607,29 @@ def test_find_with_and_without_slash_should_return_same_result(zip_file):
     assert zip_file_system.find("/dir2/") == zip_file_system.find("/dir2")
 
 
+def test_find_prefix_respects_component_boundaries_and_separator_aliases():
+    files = {
+        "part/train/a.jsonl": b"a",
+        "part/train/deeper/b.jsonl": b"b",
+        "part/training/c.jsonl": b"c",
+        "part/../keep.jsonl": b"d",
+    }
+    with tempzip(files) as z:
+        fs = ZipFileSystem(z)
+        try:
+            assert fs.find("part\\train\\", maxdepth=1) == ["part/train/a.jsonl"]
+            result = fs.find("zip:///part//./train", detail=True, withdirs=True)
+            assert set(result) == {
+                "part/train",
+                "part/train/a.jsonl",
+                "part/train/deeper",
+                "part/train/deeper/b.jsonl",
+            }
+            assert fs.find("part/..") == ["part/../keep.jsonl"]
+        finally:
+            fs.close()
+
+
 @pytest.mark.parametrize("prefix", ["/", "zip://", "zip:///"])
 def test_find_should_return_file_if_exact_match(zip_file, prefix):
     zip_file_system = ZipFileSystem(zip_file)
