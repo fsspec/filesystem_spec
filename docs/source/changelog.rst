@@ -20,6 +20,7 @@ Enhancements
 
 Fixes
 
+- Accept caller-owned file-like destinations in asynchronous reference downloads.
 - Persist cache entry removal so a partial refill after eviction does not reuse stale block metadata.
 - Raise ``IsADirectoryError`` when opening a GitHub directory.
 - Keep the mode of an existing local file when a transaction commit replaces it,
