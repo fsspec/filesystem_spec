@@ -137,7 +137,7 @@ version-file = "fsspec/_version.py"
 exclude = ["**/tests/*", "!**/tests/abstract/"]
 
 [tool.ruff]
-exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version"]
+exclude = [".tox", "build", "docs/source/conf.py", "fsspec/_version.py"]
 line-length = 88
 
 [tool.ruff.lint]
@@ -179,6 +179,8 @@ select = [
     "UP",
 ]
 ignore = [
+    "ASYNC109",
+    "ASYNC240",
     # Loop control variable `loop` not used within loop body
     "B007",
     # Star-arg unpacking after a keyword argument is strongly discouraged
@@ -194,22 +196,15 @@ ignore = [
     # line break before binary operator
     # uncomment when implemented in ruff
     # "W503",
-    # whitespace before :
-    "E203",
     # redefs
     "F811",
     # Fix these codes later
     "G004",
-    "PERF203",
     "PLC0415",
-    "UP007",
-    "UP011",
     "UP015",
-    "UP018",
     "SIM102",
     "SIM105",
     "SIM108",
-    "SIM114",
     "SIM115",
     "SIM117",
     "TC003",
@@ -226,7 +221,6 @@ ignore = [
     "Q003",
     "COM812",
     "COM819",
-    "ASYNC109"
 ]
 
 [tool.pytest.ini_options]
