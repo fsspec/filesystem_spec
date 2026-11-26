@@ -962,3 +962,136 @@ def test_check_contained(root, path, contained):
     else:
         with pytest.raises(ValueError, match="outside the destination"):
             check_contained(root, [path])
+
+
+@pytest.mark.skipif(WIN, reason="Win32 collapses '..' before resolving links")
+def test_check_contained_resolves_symlinks_with_dotdot(tmp_path):
+    dest = tmp_path / "outer" / "dest"
+    deep = dest / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    link = deep / "link"
+    try:
+        link.symlink_to(dest, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    # Resolves through `link` to tmp_path/outside.txt on POSIX.
+    outside = f"{dest}/a/b/c/link/../../outside.txt"
+    with pytest.raises(ValueError, match="outside the destination"):
+        check_contained(str(dest), [outside])
+
+    # Traversing the same symlink without climbing above `dest` remains valid,
+    # as does a non-symlink `..` segment that stays inside `dest`.
+    check_contained(
+        str(dest),
+        [f"{dest}/a/b/c/link/inside.txt", f"{dest}/a/b/../inside.txt"],
+    )
+
+
+def test_check_contained_preserves_outward_symlink_without_dotdot(tmp_path):
+    dest = tmp_path / "outer" / "dest"
+    dest.mkdir(parents=True)
+    external = tmp_path / "external"
+    external.mkdir()
+    link = dest / "linked"
+    try:
+        link.symlink_to(external, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    # User-configured symlinks without ".." segments continue to work.
+    check_contained(str(dest), [f"{dest}/linked/inside.txt"])
+
+    # Combining an outward symlink with ".." is rejected.
+    if not WIN:
+        for escaped in (
+            f"{dest}/linked/../outside.txt",
+            f"{dest}/linked/sub/../inside.txt",
+            f"{dest}/a/../linked/inside.txt",
+        ):
+            with pytest.raises(ValueError, match="outside the destination"):
+                check_contained(str(dest), [escaped])
+
+        # A root containing `<symlink>/..` with a pre-collapsed path is also
+        # verified via realpath rather than matching `root_abs`.
+        real_parent = tmp_path / "real_parent"
+        (real_parent / "real_dest").mkdir(parents=True)
+        sym_dir = tmp_path / "sym_dir"
+        sym_dir.symlink_to(real_parent / "real_dest", target_is_directory=True)
+        with pytest.raises(ValueError, match="outside the destination"):
+            check_contained(
+                f"{sym_dir}/../other_dir", [f"{tmp_path}/other_dir/file.txt"]
+            )
+
+
+@pytest.mark.skipif(WIN, reason="Win32 collapses '..' before resolving links")
+def test_get_resolves_symlinks_in_containment(tmp_path, m):
+    dest = tmp_path / "outer" / "dest"
+    deep = dest / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    link = deep / "link"
+    try:
+        link.symlink_to(dest, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    m.pipe_file("/src/a/b/c/link/../../outside.txt", b"data")
+    m.pipe_file("/src/ok.txt", b"ok")
+
+    with pytest.raises(ValueError, match="outside the destination"):
+        m.get("/src/", str(dest), recursive=True)
+
+    assert not (tmp_path / "outside.txt").exists()
+    assert not (dest / "ok.txt").exists()
+
+
+def test_check_contained_rejects_intermediate_escape(tmp_path, m):
+    dest = tmp_path / "outer" / "dest"
+    dest.mkdir(parents=True)
+
+    # A path that steps above `dest` and returns still creates the intermediate
+    # directory outside `dest` when passed to `os.makedirs`.
+    bouncing = f"{dest}/a/../../sibling/../dest/ok.txt"
+    with pytest.raises(ValueError, match="outside the destination"):
+        check_contained(str(dest), [bouncing])
+
+    m.pipe_file("/src/a/../../sibling/../dest/ok.txt", b"data")
+    m.pipe_file("/src/plain.txt", b"ok")
+
+    for kwargs in ({"recursive": True, "maxdepth": 10}, {}):
+        rpath = "/src/" if kwargs else "/src/**/*.txt"
+        with pytest.raises(ValueError, match="outside the destination"):
+            m.get(rpath, str(dest), **kwargs)
+        assert not (dest.parent / "sibling").exists()
+        assert not (dest / "plain.txt").exists()
+
+
+@pytest.mark.skipif(WIN, reason="Win32 collapses '..' before resolving links")
+def test_check_contained_rejects_intermediate_symlink_escape(tmp_path, m):
+    dest = tmp_path / "outer" / "dest"
+    deep = dest / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    link = deep / "link"
+    try:
+        link.symlink_to(dest, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    # Traversing `link` followed by `..` leaves `dest` even if later segments
+    # re-enter `dest`.
+    bouncing = f"{dest}/a/b/c/link/../sibling/../dest/ok.txt"
+    with pytest.raises(ValueError, match="outside the destination"):
+        check_contained(str(dest), [bouncing])
+
+    # An in-tree `..` after the same symlink that never leaves `dest` remains valid.
+    check_contained(str(dest), [f"{dest}/a/b/c/link/sub/../inside.txt"])
+
+    m.pipe_file("/src/a/b/c/link/../sibling/../dest/ok.txt", b"data")
+    m.pipe_file("/src/plain.txt", b"ok")
+
+    for kwargs in ({"recursive": True, "maxdepth": 10}, {}):
+        rpath = "/src/" if kwargs else "/src/**/*.txt"
+        with pytest.raises(ValueError, match="outside the destination"):
+            m.get(rpath, str(dest), **kwargs)
+        assert not (dest.parent / "sibling").exists()
+        assert not (dest / "plain.txt").exists()

@@ -917,6 +917,8 @@ class ReferenceFileSystem(AsyncFileSystem):
             self.ls("")
         rpath = self.expand_path(rpath, recursive=recursive, maxdepth=maxdepth)
         fs = fsspec.filesystem("file", auto_mkdir=True)
+        if isinstance(lpath, (str, os.PathLike)):
+            lpath = fs._strip_protocol(lpath)
         targets = other_paths(rpath, lpath)
         if isinstance(lpath, str):
             # The names came from the source listing; ".." in one of them

@@ -1,7 +1,13 @@
+import sys
+
 import pytest
 
 import fsspec
+import fsspec.generic
 from fsspec.generic import GenericFileSystem, rsync
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+from fsspec.implementations.dirfs import DirFileSystem
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.registry import _registry, register_implementation
 from fsspec.tests.conftest import data, server  # noqa: F401
@@ -259,6 +265,319 @@ def test_rsync_rejects_names_escaping_destination(tmp_path, m):
         rsync("memory://src", f"file://{dest}")
     assert not (tmp_path / "escaped").exists()
     assert not (dest / "ok").exists()
+
+
+def test_rsync_rejects_names_escaping_memory_destination(m):
+    m.pipe({"/src/ok": b"ok", "/src/a/../../outside": b"data"})
+    m.makedirs("/dst", exist_ok=True)
+
+    with pytest.raises(ValueError, match="outside the destination"):
+        rsync("memory:///src", "memory:///dst")
+    assert not m.exists("/outside")
+    assert not m.exists("/dst/ok")
+
+
+def test_rsync_passes_local_paths_to_check_contained(tmp_path, m, monkeypatch):
+    m.pipe({"/src/ok.txt": b"ok", "/src/sub/file.txt": b"data"})
+    dest = tmp_path / "dest"
+    dest.mkdir()
+
+    seen = []
+    orig_check_contained = fsspec.generic.check_contained
+
+    def recording_check_contained(root, paths):
+        seen.append((root, list(paths)))
+        return orig_check_contained(root, paths)
+
+    monkeypatch.setattr(fsspec.generic, "check_contained", recording_check_contained)
+    rsync("memory:///src", f"file://{dest}")
+
+    assert len(seen) == 1
+    root_arg, path_args = seen[0]
+    assert not root_arg.startswith("file://")
+    assert all(not p.startswith("file://") for p in path_args)
+    assert (dest / "ok.txt").read_bytes() == b"ok"
+    assert (dest / "sub" / "file.txt").read_bytes() == b"data"
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Win32 collapses '..' before resolving links",
+)
+def test_rsync_resolves_symlinks_in_containment(tmp_path, m):
+    dest = tmp_path / "outer" / "dest"
+    deep = dest / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    link = deep / "link"
+    try:
+        link.symlink_to(dest, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    m.pipe({"/src/ok": b"ok", "/src/a/b/c/link/../../outside.txt": b"data"})
+
+    with pytest.raises(ValueError, match="outside the destination"):
+        rsync("memory://src", f"file://{dest}")
+    assert not (tmp_path / "outside.txt").exists()
+    assert not (dest / "ok").exists()
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Win32 collapses '..' before resolving links",
+)
+def test_rsync_wrapped_local_dirfs_containment(tmp_path, m):
+    sandbox = tmp_path / "outer"
+    dest = sandbox / "dest"
+    deep = dest / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    link = deep / "link"
+    try:
+        link.symlink_to(dest, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    m.pipe({"/src/ok": b"ok", "/src/a/b/c/link/../../outside.txt": b"data"})
+    dirfs = DirFileSystem(path=str(sandbox), fs=LocalFileSystem())
+    prev_generic = fsspec.generic._generic_fs.copy()
+    try:
+        fsspec.generic._generic_fs["memory"] = m
+        fsspec.generic._generic_fs["dir"] = dirfs
+        gfs = GenericFileSystem(default_method="generic")
+        with pytest.raises(ValueError, match="outside the destination"):
+            rsync("memory:///src", "dir://dest", fs=gfs)
+    finally:
+        fsspec.generic._generic_fs.clear()
+        fsspec.generic._generic_fs.update(prev_generic)
+    assert not (tmp_path / "outside.txt").exists()
+    assert not (dest / "ok").exists()
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Win32 collapses '..' before resolving links",
+)
+def test_rsync_wrapped_local_async_wrapper_containment(tmp_path, m):
+    dest = tmp_path / "outer" / "dest"
+    deep = dest / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    link = deep / "link"
+    try:
+        link.symlink_to(dest, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    m.pipe({"/src/ok": b"ok", "/src/a/b/c/link/../../outside.txt": b"data"})
+    prev_generic = fsspec.generic._generic_fs.copy()
+    try:
+        fsspec.generic._generic_fs["memory"] = m
+        fsspec.generic._generic_fs["file"] = AsyncFileSystemWrapper(LocalFileSystem())
+        gfs = GenericFileSystem(default_method="generic")
+        with pytest.raises(ValueError, match="outside the destination"):
+            rsync("memory:///src", f"file://{dest}", fs=gfs)
+    finally:
+        fsspec.generic._generic_fs.clear()
+        fsspec.generic._generic_fs.update(prev_generic)
+    assert not (tmp_path / "outside.txt").exists()
+    assert not (dest / "ok").exists()
+
+
+def test_rsync_bare_root_dirfs(tmp_path, m):
+    root_dir = tmp_path / "root"
+    root_dir.mkdir()
+    (root_dir / "keep.txt").write_bytes(b"keep")
+    (root_dir / "obsolete.txt").write_bytes(b"old")
+
+    dirfs = DirFileSystem(path=str(root_dir), fs=LocalFileSystem())
+    prev_generic = fsspec.generic._generic_fs.copy()
+    try:
+        fsspec.generic._generic_fs["memory"] = m
+        fsspec.generic._generic_fs["dir"] = dirfs
+        gfs = GenericFileSystem(default_method="generic")
+
+        # Sync from bare dir:// root to memory:///dst
+        rsync("dir://", "memory:///dst", fs=gfs)
+        assert m.cat("memory:///dst/keep.txt") == b"keep"
+        assert m.cat("memory:///dst/obsolete.txt") == b"old"
+
+        # Sync back from memory:///dst into bare dir:// root with delete_missing
+        m.rm("memory:///dst/obsolete.txt")
+        m.pipe_file("memory:///dst/added.txt", b"new")
+        rsync("memory:///dst", "dir://", delete_missing=True, fs=gfs)
+        assert (root_dir / "keep.txt").read_bytes() == b"keep"
+        assert (root_dir / "added.txt").read_bytes() == b"new"
+        assert not (root_dir / "obsolete.txt").exists()
+    finally:
+        fsspec.generic._generic_fs.clear()
+        fsspec.generic._generic_fs.update(prev_generic)
+
+
+def test_rsync_trailing_slash_source_and_destination(tmp_path):
+    class TrailingSlashMemoryFS(MemoryFileSystem):
+        protocol = "tsmem"
+
+        @classmethod
+        def _strip_protocol(cls, path):
+            if isinstance(path, list):
+                return [cls._strip_protocol(p) for p in path]
+            had_trailing = isinstance(path, str) and path.endswith("/")
+            if isinstance(path, str):
+                path = path.removeprefix("tsmem://")
+            stripped = super()._strip_protocol(path)
+            if had_trailing and stripped != "/" and not stripped.endswith("/"):
+                return stripped + "/"
+            return stripped
+
+        def _norm(self, path):
+            return self._strip_protocol(path).rstrip("/") or "/"
+
+        def info(self, path, **kwargs):
+            return super().info(self._norm(path), **kwargs)
+
+        def ls(self, path, detail=True, **kwargs):
+            return super().ls(self._norm(path), detail=detail, **kwargs)
+
+        def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+            return super().find(
+                self._norm(path),
+                maxdepth=maxdepth,
+                withdirs=withdirs,
+                detail=detail,
+                **kwargs,
+            )
+
+    tsfs = TrailingSlashMemoryFS(global_store=False, skip_instance_cache=True)
+    tsfs.pipe({"/src/keep.txt": b"keep", "/src/sub/new.txt": b"new"})
+    tsfs.pipe({"/dst/keep.txt": b"keep", "/dst/stale.txt": b"old"})
+    tsfs.pipe({"/src_sibling/other.txt": b"other"})
+
+    dest = tmp_path / "dest"
+    dest.mkdir()
+
+    prev_generic = fsspec.generic._generic_fs.copy()
+    try:
+        fsspec.generic._generic_fs["tsmem"] = tsfs
+        fsspec.generic._generic_fs["file"] = LocalFileSystem()
+        gfs = GenericFileSystem(default_method="generic")
+
+        # Sync from a prefix whose _strip_protocol keeps a trailing slash to local.
+        rsync("tsmem:///src/", f"file://{dest}/", fs=gfs)
+        assert (dest / "keep.txt").read_bytes() == b"keep"
+        assert (dest / "sub" / "new.txt").read_bytes() == b"new"
+        assert not (dest / "other.txt").exists()
+
+        # Sync between trailing-slash prefixes with delete_missing=True.
+        rsync("tsmem:///src/", "tsmem:///dst/", delete_missing=True, fs=gfs)
+        assert tsfs.cat("/dst/keep.txt") == b"keep"
+        assert tsfs.cat("/dst/sub/new.txt") == b"new"
+        assert not tsfs.exists("/dst/stale.txt")
+        assert tsfs.exists("/src_sibling/other.txt")
+    finally:
+        fsspec.generic._generic_fs.clear()
+        fsspec.generic._generic_fs.update(prev_generic)
+
+
+def test_rsync_preserves_root_marker_object():
+    class MarkerObjectFS(MemoryFileSystem):
+        protocol = "markmem"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.markers = set()
+
+        @classmethod
+        def _strip_protocol(cls, path):
+            if isinstance(path, list):
+                return [cls._strip_protocol(p) for p in path]
+            if isinstance(path, str):
+                path = path.removeprefix("markmem://")
+            had_trailing = isinstance(path, str) and path.endswith("/")
+            stripped = super()._strip_protocol(path)
+            if had_trailing and stripped != "/" and not stripped.endswith("/"):
+                return stripped + "/"
+            return stripped
+
+        def _norm(self, path):
+            return self._strip_protocol(path).rstrip("/") or "/"
+
+        def info(self, path, **kwargs):
+            return super().info(self._norm(path), **kwargs)
+
+        def find(self, path, maxdepth=None, withdirs=False, detail=False, **kwargs):
+            norm = self._norm(path)
+            out = super().find(
+                norm, maxdepth=maxdepth, withdirs=withdirs, detail=True, **kwargs
+            )
+            for mk in sorted(self.markers):
+                if mk == norm + "/" or mk.startswith(norm + "/"):
+                    out[mk] = {"name": mk, "size": 0, "type": "file"}
+            return out if detail else list(out)
+
+        def copy(self, path1, path2, **kwargs):
+            p1s = [path1] if isinstance(path1, str) else list(path1)
+            p2s = [path2] if isinstance(path2, str) else list(path2)
+            for src, dst in zip(p1s, p2s):
+                s = self._strip_protocol(src)
+                d = self._strip_protocol(dst)
+                if s.endswith("/"):
+                    self.markers.add(d)
+                else:
+                    super().copy(s, d, **kwargs)
+
+        def rm(self, path, recursive=False, maxdepth=None):
+            paths = [path] if isinstance(path, str) else list(path)
+            for p in paths:
+                sp = self._strip_protocol(p)
+                if sp in self.markers:
+                    self.markers.remove(sp)
+                else:
+                    super().rm(sp, recursive=recursive, maxdepth=maxdepth)
+
+    mfs = MarkerObjectFS(global_store=False, skip_instance_cache=True)
+    mfs.pipe({"/src/keep.txt": b"keep", "/src/sub/new.txt": b"new"})
+    mfs.markers.update({"/src/", "/src/sub/"})
+
+    prev_generic = fsspec.generic._generic_fs.copy()
+    try:
+        fsspec.generic._generic_fs["markmem"] = mfs
+        gfs = GenericFileSystem(default_method="generic")
+
+        # Forward copy preserves the root marker with its trailing slash.
+        rsync("markmem:///src", "markmem:///dst", fs=gfs)
+        assert "/dst/" in mfs.markers
+        assert "/dst/sub/" in mfs.markers
+        assert "/dst" not in mfs.store
+
+        # delete_missing=True keeps the destination root marker when present in source.
+        mfs.pipe_file("/dst/stale.txt", b"old")
+        rsync("markmem:///src", "markmem:///dst", delete_missing=True, fs=gfs)
+        assert "/dst/" in mfs.markers
+        assert not mfs.exists("/dst/stale.txt")
+    finally:
+        fsspec.generic._generic_fs.clear()
+        fsspec.generic._generic_fs.update(prev_generic)
+
+
+def test_rsync_backslash_in_source_name(tmp_path, m):
+    key = "/src/a\\..\\..\\outside.txt"
+    m.pipe({key: b"data", "/src/ok.txt": b"ok"})
+
+    # Remote-to-remote sync treats backslashes as literal object-key characters.
+    m.makedirs("/dst", exist_ok=True)
+    rsync("memory:///src", "memory:///dst")
+    assert m.cat("/dst/a\\..\\..\\outside.txt") == b"data"
+
+    # Sync to local rejects backslashes escaping destination on Windows, and
+    # preserves them as literal filenames on POSIX.
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    if sys.platform == "win32":
+        with pytest.raises(ValueError, match="outside the destination"):
+            rsync("memory:///src", f"file://{dest}")
+        assert not (tmp_path / "outside.txt").exists()
+    else:
+        rsync("memory:///src", f"file://{dest}")
+        assert (dest / "a\\..\\..\\outside.txt").read_bytes() == b"data"
 
 
 @pytest.mark.parametrize("relative", ["ordinary.txt", "nested/memory:///src/data"])
