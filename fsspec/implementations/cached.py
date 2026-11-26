@@ -522,7 +522,6 @@ class CachingFileSystem(ChainedFileSystem):
             "__getattribute__",
             "__reduce__",
             "_make_local_details",
-            "_local_details",
             "_prepare_local_details",
             "_ukey_async",
             "_check_file_async",
@@ -720,30 +719,12 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         self._cache_size = None
 
     def _make_local_details(self, path, uid=None):
-        fn, detail = self._local_details(path, uid)
+        fn, detail = WholeFileCacheFileSystem._prepare_local_details(self, path, uid)
         self._metadata.update_file(path, detail)
         return fn
 
-    def _prepare_local_details(self, path):
-        if (
-            type(self)._make_local_details
-            is WholeFileCacheFileSystem._make_local_details
-        ):
-            return self._local_details(path)
-
-        # Subclasses can use the old hook to prepare their cache destination.
-        cache = self._metadata.cached_files[-1]
-        previous = cache.get(path)
-        try:
-            fn = self._make_local_details(path)
-            return fn, cache.get(path)
-        finally:
-            if previous is None:
-                cache.pop(path, None)
-            else:
-                cache[path] = previous
-
-    def _local_details(self, path, uid=None):
+    def _prepare_local_details(self, path, uid=None):
+        """Build metadata for a download without updating the cache."""
         hash = self._mapper(path)
         fn = os.path.join(self.storage[-1], hash)
         detail = {
@@ -810,7 +791,9 @@ class WholeFileCacheFileSystem(CachingFileSystem):
                         self._get_cached_file_before_open(p)
                         fn = os.path.join(self.storage[-1], self._mapper(p))
                     else:
-                        fn, details_to_save[p] = self._prepare_local_details(p)
+                        fn, detail = self._prepare_local_details(p)
+                        if detail is not None:
+                            details_to_save[p] = detail
                         getpaths.append(p)
                         storepaths.append(fn)
                 else:
@@ -826,8 +809,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         if getpaths:
             _atomic_get(self.fs, getpaths, storepaths, callback=self.callback)
             for p, detail in details_to_save.items():
-                if detail is not None:
-                    self._metadata.update_file(p, detail)
+                self._metadata.update_file(p, detail)
             self.save_cache()
 
         callback.set_size(len(paths))
@@ -866,8 +848,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
         else:
             with _tempfile(fn) as tmp:
                 self.fs.get_file(path, tmp, callback=self.callback)
-        if detail is not None:
-            self._metadata.update_file(path, detail)
+        self._metadata.update_file(path, detail)
         self.save_cache()
         return self._metadata.cached_files[-1][path].copy(), fn
 
@@ -1032,6 +1013,11 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
 
     def save_cache(self):
         pass
+
+    def _prepare_local_details(self, path, uid=None):
+        # Simplecache uses file existence. Preserve the pre-download hook used
+        # by subclasses to create directories for custom cache paths.
+        return self._make_local_details(path), None
 
     def load_cache(self):
         pass

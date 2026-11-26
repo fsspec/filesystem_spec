@@ -23,6 +23,7 @@ from fsspec.implementations.cache_metadata import CacheMetadata
 from fsspec.implementations.cached import (
     CachingFileSystem,
     LocalTempFile,
+    SimpleCacheFileSystem,
     WholeFileCacheFileSystem,
     _tempfile,
 )
@@ -1970,6 +1971,26 @@ def test_failed_filecache_batch_preparation_is_retried(tmp_path, monkeypatch):
             fs.cat(paths)
 
     assert fs.cat_file(paths[0]) == b"updated source contents"
+
+
+def test_simplecache_cat_preserves_destination_hook(tmp_path):
+    class NestedCache(SimpleCacheFileSystem):
+        def _make_local_details(self, path):
+            destination = super()._make_local_details(path)
+            pathlib.Path(destination).parent.mkdir(parents=True, exist_ok=True)
+            return destination
+
+    source = tmp_path / "source"
+    source.write_bytes(b"contents")
+    cache = tmp_path / "cache"
+    fs = NestedCache(
+        target_protocol="file",
+        cache_storage=str(cache),
+        cache_mapper=lambda path: f"nested/{pathlib.Path(path).name}",
+        skip_instance_cache=True,
+    )
+    assert fs.cat(str(source)) == b"contents"
+    assert (cache / "nested" / "source").read_bytes() == b"contents"
 
 
 def test_tempfile_busy_destination(tmp_path, monkeypatch):
