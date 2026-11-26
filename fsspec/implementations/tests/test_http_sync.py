@@ -51,6 +51,38 @@ def test_list(server, sync):
     assert out == [server.address + "/index/realfile"]
 
 
+@pytest.mark.parametrize("same_scheme", [True, False])
+@pytest.mark.parametrize("simple_links", [True, False])
+@pytest.mark.parametrize("detail", [True, False])
+def test_list_same_scheme(
+    server, sync, reset_files, reset_faults, same_scheme, simple_links, detail
+):
+    url = server.address + "/same-scheme"
+    same = url + "/same.txt"
+    other = url.replace("http://", "https://", 1) + "/other.txt"
+    links = [same, other, "/same-scheme/absolute.txt", "relative.txt"]
+    links.append("http://example.invalid/same-scheme/unrelated.txt")
+    HTTPTestHandler.dynamic_files["/same-scheme"] = "".join(
+        f'<a href="{link}">file</a>' for link in links
+    ).encode()
+    h = fsspec.filesystem(
+        "http",
+        same_scheme=same_scheme,
+        simple_links=simple_links,
+        skip_instance_cache=True,
+    )
+    try:
+        result = h.ls(url, detail=detail)
+        expected = [same, url + "/absolute.txt", url + "/relative.txt"]
+        if not same_scheme:
+            expected.append(other)
+        names = [entry["name"] for entry in result] if detail else result
+        assert sorted(names) == sorted(expected)
+        assert HTTPTestHandler.get_counts["/same-scheme"] == 1
+    finally:
+        h.session.close()
+
+
 def test_list_pathological_listing(server, sync, reset_files):
     # a long whitespace run inside an anchor used to make the link regex
     # backtrack cubically, so listing this page took about a minute
