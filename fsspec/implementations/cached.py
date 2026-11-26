@@ -653,6 +653,14 @@ class WholeFileCacheFileSystem(CachingFileSystem):
     protocol = "filecache"
     local_file = True
 
+    def _check_file(self, path):
+        cached = super()._check_file(path)
+        if cached and cached[0]["blocks"] is not True:
+            raise ValueError(
+                f"Attempt to open partially cached file {path} as a wholly cached file"
+            )
+        return cached
+
     def open_many(self, open_files, **kwargs):
         paths = [of.path for of in open_files]
         if "r" in open_files.mode:
@@ -854,14 +862,7 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # Use this open's selected file, even if it expired during download.
             if cached:
                 detail, fn = cached
-                _, blocks = detail["fn"], detail["blocks"]
-                if blocks is True:
-                    logger.debug("Opening local copy of %s", path)
-                else:
-                    raise ValueError(
-                        f"Attempt to open partially cached file {path}"
-                        f" as a wholly cached file"
-                    )
+                logger.debug("Opening local copy of %s", path)
 
         # Just reading does not need special file handling
         if "r" in mode and "+" not in mode:

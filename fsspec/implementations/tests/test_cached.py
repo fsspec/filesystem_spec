@@ -12,6 +12,7 @@ import pytest
 
 import fsspec
 from fsspec.compression import compr
+from fsspec.core import OpenFile, OpenFiles
 from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from fsspec.implementations.cache_mapper import (
@@ -28,6 +29,7 @@ from fsspec.implementations.cached import (
 from fsspec.implementations.local import make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
 from fsspec.implementations.zip import ZipFileSystem
+from fsspec.spec import AbstractBufferedFile
 from fsspec.tests.conftest import win
 
 from .test_ftp import FTPFileSystem
@@ -1833,6 +1835,30 @@ def test_partial_download_invisible_async(tmp_path, protocol):
 
     asyncio.run(run())
     assert not [f for f in os.listdir(tmp_path) if f.endswith(".part")]
+
+
+@pytest.mark.parametrize("method", ["cat", "open_many"])
+def test_filecache_bulk_reads_reject_partial_blockcache(tmp_path, method):
+    class BufferedMemoryFileSystem(MemoryFileSystem):
+        def _open(self, path, mode="rb", **kwargs):
+            if mode == "rb":
+                return AbstractBufferedFile(self, path, mode=mode, **kwargs)
+            return super()._open(path, mode=mode, **kwargs)
+
+    backend = BufferedMemoryFileSystem(skip_instance_cache=True)
+    path = "/mixed-partial-cache"
+    backend.pipe_file(path, b"0123456789abcdef")
+    blocks = CachingFileSystem(fs=backend, cache_storage=str(tmp_path))
+    with blocks.open(path, block_size=4) as handle:
+        assert handle.read(1) == b"0"
+
+    whole = WholeFileCacheFileSystem(fs=backend, cache_storage=str(tmp_path))
+    with pytest.raises(ValueError, match="Attempt to open partially cached file"):
+        if method == "cat":
+            whole.cat(path)
+        else:
+            with OpenFiles([OpenFile(whole, path)], fs=whole):
+                pass
 
 
 def test_failed_download_cleans_up_tempfiles(tmp_path, monkeypatch):
