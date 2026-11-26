@@ -5,6 +5,7 @@ import itertools
 import logging
 import math
 import os
+from bisect import bisect_right
 from functools import lru_cache
 from itertools import chain
 from typing import TYPE_CHECKING, Literal
@@ -998,21 +999,29 @@ class ReferenceFileSystem(AsyncFileSystem):
             )
             bytes_out = fs.cat_ranges(new_paths, new_starts, new_ends)
 
-            # unbundle from merged bytes - simple approach
+            # Merged ranges are sorted by path and start, with nondecreasing
+            # ends within each path. Index them once rather than scanning all
+            # fetched ranges for every reference.
+            ranges_by_path = {}
+            for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
+                range_starts, ranges = ranges_by_path.setdefault(np, ([], []))
+                range_starts.append(ns)
+                ranges.append((ns, ne, b))
+
             for u, s, e, p in zip(urls, starts, ends, valid_paths):
                 if p in out:
                     continue  # was bytes, already handled
-                for np, ns, ne, b in zip(new_paths, new_starts, new_ends, bytes_out):
-                    if np == u and (ns is None or ne is None):
-                        if isinstance(b, Exception):
-                            out[p] = b
-                        else:
-                            out[p] = b[s:e]
-                    elif np == u and s >= ns and e <= ne:
-                        if isinstance(b, Exception):
-                            out[p] = b
-                        else:
-                            out[p] = b[s - ns : (e - ne) or None]
+                range_starts, ranges = ranges_by_path[u]
+                index = bisect_right(range_starts, s or 0) - 1
+                if index < 0:
+                    continue
+                ns, ne, b = ranges[index]
+                if ne is None:
+                    out[p] = b if isinstance(b, Exception) else b[s:e]
+                elif s >= ns and e <= ne:
+                    out[p] = (
+                        b if isinstance(b, Exception) else b[s - ns : (e - ne) or None]
+                    )
 
         for k, v in out.copy().items():
             # these were valid references, but fetch failed, so transform exc
