@@ -1042,7 +1042,13 @@ class AbstractFileSystem(metaclass=_Cached):
     def get_file(
         self, rpath, lpath=None, callback=DEFAULT_CALLBACK, outfile=None, **kwargs
     ):
-        """Copy single remote file to local"""
+        """Copy a single remote file to local.
+
+        The default implementation passes extra keyword arguments to
+        :meth:`open`. Backend implementations may use a different transfer
+        method and need not apply options such as compression. For a
+        decompressed stream, open the source with ``compression`` explicitly.
+        """
         from .implementations.local import LocalFileSystem
 
         if outfile is None and isfilelike(lpath):

@@ -147,6 +147,22 @@ such as ``.gz`` for gzip. Compression is not inferred by default:
 ``compression=None`` leaves the bytes unchanged, even if the filename ends in
 ``.gz``. The same ``compression`` argument is available on :func:`fsspec.open_files`.
 
+Copying a file with :meth:`~fsspec.spec.AbstractFileSystem.get_file` is not
+guaranteed to decompress it. The default implementation opens the source, but
+some backends override the copy operation and may transfer the original bytes
+rather than apply ``compression``. To decompress while copying regardless of
+the backend's transfer implementation, open the source explicitly:
+
+.. code-block:: python
+
+    from shutil import copyfileobj
+
+    import fsspec
+
+    with fsspec.open("example.txt.gz", "rb", compression="infer") as source:
+        with open("example.txt", "wb") as destination:
+            copyfileobj(source, destination)
+
 Available codecs depend on your Python installation and optional packages.
 Call :func:`fsspec.available_compressions` to see the codecs registered in the
 current process. For example, ``"gzip"`` is a codec name, while ``None`` means no
