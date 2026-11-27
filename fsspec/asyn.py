@@ -184,11 +184,11 @@ def sync_teardown(
     """
     coro = func_or_coro(*args, **kwargs) if callable(func_or_coro) else func_or_coro
     if not asyncio.iscoroutine(coro):
-        return
+        return None
 
     if sys.is_finalizing():
         coro.close()
-        return
+        return None
 
     if loop is None or not loop.is_running() or loop.is_closed():
         coro.close()
@@ -196,7 +196,7 @@ def sync_teardown(
 
     if _on_loop_thread(loop):
         _defer_task(loop, coro, description=description, log_level=logging.ERROR)
-        return
+        return None
 
     try:
         future = asyncio.run_coroutine_threadsafe(coro, loop)
@@ -205,7 +205,7 @@ def sync_teardown(
         raise RuntimeError(f"Skipping {description}: event loop is closed.") from None
 
     if timeout is not None and timeout <= 0:
-        return
+        return None
 
     try:
         return future.result(timeout)
@@ -776,7 +776,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 # Non-recursive glob does not copy directories
                 lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
                 if not lpaths:
-                    return
+                    return None
 
             source_is_file = len(lpaths) == 1
             dest_is_dir = isinstance(rpath, str) and (
@@ -858,7 +858,7 @@ class AsyncFileSystem(AbstractFileSystem):
                     p for p in rpaths if not (trailing_sep(p) or await self._isdir(p))
                 ]
                 if not rpaths:
-                    return
+                    return None
 
             lpath = make_path_posix(lpath)
             source_is_file = len(rpaths) == 1

@@ -135,12 +135,12 @@ class Callback:
         kwargs: passed on to (all) hook(s)
         """
         if not self.hooks:
-            return
+            return None
         kw = self.kw.copy()
         kw.update(kwargs)
         if hook_name:
             if hook_name not in self.hooks:
-                return
+                return None
             return self.hooks[hook_name](self.size, self.value, **kw)
         for hook in self.hooks.values() or []:
             hook(self.size, self.value, **kw)
