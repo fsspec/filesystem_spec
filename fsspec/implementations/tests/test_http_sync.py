@@ -118,6 +118,7 @@ def test_list_request_options(server, sync, monkeypatch, retry_without_slash):
             b"" if handler.path.endswith("/") else b'<a href="/options/file">file</a>'
         )
         handler._respond(data=body)
+        return None
 
     monkeypatch.setattr(HTTPTestHandler, "do_GET", respond)
     h = fsspec.filesystem(

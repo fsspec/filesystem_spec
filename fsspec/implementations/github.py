@@ -166,8 +166,7 @@ class GithubFileSystem(AbstractFileSystem):
                 if out["type"] == "file":
                     if detail:
                         return [out]
-                    else:
-                        return [out["name"]]
+                    return [out["name"]]
                 _sha = out["sha"]
         if path not in self.dircache or sha not in [self.root, None]:
             r = requests.get(
@@ -196,8 +195,7 @@ class GithubFileSystem(AbstractFileSystem):
             out = self.dircache[path]
         if detail:
             return out
-        else:
-            return sorted([f["name"] for f in out])
+        return sorted([f["name"] for f in out])
 
     def invalidate_cache(self, path=None):
         self.dircache.clear()

@@ -349,9 +349,8 @@ class SFTPFileSystem(AbstractFileSystem):
         stats = [self._decode_stat(stat, path) for stat in self.ftp.listdir_iter(path)]
         if detail:
             return stats
-        else:
-            paths = [stat["name"] for stat in stats]
-            return sorted(paths)
+        paths = [stat["name"] for stat in stats]
+        return sorted(paths)
 
     def put_file(self, lpath, rpath, callback=None, **kwargs):
         rpath = self._strip_protocol(rpath)

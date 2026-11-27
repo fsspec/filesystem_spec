@@ -190,12 +190,11 @@ class WebHDFS(AbstractFileSystem):
             else:
                 if exp in ["IllegalArgumentException", "UnsupportedOperationException"]:
                     raise ValueError(msg)
-                elif exp in ["SecurityException", "AccessControlException"]:
+                if exp in ["SecurityException", "AccessControlException"]:
                     raise PermissionError(msg)
-                elif exp in ["FileNotFoundException"]:
+                if exp in ["FileNotFoundException"]:
                     raise FileNotFoundError(msg)
-                else:
-                    raise RuntimeError(msg)
+                raise RuntimeError(msg)
         out.raise_for_status()
         return out
 
@@ -296,8 +295,7 @@ class WebHDFS(AbstractFileSystem):
             info["name"] = path.rstrip("/") + "/" + suffix if suffix else path
         if detail:
             return sorted(infos, key=lambda i: i["name"])
-        else:
-            return sorted(info["name"] for info in infos)
+        return sorted(info["name"] for info in infos)
 
     def content_summary(self, path):
         """Total numbers of files, directories and bytes under path"""
@@ -312,9 +310,8 @@ class WebHDFS(AbstractFileSystem):
             out2 = self.session.get(location)
             out2.raise_for_status()
             return out2.json()["FileChecksum"]
-        else:
-            out.raise_for_status()
-            return out.json()["FileChecksum"]
+        out.raise_for_status()
+        return out.json()["FileChecksum"]
 
     def home_directory(self):
         """Get user's home directory"""
@@ -499,8 +496,7 @@ class WebHDFile(AbstractBufferedFile):
             location = out.headers["Location"]
             out2 = self.fs.session.get(self.fs._apply_proxy(location))
             return out2.content
-        else:
-            return out.content
+        return out.content
 
     def commit(self):
         self.fs.mv(self.path, self.target)

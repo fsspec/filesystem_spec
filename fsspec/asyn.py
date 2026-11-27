@@ -109,10 +109,9 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         if isinstance(return_result, asyncio.TimeoutError):
             # suppress asyncio.TimeoutError, raise FSTimeoutError
             raise FSTimeoutError from return_result
-        elif isinstance(return_result, BaseException):
+        if isinstance(return_result, BaseException):
             raise return_result
-        else:
-            return return_result
+        return return_result
     finally:
         # the traceback also includes this frame, so don't keep the exception
         # in a local either: that would be a reference cycle
@@ -184,11 +183,11 @@ def sync_teardown(
     """
     coro = func_or_coro(*args, **kwargs) if callable(func_or_coro) else func_or_coro
     if not asyncio.iscoroutine(coro):
-        return
+        return None
 
     if sys.is_finalizing():
         coro.close()
-        return
+        return None
 
     if loop is None or not loop.is_running() or loop.is_closed():
         coro.close()
@@ -196,7 +195,7 @@ def sync_teardown(
 
     if _on_loop_thread(loop):
         _defer_task(loop, coro, description=description, log_level=logging.ERROR)
-        return
+        return None
 
     try:
         future = asyncio.run_coroutine_threadsafe(coro, loop)
@@ -205,7 +204,7 @@ def sync_teardown(
         raise RuntimeError(f"Skipping {description}: event loop is closed.") from None
 
     if timeout is not None and timeout <= 0:
-        return
+        return None
 
     try:
         return future.result(timeout)
@@ -352,8 +351,7 @@ def _get_batch_size(nofiles=False):
 
     if soft_limit == resource.RLIM_INFINITY:
         return -1
-    else:
-        return soft_limit // 8
+    return soft_limit // 8
 
 
 def running_async() -> bool:
@@ -679,8 +677,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 for k, v in zip(paths, out)
                 if on_error != "omit" or not is_exception(v)
             }
-        else:
-            return out[0]
+        return out[0]
 
     async def _cat_ranges(
         self,
@@ -776,7 +773,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 # Non-recursive glob does not copy directories
                 lpaths = [p for p in lpaths if not (trailing_sep(p) or fs.isdir(p))]
                 if not lpaths:
-                    return
+                    return None
 
             source_is_file = len(lpaths) == 1
             dest_is_dir = isinstance(rpath, str) and (
@@ -858,7 +855,7 @@ class AsyncFileSystem(AbstractFileSystem):
                     p for p in rpaths if not (trailing_sep(p) or await self._isdir(p))
                 ]
                 if not rpaths:
-                    return
+                    return None
 
             lpath = make_path_posix(lpath)
             source_is_file = len(rpaths) == 1
@@ -1023,14 +1020,11 @@ class AsyncFileSystem(AbstractFileSystem):
             if await self._exists(path, **kwargs):
                 if not detail:
                     return [path]
-                else:
-                    return {path: await self._info(path, **kwargs)}
-            else:
-                if not detail:
-                    return []  # glob of non-existent returns empty
-                else:
-                    return {}
-        elif "/" in path[:min_idx]:
+                return {path: await self._info(path, **kwargs)}
+            if not detail:
+                return []  # glob of non-existent returns empty
+            return {}
+        if "/" in path[:min_idx]:
             first_wildcard_idx = min_idx
             min_idx = path[:min_idx].rindex("/")
             root = path[
@@ -1076,8 +1070,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
         if detail:
             return out
-        else:
-            return list(out)
+        return list(out)
 
     async def _du(self, path, total=True, maxdepth=None, **kwargs):
         sizes = {}
@@ -1087,8 +1080,7 @@ class AsyncFileSystem(AbstractFileSystem):
             sizes[info["name"]] = info["size"]
         if total:
             return sum(sizes.values())
-        else:
-            return sizes
+        return sizes
 
     async def _find(self, path, maxdepth=None, withdirs=False, **kwargs):
         path = self._strip_protocol(path)
@@ -1112,8 +1104,7 @@ class AsyncFileSystem(AbstractFileSystem):
         names = sorted(out)
         if not detail:
             return names
-        else:
-            return {name: out[name] for name in names}
+        return {name: out[name] for name in names}
 
     async def _expand_path(
         self,
@@ -1162,7 +1153,7 @@ class AsyncFileSystem(AbstractFileSystem):
                             )
                         )
                     continue
-                elif recursive:
+                if recursive:
                     rec = set(await self._find(p, maxdepth=maxdepth, withdirs=withdirs))
                     out |= rec
                 if p not in out and (

@@ -450,12 +450,11 @@ class DummyTestFS(AbstractFileSystem):
     @classmethod
     def get_test_paths(cls, start_with=""):
         """Helper to return directory and file paths with no details"""
-        all = [
+        return [
             file["name"]
             for file in cls._fs_contents
             if file["name"].startswith(start_with)
         ]
-        return all
 
     def _open(
         self,

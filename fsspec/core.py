@@ -731,7 +731,7 @@ def _expand_paths(path, name_function, num):
     if isinstance(path, str):
         if path.count("*") > 1:
             raise ValueError("Output path spec must contain exactly one '*'.")
-        elif "*" not in path:
+        if "*" not in path:
             # paths are "/"-separated on every filesystem, including local ones
             path = posixpath.join(path, "*.part")
 

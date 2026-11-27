@@ -118,8 +118,7 @@ class JupyterFileSystem(fsspec.AbstractFileSystem):
         if mode == "rb":
             data = self.cat_file(path)
             return io.BytesIO(data)
-        else:
-            return SimpleFileWriter(self, path, mode="wb")
+        return SimpleFileWriter(self, path, mode="wb")
 
 
 class SimpleFileWriter(fsspec.spec.AbstractBufferedFile):
@@ -133,3 +132,4 @@ class SimpleFileWriter(fsspec.spec.AbstractBufferedFile):
         self.buffer.seek(0)
         data = self.buffer.read()
         self.fs.pipe_file(self.path, data)
+        return None

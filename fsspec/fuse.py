@@ -76,8 +76,7 @@ class FUSEr(Operations):
 
         f = self.cache[fh]
         f.seek(offset)
-        out = f.read(size)
-        return out
+        return f.read(size)
 
     def write(self, path, data, offset, fh):
         logger.debug("write %s", (path, offset))
@@ -194,11 +193,11 @@ def run(
         th.daemon = True
         th.start()
         return th
-    else:  # pragma: no cover
-        try:
-            func()
-        except KeyboardInterrupt:
-            pass
+    # pragma: no cover
+    try:
+        func()
+    except KeyboardInterrupt:
+        pass
 
 
 def main(args):

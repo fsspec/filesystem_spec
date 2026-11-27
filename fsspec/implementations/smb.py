@@ -253,7 +253,7 @@ class SMBFileSystem(AbstractFileSystem):
             stype = "link"
         else:
             stype = "file"
-        res = {
+        return {
             "name": path + "/" if stype == "directory" else path,
             "size": stats.st_size,
             "type": stype,
@@ -262,7 +262,6 @@ class SMBFileSystem(AbstractFileSystem):
             "time": stats.st_atime,
             "mtime": stats.st_mtime,
         }
-        return res
 
     def created(self, path):
         """Return the created timestamp of a file as a datetime.datetime"""
@@ -347,15 +346,13 @@ class SMBFileSystem(AbstractFileSystem):
 
 def _as_unc_path(host, path):
     rpath = path.replace("/", "\\")
-    unc = f"\\\\{host}{rpath}"
-    return unc
+    return f"\\\\{host}{rpath}"
 
 
 def _as_temp_path(host, path, temppath):
     share = path.split("/")[1]
     temp_file = f"/{share}{temppath}/{uuid.uuid4()}"
-    unc = _as_unc_path(host, temp_file)
-    return unc
+    return _as_unc_path(host, temp_file)
 
 
 def _share_has_path(path):

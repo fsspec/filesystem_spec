@@ -612,8 +612,7 @@ class AbstractFileSystem(metaclass=_Cached):
         names = sorted(out)
         if not detail:
             return names
-        else:
-            return {name: out[name] for name in names}
+        return {name: out[name] for name in names}
 
     def du(self, path, total=True, maxdepth=None, withdirs=False, **kwargs):
         """Space used by files and optionally directories within a path
@@ -646,8 +645,7 @@ class AbstractFileSystem(metaclass=_Cached):
             sizes[info["name"]] = info["size"]
         if total:
             return sum(sizes.values())
-        else:
-            return sizes
+        return sizes
 
     def glob(self, path, maxdepth=None, **kwargs):
         """Find files by glob-matching.
@@ -713,14 +711,11 @@ class AbstractFileSystem(metaclass=_Cached):
             if self.exists(path, **kwargs):
                 if not detail:
                     return [path]
-                else:
-                    return {path: self.info(path, **kwargs)}
-            else:
-                if not detail:
-                    return []  # glob of non-existent returns empty
-                else:
-                    return {}
-        elif "/" in path[:min_idx]:
+                return {path: self.info(path, **kwargs)}
+            if not detail:
+                return []  # glob of non-existent returns empty
+            return {}
+        if "/" in path[:min_idx]:
             min_idx = path[:min_idx].rindex("/")
             root = path[: min_idx + 1]
             depth = path[min_idx + 1 :].count("/") + 1
@@ -755,8 +750,7 @@ class AbstractFileSystem(metaclass=_Cached):
 
         if detail:
             return out
-        else:
-            return list(out)
+        return list(out)
 
     def exists(self, path, **kwargs):
         """Is there a file at the given path"""
@@ -801,10 +795,9 @@ class AbstractFileSystem(metaclass=_Cached):
             if "size" not in out1[0]:
                 out1[0]["size"] = None
             return out1[0]
-        elif len(out1) > 1 or out:
+        if len(out1) > 1 or out:
             return {"name": path, "size": 0, "type": "directory"}
-        else:
-            raise FileNotFoundError(path)
+        raise FileNotFoundError(path)
 
     def checksum(self, path):
         """Unique value for current version of file
@@ -1047,8 +1040,7 @@ class AbstractFileSystem(metaclass=_Cached):
                     if on_error == "return":
                         out[path] = e
             return out
-        else:
-            return self.cat_file(paths[0], **kwargs)
+        return self.cat_file(paths[0], **kwargs)
 
     def get_file(
         self, rpath, lpath=None, callback=DEFAULT_CALLBACK, outfile=None, **kwargs
@@ -1060,7 +1052,7 @@ class AbstractFileSystem(metaclass=_Cached):
             outfile = lpath
         elif outfile is None and self.isdir(rpath):
             os.makedirs(lpath, exist_ok=True)
-            return None
+            return
 
         if outfile is None:
             fs = LocalFileSystem(auto_mkdir=True)
@@ -1162,7 +1154,7 @@ class AbstractFileSystem(metaclass=_Cached):
             raise FileExistsError
         if os.path.isdir(lpath):
             self.makedirs(rpath, exist_ok=True)
-            return None
+            return
 
         with open(lpath, "rb") as f1:
             size = f1.seek(0, 2)
@@ -1378,7 +1370,7 @@ class AbstractFileSystem(metaclass=_Cached):
                             )
                         )
                     continue
-                elif recursive:
+                if recursive:
                     rec = set(
                         self.find(
                             p,
@@ -1476,8 +1468,7 @@ class AbstractFileSystem(metaclass=_Cached):
         if "/" in path:
             parent = path.rsplit("/", 1)[0].lstrip(cls.root_marker)
             return cls.root_marker + parent
-        else:
-            return cls.root_marker
+        return cls.root_marker
 
     def _open(
         self,
@@ -1555,26 +1546,25 @@ class AbstractFileSystem(metaclass=_Cached):
                 ),
                 **text_kwargs,
             )
-        else:
-            ac = kwargs.pop("autocommit", not self._intrans)
-            f = self._open(
-                path,
-                mode=mode,
-                block_size=block_size,
-                autocommit=ac,
-                cache_options=cache_options,
-                **kwargs,
-            )
-            if not ac and "r" not in mode:
-                self.transaction.files.append(f)
-            if compression is not None:
-                from fsspec.compression import compr
-                from fsspec.core import get_compression
+        ac = kwargs.pop("autocommit", not self._intrans)
+        f = self._open(
+            path,
+            mode=mode,
+            block_size=block_size,
+            autocommit=ac,
+            cache_options=cache_options,
+            **kwargs,
+        )
+        if not ac and "r" not in mode:
+            self.transaction.files.append(f)
+        if compression is not None:
+            from fsspec.compression import compr
+            from fsspec.core import get_compression
 
-                compression = get_compression(path, compression)
-                compress = compr[compression]
-                f = compress(f, mode=mode[0])
-            return f
+            compression = get_compression(path, compression)
+            compress = compr[compression]
+            f = compress(f, mode=mode[0])
+        return f
 
     def touch(self, path, truncate=True, **kwargs):
         """Create empty file, or update timestamp
@@ -2187,8 +2177,7 @@ class AbstractBufferedFile(io.IOBase):
     def __hash__(self):
         if "w" in self.mode:
             return id(self)
-        else:
-            return int(tokenize(self.details), 16)
+        return int(tokenize(self.details), 16)
 
     def __eq__(self, other):
         """Files are equal if they have the same checksum, only in read mode"""
@@ -2211,8 +2200,7 @@ class AbstractBufferedFile(io.IOBase):
         """File information about this path"""
         if self.readable():
             return self.details
-        else:
-            raise ValueError("Info not available while writing")
+        raise ValueError("Info not available while writing")
 
     def tell(self):
         """Current file location"""
@@ -2432,8 +2420,7 @@ class AbstractBufferedFile(io.IOBase):
         out = [l + b"\n" for l in lines[:-1]]
         if data.endswith(b"\n"):
             return out
-        else:
-            return out + [lines[-1]]
+        return out + [lines[-1]]
         # return list(self)  ???
 
     def readinto1(self, b):

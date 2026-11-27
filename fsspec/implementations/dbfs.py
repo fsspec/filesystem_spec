@@ -74,6 +74,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                         return [entry]
                     return []
             raise FileNotFoundError(path)
+        return None
 
     def ls(self, path, detail=True, **kwargs):
         """
@@ -194,7 +195,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 # Not everything was deleted so far; retry without recursion.
                 if e.error_code == "PARTIAL_DELETE":
                     continue
-                elif e.error_code == "IO_ERROR":
+                if e.error_code == "IO_ERROR":
                     # Using the same exception as the os module would use here
                     raise OSError(e.message) from e
 
@@ -241,7 +242,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message) from e
-            elif e.error_code == "RESOURCE_ALREADY_EXISTS":
+            if e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message) from e
 
             raise
@@ -371,7 +372,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message) from e
-            elif e.error_code == "MAX_BLOCK_SIZE_EXCEEDED":
+            if e.error_code == "MAX_BLOCK_SIZE_EXCEEDED":
                 raise ValueError(e.message) from e
 
             raise
@@ -401,7 +402,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message) from e
-            elif e.error_code in ["INVALID_PARAMETER_VALUE", "MAX_READ_SIZE_EXCEEDED"]:
+            if e.error_code in ["INVALID_PARAMETER_VALUE", "MAX_READ_SIZE_EXCEEDED"]:
                 raise ValueError(e.message) from e
 
             raise
@@ -475,6 +476,7 @@ class DatabricksFile(AbstractBufferedFile):
         if final:
             self.fs._close_handle(handle=self.handle)
             return True
+        return None
 
     def _fetch_range(self, start, end):
         """Internal function to download a block of data"""

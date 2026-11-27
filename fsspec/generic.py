@@ -237,8 +237,7 @@ class GenericFileSystem(AsyncFileSystem):
             o["name"] = fs.unstrip_protocol(o["name"])
         if detail:
             return out
-        else:
-            return [o["name"] for o in out]
+        return [o["name"] for o in out]
 
     async def _cat_file(
         self,
@@ -248,8 +247,7 @@ class GenericFileSystem(AsyncFileSystem):
         fs = _resolve_fs(url, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             return await fs._cat_file(url, **kwargs)
-        else:
-            return fs.cat_file(url, **kwargs)
+        return fs.cat_file(url, **kwargs)
 
     async def _pipe_file(
         self,
@@ -260,8 +258,7 @@ class GenericFileSystem(AsyncFileSystem):
         fs = _resolve_fs(path, self.method, storage_options=self.st_opts)
         if fs.async_impl:
             return await fs._pipe_file(path, value, **kwargs)
-        else:
-            return fs.pipe_file(path, value, **kwargs)
+        return fs.pipe_file(path, value, **kwargs)
 
     async def _rm(self, url, **kwargs):
         urls = url
@@ -309,9 +306,9 @@ class GenericFileSystem(AsyncFileSystem):
             # pure remote
             if fs.async_impl:
                 return await fs._copy(url, url2, **kwargs)
-            else:
-                return fs.copy(url, url2, **kwargs)
+            return fs.copy(url, url2, **kwargs)
         await copy_file_op(fs, [url], fs2, [url2], tempdir, 1, on_error="raise")
+        return None
 
     async def _make_many_dirs(self, urls, exist_ok=True):
         fs = _resolve_fs(urls[0], self.method, storage_options=self.st_opts)
@@ -360,12 +357,12 @@ class GenericFileSystem(AsyncFileSystem):
         if fs is fs2:
             if fs.async_impl:
                 return await fs._copy(path1, path2, **kwargs)
-            else:
-                return fs.copy(path1, path2, **kwargs)
+            return fs.copy(path1, path2, **kwargs)
 
         await copy_file_op(
             fs, path1, fs2, path2, tempdir, batch_size, on_error=on_error
         )
+        return None
 
 
 async def copy_file_op(
@@ -389,10 +386,11 @@ async def copy_file_op(
         )
     if on_error == "return":
         return out
-    elif on_error == "raise":
+    if on_error == "raise":
         for o in out:
             if isinstance(o, Exception):
                 raise o
+    return None
 
 
 async def _copy_file_op(fs1, url1, fs2, url2, local, on_error="ignore"):
@@ -411,5 +409,4 @@ async def _copy_file_op(fs1, url1, fs2, url2, local, on_error="ignore"):
 async def maybe_await(cor):
     if inspect.iscoroutine(cor):
         return await cor
-    else:
-        return cor
+    return cor

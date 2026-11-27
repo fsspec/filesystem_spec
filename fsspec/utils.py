@@ -235,7 +235,7 @@ def seek_delimiter(file: IO[bytes], delimiter: bytes, blocksize: int) -> bool:
                 i = full.index(delimiter)
                 file.seek(file.tell() - (len(full) - i) + len(delimiter))
                 return True
-            elif len(current) < blocksize:
+            if len(current) < blocksize:
                 # end-of-file without delimiter
                 return False
         except (OSError, ValueError):
@@ -361,12 +361,11 @@ def stringify_path(filepath: str | os.PathLike[str] | pathlib.Path) -> str:
     """
     if isinstance(filepath, str):
         return filepath
-    elif hasattr(filepath, "__fspath__"):
+    if hasattr(filepath, "__fspath__"):
         return filepath.__fspath__()
-    elif hasattr(filepath, "path"):
+    if hasattr(filepath, "path"):
         return filepath.path
-    else:
-        return filepath  # type: ignore[return-value]
+    return filepath  # type: ignore[return-value]
 
 
 def make_instance(
@@ -734,7 +733,7 @@ def merge_offset_ranges(
             if end is not None and end <= prev_end:
                 # Already covered by the current block
                 continue
-            elif (
+            if (
                 end is not None
                 and max_block is not None
                 and (end - new_starts[-1]) > max_block
@@ -896,7 +895,7 @@ def glob_translate(pat):
         if part == "**":
             results.append(any_segments if idx < last_part_idx else any_last_segments)
             continue
-        elif "**" in part:
+        if "**" in part:
             raise ValueError(
                 "Invalid pattern: '**' can only be an entire path component"
             )
@@ -938,6 +937,5 @@ def _fast_slice(src_bytes: bytes, offset: int, read_size: int) -> bytes:
         # Releases the GIL
         ctypes.memmove(dest_ptr, src_ptr + offset, read_size)
         return dest_bytes
-    else:
-        # Standard fallback for PyPy/non-CPython
-        return src_bytes[offset : offset + read_size]
+    # Standard fallback for PyPy/non-CPython
+    return src_bytes[offset : offset + read_size]

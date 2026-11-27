@@ -35,9 +35,7 @@ def make_fs(mocker):
         else:
             cls = AbstractFileSystem
 
-        fs = mocker.MagicMock(spec=cls, **attrs)
-
-        return fs
+        return mocker.MagicMock(spec=cls, **attrs)
 
     return _make_fs
 

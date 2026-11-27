@@ -42,15 +42,14 @@ def set_conf_env(conf_dict, envdict=os.environ):
             if key.count("_") > 1:
                 kwarg_keys.append(key)
                 continue
+            if isinstance(value, dict):
+                _, proto = key.split("_", 1)
+                conf_dict.setdefault(proto.lower(), {}).update(value)
             else:
-                if isinstance(value, dict):
-                    _, proto = key.split("_", 1)
-                    conf_dict.setdefault(proto.lower(), {}).update(value)
-                else:
-                    warnings.warn(
-                        f"Ignoring environment variable {key} due to not being a dict:"
-                        f" {type(value)}"
-                    )
+                warnings.warn(
+                    f"Ignoring environment variable {key} due to not being a dict:"
+                    f" {type(value)}"
+                )
         elif key.startswith("FSSPEC"):
             warnings.warn(
                 f"Ignoring environment variable {key} due to having an unexpected name"
@@ -123,8 +122,7 @@ def apply_config(cls, kwargs, conf_dict=None):
             kw.update(conf_dict[proto])
     # explicit kwargs always win
     kw.update(**kwargs)
-    kwargs = kw
-    return kwargs
+    return kw
 
 
 set_conf_files(conf_dir, conf)

@@ -177,7 +177,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             if "use_206" in self.headers:
                 status = 206
         if self._serve_fault(status, content_range, file_data):
-            return
+            return None
         if "give_length" in self.headers:
             if "gzip_encoding" in self.headers:
                 file_data = gzip.compress(file_data)
@@ -196,6 +196,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             )
         else:
             self._respond(status, data=file_data)
+        return None
 
     def do_POST(self):
         length = self.headers.get("Content-Length")
@@ -225,7 +226,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         if "head_not_auth" in self.headers:
             r_headers["Content-Length"] = 123
             return self._respond(403, r_headers, b"not authorized for HEAD request")
-        elif "head_ok" not in self.headers:
+        if "head_ok" not in self.headers:
             return self._respond(405)
 
         file_path = self.path.rstrip("/")
@@ -235,7 +236,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         self.head_counts[self.path] = self.head_counts.get(self.path, 0) + 1
         if "fail_head" in self.headers and "fail_status" in self.headers:
             if self._serve_fault(200, None, file_data):
-                return
+                return None
 
         if ("give_length" in self.headers) or ("head_give_length" in self.headers):
             if "zero_length" in self.headers:
@@ -255,6 +256,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             r_headers["Accept-Ranges"] = "none"
 
         self._respond(200, r_headers)
+        return None
 
 
 @contextlib.contextmanager

@@ -28,8 +28,7 @@ def wrap_exceptions(func):
             message, *args = exception.args
             if isinstance(message, str) and "does not exist" in message:
                 raise FileNotFoundError(errno.ENOENT, message) from exception
-            else:
-                raise
+            raise
 
     return wrapper
 
@@ -94,8 +93,7 @@ class ArrowFSWrapper(AbstractFileSystem):
             entries = [self.info(path, **kwargs)]
         if detail:
             return entries
-        else:
-            return [entry["name"] for entry in entries]
+        return [entry["name"] for entry in entries]
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)

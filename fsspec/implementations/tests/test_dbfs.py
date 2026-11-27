@@ -72,17 +72,14 @@ def vcr_config():
             "before_record_response": before_record_response,
             "before_record_request": before_record_request,
         }
-    else:
-        return {
-            "record_mode": "none",
-        }
+    return {
+        "record_mode": "none",
+    }
 
 
 @pytest.fixture
 def dbfsFS():
-    fs = fsspec.filesystem("dbfs", instance=INSTANCE, token=TOKEN)
-
-    return fs
+    return fsspec.filesystem("dbfs", instance=INSTANCE, token=TOKEN)
 
 
 @pytest.fixture

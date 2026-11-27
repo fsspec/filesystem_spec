@@ -48,8 +48,7 @@ class BasenameCacheMapper(AbstractCacheMapper):
         prefix, *bits = path.rsplit("/", self.directory_levels + 1)
         if bits:
             return self._separator.join(bits)
-        else:
-            return prefix  # No separator found, simple filename
+        return prefix  # No separator found, simple filename
 
     def __eq__(self, other: object) -> bool:
         return super().__eq__(other) and self.directory_levels == other.directory_levels
@@ -71,5 +70,4 @@ def create_cache_mapper(same_names: bool) -> AbstractCacheMapper:
     """
     if same_names:
         return BasenameCacheMapper()
-    else:
-        return HashCacheMapper()
+    return HashCacheMapper()

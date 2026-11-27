@@ -10,11 +10,10 @@ from fsspec.utils import infer_storage_options
 def _get_client(client):
     if client is None:
         return _get_global_client()
-    elif isinstance(client, Client):
+    if isinstance(client, Client):
         return client
-    else:
-        # e.g., connection string
-        return Client(client)
+    # e.g., connection string
+    return Client(client)
 
 
 def _in_worker():
@@ -51,8 +50,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
         so = infer_storage_options(path)
         if "host" in so and "port" in so:
             return {"client": f"{so['host']}:{so['port']}"}
-        else:
-            return {}
+        return {}
 
     def _determine_worker(self):
         if _in_worker():
@@ -93,8 +91,7 @@ class DaskWorkerFileSystem(AbstractFileSystem):
     def ls(self, *args, **kwargs):
         if self.worker:
             return self.fs.ls(*args, **kwargs)
-        else:
-            return self.rfs.ls(*args, **kwargs).compute()
+        return self.rfs.ls(*args, **kwargs).compute()
 
     def _open(
         self,
@@ -114,16 +111,15 @@ class DaskWorkerFileSystem(AbstractFileSystem):
                 cache_options=cache_options,
                 **kwargs,
             )
-        else:
-            return DaskFile(
-                fs=self,
-                path=path,
-                mode=mode,
-                block_size=block_size,
-                autocommit=autocommit,
-                cache_options=cache_options,
-                **kwargs,
-            )
+        return DaskFile(
+            fs=self,
+            path=path,
+            mode=mode,
+            block_size=block_size,
+            autocommit=autocommit,
+            cache_options=cache_options,
+            **kwargs,
+        )
 
     def fetch_range(self, path, mode, start, end):
         if self.worker:

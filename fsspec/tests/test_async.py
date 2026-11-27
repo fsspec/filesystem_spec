@@ -436,7 +436,6 @@ def test_rm_file_with_rm_implementation():
                 path = [path]
             for p in path:
                 self.removed_paths.append(p)
-            return None
 
     fs = AsyncFSWithRm()
     fs.rm_file("test/file.txt")
@@ -451,7 +450,6 @@ def test_rm_file_with_rm_file_implementation():
 
         async def _rm_file(self, path, **kwargs):
             self.removed_paths.append(path)
-            return None
 
     fs = AsyncFSWithRmFile()
     fs.rm_file("test/file.txt")

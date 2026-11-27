@@ -191,8 +191,7 @@ class GistFileSystem(AbstractFileSystem):
                 raise FileNotFoundError(path)
         if detail:
             return results
-        else:
-            return sorted(f["name"] for f in results)
+        return sorted(f["name"] for f in results)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         """
@@ -231,7 +230,7 @@ class GistFileSystem(AbstractFileSystem):
             except FileNotFoundError as e:
                 if on_error == "raise":
                     raise e
-                elif on_error == "omit":
+                if on_error == "omit":
                     pass  # skip
                 else:
                     out[p] = e
