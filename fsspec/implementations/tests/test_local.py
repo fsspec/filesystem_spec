@@ -6,6 +6,7 @@ import os
 import os.path
 import pickle
 import posixpath
+import stat
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -551,6 +552,16 @@ def test_commit_discard(tmpdir):
         assert not fs.exists(tmpdir + "/bfile")
 
 
+def test_discard_closes_file(tmp_path):
+    stream = LocalFileOpener(tmp_path / "output", "wb", autocommit=False)
+    try:
+        stream.discard()
+        assert stream.closed
+    finally:
+        stream.close()
+        Path(stream.temp).unlink(missing_ok=True)
+
+
 def test_transaction_with_compression(tmpdir):
     path = str(tmpdir / "afile.gz")
     fs = LocalFileSystem()
@@ -606,6 +617,23 @@ def test_same_permissions_with_and_without_transaction(tmpdir):
         f.write(b"data")
 
     assert fs.info(tmpdir + "/afile")["mode"] == fs.info(tmpdir + "/bfile")["mode"]
+
+
+@pytest.mark.skipif(WIN, reason="posix file modes")
+def test_transaction_keeps_mode_of_existing_file(tmpdir):
+    # the commit replaces the file with the temporary one, which used to
+    # reset a restrictive mode to the umask default
+    path = str(tmpdir / "afile")
+    with open(path, "wb") as f:
+        f.write(b"old")
+    os.chmod(path, 0o600)
+
+    fs = LocalFileSystem()
+    with fs.transaction, fs.open(path, "wb") as f:
+        f.write(b"new")
+
+    assert fs.cat(path) == b"new"
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 
 
 def test_get_umask_uses_cache():
@@ -1120,6 +1148,23 @@ def test_strip_protocol_windows_remote_shares(uri, stripped, cwd):
     stripped = stripped.format(cwd=cwd)
 
     assert LocalFileSystem._strip_protocol(uri) == stripped
+
+
+@pytest.mark.parametrize("protocol", ["other", ("file", "other"), ["file", "other"]])
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("other:///path", "{current_drive}/path"),
+        ("other:/path", "{current_drive}/path"),
+        ("otherpath", "{cwd}/otherpath"),
+        ("/path", "{current_drive}/path"),
+    ],
+)
+def test_strip_protocol_custom_protocols(protocol, uri, expected, cwd, current_drive):
+    fs_cls = type("CustomFileSystem", (LocalFileSystem,), {"protocol": protocol})
+    expected = expected.format(cwd=cwd, current_drive=current_drive)
+
+    assert fs_cls._strip_protocol(uri) == expected
 
 
 def test_mkdir_twice_faile(tmpdir):

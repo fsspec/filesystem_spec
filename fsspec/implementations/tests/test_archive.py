@@ -233,9 +233,12 @@ class TestAnyArchive:
             fs = fsspec.filesystem(scenario.protocol, fo=archive)
             assert fs.find("") == []
             assert fs.find("", withdirs=True) == []
-            with pytest.raises(FileNotFoundError):
-                fs.info("")
             assert fs.ls("") == []
+            # the root is a directory whether or not the archive has members
+            for root in ["", "/"]:
+                assert fs.info(root) == {"name": "", "type": "directory", "size": 0}
+                assert fs.isdir(root)
+                assert fs.exists(root)
 
     def test_glob(self, scenario: ArchiveTestScenario):
         with scenario.provider(archive_data) as archive:

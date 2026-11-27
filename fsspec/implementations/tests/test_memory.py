@@ -1,8 +1,9 @@
 import os
 import pickle
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from threading import Event, Thread
 
 import pytest
 
@@ -25,12 +26,12 @@ from fsspec.implementations.memory import MemoryFileSystem
 def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
     m.pipe_file("file", b"abc")
     created = m.created("file")
-    modified = datetime(2100, 1, 1, tzinfo=timezone.utc)
+    modified = datetime(2100, 1, 1, tzinfo=UTC)
 
     class Clock:
         @staticmethod
         def now(tz):
-            assert tz is timezone.utc
+            assert tz is UTC
             return modified
 
     with m.open("file", mode) as f:
@@ -44,7 +45,7 @@ def test_modified_after_write(m, monkeypatch, mode, method, args, expected):
 
 def test_modified_after_partial_writelines(m):
     m.pipe_file("file", b"abc")
-    original = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    original = datetime(2000, 1, 1, tzinfo=UTC)
 
     with m.open("file", "ab") as f:
         f.modified = original
@@ -259,6 +260,51 @@ def test_info_created_matches_ls(m):
     assert info == m.find("/dir", detail=True)["/dir/afile"]
 
 
+@pytest.mark.parametrize(
+    "listing, removed, expected",
+    [
+        ("/data", "/data/b", {"/data/a": 1}),
+        ("/data/a", "/data/a", {"/data/a": 1}),
+    ],
+)
+def test_ls_survives_deletion_during_listing(m, listing, removed, expected):
+    m.pipe_file("/data/a", b"a")
+    m.pipe_file("/data/b", b"bbb")
+    ready = Event()
+    deleted = Event()
+
+    class PauseOnSize:
+        def __init__(self, real):
+            self.real = real
+            self.created = real.created
+
+        @property
+        def size(self):
+            ready.set()
+            assert deleted.wait(timeout=5)
+            return self.real.size
+
+    m.store["/data/a"] = PauseOnSize(m.store["/data/a"])
+    other = MemoryFileSystem(skip_instance_cache=True)
+
+    def delete_file():
+        if ready.wait(timeout=5):
+            other.rm_file(removed)
+            deleted.set()
+
+    thread = Thread(target=delete_file)
+    thread.start()
+    try:
+        entries = m.ls(listing, detail=True)
+    finally:
+        ready.set()
+        thread.join(timeout=5)
+
+    assert not thread.is_alive()
+    assert removed not in m.store
+    assert {entry["name"]: entry["size"] for entry in entries} == expected
+
+
 def test_directories(m):
     m.mkdir("outer/inner")
     assert m.info("outer/inner")["type"] == "directory"
@@ -432,6 +478,19 @@ def test_mv_same_paths(m):
     assert m.exists("src/file.txt")
 
 
+@pytest.mark.parametrize("same_source", ["/batch/a", "memory:///batch/a"])
+def test_mv_batch_keeps_unchanged_source(m, same_source):
+    m.pipe({"/batch/a": b"alpha", "/batch/b": b"beta"})
+
+    m.mv([same_source, "/batch/b"], ["/batch/a", "/batch/c"])
+
+    assert m.cat(["/batch/a", "/batch/c"]) == {
+        "/batch/a": b"alpha",
+        "/batch/c": b"beta",
+    }
+    assert not m.exists("/batch/b")
+
+
 def test_mv_recursive_propagates_cp_file_errors(m, monkeypatch):
     m.mkdir("src")
     m.touch("src/file.txt")
@@ -500,6 +559,34 @@ def test_makedirs_existing_file(m, path, exist_ok, method):
 
     assert m.cat_file(path) == b"payload"
     assert not m.isdir(path)
+
+
+@pytest.mark.parametrize(
+    "path", ["missing/child", "/missing/child", "memory://missing/child"]
+)
+def test_mkdir_without_parents_missing(m, path):
+    with pytest.raises(FileNotFoundError):
+        m.mkdir(path, create_parents=False)
+
+    assert m.pseudo_dirs == [""]
+    assert m.find("", withdirs=True) == []
+
+
+@pytest.mark.parametrize("parent", ["root", "explicit", "implicit"])
+def test_mkdir_without_parents_existing(m, parent):
+    if parent == "root":
+        path = "/child"
+    else:
+        path = "/parent/child"
+        if parent == "explicit":
+            m.mkdir("/parent")
+        else:
+            m.pipe_file("/parent/file", b"payload")
+
+    m.mkdir(path, create_parents=False)
+
+    assert path in m.pseudo_dirs
+    assert m.isdir(path)
 
 
 def test_no_rewind_append_mode(m):
@@ -868,6 +955,23 @@ def test_find_matches_generic(m):
                     assert got == expected, (root, maxdepth, withdirs, detail)
 
 
+@pytest.mark.parametrize("root", ["", "/data"])
+@pytest.mark.parametrize("maxdepth", [1, 2, 5, None])
+@pytest.mark.parametrize("detail", [False, True])
+def test_find_deep_ancestors(m, root, maxdepth, detail):
+    from fsspec.spec import AbstractFileSystem
+
+    deep = "/data/" + "/".join(f"level{i}" for i in range(40))
+    m.pipe_file(deep + "/file", b"content")
+    m.mkdir(deep + "/empty")
+    m.pipe_file("/database/unrelated", b"other")
+    assert m.find(root, maxdepth=maxdepth, withdirs=True, detail=detail) == (
+        AbstractFileSystem.find(
+            m, root, maxdepth=maxdepth, withdirs=True, detail=detail
+        )
+    )
+
+
 def test_find_snapshots_store_before_iterating(m):
     # `store` is a class attribute shared by every MemoryFileSystem instance, so
     # another instance can add or remove a path while find() is walking it.
@@ -974,6 +1078,54 @@ def test_mapper_delitem_missing_key_raises_keyerror(m):
     del mapper["present"]
     with pytest.raises(KeyError):
         del mapper["missing"]
+
+
+def test_cat_recursive_skips_directories(m):
+    m.pipe({"/tree/a": b"a", "/tree/sub/b": b"b"})
+    assert m.cat("/tree", recursive=True) == {"/tree/a": b"a", "/tree/sub/b": b"b"}
+    assert m.cat(["/tree/sub"], recursive=True) == {"/tree/sub/b": b"b"}
+    assert m.cat("/tree/a", recursive=True) == b"a"
+
+
+def test_cat_recursive_empty_directory(m):
+    m.mkdir("/empty")
+    assert m.cat("/empty", recursive=True) == {}
+
+
+def test_expand_path_withdirs(m):
+    m.pipe({"/tree/a": b"a", "/tree/sub/b": b"b"})
+    m.mkdir("/tree/empty")
+
+    assert m.expand_path("/tree", recursive=True, withdirs=False) == [
+        "/tree/a",
+        "/tree/sub/b",
+    ]
+    # without it, the directories are part of the expansion
+    assert "/tree/sub" in m.expand_path("/tree", recursive=True)
+    # globs drop directories too
+    assert m.expand_path("/tree/*", recursive=True, withdirs=False) == [
+        "/tree/a",
+        "/tree/sub/b",
+    ]
+    # a literal file is still returned, a directory holding no files is not
+    assert m.expand_path("/tree/a", recursive=True, withdirs=False) == ["/tree/a"]
+    with pytest.raises(FileNotFoundError):
+        m.expand_path("/tree/empty", recursive=True, withdirs=False)
+
+
+def test_cat_recursive_does_not_stat_every_path(m):
+    m.pipe({f"/many/f{i}": b"x" for i in range(20)})
+    calls = []
+    isdir = MemoryFileSystem.isdir
+    try:
+        MemoryFileSystem.isdir = lambda self, path: (
+            calls.append(path),
+            isdir(self, path),
+        )[1]
+        assert len(m.cat("/many", recursive=True)) == 20
+    finally:
+        MemoryFileSystem.isdir = isdir
+    assert calls == []
 
 
 @pytest.mark.parametrize("mode", ["rb", "wb", "ab"])

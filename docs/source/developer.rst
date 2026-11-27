@@ -23,17 +23,22 @@ Note the backend-specific parameters that can be passed in this call.
 
 In cases where the caller wants to control the context directly, they can use the
 ``open`` method of the ``OpenFile``, or get the filesystem object directly,
-skipping the ``OpenFile`` route. In the latter case, text encoding and compression
-are **not** handled for you. The file-like object can also be used as a context
-manager, or the ``close()`` method must be called explicitly to release resources.
+skipping the ``OpenFile`` route. Both routes support text encoding and compression.
+When using ``OpenFile.open()`` without a context,
+keep the ``OpenFile`` instance and call its ``close()`` method to close all
+underlying files, including any compression and text wrappers. Closing only the
+returned wrapper may leave the underlying file open. Use ``try``/``finally`` so
+cleanup also runs if processing raises an exception.
 
 .. code-block:: python
 
     # OpenFile route
     of = fsspec.open("protocol://path", 'rb', param=value)
     f = of.open()
-    process_file(f)
-    f.close()
+    try:
+        process_file(f)
+    finally:
+        of.close()
 
     # filesystem class route, context
     fs = fsspec.filesystem("protocol", param=value)
@@ -43,8 +48,10 @@ manager, or the ``close()`` method must be called explicitly to release resource
     # filesystem class route, explicit close
     fs = fsspec.filesystem("protocol", param=value)
     f = fs.open("path", "rb")
-    process_file(f)
-    f.close()
+    try:
+        process_file(f)
+    finally:
+        f.close()
 
 Implementing a backend
 ~~~~~~~~~~~~~~~~~~~~~~
