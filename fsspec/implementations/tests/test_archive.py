@@ -6,7 +6,7 @@ import pickle
 import tarfile
 import tempfile
 import zipfile
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from io import BytesIO
 
 import pytest
@@ -15,6 +15,34 @@ import fsspec
 
 # The blueprint to create synthesized archive files from.
 archive_data = {"a": b"", "b": b"hello", "deeply/nested/path": b"stuff"}
+
+
+@pytest.mark.parametrize("protocol", ["zip", "tar"])
+@pytest.mark.parametrize("literal_protocol_prefix", [False, True])
+def test_implicit_archive_directories(protocol, literal_protocol_prefix):
+    names = ["./corpus//train/./a.jsonl", "corpus/train/b.jsonl", "corpus/../c.jsonl"]
+    if literal_protocol_prefix:
+        names.append(f"{protocol}::other/partition/data.jsonl")
+    buffer = BytesIO()
+    if protocol == "zip":
+        with zipfile.ZipFile(buffer, "w") as archive:
+            for name in names:
+                archive.writestr(name, b"payload")
+    else:
+        with tarfile.open(fileobj=buffer, mode="w") as archive:
+            for name in names:
+                member = tarfile.TarInfo(name)
+                member.size = len(b"payload")
+                archive.addfile(member, BytesIO(b"payload"))
+    buffer.seek(0)
+    with closing(fsspec.filesystem(protocol, fo=buffer)) as fs:
+        assert fs.ls("corpus/train", detail=False) == [
+            "corpus/train/a.jsonl",
+            "corpus/train/b.jsonl",
+        ]
+        assert fs.cat_file("corpus/../c.jsonl") == b"payload"
+        if literal_protocol_prefix:
+            assert fs.info("other/partition")["type"] == "directory"
 
 
 @contextmanager
@@ -184,6 +212,8 @@ def pytest_generate_tests(metafunc):
 
     https://docs.pytest.org/en/latest/example/parametrize.html#a-quick-port-of-testscenarios
     """
+    if "scenario" not in metafunc.fixturenames:
+        return
     idlist = []
     argnames = ["scenario"]
     argvalues = []

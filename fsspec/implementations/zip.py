@@ -81,11 +81,6 @@ class ZipFileSystem(AbstractArchiveFileSystem):
         # zip file paths are always relative to the archive root
         return cls._normalize_path(super()._strip_protocol(path))
 
-    @staticmethod
-    def _normalize_path(path):
-        # Do not resolve '..': it can be part of a literal archive member name.
-        return "/".join(part for part in path.split("/") if part not in ("", "."))
-
     def __del__(self):
         if hasattr(self, "zip"):
             self.close()
@@ -111,9 +106,13 @@ class ZipFileSystem(AbstractArchiveFileSystem):
                 if name:
                     members[name] = z
             self._members = members
+            if type(self) is ZipFileSystem:
+                dirnames = self._all_dirnames_from_normalized(members)
+            else:
+                dirnames = self._all_dirnames(members)
             self.dir_cache = {
                 dirname: {"name": dirname, "size": 0, "type": "directory"}
-                for dirname in self._all_dirnames(members)
+                for dirname in dirnames
             }
             for name, z in members.items():
                 f = {s: getattr(z, s, None) for s in zipfile.ZipInfo.__slots__}

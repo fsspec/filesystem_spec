@@ -27,11 +27,6 @@ class TarFileSystem(AbstractArchiveFileSystem):
         # file paths are always relative to the archive root
         return cls._normalize_path(super()._strip_protocol(path))
 
-    @staticmethod
-    def _normalize_path(path):
-        # Do not resolve '..': it can be part of a literal archive member name.
-        return "/".join(part for part in path.split("/") if part not in ("", "."))
-
     def ls(self, path, detail=True, **kwargs):
         entries = super().ls(self._strip_protocol(path), detail=detail, **kwargs)
         # An explicit './' member represents the root, not one of its children.
@@ -182,9 +177,13 @@ class TarFileSystem(AbstractArchiveFileSystem):
             return
 
         # This enables ls to get directories as children as well as files
+        if type(self) is TarFileSystem:
+            dirnames = self._all_dirnames_from_normalized(self.index)
+        else:
+            dirnames = self._all_dirnames(self.index)
         self.dir_cache = {
             dirname: {"name": dirname, "size": 0, "type": "directory"}
-            for dirname in self._all_dirnames(self.index)
+            for dirname in dirnames
         }
         self.dir_cache.update(
             {info["name"]: info for info, _, _ in self.index.values()}
