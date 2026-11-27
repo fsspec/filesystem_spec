@@ -546,18 +546,42 @@ def open_local(
     mode: str = "rb",
     **storage_options: dict,
 ) -> str | list[str]:
-    """Open file(s) which can be resolved to local
+    """Resolve one or more URLs to local filenames.
 
-    For files which either are local, or get downloaded upon open
-    (e.g., by file caching)
+    The files must already be local or be downloaded when opened, for example
+    through a caching filesystem. Use the returned filenames with APIs that
+    accept local paths, or pass them to the built-in ``open()`` to read them.
 
     Parameters
     ----------
-    url: str or list(str)
+    url: str, pathlib.Path, list of str, or list of pathlib.Path
     mode: str
         Must be read mode
     storage_options:
         passed on to FS for or used by open_files (e.g., compression)
+
+    Returns
+    -------
+    str or list of str
+        A single filename for a literal URL or a ``pathlib.Path``, or a list of
+        filenames for a list of inputs or a glob such as ``*.csv``, even if
+        only one file matches.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> from tempfile import TemporaryDirectory
+    >>> from fsspec import open_local
+    >>> with TemporaryDirectory() as directory:
+    ...     source = Path(directory) / "example.txt"
+    ...     _ = source.write_text("example", encoding="utf-8")
+    ...     filename = open_local(source)
+    ...     print(isinstance(filename, str))
+    ...     print(open_local(str(source.parent / "*.txt")) == [filename])
+    ...     print(Path(filename).read_text(encoding="utf-8"))
+    True
+    True
+    example
     """
     if "r" not in mode:
         raise ValueError("Can only ensure local files when reading")
