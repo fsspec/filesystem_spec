@@ -105,6 +105,18 @@ class MemoryFileSystem(AbstractFileSystem):
         # Uniform prefix so that the search root "" (the filesystem root) and a
         # nested path are handled the same way; rel depth is rel.count("/") + 1.
         prefix = path + "/" if path else "/"
+        if not detail and not withdirs:
+            # FSMap iteration only needs the keys. Snapshot them without
+            # allocating or reading per-file metadata.
+            return sorted(
+                name
+                for name in tuple(self.store)
+                if name.startswith(prefix)
+                and not (
+                    maxdepth is not None and name.count("/", len(prefix)) + 1 > maxdepth
+                )
+            )
+
         out = {}
         dirs = {}
 
