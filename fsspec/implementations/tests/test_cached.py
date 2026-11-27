@@ -1690,6 +1690,35 @@ def test_write_transaction(tmpdir, m, monkeypatch):
     assert called[0] == 1  # copy was done in one go
 
 
+def test_write_transaction_ls_closed_files(tmp_path, m):
+    fs = fsspec.filesystem("simplecache", fs=m, cache_storage=str(tmp_path))
+    with fs.transaction:
+        fs.pipe("/data/a.bin", b"12345")
+        with fs.open("/data/b.bin", "wb") as f:
+            f.write(b"123")
+        fs.pipe("/data/sub/c.bin", b"1")
+        fs.pipe("/data/sub/e.bin", b"1")
+        f2 = fs.open("/data/d.bin", "wb")
+        f2.write(b"12")
+
+        assert fs.ls("/data", detail=False) == [
+            "/data/a.bin",
+            "/data/b.bin",
+            "/data/d.bin",
+            "/data/sub",
+        ]
+        listing = {d["name"]: d for d in fs.ls("/data", detail=True)}
+        assert listing["/data/a.bin"]["size"] == 5
+        assert listing["/data/b.bin"]["size"] == 3
+        assert listing["/data/d.bin"]["size"] == 2
+        assert listing["/data/sub"]["type"] == "directory"
+        assert fs.ls("/data/a.bin", detail=True)[0]["size"] == 5
+        assert fs.info("/data/a.bin")["size"] == 5
+        f2.close()
+
+    assert m.cat("/data/a.bin") == b"12345"
+
+
 @pytest.mark.parametrize("existing", [False, True])
 @pytest.mark.parametrize("writes", [1, 2])
 @pytest.mark.parametrize("mode", ["wb", "ab"])
