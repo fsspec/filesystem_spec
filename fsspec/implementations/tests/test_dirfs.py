@@ -808,6 +808,28 @@ def test_find(dirfs):
 
 
 @pytest.mark.asyncio
+async def test_async_find_preserves_backend_list_with_shared_file_and_directory(adirfs):
+    # Object stores can represent a file and a directory at the same path.
+    # Their names-only listing can contain both; a detail mapping cannot.
+    shared = f"{PATH}/shared"
+    child = f"{shared}/child"
+
+    async def backend_find(path, maxdepth, withdirs, detail, prefix):
+        if detail:
+            return {shared: {"type": "directory"}, child: {"type": "file"}}
+        return [shared, shared, child]
+
+    adirfs.fs._find.side_effect = backend_find
+
+    assert await adirfs._find("", None, True, False, "sh") == [
+        "shared",
+        "shared",
+        "shared/child",
+    ]
+    adirfs.fs._find.assert_awaited_once_with(PATH, None, True, False, "sh")
+
+
+@pytest.mark.asyncio
 async def test_async_find_detail(adirfs):
     adirfs.fs._find.return_value = {
         f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
