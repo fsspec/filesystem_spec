@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from types import SimpleNamespace
 
 import aiohttp
@@ -180,6 +181,39 @@ def test_list(server):
     h = fsspec.filesystem("http")
     out = h.glob(server.address + "/index/*")
     assert out == [server.realfile]
+
+
+@pytest.mark.parametrize("same_scheme", [True, False])
+@pytest.mark.parametrize("simple_links", [True, False])
+@pytest.mark.parametrize("detail", [True, False])
+def test_list_same_scheme(
+    server, reset_files, reset_faults, same_scheme, simple_links, detail
+):
+    url = server.address + "/same-scheme"
+    same = url + "/same.txt"
+    other = url.replace("http://", "https://", 1) + "/other.txt"
+    links = [same, other, "/same-scheme/absolute.txt", "relative.txt"]
+    links.append("http://example.invalid/same-scheme/unrelated.txt")
+    HTTPTestHandler.dynamic_files["/same-scheme"] = "".join(
+        f'<a href="{link}">file</a>' for link in links
+    ).encode()
+    h = fsspec.filesystem(
+        "http",
+        same_scheme=same_scheme,
+        simple_links=simple_links,
+        skip_instance_cache=True,
+    )
+    try:
+        result = h.ls(url, detail=detail)
+        expected = [same, url + "/absolute.txt", url + "/relative.txt"]
+        if not same_scheme:
+            expected.append(other)
+        names = [entry["name"] for entry in result] if detail else result
+        assert sorted(names) == sorted(expected)
+        assert HTTPTestHandler.get_counts["/same-scheme"] == 1
+    finally:
+        if h._session is not None:
+            h.close_session(h.loop, h._session)
 
 
 def test_list_pathological_listing(server, reset_files):
@@ -443,15 +477,47 @@ def test_exists_strict(server):
     assert e.value.status == 401
 
 
-def test_read(server):
+@pytest.mark.parametrize("length", [None, -1])
+def test_read(server, length):
     h = fsspec.filesystem("http")
     out = server.realfile
     with h.open(out, "rb") as f:
-        assert f.read() == data
+        assert f.read(length) == data
     with h.open(out, "rb", block_size=0) as f:
-        assert f.read() == data
+        assert f.read(length) == data
     with h.open(out, "rb") as f:
-        assert f.read(100) + f.read() == data
+        assert f.read(100) + f.read(length) == data
+
+
+@pytest.mark.parametrize("block_size", [0, 32, 2**20])
+@pytest.mark.parametrize("position", [0, 10])
+def test_read_none(server, block_size, position):
+    h = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    with h.open(server.realfile, block_size=block_size) as f:
+        assert f.read(position) == data[:position]
+        assert f.read(None) == data[position:]
+        assert f.tell() == len(data)
+        assert f.read(None) == b""
+
+
+@pytest.mark.parametrize("filesystem_default", [False, True])
+def test_reopen_with_known_parts(encoded_range_server, filesystem_default):
+    content = encoded_range_server.content
+    parts = {(0, 5): content[:5], (5, 10): content[5:10]}
+    expected = parts.copy()
+    options = {"cache_type": "parts", "cache_options": {"data": parts, "strict": True}}
+    h = fsspec.filesystem(
+        "http",
+        **(options if filesystem_default else {}),
+    )
+    for _ in range(2):
+        with h.open(
+            encoded_range_server.url, **({} if filesystem_default else options)
+        ) as f:
+            assert f.read(5) == content[:5]
+            f.seek(8)
+            assert f.read(2) == content[8:10]
+    assert parts == expected
 
 
 def test_file_pickle(server):
@@ -620,6 +686,29 @@ def test_multi_download(server, tmpdir):
     assert open(fnb, "rb").read() == data
 
 
+@pytest.mark.parametrize("path_type", [str, Path])
+@pytest.mark.parametrize("parent", ["", "nested"])
+def test_multi_download_relative_destinations(
+    server, tmp_path, monkeypatch, path_type, parent
+):
+    monkeypatch.chdir(tmp_path)
+    makedirs = os.makedirs
+
+    def make_parent(path, **kwargs):
+        assert os.fspath(path) not in ("", os.curdir)
+        return makedirs(path, **kwargs)
+
+    monkeypatch.setattr(os, "makedirs", make_parent)
+    h = fsspec.filesystem("http", headers={"give_length": "true", "head_ok": "true"})
+    destinations = [
+        path_type(os.path.join(parent, name)) for name in ("afile", "bfile")
+    ]
+
+    h.get([server.realfile, server.address + "/index/otherfile"], destinations)
+
+    assert all(Path(path).read_bytes() == data for path in destinations)
+
+
 def test_ls(server):
     h = fsspec.filesystem("http")
     l = h.ls(server.address + "/data/20020401/", detail=False)
@@ -714,6 +803,23 @@ def test_info(server):
     fs = fsspec.filesystem("http", headers={"redirect": "true"})
     info = fs.info(server.address + "/redirectme")
     assert info["url"] == server.realfile
+
+
+def test_custom_headers_not_forwarded_across_origins(server):
+    fs = fsspec.filesystem(
+        "http", headers={"X-Api-Key": "secret", "Accept-Language": "en"}
+    )
+
+    same_origin_headers = json.loads(
+        fs.cat_file(server.address + "/cross-origin-target")
+    )
+    assert same_origin_headers["x-api-key"] == "secret"
+
+    redirected_headers = json.loads(
+        fs.cat_file(server.address + "/redirect-cross-origin")
+    )
+    assert "x-api-key" not in redirected_headers
+    assert redirected_headers["accept-language"] == "en"
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT"])
@@ -840,14 +946,15 @@ def test_close(get_client):
 
 
 @pytest.mark.asyncio
-async def test_async_file(server):
+@pytest.mark.parametrize("length", [None, -1])
+async def test_async_file(server, length):
     fs = fsspec.filesystem("http", asynchronous=True, skip_instance_cache=True)
     fn = server.realfile
     of = await fs.open_async(fn)
     async with of as f:
         out1 = await f.read(10)
         assert data.startswith(out1)
-        out2 = await f.read()
+        out2 = await f.read(length)
         assert data == out1 + out2
     await fs._session.close()
 

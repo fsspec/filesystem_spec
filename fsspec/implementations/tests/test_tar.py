@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 import shutil
 import tarfile
@@ -79,6 +80,135 @@ def test_compressions(recipe):
 
         # Verify content of a sample file.
         assert fs.cat("b") == b"hello"
+
+
+@pytest.fixture(
+    params=["", "gz", "bz2", "xz"], ids=["tar", "tar-gz", "tar-bz2", "tar-xz"]
+)
+def tar_for_close(tmp_path, request):
+    compression = request.param
+    path = tmp_path / ("archive.tar" + (f".{compression}" if compression else ""))
+    with tarfile.open(path, mode=f"w:{compression}") as archive:
+        info = tarfile.TarInfo("member")
+        info.size = 4
+        archive.addfile(info, BytesIO(b"data"))
+    return str(path)
+
+
+def test_close_owned_archive(tar_for_close):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    try:
+        assert fs.cat("member") == b"data"
+        for _ in range(2):
+            fs.close()
+            # Keep the filesystem alive: cleanup must not depend on disposal.
+            assert fs.tar.closed
+            assert raw.closed
+            assert fs.fo.closed
+            with pytest.raises(ValueError):
+                raw.fileno()
+    finally:
+        fs.fo.close()
+        fs.of.close()
+
+
+def test_dispose_owned_archive(tar_for_close):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    archive = fs.fo
+    try:
+        del fs
+        gc.collect()
+        assert raw.closed
+        assert archive.closed
+    finally:
+        archive.close()
+        raw.close()
+
+
+@pytest.mark.parametrize(
+    "open_archive", [open, fsspec.open], ids=["file", "openfile-context"]
+)
+def test_close_preserves_borrowed_archive(tar_for_close, open_archive):
+    with open_archive(tar_for_close, "rb") as raw:
+        fs = TarFileSystem(raw)
+        assert fs.cat("member") == b"data"
+        fs.close()
+        fs.close()
+        assert not raw.closed
+        raw.seek(0)
+        assert raw.read(1)
+        del fs
+        gc.collect()
+        assert not raw.closed
+        raw.seek(0)
+        assert raw.read(1)
+    assert raw.closed
+
+
+def test_close_preserves_openfile_stream(tar_for_close):
+    owner = fsspec.open(tar_for_close, "rb")
+    raw = owner.open()
+    try:
+        fs = TarFileSystem(raw)
+        assert fs.cat("member") == b"data"
+        fs.close()
+        fs.close()
+        del fs
+        gc.collect()
+        assert not raw.closed
+        raw.seek(0)
+        assert raw.read(1)
+    finally:
+        owner.close()
+    assert raw.closed
+
+
+def test_close_owned_archive_after_tar_close_error(tar_for_close, monkeypatch):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    close_tar = fs.tar.close
+
+    def fail_close():
+        close_tar()
+        raise RuntimeError("tar close failed")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(fs.tar, "close", fail_close)
+            with pytest.raises(RuntimeError, match="tar close failed"):
+                fs.close()
+            assert raw.closed
+            assert fs.fo.closed
+        fs.close()
+    finally:
+        fs.fo.close()
+        fs.of.close()
+
+
+@pytest.mark.parametrize("tar_for_close", ["gz", "bz2", "xz"], indirect=True)
+def test_close_owned_archive_after_compression_close_error(tar_for_close, monkeypatch):
+    fs = TarFileSystem(tar_for_close)
+    raw = fs.of.fobjects[0]
+    close_compression = fs.fo.close
+
+    def fail_close():
+        close_compression()
+        raise RuntimeError("compression close failed")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(fs.fo, "close", fail_close)
+            with pytest.raises(RuntimeError, match="compression close failed"):
+                fs.close()
+            assert fs.tar.closed
+            assert raw.closed
+            assert fs.fo.closed
+        fs.close()
+    finally:
+        fs.fo.close()
+        fs.of.close()
 
 
 @pytest.mark.parametrize(
@@ -352,6 +482,23 @@ def test_links_report_target_size(tmp_path: Path):
     assert fs.size("dangling") == 0
 
 
+@pytest.mark.parametrize("kind", [tarfile.SYMTYPE, tarfile.LNKTYPE])
+def test_open_dangling_link_raises_file_not_found(tmp_path, kind):
+    path = tmp_path / "dangling-link.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("link")
+        info.type = kind
+        info.linkname = "missing"
+        tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    try:
+        with pytest.raises(FileNotFoundError, match="link"), fs.open("link"):
+            pass
+    finally:
+        fs.close()
+
+
 @pytest.mark.parametrize("prefix", ["./", "././"])
 @pytest.mark.parametrize("explicit_directories", [False, True])
 def test_dot_path_components(tmp_path, prefix, explicit_directories):
@@ -422,7 +569,12 @@ def test_dot_normalization_preserves_parent_components(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "names", [["./file.txt", "file.txt"], ["file.txt", "./file.txt"]]
+    "names",
+    [
+        ["./file.txt", "file.txt"],
+        ["file.txt", "./file.txt"],
+        ["file.txt", "file.txt"],
+    ],
 )
 def test_dot_normalization_duplicate_members(tmp_path, names):
     path = tmp_path / "duplicates.tar"
@@ -437,6 +589,23 @@ def test_dot_normalization_duplicate_members(tmp_path, names):
     assert fs.size("file.txt") == len(b"last")
     assert fs.cat("file.txt") == b"last"
     assert fs.cat("./file.txt") == b"last"
+
+
+def test_regular_member_with_trailing_slash_keeps_tarfile_name_lookup(tmp_path):
+    path = tmp_path / "trailing-slash.tar"
+    with tarfile.open(path, "w") as tar:
+        for name, data in [("file", b"one"), ("file/", b"two"), ("missing/", b"xxx")]:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    try:
+        assert fs.cat_file("file") == b"one"
+        with pytest.raises(FileNotFoundError, match="missing"):
+            fs.cat_file("missing")
+    finally:
+        fs.close()
 
 
 def test_dot_normalization_preserves_links(tmp_path):

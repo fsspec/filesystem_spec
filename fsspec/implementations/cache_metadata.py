@@ -31,7 +31,7 @@ class CacheMetadata:
     For backward compatibility. No longer supports pickle.
     """
 
-    def __init__(self, storage: list[str]):
+    def __init__(self, storage: list[str], metadata_name: str = "cache"):
         """
 
         Parameters
@@ -39,11 +39,14 @@ class CacheMetadata:
         storage: list[str]
             Directories containing cached files, must be at least one. Metadata
             is stored in the last of these directories by convention.
+        metadata_name: str
+            Name of the metadata file inside each storage directory.
         """
         if not storage:
             raise ValueError("CacheMetadata expects at least one storage location")
 
         self._storage = storage
+        self._metadata_name = metadata_name
         self.cached_files: list[Detail] = [{}]
 
     def _load(self, fn: str) -> Detail:
@@ -80,7 +83,7 @@ class CacheMetadata:
             writable = i == n - 1
             if writable_only and not writable:
                 continue
-            yield os.path.join(storage, "cache"), storage, writable
+            yield os.path.join(storage, self._metadata_name), storage, writable
 
     def check_file(
         self, path: str, cfs: CachingFileSystem | None
@@ -129,7 +132,7 @@ class CacheMetadata:
                 self.cached_files[-1].pop(path)
 
         if self.cached_files[-1]:
-            cache_path = os.path.join(self._storage[-1], "cache")
+            cache_path = os.path.join(self._storage[-1], self._metadata_name)
             self._save(self.cached_files[-1], cache_path)
 
         writable_cache_empty = not self.cached_files[-1]
@@ -168,16 +171,15 @@ class CacheMetadata:
             return None
         _, fn = details
         if fn.startswith(self._storage[-1]):
-            self.cached_files[-1].pop(path)
-            self.save()
+            self.save(removed=path)
         else:
             raise PermissionError(
                 "Can only delete cached file in last, writable cache location"
             )
         return fn
 
-    def save(self) -> None:
-        """Save metadata to disk"""
+    def save(self, *, removed: str | None = None) -> None:
+        """Save metadata to disk, excluding an explicitly removed path."""
         for (fn, _, writable), cache in zip(self._scan_locations(), self.cached_files):
             if not writable:
                 continue
@@ -205,6 +207,9 @@ class CacheMetadata:
                         cached_files[k] = c
             else:
                 cached_files = cache
+            # Remove the entry after merging, before writing the metadata.
+            if removed is not None:
+                cached_files.pop(removed, None)
             cache = {k: v.copy() for k, v in cached_files.items()}
             for c in cache.values():
                 if isinstance(c["blocks"], set):

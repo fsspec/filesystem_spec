@@ -2,6 +2,7 @@ import asyncio
 import io
 import os
 import tarfile
+from contextlib import nullcontext
 from itertools import cycle
 
 import pytest
@@ -199,6 +200,66 @@ def test_open(tmpdir):
         assert f.read() == b"hello"
 
 
+@pytest.mark.parametrize("mode", ["wb", "w", "ab", "a"])
+def test_open_persists_writes(tmp_path, mode):
+    path = tmp_path / "output"
+    path.write_bytes(b"original")
+    fs = AsyncFileSystemWrapper(LocalFileSystem(), asynchronous=False)
+    data = b"\x00hello\xff" if "b" in mode else "hello λ"
+    with fs.open(path, mode, encoding="utf-8") as stream:
+        assert stream.write(data) == len(data)
+
+    expected = data if isinstance(data, bytes) else data.encode("utf-8")
+    if "a" in mode:
+        expected = b"original" + expected
+    assert path.read_bytes() == expected
+    with fs.open(path, "rb") as stream:
+        assert stream.read() == expected
+
+
+@pytest.mark.parametrize("mode", ["wb", "w"])
+def test_chained_open_persists_writes(tmp_path, mode):
+    path = tmp_path / "output"
+    data = b"hello" if "b" in mode else "hello λ"
+    with fsspec.open(
+        f"async_wrapper::file://{path}",
+        mode=mode,
+        encoding="utf-8",
+        async_wrapper={"asynchronous": False},
+    ) as stream:
+        stream.write(data)
+
+    expected = data if isinstance(data, bytes) else data.encode("utf-8")
+    assert path.read_bytes() == expected
+
+
+def test_open_preserves_backend_errors(tmp_path):
+    path = tmp_path / "output"
+    path.write_bytes(b"original")
+    fs = AsyncFileSystemWrapper(LocalFileSystem(), asynchronous=False)
+    with pytest.raises(FileExistsError):
+        fs.open(path, "xb")
+    with pytest.raises(FileNotFoundError):
+        fs.open(tmp_path / "missing" / "output", "wb")
+    assert path.read_bytes() == b"original"
+
+
+@pytest.mark.parametrize("commit", [True, False])
+def test_open_transaction_persists_only_on_commit(tmp_path, commit):
+    path = tmp_path / "output"
+    path.write_bytes(b"original")
+    fs = AsyncFileSystemWrapper(LocalFileSystem(), asynchronous=False)
+    error = nullcontext() if commit else pytest.raises(RuntimeError, match="rollback")
+    with error:
+        with fs.transaction:
+            with fs.open(path, "wb") as stream:
+                stream.write(b"replacement")
+            assert path.read_bytes() == b"original"
+            if not commit:
+                raise RuntimeError("rollback")
+    assert path.read_bytes() == (b"replacement" if commit else b"original")
+
+
 @pytest.mark.asyncio
 async def test_semaphore_synchronous():
     fs = AsyncFileSystemWrapper(
@@ -245,6 +306,22 @@ def test_get_does_not_write_above_destination(tmp_path):
         pass
 
     assert not outside.exists(), f"async copy wrote {outside}, above {dest}"
+
+
+@pytest.mark.asyncio
+async def test_cat_recursive_skips_directories(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "a").write_bytes(b"a")
+    (tmp_path / "sub" / "b").write_bytes(b"b")
+    (tmp_path / "empty").mkdir()
+    root = tmp_path.as_posix()
+    async_fs = AsyncFileSystemWrapper(LocalFileSystem())
+
+    assert await async_fs._cat(root, recursive=True) == {
+        f"{root}/a": b"a",
+        f"{root}/sub/b": b"b",
+    }
+    assert await async_fs._cat(f"{root}/empty", recursive=True) == {}
 
 
 def test_paths_normalized_like_wrapped_fs():
