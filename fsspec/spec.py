@@ -17,6 +17,8 @@ from .config import apply_config, conf
 from .dircache import DirCache
 from .transaction import Transaction
 from .utils import (
+    _plan_range_requests,
+    _unmerge_range_results,
     _unstrip_protocol,
     check_contained,
     glob_translate,
@@ -977,9 +979,15 @@ class AbstractFileSystem(metaclass=_Cached):
         starts, ends: int or list
             Bytes limits of the read. If using a single int, the same value will be
             used to read all the specified files.
+        max_gap: int or None
+            If set, merge bounded non-negative integer ranges for each string
+            path when the gap is at most this many bytes. Zero merges adjacent
+            and overlapping ranges. None (default) keeps independent requests.
+            Results retain input order and duplicates. Open-ended, negative,
+            and reversed ranges are fetched independently. Coalescing may read
+            extra gap bytes and has no merged-request size limit. A failed
+            merged request produces an exception for every range it covers.
         """
-        if max_gap is not None:
-            raise NotImplementedError
         if not isinstance(paths, list):
             raise TypeError
         if not isinstance(starts, list):
@@ -988,6 +996,14 @@ class AbstractFileSystem(metaclass=_Cached):
             ends = [ends] * len(paths)
         if len(starts) != len(paths) or len(ends) != len(paths):
             raise ValueError
+        if max_gap is not None:
+            merged_paths, merged_starts, merged_ends, mapping = _plan_range_requests(
+                paths, starts, ends, max_gap
+            )
+            results = self.cat_ranges(
+                merged_paths, merged_starts, merged_ends, on_error="return", **kwargs
+            )
+            return _unmerge_range_results(results, mapping, on_error)
         out = []
         for p, s, e in zip(paths, starts, ends):
             try:
