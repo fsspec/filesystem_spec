@@ -133,6 +133,10 @@ Fixes
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
+- Iterate buffered Pyodide HTTP responses when a server ignores Range requests,
+  and preserve colon-containing or empty response-header values.
+
+
 - Honor ``same_scheme=True`` when listing HTTP directories in both HTTP backends.
 
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
