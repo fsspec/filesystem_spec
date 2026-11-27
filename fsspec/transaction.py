@@ -41,47 +41,47 @@ class Transaction:
 
     def complete(self, commit=True):
         """Finish transaction: commit or discard all deferred files"""
-        f = None
         try:
-            while self.files:
-                f = self.files.popleft()
-                if commit:
-                    f.commit()
-                else:
-                    f.discard()
-                f = None
+            _finish_files(self.files, commit)
         finally:
-            # the file being processed when the error was raised is already
-            # off the queue; put it back so its temporary file is cleaned up
-            if f is not None:
-                self.files.appendleft(f)
             # A failed commit or discard must still end the transaction.
             # Leaving _intrans set would defer every later write on this
             # filesystem into a temporary file that nothing ever commits,
             # and instances are cached, so that would persist process-wide.
-            while self.files:
-                try:
-                    self.files.popleft().discard()
-                except Exception:
-                    logger.debug("Discarding deferred file failed", exc_info=True)
             self.fs._intrans = False
             self.fs._transaction = None
             self.fs = None
 
 
+def _finish_files(files, commit):
+    current = None
+    try:
+        while files:
+            current = files.popleft()
+            if commit:
+                current.commit()
+            else:
+                current.discard()
+            current = None
+    finally:
+        if current is not None:
+            files.appendleft(current)
+        while files:
+            try:
+                files.popleft().discard()
+            except Exception:
+                logger.debug("Discarding deferred file failed", exc_info=True)
+
+
 class FileActor:
     def __init__(self):
-        self.files = []
+        self.files = deque()
 
     def commit(self):
-        for f in self.files:
-            f.commit()
-        self.files.clear()
+        _finish_files(self.files, commit=True)
 
     def discard(self):
-        for f in self.files:
-            f.discard()
-        self.files.clear()
+        _finish_files(self.files, commit=False)
 
     def append(self, f):
         self.files.append(f)

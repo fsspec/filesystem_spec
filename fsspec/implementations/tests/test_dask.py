@@ -51,3 +51,31 @@ def test_transaction_context_keeps_worker_actor(cli, tmp_path):
             raise RuntimeError("abort")
     assert (tmp_path / "discard").exists()
     assert not fs._intrans
+
+
+def test_failed_transaction_discards_remaining_worker_files(cli, tmp_path):
+    from fsspec.transaction import DaskTransaction
+
+    class Marker:
+        def __init__(self, name):
+            self.temporary = tmp_path / f"{name}.pending"
+            self.temporary.touch()
+
+        def commit(self):
+            if self.temporary.stem == "failure":
+                raise OSError("worker commit failed")
+            self.temporary.rename(self.temporary.with_suffix(".committed"))
+
+        def discard(self):
+            self.temporary.unlink()
+
+    fs = fsspec.filesystem("file", skip_instance_cache=True)
+    fs.transaction_type = DaskTransaction
+    with pytest.raises(OSError, match="worker commit failed"):
+        with fs.transaction as transaction:
+            for name in ("first", "failure", "pending"):
+                transaction.files.append(Marker(name)).result()
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["first.committed"]
+    assert not fs._intrans
+    assert fs._transaction is None
