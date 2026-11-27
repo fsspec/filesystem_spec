@@ -28,6 +28,7 @@ from fsspec.utils import (
     read_block,
     seek_delimiter,
     setup_logging,
+    url_is_under,
 )
 
 WIN = sys.platform.startswith("win")
@@ -962,3 +963,26 @@ def test_check_contained(root, path, contained):
     else:
         with pytest.raises(ValueError, match="outside the destination"):
             check_contained(root, [path])
+
+
+@pytest.mark.parametrize(
+    "url, root, under",
+    (
+        ("http://h/dir/file", "http://h/dir/", True),
+        ("http://h/dir/file", "http://h/dir", True),
+        ("http://h/dir/a/b/file", "http://h/dir", True),
+        ("http://h/dir/./file", "http://h/dir", True),
+        ("http://h/dir/?C=N;O=D", "http://h/dir/", True),
+        # the scheme may differ, as the HTTP listing code allows
+        ("http://h/dir/file", "https://h/dir/", True),
+        ("http://h/dir/../file", "http://h/dir/", False),
+        ("http://h/dir/a/../../file", "http://h/dir/", False),
+        # %2e is decoded before the segments are resolved
+        ("http://h/dir/%2E%2E/file", "http://h/dir/", False),
+        # a sibling whose name starts with the root is not inside it
+        ("http://h/directory/file", "http://h/dir", False),
+        ("http://other/dir/file", "http://h/dir", False),
+    ),
+)
+def test_url_is_under(url, root, under):
+    assert url_is_under(url, root) is under
