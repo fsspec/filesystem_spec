@@ -28,8 +28,7 @@ def wrap_exceptions(func):
             message, *args = exception.args
             if isinstance(message, str) and "does not exist" in message:
                 raise FileNotFoundError(errno.ENOENT, message) from exception
-            else:
-                raise
+            raise
 
     return wrapper
 

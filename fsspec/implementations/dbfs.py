@@ -242,7 +242,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message) from e
-            elif e.error_code == "RESOURCE_ALREADY_EXISTS":
+            if e.error_code == "RESOURCE_ALREADY_EXISTS":
                 raise FileExistsError(e.message) from e
 
             raise
@@ -372,7 +372,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message) from e
-            elif e.error_code == "MAX_BLOCK_SIZE_EXCEEDED":
+            if e.error_code == "MAX_BLOCK_SIZE_EXCEEDED":
                 raise ValueError(e.message) from e
 
             raise
@@ -402,7 +402,7 @@ class DatabricksFileSystem(AbstractFileSystem):
         except DatabricksException as e:
             if e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 raise FileNotFoundError(e.message) from e
-            elif e.error_code in ["INVALID_PARAMETER_VALUE", "MAX_READ_SIZE_EXCEEDED"]:
+            if e.error_code in ["INVALID_PARAMETER_VALUE", "MAX_READ_SIZE_EXCEEDED"]:
                 raise ValueError(e.message) from e
 
             raise

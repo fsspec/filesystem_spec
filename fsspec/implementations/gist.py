@@ -230,7 +230,7 @@ class GistFileSystem(AbstractFileSystem):
             except FileNotFoundError as e:
                 if on_error == "raise":
                     raise e
-                elif on_error == "omit":
+                if on_error == "omit":
                     pass  # skip
                 else:
                     out[p] = e

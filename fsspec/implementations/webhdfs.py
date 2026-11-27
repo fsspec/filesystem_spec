@@ -190,12 +190,11 @@ class WebHDFS(AbstractFileSystem):
             else:
                 if exp in ["IllegalArgumentException", "UnsupportedOperationException"]:
                     raise ValueError(msg)
-                elif exp in ["SecurityException", "AccessControlException"]:
+                if exp in ["SecurityException", "AccessControlException"]:
                     raise PermissionError(msg)
-                elif exp in ["FileNotFoundException"]:
+                if exp in ["FileNotFoundException"]:
                     raise FileNotFoundError(msg)
-                else:
-                    raise RuntimeError(msg)
+                raise RuntimeError(msg)
         out.raise_for_status()
         return out
 

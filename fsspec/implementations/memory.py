@@ -344,16 +344,15 @@ class MemoryFileSystem(AbstractFileSystem):
                 m.seek(0, 2)
                 return m
             raise FileNotFoundError(path)
-        elif mode in {"wb", "w+b", "xb", "x+b"}:
+        if mode in {"wb", "w+b", "xb", "x+b"}:
             if "x" in mode and self.exists(path):
                 raise FileExistsError
             m = MemoryFile(self, path, kwargs.get("data"))
             if not self._intrans:
                 m.commit()
             return m
-        else:
-            name = self.__class__.__name__
-            raise ValueError(f"unsupported file mode for {name}: {mode!r}")
+        name = self.__class__.__name__
+        raise ValueError(f"unsupported file mode for {name}: {mode!r}")
 
     def cp_file(self, path1, path2, **kwargs):
         path1 = self._strip_protocol(path1)

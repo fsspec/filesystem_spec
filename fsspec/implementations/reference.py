@@ -346,9 +346,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if maybe is None:
             # explicitly deleted
             raise KeyError
-        elif maybe:
+        if maybe:
             return maybe
-        elif chunk_size == 0:
+        if chunk_size == 0:
             return b""
 
         # Chunk keys can be loaded from row group and cached in LRU cache
@@ -1024,7 +1024,7 @@ class ReferenceFileSystem(AsyncFileSystem):
                 new_ex.__cause__ = ex
                 if on_error == "raise":
                     raise new_ex
-                elif on_error != "omit":
+                if on_error != "omit":
                     out[k] = new_ex
                 else:
                     del out[k]

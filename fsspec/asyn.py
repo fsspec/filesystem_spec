@@ -109,10 +109,9 @@ def sync(loop, func, *args, timeout=None, **kwargs):
         if isinstance(return_result, asyncio.TimeoutError):
             # suppress asyncio.TimeoutError, raise FSTimeoutError
             raise FSTimeoutError from return_result
-        elif isinstance(return_result, BaseException):
+        if isinstance(return_result, BaseException):
             raise return_result
-        else:
-            return return_result
+        return return_result
     finally:
         # the traceback also includes this frame, so don't keep the exception
         # in a local either: that would be a reference cycle
