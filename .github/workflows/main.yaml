@@ -7,6 +7,9 @@ on:
     branches: [master]
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   linux:
     name: ${{ matrix.PY }}${{ matrix.FREETHREADING && 't' || '' }}-pytest
@@ -28,6 +31,8 @@ jobs:
 
     env:
       CIRUN: true
+      # used by test_github.py; anonymous calls run into the rate limit
+      GITHUB_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout
