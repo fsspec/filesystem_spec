@@ -100,6 +100,10 @@ class DaskTransaction(Transaction):
         client = distributed.default_client()
         self.files = client.submit(FileActor, actor=True).result()
 
+    def start(self):
+        # The worker actor owns the deferred files for this transaction.
+        self.fs._intrans = True
+
     def complete(self, commit=True):
         """Finish transaction: commit or discard all deferred files"""
         try:

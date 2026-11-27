@@ -88,6 +88,38 @@ def test_info_request_options_override(
         fs.session.close()
 
 
+@pytest.mark.parametrize("same_scheme", [True, False])
+@pytest.mark.parametrize("simple_links", [True, False])
+@pytest.mark.parametrize("detail", [True, False])
+def test_list_same_scheme(
+    server, sync, reset_files, reset_faults, same_scheme, simple_links, detail
+):
+    url = server.address + "/same-scheme"
+    same = url + "/same.txt"
+    other = url.replace("http://", "https://", 1) + "/other.txt"
+    links = [same, other, "/same-scheme/absolute.txt", "relative.txt"]
+    links.append("http://example.invalid/same-scheme/unrelated.txt")
+    HTTPTestHandler.dynamic_files["/same-scheme"] = "".join(
+        f'<a href="{link}">file</a>' for link in links
+    ).encode()
+    h = fsspec.filesystem(
+        "http",
+        same_scheme=same_scheme,
+        simple_links=simple_links,
+        skip_instance_cache=True,
+    )
+    try:
+        result = h.ls(url, detail=detail)
+        expected = [same, url + "/absolute.txt", url + "/relative.txt"]
+        if not same_scheme:
+            expected.append(other)
+        names = [entry["name"] for entry in result] if detail else result
+        assert sorted(names) == sorted(expected)
+        assert HTTPTestHandler.get_counts["/same-scheme"] == 1
+    finally:
+        h.session.close()
+
+
 def test_list_pathological_listing(server, sync, reset_files):
     # a long whitespace run inside an anchor used to make the link regex
     # backtrack cubically, so listing this page took about a minute
@@ -319,7 +351,8 @@ def test_exists_strict(server, sync):
     assert e.value.response.status_code == 401
 
 
-def test_read(server, sync):
+@pytest.mark.parametrize("length", [None, -1])
+def test_read(server, sync, length):
     h = fsspec.filesystem("http")
     out = server.address + "/index/realfile"
     # with h.open(out, "rb") as f:
@@ -328,8 +361,19 @@ def test_read(server, sync):
     #    assert f.read() == data
     with h.open(out, "rb") as f:
         o1 = f.read(100)
-        o2 = f.read()
+        o2 = f.read(length)
         assert o1 + o2 == data
+
+
+@pytest.mark.parametrize("block_size", [0, 32, 2**20])
+@pytest.mark.parametrize("position", [0, 10])
+def test_read_none(server, sync, block_size, position):
+    h = fsspec.filesystem("http", headers={"head_ok": "true", "give_length": "true"})
+    with h.open(server.realfile, block_size=block_size) as f:
+        assert f.read(position) == data[:position]
+        assert f.read(None) == data[position:]
+        assert f.tell() == len(data)
+        assert f.read(None) == b""
 
 
 def test_methods(server, sync):

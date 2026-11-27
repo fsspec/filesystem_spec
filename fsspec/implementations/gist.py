@@ -227,8 +227,7 @@ class GistFileSystem(AbstractFileSystem):
         out = {}
         for p in paths:
             try:
-                with self.open(p, "rb") as f:
-                    out[p] = f.read()
+                out[p] = self.cat_file(p, **kwargs)
             except FileNotFoundError as e:
                 if on_error == "raise":
                     raise e
