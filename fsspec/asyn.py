@@ -555,7 +555,7 @@ class AsyncFileSystem(AbstractFileSystem):
             # No need to expand paths when both source and destination
             # are provided as lists
             paths1 = path1
-            paths2 = path2
+            paths2 = other_paths(paths1, path2)
         else:
             path1 = stringify_path(path1)
             source_is_str = isinstance(path1, str)
@@ -761,10 +761,8 @@ class AsyncFileSystem(AbstractFileSystem):
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
         if isinstance(lpath, list) and isinstance(rpath, list):
-            # No need to expand paths when both source and destination
-            # are provided as lists
-            rpaths = rpath
             lpaths = lpath
+            rpaths = other_paths(lpaths, rpath)
         else:
             lpath = stringify_path(lpath)
             source_is_str = isinstance(lpath, str)
@@ -839,10 +837,8 @@ class AsyncFileSystem(AbstractFileSystem):
         in ``fsspec.config.conf``, falling back to 1/8th of the system limit .
         """
         if isinstance(lpath, list) and isinstance(rpath, list):
-            # No need to expand paths when both source and destination
-            # are provided as lists
             rpaths = rpath
-            lpaths = lpath
+            lpaths = other_paths(rpaths, lpath)
         else:
             rpath = stringify_path(rpath)
             source_is_str = isinstance(rpath, str)

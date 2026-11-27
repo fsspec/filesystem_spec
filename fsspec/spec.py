@@ -1106,7 +1106,7 @@ class AbstractFileSystem(metaclass=_Cached):
             # No need to expand paths when both source and destination
             # are provided as lists
             rpaths = rpath
-            lpaths = lpath
+            lpaths = other_paths(rpaths, lpath)
         else:
             from .implementations.local import (
                 LocalFileSystem,
@@ -1198,8 +1198,8 @@ class AbstractFileSystem(metaclass=_Cached):
         if isinstance(lpath, list) and isinstance(rpath, list):
             # No need to expand paths when both source and destination
             # are provided as lists
-            rpaths = rpath
             lpaths = lpath
+            rpaths = other_paths(lpaths, rpath)
         else:
             from .implementations.local import (
                 LocalFileSystem,
@@ -1281,7 +1281,7 @@ class AbstractFileSystem(metaclass=_Cached):
             # No need to expand paths when both source and destination
             # are provided as lists
             paths1 = path1
-            paths2 = path2
+            paths2 = other_paths(paths1, path2)
         else:
             from .implementations.local import trailing_sep
 
