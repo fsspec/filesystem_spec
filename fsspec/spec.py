@@ -2347,9 +2347,11 @@ class AbstractBufferedFile(io.IOBase):
             and self.lazy_size
             and self._size is None
             and self._details is None
+            and not self._cache_options.get("data")
         ):
             # Whole-file sequential read before anything needed the size:
-            # one fetch, without the info() round trip (GH#1392).
+            # one fetch, without the info() round trip (GH#1392). Not taken
+            # when the caller preloaded the cache, which must keep serving.
             out = self.fs.cat_file(self.path)
             self.size = len(out)
             self.loc = len(out)

@@ -1,3 +1,4 @@
+import copy
 import glob
 import io
 import json
@@ -1505,6 +1506,28 @@ def test_lazy_size_close_and_pickle(counting_fs):
     assert fs.calls == [("info", "a")]
     assert f2.read() == fs.contents["a"]
     assert f2.fs.calls == [("cat_file", "a", 0, 100)]
+
+
+@pytest.mark.parametrize(
+    "cache_type, cache_options",
+    [
+        ("parts", {"data": {(0, 6): b"cached"}, "strict": True}),
+        ("all", {"data": b"cached"}),
+    ],
+)
+def test_lazy_size_whole_read_uses_preloaded_cache(cache_type, cache_options):
+    # a whole-file read must not bypass data the caller put in the cache
+    fs = CountingFS({"six": b"stored"})
+    for length in (6, -1):
+        fs.calls.clear()
+        with fs.open(
+            "six",
+            "rb",
+            cache_type=cache_type,
+            cache_options=copy.deepcopy(cache_options),
+        ) as f:
+            assert f.read(length) == b"cached"
+        assert not [c for c in fs.calls if c[0] == "cat_file"]
 
 
 def test_eager_size_default_unchanged():
