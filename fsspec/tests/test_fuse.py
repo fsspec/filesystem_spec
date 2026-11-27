@@ -41,7 +41,7 @@ def test_run_defaults_to_foreground(tmp_path, mocker):
 def host_fuse(mountdir):
     fs = MemoryFileSystem()
     fs.touch("/mounted/testfile")
-    run(fs, "/mounted/", mountdir)
+    run(fs, "/mounted/", mountdir, ready_file=True)
 
 
 def test_basic(tmpdir, capfd):
@@ -66,6 +66,9 @@ def test_basic(tmpdir, capfd):
 
                 pdb.set_trace()
                 pytest.skip(msg="fuse didn't come live")
+
+        with open(os.path.join(mountdir, ".fuse_ready")) as f:
+            assert f.read() == "ready"
 
         fn = os.path.join(mountdir, "test")
         with open(fn, "wb") as f:
