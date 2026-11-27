@@ -133,6 +133,9 @@ Fixes
 
 - Close sync HTTP download files on success or failure, without closing caller-owned streams.
 
+- Normalize negative HTTP read bounds before checking for empty ranges, without issuing a data request for those empty reads.
+
+
 - Honor ``same_scheme=True`` when listing HTTP directories in both HTTP backends.
 
 - Expose known buffered-file sizes through a ``len`` property for multipart encoders.
