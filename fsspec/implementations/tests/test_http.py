@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import gzip
 import io
 import json
@@ -6,18 +7,23 @@ import os
 import sys
 import threading
 import time
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
 import aiohttp
 import pytest
+import yarl
+from multidict import CIMultiDict
 
 import fsspec.asyn
 import fsspec.utils
 from fsspec.implementations.http import (
     _RETRYABLE_STATUSES,
     HTTPStreamFile,
+    _strip_headers_on_cross_origin_redirect,
+    _url_origin,
 )
 from fsspec.tests.conftest import (  # noqa: F401
     HTTPTestHandler,
@@ -1407,3 +1413,621 @@ async def test_async_stream_read_after_close(
     finally:
         await stream.close()
         await fs._session.close()
+
+
+# --- cross-origin redirect credential scoping --------------------------------
+
+_BLOB = bytes(range(128))
+
+
+@contextlib.contextmanager
+def _http_fs(**kwargs):
+    kwargs.setdefault("retries", 0)
+    fs = fsspec.filesystem("http", skip_instance_cache=True, **kwargs)
+    try:
+        yield fs
+    finally:
+        if fs._session is not None:
+            fs.close_session(fs.loop, fs._session)
+
+
+def _assert_no_leaked_creds(headers):
+    for name in ("authorization", "proxy-authorization", "cookie", "x-api-key"):
+        assert name not in headers
+
+
+def _read_body(handler):
+    length = handler.headers.get("Content-Length")
+    if length is not None:
+        return handler.rfile.read(int(length))
+    if handler.headers.get("Transfer-Encoding", "").lower() != "chunked":
+        return b""
+    chunks = []
+    while line := handler.rfile.readline().strip():
+        size = int(line, 16)
+        if size == 0:
+            handler.rfile.readline()
+            break
+        chunks.append(handler.rfile.read(size))
+        handler.rfile.readline()
+    return b"".join(chunks)
+
+
+def _serve_blob(_handler, method, hdrs, _body):
+    if method == "HEAD":
+        return 200, {"Content-Length": len(_BLOB), "Accept-Ranges": "bytes"}, b""
+    if "range" in hdrs:
+        start_s, end_s = hdrs["range"].split("=")[1].split("-")
+        start, end = int(start_s), int(end_s) if end_s else len(_BLOB) - 1
+        chunk = _BLOB[start : end + 1]
+        return 206, {"Content-Range": f"bytes {start}-{end}/{len(_BLOB)}"}, chunk
+    return 200, {}, _BLOB
+
+
+@pytest.fixture
+def two_origin_servers():
+    """Two local HTTP servers on distinct ports (distinct origins) with recording."""
+
+    def _start():
+        state = SimpleNamespace(routes={}, requests=[], address="", port=0)
+
+        class Handler(BaseHTTPRequestHandler):
+            def _handle(self, method):
+                body = _read_body(self)
+                hdrs = {k.lower(): v for k, v in self.headers.items()}
+                state.requests.append(
+                    {"method": method, "path": self.path, "headers": hdrs, "body": body}
+                )
+                route = state.routes.get((method, self.path)) or state.routes.get(
+                    self.path
+                )
+                if route is None:
+                    status, resp_hdrs, resp_body = 404, {}, b""
+                elif callable(route):
+                    status, resp_hdrs, resp_body = route(self, method, hdrs, body)
+                else:
+                    status, resp_hdrs, resp_body = route
+                resp_hdrs = dict(resp_hdrs)
+                if method != "HEAD":
+                    resp_hdrs.setdefault("Content-Length", len(resp_body))
+                self.send_response(status)
+                for k, v in resp_hdrs.items():
+                    self.send_header(k, str(v))
+                self.end_headers()
+                if method != "HEAD" and resp_body:
+                    self.wfile.write(resp_body)
+
+            do_GET = lambda self: self._handle("GET")
+            do_HEAD = lambda self: self._handle("HEAD")
+            do_POST = lambda self: self._handle("POST")
+            do_PUT = lambda self: self._handle("PUT")
+            log_message = lambda self, *_: None
+
+        httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        state.port = httpd.server_port
+        state.address = f"http://127.0.0.1:{httpd.server_port}"
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        return httpd, thread, state
+
+    httpd_a, th_a, origin_a = _start()
+    httpd_b, th_b, origin_b = _start()
+    origin_a.routes.update(
+        {
+            "/final": (200, {}, b"ok"),
+            "/same": (302, {"Location": f"{origin_a.address}/final"}, b""),
+            "/rel": (302, {"Location": "/final"}, b""),
+            "/to-b": (302, {"Location": f"{origin_b.address}/echo"}, b""),
+            "/proto-rel": (302, {"Location": f"//127.0.0.1:{origin_b.port}/echo"}, b""),
+            "/bounce": (302, {"Location": f"{origin_b.address}/back-to-a"}, b""),
+            "/bad-url": (302, {"Location": "http://[::1"}, b""),
+            "/non-http": (302, {"Location": "file:///etc/passwd"}, b""),
+            "/blob": (302, {"Location": f"{origin_b.address}/blob"}, b""),
+            "/listing/": (302, {"Location": f"{origin_b.address}/listing/"}, b""),
+            ("PUT", "/pipe-307"): (
+                307,
+                {"Location": f"{origin_b.address}/target"},
+                b"",
+            ),
+            ("PUT", "/pipe-308"): (
+                308,
+                {"Location": f"{origin_b.address}/target"},
+                b"",
+            ),
+            ("POST", "/post-303"): (
+                303,
+                {"Location": f"{origin_b.address}/after-post"},
+                b"",
+            ),
+            ("POST", "/post-302"): (
+                302,
+                {"Location": f"{origin_b.address}/after-post"},
+                b"",
+            ),
+        }
+    )
+    origin_b.routes.update(
+        {
+            "/echo": (200, {}, b"echo"),
+            "/target": (200, {}, b"stored"),
+            "/after-post": (200, {}, b"redirected-get"),
+            "/back-to-a": (302, {"Location": f"{origin_a.address}/final"}, b""),
+            "/blob": _serve_blob,
+            "/listing/": (
+                200,
+                {"Content-Type": "text/html"},
+                f'<a href="{origin_a.address}/listing/item.txt">item</a>'.encode(),
+            ),
+        }
+    )
+    try:
+        yield origin_a, origin_b
+    finally:
+        for httpd, th in ((httpd_a, th_a), (httpd_b, th_b)):
+            httpd.shutdown()
+            httpd.server_close()
+            th.join()
+
+
+@pytest.mark.parametrize(
+    ("url_a", "url_b", "same_origin"),
+    [
+        ("https://Example.COM:443/a", "https://example.com/b", True),
+        ("http://example.com:80/a", "http://example.com/b", True),
+        ("https://a.example/x", "http://a.example/x", False),
+        ("http://127.0.0.1:8001/a", "http://127.0.0.1:8002/a", False),
+        ("https://a.example/x", "https://b.example/x", False),
+    ],
+)
+def test_url_origin(url_a, url_b, same_origin):
+    # Act
+    equal = _url_origin(yarl.URL(url_a)) == _url_origin(yarl.URL(url_b))
+
+    # Assert
+    assert equal is same_origin
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("src", "location", "keep_creds"),
+    [
+        ("https://Example.COM:443/dir/a", "https://example.com/dir/b", True),
+        ("https://example.com/dir/a", "../b", True),
+        ("https://example.com/a", "http://example.com/a", False),
+        ("https://origin-a.example/a", "//origin-b.example/steal", False),
+    ],
+)
+async def test_redirect_hook_header_filtering(src, location, keep_creds):
+    # Arrange
+    session = SimpleNamespace(_requote_redirect_url=True)
+    headers = CIMultiDict(
+        {
+            "Authorization": "Basic abc",
+            "X-API-Key": "secret",
+            "Cookie": "sid=1",
+            "Range": "bytes=0-10",
+        }
+    )
+    params = SimpleNamespace(
+        url=yarl.URL(src),
+        headers=headers,
+        response=SimpleNamespace(headers={"Location": location}),
+    )
+
+    # Act
+    await _strip_headers_on_cross_origin_redirect(session, None, params)
+
+    # Assert
+    assert headers["Range"] == "bytes=0-10"
+    assert ("Authorization" in headers) is keep_creds
+    assert ("X-API-Key" in headers) is keep_creds
+    assert ("Cookie" in headers) is keep_creds
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_location",
+    ["http://[::1", "file:///etc/passwd", "ftp://other.example/x"],
+)
+async def test_redirect_hook_ignores_bad_locations(bad_location):
+    # Arrange
+    session = SimpleNamespace(_requote_redirect_url=True)
+    headers = CIMultiDict({"X-API-Key": "secret"})
+    params = SimpleNamespace(
+        url=yarl.URL("https://origin-a.example/a"),
+        headers=headers,
+        response=SimpleNamespace(headers={"Location": bad_location}),
+    )
+
+    # Act & Assert (does not raise raw ValueError)
+    await _strip_headers_on_cross_origin_redirect(session, None, params)
+
+
+@pytest.mark.parametrize("path", ["/bad-url", "/non-http"])
+def test_invalid_redirect_location_raises_client_error(two_origin_servers, path):
+    # Arrange
+    origin_a, _ = two_origin_servers
+
+    # Act & Assert
+    with _http_fs() as fs, pytest.raises(aiohttp.ClientError):
+        fs.cat_file(f"{origin_a.address}{path}")
+
+
+def test_client_kwargs_not_mutated(two_origin_servers):
+    # Arrange
+    origin_a, _ = two_origin_servers
+    auth = aiohttp.BasicAuth("alice", "s3cr3t")
+    hdrs = {"X-API-Key": "k1"}
+    cookies = {"sid": "c1"}
+    ck = {"auth": auth, "headers": hdrs, "cookies": cookies}
+
+    # Act
+    with _http_fs(client_kwargs=ck) as fs:
+        out = fs.cat_file(f"{origin_a.address}/final")
+
+    # Assert
+    assert out == b"ok"
+    assert ck == {
+        "auth": auth,
+        "headers": {"X-API-Key": "k1"},
+        "cookies": {"sid": "c1"},
+    }
+    assert hdrs == {"X-API-Key": "k1"}
+    assert cookies == {"sid": "c1"}
+    assert fs._session._default_auth is None
+
+
+@pytest.mark.parametrize(
+    "fs_kwargs",
+    [
+        {
+            "client_kwargs": {
+                "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+                "headers": {"authorization": "Bearer tok"},
+            }
+        },
+        {
+            "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+            "headers": {"Authorization": "Bearer tok"},
+        },
+    ],
+)
+def test_auth_and_authorization_header_conflict(two_origin_servers, fs_kwargs):
+    # Arrange
+    origin_a, _ = two_origin_servers
+
+    # Act & Assert
+    with _http_fs(**fs_kwargs) as fs, pytest.raises(ValueError, match="AUTHORIZATION"):
+        fs.cat_file(f"{origin_a.address}/final")
+
+
+@pytest.mark.parametrize(
+    ("fs_kwargs", "path"),
+    [
+        (
+            {
+                "client_kwargs": {
+                    "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+                    "headers": {"X-API-Key": "k1", "Cookie": "pre=1"},
+                    "cookies": {"sid": "c1"},
+                }
+            },
+            "/same",
+        ),
+        (
+            {
+                "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+                "headers": {"X-API-Key": "k1"},
+            },
+            "/rel",
+        ),
+    ],
+)
+def test_same_origin_redirect_preserves_credentials(
+    two_origin_servers, fs_kwargs, path
+):
+    # Arrange
+    origin_a, _ = two_origin_servers
+    expected_auth = aiohttp.BasicAuth("alice", "s3cr3t").encode()
+
+    # Act
+    with _http_fs(**fs_kwargs) as fs:
+        out = fs.cat_file(f"{origin_a.address}{path}")
+
+    # Assert
+    assert out == b"ok"
+    hdrs = origin_a.requests[-1]["headers"]
+    assert hdrs["authorization"] == expected_auth
+    assert hdrs["x-api-key"] == "k1"
+    if "cookies" in fs_kwargs.get("client_kwargs", {}):
+        assert "pre=1" in hdrs["cookie"] and "sid=c1" in hdrs["cookie"]
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_body", "check_origin_a_final"),
+    [
+        ("/to-b", b"echo", False),
+        ("/proto-rel", b"echo", False),
+        ("/bounce", b"ok", True),
+    ],
+)
+def test_cross_origin_and_bounce_back_strip_credentials(
+    two_origin_servers, path, expected_body, check_origin_a_final
+):
+    # Arrange
+    origin_a, origin_b = two_origin_servers
+    auth = aiohttp.BasicAuth("alice", "s3cr3t")
+
+    # Act
+    with _http_fs(
+        client_kwargs={
+            "auth": auth,
+            "headers": {"X-API-Key": "k1", "User-Agent": "ua/1"},
+            "cookies": {"sid": "c1"},
+        }
+    ) as fs:
+        out = fs.cat_file(f"{origin_a.address}{path}")
+
+    # Assert
+    assert out == expected_body
+    assert origin_a.requests[0]["headers"]["authorization"] == auth.encode()
+    _assert_no_leaked_creds(origin_b.requests[0]["headers"])
+    assert origin_b.requests[0]["headers"]["user-agent"] == "ua/1"
+    if check_origin_a_final:
+        _assert_no_leaked_creds(origin_a.requests[1]["headers"])
+
+
+def test_domain_morsel_cookies_kept_while_unscoped_stripped(two_origin_servers):
+    # Arrange
+    origin_a, origin_b = two_origin_servers
+    jar_cookies = SimpleCookie()
+    jar_cookies["scoped"] = "domain-only"
+    jar_cookies["scoped"]["domain"] = "other.example"
+    jar_cookies["unscoped"] = "secret"
+
+    # Act
+    with _http_fs(client_kwargs={"cookies": jar_cookies}) as fs:
+        out = fs.cat_file(f"{origin_a.address}/to-b")
+
+    # Assert
+    assert out == b"echo"
+    assert origin_a.requests[-1]["headers"]["cookie"] == "unscoped=secret"
+    assert "cookie" not in origin_b.requests[-1]["headers"]
+
+
+def test_dummy_cookie_jar_does_not_hoist_cookies(two_origin_servers):
+    # Arrange
+    origin_a, _ = two_origin_servers
+    dummy_jar = aiohttp.DummyCookieJar(loop=fsspec.asyn.get_loop())
+
+    # Act
+    with _http_fs(
+        client_kwargs={"cookies": {"sid": "ignored"}, "cookie_jar": dummy_jar}
+    ) as fs:
+        out = fs.cat_file(f"{origin_a.address}/to-b")
+
+    # Assert
+    assert out == b"echo"
+    assert "cookie" not in origin_a.requests[-1]["headers"]
+
+
+@pytest.mark.parametrize("use_relative", [False, True])
+def test_base_url_matching_origin_sends_credentials(two_origin_servers, use_relative):
+    # Arrange
+    origin_a, _ = two_origin_servers
+    auth = aiohttp.BasicAuth("alice", "s3cr3t")
+    target = "final" if use_relative else f"{origin_a.address}/final"
+
+    # Act
+    with _http_fs(
+        client_kwargs={
+            "base_url": f"{origin_a.address}/",
+            "auth": auth,
+            "headers": {"X-API-Key": "a-key"},
+            "cookies": {"sid": "a-sid"},
+        }
+    ) as fs:
+        out = fs.cat_file(target)
+
+    # Assert
+    assert out == b"ok"
+    hdrs = origin_a.requests[-1]["headers"]
+    assert hdrs["authorization"] == auth.encode()
+    assert hdrs["x-api-key"] == "a-key"
+    assert hdrs["cookie"] == "sid=a-sid"
+
+
+def test_base_url_other_origin_omits_session_credentials(two_origin_servers):
+    # Arrange
+    origin_a, origin_b = two_origin_servers
+    auth = aiohttp.BasicAuth("alice", "s3cr3t")
+
+    # Act
+    with _http_fs(
+        client_kwargs={
+            "base_url": f"{origin_a.address}/",
+            "auth": auth,
+            "headers": {"X-API-Key": "a-key", "User-Agent": "ua"},
+            "cookies": {"sid": "a-sid"},
+        }
+    ) as fs:
+        out = fs.cat_file(f"{origin_b.address}/echo", headers={"X-API-Key": "b-key"})
+
+    # Assert
+    assert out == b"echo"
+    hdrs = origin_b.requests[-1]["headers"]
+    assert hdrs["x-api-key"] == "b-key"
+    assert hdrs["user-agent"] == "ua"
+    assert "authorization" not in hdrs and "cookie" not in hdrs
+
+
+def test_base_url_bounce_back_keeps_credentials_stripped(two_origin_servers):
+    # Arrange
+    origin_a, _ = two_origin_servers
+    auth = aiohttp.BasicAuth("alice", "s3cr3t")
+
+    # Act
+    with _http_fs(
+        client_kwargs={
+            "base_url": f"{origin_a.address}/",
+            "auth": auth,
+            "headers": {"X-API-Key": "a-key"},
+            "cookies": {"sid": "a-sid"},
+        }
+    ) as fs:
+        out = fs.cat_file(f"{origin_a.address}/bounce")
+
+    # Assert
+    assert out == b"ok"
+    _assert_no_leaked_creds(origin_a.requests[1]["headers"])
+
+
+def _run_read_op(fs, origin_a, origin_b, tmp_path, operation):
+    blob_url = f"{origin_a.address}/blob"
+    if operation == "cat_file":
+        assert fs.cat_file(blob_url) == _BLOB
+        assert origin_b.requests[-1]["headers"]["user-agent"] == "cdn-client/1"
+    elif operation == "cat_file_range":
+        assert fs.cat_file(blob_url, start=10, end=26) == _BLOB[10:26]
+        assert origin_b.requests[-1]["headers"]["range"] == "bytes=10-25"
+    elif operation == "get_file":
+        out = tmp_path / "out.bin"
+        fs.get_file(blob_url, str(out))
+        assert out.read_bytes() == _BLOB
+    elif operation == "info":
+        info = fs.info(blob_url)
+        assert info["size"] == len(_BLOB)
+        assert origin_b.requests[0]["headers"]["accept-encoding"] == "identity"
+    elif operation == "exists":
+        assert fs.exists(blob_url) is True
+    elif operation == "ls":
+        entries = fs.ls(f"{origin_a.address}/listing/", detail=False)
+        assert f"{origin_a.address}/listing/item.txt" in entries
+    elif operation == "open_buffered":
+        with fs.open(blob_url, "rb", block_size=16) as f:
+            f.seek(20)
+            assert f.read(16) == _BLOB[20:36]
+        get_reqs = [r for r in origin_b.requests if r["method"] == "GET"]
+        assert get_reqs[-1]["headers"]["range"].startswith("bytes=20-")
+        assert get_reqs[-1]["headers"]["accept-encoding"] == "identity"
+    elif operation == "open_stream":
+        with fs.open(blob_url, "rb", block_size=0) as f:
+            assert isinstance(f, HTTPStreamFile) and f.read() == _BLOB
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "cat_file",
+        "cat_file_range",
+        "get_file",
+        "info",
+        "exists",
+        "ls",
+        "open_buffered",
+        "open_stream",
+    ],
+)
+def test_cross_origin_read_methods_strip_credentials(
+    two_origin_servers, tmp_path, operation
+):
+    # Arrange
+    origin_a, origin_b = two_origin_servers
+    client_kwargs = {
+        "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+        "headers": {"X-API-Key": "k1", "User-Agent": "cdn-client/1"},
+        "cookies": {"sid": "c1"},
+    }
+
+    # Act
+    with _http_fs(client_kwargs=client_kwargs) as fs:
+        _run_read_op(fs, origin_a, origin_b, tmp_path, operation)
+
+    # Assert
+    assert origin_b.requests
+    for req in origin_b.requests:
+        _assert_no_leaked_creds(req["headers"])
+
+
+@pytest.mark.parametrize("path", ["/pipe-307", "/pipe-308"])
+def test_cross_origin_pipe_file_preserves_body_and_strips_creds(
+    two_origin_servers, path
+):
+    # Arrange
+    origin_a, origin_b = two_origin_servers
+    hdrs = {"Content-Type": "text/plain", "X-API-Key": "call-secret"}
+
+    # Act
+    with _http_fs(
+        client_kwargs={
+            "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+            "cookies": {"sid": "c1"},
+        },
+        headers={"X-API-Key": "k1"},
+    ) as fs:
+        fs.pipe_file(f"{origin_a.address}{path}", b"hello", headers=hdrs)
+
+    # Assert
+    assert hdrs == {"Content-Type": "text/plain", "X-API-Key": "call-secret"}
+    req = origin_b.requests[-1]
+    assert req["method"] == "PUT" and req["body"] == b"hello"
+    assert req["headers"]["content-type"] == "text/plain"
+    assert req["headers"]["content-length"] == "5"
+    _assert_no_leaked_creds(req["headers"])
+
+
+@pytest.mark.parametrize("path", ["/post-303", "/post-302"])
+def test_cross_origin_put_file_post_redirect_switches_to_get(
+    two_origin_servers, tmp_path, path
+):
+    # Arrange
+    origin_a, origin_b = two_origin_servers
+    src = tmp_path / "upload.bin"
+    src.write_bytes(b"upload")
+
+    # Act
+    with _http_fs(
+        client_kwargs={
+            "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+            "cookies": {"sid": "c1"},
+        },
+        headers={"X-API-Key": "k1"},
+    ) as fs:
+        fs.put_file(src, f"{origin_a.address}{path}", method="post")
+
+    # Assert
+    req = origin_b.requests[-1]
+    assert req["method"] == "GET" and req["body"] == b""
+    assert "content-length" not in req["headers"]
+    _assert_no_leaked_creds(req["headers"])
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_redirect_async_stream_file(two_origin_servers):
+    # Arrange
+    origin_a, origin_b = two_origin_servers
+    fs = fsspec.filesystem(
+        "http",
+        asynchronous=True,
+        client_kwargs={
+            "auth": aiohttp.BasicAuth("alice", "s3cr3t"),
+            "headers": {"X-API-Key": "k1"},
+            "cookies": {"sid": "c1"},
+        },
+        retries=0,
+        skip_instance_cache=True,
+    )
+
+    # Act
+    try:
+        async with await fs.open_async(f"{origin_a.address}/blob") as f:
+            out = await f.read()
+    finally:
+        if fs._session is not None:
+            await fs._session.close()
+
+    # Assert
+    assert out == _BLOB
+    assert origin_b.requests
+    for req in origin_b.requests:
+        _assert_no_leaked_creds(req["headers"])
