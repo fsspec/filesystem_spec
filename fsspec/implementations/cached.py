@@ -89,9 +89,7 @@ class WriteCachedTransaction(Transaction):
                 logger.debug("Discarding failed cached transaction", exc_info=True)
             raise
         self.files.clear()
-        self.fs._intrans = False
-        self.fs._transaction = None
-        self.fs = None  # break cycle
+        self._detach()
 
 
 class CachingFileSystem(ChainedFileSystem):

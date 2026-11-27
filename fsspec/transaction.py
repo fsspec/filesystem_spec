@@ -30,14 +30,24 @@ class Transaction:
         # only commit if there was no exception
         self.complete(commit=exc_type is None)
         if self.fs:
-            self.fs._intrans = False
-            self.fs._transaction = None
-            self.fs = None
+            self._detach()
 
     def start(self):
         """Start a transaction on this FileSystem"""
         self.files = deque()  # clean up after previous failed completions
         self.fs._intrans = True
+
+    def _detach(self):
+        """End the transaction on the filesystem and drop the reference to it
+
+        Every ``complete()`` must call this, also when committing or discarding
+        failed: leaving ``_intrans`` set would defer every later write on this
+        filesystem into a temporary file that nothing ever commits, and
+        instances are cached, so that would persist process-wide.
+        """
+        self.fs._intrans = False
+        self.fs._transaction = None
+        self.fs = None  # break the reference cycle with the filesystem
 
     def complete(self, commit=True):
         """Finish transaction: commit or discard all deferred files"""
@@ -56,17 +66,12 @@ class Transaction:
             if f is not None:
                 self.files.appendleft(f)
             # A failed commit or discard must still end the transaction.
-            # Leaving _intrans set would defer every later write on this
-            # filesystem into a temporary file that nothing ever commits,
-            # and instances are cached, so that would persist process-wide.
             while self.files:
                 try:
                     self.files.popleft().discard()
                 except Exception:
                     logger.debug("Discarding deferred file failed", exc_info=True)
-            self.fs._intrans = False
-            self.fs._transaction = None
-            self.fs = None
+            self._detach()
 
 
 class FileActor:
@@ -112,6 +117,4 @@ class DaskTransaction(Transaction):
             else:
                 self.files.discard().result()
         finally:
-            self.fs._intrans = False
-            self.fs._transaction = None
-            self.fs = None
+            self._detach()
