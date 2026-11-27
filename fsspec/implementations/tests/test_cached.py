@@ -2274,3 +2274,17 @@ def test_write_transaction_failed_upload_ends_transaction(
     with fs.transaction:
         fs.pipe("/next-transaction", b"committed")
     assert m.cat("/next-transaction") == b"committed"
+
+
+def test_simplecache_pipe_file_create_mode(tmp_path):
+    fs = fsspec.filesystem(
+        "simplecache", target_protocol="memory", cache_storage=str(tmp_path)
+    )
+    fs.pipe_file("/pipe_mode/f", b"original")
+    with pytest.raises(FileExistsError):
+        fs.pipe_file("/pipe_mode/f", b"replaced", mode="create")
+    assert fs.cat_file("/pipe_mode/f") == b"original"
+    fs.pipe_file("/pipe_mode/f", b"replaced")
+    assert fs.cat_file("/pipe_mode/f") == b"replaced"
+    fs.pipe_file("/pipe_mode/new", b"x", mode="create")
+    assert fs.cat_file("/pipe_mode/new") == b"x"
