@@ -94,8 +94,7 @@ class ArrowFSWrapper(AbstractFileSystem):
             entries = [self.info(path, **kwargs)]
         if detail:
             return entries
-        else:
-            return [entry["name"] for entry in entries]
+        return [entry["name"] for entry in entries]
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)

@@ -71,8 +71,7 @@ class MemoryFileSystem(AbstractFileSystem):
         if isinstance(path, PurePath):
             if isinstance(path, PureWindowsPath):
                 return LocalFileSystem._strip_protocol(path)
-            else:
-                path = stringify_path(path)
+            path = stringify_path(path)
 
         path = path.removeprefix("memory://")
         if "::" in path or "://" in path:
@@ -288,7 +287,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "size": 0,
                 "type": "directory",
             }
-        elif path in self.store:
+        if path in self.store:
             filelike = self.store[path]
             return {
                 "name": path,
@@ -296,8 +295,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 "type": "file",
                 "created": filelike.created.timestamp(),
             }
-        else:
-            raise FileNotFoundError(path)
+        raise FileNotFoundError(path)
 
     def _open(
         self,
@@ -336,7 +334,7 @@ class MemoryFileSystem(AbstractFileSystem):
                     # position at the beginning of file
                     f.seek(0)
                 return f
-            elif "a" in mode:
+            if "a" in mode:
                 # append modes create the file if it does not exist, matching
                 # builtin open() and LocalFileSystem
                 m = MemoryFile(self, path, kwargs.get("data"))
@@ -345,8 +343,7 @@ class MemoryFileSystem(AbstractFileSystem):
                 # position at the end of file, like the existing-file path above
                 m.seek(0, 2)
                 return m
-            else:
-                raise FileNotFoundError(path)
+            raise FileNotFoundError(path)
         elif mode in {"wb", "w+b", "xb", "x+b"}:
             if "x" in mode and self.exists(path):
                 raise FileExistsError

@@ -344,8 +344,7 @@ class HTTPFileSystem(AbstractFileSystem):
                 }
                 for u in out
             ]
-        else:
-            return sorted(out)
+        return sorted(out)
 
     def ls(self, url, detail=True, **kwargs):
         if self.use_listings_cache and url in self.dircache:
@@ -542,14 +541,13 @@ class HTTPFileSystem(AbstractFileSystem):
                 cache_options=cache_options or self.cache_options,
                 **kw,
             )
-        else:
-            return HTTPStreamFile(
-                self,
-                path,
-                mode=mode,
-                session=self.session,
-                **kw,
-            )
+        return HTTPStreamFile(
+            self,
+            path,
+            mode=mode,
+            session=self.session,
+            **kw,
+        )
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
@@ -614,13 +612,11 @@ class HTTPFileSystem(AbstractFileSystem):
             elif self.exists(path):
                 if not detail:
                     return [path]
-                else:
-                    return {path: self.info(path)}
+                return {path: self.info(path)}
             else:
                 if not detail:
                     return []  # glob of non-existent returns empty
-                else:
-                    return {}
+                return {}
         elif "/" in path[:ind]:
             ind2 = path[:ind].rindex("/")
             root = path[: ind2 + 1]
@@ -664,8 +660,7 @@ class HTTPFileSystem(AbstractFileSystem):
         }
         if detail:
             return out
-        else:
-            return list(out)
+        return list(out)
 
     def isdir(self, path):
         # override, since all URLs are (also) files

@@ -47,10 +47,9 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
             return {"name": "", "type": "directory", "size": 0}
         if path in self.dir_cache:
             return self.dir_cache[path]
-        elif path + "/" in self.dir_cache:
+        if path + "/" in self.dir_cache:
             return self.dir_cache[path + "/"]
-        else:
-            raise FileNotFoundError(path)
+        raise FileNotFoundError(path)
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
@@ -81,5 +80,4 @@ class AbstractArchiveFileSystem(AbstractFileSystem):
                 paths[info["name"]] = info
         if detail:
             return sorted(paths.values(), key=operator.itemgetter("name"))
-        else:
-            return sorted(paths)
+        return sorted(paths)

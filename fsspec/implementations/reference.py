@@ -336,9 +336,9 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         """
         if key in self._items:
             return self._items[key]
-        elif key in self.zmetadata:
+        if key in self.zmetadata:
             return json.dumps(self.zmetadata[key]).encode()
-        elif "/" not in key or self._is_meta(key):
+        if "/" not in key or self._is_meta(key):
             raise KeyError(key)
         field, _ = key.rsplit("/", 1)
         record, ri, chunk_size = self._key_to_record(key)
@@ -398,12 +398,11 @@ class LazyReferenceMapper(collections.abc.MutableMapping):
         if len(refs) == 3:
             # All urls
             return (list(t) for t in it)
-        elif len(refs) == 1:
+        if len(refs) == 1:
             # All raws
             return refs["raw"]
-        else:
-            # Mix of urls and raws
-            return (list(t[:3]) if not t[3] else t[3] for t in it)
+        # Mix of urls and raws
+        return (list(t[:3]) if not t[3] else t[3] for t in it)
 
     def _generate_all_records(self, field):
         """Load all the references within a field by iterating over the parquet files"""
@@ -1240,12 +1239,11 @@ class ReferenceFileSystem(AsyncFileSystem):
     def isdir(self, path):  # overwrite auto-sync version
         if self.dircache:
             return path in self.dircache
-        elif isinstance(self.references, LazyReferenceMapper):
+        if isinstance(self.references, LazyReferenceMapper):
             return path in self.references.listdir()
-        else:
-            # this may be faster than building dircache for single calls, but
-            # by looping will be slow for many calls; could cache it?
-            return any(_.startswith(f"{path}/") for _ in self.references)
+        # this may be faster than building dircache for single calls, but
+        # by looping will be slow for many calls; could cache it?
+        return any(_.startswith(f"{path}/") for _ in self.references)
 
     def isfile(self, path):  # overwrite auto-sync version
         return path in self.references
@@ -1267,18 +1265,16 @@ class ReferenceFileSystem(AsyncFileSystem):
             if not self.dircache:
                 self._dircache_from_items()
             return {k: self._ls_from_cache(k)[0] for k in r}
-        else:
-            return r
+        return r
 
     def info(self, path, **kwargs):
         out = self.references.get(path)
         if out is not None:
             if isinstance(out, (str, bytes)):
                 return {"name": path, "type": "file", "size": len(_inline_data(out))}
-            elif len(out) > 1:
+            if len(out) > 1:
                 return {"name": path, "type": "file", "size": out[2]}
-            else:
-                out0 = [{"name": path, "type": "file", "size": None}]
+            out0 = [{"name": path, "type": "file", "size": None}]
         else:
             out = self.ls(path, True)
             out0 = [o for o in out if o["name"] == path]

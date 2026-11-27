@@ -226,7 +226,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
         if "head_not_auth" in self.headers:
             r_headers["Content-Length"] = 123
             return self._respond(403, r_headers, b"not authorized for HEAD request")
-        elif "head_ok" not in self.headers:
+        if "head_ok" not in self.headers:
             return self._respond(405)
 
         file_path = self.path.rstrip("/")

@@ -375,8 +375,7 @@ class HTTPFileSystem(AsyncFileSystem):
                 }
                 for u in out
             ]
-        else:
-            return sorted(out)
+        return sorted(out)
 
     async def _ls(self, url, detail=True, **kwargs):
         if self.use_listings_cache and url in self.dircache:
@@ -575,15 +574,14 @@ class HTTPFileSystem(AsyncFileSystem):
                 loop=self.loop,
                 **kw,
             )
-        else:
-            return HTTPStreamFile(
-                self,
-                path,
-                mode=mode,
-                loop=self.loop,
-                session=session,
-                **kw,
-            )
+        return HTTPStreamFile(
+            self,
+            path,
+            mode=mode,
+            loop=self.loop,
+            session=session,
+            **kw,
+        )
 
     async def open_async(self, path, mode="rb", size=None, **kwargs):
         session = await self.set_session()
@@ -674,14 +672,11 @@ class HTTPFileSystem(AsyncFileSystem):
             if await self._exists(path, **kwargs):
                 if not detail:
                     return [path]
-                else:
-                    return {path: await self._info(path, **kwargs)}
-            else:
-                if not detail:
-                    return []  # glob of non-existent returns empty
-                else:
-                    return {}
-        elif "/" in path[:min_idx]:
+                return {path: await self._info(path, **kwargs)}
+            if not detail:
+                return []  # glob of non-existent returns empty
+            return {}
+        if "/" in path[:min_idx]:
             min_idx = path[:min_idx].rindex("/")
             root = path[: min_idx + 1]
             depth = path[min_idx + 1 :].count("/") + 1
@@ -718,8 +713,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
         if detail:
             return out
-        else:
-            return list(out)
+        return list(out)
 
     async def _isdir(self, path):
         # override, since all URLs are (also) files

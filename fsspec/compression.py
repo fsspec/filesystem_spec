@@ -170,9 +170,8 @@ except ImportError:
             if "r" in mode:
                 cctx = zstd.ZstdDecompressor()
                 return cctx.stream_reader(infile)
-            else:
-                cctx = zstd.ZstdCompressor(level=10)
-                return cctx.stream_writer(infile)
+            cctx = zstd.ZstdCompressor(level=10)
+            return cctx.stream_writer(infile)
 
         register_compression("zstd", zstandard_file, ["zst", "zstd"])
     except ImportError:

@@ -72,10 +72,9 @@ def vcr_config():
             "before_record_response": before_record_response,
             "before_record_request": before_record_request,
         }
-    else:
-        return {
-            "record_mode": "none",
-        }
+    return {
+        "record_mode": "none",
+    }
 
 
 @pytest.fixture

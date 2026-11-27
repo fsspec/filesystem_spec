@@ -193,11 +193,11 @@ def run(
         th.daemon = True
         th.start()
         return th
-    else:  # pragma: no cover
-        try:
-            func()
-        except KeyboardInterrupt:
-            pass
+    # pragma: no cover
+    try:
+        func()
+    except KeyboardInterrupt:
+        pass
 
 
 def main(args):

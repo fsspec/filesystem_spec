@@ -352,8 +352,7 @@ def _get_batch_size(nofiles=False):
 
     if soft_limit == resource.RLIM_INFINITY:
         return -1
-    else:
-        return soft_limit // 8
+    return soft_limit // 8
 
 
 def running_async() -> bool:
@@ -679,8 +678,7 @@ class AsyncFileSystem(AbstractFileSystem):
                 for k, v in zip(paths, out)
                 if on_error != "omit" or not is_exception(v)
             }
-        else:
-            return out[0]
+        return out[0]
 
     async def _cat_ranges(
         self,
@@ -1023,14 +1021,11 @@ class AsyncFileSystem(AbstractFileSystem):
             if await self._exists(path, **kwargs):
                 if not detail:
                     return [path]
-                else:
-                    return {path: await self._info(path, **kwargs)}
-            else:
-                if not detail:
-                    return []  # glob of non-existent returns empty
-                else:
-                    return {}
-        elif "/" in path[:min_idx]:
+                return {path: await self._info(path, **kwargs)}
+            if not detail:
+                return []  # glob of non-existent returns empty
+            return {}
+        if "/" in path[:min_idx]:
             first_wildcard_idx = min_idx
             min_idx = path[:min_idx].rindex("/")
             root = path[
@@ -1076,8 +1071,7 @@ class AsyncFileSystem(AbstractFileSystem):
 
         if detail:
             return out
-        else:
-            return list(out)
+        return list(out)
 
     async def _du(self, path, total=True, maxdepth=None, **kwargs):
         sizes = {}
@@ -1087,8 +1081,7 @@ class AsyncFileSystem(AbstractFileSystem):
             sizes[info["name"]] = info["size"]
         if total:
             return sum(sizes.values())
-        else:
-            return sizes
+        return sizes
 
     async def _find(self, path, maxdepth=None, withdirs=False, **kwargs):
         path = self._strip_protocol(path)
@@ -1112,8 +1105,7 @@ class AsyncFileSystem(AbstractFileSystem):
         names = sorted(out)
         if not detail:
             return names
-        else:
-            return {name: out[name] for name in names}
+        return {name: out[name] for name in names}
 
     async def _expand_path(
         self,

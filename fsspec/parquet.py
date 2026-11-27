@@ -372,7 +372,7 @@ def _set_engine(engine_str):
         try:
             if engine == "fastparquet":
                 return FastparquetEngine()
-            elif engine == "pyarrow":
+            if engine == "pyarrow":
                 return PyarrowEngine()
         except ImportError:
             pass

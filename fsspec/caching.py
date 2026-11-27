@@ -270,7 +270,7 @@ class ReadAheadCache(BaseCache):
             # cache hit
             self.hit_count += 1
             return self.cache[start - self.start : end - self.start]
-        elif self.start <= start < self.end:
+        if self.start <= start < self.end:
             # partial hit
             self.miss_count += 1
             part = self.cache[start - self.start :]
@@ -453,10 +453,9 @@ class FirstChunkCache(BaseCache):
                 part += self.fetcher(self.blocksize, end)
             self.hit_count += 1
             return part
-        else:
-            self.miss_count += 1
-            self.total_requested_bytes += end - start
-            return self.fetcher(start, end)
+        self.miss_count += 1
+        self.total_requested_bytes += end - start
+        return self.fetcher(start, end)
 
 
 class BlockCache(BaseCache):
@@ -568,24 +567,23 @@ class BlockCache(BaseCache):
             block: bytes = self._fetch_block_cached(start_block_number)
             return block[start_pos:end_pos]
 
-        else:
-            # read from the initial
-            out = [self._fetch_block_cached(start_block_number)[start_pos:]]
+        # read from the initial
+        out = [self._fetch_block_cached(start_block_number)[start_pos:]]
 
-            # intermediate blocks
-            # Note: it'd be nice to combine these into one big request. However
-            # that doesn't play nicely with our LRU cache.
-            out.extend(
-                map(
-                    self._fetch_block_cached,
-                    range(start_block_number + 1, end_block_number),
-                )
+        # intermediate blocks
+        # Note: it'd be nice to combine these into one big request. However
+        # that doesn't play nicely with our LRU cache.
+        out.extend(
+            map(
+                self._fetch_block_cached,
+                range(start_block_number + 1, end_block_number),
             )
+        )
 
-            # final block
-            out.append(self._fetch_block_cached(end_block_number)[:end_pos])
+        # final block
+        out.append(self._fetch_block_cached(end_block_number)[:end_pos])
 
-            return b"".join(out)
+        return b"".join(out)
 
 
 class BytesCache(BaseCache):
@@ -1097,24 +1095,23 @@ class BackgroundBlockCache(BaseCache):
             block = self._fetch_block_cached(start_block_number)
             return block[start_pos:end_pos]
 
-        else:
-            # read from the initial
-            out = [self._fetch_block_cached(start_block_number)[start_pos:]]
+        # read from the initial
+        out = [self._fetch_block_cached(start_block_number)[start_pos:]]
 
-            # intermediate blocks
-            # Note: it'd be nice to combine these into one big request. However
-            # that doesn't play nicely with our LRU cache.
-            out.extend(
-                map(
-                    self._fetch_block_cached,
-                    range(start_block_number + 1, end_block_number),
-                )
+        # intermediate blocks
+        # Note: it'd be nice to combine these into one big request. However
+        # that doesn't play nicely with our LRU cache.
+        out.extend(
+            map(
+                self._fetch_block_cached,
+                range(start_block_number + 1, end_block_number),
             )
+        )
 
-            # final block
-            out.append(self._fetch_block_cached(end_block_number)[:end_pos])
+        # final block
+        out.append(self._fetch_block_cached(end_block_number)[:end_pos])
 
-            return b"".join(out)
+        return b"".join(out)
 
 
 caches: dict[str | None, type[BaseCache]] = {

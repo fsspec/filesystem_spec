@@ -587,7 +587,7 @@ class CachingFileSystem(ChainedFileSystem):
         fs = d.get("fs", None)  # fs is not immediately defined
         if item in d:
             return d[item]
-        elif fs is not None:
+        if fs is not None:
             if item in fs.__dict__:
                 # attribute of instance
                 return fs.__dict__[item]
@@ -600,9 +600,8 @@ class CachingFileSystem(ChainedFileSystem):
                 # instance method
                 return m.__get__(fs, cls)
             return m  # class method or attribute
-        else:
-            # attributes of the superclass, while target is being set up
-            return super().__getattribute__(item)
+        # attributes of the superclass, while target is being set up
+        return super().__getattribute__(item)
 
     def __eq__(self, other):
         """Test for equality."""

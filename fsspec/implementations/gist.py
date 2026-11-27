@@ -191,8 +191,7 @@ class GistFileSystem(AbstractFileSystem):
                 raise FileNotFoundError(path)
         if detail:
             return results
-        else:
-            return sorted(f["name"] for f in results)
+        return sorted(f["name"] for f in results)
 
     def _open(self, path, mode="rb", block_size=None, **kwargs):
         """

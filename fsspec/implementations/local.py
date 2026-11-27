@@ -253,15 +253,14 @@ class LocalFileSystem(AbstractFileSystem):
         if os.sep == "/":
             # posix native
             return path.rsplit("/", 1)[0] or "/"
-        else:
-            # NT
-            path_ = path.rsplit("/", 1)[0]
-            if len(path_) <= 3:
-                if path_[1:2] == ":":
-                    # nt root (something like c:/)
-                    return path_[0] + ":/"
-            # More cases may be required here
-            return path_
+        # NT
+        path_ = path.rsplit("/", 1)[0]
+        if len(path_) <= 3:
+            if path_[1:2] == ":":
+                # nt root (something like c:/)
+                return path_[0] + ":/"
+        # More cases may be required here
+        return path_
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -301,8 +300,7 @@ class LocalFileSystem(AbstractFileSystem):
             path = path.rstrip("/") or cls.root_marker
             return drive + path
 
-        else:
-            return path.rstrip("/") or cls.root_marker
+        return path.rstrip("/") or cls.root_marker
 
     def _isfilestore(self):
         # Inheriting from DaskFileSystem makes this False (S3, etc. were)
@@ -320,51 +318,48 @@ def make_path_posix(path):
     if not isinstance(path, str):
         if isinstance(path, (list, set, tuple)):
             return type(path)(make_path_posix(p) for p in path)
-        else:
-            path = stringify_path(path)
-            if not isinstance(path, str):
-                raise TypeError(f"could not convert {path!r} to string")
+        path = stringify_path(path)
+        if not isinstance(path, str):
+            raise TypeError(f"could not convert {path!r} to string")
     if os.sep == "/":
         # Native posix
         if path.startswith("/"):
             # most common fast case for posix
             return path
-        elif path.startswith("~"):
+        if path.startswith("~"):
             return osp.expanduser(path)
-        elif path.startswith("./"):
+        if path.startswith("./"):
             path = path[2:]
         elif path == ".":
             path = ""
         return f"{os.getcwd()}/{path}"
-    else:
-        # NT handling
-        if path[0:1] == "/" and path[2:3] == ":":
-            # path is like "/c:/local/path"
-            path = path[1:]
-        if path[1:2] == ":":
-            # windows full path like "C:\\local\\path"
-            if len(path) == 2 or (len(path) == 3 and path[2] in "/\\"):
-                # nt root (something like c:/). A three-character "c:x" is not a
-                # root: it names "x" relative to that drive, so it falls through
-                # instead of being collapsed to the drive root.
-                return path[0] + ":/"
-            return path.replace("\\", "/")
-        elif path[0:1] == "~":
-            return make_path_posix(osp.expanduser(path))
-        elif path.startswith(("\\\\", "//")):
-            # windows UNC/DFS-style paths
-            return "//" + path[2:].replace("\\", "/")
-        elif path.startswith(("\\", "/")):
-            # windows relative path with root
-            path = path.replace("\\", "/")
-            return f"{osp.splitdrive(os.getcwd())[0]}{path}"
-        else:
-            path = path.replace("\\", "/")
-            if path.startswith("./"):
-                path = path[2:]
-            elif path == ".":
-                path = ""
-            return f"{make_path_posix(os.getcwd())}/{path}"
+    # NT handling
+    if path[0:1] == "/" and path[2:3] == ":":
+        # path is like "/c:/local/path"
+        path = path[1:]
+    if path[1:2] == ":":
+        # windows full path like "C:\\local\\path"
+        if len(path) == 2 or (len(path) == 3 and path[2] in "/\\"):
+            # nt root (something like c:/). A three-character "c:x" is not a
+            # root: it names "x" relative to that drive, so it falls through
+            # instead of being collapsed to the drive root.
+            return path[0] + ":/"
+        return path.replace("\\", "/")
+    if path[0:1] == "~":
+        return make_path_posix(osp.expanduser(path))
+    if path.startswith(("\\\\", "//")):
+        # windows UNC/DFS-style paths
+        return "//" + path[2:].replace("\\", "/")
+    if path.startswith(("\\", "/")):
+        # windows relative path with root
+        path = path.replace("\\", "/")
+        return f"{osp.splitdrive(os.getcwd())[0]}{path}"
+    path = path.replace("\\", "/")
+    if path.startswith("./"):
+        path = path[2:]
+    elif path == ".":
+        path = ""
+    return f"{make_path_posix(os.getcwd())}/{path}"
 
 
 def trailing_sep(path):
