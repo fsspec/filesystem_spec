@@ -396,32 +396,26 @@ class DirFileSystem(AsyncFileSystem, ChainedFileSystem):
         return self._relpath(ret)
 
     async def _du(self, path, *args, **kwargs):
-        total = kwargs.get("total", True)
         ret = await self.fs._du(self._join(path), *args, **kwargs)
-        if total:
-            return ret
-
-        return {self._relpath(path): size for path, size in ret.items()}
+        if isinstance(ret, dict):
+            return {self._relpath(path): size for path, size in ret.items()}
+        return ret
 
     def du(self, path, *args, **kwargs):
-        total = kwargs.get("total", True)
         ret = self.fs.du(self._join(path), *args, **kwargs)
-        if total:
-            return ret
-
-        return {self._relpath(path): size for path, size in ret.items()}
+        if isinstance(ret, dict):
+            return {self._relpath(path): size for path, size in ret.items()}
+        return ret
 
     async def _find(self, path, *args, **kwargs):
-        detail = kwargs.get("detail", False)
         ret = await self.fs._find(self._join(path), *args, **kwargs)
-        if detail:
+        if isinstance(ret, dict):
             return self._relpath_detail(ret)
         return self._relpath(ret)
 
     def find(self, path, *args, **kwargs):
-        detail = kwargs.get("detail", False)
         ret = self.fs.find(self._join(path), *args, **kwargs)
-        if detail:
+        if isinstance(ret, dict):
             return self._relpath_detail(ret)
         return self._relpath(ret)
 

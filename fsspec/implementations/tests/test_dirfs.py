@@ -808,6 +808,28 @@ def test_find(dirfs):
 
 
 @pytest.mark.asyncio
+async def test_async_find_preserves_backend_list_with_shared_file_and_directory(adirfs):
+    # Object stores can represent a file and a directory at the same path.
+    # Their names-only listing can contain both; a detail mapping cannot.
+    shared = f"{PATH}/shared"
+    child = f"{shared}/child"
+
+    async def backend_find(path, maxdepth, withdirs, detail, prefix):
+        if detail:
+            return {shared: {"type": "directory"}, child: {"type": "file"}}
+        return [shared, shared, child]
+
+    adirfs.fs._find.side_effect = backend_find
+
+    assert await adirfs._find("", None, True, False, "sh") == [
+        "shared",
+        "shared",
+        "shared/child",
+    ]
+    adirfs.fs._find.assert_awaited_once_with(PATH, None, True, False, "sh")
+
+
+@pytest.mark.asyncio
 async def test_async_find_detail(adirfs):
     adirfs.fs._find.return_value = {
         f"{PATH}/dir/one": {"name": f"{PATH}/dir/one", "foo": "bar"},
@@ -834,6 +856,30 @@ def test_find_detail(dirfs):
     for name, info in dirfs.fs.find.return_value.items():
         assert info["name"] == name
     dirfs.fs.find.assert_called_once_with(f"{PATH}/dir", *ARGS, detail=True, **KWARGS)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("method", ["find", "du"])
+async def test_positional_listing_options(tmp_path, asynchronous, method):
+    (tmp_path / "payload").write_bytes(b"data")
+    local = LocalFileSystem()
+    backend = (
+        AsyncFileSystemWrapper(fs=local, asynchronous=True) if asynchronous else local
+    )
+    fs = DirFileSystem(str(tmp_path), backend, asynchronous=asynchronous)
+    args = (None, False, True) if method == "find" else (False,)
+    if asynchronous:
+        result = await getattr(fs, f"_{method}")("", *args)
+    else:
+        result = getattr(fs, method)("", *args)
+
+    if method == "find":
+        assert list(result) == ["payload"]
+        assert result["payload"]["name"] == "payload"
+        assert result["payload"]["size"] == 4
+    else:
+        assert result == {"payload": 4}
 
 
 @pytest.mark.asyncio
