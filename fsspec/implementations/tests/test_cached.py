@@ -3,6 +3,7 @@ import json
 import os
 import pathlib
 import shutil
+import stat
 import tempfile
 import threading
 import time
@@ -257,6 +258,88 @@ def test_cache_storage_mode(tmp_path, protocol):
 
     mode = stat.S_IMODE(os.stat(cache).st_mode)
     assert mode & (stat.S_IRWXG | stat.S_IRWXO) == 0, oct(mode)
+
+
+@pytest.mark.skipif(win, reason="POSIX file permissions")
+@pytest.mark.parametrize("protocol", ["filecache", "simplecache", "blockcache"])
+def test_cache_storage_mode_existing_dir(tmp_path, protocol):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    os.chmod(cache, 0o755)
+
+    fs = fsspec.filesystem(
+        protocol,
+        target_protocol="file",
+        cache_storage=str(cache),
+        cache_storage_mode=0o700,
+        skip_instance_cache=True,
+    )
+    assert stat.S_IMODE(os.stat(cache).st_mode) & 0o777 == 0o700
+
+    # Post-init _mkcache() works and a wider mode does not widen the directory.
+    fs.cache_storage_mode = 0o750
+    fs._mkcache()
+    assert stat.S_IMODE(os.stat(cache).st_mode) & 0o777 == 0o700
+
+
+@pytest.mark.skipif(win, reason="POSIX file permissions")
+@pytest.mark.parametrize("trailing_slash", [False, True])
+def test_cache_storage_mode_rejects_symlink(tmp_path, trailing_slash):
+    target = tmp_path / "target"
+    target.mkdir()
+    os.chmod(target, 0o755)
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    cache_path = f"{link}{os.sep}" if trailing_slash else str(link)
+
+    with pytest.raises(PermissionError, match="symlink"):
+        fsspec.filesystem(
+            "filecache",
+            target_protocol="file",
+            cache_storage=cache_path,
+            cache_storage_mode=0o700,
+            skip_instance_cache=True,
+        )
+    assert stat.S_IMODE(os.stat(target).st_mode) & 0o777 == 0o755
+
+
+@pytest.mark.skipif(win, reason="POSIX file permissions")
+def test_cache_storage_mode_rejects_foreign_owner(tmp_path, monkeypatch):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    os.chmod(cache, 0o755)
+    foreign_uid = os.stat(cache).st_uid + 1
+    monkeypatch.setattr(os, "geteuid", lambda: foreign_uid)
+
+    with pytest.raises(PermissionError, match="owned by uid"):
+        fsspec.filesystem(
+            "filecache",
+            target_protocol="file",
+            cache_storage=str(cache),
+            cache_storage_mode=0o700,
+            skip_instance_cache=True,
+        )
+    assert stat.S_IMODE(os.stat(cache).st_mode) & 0o777 == 0o755
+
+
+@pytest.mark.skipif(win, reason="POSIX file permissions")
+def test_cache_storage_mode_simplecache_preserves_readonly_dir(tmp_path):
+    readonly_dir = tmp_path / "readonly"
+    writable_dir = tmp_path / "writable"
+    readonly_dir.mkdir()
+    writable_dir.mkdir()
+    os.chmod(readonly_dir, 0o755)
+    os.chmod(writable_dir, 0o755)
+
+    fsspec.filesystem(
+        "simplecache",
+        target_protocol="file",
+        cache_storage=[str(readonly_dir), str(writable_dir)],
+        cache_storage_mode=0o700,
+        skip_instance_cache=True,
+    )
+    assert stat.S_IMODE(os.stat(writable_dir).st_mode) & 0o777 == 0o700
+    assert stat.S_IMODE(os.stat(readonly_dir).st_mode) & 0o777 == 0o755
 
 
 def test_idempotent():

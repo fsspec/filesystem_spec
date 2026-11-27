@@ -5,6 +5,7 @@ import inspect
 import logging
 import os
 import secrets
+import stat
 import tempfile
 import time
 import weakref
@@ -32,6 +33,33 @@ if TYPE_CHECKING:
     from fsspec.implementations.cache_mapper import AbstractCacheMapper
 
 logger = logging.getLogger("fsspec.cached")
+
+
+def _enforce_storage_mode(path, mode):
+    if not hasattr(os, "geteuid"):
+        return
+    check_path = os.fspath(path).rstrip(os.sep) or os.sep
+    try:
+        dir_fd = os.open(check_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+    except OSError as exc:
+        if os.path.islink(check_path):
+            raise PermissionError(
+                f"Cache storage directory must not be a symlink: {path!r}"
+            ) from exc
+        raise
+    try:
+        dir_stat = os.fstat(dir_fd)
+        if dir_stat.st_uid != os.geteuid():
+            raise PermissionError(
+                f"Cache storage directory {path!r} is owned by uid "
+                f"{dir_stat.st_uid}, expected {os.geteuid()}"
+            )
+        actual_mode = stat.S_IMODE(dir_stat.st_mode)
+        extra_bits = (actual_mode & 0o777) & ~mode
+        if extra_bits:
+            os.fchmod(dir_fd, actual_mode & ~extra_bits)
+    finally:
+        os.close(dir_fd)
 
 
 @contextmanager
@@ -174,12 +202,14 @@ class CachingFileSystem(ChainedFileSystem):
             The object use to map from original filenames to cached filenames.
             Only one of this and ``same_names`` should be specified.
         cache_storage_mode: int (optional)
-            Permission mode used when creating the cache storage directory,
+            Permission mode used for the writable cache storage directory,
             e.g. ``0o700``. The default of ``None`` leaves the directory at
             the system default (governed by the umask), which is the existing
             behaviour. Pass an octal mode such as ``0o700`` to keep the cache
             directory, and so the cached data files within it, readable by the
-            owner only.
+            owner only. On POSIX, if the directory already exists, it must be
+            a real directory owned by the current user and any permissions
+            wider than ``cache_storage_mode`` are tightened.
         cache_metadata_name: str (optional)
             Name of the file holding the cache metadata inside each cache
             storage directory, "cache" by default. With ``same_names=True``
@@ -266,6 +296,7 @@ class CachingFileSystem(ChainedFileSystem):
             os.makedirs(path, exist_ok=True)
         else:
             os.makedirs(path, exist_ok=True, mode=self.cache_storage_mode)
+            _enforce_storage_mode(path, self.cache_storage_mode)
 
     def _mkcache(self):
         self._makedirs(self.storage[-1])
