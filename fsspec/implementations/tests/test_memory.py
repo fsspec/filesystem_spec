@@ -14,6 +14,23 @@ from fsspec.implementations.local import LocalFileSystem, make_path_posix
 from fsspec.implementations.memory import MemoryFileSystem
 
 
+def test_cat_file_whole_read_preserves_snapshot_and_position(m):
+    m.pipe_file("file", b"abcdef")
+    with m.open("file", "r+b") as file:
+        file.seek(2)
+        snapshot = m.cat_file("file")
+        assert file.tell() == 2
+        file.write(b"XY")
+        assert snapshot == b"abcdef"
+        assert m.cat_file("file", start=-4, end=-1) == b"XYe"
+        assert m.cat_file("file") == b"abXYef"
+        with file.getbuffer() as view:
+            snapshot = m.cat_file("file")
+            view[:2] = b"12"
+            assert snapshot == b"abXYef"
+        assert m.cat_file("file") == b"12XYef"
+
+
 @pytest.mark.parametrize(
     "mode, method, args, expected",
     [

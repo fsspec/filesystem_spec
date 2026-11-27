@@ -385,9 +385,13 @@ class MemoryFileSystem(AbstractFileSystem):
         logger.debug("cat: %s", path)
         path = self._strip_protocol(path)
         try:
-            return bytes(self.store[path].getbuffer()[start:end])
+            file = self.store[path]
         except KeyError as e:
             raise FileNotFoundError(path) from e
+        if start is None and end is None:
+            # BytesIO can share an immutable snapshot until the next write.
+            return file.getvalue()
+        return bytes(file.getbuffer()[start:end])
 
     def _rm(self, path):
         path = self._strip_protocol(path)
