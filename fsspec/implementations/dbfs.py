@@ -195,7 +195,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                 # Not everything was deleted so far; retry without recursion.
                 if e.error_code == "PARTIAL_DELETE":
                     continue
-                elif e.error_code == "IO_ERROR":
+                if e.error_code == "IO_ERROR":
                     # Using the same exception as the os module would use here
                     raise OSError(e.message) from e
 

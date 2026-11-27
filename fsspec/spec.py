@@ -1370,7 +1370,7 @@ class AbstractFileSystem(metaclass=_Cached):
                             )
                         )
                     continue
-                elif recursive:
+                if recursive:
                     rec = set(
                         self.find(
                             p,

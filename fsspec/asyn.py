@@ -1153,7 +1153,7 @@ class AsyncFileSystem(AbstractFileSystem):
                             )
                         )
                     continue
-                elif recursive:
+                if recursive:
                     rec = set(await self._find(p, maxdepth=maxdepth, withdirs=withdirs))
                     out |= rec
                 if p not in out and (

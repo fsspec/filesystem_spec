@@ -733,7 +733,7 @@ def merge_offset_ranges(
             if end is not None and end <= prev_end:
                 # Already covered by the current block
                 continue
-            elif (
+            if (
                 end is not None
                 and max_block is not None
                 and (end - new_starts[-1]) > max_block
@@ -895,7 +895,7 @@ def glob_translate(pat):
         if part == "**":
             results.append(any_segments if idx < last_part_idx else any_last_segments)
             continue
-        elif "**" in part:
+        if "**" in part:
             raise ValueError(
                 "Invalid pattern: '**' can only be an entire path component"
             )
