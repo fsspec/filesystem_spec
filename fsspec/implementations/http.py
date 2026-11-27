@@ -243,6 +243,13 @@ class HTTPFileSystem(AsyncFileSystem):
         self.cache_type = cache_type
         self.cache_options = cache_options
         self.client_kwargs = client_kwargs or {}
+        # aiohttp attaches a session's default auth to every request, so it
+        # also authenticates the request following a redirect to another
+        # origin; keep basic auth out of the session and send it per request
+        client_auth = self.client_kwargs.get("auth")
+        self._client_auth = (
+            client_auth if isinstance(client_auth, aiohttp.BasicAuth) else None
+        )
         self.get_client = get_client
         self.encoded = encoded
         if retries < 0:
@@ -299,10 +306,27 @@ class HTTPFileSystem(AsyncFileSystem):
             trace_configs = list(client_kwargs.get("trace_configs") or ())
             trace_configs.append(trace_config)
             client_kwargs["trace_configs"] = trace_configs
+            if self._client_auth is not None:
+                # sent with each request instead, see _set_request_auth
+                client_kwargs.pop("auth", None)
             self._session = await self.get_client(loop=self.loop, **client_kwargs)
             if not self.asynchronous:
                 weakref.finalize(self, self.close_session, self.loop, self._session)
         return self._session
+
+    def _set_request_auth(self, url, kw):
+        """Add the ``client_kwargs`` basic auth to one request's arguments.
+
+        aiohttp drops a request's own ``auth`` when a redirect changes origin,
+        unlike the session default it re-applies there. Credentials given for
+        the call or encoded in the URL still win, and aiohttp rejects ``auth``
+        next to either of them.
+        """
+        if self._client_auth is None or "auth" in kw:
+            return
+        parsed = yarl.URL(url)
+        if not parsed.user and not parsed.password:
+            kw["auth"] = self._client_auth
 
     @classmethod
     def _strip_protocol(cls, path):
@@ -321,6 +345,7 @@ class HTTPFileSystem(AsyncFileSystem):
         # ignoring URL-encoded arguments
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        self._set_request_auth(url, kw)
         logger.debug(url)
         session = await self.set_session()
         async with session.get(self.encode_url(url), **kw) as r:
@@ -400,6 +425,7 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _cat_file(self, url, start=None, end=None, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        self._set_request_auth(url, kw)
         logger.debug(url)
 
         ranged = start is not None or end is not None
@@ -431,6 +457,7 @@ class HTTPFileSystem(AsyncFileSystem):
     ):
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        self._set_request_auth(rpath, kw)
         logger.debug(rpath)
         session = await self.set_session()
         async with session.get(self.encode_url(rpath), **kw) as r:
@@ -494,6 +521,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        self._set_request_auth(rpath, kw)
         session = await self.set_session()
 
         method = method.lower()
@@ -509,6 +537,7 @@ class HTTPFileSystem(AsyncFileSystem):
     async def _exists(self, path, strict=False, **kwargs):
         kw = self.kwargs.copy()
         kw.update(kwargs)
+        self._set_request_auth(path, kw)
         try:
             logger.debug(path)
             session = await self.set_session()
@@ -558,6 +587,7 @@ class HTTPFileSystem(AsyncFileSystem):
         kw = self.kwargs.copy()
         kw["asynchronous"] = self.asynchronous
         kw.update(kwargs)
+        self._set_request_auth(path, kw)
         info = {}
         size = size or info.update(self.info(path, **kwargs)) or info["size"]
         session = sync(self.loop, self.set_session)
@@ -586,6 +616,7 @@ class HTTPFileSystem(AsyncFileSystem):
 
     async def open_async(self, path, mode="rb", size=None, **kwargs):
         session = await self.set_session()
+        self._set_request_auth(path, kwargs)
         if size is None:
             try:
                 size = (await self._info(path, **kwargs))["size"]
@@ -616,6 +647,9 @@ class HTTPFileSystem(AsyncFileSystem):
         """
         info = {}
         session = await self.set_session()
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        self._set_request_auth(url, kw)
 
         async def _once():
             # HEAD, then GET if that gave no size or failed for any reason
@@ -628,8 +662,7 @@ class HTTPFileSystem(AsyncFileSystem):
                             self.encode_url(url),
                             size_policy=policy,
                             session=session,
-                            **self.kwargs,
-                            **kwargs,
+                            **kw,
                         )
                     )
                     if info.get("size") is not None:
@@ -755,6 +788,7 @@ class HTTPFileSystem(AsyncFileSystem):
         headers["Content-Length"] = str(len(value))
 
         session = await self.set_session()
+        self._set_request_auth(url, kwargs)
 
         async with session.put(
             self.encode_url(url), data=value, headers=headers, **kwargs
