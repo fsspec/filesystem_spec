@@ -1068,19 +1068,23 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             ex = None
         if self._intrans:
             path1 = path.rstrip("/") + "/"
+
+            def _size(f):
+                return os.path.getsize(f.fn) if f.closed else f.tell()
+
             for f in self.transaction.files:
                 if f.path == path:
-                    details.append(
-                        {"name": path, "size": f.size or f.tell(), "type": "file"}
-                    )
+                    details.append({"name": path, "size": _size(f), "type": "file"})
                 elif f.path.startswith(path1):
                     if f.path.count("/") == path1.count("/"):
                         details.append(
-                            {"name": f.path, "size": f.size or f.tell(), "type": "file"}
+                            {"name": f.path, "size": _size(f), "type": "file"}
                         )
                     else:
                         dname = "/".join(f.path.split("/")[: path1.count("/") + 1])
                         details.append({"name": dname, "size": 0, "type": "directory"})
+            # one entry per name; staged (later) entries take precedence
+            details = list({d["name"]: d for d in details}.values())
         if ex is not None and not details:
             raise ex
         if detail:
