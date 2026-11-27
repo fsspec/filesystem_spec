@@ -80,9 +80,7 @@ def vcr_config():
 
 @pytest.fixture
 def dbfsFS():
-    fs = fsspec.filesystem("dbfs", instance=INSTANCE, token=TOKEN)
-
-    return fs
+    return fsspec.filesystem("dbfs", instance=INSTANCE, token=TOKEN)
 
 
 @pytest.fixture

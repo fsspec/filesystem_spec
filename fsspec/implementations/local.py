@@ -348,8 +348,7 @@ def make_path_posix(path):
                 # root: it names "x" relative to that drive, so it falls through
                 # instead of being collapsed to the drive root.
                 return path[0] + ":/"
-            path = path.replace("\\", "/")
-            return path
+            return path.replace("\\", "/")
         elif path[0:1] == "~":
             return make_path_posix(osp.expanduser(path))
         elif path.startswith(("\\\\", "//")):

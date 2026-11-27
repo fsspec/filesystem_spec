@@ -543,8 +543,7 @@ class BlockCache(BaseCache):
         self.total_requested_bytes += end - start
         self.miss_count += 1
         logger.info("BlockCache fetching block %d", block_number)
-        block_contents = super()._fetch(start, end)
-        return block_contents
+        return super()._fetch(start, end)
 
     def _read_cache(
         self, start: int, end: int, start_block_number: int, end_block_number: int
@@ -823,13 +822,11 @@ class KnownPartsOfAFile(BaseCache):
                 # end block. The start of the request must have been found in
                 # an earlier part, else these bytes come from the wrong offsets
                 self.hit_count += 1
-                out = out + self.data[(loc0, loc1)][: stop - loc0]
-                return out
+                return out + self.data[(loc0, loc1)][: stop - loc0]
             loc_old = loc1
         self.miss_count += 1
         if started and not self.strict:
-            out = out + b"\x00" * (stop - loc_old)
-            return out
+            return out + b"\x00" * (stop - loc_old)
         raise ValueError
 
 
@@ -1073,8 +1070,7 @@ class BackgroundBlockCache(BaseCache):
         logger.info("BlockCache fetching block (%s) %d", log_info, block_number)
         self.total_requested_bytes += end - start
         self.miss_count += 1
-        block_contents = super()._fetch(start, end)
-        return block_contents
+        return super()._fetch(start, end)
 
     def _read_cache(
         self, start: int, end: int, start_block_number: int, end_block_number: int

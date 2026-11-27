@@ -123,8 +123,7 @@ def apply_config(cls, kwargs, conf_dict=None):
             kw.update(conf_dict[proto])
     # explicit kwargs always win
     kw.update(**kwargs)
-    kwargs = kw
-    return kwargs
+    return kw
 
 
 set_conf_files(conf_dir, conf)
