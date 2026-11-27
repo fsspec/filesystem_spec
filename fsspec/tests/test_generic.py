@@ -330,6 +330,64 @@ def test_rsync(tmpdir, m):
     )
 
 
+@pytest.mark.parametrize(
+    "kwargs, copied_existing",
+    [
+        ({"update_cond": "always"}, {"same_size", "other_size"}),
+        ({"update_cond": "never"}, set()),
+        ({"update_cond": "different"}, {"other_size"}),
+        ({}, {"other_size"}),  # "different" is the default
+        (
+            # fields may be functions of the info dict
+            {
+                "source_field": lambda info: info["size"] > 2,
+                "dest_field": lambda _: True,
+            },
+            {"other_size"},
+        ),
+    ],
+)
+def test_rsync_update_cond(m, kwargs, copied_existing):
+    m.pipe(
+        {
+            "/src/same_size": b"new",
+            "/src/other_size": b"n",
+            "/src/missing": b"new",
+            "/dst/same_size": b"old",
+            "/dst/other_size": b"old",
+        }
+    )
+
+    copied = rsync("memory:///src", "memory:///dst", **kwargs)
+
+    assert copied == {
+        f"memory:///src/{name}": f"memory:///dst/{name}"
+        for name in copied_existing | {"missing"}
+    }
+
+
+@pytest.mark.parametrize("delete_missing", [False, True])
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"/src/afile": b"new", "/dst/afile": b"old"},  # a file in both trees
+        {"/src/new": b"new", "/dst/keep": b"old"},  # no file in both trees
+    ],
+)
+def test_rsync_rejects_unknown_update_cond(m, files, delete_missing):
+    m.pipe(files)
+
+    with pytest.raises(ValueError, match="Unknown update_cond 'sometimes'"):
+        rsync(
+            "memory:///src",
+            "memory:///dst",
+            update_cond="sometimes",
+            delete_missing=delete_missing,
+        )
+    # nothing was copied or deleted
+    assert m.cat(m.find("/")) == files
+
+
 class _OptionsRequiredFS(MemoryFileSystem):
     """Backend that raises unless its storage_options reached the constructor."""
 

@@ -37,6 +37,32 @@ def _resolve_fs(url, method, protocol=None, storage_options=None):
     raise ValueError(f"Unknown FS resolution method: {method}")
 
 
+def _info_value(info, field):
+    """Value of ``field`` in a file's info dict; ``field`` may be a key or a function"""
+    return field(info) if callable(field) else info[field]
+
+
+def _copy_always(source_info, dest_info, source_field, dest_field):
+    return True
+
+
+def _copy_never(source_info, dest_info, source_field, dest_field):
+    return False
+
+
+def _copy_if_different(source_info, dest_info, source_field, dest_field):
+    return _info_value(source_info, source_field) != _info_value(dest_info, dest_field)
+
+
+# For each ``update_cond`` of ``rsync``: whether to copy a file that already
+# exists in the destination, given the info of the source and destination files
+_UPDATE_CONDITIONS = {
+    "always": _copy_always,
+    "never": _copy_never,
+    "different": _copy_if_different,
+}
+
+
 def rsync(
     source,
     destination,
@@ -77,7 +103,8 @@ def rsync(
         the destination. If "never", files that exist in the destination are
         not copied again. If "different" (default), only copy if the info
         fields given by ``source_field`` and ``dest_field`` (usually "size")
-        are different. Other comparisons may be added in the future.
+        are different. Other comparisons may be added in the future. Any
+        other value raises ``ValueError``.
     inst_kwargs: dict|None
         If ``fs`` is None, use this set of keyword arguments to make a
         GenericFileSystem instance
@@ -89,6 +116,13 @@ def rsync(
     -------
     dict of the copy operations that were performed, {source: destination}
     """
+    try:
+        should_copy = _UPDATE_CONDITIONS[update_cond]
+    except KeyError:
+        raise ValueError(
+            f"Unknown update_cond {update_cond!r}, "
+            f"must be one of {', '.join(map(repr, _UPDATE_CONDITIONS))}"
+        ) from None
     fs = fs or GenericFileSystem(**(inst_kwargs or {}))
     source = fs._strip_protocol(source)
     destination = fs._strip_protocol(destination)
@@ -119,23 +153,12 @@ def rsync(
     ]
     for k, v in allfiles.copy().items():
         otherfile = k.replace(source, destination, 1)
-        if otherfile in otherfiles:
-            if update_cond == "always":
-                allfiles[k] = otherfile
-            elif update_cond == "never":
-                allfiles.pop(k)
-            elif update_cond == "different":
-                inf1 = source_field(v) if callable(source_field) else v[source_field]
-                v2 = otherfiles[otherfile]
-                inf2 = dest_field(v2) if callable(dest_field) else v2[dest_field]
-                if inf1 != inf2:
-                    # details mismatch, make copy
-                    allfiles[k] = otherfile
-                else:
-                    # details match, don't copy
-                    allfiles.pop(k)
+        exists_in_destination = otherfile in otherfiles
+        if exists_in_destination and not should_copy(
+            v, otherfiles[otherfile], source_field, dest_field
+        ):
+            allfiles.pop(k)
         else:
-            # file not in target yet
             allfiles[k] = otherfile
     logger.debug(f"{len(allfiles)} files to copy")
     if allfiles:
