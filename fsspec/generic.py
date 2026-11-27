@@ -312,6 +312,7 @@ class GenericFileSystem(AsyncFileSystem):
             else:
                 return fs.copy(url, url2, **kwargs)
         await copy_file_op(fs, [url], fs2, [url2], tempdir, 1, on_error="raise")
+        return None
 
     async def _make_many_dirs(self, urls, exist_ok=True):
         fs = _resolve_fs(urls[0], self.method, storage_options=self.st_opts)
@@ -366,6 +367,7 @@ class GenericFileSystem(AsyncFileSystem):
         await copy_file_op(
             fs, path1, fs2, path2, tempdir, batch_size, on_error=on_error
         )
+        return None
 
 
 async def copy_file_op(
@@ -393,6 +395,7 @@ async def copy_file_op(
         for o in out:
             if isinstance(o, Exception):
                 raise o
+    return None
 
 
 async def _copy_file_op(fs1, url1, fs2, url2, local, on_error="ignore"):

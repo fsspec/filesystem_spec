@@ -144,6 +144,7 @@ class Callback:
             return self.hooks[hook_name](self.size, self.value, **kw)
         for hook in self.hooks.values() or []:
             hook(self.size, self.value, **kw)
+        return None
 
     def wrap(self, iterable):
         """

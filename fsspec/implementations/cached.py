@@ -92,6 +92,7 @@ class WriteCachedTransaction(Transaction):
         self.fs._intrans = False
         self.fs._transaction = None
         self.fs = None  # break cycle
+        return None
 
 
 class CachingFileSystem(ChainedFileSystem):
@@ -998,6 +999,7 @@ class SimpleCacheFileSystem(WholeFileCacheFileSystem):
             fn = os.path.join(storage, sha)
             if os.path.exists(fn):
                 return fn
+        return None
 
     def save_cache(self):
         pass

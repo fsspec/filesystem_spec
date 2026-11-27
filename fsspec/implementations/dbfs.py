@@ -74,6 +74,7 @@ class DatabricksFileSystem(AbstractFileSystem):
                         return [entry]
                     return []
             raise FileNotFoundError(path)
+        return None
 
     def ls(self, path, detail=True, **kwargs):
         """
@@ -475,6 +476,7 @@ class DatabricksFile(AbstractBufferedFile):
         if final:
             self.fs._close_handle(handle=self.handle)
             return True
+        return None
 
     def _fetch_range(self, start, end):
         """Internal function to download a block of data"""

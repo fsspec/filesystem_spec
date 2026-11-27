@@ -156,6 +156,7 @@ class LocalFileSystem(AbstractFileSystem):
                 shutil.copyfileobj(f, path2)
         else:
             return self.cp_file(path1, path2, **kwargs)
+        return None
 
     def put_file(self, path1, path2, callback=None, mode="overwrite", **kwargs):
         if mode == "create" and self.exists(path2):

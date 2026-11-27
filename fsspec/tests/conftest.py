@@ -196,6 +196,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             )
         else:
             self._respond(status, data=file_data)
+        return None
 
     def do_POST(self):
         length = self.headers.get("Content-Length")
@@ -255,6 +256,7 @@ class HTTPTestHandler(BaseHTTPRequestHandler):
             r_headers["Accept-Ranges"] = "none"
 
         self._respond(200, r_headers)
+        return None
 
 
 @contextlib.contextmanager

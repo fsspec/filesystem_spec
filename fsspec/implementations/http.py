@@ -150,6 +150,7 @@ async def _with_retries(attempt, fs, label):
                 delay,
             )
             await asyncio.sleep(delay)
+    return None
 
 
 async def get_client(**kwargs):
@@ -1092,6 +1093,7 @@ async def get_range(session, url, start, end, file=None, **kwargs):
             f.write(out)
     else:
         return out
+    return None
 
 
 async def _file_info(url, session, size_policy="head", **kwargs):

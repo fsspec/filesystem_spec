@@ -80,6 +80,7 @@ def _prot_in_references(path, references):
     ref = references.get(path)
     if isinstance(ref, (list, tuple)) and isinstance(ref[0], str):
         return split_protocol(ref[0])[0] if ref[0] else ref[0]
+    return None
 
 
 def _protocol_groups(paths, references):
@@ -898,6 +899,7 @@ class ReferenceFileSystem(AsyncFileSystem):
         else:
             with open(lpath, "wb") as f:
                 f.write(data)
+        return None
 
     def get_file(self, rpath, lpath, callback=DEFAULT_CALLBACK, **kwargs):
         if self.isdir(rpath):
@@ -910,6 +912,7 @@ class ReferenceFileSystem(AsyncFileSystem):
             with open(lpath, "wb") as f:
                 f.write(data)
         callback.absolute_update(len(data))
+        return None
 
     def get(self, rpath, lpath, recursive=False, maxdepth=None, **kwargs):
         if recursive:

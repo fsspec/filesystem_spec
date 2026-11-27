@@ -133,3 +133,4 @@ class SimpleFileWriter(fsspec.spec.AbstractBufferedFile):
         self.buffer.seek(0)
         data = self.buffer.read()
         self.fs.pipe_file(self.path, data)
+        return None
