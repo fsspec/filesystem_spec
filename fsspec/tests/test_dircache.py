@@ -32,9 +32,9 @@ def test_dircache_read_promotes_key_to_most_recent():
     assert dc["c"] == 3
 
 
-def test_dircache_negative_max_paths_retains_all_items():
-    dc = DirCache(max_paths=-1)
-
+@pytest.mark.parametrize("max_paths", [-1, 0, None])
+def test_dircache_unlimited_paths_retains_all_items(max_paths):
+    dc = DirCache(max_paths=max_paths)
     for i in range(10):
         dc[f"k{i}"] = i
 
@@ -44,47 +44,22 @@ def test_dircache_negative_max_paths_retains_all_items():
     assert len(list(dc)) == 10
 
 
-def test_dircache_zero_max_paths_retains_all_items():
-    dc = DirCache(max_paths=0)
-
-    for i in range(10):
-        dc[f"k{i}"] = i
-
-    assert len(dc) == 10
-    assert dc["k0"] == 0
-    assert dc["k9"] == 9
-    assert len(list(dc)) == 10
-
-
-def test_dircache_unlimited_paths_retains_all_items():
-    dc = DirCache(max_paths=None)
-
-    for i in range(10):
-        dc[f"k{i}"] = i
-
-    assert len(dc) == 10
-    assert dc["k0"] == 0
-    assert dc["k9"] == 9
-    assert len(list(dc)) == 10
-
-
-def test_dircache_expired_entry_raises_key_error_on_get():
+@pytest.mark.parametrize("operation", ["get", "contains", "iter"])
+def test_dircache_expired_entry(operation):
     dc = DirCache(listings_expiry_time=0.05)
     dc["a"] = 100
-
+    dc["b"] = 200
     time.sleep(0.08)
 
-    with pytest.raises(KeyError):
-        _ = dc["a"]
-
-
-def test_dircache_expired_entry_not_in_cache():
-    dc = DirCache(listings_expiry_time=0.05)
-    dc["a"] = 100
-
-    time.sleep(0.08)
-
-    assert "a" not in dc
+    # Use a fresh cache for each operation: checking expiry can evict entries.
+    if operation == "get":
+        with pytest.raises(KeyError):
+            dc["a"]
+    elif operation == "contains":
+        assert "a" not in dc
+    else:
+        assert list(dc) == []
+        assert len(dc) == 0
 
 
 def test_dircache_missing_key_not_in_cache_with_expiry():
@@ -95,33 +70,14 @@ def test_dircache_missing_key_not_in_cache_with_expiry():
     assert is_present is False
 
 
-def test_dircache_iter_excludes_expired_entries():
-    dc = DirCache(listings_expiry_time=0.05)
-    dc["a"] = 1
-    dc["b"] = 2
-
-    time.sleep(0.08)
-    active_keys = list(dc)
-
-    assert active_keys == []
-    assert len(dc) == 0
-
-
-def test_dircache_disabled_ignores_writes():
+def test_dircache_disabled():
     dc = DirCache(use_listings_cache=False)
-
     dc["a"] = 1
-
     assert "a" not in dc
     assert len(dc) == 0
     assert list(dc) == []
-
-
-def test_dircache_disabled_raises_key_error_on_read():
-    dc = DirCache(use_listings_cache=False)
-
     with pytest.raises(KeyError):
-        _ = dc["a"]
+        dc["a"]
 
 
 def test_dircache_del_removes_entry():
@@ -154,3 +110,23 @@ def test_dircache_pickle_roundtrip():
     assert dc2.use_listings_cache is True
     assert dc2.listings_expiry_time == 10
     assert dc2.max_paths == 5
+
+
+@pytest.mark.parametrize("max_paths", [None, 0, 1, 2, 3])
+@pytest.mark.parametrize("listings_expiry_time", [None, 60])
+@pytest.mark.parametrize("view", ["items", "values"])
+def test_dircache_views_after_reads(max_paths, listings_expiry_time, view):
+    dc = DirCache(max_paths=max_paths, listings_expiry_time=listings_expiry_time)
+    entries = {"a": 1, "b": 2, "c": 3}
+    for key, value in entries.items():
+        dc[key] = value
+
+    # Start with a non-default LRU order when the cache is bounded.
+    dc[next(iter(dc))]
+    keys = list(dc)
+    expected = [(key, entries[key]) for key in keys]
+    if view == "values":
+        expected = [value for _, value in expected]
+
+    assert list(getattr(dc, view)()) == expected
+    assert list(dc) == keys

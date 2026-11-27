@@ -124,3 +124,63 @@ def test_url(repo):
 
     with fsspec.open(f"git://{d}:file1") as f:
         assert f.read() == b"data00"
+
+
+@pytest.mark.parametrize("path", ["file1/child", "inner/file1/child", "file1//child"])
+def test_path_below_file_is_missing(repo, path):
+    fs = fsspec.filesystem("git", path=repo[0], ref="abranch")
+    assert not fs.exists(path)
+    assert not fs.isfile(path)
+    for method in (fs.info, fs.ls, fs.open):
+        with pytest.raises(FileNotFoundError):
+            method(path)
+    assert fs.cat_file("inner/file1") == b"data3"
+
+
+@pytest.mark.parametrize("path", ["file1", "inner/file1"])
+@pytest.mark.parametrize("prefix", ["", "/", "git://"])
+@pytest.mark.parametrize("suffix", ["", "/"])
+def test_file_metadata_path(repo, path, prefix, suffix):
+    fs = fsspec.filesystem("git", path=repo[0], ref="abranch")
+    requested = prefix + path + suffix
+    info = fs.info(requested)
+    assert info["name"] == path
+    assert fs.ls(requested) == [info]
+    assert fs.ls(requested, detail=False) == [path]
+    assert fs.cat_file(info["name"]) == fs.cat_file(requested)
+
+
+@pytest.mark.parametrize("path", ["inner", "inner/", "/inner", "git://inner/"])
+def test_directory_metadata_path(repo, path):
+    fs = fsspec.filesystem("git", path=repo[0], ref="abranch")
+    assert fs.info(path)["name"] == "inner"
+    assert fs.info(path)["type"] == "directory"
+    assert fs.ls(path, detail=False) == ["inner/file1"]
+    assert fs.ls(path)[0] == fs.info("inner/file1")
+    assert fs.info("")["name"] == ""
+    assert fs.ls("", detail=False) == ["file1", "file2", "inner"]
+
+
+def test_special_objects_are_not_directories(repo):
+    git_repo = pygit2.Repository(repo[0])
+    parent = git_repo.revparse_single("abranch")
+    builder = git_repo.TreeBuilder(parent.tree)
+    builder.insert(
+        "link", git_repo.create_blob(b"inner/file1"), pygit2.GIT_FILEMODE_LINK
+    )
+    builder.insert("submodule", parent.id, pygit2.GIT_FILEMODE_COMMIT)
+    signature = pygit2.Signature("Test", "test@example.com")
+    git_repo.create_commit(
+        "refs/heads/abranch",
+        signature,
+        signature,
+        "special objects",
+        builder.write(),
+        [parent.id],
+    )
+    fs = fsspec.filesystem("git", path=repo[0], ref="abranch")
+    assert fs.cat_file("link") == b"inner/file1"
+    assert fs.info("link")["mode"] == "120000"
+    for path in ("link/child", "submodule/file1"):
+        with pytest.raises(FileNotFoundError):
+            fs.open(path)

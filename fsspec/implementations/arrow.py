@@ -159,6 +159,10 @@ class ArrowFSWrapper(AbstractFileSystem):
 
     @wrap_exceptions
     def rm(self, path, recursive=False, maxdepth=None):
+        if isinstance(path, list):
+            for p in path:
+                self.rm(p, recursive=recursive, maxdepth=maxdepth)
+            return
         path = self._strip_protocol(path).rstrip("/")
         if self.isdir(path):
             if recursive:
@@ -202,6 +206,8 @@ class ArrowFSWrapper(AbstractFileSystem):
     @wrap_exceptions
     def makedirs(self, path, exist_ok=False):
         path = self._strip_protocol(path)
+        if not exist_ok and self.exists(path):
+            raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), path)
         self.fs.create_dir(path, recursive=True)
 
     @wrap_exceptions

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from errno import ENOTEMPTY
 from io import BytesIO
 from pathlib import PurePath, PureWindowsPath
@@ -112,6 +112,18 @@ class MemoryFileSystem(AbstractFileSystem):
             # Register every directory implied between ``path`` and ``name`` that
             # is within maxdepth, mirroring how walk() surfaces implied dirs.
             idx = name.rfind("/")
+            if maxdepth is not None:
+                # Start at the deepest ancestor that can appear in the result.
+                limit = name.find("/", len(prefix))
+                depth = 1
+                while limit >= 0 and depth + 1 <= maxdepth:
+                    next_limit = name.find("/", limit + 1)
+                    if next_limit < 0:
+                        break
+                    limit = next_limit
+                    depth += 1
+                if limit >= 0:
+                    idx = min(idx, limit)
             while idx > len(path):
                 parent = name[:idx]
                 if parent in dirs:
@@ -155,16 +167,17 @@ class MemoryFileSystem(AbstractFileSystem):
 
     def ls(self, path, detail=True, **kwargs):
         path = self._strip_protocol(path)
-        if path in self.store:
+        filelike = self.store.get(path)
+        if filelike is not None:
             # there is a key with this exact name
             if not detail:
                 return [path]
             return [
                 {
                     "name": path,
-                    "size": self.store[path].size,
+                    "size": filelike.size,
                     "type": "file",
-                    "created": self.store[path].created.timestamp(),
+                    "created": filelike.created.timestamp(),
                 }
             ]
         paths = set()
@@ -174,12 +187,15 @@ class MemoryFileSystem(AbstractFileSystem):
             if p2.startswith(starter):
                 if "/" not in p2[len(starter) :]:
                     # exact child
+                    filelike = self.store.get(p2)
+                    if filelike is None:
+                        continue  # removed since the keys were snapshotted
                     out.append(
                         {
                             "name": p2,
-                            "size": self.store[p2].size,
+                            "size": filelike.size,
                             "type": "file",
-                            "created": self.store[p2].created.timestamp(),
+                            "created": filelike.created.timestamp(),
                         }
                     )
                 elif len(p2) > len(starter):
@@ -223,6 +239,8 @@ class MemoryFileSystem(AbstractFileSystem):
             raise FileExistsError(path)
         if self._parent(path).strip("/") and self.isfile(self._parent(path)):
             raise NotADirectoryError(self._parent(path))
+        if not create_parents and not self.isdir(self._parent(path)):
+            raise FileNotFoundError(self._parent(path))
         if create_parents and self._parent(path).strip("/"):
             try:
                 self.mkdir(self._parent(path), create_parents, **kwargs)
@@ -435,8 +453,8 @@ class MemoryFile(BytesIO):
         logger.debug("open file %s", path)
         self.fs = fs
         self.path = path
-        self.created = datetime.now(tz=timezone.utc)
-        self.modified = datetime.now(tz=timezone.utc)
+        self.created = datetime.now(tz=UTC)
+        self.modified = datetime.now(tz=UTC)
         if data:
             super().__init__(data)
             self.seek(0)
@@ -448,7 +466,7 @@ class MemoryFile(BytesIO):
     def write(self, data):
         written = super().write(data)
         if written:
-            self.modified = datetime.now(tz=timezone.utc)
+            self.modified = datetime.now(tz=UTC)
         return written
 
     def writelines(self, lines):
@@ -457,7 +475,7 @@ class MemoryFile(BytesIO):
 
     def truncate(self, size=None):
         size = super().truncate(size)
-        self.modified = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=UTC)
         return size
 
     def __enter__(self):
@@ -471,4 +489,4 @@ class MemoryFile(BytesIO):
 
     def commit(self):
         self.fs.store[self.path] = self
-        self.modified = datetime.now(tz=timezone.utc)
+        self.modified = datetime.now(tz=UTC)
