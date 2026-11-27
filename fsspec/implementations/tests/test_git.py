@@ -75,6 +75,28 @@ def test_refs(repo):
         assert f.read() == b"data3"
 
 
+def test_default_ref_on_main_without_master(repo):
+    d, _ = repo
+    subprocess.run(["git", "branch", "-m", "main"], cwd=d, check=True)
+    subprocess.run(["git", "branch", "-D", "master"], cwd=d, check=True)
+
+    with fsspec.open("git://inner/file1", path=d) as f:
+        assert f.read() == b"data3"
+
+
+def test_default_ref_on_detached_head(repo):
+    d, sha = repo
+    subprocess.run(["git", "checkout", "--detach", sha], cwd=d, check=True)
+    with open(os.path.join(d, "file1"), "wb") as f:
+        f.write(b"uncommitted")
+
+    fs = fsspec.filesystem("git", path=d)
+    assert fs.ls("", detail=False) == ["file1"]
+    assert fs.cat_file("file1") == b"data0"
+    with fsspec.open("git://file1", path=d, ref="master") as f:
+        assert f.read() == b"data00"
+
+
 def _check_FileNotFoundError(f, *args, **kwargs):
     with pytest.raises(FileNotFoundError):
         f(*args, **kwargs)

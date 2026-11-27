@@ -34,13 +34,14 @@ class GitFileSystem(AbstractFileSystem):
             takes precedence if both are given.
         ref: str (optional)
             Reference to work with, could be a hash, tag or branch name. Defaults
-            to current working tree. Note that ``ls`` and ``open`` also take hash,
+            to the commit resolved by ``HEAD``, not uncommitted working-tree
+            changes. Note that ``ls`` and ``open`` also take a reference,
             so this becomes the default for those operations
         kwargs
         """
         super().__init__(**kwargs)
         self.repo = pygit2.Repository(fo or path or os.getcwd())
-        self.ref = ref or "master"
+        self.ref = ref or "HEAD"
 
     @classmethod
     def _strip_protocol(cls, path):
