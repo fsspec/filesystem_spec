@@ -4,6 +4,7 @@ import tempfile
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -567,6 +568,22 @@ def test_url_to_fs(ftp_writable):
         f"simplecache::zip::ftp://{username}:{password}@{host}:{port}/afile.zip"
     )
     assert url == ""
+
+
+def test_url_to_fs_ssh_host():
+    # https://github.com/fsspec/filesystem_spec/issues/539
+    # url_to_fs used to drop the host from ssh URLs, so creating the
+    # filesystem raised
+    # TypeError: __init__() missing 1 required positional argument: 'host'
+    # SFTPFileSystem connects in __init__, so mock the connection out;
+    # reaching _connect at all proves the host was passed through.
+    from fsspec.implementations.sftp import SFTPFileSystem
+
+    with patch.object(SFTPFileSystem, "_connect", lambda self: None):
+        fs, url = fsspec.core.url_to_fs("ssh://host/folder1")
+    assert isinstance(fs, SFTPFileSystem)
+    assert fs.host == "host"
+    assert url == "/folder1"
 
 
 def test_target_protocol_options(ftp_writable):
