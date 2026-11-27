@@ -1,11 +1,13 @@
 import base64
 import json
 import os
+import sys
 from io import BytesIO
 
 import pytest
 
 import fsspec
+import fsspec.implementations.reference
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.reference import (
     LazyReferenceMapper,
@@ -585,6 +587,120 @@ def test_get_keeps_dotdot_inside_destination(tmp_path):
 
     assert (dest / "plain.txt").read_bytes() == b"ok"
     assert (dest / "a" / "inner.txt").read_bytes() == b"inner"
+
+
+def test_get_file_url_destination_containment(tmp_path, monkeypatch):
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"original")
+
+    seen = []
+    orig_check_contained = fsspec.implementations.reference.check_contained
+
+    def recording_check_contained(root, paths):
+        seen.append((root, list(paths)))
+        return orig_check_contained(root, paths)
+
+    monkeypatch.setattr(
+        fsspec.implementations.reference, "check_contained", recording_check_contained
+    )
+
+    ok_fs = fsspec.filesystem(
+        "reference",
+        fo={"version": 1, "refs": {"dataset/normal.txt": b"ok"}},
+        skip_instance_cache=True,
+    )
+    ok_fs.get("dataset", f"file://{dest}/", recursive=True)
+    assert len(seen) == 1
+    root_arg, path_args = seen[0]
+    assert not root_arg.startswith("file://")
+    assert all(not p.startswith("file://") for p in path_args)
+    assert (dest / "normal.txt").read_bytes() == b"ok"
+
+    path_dest = tmp_path / "path_dest"
+    ok_fs.get("dataset", path_dest, recursive=True)
+    assert (path_dest / "normal.txt").read_bytes() == b"ok"
+
+    bad_dest = tmp_path / "bad_dest"
+    bad_dest.mkdir()
+    refs = {
+        "version": 1,
+        "refs": {
+            "dataset/../outside.txt": b"data",
+            "dataset/normal.txt": b"ok",
+        },
+    }
+    fs = fsspec.filesystem("reference", fo=refs, skip_instance_cache=True)
+    with pytest.raises(ValueError, match="outside the destination"):
+        fs.get("dataset", f"file://{bad_dest}/", recursive=True)
+
+    assert outside.read_bytes() == b"original"
+    assert not (bad_dest / "normal.txt").exists()
+
+
+def test_get_rejects_intermediate_escape_glob(tmp_path):
+    dest = tmp_path / "outer" / "dest"
+    dest.mkdir(parents=True)
+
+    refs = {
+        "version": 1,
+        "refs": {
+            "dataset/a/../../sibling/../dest/ok.txt": b"data",
+            "dataset/plain.txt": b"ok",
+        },
+    }
+    fs = fsspec.filesystem("reference", fo=refs, skip_instance_cache=True)
+    with pytest.raises(ValueError, match="outside the destination"):
+        fs.get("dataset/**/*.txt", f"file://{dest}/")
+
+    assert not (dest.parent / "sibling").exists()
+    assert not (dest / "plain.txt").exists()
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Win32 collapses '..' before resolving links",
+)
+def test_get_file_url_resolves_symlinks_in_containment(tmp_path):
+    dest = tmp_path / "outer" / "dest"
+    deep = dest / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    link = deep / "link"
+    try:
+        link.symlink_to(dest, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    refs = {
+        "version": 1,
+        "refs": {
+            "dataset/a/b/c/link/../../outside.txt": b"data",
+            "dataset/ok.txt": b"ok",
+        },
+    }
+    fs = fsspec.filesystem("reference", fo=refs, skip_instance_cache=True)
+    with pytest.raises(ValueError, match="outside the destination"):
+        fs.get("dataset", f"file://{dest}/", recursive=True)
+
+    assert not (tmp_path / "outside.txt").exists()
+    assert not (dest / "ok.txt").exists()
+
+    bouncing_refs = {
+        "version": 1,
+        "refs": {
+            "dataset/a/b/c/link/../sibling/../dest/ok.txt": b"data",
+            "dataset/ok.txt": b"ok",
+        },
+    }
+    bouncing_fs = fsspec.filesystem(
+        "reference", fo=bouncing_refs, skip_instance_cache=True
+    )
+    with pytest.raises(ValueError, match="outside the destination"):
+        bouncing_fs.get("dataset/**/*.txt", f"file://{dest}/")
+
+    assert not (dest.parent / "sibling").exists()
+    assert not (dest / "ok.txt").exists()
 
 
 def test_multi_fs_provided(m, tmpdir):

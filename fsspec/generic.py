@@ -8,10 +8,116 @@ import uuid
 from .asyn import AsyncFileSystem, _run_coros_in_chunks, sync_wrapper
 from .callbacks import DEFAULT_CALLBACK
 from .core import filesystem, get_filesystem_class, split_protocol, url_to_fs
-from .utils import check_contained
+from .implementations.chained import ChainedFileSystem
+from .implementations.dirfs import DirFileSystem
+from .implementations.local import LocalFileSystem
+from .utils import _escapes_root, check_contained
 
 _generic_fs = {}
 logger = logging.getLogger("fsspec.generic")
+
+
+def _normalize_rsync_root(root: str) -> str:
+    if "://" in root:
+        scheme, rest = root.split("://", 1)
+        if not rest:
+            return root
+        if not rest.strip("/"):
+            return f"{scheme}:///"
+        if len(rest) >= 3 and rest[1] == ":" and not rest[2:].strip("/"):
+            return f"{scheme}://{rest[:2]}/"
+        return f"{scheme}://{rest.rstrip('/')}"
+    if not root.strip("/"):
+        return "/" if root.startswith("/") else root
+    if len(root) >= 3 and root[1] == ":" and not root[2:].strip("/"):
+        return f"{root[:2]}/"
+    return root.rstrip("/")
+
+
+def _extract_rsync_rel(path: str, root: str) -> str:
+    root_norm = _normalize_rsync_root(root)
+    if path in (root, root_norm):
+        return ""
+    if root_norm.endswith("://"):
+        if path.startswith(root_norm):
+            return path.removeprefix(root_norm).removeprefix("/")
+    else:
+        prefix = root_norm if root_norm.endswith("/") else root_norm + "/"
+        if path.startswith(prefix):
+            return path.removeprefix(prefix)
+        if root_norm.endswith(":///") and path == root_norm.removesuffix("/"):
+            return ""
+    raise ValueError(f"path {path!r} is outside the root {root!r}")
+
+
+def _join_rsync_url(root: str, rel: str, root_fs=None) -> str:
+    root_norm = _normalize_rsync_root(root)
+    if not rel:
+        return root_norm
+    if root_norm.endswith("://"):
+        sep = "/" if getattr(root_fs, "root_marker", "") == "/" else ""
+        return f"{root_norm}{sep}{rel}"
+    return f"{root_norm}{'' if root_norm.endswith('/') else '/'}{rel}"
+
+
+def _map_rsync_url(path: str, src: str, dst: str, dst_fs=None) -> tuple[str, str]:
+    rel = _extract_rsync_rel(path, src)
+    target = _join_rsync_url(dst, rel, dst_fs)
+    src_norm = _normalize_rsync_root(src)
+    if (
+        not rel
+        and not src_norm.endswith("/")
+        and path == src_norm + "/"
+        and not target.endswith("/")
+    ):
+        # Preserve a zero-byte "prefix/" marker object naming the root itself.
+        target += "/"
+    return rel, target
+
+
+def _local_dest_mapper(dest_fs):
+    """Return a URL-to-local-path mapper if ``dest_fs`` targets LocalFileSystem."""
+    transforms = []
+    cur = dest_fs
+    seen = set()
+    while id(cur) not in seen:
+        seen.add(id(cur))
+        if isinstance(cur, LocalFileSystem):
+            break
+        if isinstance(cur, DirFileSystem):
+            transforms.append(cur._join)
+            cur = cur.fs
+        elif hasattr(cur, "sync_fs"):
+            transforms.append(cur._strip_protocol)
+            cur = cur.sync_fs
+        elif isinstance(cur, ChainedFileSystem) and hasattr(cur, "fs"):
+            transforms.append(cur._strip_protocol)
+            cur = cur.fs
+        else:
+            return None
+    else:
+        return None
+
+    local_fs = cur
+
+    def to_local(url: str) -> str:
+        p = url
+        for fn in transforms:
+            p = fn(p)
+        return local_fs._strip_protocol(p)
+
+    return to_local
+
+
+def _check_relative_depth(
+    source_path: str, rel: str, destination: str, split_backslash: bool
+) -> None:
+    norm_rel = rel.replace("\\", "/") if split_backslash else rel
+    if _escapes_root(norm_rel):
+        raise ValueError(
+            f"path {source_path!r} would be copied outside the destination "
+            f"{destination!r}"
+        )
 
 
 def set_generic_fs(protocol, **storage_options):
@@ -95,30 +201,43 @@ def rsync(
     allfiles = fs.find(source, withdirs=True, detail=True)
     if not fs.isdir(source):
         raise ValueError("Can only rsync on a directory")
+    dest_fs = _resolve_fs(destination, fs.method, storage_options=fs.st_opts)
+    to_local = _local_dest_mapper(dest_fs)
+    split_backslash = to_local is not None and os.sep != "/"
     # The names came from the source listing; ".." in one of them would
     # otherwise place the copy above the destination.
-    check_contained(destination, [a.replace(source, destination, 1) for a in allfiles])
+    mapped = {}
+    for a in allfiles:
+        rel, target = _map_rsync_url(a, source, destination, dest_fs)
+        _check_relative_depth(a, rel, destination, split_backslash)
+        mapped[a] = target
+    if to_local is not None:
+        check_contained(
+            to_local(destination),
+            [to_local(target) for target in mapped.values()],
+        )
     otherfiles = fs.find(destination, withdirs=True, detail=True)
     dirs = [
         a
         for a, v in allfiles.items()
-        if v["type"] == "directory"
-        and a.replace(source, destination, 1) not in otherfiles
+        if v["type"] == "directory" and mapped[a] not in otherfiles
     ]
     logger.debug(f"{len(dirs)} directories to create")
     if dirs:
-        fs.make_many_dirs(
-            [dirn.replace(source, destination, 1) for dirn in dirs], exist_ok=True
-        )
+        fs.make_many_dirs([mapped[dirn] for dirn in dirs], exist_ok=True)
     allfiles = {a: v for a, v in allfiles.items() if v["type"] == "file"}
     logger.debug(f"{len(allfiles)} files to consider for copy")
-    to_delete = [
-        o
-        for o, v in otherfiles.items()
-        if o.replace(destination, source, 1) not in allfiles and v["type"] == "file"
-    ]
+    to_delete = []
+    if delete_missing:
+        src_fs = _resolve_fs(source, fs.method, storage_options=fs.st_opts)
+        to_delete = [
+            o
+            for o, v in otherfiles.items()
+            if v["type"] == "file"
+            and _map_rsync_url(o, destination, source, src_fs)[1] not in allfiles
+        ]
     for k, v in allfiles.copy().items():
-        otherfile = k.replace(source, destination, 1)
+        otherfile = mapped[k]
         if otherfile in otherfiles:
             if update_cond == "always":
                 allfiles[k] = otherfile

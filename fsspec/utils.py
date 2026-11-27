@@ -435,13 +435,114 @@ def other_paths(
     return path2
 
 
+def _is_within(key: str, root_key: str, prefix: str) -> bool:
+    return key == root_key or key.startswith(prefix)
+
+
+def _root_prefix_candidates(
+    root: str | os.PathLike, root_abs: str
+) -> list[tuple[str, str, str]]:
+    seps = "/\\" if os.sep != "/" else "/"
+    root_str = os.fspath(root)
+    root_parts = (
+        root_str.replace("\\", "/").split("/")
+        if os.sep != "/"
+        else root_str.split("/")
+    )
+    # Only allow ``root_abs`` as a fast-path prefix when ``root`` itself does
+    # not contain ``..`` segments that could cross a symlink.
+    raw = (root_str,) if ".." in root_parts else (root_str, root_abs)
+    candidates: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for cand in raw:
+        cand_norm_full = os.path.normcase(cand)
+        if cand_norm_full in seen:
+            continue
+        seen.add(cand_norm_full)
+        cand_stripped = cand.rstrip(seps)
+        candidates.append(
+            (cand_norm_full, cand_stripped, os.path.normcase(cand_stripped))
+        )
+    return candidates
+
+
+def _dotdot_prefixes(
+    path: str | os.PathLike, candidates: list[tuple[str, str, str]]
+) -> list[str] | None:
+    """Return intermediate '..' prefixes if symlink/prefix validation applies.
+
+    Returns ``None`` when ``path`` sits literally under a candidate root prefix
+    with no ``..`` segments below it, keeping normal paths on the lexical fast
+    path without ``os.path.realpath`` calls.
+    """
+    seps = "/\\" if os.sep != "/" else "/"
+    path_str = os.fspath(path)
+    path_norm = os.path.normcase(path_str)
+
+    base = None
+    tail = None
+    sep_used = os.sep
+    for cand_norm_full, cand_stripped, cand_norm in candidates:
+        if path_norm in (cand_norm_full, cand_norm):
+            return None
+        if not cand_stripped:
+            if path_str and path_str[0] in seps:
+                base = path_str[0]
+                tail = path_str.lstrip(seps)
+                sep_used = ""
+                break
+        elif (
+            len(path_str) > len(cand_stripped)
+            and path_str[len(cand_stripped)] in seps
+            and os.path.normcase(path_str[: len(cand_stripped)]) == cand_norm
+        ):
+            base = path_str[: len(cand_stripped)]
+            sep_used = path_str[len(cand_stripped)]
+            tail = path_str[len(cand_stripped) + 1 :]
+            break
+
+    if tail is not None:
+        if ".." not in tail:
+            return None
+        parts = tail.replace("\\", "/").split("/") if os.sep != "/" else tail.split("/")
+        if ".." not in parts:
+            return None
+        prefixes = []
+        acc: list[str] = []
+        last = len(parts) - 1
+        for i, part in enumerate(parts):
+            acc.append(part)
+            if part == ".." and i < last:
+                prefixes.append(f"{base}{sep_used}{os.sep.join(acc)}")
+        return prefixes
+
+    parts = (
+        path_str.replace("\\", "/").split("/")
+        if os.sep != "/"
+        else path_str.split("/")
+    )
+    prefixes = []
+    acc = []
+    last = len(parts) - 1
+    for i, part in enumerate(parts):
+        acc.append(part)
+        if part == ".." and i < last:
+            prefixes.append(os.sep.join(acc) or os.sep)
+    return prefixes
+
+
 def check_contained(root: str, paths: list[str]) -> None:
     """Raise if any of ``paths`` lies outside the destination ``root``.
 
     Bulk copies build their destination names by joining source names onto a
     destination root. Those names come from the source listing, so a name
     holding ".." segments resolves above the root and writes outside the
-    destination the caller asked for.
+    destination the caller asked for. When a path contains ".." segments below
+    ``root``, containment is also verified at each intermediate ".." prefix and
+    after resolving filesystem symlinks so that ".." cannot traverse outside
+    ``root`` or follow a symlink above ``root`` (paths combining an outward
+    symlink with ".." are rejected, while ".."-free paths through user-placed
+    symlinks remain allowed).
 
     Parameters
     ----------
@@ -455,14 +556,41 @@ def check_contained(root: str, paths: list[str]) -> None:
     # escape, while the message keeps the paths as the caller would see them.
     root_key = os.path.normcase(root_abs)
     prefix = root_key.rstrip(os.sep) + os.sep
+    candidates = _root_prefix_candidates(root, root_abs)
+    root_real = None
+    real_prefix = None
     for path in paths:
         path_abs = os.path.abspath(path)
         path_key = os.path.normcase(path_abs)
-        if path_key != root_key and not path_key.startswith(prefix):
+        if not _is_within(path_key, root_key, prefix):
             raise ValueError(
                 f"path {path!r} would be copied to {path_abs!r}, which is "
                 f"outside the destination {root!r}"
             )
+        prefixes = _dotdot_prefixes(path, candidates)
+        if prefixes is not None:
+            if root_real is None:
+                root_real = os.path.normcase(os.path.realpath(root))
+                real_prefix = root_real.rstrip(os.sep) + os.sep
+            for p in prefixes:
+                p_abs = os.path.abspath(p)
+                if not _is_within(os.path.normcase(p_abs), root_key, prefix):
+                    raise ValueError(
+                        f"path {path!r} traverses {p_abs!r}, which is "
+                        f"outside the destination {root!r}"
+                    )
+                p_real = os.path.realpath(p)
+                if not _is_within(os.path.normcase(p_real), root_real, real_prefix):
+                    raise ValueError(
+                        f"path {path!r} resolves to {p_real!r}, which is "
+                        f"outside the destination {root!r}"
+                    )
+            path_real = os.path.realpath(path)
+            if not _is_within(os.path.normcase(path_real), root_real, real_prefix):
+                raise ValueError(
+                    f"path {path!r} resolves to {path_real!r}, which is "
+                    f"outside the destination {root!r}"
+                )
 
 
 def _escapes_root(path: str) -> bool:
