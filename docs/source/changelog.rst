@@ -6,6 +6,8 @@ Dev
 
 Enhancements
 
+- Skip file metadata and directory info construction in names-only memory finds.
+
 - Strip the protocol from ``LocalFileSystem`` paths without building every
   prefix on each call, so ``ls`` and other local path operations are faster.
 
