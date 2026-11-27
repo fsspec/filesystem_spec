@@ -27,7 +27,7 @@ Fixes
 - Keep the mode of an existing local file when a transaction commit replaces it,
   instead of resetting it to the umask default
 
-- Reject mixed source or destination backends in ``GenericFileSystem.copy``(#2302).
+- Reject mixed source or destination backends in ``GenericFileSystem.copy`` (#2302).
 - Allow listing cache items and values with bounded LRU caching (#2419).
 - Read committed FTP files at their original paths inside transactions (#2463).
 
@@ -69,6 +69,9 @@ Fixes
 - Allow the DBFS backend to load without an undeclared ``typing_extensions`` dependency.
 
 - Use the documentation extra when setting up a local documentation build.
+
+- Clarify ``async_impl`` capability and the ``asynchronous`` instance context
+  in the async documentation (#1709).
 
 - Preserve DBFS status-check errors when creating directories with ``exist_ok=False``.
 
