@@ -113,7 +113,10 @@ test_full = [
     'zstandard; python_version < "3.14"',
 ]
 test_downstream = [
+    "adlfs>=2026.8.0",
     "dask[dataframe,test]",
+    "gcsfs",
+    "google-adk[fsspec]",
     "moto[server]>4,<5",
     "pytest-timeout",
     "xarray",
