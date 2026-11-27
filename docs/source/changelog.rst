@@ -6,6 +6,10 @@ Dev
 
 Enhancements
 
+- Add conservative ``read_only`` and ``immutable`` capability metadata, with
+  read-only declarations for Git and data URLs and an immutable declaration
+  for data URLs (#1511).
+
 - Strip the protocol from ``LocalFileSystem`` paths without building every
   prefix on each call, so ``ls`` and other local path operations are faster.
 
