@@ -297,6 +297,9 @@ Fixes
 
 - Preserve preloaded file parts when opening another file with the same cache options.
 
+- Ignore the ``Content-Range`` total as the size in async HTTP ``info`` when the
+  response has a ``Content-Encoding``, as already done for ``Content-Length``.
+
 
 2026.9.0
 --------
