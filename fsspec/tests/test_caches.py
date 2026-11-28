@@ -405,6 +405,37 @@ def test_mmap_cache(mocker):
     assert fetcher.call_count == 5
 
 
+@pytest.mark.parametrize("use_multi_fetcher", [False, True])
+def test_mmap_cache_missing_runs_and_statistics(use_multi_fetcher):
+    calls = []
+
+    def fetch(start, stop):
+        calls.append((start, stop))
+        return letters_fetcher(start, stop)
+
+    cache = MMapCache(5, fetch, 52)
+    try:
+        if use_multi_fetcher:
+            cache.multi_fetcher = lambda ranges: [fetch(*bounds) for bounds in ranges]
+        cache._fetch(11, 13)
+        cache._fetch(26, 28)
+        calls.clear()
+        assert cache._fetch(1, 52) == letters_fetcher(1, 52)
+        assert calls == [(0, 10), (15, 25), (30, 52)]
+        assert cache.blocks == set(range(11))
+        assert (cache.hit_count, cache.miss_count, cache.total_requested_bytes) == (
+            2,
+            11,
+            52,
+        )
+        calls.clear()
+        assert cache._fetch(1, 52) == letters_fetcher(1, 52)
+        assert not calls
+        assert (cache.hit_count, cache.miss_count) == (13, 11)
+    finally:
+        cache.close()
+
+
 @pytest.mark.parametrize("remove_location", [False, True])
 def test_mmap_cache_pickle_named_location(tmp_path, remove_location):
     location = tmp_path / "cached"
