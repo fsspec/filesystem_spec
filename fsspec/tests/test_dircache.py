@@ -1,5 +1,6 @@
 import pickle
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -130,3 +131,40 @@ def test_dircache_views_after_reads(max_paths, listings_expiry_time, view):
 
     assert list(getattr(dc, view)()) == expected
     assert list(dc) == keys
+
+
+@pytest.mark.parametrize("operation", ["get", "contains", "iter"])
+@pytest.mark.parametrize("max_paths", [None, 2])
+@pytest.mark.parametrize(
+    "elapsed, wall_jump, expired",
+    [(1, 1000, False), (6, -1000, True), (5, 1000, False), (5.001, -1000, True)],
+)
+def test_dircache_expiry_ignores_wall_clock_changes(
+    monkeypatch, operation, max_paths, elapsed, wall_jump, expired
+):
+    clock = {"wall": 10000, "elapsed": 100}
+    monkeypatch.setattr(
+        "fsspec.dircache.time",
+        SimpleNamespace(
+            time=lambda: clock["wall"],
+            monotonic=lambda: clock["elapsed"],
+        ),
+    )
+    dc = DirCache(listings_expiry_time=5, max_paths=max_paths)
+    dc["a"] = 100
+
+    clock["wall"] += elapsed + wall_jump
+    clock["elapsed"] += elapsed
+
+    if operation == "get":
+        if expired:
+            with pytest.raises(KeyError):
+                dc["a"]
+        else:
+            assert dc["a"] == 100
+    elif operation == "contains":
+        assert ("a" in dc) is not expired
+    else:
+        assert list(dc) == ([] if expired else ["a"])
+
+    assert len(dc) == (0 if expired else 1)
