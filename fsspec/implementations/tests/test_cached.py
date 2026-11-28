@@ -246,18 +246,20 @@ def test_blockcache_workflow(ftp_writable, tmp_path):
     fs.save_cache()
     del fs
 
-    # Check that cache file only has the first two blocks
+    # The exclusive end of the read does not fetch the next block.
     with open(tmp_path / "cache", "r") as f:
         cache = json.load(f)
     assert "/out" in cache
-    assert cache["/out"]["blocks"] == [0, 1]
+    assert cache["/out"]["blocks"] == [0]
 
     # Reopen the same cache and read some more...
     fs = fsspec.filesystem("blockcache", **fs_kwargs)
     with fs.open("/out", block_size=5) as f:
         assert f.read(5) == b"test\n"
+        assert f.cache.blocks == {0}
         f.seek(30)
         assert f.read(5) == b"test\n"
+        assert f.cache.blocks == {0, 6}
 
 
 @pytest.mark.parametrize("impl", ["filecache", "blockcache", "cached"])
