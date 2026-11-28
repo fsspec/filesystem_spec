@@ -482,6 +482,23 @@ def test_links_report_target_size(tmp_path: Path):
     assert fs.size("dangling") == 0
 
 
+@pytest.mark.parametrize("kind", [tarfile.SYMTYPE, tarfile.LNKTYPE])
+def test_open_dangling_link_raises_file_not_found(tmp_path, kind):
+    path = tmp_path / "dangling-link.tar"
+    with tarfile.open(path, "w") as tar:
+        info = tarfile.TarInfo("link")
+        info.type = kind
+        info.linkname = "missing"
+        tar.addfile(info)
+
+    fs = TarFileSystem(str(path))
+    try:
+        with pytest.raises(FileNotFoundError, match="link"), fs.open("link"):
+            pass
+    finally:
+        fs.close()
+
+
 @pytest.mark.parametrize("prefix", ["./", "././"])
 @pytest.mark.parametrize("explicit_directories", [False, True])
 def test_dot_path_components(tmp_path, prefix, explicit_directories):
@@ -552,7 +569,12 @@ def test_dot_normalization_preserves_parent_components(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "names", [["./file.txt", "file.txt"], ["file.txt", "./file.txt"]]
+    "names",
+    [
+        ["./file.txt", "file.txt"],
+        ["file.txt", "./file.txt"],
+        ["file.txt", "file.txt"],
+    ],
 )
 def test_dot_normalization_duplicate_members(tmp_path, names):
     path = tmp_path / "duplicates.tar"
@@ -567,6 +589,23 @@ def test_dot_normalization_duplicate_members(tmp_path, names):
     assert fs.size("file.txt") == len(b"last")
     assert fs.cat("file.txt") == b"last"
     assert fs.cat("./file.txt") == b"last"
+
+
+def test_regular_member_with_trailing_slash_keeps_tarfile_name_lookup(tmp_path):
+    path = tmp_path / "trailing-slash.tar"
+    with tarfile.open(path, "w") as tar:
+        for name, data in [("file", b"one"), ("file/", b"two"), ("missing/", b"xxx")]:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, BytesIO(data))
+
+    fs = TarFileSystem(str(path))
+    try:
+        assert fs.cat_file("file") == b"one"
+        with pytest.raises(FileNotFoundError, match="missing"):
+            fs.cat_file("missing")
+    finally:
+        fs.close()
 
 
 def test_dot_normalization_preserves_links(tmp_path):

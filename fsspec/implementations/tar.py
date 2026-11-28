@@ -159,7 +159,7 @@ class TarFileSystem(AbstractArchiveFileSystem):
             if ti.islnk() or ti.issym():
                 # extractfile follows links, so report the size of the target
                 info["size"] = self._link_target_size(ti)
-            out[name] = (info, ti.offset_data, orig_name)
+            out[name] = (info, ti, orig_name)
 
         self.index = out
         # TODO: save index to self.index_store here, if set
@@ -197,10 +197,19 @@ class TarFileSystem(AbstractArchiveFileSystem):
         member = self.index.get(path)
         if member is None or member[0]["type"] == "directory":
             raise self._not_a_file(path)
-        details, _, orig_name = member
+        details, tarinfo, orig_name = member
         if details["type"] != "file":
             raise ValueError("Can only handle regular files")
-        out = self.tar.extractfile(orig_name)
+        try:
+            # A name lookup scans tarfile's members in reverse. Reuse the
+            # indexed member when it has the exact name tarfile would look up.
+            # Keep the name lookup for unusual non-directory names ending in "/".
+            out = self.tar.extractfile(
+                tarinfo if tarinfo.name == orig_name else orig_name
+            )
+        except KeyError as exc:
+            # tarfile reports a missing link target as KeyError.
+            raise FileNotFoundError(path) from exc
         # cat_file needs the size to resolve negative offsets, as zip provides.
         out.size = details["size"]
         return out
