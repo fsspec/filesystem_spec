@@ -288,6 +288,9 @@ Fixes
 
 - Keep failed memory-mapped cache reads retriable without discarding completed ranges.
 
+- Bound memory-mapped cache reads to EOF and avoid fetching an extra block at an
+  exclusive end boundary.
+
 - Percent-encode GitHub file paths in contents API URLs so files named with ``#``, ``?`` or ``%`` can be read and removed.
 
 - Make async loop lock initialization thread-safe (#1783)
@@ -306,6 +309,7 @@ Enhancements
 - ``ia://`` filesystem for files in Internet Archive items: an
   ``HTTPFileSystem`` reading from ``archive.org/download`` with credentials from
   ``ia configure``'s ``ia.ini``
+
 - Allow instance-local memory stores with ``global_store=False`` while
   preserving normal instance caching and the default shared store (#2137;
   issue #1904)
