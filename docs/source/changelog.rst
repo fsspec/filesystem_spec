@@ -18,6 +18,11 @@ Enhancements
   operations that fill the cache on a miss, so ``filecache``/``simplecache``
   opens can report download progress (#1623)
 
+- ``BlockCache`` fetches a run of blocks it does not hold in one request
+  instead of one request per block, so a read spanning many blocks no longer
+  costs that many serialized round trips; on async filesystems the runs are
+  requested together through ``cat_ranges`` (#1960)
+
 Fixes
 
 - Honor ``exist_ok=False`` in Arrow-backed ``makedirs`` operations (#2415).
