@@ -670,3 +670,157 @@ def test_repeated_argument():
             anon=False,
             account_name="OTHER",
         )
+
+
+_CHAINED_OVERRIDE_KINDS = [
+    "file_scheme",
+    "bare_path",
+    "http_scheme",
+    "wrapper_prefix",
+    "three_segment",
+]
+
+
+def _chained_override_url(kind, path):
+    posix = path.as_posix()
+    if kind == "file_scheme":
+        return f"file://{posix}::memory"
+    if kind == "bare_path":
+        return f"{posix}::memory"
+    if kind == "http_scheme":
+        return f"http://127.0.0.1:1/{path.name}::memory"
+    if kind == "wrapper_prefix":
+        return f"simplecache::file://{posix}"
+    if kind == "three_segment":
+        return f"simplecache::file://{posix}::memory"
+    raise ValueError(kind)
+
+
+@pytest.mark.parametrize("kind", _CHAINED_OVERRIDE_KINDS)
+def test_protocol_override_ignores_chained_url_resolution(
+    tmp_path, m, instance_caches, kind
+):
+    target = tmp_path / "secret.txt"
+    url = _chained_override_url(kind, target)
+    url2 = _chained_override_url(kind, tmp_path / "secret2.txt")
+
+    fs, urlpath = fsspec.core.url_to_fs(url, protocol="memory")
+    assert fs.protocol == "memory"
+    assert fs.storage_options == {}
+    assert urlpath == url
+
+    fs_single, _, paths_single = get_fs_token_paths(url, protocol="memory")
+    assert fs_single.protocol == "memory"
+    assert paths_single == [url]
+
+    for seq in ([url, url2], (url, url2)):
+        fs_seq, _, paths_seq = get_fs_token_paths(seq, protocol="memory")
+        assert fs_seq.protocol == "memory"
+        assert paths_seq == [url, url2]
+
+    mixed_urls = [
+        f"file://{target.as_posix()}::memory",
+        "http://127.0.0.1:1/other.txt::memory",
+    ]
+    fs_mixed, _, paths_mixed = get_fs_token_paths(mixed_urls, protocol="memory")
+    assert fs_mixed.protocol == "memory"
+    assert paths_mixed == mixed_urls
+
+    assert set(instance_caches.gather_counts()) <= {"memory"}
+
+
+@pytest.mark.parametrize("kind", _CHAINED_OVERRIDE_KINDS)
+def test_open_and_open_files_protocol_override_chained_url(
+    tmp_path, m, instance_caches, kind
+):
+    existing = tmp_path / "existing.txt"
+    existing.write_bytes(b"local-secret")
+    mkdir_target = tmp_path / "mkdir_nested" / "partdir"
+    missing_dir = tmp_path / "nested" / "dir"
+    missing_file = missing_dir / "out.txt"
+
+    read_url = _chained_override_url(kind, existing)
+    mkdir_url = _chained_override_url(kind, mkdir_target)
+    write_url = _chained_override_url(kind, missing_file)
+
+    of = fsspec.open(read_url, "rb", protocol="memory")
+    assert of.fs.protocol == "memory"
+    with pytest.raises(FileNotFoundError):
+        with of:
+            pass
+
+    with pytest.raises(ValueError, match="attribute local_file=True"):
+        open_local(read_url, protocol="memory")
+
+    files_mkdir = open_files(mkdir_url, mode="wb", protocol="memory", auto_mkdir=True)
+    assert files_mkdir.fs.protocol == "memory"
+    assert not mkdir_target.parent.exists()
+
+    with open_files(
+        [read_url], mode="wb", protocol="memory", auto_mkdir=True, expand=False
+    ) as streams:
+        streams[0].write(b"in-memory")
+
+    assert existing.read_bytes() == b"local-secret"
+    assert not missing_dir.exists()
+
+    with open_files([read_url], mode="rb", protocol="memory") as streams:
+        assert streams[0].read() == b"in-memory"
+
+    with fsspec.open(write_url, "wb", protocol="memory") as f:
+        f.write(b"in-memory-2")
+    assert not missing_dir.exists()
+    with fsspec.open(write_url, "rb", protocol="memory") as f:
+        assert f.read() == b"in-memory-2"
+
+    assert set(instance_caches.gather_counts()) <= {"memory"}
+
+
+def test_wrapper_protocol_override_ignores_chained_target(tmp_path, m, instance_caches):
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"local-secret")
+    m.makedirs("/sandbox", exist_ok=True)
+
+    url = f"file://{secret.as_posix()}::file://{secret.as_posix()}"
+    with pytest.raises(FileNotFoundError):
+        with fsspec.open(
+            url, "rb", protocol="dir", path="/sandbox", target_protocol="memory"
+        ):
+            pass
+
+    with fsspec.open(
+        url,
+        "wb",
+        protocol="dir",
+        path="/sandbox",
+        target_protocol="memory",
+        auto_mkdir=True,
+    ) as f:
+        f.write(b"sandboxed")
+
+    assert secret.read_bytes() == b"local-secret"
+    with fsspec.open(
+        url, "rb", protocol="dir", path="/sandbox", target_protocol="memory"
+    ) as f:
+        assert f.read() == b"sandboxed"
+    assert set(instance_caches.gather_counts()) <= {"memory", "dir"}
+
+
+def test_get_fs_token_paths_protocol_does_not_mutate_storage_options(m):
+    opts = {"auto_mkdir": False}
+    expected = opts.copy()
+
+    fs, _, paths = get_fs_token_paths(
+        "file:///tmp/example::memory", storage_options=opts, protocol="memory"
+    )
+    assert opts == expected
+    assert fs.protocol == "memory"
+    assert paths == ["file:///tmp/example::memory"]
+
+    opts_with_proto = {"protocol": "memory", "auto_mkdir": False}
+    expected_with_proto = opts_with_proto.copy()
+    urls = ["file:///tmp/example::memory", "http://127.0.0.1:1/other::memory"]
+    fs2, _, paths2 = get_fs_token_paths(urls, storage_options=opts_with_proto)
+    assert opts_with_proto == expected_with_proto
+    assert fs2.protocol == "memory"
+    assert paths2 == urls

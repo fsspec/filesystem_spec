@@ -352,7 +352,10 @@ def _un_chain(path, kwargs):
     # Avoid a circular import
     from fsspec.implementations.chained import ChainedFileSystem
 
-    if "::" in path:
+    kwargs = kwargs.copy()
+    override_protocol = kwargs.pop("protocol", None)
+
+    if "::" in path and not override_protocol:
         x = re.compile(".*[^a-z]+.*")  # test for non protocol-like single word
         known_protocols = set(available_protocols())
         bits = []
@@ -371,10 +374,9 @@ def _un_chain(path, kwargs):
     # [[url, protocol, kwargs], ...]
     out = []
     previous_bit = None
-    kwargs = kwargs.copy()
 
     for bit in reversed(bits):
-        protocol = kwargs.pop("protocol", None) or split_protocol(bit)[0] or "file"
+        protocol = override_protocol or split_protocol(bit)[0] or "file"
         cls = get_filesystem_class(protocol)
         extra_kwargs = cls._get_kwargs_from_urls(bit)
         kws = kwargs.pop(protocol, {}).copy()
@@ -686,10 +688,10 @@ def get_fs_token_paths(
         urlpath0 = stringify_path(next(iter(urlpath)))
     else:
         urlpath0 = stringify_path(urlpath)
-    storage_options = storage_options or {}
+    storage_options = dict(storage_options) if storage_options else {}
     if protocol:
         storage_options["protocol"] = protocol
-    chain = _un_chain(urlpath0, storage_options or {})
+    chain = _un_chain(urlpath0, storage_options)
     inkwargs = {}
     # Reverse iterate the chain, creating a nested target_* structure
     for i, ch in enumerate(reversed(chain)):
@@ -703,9 +705,7 @@ def get_fs_token_paths(
     paths, protocol, _ = chain[0]
     fs = filesystem(protocol, **inkwargs)
     if isinstance(urlpath, (list, tuple, set)):
-        pchains = [
-            _un_chain(stringify_path(u), storage_options or {})[0] for u in urlpath
-        ]
+        pchains = [_un_chain(stringify_path(u), storage_options)[0] for u in urlpath]
         if len({pc[1] for pc in pchains}) > 1:
             raise ValueError(f"Protocol mismatch getting fs from {urlpath}")
         paths = [pc[0] for pc in pchains]
