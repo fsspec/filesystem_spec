@@ -126,6 +126,7 @@ Built-in Implementations
    implementations.libarchive.LibArchiveFileSystem
    implementations.local.LocalFileSystem
    implementations.memory.MemoryFileSystem
+   implementations.mount.MountFileSystem
    implementations.reference.ReferenceFileSystem
    implementations.reference.LazyReferenceMapper
    implementations.sftp.SFTPFileSystem
@@ -190,6 +191,9 @@ Built-in Implementations
 
 .. autoclass:: fsspec.implementations.memory.MemoryFileSystem
    :members: __init__
+
+.. autoclass:: fsspec.implementations.mount.MountFileSystem
+   :members: __init__, mount, unmount, mounts
 
 .. autoclass:: fsspec.implementations.reference.ReferenceFileSystem
    :members: __init__
