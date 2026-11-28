@@ -701,10 +701,21 @@ class WholeFileCacheFileSystem(CachingFileSystem):
             # helper to adapt both whole-file and simple-cache
             return fn[1] if isinstance(fn, tuple) else fn
 
-        return [
-            open(firstpart(fn0) if fn0 else fn1, mode=open_files.mode)
-            for fn0, fn1 in zip(details, downfn0)
-        ]
+        files = []
+        for fn0, fn1, of in zip(details, downfn0, open_files):
+            text_options = {}
+            if "b" not in open_files.mode:
+                text_options = {
+                    "encoding": of.encoding,
+                    "errors": of.errors,
+                    "newline": of.newline,
+                }
+            files.append(
+                open(
+                    firstpart(fn0) if fn0 else fn1, mode=open_files.mode, **text_options
+                )
+            )
+        return files
 
     def commit_many(self, open_files):
         self.fs.put([f.fn for f in open_files], [f.path for f in open_files])

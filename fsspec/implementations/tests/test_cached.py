@@ -1220,6 +1220,45 @@ def test_multi_cache_closes_readers(tmp_path, m, protocol, raise_in_context):
 
 
 @pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
+@pytest.mark.parametrize(
+    "mode, data, options, expected",
+    [
+        ("r", "café".encode("utf-16"), {"encoding": "utf-16"}, "café"),
+        (
+            "rt",
+            b"hello\xff",
+            {"encoding": "utf-8", "errors": "replace"},
+            "hello\ufffd",
+        ),
+        ("rt", b"a\r\nb\rc\n", {"newline": ""}, "a\r\nb\rc\n"),
+        (
+            "rb",
+            b"hello\xff\r\n",
+            {"encoding": "utf-16", "errors": "replace", "newline": ""},
+            b"hello\xff\r\n",
+        ),
+    ],
+    ids=["encoding", "errors", "newline", "binary"],
+)
+def test_multi_cache_read_text_options(
+    tmp_path, m, protocol, mode, data, options, expected
+):
+    m.pipe({"/first": data, "/second": data})
+    open_files = fsspec.open_files(
+        [f"{protocol}::memory:///{name}" for name in ["first", "second"]],
+        mode=mode,
+        cache_storage=str(tmp_path),
+        **options,
+    )
+
+    # Exercise both newly downloaded files and existing cache entries.
+    for _ in range(2):
+        with open_files as files:
+            assert [f.read() for f in files] == [expected, expected]
+        assert all(f.closed for f in files)
+
+
+@pytest.mark.parametrize("protocol", ["simplecache", "filecache"])
 def test_multi_cache(protocol):
     with fsspec.open_files("memory://file*", "wb", num=2) as files:
         for f in files:
